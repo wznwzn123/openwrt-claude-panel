@@ -1,0 +1,64 @@
+# 托管服务自检：模拟一个新用户从开通到打开面板的全过程，最后删掉，不留痕迹
+# 1. 用管理密钥生成一个只能用一次的邀请码
+# 2. 用邀请码开通（托管服务会建隧道、建子域名）
+# 3. 在这台 GitHub 机器上跑 cloudflared，假装是路由器，放一个测试页面
+# 4. 从外网打开 https://子域名/panel/manifest.json，看能不能通
+# 5. 注销（删隧道、删子域名）、删掉邀请码
+name: 托管服务自检
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: hub-selftest
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    env:
+      HUB: ${{ vars.HUB_URL }}
+      AK: ${{ secrets.HUB_ADMIN_KEY }}
+    steps:
+      - name: 生成一次性邀请码
+        run: |
+          [ -n "$HUB" ] && [ -n "$AK" ] || { echo "::error::没有设置 HUB_URL 或 HUB_ADMIN_KEY"; exit 1; }
+          R=$(curl -sS -m 20 -X POST -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' -d '{"max":1,"days":1,"note":"自检（会自动删除）"}' "$HUB/api/admin/invites")
+          INV=$(echo "$R" | jq -r '.invite.code // empty')
+          [ -n "$INV" ] || { echo "::error::生成邀请码失败：$R"; exit 1; }
+          echo "::add-mask::$INV"
+          echo "INV=$INV" >> "$GITHUB_ENV"
+          echo "::notice::1/5 管理接口正常，邀请码已生成"
+      - name: 用邀请码开通
+        run: |
+          R=$(curl -sS -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$INV\",\"name\":\"selftest\",\"model\":\"GitHub Actions\"}" "$HUB/api/register")
+          SUB=$(echo "$R" | jq -r '.sub // empty')
+          if [ -z "$SUB" ]; then echo "::error::开通失败（多半是运行令牌 HUB_RUNTIME_TOKEN 的权限不对）：$(echo "$R" | jq -c '{error}')"; exit 1; fi
+          TOK=$(echo "$R" | jq -r .token); RK=$(echo "$R" | jq -r .rkey)
+          echo "::add-mask::$TOK"; echo "::add-mask::$RK"
+          { echo "SUB=$SUB"; echo "HOST=$(echo "$R" | jq -r .host)"; echo "TOK=$TOK"; echo "RK=$RK"; } >> "$GITHUB_ENV"
+          echo "::notice::2/5 开通成功：隧道和子域名都建好了（$SUB）"
+      - name: 假装是路由器：跑隧道和测试页面
+        run: |
+          mkdir -p site/panel && echo '{"selftest":true}' > site/panel/manifest.json
+          (cd site && nohup python3 -m http.server 18765 --bind 127.0.0.1 > ../http.log 2>&1 &)
+          curl -fsSL -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+          nohup ./cloudflared tunnel --no-autoupdate --protocol http2 run --token "$TOK" > cf.log 2>&1 &
+          echo "::notice::3/5 隧道程序已启动"
+      - name: 从外网打开面板地址
+        run: |
+          for i in $(seq 1 24); do
+            R=$(curl -sS -m 10 "https://$HOST/panel/manifest.json" 2>&1 || true)
+            if echo "$R" | grep -q selftest; then echo "::notice::4/5 外网能打开 https://$HOST/panel/ （隧道 → 路由器 这条路是通的）"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::外网打不开 https://$HOST/panel/manifest.json，最后返回：$(echo "$R" | head -c 300)"
+          grep -iE "error|ERR|Registered" cf.log | tail -5 | sed 's/^/::warning::cloudflared: /'
+          exit 1
+      - name: 注销，删掉测试用的一切
+        if: always()
+        run: |
+          pkill -f "cloudflared tunnel" || true
+          if [ -n "$SUB" ]; then
+            R=$(curl -sS -m 60 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RK\"}" "$HUB/api/unregister")
+            if echo "$R" | jq -e '.ok == true' >/dev/null; then echo "::notice::5/5 已注销：隧道和子域名都删掉了"; else echo "::error::注销失败：$R（到 $HUB/admin 手动删除 $SUB）"; fi
+          fi
+          [ -n "$INV" ] && curl -sS -m 20 -X DELETE -H "Authorization: Bearer $AK" "$HUB/api/admin/invites/$INV" >/dev/null || true

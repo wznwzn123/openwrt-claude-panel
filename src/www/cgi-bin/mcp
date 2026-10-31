@@ -4,6 +4,7 @@
 'use strict';
 
 import { readfile, writefile, popen, stat, stdin, rename, mkdir, open as fs_open } from 'fs';
+import * as CL from 'cmcp.lib';
 
 const VERSION = '2.2.0';
 const CONF_PATH = getenv('CLAUDE_MCP_CONF') || '/etc/claude-mcp/config.json';
@@ -2021,16 +2022,8 @@ const BL_MARK = '# [cmcp-blacklist]';
 
 function bl_load() { let j = null; try { j = json(readfile(BL_FILE) ?? '[]'); } catch (e) {} return type(j) == 'array' ? j : []; }
 function bl_save(l) { writefile(BL_FILE + '.tmp', sprintf('%J', l)); rename(BL_FILE + '.tmp', BL_FILE); }
-function bl_write_ruleset(l) {
-	// 注意：面板域名不放进来——从大陆直连 Cloudflare 很慢（每个请求 0.6–2 秒），走代理节点只要 0.1–0.2 秒
-	let lines = ['# 由路由器面板「拉黑名单」自动生成，不要手动修改', 'payload:'];
-	// 路由器自己连 Cloudflare 的流量（隧道、云端报告）走直连：不受代理节点抽风影响。只认路由器上的程序，手机等设备照旧走代理
-	push(lines, '  - PROCESS-NAME,cloudflared', '  - DST-PORT,7844', '  - AND,((DOMAIN-SUFFIX,' + panel_domain() + '),(PROCESS-NAME,curl))', '  - AND,((DOMAIN,api.cloudflare.com),(PROCESS-NAME,curl))');
-	for (let e in l) push(lines, sprintf("  - SRC-IP-CIDR,%s/32", e.ip));
-	mkdir('/etc/openclash/rule_provider');
-	writefile(BL_RULESET + '.tmp', join('\n', lines) + '\n');
-	rename(BL_RULESET + '.tmp', BL_RULESET);
-}
+// 规则集的内容在共用库里生成（cmcp-route 也要用）：被拉黑的设备、路由器自己的隧道、面板走直连时的面板域名
+function bl_write_ruleset(l) { CL.bl_ruleset_write(); }
 function bl_custom_ready() { return index(readfile(BL_CUSTOM) ?? '', BL_MARK) >= 0; }
 function bl_live() { try { let r = api('GET', '/providers/rules', null, 4); return !!(r?.providers?.[BL_PROVIDER]); } catch (e) { return false; } }
 function bl_mac(m) { m = lc(trim('' + (m ?? ''))); if (!match(m, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('MAC 地址不对：' + m); return m; }
@@ -2362,6 +2355,23 @@ P.hub_unbind = function(a) {
 	if (!match(uid, /^[a-z2-9]{12}$/)) die('账号编号不对');
 	hub_call('/api/dev/unbind', { uid });
 	return { ok: true };
+};
+/* ---------- 换一把新的登录密钥：旧的登录地址马上作废（截图泄露、手机丢了时用） ---------- */
+P.rotate_key = function(a) {
+	if (a?.confirm != 'ROTATE') die('需要确认');
+	let nt = trim(sh("tr -dc 'a-z0-9' < /dev/urandom | head -c 40").out);
+	if (length(nt) != 40) die('生成新密钥失败，稍后再试');
+	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
+	if (length(c.token ?? '') < 16) die('读不到现在的密钥，没有修改');
+	c.token = nt;
+	writefile(CONF_PATH + '.tmp', sprintf('%.J\n', c));
+	rename(CONF_PATH + '.tmp', CONF_PATH);
+	CONF = null;
+	let cc = readfile('/etc/claude-mcp/cloud.conf') ?? '';
+	// 自建完整版：云端（Worker）用登录密钥来认面板，要提醒用户把 Worker 的 PANEL_TOKEN 也换掉
+	let selfcloud = match(cc, /(^|\n)URL=./) && !match(cc, /(^|\n)PKEY=./);
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废。其他手机要重新添加，Claude 连接器要换成新地址。'))); } catch (e) {}
+	return { token: nt, host: trim(readfile('/etc/claude-mcp/hostname') ?? ''), selfcloud: !!selfcloud };
 };
 P.cloud_info = function() {
 	let c = {};

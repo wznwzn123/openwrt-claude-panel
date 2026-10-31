@@ -55,8 +55,19 @@
 	<div id="devs"></div>
 	<div class="sech"><h2>添加路由器</h2></div>
 	<div class="card">
-		<p class="muted" style="margin:0 0 10px;font-size:14px">在路由器面板里打开「系统操作 → 绑定到账号」，把显示的配对码填在这里（10 分钟内有效）。</p>
+		<p class="muted" style="margin:0 0 8px;font-size:14px">输入 8 位配对码（10 分钟内有效）。配对码从哪来：</p>
+		<ul class="muted" style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:1.75">
+			<li><b>刚装完托管版</b>：安装结束时终端里就显示了配对码和绑定链接</li>
+			<li><b>已经装好</b>：路由器面板「系统操作 → 绑定到账号」，或者在路由器终端运行 <code>cmcp-pair</code></li>
+			<li>配对码只有用<b>邀请码装的托管版</b>才有；自己用 Cloudflare 搭的<b>自建版</b>，用下面的「添加自建版路由器」</li>
+		</ul>
 		<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">绑定</button></form>
+		<div class="err" data-err></div>
+	</div>
+	<div class="card">
+		<b style="font-size:15px">添加自建版路由器</b>
+		<p class="muted" style="margin:4px 0 10px;font-size:13.5px;line-height:1.7">填面板网址（比如 <code>https://router.example.com/panel/</code>），账号里只记下网址，换手机时好找。<br>粘贴登录地址也行，<b>里面的密钥会自动去掉，不会保存</b>；第一次在新手机上打开，还是要用旧手机「添加新手机」扫码。</p>
+		<form id="fLink" style="display:flex;flex-direction:column;gap:8px"><input class="input" name="name" placeholder="名字（比如：家里、公司）" maxlength="40" autocomplete="off"><div class="row" style="flex-wrap:nowrap"><input class="input" name="url" type="url" inputmode="url" placeholder="https://…/panel/" autocapitalize="off" spellcheck="false" required><button class="btn primary">添加</button></div></form>
 		<div class="err" data-err></div>
 	</div>
 	<div class="sech"><h2>换手机怎么办</h2></div>
@@ -110,6 +121,7 @@ form('fLogin', async (d) => { await api('login', d); await load(); });
 form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load(); });
 form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load(); });
 form('fBind', async (d, f) => { const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app'); await load(); });
+form('fLink', async (d, f) => { const r = await api('link', { name: d.name, url: d.url }); f.reset(); toast(r.stripped ? '已添加「' + r.name + '」（登录地址里的密钥已去掉，没有保存）' : '已添加「' + r.name + '」'); await load(); });
 form('fPw', async (d, f) => { await api('password', d); f.reset(); toast('密码已修改，其他设备上的登录已退出'); });
 document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () => {
 	const f = b.closest('form'), email = f.email.value.trim(), err = f.querySelector('[data-err]');
@@ -127,14 +139,18 @@ $('delBtn').onclick = async () => {
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 function render(me) {
 	$('who').textContent = me.email;
-	$('cnt').textContent = me.devs.length ? me.devs.length + ' 台' : '';
-	$('devs').innerHTML = me.devs.length ? me.devs.map((d) => {
+	const links = me.links || [], n = me.devs.length + links.length;
+	$('cnt').textContent = n ? n + ' 台' : '';
+	$('devs').innerHTML = n ? me.devs.map((d) => {
 		const on = !d.off && d.last && Date.now() - d.last < 180e3;
 		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
 		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}</div>
 		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
-	}).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。在路由器面板里打开「系统操作 → 绑定到账号」，把配对码填到下面。</p></div>`;
+	}).join('') + links.map((l) => `<div class="card dev" data-link="${esc(l.id)}"><div class="ic">⌂</div><b>${esc(l.name)}</b>
+		<div class="meta">自建版 · ${esc(l.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))}</div>
+		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
 	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
+	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub; if (!confirm('从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return; try { await api('unbind', { sub }); toast('已解绑'); await load(); } catch (x) { toast(x.message); } }));
 }
 async function load() {

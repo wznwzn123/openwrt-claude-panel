@@ -76,6 +76,7 @@ h1,h2,h3{letter-spacing:-.02em}
 .ngb.kids>div{margin-left:23px;padding-left:8px;border-left:1.5px solid var(--line)}
 .sidenav .kids button{padding:8px 10px;font-size:14px;font-weight:500}.sidenav .kids button i{display:none}
 .sidenav button .org{margin-left:auto;font-style:normal;text-decoration:none;font-size:10.5px;font-weight:600;color:var(--muted);opacity:.75;flex:none}
+.sidenav .ng.flash>button{background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
 .sidenav button .path{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:1px}
 .sidenav button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 内嵌的 Kwrt 原版页面 */
@@ -768,6 +769,7 @@ section.page{display:none}section.page.on{display:block}
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="hubbind" id="hubBindBtn"><div><b>绑定到账号</b><span class="muted">把这台路由器加到官网账号里，换手机时好找</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="logout"><div><b>断开此手机</b><span class="muted">清除这台手机保存的密钥</span></div><span class="muted">›</span></button>
@@ -1100,36 +1102,70 @@ const NAVK = {}; // 'k:路径' → { t, path: [分组, 上级] }
 // 新装的插件：读 Kwrt 后台菜单，侧边栏里没有的自动放进「服务」（这一组不带图标）
 // （下面这些面板里已经有自己的版本：系统操作里的重启/关机/释放内存、文件管理、终端、系统日志、进程、iStore）
 const NAV_SKIP = ['admin/system/shutdown', 'admin/system/release_ram', 'admin/system/filemanager', 'admin/system/reboot', 'admin/services/ttyd', 'admin/services/store', 'admin/status/logs', 'admin/status/processes'];
+// 写死在侧边栏里的原版页面：没出现在菜单里但能打开的（只要带来它的插件在），或者别的固件上换了地址的
+const NAV_ALIAS = { 'admin/store': ['admin/services/store'], 'admin/quickstart': ['admin/index'] };
+const NAV_FALLBACK = { 'admin/quickstart': 'admin/status/overview', 'admin/package-manager': 'admin/system/opkg' };
+// 「服务」里也列出放在别处的几个（跟 LuCI 一样好找）：点了展开「代理」里对应的那一项，终端直接打开面板自己的
+const SVC_LINKS = [
+	{ need: 'admin/services/openclash', it: { link: 1, t: 'OpenClash', jump: '代理/OpenClash 原版', hint: '在「代理」里' } },
+	{ need: 'admin/services/passwall', it: { link: 1, t: 'PassWall', jump: '代理/PassWall', hint: '在「代理」里' } },
+	{ need: 'admin/services/ttyd', it: { link: 1, p: 'term', i: '›_', t: '终端', hint: '面板自己的终端' } },
+];
+const NAV_GROUP = { status: '状态', network: '网络', system: '系统' }; // 其他分类的新插件都放「服务」
+let NAV0 = null, PKG_PAGE = 'admin/package-manager';
 function navKnown(p) {
-	for (const g of NAV) {
-		for (const it of g.g === '服务' && SVC0 ? SVC0 : g.items) {
+	for (const g of NAV0 || NAV) {
+		for (const it of g.items) {
 			if (Array.isArray(it) ? it[3] === 'extra' : it.extra) continue;
-			const ps = Array.isArray(it) ? [it[0]] : it.kids ? it.kids.map((k) => k[0]) : [];
+			const ps = Array.isArray(it) ? [it[0], ...(NAV_ALIAS[it[0]] || []), ...(NAV_FALLBACK[it[0]] ? [NAV_FALLBACK[it[0]]] : [])] : it.kids ? it.kids.map((k) => k[0]) : [];
 			for (const x of ps) if (x === p || x.startsWith(p + '/') || p.startsWith(x + '/')) return true;
 		}
 	}
 	return false;
 }
-// 「服务」里原本写好的插件（路由器上没装的不显示）
-let SVC0 = null;
+// 读到路由器的真实菜单后：每一组都只显示路由器上实际有的页面，再把新装的插件放进对应的组
 function navExtra(items, draw) {
-	const svc = NAV.find((g) => g.g === '服务');
-	SVC0 ??= svc.items.slice();
+	NAV0 ??= NAV.map((g) => ({ ...g, items: g.items.slice() }));
 	if (!items || !items.length) return 0;   // 还没读到菜单：先按原来的显示
-	// 路由器上实际有的页面
-	const have = new Set();
-	for (const it of items) { have.add(it.p); (it.kids || []).forEach((k) => have.add(k[0])); }
+	const have = new Set(), live = {};
+	for (const it of items) { have.add(it.p); live[it.p] = it; (it.kids || []).forEach((k) => have.add(k[0])); }
 	const hv = [...have];
-	const present = (p) => have.has(p) || hv.some((h) => h.startsWith(p + '/')) || (p === 'admin/store' && have.has('admin/services/store'));
-	svc.items = SVC0.filter((it) => (Array.isArray(it) ? present(it[0]) : it.kids.some((k) => present(k[0])))).map((it) => (Array.isArray(it) ? it : { ...it, kids: it.kids.filter((k) => present(k[0])) }));
+	// 保护：每台路由器都有的「状态」「网络」「系统」，要是读到的菜单里一项都没有，多半是没读全，这一类就照原样显示，不藏
+	// （「服务」这类插件分类是真的可能一个都没装，不在保护范围里）
+	const cats = new Set(hv.map((h) => h.split('/')[1]));
+	const unread = (p) => { const c = p.split('/'); return c.length >= 3 && ['status', 'network', 'system'].includes(c[1]) && !cats.has(c[1]); };
+	const present = (p) => have.has(p) || hv.some((h) => h.startsWith(p + '/')) || (NAV_ALIAS[p] || []).some((x) => have.has(x)) || unread(p);
+	const dir = (p) => p.slice(0, p.lastIndexOf('/'));
+	PKG_PAGE = present('admin/package-manager') ? 'admin/package-manager' : present('admin/system/opkg') ? 'admin/system/opkg' : 'admin/package-manager';
+	for (const g of NAV) {
+		const g0 = NAV0.find((x) => x.g === g.g);
+		g.items = g0.items.flatMap((it) => {
+			if (Array.isArray(it)) {
+				if (present(it[0])) return [it];
+				const fb = NAV_FALLBACK[it[0]];
+				if (fb && present(fb)) { NAVK['k:' + fb] = { t: it[1], path: [g.g] }; return [[fb, it[1], it[2]]]; }
+				return [];
+			}
+			if (!it.kids) return [it];   // 面板自己的页面，一直都在
+			const kids = it.kids.filter((k) => present(k[0]));
+			// 原版插件新增的子页面（比如 PassWall 的「规则列表」）也补上
+			const par = live[dir(it.kids[0][0])];
+			if (par && it.kids.every((k) => dir(k[0]) === par.p))
+				for (const k of par.kids || []) if (!kids.some((x) => x[0] === k[0])) { kids.push(k); NAVK['k:' + k[0]] = { t: k[1], path: [g.g, it.t] }; }
+			return kids.length ? [{ ...it, kids }] : [];
+		});
+	}
+	const svc = NAV.find((g) => g.g === '服务');
 	svc.empty = 1;
-	// 只收「服务」「VPN」分类下真正的插件页面；空的菜单分类、iStore 首页、硬盘工具这些不算插件
-	const ex = (items || []).filter((it) => it && it.p && /^admin\/(services|vpn)\/[^/]+$/.test(it.p) && !NAV_SKIP.includes(it.p) && !navKnown(it.p))
-		.map((it) => (it.kids && it.kids.length ? { t: it.t, extra: 1, kids: it.kids } : [it.p, it.t, null, 'extra']));
-	svc.items.push(...ex);
+	svc.items.push(...SVC_LINKS.filter((x) => present(x.need)).map((x) => x.it));
+	// 新装的插件：所有分类里侧边栏还没有的真页面（空的菜单分类、单独一页的首页/向导不算）
+	const ex = items.filter((it) => it && it.p && /^admin\/[^/]+\/[^/]+$/.test(it.p) && !NAV_SKIP.includes(it.p) && !navKnown(it.p));
 	for (const it of ex) {
-		if (Array.isArray(it)) NAVK['k:' + it[0]] = { t: it[1], path: ['服务'] };
-		else it.kids.forEach((k) => (NAVK['k:' + k[0]] = { t: k[1], path: ['服务', it.t] }));
+		const gname = NAV_GROUP[it.p.split('/')[1]] || '服务';
+		const x = it.kids && it.kids.length ? { t: it.t, extra: 1, kids: it.kids } : [it.p, it.t, null, 'extra'];
+		NAV.find((g) => g.g === gname).items.push(x);
+		if (Array.isArray(x)) NAVK['k:' + x[0]] = { t: x[1], path: [gname] };
+		else x.kids.forEach((k) => (NAVK['k:' + k[0]] = { t: k[1], path: [gname, x.t] }));
 	}
 	if (draw !== false && !$('sideQ').value.trim()) renderNav();
 	return ex.length;
@@ -1155,7 +1191,9 @@ const NAV_IC = {"cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
-	return `<button data-p="${x.p}">${navIc(x.p, x.i)}<span>${esc(x.t)}</span></button>`;
+	const lab = `<span>${esc(x.t)}${x.hint ? `<span class="path">${esc(x.hint)}</span>` : ''}</span>`;
+	if (x.jump) return `<button data-jump="${esc(x.jump)}"${noic ? ' class="noic"' : ''}>${noic ? '' : navIc(x.jump, x.i)}${lab}</button>`;
+	return `<button data-p="${x.p}"${noic ? ' class="noic"' : ''}>${noic ? '' : navIc(x.p, x.i)}${lab}</button>`;
 }
 function renderNav() {
 	const q = $('sideQ').value.trim().toLowerCase();
@@ -1168,12 +1206,13 @@ function renderNav() {
 				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : '')).toLowerCase().includes(q))
 					hits.push(`<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`);
 			};
+			if (it.link) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
 		nav.innerHTML = hits.length ? hits.join('') : '<div class="empty">没有找到这个功能</div>';
 	} else {
 		nav.innerHTML = NAV.map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
-			!g.items.length && g.empty ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:admin/package-manager">去安装 ›</button></div>` :
+			!g.items.length && g.empty ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:${PKG_PAGE}">去安装 ›</button></div>` :
 			g.items.map((it) => {
 				if (!it.kids) return navBtn(it, false, g.noic);
 				const id = g.g + '/' + it.t;
@@ -1187,7 +1226,7 @@ function navMark() {
 }
 // 打开某一页时，把它所在的分组展开
 function navReveal(p) {
-	const pth = NAVK[p]?.path || (() => { for (const g of NAV) for (const it of g.items) { if (it.p === p) return [g.g]; if (it.kids && it.kids.some((k) => k.p === p)) return [g.g, it.t]; } return []; })();
+	const pth = NAVK[p]?.path || (() => { for (const g of NAV) for (const it of g.items) { if (it.link) continue; if (it.p === p) return [g.g]; if (it.kids && it.kids.some((k) => k.p === p)) return [g.g, it.t]; } return []; })();
 	let ch = false;
 	if (pth[0] && !navOpen[pth[0]]) { navOpen[pth[0]] = 1; ch = true; }
 	if (pth[1] && !navOpen[pth[0] + '/' + pth[1]]) { navOpen[pth[0] + '/' + pth[1]] = 1; ch = true; }
@@ -1225,6 +1264,17 @@ $('sidenav').addEventListener('click', (e) => {
 		box.classList.toggle('anim', !!navOpen[id]);
 		t.setAttribute('aria-expanded', !!navOpen[id]);
 		store.set('rp_nav', JSON.stringify(navOpen));
+		return;
+	}
+	// 「服务」里的 OpenClash / PassWall：展开「代理」里对应的那一项，滚到那里
+	const j = e.target.closest('button[data-jump]');
+	if (j) {
+		const id = j.dataset.jump, top = id.split('/')[0];
+		navOpen[top] = 1; navOpen[id] = 1;
+		store.set('rp_nav', JSON.stringify(navOpen));
+		renderNav();
+		const box = $('sidenav').querySelector(`[data-g="${CSS.escape(id)}"]`);
+		if (box) { box.scrollIntoView({ block: 'start', behavior: 'smooth' }); box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 1200); }
 		return;
 	}
 	const b = e.target.closest('button[data-p]');
@@ -1277,7 +1327,7 @@ async function refresh(quiet) {
 			}).catch(() => {
 				if (!netErr) return;
 				setStatus(false, '手机网络问题');
-				if (homeOff()) $('hDesc').textContent = '路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳；如果手机连着家里这台路由器的 Wi-Fi，也可能是 OpenClash 正在重启。下面是上次的数据。';
+				if (homeOff()) $('hDesc').textContent = '路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳。如果手机连着家里这台路由器的 Wi-Fi，也可能是 OpenClash 正在重启，或者代理节点出了问题（面板会在几分钟内自动改走直连）；急的话先换成手机流量打开。下面是上次的数据。';
 			});
 		} else if (/连不上|超时/.test(e.message)) setStatus(false, '离线');
 		if (!quiet) toast(e.message, true);
@@ -3481,6 +3531,7 @@ const T = {
 	async lock() { lockSettings(); },
 	look() { lookSettings(); },
 	addphone() { addPhone(); },
+	rotatekey() { rotateKey(); },
 	hubbind() { hubBind(); },
 	async logout() { if (await confirmBox('断开此手机', '会清除这台手机上保存的密钥，之后需要重新粘贴连接地址。路由器上的设置不受影响。', '断开', true)) logout(); },
 };
@@ -3584,6 +3635,21 @@ async function addPhone() {
 	<div class="notice w" style="margin-top:12px">⚠️ 扫到这个码就等于拿到路由器的全部权限。只给自己或家人的手机扫，扫完就关掉，不要截图、不要发给别人。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(url); });
+}
+// 换一把新的登录密钥：这台手机自动换成新的；其他手机、Claude 连接器要重新填
+async function rotateKey() {
+	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 这台手机自动换成新密钥，不用重新登录\n· 其他已经登录的手机要重新添加（在这台手机「添加新手机」扫码）\n· 在 Claude 里用了连接器的，要换成新的登录地址', '换新密钥', true))) return;
+	let r;
+	try { r = await P('rotate_key', { confirm: 'ROTATE' }, 30000); } catch (e) { return toast(e.message, true); }
+	token = r.token; store.set('rp_token', r.token);
+	const login = location.origin + '/cgi-bin/mcp/' + r.token;
+	modal(`<div class="sheethead"><h3>已换成新密钥</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 10px">旧的登录地址已经作废。这是新的登录地址（也是新的 Claude 连接器地址），点一下显示：</p>
+	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(login)}<span>点一下显示</span></div>
+	${r.selfcloud ? '<div class="notice w" style="margin-top:12px">你用的是自建完整版：还要把 Cloudflare Worker 的密钥 <b>PANEL_TOKEN</b> 换成新的登录密钥（地址最后那一串），不然推送和云端备份会连不上。</div>' : ''}
+	<div class="notice" style="margin-top:12px">接下来：其他手机在这台手机「系统操作 → 添加新手机」扫码重新添加；Claude 里删掉旧连接器，用新地址重新添加。</div>
+	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制新地址</button><button class="btn primary" data-v="close">完成</button></div>`,
+	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
 }
 function hubBind() {
 	modal(`<div class="sheethead"><h3>绑定到账号</h3><button class="btn sm" data-v="close">关闭</button></div><div data-hb><div class="muted" style="padding:20px 0;text-align:center">正在获取配对码…</div></div>`, (m) => {

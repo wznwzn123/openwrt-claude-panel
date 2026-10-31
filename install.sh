@@ -31,12 +31,19 @@ say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m ✓\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m !\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m ✗ %s\033[0m\n' "$*"; exit 1; }
-ask()  { # ask 变量名 提示 默认值
-	local v
+ask()  { # ask 变量名 提示 默认值 [必填]
+	local v n=0
 	if [ "$YES" = 1 ]; then eval "$1=\"\$3\""; return; fi
-	printf '%s' "$2"; [ -n "$3" ] && printf ' [%s]' "$3"; printf '：'
-	read -r v </dev/tty || v=""
-	[ -z "$v" ] && v="$3"
+	# 粘贴安装命令时，末尾多出来的回车会留在输入里，被当成「直接按了回车」：提问前先清掉
+	while IFS= read -r -t 0.2 v 2>/dev/null </dev/tty; do :; done
+	while :; do
+		printf '%s' "$2"; [ -n "$3" ] && printf ' [%s]' "$3"; printf '：'
+		v=""; read -r v </dev/tty || v=""
+		[ -z "$v" ] && v="$3"
+		{ [ -n "$v" ] || [ -z "$4" ]; } && break
+		n=$((n+1)); [ $n -ge 3 ] && break
+		warn "这一项不能空着，请再输入一次"
+	done
 	eval "$1=\"\$v\""
 }
 rnd() { tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c "${1:-40}"; }
@@ -167,16 +174,24 @@ if [ -n "$HUB" ]; then
 	if [ -s $D/hub.conf ] && grep -q '^PKEY=' $D/cloud.conf 2>/dev/null; then
 		ok "已经开通过托管服务，保留现在的网址"
 	else
-		[ -n "$INV" ] || ask INV "邀请码（找提供托管服务的人要）" ""
-		inv=$(printf '%s' "$INV" | tr -cd 'A-Za-z0-9')
-		[ -n "$inv" ] || die "托管版需要邀请码"
 		nm=$(uci -q get system.@system[0].hostname 2>/dev/null | tr -cd 'A-Za-z0-9._-' | cut -c1-40 || true)
 		md=$(cat /tmp/sysinfo/model 2>/dev/null | tr -cd 'A-Za-z0-9 ._()-' | cut -c1-60 || true)
-		say "向托管服务申请专属网址"
-		R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\"}" "$HUB/api/register" || true)
 		jf() { jsonfilter -s "$R" -e "@.$1" 2>/dev/null || true; }
-		SUB=$(jf sub)
-		[ -n "$SUB" ] || { e=$(jf error); die "开通失败：${e:-连不上托管服务 $HUB}"; }
+		SUB=""; try=0
+		while [ -z "$SUB" ]; do
+			try=$((try+1))
+			[ -n "$INV" ] || ask INV "邀请码（找提供托管服务的人要）" "" 1
+			inv=$(printf '%s' "$INV" | tr -cd 'A-Za-z0-9')
+			[ -n "$inv" ] || die "托管版需要邀请码。拿到邀请码后，在这个目录重新运行：sh install.sh --invite 邀请码"
+			say "向托管服务申请专属网址"
+			R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\"}" "$HUB/api/register" || true)
+			SUB=$(jf sub)
+			[ -n "$SUB" ] && break
+			e=$(jf error)
+			# 邀请码输错了（或者过期、用完）：一共给三次机会
+			case "$e" in 邀请码*) if [ "$YES" != 1 ] && [ $try -lt 3 ]; then warn "$e，请检查后再输入一次"; INV=""; continue; fi ;; esac
+			die "开通失败：${e:-连不上托管服务 $HUB}"
+		done
 		HOST=$(jf host)
 		(umask 077
 		 printf '%s' "$(jf token)" > $D/tunnel_token
@@ -222,15 +237,17 @@ fi
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
 touch $CR
-sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily/d' $CR
+sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route/d' $CR
 echo '0 9 * * * /usr/sbin/cmcp-daily >/dev/null 2>&1' >> $CR
+# 面板走直连还是走代理，自动选能打开的那条
+echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 [ "$ED" = full ] && echo '7 4 * * * /usr/sbin/cmcp-backup auto >/dev/null 2>&1' >> $CR
 /etc/init.d/cron enable >/dev/null 2>&1 || true
 /etc/init.d/cron restart >/dev/null 2>&1 || true
 
 # ---------- 升级系统时保留 ----------
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-notify /usr/sbin/cmcp-pause /usr/sbin/cmcp-traffic /usr/sbin/cmcp-watchdog; do
+	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-watchdog; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -241,6 +258,8 @@ say "启动服务"
 /etc/init.d/claude-mcp restart
 /etc/init.d/cmcp-watchdog enable
 /etc/init.d/cmcp-watchdog restart
+# 换了网址（比如自建版换成托管版）后，OpenClash 规则集里的面板域名也要跟着更新
+/usr/sbin/cmcp-route --init >/dev/null 2>&1 || true
 sleep 3
 code=$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json || true)
 [ "$code" = 200 ] && ok "面板服务已运行" || warn "面板服务没响应（HTTP $code），看看 logread | grep uhttpd"
@@ -279,7 +298,8 @@ echo "⚠️  登录地址里带着密钥，谁拿到都能完全控制你的路
 if [ -n "$HUB" ]; then
 	echo
 	echo "托管版：推送、云端备份、断电断网判断都已经开通，不用再做别的设置。"
-	echo "想在官网账号里看到这台路由器：面板里「系统操作 → 绑定到账号」，再到 $HUB/app 输入配对码。"
+	echo
+	/usr/sbin/cmcp-pair --install || echo "绑定到官网账号：面板里「系统操作 → 绑定到账号」，或者在终端运行 cmcp-pair 拿配对码。"
 elif [ "$ED" = full ]; then
 	echo
 	echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"

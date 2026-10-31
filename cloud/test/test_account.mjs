@@ -85,6 +85,26 @@ ok('A 解绑 B 的路由器：B 那边不受影响', (await call(B, '/api/accoun
 ok('A 看不到 B 的路由器', !(await call(A, '/api/account/me')).j.devs.some((d) => d.sub === R2.sub));
 ok('改名只改自己账号里的显示', (await call(A, '/api/account/rename', { sub: R1.sub, alias: '客厅' })).st === 200 && (await call(A, '/api/account/me')).j.devs[0].name === '客厅');
 
+// ---- 自建版路由器：账号里只记网址，不记密钥 ----
+let L1 = await call(A, '/api/account/link', { name: '公司', url: 'https://router.example.com/panel/' });
+ok('添加自建版路由器', L1.st === 200 && L1.j.ok && !L1.j.stripped, JSON.stringify(L1.j));
+let meA = (await call(A, '/api/account/me')).j;
+ok('自建版出现在「我的路由器」里（只有名字和网址）', meA.links.length === 1 && meA.links[0].url === 'https://router.example.com/panel/' && meA.links[0].name === '公司' && Object.keys(meA.links[0]).sort().join() === 'at,id,name,url', JSON.stringify(meA.links));
+let L2 = await call(A, '/api/account/link', { name: '', url: 'https://home.example.net/cgi-bin/mcp/abcdefghijklmnop1234' });
+meA = (await call(A, '/api/account/me')).j;
+ok('粘贴登录地址：密钥去掉，只存面板网址', L2.st === 200 && L2.j.stripped === true && meA.links[1].url === 'https://home.example.net/panel/' && !JSON.stringify(meA).includes('abcdefghijklmnop1234'), JSON.stringify(meA.links));
+ok('没填名字：用网址当名字', meA.links[1].name === 'home.example.net');
+let L3 = await call(A, '/api/account/link', { url: 'https://x.example.org/panel/#login=abcdefghijklmnop1234' });
+ok('#login=密钥 的链接：也去掉密钥', L3.st === 200 && L3.j.stripped === true && !JSON.stringify((await call(A, '/api/account/me')).j).includes('abcdefghijklmnop1234'));
+ok('同一个网址不能重复添加', (await call(A, '/api/account/link', { url: 'https://router.example.com/panel/' })).st === 400);
+for (const bad of ['http://router.example.com/panel/', 'javascript:alert(1)', 'https://user:pw@router.example.com/panel/', 'https://router.example.com/other/', 'hello', 'https://localhost/panel/'])
+	ok('不收奇怪的网址：' + bad, (await call(A, '/api/account/link', { url: bad })).st === 400);
+ok('托管版网址要用配对码', /配对码/.test((await call(A, '/api/account/link', { url: 'https://' + R1.sub + '.panel.example/panel/' })).j.error || ''));
+ok('B 看不到 A 的自建版路由器', ((await call(B, '/api/account/me')).j.links || []).length === 0);
+ok('B 删不了 A 的', (await call(B, '/api/account/unlink', { id: L1.j.id })).st === 404);
+ok('没登录不能添加', (await call(anon, '/api/account/link', { url: 'https://a.example.com/panel/' })).st === 401);
+ok('移除自建版路由器', (await call(A, '/api/account/unlink', { id: L1.j.id })).st === 200 && (await call(A, '/api/account/me')).j.links.length === 2);
+
 // ---- 路由器那边看/移除绑定的账号 ----
 P = await pairOf(R1); await call(B, '/api/account/bind', { code: P.code });
 const devAcc = async (R, key) => (await mod.default.fetch(new Request('https://panel.example/api/dev/accounts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: R.sub, rkey: key }) }), env));

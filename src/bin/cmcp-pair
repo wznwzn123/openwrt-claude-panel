@@ -1,0 +1,28 @@
+#!/bin/sh
+# 托管版：拿一个配对码，把这台路由器绑定到官网账号（换手机时好找）
+# 用法：cmcp-pair            在终端随时运行，配对码 10 分钟内有效
+#       cmcp-pair --install  安装脚本最后自动调用（措辞略有不同）
+D=/etc/claude-mcp
+HUB=$(sed -n 's/^HUB=//p' $D/hub.conf 2>/dev/null)
+SUB=$(sed -n 's/^SUB=//p' $D/hub.conf 2>/dev/null)
+RKEY=$(sed -n 's/^RKEY=//p' $D/cloud.conf 2>/dev/null)
+if [ -z "$HUB" ] || [ -z "$SUB" ] || [ -z "$RKEY" ]; then
+	echo "这台路由器不是托管版，不能绑定到官网账号（自建版不需要绑定）。" >&2
+	exit 1
+fi
+R=$(curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RKEY\"}" "$HUB/api/pair/start" 2>/dev/null)
+CODE=$(jsonfilter -s "$R" -e '@.code' 2>/dev/null)
+if [ -z "$CODE" ]; then
+	E=$(jsonfilter -s "$R" -e '@.error' 2>/dev/null)
+	echo "拿配对码失败：${E:-连不上托管服务 $HUB}。稍后运行 cmcp-pair 再试，或者在面板「系统操作 → 绑定到账号」里拿。" >&2
+	exit 1
+fi
+if [ "$1" = "--install" ]; then
+	echo "绑定到官网账号（换手机时一眼找到这台路由器，不绑也能正常用）："
+else
+	echo "绑定到官网账号："
+fi
+echo "  手机直接打开这个链接，登录或注册后自动绑定："
+echo "    $HUB/app?pair=$CODE"
+echo "  或者在 $HUB/app 的「添加路由器」里输入配对码：$CODE"
+echo "  10 分钟内有效。过期了在终端运行 cmcp-pair 再拿一个，或者在面板「系统操作 → 绑定到账号」里拿。"

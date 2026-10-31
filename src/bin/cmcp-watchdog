@@ -101,7 +101,7 @@ boot_check() {
 （路由器一直没对上时间，以上时间可能不准）"
 	fi
 	[ "$NET" = ok ] || [ "$up" -gt 600 ] || return
-	bt=$ibt; last=$(cat "$HB" 2>/dev/null)
+	bt=$ibt; last=$(cut -d' ' -f1 "$HB" 2>/dev/null); local mem; mem=$(cut -s -d' ' -f2- "$HB" 2>/dev/null)
 	if [ -f "$CS" ]; then
 		reason="路由器重启了（正常重启：执行了重启命令或在网页上点了重启）"; lvl=info; last=$(cat "$CS"); rm -f "$CS"
 	else
@@ -112,6 +112,13 @@ boot_check() {
 	[ "$lvl" = err ] && detail="$detail
 断电前最后一次正常运行记录 $(fmt $last)（每 5 分钟记一次，实际断电在这之后 5 分钟内）
 从最后记录到开机共 $(mins $last $bt)"
+	# 每 5 分钟那次记录里顺便记了内存：死机前内存很紧张的话，多半就是内存不够
+	if [ "$lvl" = err ] && [ -n "$mem" ]; then
+		set -- $mem
+		detail="$detail
+断电前最后一次记录的内存：可用 ${1}MB，内核占用 ${2}MB，交换区已用 ${3}MB"
+		[ "${1:-999}" -lt 45 ] 2>/dev/null && detail="$detail（内存很紧张，很可能是内存不够导致死机）"
+	fi
 	detail="$detail$note"
 	if ls /sys/fs/pstore/* >/dev/null 2>&1; then
 		detail="$detail
@@ -265,7 +272,8 @@ check() {
 	# 暂停上网：规则被防火墙重载冲掉了就补回来、到期自动恢复、每天定时断网开始时断开现有连接（用过这个功能才检查）
 	[ "$DRYRUN" != 1 ] && [ -f "$D/pause.json" ] && [ -x /usr/sbin/cmcp-pause ] && /usr/sbin/cmcp-pause check >/dev/null 2>&1
 	# 心跳：每 5 分钟写一次闪存，用来判断断电时间（开机记录写完之前不能写，否则会盖掉断电前的最后记录）
-	if [ "$BOOT_DONE" = 1 ] && [ $(( t - HB_T )) -ge 300 ]; then echo "$t" > "$HB"; HB_T=$t; fi
+	# 每 5 分钟记一次「还在正常运行」，顺便记下内存（可用、内核占用、交换区已用，单位 MB），意外重启后用来判断原因
+	if [ "$BOOT_DONE" = 1 ] && [ $(( t - HB_T )) -ge 300 ]; then echo "$t $(awk '/^MemAvailable/{a=$2}/^SUnreclaim/{u=$2}/^SwapTotal/{st=$2}/^SwapFree/{sf=$2}END{printf "%d %d %d", a/1024, u/1024, (st-sf)/1024}' ${WD_MEMINFO:-/proc/meminfo} 2>/dev/null)" > "$HB"; HB_T=$t; fi
 	save
 	rmdir /tmp/cmcp_wd.lock
 }

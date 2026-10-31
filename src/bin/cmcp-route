@@ -1,0 +1,67 @@
+#!/usr/bin/ucode
+// 面板走直连还是走代理：自动选能打开、更快的那条（计划任务每 3 分钟一次）
+// 起因：手机连着家里 Wi-Fi 打开面板时，流量会被 OpenClash 送进代理节点绕一圈；节点卡了或断了，面板就打不开。
+// 做法：分别测「直连」和「代理」打开面板要多久——
+//   · 代理打不开、直连能打开 → 改走直连
+//   · 两条都能通 → 用明显更快的那条（差不多就不换，免得来回跳）
+// 切换只是刷新「拉黑名单」那个规则集，不重启 OpenClash、不断网。
+// 用法：cmcp-route          检查一次，需要就切换
+//       cmcp-route --init   只按现在的设置重新生成规则集（安装、换网址后用）
+//       cmcp-route --status 看现在走哪条
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile } from 'fs';
+
+const ST = L.D + '/panel_route.json';
+const PROVIDER = 'cmcp_blacklist';
+const arg = ARGV[0];
+const host = trim(readfile(L.D + '/hostname') ?? '');
+let st = L.readj(ST, {});
+
+if (arg == '--status') { print(sprintf('%J\n', st)); exit(0); }
+if (arg == '--init' || !host || match(host, /trycloudflare\.com$/)) {
+	L.bl_ruleset_write();
+	try { L.api('PUT', '/providers/rules/' + PROVIDER, null, 10); } catch (e) {}   // 规则集没启用时这一步什么也不做
+	exit(0);
+}
+// 还没启用「拉黑名单」规则集的路由器：只更新文件，等用户在面板里启用（启用要重启一次 OpenClash）
+const ready = index(readfile('/etc/openclash/custom/openclash_custom_rules.list') ?? '', '# [cmcp-blacklist]') >= 0;
+if (!ready) { L.bl_ruleset_write(); exit(0); }
+
+const url = 'https://' + host + '/panel/manifest.json';
+function delay(px) {
+	let best = 0;
+	for (let i = 0; i < 2; i++) {
+		let r = null;
+		try { r = L.api('GET', '/proxies/' + L.enc(px) + '/delay?timeout=5000&url=' + L.enc(url), null, 8); } catch (e) {}
+		let d = +(r?.json?.delay ?? 0);
+		if (d > 0 && (!best || d < best)) best = d;
+	}
+	return best;
+}
+// 不走直连时，面板命中的是最后那条 MATCH 规则对应的策略组
+function match_group() {
+	let r = null;
+	try { r = L.api('GET', '/rules', null, 6); } catch (e) {}
+	let rs = r?.json?.rules ?? [];
+	for (let i = length(rs) - 1; i >= 0; i--) if (lc(rs[i]?.type ?? '') == 'match') return rs[i].proxy;
+	return null;
+}
+const g = match_group();
+if (!g || g == 'DIRECT') { if (st.direct) { st = { direct: false, at: time(), why: '最后的规则本来就是直连' }; L.writej(ST, st); L.bl_ruleset_write(); try { L.api('PUT', '/providers/rules/' + PROVIDER, null, 10); } catch (e) {} } exit(0); }
+const d = delay('DIRECT'), p = delay(g);
+let want = !!st.direct, why = st.why ?? '';
+if (!p && d) { want = true; why = '代理节点打不开面板'; }
+else if (!d && p) { want = false; why = '直连打不开面板'; }
+else if (d && p) {
+	if (!st.direct && d < p * 0.75) { want = true; why = sprintf('直连更快（%dms，代理 %dms）', d, p); }
+	else if (st.direct && p < d * 0.6) { want = false; why = sprintf('代理更快（%dms，直连 %dms）', p, d); }
+}
+const prev = !!st.direct;
+st = { direct: want, at: time(), why, d, p, group: g };
+L.writej(ST, st);
+if (want != prev) {
+	L.bl_ruleset_write();
+	try { L.api('PUT', '/providers/rules/' + PROVIDER, null, 10); } catch (e) {}
+	L.notify('info', 'route', want ? '面板改走直连' : '面板改回走代理', why, 'route');
+}

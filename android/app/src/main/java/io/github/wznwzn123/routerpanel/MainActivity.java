@@ -2,13 +2,22 @@ package io.github.wznwzn123.routerpanel;
 
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.text.InputType;
+import android.widget.EditText;
+import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -37,6 +46,19 @@ import androidx.core.content.ContextCompat;
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.DecodeHintType;
+import com.google.zxing.MultiFormatReader;
+import com.google.zxing.RGBLuminanceSource;
+import com.google.zxing.common.GlobalHistogramBinarizer;
+import com.google.zxing.common.HybridBinarizer;
+
+import java.io.InputStream;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.Map;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -54,6 +76,10 @@ public class MainActivity extends AppCompatActivity {
 
     private final ActivityResultLauncher<ScanOptions> scanner = registerForActivityResult(new ScanContract(), r -> {
         if (r.getContents() != null) js(home, "onScan(" + JSONObject.quote(r.getContents()) + ")");
+    });
+    // 从相册选一张带二维码的图片（比如别的手机上面板二维码的截图）
+    private final ActivityResultLauncher<String> imgPicker = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+        if (uri != null) new Thread(() -> decodeQr(uri)).start();
     });
     private final ActivityResultLauncher<Intent> picker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
         if (fileCb == null) return;
@@ -105,6 +131,11 @@ public class MainActivity extends AppCompatActivity {
             String o = getIntent().getStringExtra("open");
             if (o != null) openUrl(o);
             if (getIntent().getBooleanExtra("scan", false)) new Bridge().scan();
+            // --es homejs 代码：首页加载好后执行（测弹窗、手动添加）；--es qrfile 路径：识别这张图片里的二维码（测相册识别）
+            String hj = getIntent().getStringExtra("homejs");
+            if (hj != null) home.postDelayed(() -> js(home, hj), 2500);
+            String qf = getIntent().getStringExtra("qrfile");
+            if (qf != null) home.postDelayed(() -> new Thread(() -> decodeQr(Uri.fromFile(new java.io.File(qf)))).start(), 2500);
         }
     }
 
@@ -141,6 +172,34 @@ public class MainActivity extends AppCompatActivity {
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(false);
         home.addJavascriptInterface(new Bridge(), "App");
+        // 首页里的提示、确认、输入框：不设置这个的话，安卓会把它们全部悄悄吞掉（点了没反应）
+        home.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onJsAlert(WebView v, String url, String msg, JsResult r) {
+                new AlertDialog.Builder(MainActivity.this).setMessage(msg).setPositiveButton("知道了", (d, w) -> r.confirm())
+                        .setOnCancelListener(d -> r.confirm()).show();
+                return true;
+            }
+            @Override public boolean onJsConfirm(WebView v, String url, String msg, JsResult r) {
+                new AlertDialog.Builder(MainActivity.this).setMessage(msg)
+                        .setPositiveButton("确定", (d, w) -> r.confirm()).setNegativeButton("取消", (d, w) -> r.cancel())
+                        .setOnCancelListener(d -> r.cancel()).show();
+                return true;
+            }
+            @Override public boolean onJsPrompt(WebView v, String url, String msg, String def, JsPromptResult r) {
+                EditText in = new EditText(MainActivity.this);
+                in.setInputType(InputType.TYPE_CLASS_TEXT);
+                in.setSingleLine(true);
+                if (def != null) { in.setText(def); in.setSelection(def.length()); }
+                int pad = (int) (20 * getResources().getDisplayMetrics().density);
+                FrameLayout box = new FrameLayout(MainActivity.this);
+                box.setPadding(pad, pad / 2, pad, 0);
+                box.addView(in);
+                new AlertDialog.Builder(MainActivity.this).setMessage(msg).setView(box)
+                        .setPositiveButton("确定", (d, w) -> r.confirm(in.getText().toString())).setNegativeButton("取消", (d, w) -> r.cancel())
+                        .setOnCancelListener(d -> r.cancel()).show();
+                return true;
+            }
+        });
         home.setWebViewClient(new WebViewClient() {
             // 首页只显示自己；点了别的链接就交给面板窗口或系统浏览器
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
@@ -242,6 +301,35 @@ public class MainActivity extends AppCompatActivity {
     // 用 INVISIBLE 不用 GONE：隐藏时网页照常排版，切回来不会空白
     private void showHome() { site.setVisibility(View.INVISIBLE); js(home, "window.refresh && refresh()"); }
     private void showSite() { site.setVisibility(View.VISIBLE); site.invalidate(); }
+    // 识别图片里的二维码：大图先缩小，再用两种方式各试一次
+    private void decodeQr(Uri uri) {
+        try {
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            try (InputStream in = getContentResolver().openInputStream(uri)) { BitmapFactory.decodeStream(in, null, o); }
+            int side = Math.max(o.outWidth, o.outHeight), ss = 1;
+            while (side / ss > 2000) ss *= 2;
+            BitmapFactory.Options o2 = new BitmapFactory.Options();
+            o2.inSampleSize = ss;
+            Bitmap b;
+            try (InputStream in = getContentResolver().openInputStream(uri)) { b = BitmapFactory.decodeStream(in, null, o2); }
+            if (b == null) throw new Exception("not image");
+            int w = b.getWidth(), h = b.getHeight();
+            int[] px = new int[w * h];
+            b.getPixels(px, 0, w, 0, 0, w, h);
+            b.recycle();
+            RGBLuminanceSource src = new RGBLuminanceSource(w, h, px);
+            Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
+            hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
+            hints.put(DecodeHintType.POSSIBLE_FORMATS, EnumSet.of(BarcodeFormat.QR_CODE));
+            String text;
+            try { text = new MultiFormatReader().decode(new BinaryBitmap(new HybridBinarizer(src)), hints).getText(); }
+            catch (Exception e) { text = new MultiFormatReader().decode(new BinaryBitmap(new GlobalHistogramBinarizer(src)), hints).getText(); }
+            js(home, "onScan(" + JSONObject.quote(text) + ")");
+        } catch (Exception e) {
+            toast("这张图片里没找到二维码。请用清楚一点的截图（面板里的二维码要先点一下，去掉模糊再截图）");
+        }
+    }
     private void js(WebView w, String code) { runOnUiThread(() -> w.evaluateJavascript(code, null)); }
     private void toast(String t) { runOnUiThread(() -> Toast.makeText(this, t, Toast.LENGTH_SHORT).show()); }
 
@@ -254,6 +342,17 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void saveRouters(String json) { try { save(new JSONArray(json)); } catch (Exception e) {} }
         @JavascriptInterface public void open(String url) { runOnUiThread(() -> openUrl(url)); }
         @JavascriptInterface public void external(String url) { runOnUiThread(() -> MainActivity.this.external(url)); }
+        // 读手机剪贴板（网页自己读剪贴板在 App 里经常被拦，改用系统的）
+        @JavascriptInterface public String clipboard() {
+            try {
+                ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                ClipData c = cm == null ? null : cm.getPrimaryClip();
+                if (c == null || c.getItemCount() == 0) return "";
+                CharSequence t = c.getItemAt(0).coerceToText(MainActivity.this);
+                return t == null ? "" : t.toString();
+            } catch (Exception e) { return ""; }
+        }
+        @JavascriptInterface public void pickQr() { runOnUiThread(() -> { try { imgPicker.launch("image/*"); } catch (Exception e) { toast("打不开相册"); } }); }
         @JavascriptInterface public void scan() {
             runOnUiThread(() -> {
                 ScanOptions o = new ScanOptions();

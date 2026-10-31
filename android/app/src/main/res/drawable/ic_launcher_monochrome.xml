@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 安卓 13「主题图标」用的单色版：同样的形状，指示灯和网口挖空 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="2.5" android:scaleY="2.5" android:translateX="14" android:translateY="14">
+        <path android:pathData="M8.4,9.8A10.8,10.8 0,0 1,23.6 9.8" android:strokeColor="#99FFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M11.2,12.6A6.8,6.8 0,0 1,20.8 12.6" android:strokeColor="#FFFFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:fillType="evenOdd" android:fillColor="#FFFFFFFF"
+            android:pathData="M9.9,16h12.2a2.4,2.4 0,0 1,2.4 2.4v2.7a2.4,2.4 0,0 1,-2.4 2.4h-12.2a2.4,2.4 0,0 1,-2.4 -2.4v-2.7a2.4,2.4 0,0 1,2.4 -2.4z M10.3,19.75a1.1,1.1 0,1 0,2.2 0a1.1,1.1 0,1 0,-2.2 0z M13.5,19.75a1.1,1.1 0,1 0,2.2 0a1.1,1.1 0,1 0,-2.2 0z M18,18.95h3.4a0.8,0.8 0,0 1,0 1.6h-3.4a0.8,0.8 0,0 1,0 -1.6z"/>
+    </group>
+</vector>

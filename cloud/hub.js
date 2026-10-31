@@ -274,7 +274,8 @@ export class Hub extends DurableObject {
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
 			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, bound: x.at });
 		}
-		return { email: u.email, created: u.created, verified: !!u.verified, devs, mail: !!this.env.RESEND_API_KEY };
+		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
+		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY };
 	}
 	// 路由器那边（凭 RKEY）要一个配对码，用户在官网输入配对码，就把这台路由器加到自己账号里
 	async pairStart({ sub, rkey }) {
@@ -290,7 +291,7 @@ export class Hub extends DurableObject {
 		if (!(await this.hit('bi:' + uid, 20, 3600e3))) return { st: 429, error: '试太多次了，一小时后再试' };
 		code = String(code || '').trim().toUpperCase().replace(/[^A-Z2-9]/g, '');
 		const p = code && (await this.ctx.storage.get('p:' + code));
-		if (!p || p.exp < Date.now()) return { st: 400, error: '配对码不对或已过期（10 分钟有效），在路由器面板里重新获取一个' };
+		if (!p || p.exp < Date.now()) return { st: 400, error: '配对码不对或已过期（10 分钟有效）。重新拿一个：面板「系统操作 → 绑定到账号」，或者路由器终端运行 cmcp-pair' };
 		await this.ctx.storage.delete('p:' + code);
 		const d = await this.ctx.storage.get('d:' + p.sub), u = await this.ctx.storage.get('u:' + uid);
 		if (!d || d.state !== 'ok' || !u) return { st: 400, error: '这台路由器已经不在了' };
@@ -310,6 +311,32 @@ export class Hub extends DurableObject {
 		if (d) { d.users = (d.users || []).filter((x) => x !== uid); await this.ctx.storage.put('d:' + sub, d); }
 		return { st: 200, ok: true };
 	}
+	// 自建版路由器：账号里只记名字和面板网址，方便换手机时找到（不记密钥；粘贴了登录地址也只留网址部分）
+	addLink(uid, name, url) { return this.lock(() => this._addLink(uid, name, url)); }
+	async _addLink(uid, name, url) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		const n = panelUrl(url);
+		if (!n) return { st: 400, error: '网址不对：填路由器面板的网址，比如 https://router.example.com/panel/' };
+		const base = String(this.env.BASE_DOMAIN || '').toLowerCase();
+		if (base && (n.host === base || n.host.endsWith('.' + base))) return { st: 400, error: '这是托管版的网址，请用配对码绑定（面板「系统操作 → 绑定到账号」）' };
+		u.links = u.links || [];
+		if (u.links.some((x) => x.url === n.url)) return { st: 400, error: '这台已经添加过了' };
+		if (u.links.length >= 20) return { st: 400, error: '最多添加 20 台自建版路由器' };
+		const id = rnd(10);
+		u.links.push({ id, url: n.url, name: clean(name, 40) || n.host, at: Date.now() });
+		await this.ctx.storage.put('u:' + uid, u);
+		return { st: 200, ok: true, id, name: clean(name, 40) || n.host, stripped: n.stripped };
+	}
+	delLink(uid, id) { return this.lock(async () => {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		const before = (u.links || []).length;
+		u.links = (u.links || []).filter((x) => x.id !== id);
+		if (u.links.length === before) return { st: 404, error: '没有这台路由器' };
+		await this.ctx.storage.put('u:' + uid, u);
+		return { st: 200, ok: true };
+	}); }
 	async rename(uid, sub, alias) {
 		const u = await this.ctx.storage.get('u:' + uid);
 		const x = u && (u.devs || []).find((y) => y.sub === sub);
@@ -424,6 +451,7 @@ export async function hubFetch(req, env) {
 	if (p.startsWith('/api/account/') || p === '/api/pair/start' || p.startsWith('/api/dev/')) return accountApi(req, env, H, p, body);
 	if (p === '/api/app/version') return appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
+	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
 	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN }[p];
 	if (pg && req.method === 'GET') return new Response(pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'" } });
 	return J({ error: 'not found' }, 404);
@@ -449,7 +477,9 @@ async function appVersion(env) {
 			if (!r.ok) return null;
 			const j = await r.json();
 			if (!(j.assets || []).some((a) => a.name === 'router-panel.apk')) return null;
-			return { version: String(j.tag_name || '').replace(/^v/, ''), notes: notesOf(j.body), apk: '/app/router-panel.apk', at: j.published_at };
+			// 强制更新：发布说明里写「【必须更新】」，或者写「最低版本：1.2.1」（比这个旧的必须更新）
+			const body = String(j.body || ''), mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(body);
+			return { version: String(j.tag_name || '').replace(/^v/, ''), notes: notesOf(j.body), apk: '/app/router-panel.apk', at: j.published_at, force: body.includes('【必须更新】'), min: mv ? mv[1] : '' };
 		});
 		const res = J(v ? { ok: true, ...v } : { ok: false, error: '还没有发布安卓 App' }, v ? 200 : 404);
 		for (const [k, x] of Object.entries(cors)) res.headers.set(k, x);
@@ -462,9 +492,30 @@ async function appApk(env) {
 	return new Response(r.body, { headers: { 'content-type': 'application/vnd.android.package-archive', 'content-disposition': 'attachment; filename="router-panel.apk"', 'cache-control': 'public, max-age=600' } });
 }
 
+// 安装包也从官网下载（从 GitHub 最新发布转过来）：大陆的路由器直连 GitHub 常常很慢或者下不动
+export const DL_RE = /^(openwrt-claude-panel-(?:(?:ai|noai)-(?:lite|full)|hosted-(?:ai|noai))\.tar\.gz|SHA256SUMS)$/;
+async function dlFile(env, name) {
+	if (!DL_RE.test(name)) return J({ error: '没有这个文件' }, 404);
+	const r = await fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/' + name, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	if (!r.ok) return J({ error: '还没有发布这个安装包' }, 404);
+	const gz = name.endsWith('.gz');
+	return new Response(r.body, { headers: { 'content-type': gz ? 'application/gzip' : 'text/plain; charset=utf-8', 'content-disposition': 'attachment; filename="' + name + '"', 'cache-control': 'public, max-age=600' } });
+}
+
 /* ---------- 账号接口（官网）和路由器配对接口 ---------- */
 const getSid = (req) => (/(?:^|;\s*)sid=([a-z2-9]{32})(?:;|$)/.exec(req.headers.get('cookie') || '') || [])[1] || '';
 const sidCookie = (sid, age) => `sid=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+// 自建版路由器的面板网址：只认 https；登录地址（/cgi-bin/mcp/密钥）和 #login=密钥 都只取网址部分，密钥丢掉
+export function panelUrl(raw) {
+	let u;
+	try { u = new URL(String(raw || '').trim()); } catch (e) { return null; }
+	if (u.protocol !== 'https:' || u.username || u.password) return null;
+	const host = u.hostname.toLowerCase();
+	if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(host)) return null;
+	const stripped = /^\/cgi-bin\/mcp\/./.test(u.pathname) || /login=/.test(u.hash) || u.search.length > 1;
+	if (!/^\/(panel\/?(index\.html)?|cgi-bin\/mcp\/[A-Za-z0-9]+\/?)?$/.test(u.pathname)) return null;
+	return { host, url: 'https://' + host + (u.port ? ':' + u.port : '') + '/panel/', stripped };
+}
 async function accountApi(req, env, H, p, body) {
 	const ip = req.headers.get('cf-connecting-ip') || '';
 	const post = req.method === 'POST';
@@ -495,6 +546,8 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'bind') return out(await H.bind(me.uid, s(b.code), ip));
 	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub)));
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
+	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
+	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
 	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password)));
 	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	return J({ error: 'not found' }, 404);

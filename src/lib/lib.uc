@@ -69,4 +69,29 @@ function lan_devices() {
 	return byip;
 }
 
-export { D, shq, sh, readj, writej, now, uci, enc, api, notify, lan_devices };
+/* ---------- 「拉黑名单」规则集（OpenClash 的 file 规则集，改完刷新一下就生效，不用重启） ---------- */
+const BL_RULESET = '/etc/openclash/rule_provider/cmcp_blacklist.yaml';
+// 面板的主域名：子域名.主域名 → 主域名（托管版是官网域名，这样官网和面板一起）
+function panel_domain() {
+	let p = split(trim(readfile(D + '/hostname') ?? ''), '.');
+	return length(p) > 2 ? join('.', slice(p, 1)) : join('.', p);
+}
+// 面板现在走直连还是走代理（cmcp-route 自动选）
+function panel_direct() { return !!readj(D + '/panel_route.json', {})?.direct; }
+function bl_ruleset_write() {
+	let l = readj(D + '/blacklist.json', []), dom = panel_domain();
+	if (type(l) != 'array') l = [];
+	let lines = ['# 由路由器面板「拉黑名单」自动生成，不要手动修改', 'payload:'];
+	// 路由器自己连 Cloudflare 的流量（隧道、云端报告）走直连：不受代理节点抽风影响
+	push(lines, '  - PROCESS-NAME,cloudflared', '  - DST-PORT,7844', '  - AND,((DOMAIN,api.cloudflare.com),(PROCESS-NAME,curl))');
+	if (dom) {
+		push(lines, '  - AND,((DOMAIN-SUFFIX,' + dom + '),(PROCESS-NAME,curl))');
+		// 手机打开面板：代理节点打不开、或者直连明显更快时，cmcp-route 会把面板改成直连
+		if (panel_direct()) push(lines, '  - DOMAIN-SUFFIX,' + dom);
+	}
+	for (let e in l) if (e?.ip) push(lines, sprintf('  - SRC-IP-CIDR,%s/32', e.ip));
+	mkdir('/etc/openclash'); mkdir('/etc/openclash/rule_provider');
+	writefile(BL_RULESET + '.tmp', join('\n', lines) + '\n');
+	rename(BL_RULESET + '.tmp', BL_RULESET);
+}
+export { D, shq, sh, readj, writej, now, uci, enc, api, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write };

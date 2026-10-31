@@ -493,18 +493,18 @@ section.page{display:none}section.page.on{display:block}
 </div>
 
 <!-- 托管版：这台手机第一次打开面板，要输一次登录码 -->
-<div id="needcode" class="lgwrap hidden" role="dialog" aria-modal="true" aria-labelledby="ncTitle">
+<div id="needcode" class="lgwrap hidden" role="dialog" aria-modal="true" aria-labelledby="lcTitle">
 <main class="lgcard">
 	<div class="logo lgbiglogo" aria-hidden="true" style="font-size:30px">🔐</div>
-	<h2 id="ncTitle">输入登录码</h2>
+	<h2 id="lcTitle">输入登录码</h2>
 	<div class="muted" style="font-size:14px;line-height:1.7">为了安全，托管版每台手机第一次打开面板要输一次登录码，输对以后这台手机就不用再输了。</div>
-	<ol class="ncsteps muted"><li>打开官网 <b id="ncHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
-	<label class="lglabel" for="ncInput">登录码</label>
-	<input id="ncInput" class="input nccode" placeholder="8 位登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false">
-	<div id="ncErr" class="formerr hidden"></div>
-	<button id="ncBtn" class="lgmain">确定</button>
-	<a id="ncHub" class="nchub" href="https://yrlove520.com/app" target="_blank" rel="noopener">打开官网拿登录码</a>
-	<div class="ncmore muted">官网账号里还没有这台路由器：用安装时终端里显示的配对码绑定（过期了在路由器后台终端运行 <code>cmcp-pair</code> 再拿一个）。<br>官网打不开、急着用：在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH，不是这个面板里的终端）运行 <code>cmcp-logincode</code>，拿一个应急登录码。<br><a href="#" id="ncOut">换一个登录地址</a></div>
+	<ol class="ncsteps muted"><li>打开官网 <b id="lcHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
+	<label class="lglabel" for="lcInput">登录码</label>
+	<input id="lcInput" class="input nccode" placeholder="8 位登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false">
+	<div id="lcErr" class="formerr hidden"></div>
+	<button id="lcBtn" class="lgmain">确定</button>
+	<a id="lcHub" class="nchub" href="https://yrlove520.com/app" target="_blank" rel="noopener">打开官网拿登录码</a>
+	<div class="ncmore muted">官网账号里还没有这台路由器：用安装时终端里显示的配对码绑定（过期了在路由器后台终端运行 <code>cmcp-pair</code> 再拿一个）。<br>官网打不开、急着用：在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH，不是这个面板里的终端）运行 <code>cmcp-logincode</code>，拿一个应急登录码。<br><a href="#" id="lcOut">换一个登录地址</a></div>
 </main>
 </div>
 
@@ -4069,7 +4069,7 @@ function lgBackground() {
 }
 
 /* ---------- 托管版：输登录码 ---------- */
-function devName() {
+function loginDevName() {
 	const u = navigator.userAgent || '';
 	let os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? '安卓手机' : /Windows/.test(u) ? 'Windows 电脑' : /Mac OS/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux 电脑' : '设备';
 	const m = /Android [\d.]+; ([^;)]+?)(?: Build|\))/.exec(u);
@@ -4077,38 +4077,38 @@ function devName() {
 	const b = /RouterPanel/.test(u) ? 'App' : /EdgA?\//.test(u) ? 'Edge' : /SamsungBrowser/.test(u) ? '三星浏览器' : /MicroMessenger/.test(u) ? '微信' : /HuaweiBrowser/.test(u) ? '华为浏览器' : /MiuiBrowser|XiaoMi/.test(u) ? '小米浏览器' : /Firefox|FxiOS/.test(u) ? 'Firefox' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /Safari/.test(u) ? 'Safari' : '浏览器';
 	return (os + ' · ' + b).slice(0, 40);
 }
-function ncErr(t) { $('ncErr').textContent = t || ''; $('ncErr').classList.toggle('hidden', !t); }
+function lcErr(t) { $('lcErr').textContent = t || ''; $('lcErr').classList.toggle('hidden', !t); }
 function needCode(data) {
 	const w = $('needcode');
 	if (!token) return; // 已经退出了（退出前发出去的请求晚回来）
 	const hub = (data && /^https:\/\/[a-z0-9.-]+$/i.test(data.hub || '')) ? data.hub : 'https://yrlove520.com';
-	$('ncHub').href = hub + '/app';
-	$('ncHubName').textContent = hub.replace(/^https:\/\//, '');
+	$('lcHub').href = hub + '/app';
+	$('lcHubName').textContent = hub.replace(/^https:\/\//, '');
 	if (!w.classList.contains('hidden')) return;
 	w.classList.remove('hidden');
-	ncErr('');
-	if (pendCode) { $('ncInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
-	else setTimeout(() => { try { $('ncInput').focus(); } catch (e) {} }, 300);
+	lcErr('');
+	if (pendCode) { $('lcInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
+	else setTimeout(() => { try { $('lcInput').focus(); } catch (e) {} }, 300);
 }
 async function ncGo() {
-	const code = $('ncInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-	ncErr('');
-	if (code.length !== 8) return ncErr('登录码是 8 位字母和数字');
-	const btn = $('ncBtn'); btn.disabled = true; btn.textContent = '核对中…';
+	const code = $('lcInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+	lcErr('');
+	if (code.length !== 8) return lcErr('登录码是 8 位字母和数字');
+	const btn = $('lcBtn'); btn.disabled = true; btn.textContent = '核对中…';
 	try {
-		const r = await rpcOnce('panel/device_approve', { code, name: devName() }, 30000);
+		const r = await rpcOnce('panel/device_approve', { code, name: loginDevName() }, 30000);
 		store.set('rp_dev', r.dev);
 		btn.textContent = '✓ 登录成功';
 		setTimeout(() => location.reload(), 400);
 	} catch (e) {
-		ncErr(e instanceof AuthError ? '登录地址里的密钥不对，点下面「换一个登录地址」重新粘贴' : e.message);
+		lcErr(e instanceof AuthError ? '登录地址里的密钥不对，点下面「换一个登录地址」重新粘贴' : e.message);
 		btn.disabled = false; btn.textContent = '确定';
 	}
 }
-$('ncBtn').onclick = ncGo;
-window.addEventListener('hashchange', () => { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (!m) return; history.replaceState(null, '', location.pathname + location.search); if (!$('needcode').classList.contains('hidden')) { $('ncInput').value = m[1].toUpperCase(); ncGo(); } else pendCode = m[1].toUpperCase(); });
-$('ncInput').onkeydown = (e) => { if (e.key === 'Enter') ncGo(); };
-$('ncOut').onclick = (e) => { e.preventDefault(); logout(''); };
+$('lcBtn').onclick = ncGo;
+window.addEventListener('hashchange', () => { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (!m) return; history.replaceState(null, '', location.pathname + location.search); if (!$('needcode').classList.contains('hidden')) { $('lcInput').value = m[1].toUpperCase(); ncGo(); } else pendCode = m[1].toUpperCase(); });
+$('lcInput').onkeydown = (e) => { if (e.key === 'Enter') ncGo(); };
+$('lcOut').onclick = (e) => { e.preventDefault(); logout(''); };
 
 let ticker, wdTick = 0;
 function start() {

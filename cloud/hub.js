@@ -468,7 +468,9 @@ async function cached(key, ttl, make) {
 	return v;
 }
 // 更新说明：取发布说明里「这个版本的更新」那一节
-const notesOf = (b) => { b = String(b || '').replace(/\r/g, ''); const m = /## 这个版本的更新\n([\s\S]*?)(?:\n## |$)/.exec(b); return (m ? m[1] : b).trim().slice(0, 800); };
+// App 弹窗里是纯文字：去掉 Markdown 的加粗、链接、代码标记，「- 」换成「• 」
+const plain = (t) => t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^- /gm, '• ');
+const notesOf = (b) => { b = String(b || '').replace(/\r/g, ''); const m = /## 这个版本的更新\n([\s\S]*?)(?:\n## |$)/.exec(b); return plain((m ? m[1] : b).trim()).slice(0, 800); };
 async function appVersion(env) {
 	const cors = { 'access-control-allow-origin': '*' };
 	try {

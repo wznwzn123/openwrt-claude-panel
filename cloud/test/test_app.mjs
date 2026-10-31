@@ -21,7 +21,7 @@ rel = { tag_name: 'v1.2.0', published_at: '2026-11-01T00:00:00Z', body: 'OpenWrt
 r = await get('/api/app/version');
 const j = await r.json();
 ok('发布后：返回版本号（去掉 v）', r.status === 200 && j.version === '1.2.0', JSON.stringify(j));
-ok('更新说明只取「这个版本的更新」那一节', j.notes === '- 新增安卓 App\n- 修复了一些问题', JSON.stringify(j.notes));
+ok('更新说明只取「这个版本的更新」那一节（列表符号换成 •）', j.notes === '• 新增安卓 App\n• 修复了一些问题', JSON.stringify(j.notes));
 ok('安装包地址走自己的域名', j.apk === '/app/router-panel.apk');
 ok('普通版本：不强制更新', j.force === false && j.min === '');
 r = await get('/app/router-panel.apk');
@@ -44,6 +44,9 @@ for (const n of ['openwrt-claude-panel-hosted-ai.tar.gz', 'openwrt-claude-panel-
 }
 for (const bad of ['../etc/passwd', 'router-panel.apk', 'openwrt-claude-panel-hosted-x.tar.gz', 'openwrt-claude-panel-ai-lite.tar.gz.exe', '%2e%2e%2fsecret'])
 	ok('不认识的文件名不转发：' + bad, (await get('/dl/' + bad)).status === 404);
+rel = { tag_name: 'v1.3.1', body: '## 这个版本的更新\n\n- **只用手机就能装**：见 [📱 手机教程](https://x/y.md)，运行 `cmcp-pair`', assets: [{ name: 'router-panel.apk' }] };
+k = await (await get('/api/app/version')).json();
+ok('更新说明去掉 Markdown 符号（App 弹窗是纯文字）', k.notes === '• 只用手机就能装：见 📱 手机教程，运行 cmcp-pair', JSON.stringify(k.notes));
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

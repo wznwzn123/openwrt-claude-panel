@@ -9,6 +9,7 @@ adb shell am start -n $PKG/.MainActivity
 sleep 12
 adb exec-out screencap -p > $OUT/1-home-light.png
 # 打开网页窗口（官网账号页）
+adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity --es open https://example.com/app
 sleep 10
 adb exec-out screencap -p > $OUT/2-site.png

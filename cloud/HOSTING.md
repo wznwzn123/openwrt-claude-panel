@@ -34,7 +34,32 @@ Cloudflare 控制台 → 右上角头像 → **My Profile → API Tokens → Cre
 
 再记下两个 ID：域名概览页右下角的 **Account ID** 和 **Zone ID**。
 
-### 3. 改配置并部署
+### 3. 部署
+
+#### 方法 A：在手机上用 GitHub 一键部署（不用电脑）
+
+第 2 步的令牌就是下面的「运行令牌」。再建一个**部署令牌**（同样 Create Custom Token）：
+
+| 权限 | 范围 |
+|---|---|
+| Account · **Workers Scripts** · Edit | 你的账户 |
+| Zone · **Workers Routes** · Edit | 只选 `example.com` |
+| Zone · **DNS** · Edit | 只选 `example.com` |
+| Zone · **Zone** · Read | 只选 `example.com` |
+
+GitHub 仓库 **Settings → Secrets and variables → Actions**：
+
+| 类型 | 名字 | 值 |
+|---|---|---|
+| Variables | `HUB_URL` | `https://example.com` |
+| Secrets | `CF_DEPLOY_TOKEN` | 部署令牌 |
+| Secrets | `HUB_RUNTIME_TOKEN` | 运行令牌（第 2 步那个） |
+| Secrets | `HUB_ADMIN_KEY` | 自己编的 32 位以上随机字符，管理用，另外存好 |
+| Secrets | `RESEND_API_KEY` | （可选）邮件验证码，见下文 |
+
+然后 **Actions → 部署托管服务 → Run workflow**。几分钟后显示绿勾，结果里写着「部署好了」就完成了。推送密钥第一次部署时自动生成。以后改了代码，再运行一次就是更新。
+
+#### 方法 B：在电脑上用 wrangler
 
 把 `cloud/wrangler.hosted.toml` 里的 `example.com`、`CF_ACCOUNT_ID`、`CF_ZONE_ID`、`VAPID_SUB` 换成你的，然后：
 

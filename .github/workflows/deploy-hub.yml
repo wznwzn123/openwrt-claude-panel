@@ -1,0 +1,95 @@
+# 部署托管服务（官网 + 账号 + 给别人开通专属网址）到 Cloudflare
+# 手机上就能操作：Actions → 部署托管服务 → Run workflow
+#
+# 需要先在仓库 Settings → Secrets and variables → Actions 里设置：
+#   变量 Variables：HUB_URL            例如 https://example.com（托管服务的主域名）
+#   密钥 Secrets：  CF_DEPLOY_TOKEN    部署用的 Cloudflare API 令牌（Workers 脚本/路由、DNS、读区域）
+#                  HUB_RUNTIME_TOKEN  托管服务运行时用的令牌（只有 Tunnel 和 DNS 编辑）
+#                  HUB_ADMIN_KEY      管理密钥（发邀请码、封禁），32 位以上随机字符
+#                  RESEND_API_KEY     （可选）邮件验证码
+# 推送密钥（VAPID）第一次部署时自动生成，以后不变；不会出现在日志里。
+name: 部署托管服务
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: deploy-hub
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_DEPLOY_TOKEN }}
+      HUB_URL: ${{ vars.HUB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 检查设置
+        env:
+          RT: ${{ secrets.HUB_RUNTIME_TOKEN }}
+          AK: ${{ secrets.HUB_ADMIN_KEY }}
+        run: |
+          miss=""
+          [ -n "$HUB_URL" ] || miss="$miss 变量HUB_URL"
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || miss="$miss 密钥CF_DEPLOY_TOKEN"
+          [ -n "$RT" ] || miss="$miss 密钥HUB_RUNTIME_TOKEN"
+          [ ${#AK} -ge 32 ] || miss="$miss 密钥HUB_ADMIN_KEY(至少32位)"
+          if [ -n "$miss" ]; then echo "::error::还没设置：$miss"; exit 1; fi
+          D="${HUB_URL#https://}"; D="${D%%/*}"
+          echo "DOMAIN=$D" >> "$GITHUB_ENV"
+          echo "::notice::部署到 $D"
+      - name: 查账户和域名 ID
+        run: |
+          R=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN")
+          ZID=$(echo "$R" | jq -r '.result[0].id // empty')
+          AID=$(echo "$R" | jq -r '.result[0].account.id // empty')
+          if [ -z "$ZID" ] || [ -z "$AID" ]; then
+            echo "::error::用部署令牌找不到域名 $DOMAIN。检查 CF_DEPLOY_TOKEN 有没有「区域·区域·读取」权限、区域范围有没有选这个域名。返回：$(echo "$R" | jq -c '.errors')"
+            exit 1
+          fi
+          echo "CF_ZONE_ID=$ZID" >> "$GITHUB_ENV"
+          echo "CLOUDFLARE_ACCOUNT_ID=$AID" >> "$GITHUB_ENV"
+      - name: 生成配置
+        working-directory: cloud
+        run: |
+          sed -e "s/example\.com/$DOMAIN/g" \
+              -e "s/^CF_ACCOUNT_ID = .*/CF_ACCOUNT_ID = \"$CLOUDFLARE_ACCOUNT_ID\"/" \
+              -e "s/^CF_ZONE_ID = .*/CF_ZONE_ID = \"$CF_ZONE_ID\"/" \
+              -e "s/^VAPID_SUB = .*/VAPID_SUB = \"mailto:admin@$DOMAIN\"/" \
+              -e "s|^main = .*|&\nworkers_dev = false|" \
+              -e "s|^\[vars\]|&\nGITHUB_REPO = \"$GITHUB_REPOSITORY\"|" \
+              wrangler.hosted.toml > wrangler.ci.toml
+          cat wrangler.ci.toml
+          node ../tools/build-site.mjs
+      - name: 部署
+        working-directory: cloud
+        run: npx -y wrangler@4 deploy -c wrangler.ci.toml
+      - name: 设置密钥
+        working-directory: cloud
+        env:
+          RT: ${{ secrets.HUB_RUNTIME_TOKEN }}
+          AK: ${{ secrets.HUB_ADMIN_KEY }}
+          RS: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          HAVE=$(npx -y wrangler@4 secret list -c wrangler.ci.toml --format json | jq -r '.[].name')
+          jq -n --arg rt "$RT" --arg ak "$AK" --arg rs "$RS" \
+            '{CF_API_TOKEN: $rt, ADMIN_KEY: $ak} + (if $rs != "" then {RESEND_API_KEY: $rs} else {} end)' > "$RUNNER_TEMP/s.json"
+          # 推送密钥只在第一次生成：换了的话，大家手机上已经开的通知都会失效
+          if ! echo "$HAVE" | grep -qx VAPID_PUB; then
+            OUT=$(node gen-vapid.mjs)
+            PRIV=$(echo "$OUT" | sed -n 's/^VAPID_PRIV=//p'); PUB=$(echo "$OUT" | sed -n 's/^VAPID_PUB=//p')
+            echo "::add-mask::$PRIV"
+            jq --arg p "$PRIV" --arg u "$PUB" '. + {VAPID_PRIV: $p, VAPID_PUB: $u}' "$RUNNER_TEMP/s.json" > "$RUNNER_TEMP/s2.json" && mv "$RUNNER_TEMP/s2.json" "$RUNNER_TEMP/s.json"
+            echo "::notice::已生成推送密钥（第一次部署）"
+          fi
+          npx -y wrangler@4 secret bulk "$RUNNER_TEMP/s.json" -c wrangler.ci.toml
+          rm -f "$RUNNER_TEMP/s.json"
+      - name: 检查能不能打开
+        run: |
+          for i in $(seq 1 30); do
+            R=$(curl -sS -m 10 "https://$DOMAIN/api/ping" || true)
+            if echo "$R" | jq -e '.ok == true' >/dev/null 2>&1; then echo "::notice::部署好了：https://$DOMAIN  $R"; exit 0; fi
+            sleep 10
+          done
+          echo "::warning::部署完成，但 https://$DOMAIN 暂时还打不开（新域名的证书可能要再等几分钟）。最后一次返回：$R"

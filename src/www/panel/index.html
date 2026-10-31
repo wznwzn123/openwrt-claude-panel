@@ -406,7 +406,7 @@ section.page{display:none}section.page.on{display:block}
 <main class="lgcard">
 	<div class="logo lgbiglogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="#fff"/><circle cx="11.4" cy="19.75" r="1.1" fill="#2f6bff"/><circle cx="14.6" cy="19.75" r="1.1" fill="#2f6bff"/><path d="M18 19.75h3.4" stroke="#2f6bff" stroke-width="1.6" stroke-linecap="round"/></svg></div>
 	<h2>连接你的路由器</h2>
-	<div class="muted" style="font-size:14px">粘贴添加 Claude 连接器时用的那个地址，密钥只保存在这台手机上</div>
+	<div class="muted" style="font-size:14px">粘贴安装时显示的「登录地址」（用 Claude 的话，就是添加连接器时用的那个地址）。密钥只保存在这台手机上</div>
 	<label class="lglabel" for="lgInput">连接地址</label>
 	<input id="lgInput" class="input" placeholder="https://…/cgi-bin/mcp/……" autocomplete="off" autocapitalize="off" spellcheck="false">
 	<div id="lgErr" class="formerr hidden"></div>
@@ -770,7 +770,7 @@ async function rpcOnce(method, params, timeoutMs) {
 		r = await fetch('../cgi-bin/mcp/' + encodeURIComponent(token), {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-			body: JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {} }),
+			body: JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel' }),
 			signal: ctl.signal, cache: 'no-store',
 		});
 	} catch (e) {
@@ -3564,14 +3564,14 @@ function lgErr(t) { $('lgErr').textContent = t || ''; $('lgErr').classList.toggl
 async function doLogin() {
 	const t = parseToken($('lgInput').value);
 	lgErr('');
-	if (!t) return lgErr('没认出密钥，请粘贴完整的连接器地址');
+	if (!t) return lgErr('没认出密钥，请粘贴完整的登录地址');
 	const btn = $('lgBtn');
 	btn.disabled = true; btn.textContent = '连接中…';
 	token = t;
 	try {
 		const r = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }, 15000);
 		store.set('rp_token', t);
-		$('about').textContent = '路由器连接器 ' + (r.serverInfo?.version || '');
+		$('about').textContent = '路由器面板 ' + (r.serverInfo?.version || '');
 		start();
 	} catch (e) {
 		token = null;
@@ -3658,7 +3658,7 @@ function start() {
 		if (page === 'traf' && ++wdTick % 15 === 0) refresh(true);
 	}, 4000);
 	if (!$('about').textContent) setTimeout(() =>
-		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器连接器 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
+		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器面板 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
 	watchJobs();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); } });
@@ -3798,8 +3798,8 @@ async function lkKey(k) {
 	LK.checking = false;
 	if (ok) return lkUnlock();
 	c.fails = (c.fails || 0) + 1; c.total = (c.total || 0) + 1;
-	// 累计输错 20 次：直接断开这台手机（清掉密钥），要重新粘贴连接器地址
-	if (c.total >= LK_WIPE) { lkSave(null); lkUnlock(true); return logout('密码输错太多次，已断开这台手机，请重新粘贴连接器地址'); }
+	// 累计输错 20 次：直接断开这台手机（清掉密钥），要重新粘贴登录地址
+	if (c.total >= LK_WIPE) { lkSave(null); lkUnlock(true); return logout('密码输错太多次，已断开这台手机，请重新粘贴登录地址'); }
 	// 每错 5 次要等，等的时间翻倍：30 秒、1 分钟、2 分钟……最长 15 分钟
 	if (c.fails >= 5) { c.fails = 0; c.n = (c.n || 0) + 1; c.until = Date.now() + Math.min(30000 * 2 ** (c.n - 1), 900000); }
 	lkSave(c);
@@ -3815,16 +3815,16 @@ async function lkFp() {
 	catch (e) { if (e && e.name !== 'NotAllowedError' && e.name !== 'AbortError' && !lkWait()) lkMsg('指纹暂时用不了，请输入密码', true); }
 	finally { LK.fpBusy = false; }
 }
-// 忘记密码：只能断开这台手机（之后要重新粘贴连接器地址），所以拿到手机的人也绕不过去
+// 忘记密码：只能断开这台手机（之后要重新粘贴登录地址），所以拿到手机的人也绕不过去
 function lkForgot() {
 	const b = $('lkForgot');
 	if (Date.now() - LK.forgot > 5000) {
 		LK.forgot = Date.now(); b.textContent = '再点一次：断开这台手机并关闭面板锁'; b.classList.add('warn');
-		lkMsg('断开后要重新粘贴连接器地址才能用，路由器设置不受影响');
+		lkMsg('断开后要重新粘贴登录地址才能用，路由器设置不受影响');
 		setTimeout(() => { if (LK.on && Date.now() - LK.forgot >= 5000) { b.textContent = '忘记密码'; b.classList.remove('warn'); if (!lkWait()) lkMsg(lkHint()); } }, 5100);
 		return;
 	}
-	lkSave(null); lkUnlock(); logout('面板锁已关闭，请重新粘贴连接器地址');
+	lkSave(null); lkUnlock(); logout('面板锁已关闭，请重新粘贴登录地址');
 }
 // 5 分钟没操作自动锁（切到后台再回来也算）
 ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach((t) => addEventListener(t, () => {
@@ -3862,7 +3862,7 @@ async function lkCheckOld() {
 	toast('密码不对'); return false;
 }
 async function lkSetPin(old) {
-	const a = await pinBox(old ? '设置新密码' : '设置解锁密码', '4–6 位数字。忘了只能断开这台手机、重新粘贴连接器地址。'); if (a == null) return false;
+	const a = await pinBox(old ? '设置新密码' : '设置解锁密码', '4–6 位数字。忘了只能断开这台手机、重新粘贴登录地址。'); if (a == null) return false;
 	const b = await pinBox('再输入一次', '确认刚才的密码。'); if (b == null) return false;
 	if (a !== b) { toast('两次输入的不一样，没有保存'); return false; }
 	const salt = lkB64(lkRnd(16));

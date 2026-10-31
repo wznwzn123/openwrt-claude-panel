@@ -18,8 +18,10 @@
 
 ### 1. 在路由器上装完整版
 
+用 `openwrt-claude-panel-ai-full.tar.gz` 或 `openwrt-claude-panel-noai-full.tar.gz` 安装（详见 [AI 版·完整版教程](../docs/install-ai-full.md) / [纯面板版·完整版教程](../docs/install-noai-full.md)）：
+
 ```sh
-sh install.sh --full
+sh install.sh
 ```
 
 结束时会打印三个值，记下来：

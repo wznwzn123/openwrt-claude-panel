@@ -1,11 +1,15 @@
 #!/bin/sh
 # openwrt-claude-panel 安装脚本（在路由器上以 root 运行）
 #
-#   sh install.sh            交互安装（会问你装哪个版本）
-#   sh install.sh --lite     精简版：Claude 连接器 + 手机面板 + 本地看门狗
-#   sh install.sh --full     完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断）
+#   sh install.sh            按安装包的版本安装（从源码目录运行时会问你装哪个版本）
 #
-# 可选参数（不填就交互询问）：
+# 一共四个版本 = 「AI 版 / 纯面板版」 ×「精简版 / 完整版」：
+#   --ai         AI 版：可以在 Claude 里用对话管理路由器，也带手机面板
+#   --no-ai      纯面板版：只有手机面板，自己动手管理，不接 AI
+#   --lite       精简版：手机面板 + 本地看门狗（不需要 Cloudflare 账号）
+#   --full       完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断）
+#
+# 其他可选参数（不填就交互询问）：
 #   --domain router.example.com    面板域名（用 Cloudflare 命名隧道时填）
 #   --tunnel-token <token>         Cloudflare 隧道 token（留空 = 临时隧道，地址每次重启都会变）
 #   --cloud-url https://router.example.com/cloud   完整版：云端地址
@@ -17,7 +21,7 @@ set -e
 SRC=$(cd "$(dirname "$0")" && pwd)/src
 WWW=/www-claude-mcp
 D=/etc/claude-mcp
-ED=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0
+ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m ✓\033[0m %s\n' "$*"; }
@@ -37,11 +41,13 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--lite) ED=lite ;;
 		--full) ED=full ;;
+		--ai) AI=1 ;;
+		--no-ai|--panel-only) AI=0 ;;
 		--domain) DOMAIN=$2; shift ;;
 		--tunnel-token) TTOK=$2; shift ;;
 		--cloud-url) CURL_=$2; shift ;;
 		--yes|-y) YES=1 ;;
-		-h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,20p' "$0"; exit 0 ;;
 		*) die "不认识的参数：$1" ;;
 	esac
 	shift
@@ -55,16 +61,30 @@ UPGRADE=0
 [ -s "$D/config.json" ] && UPGRADE=1
 
 # ---------- 选版本 ----------
+# 发布的安装包里有 EDITION 文件，写着这个包是哪个版本；参数可以覆盖它
+PKG_AI=""; PKG_ED=""
+[ -f "$SRC/../EDITION" ] && . "$SRC/../EDITION"
+[ -n "$AI" ] || AI=$PKG_AI
+[ -n "$ED" ] || ED=$PKG_ED
+if [ -z "$AI" ]; then
+	def=1; [ $UPGRADE = 1 ] && grep -q '"ai": *false' "$D/config.json" && def=2
+	echo
+	echo "  1) AI 版：可以在 Claude 里用对话管理路由器，也带手机面板"
+	echo "  2) 纯面板版：只有手机面板，自己动手管理，不接 AI"
+	ask n "选择 1 或 2" "$def"
+	case "$n" in 2) AI=0 ;; *) AI=1 ;; esac
+fi
 if [ -z "$ED" ]; then
 	if [ -s "$D/cloud.conf" ]; then def=2; else def=1; fi
 	echo
-	echo "  1) 精简版：Claude 连接器 + 手机面板 + 本地看门狗（不需要 Cloudflare 账号）"
+	echo "  1) 精简版：手机面板 + 本地看门狗（不需要 Cloudflare 账号）"
 	echo "  2) 完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断，需要先部署 Worker）"
 	ask n "选择版本 1 或 2" "$def"
 	case "$n" in 2) ED=full ;; *) ED=lite ;; esac
 fi
 [ "$ED" = full ] && [ ! -f "$SRC/bin/cmcp-backup" ] && die "这个安装包是精简版，装完整版请下载 full 包"
-say "安装 $( [ "$ED" = full ] && echo 完整版 || echo 精简版 )$( [ $UPGRADE = 1 ] && echo '（升级，保留现有设置）' )"
+NAME="$( [ "$AI" = 1 ] && echo AI版 || echo 纯面板版 )·$( [ "$ED" = full ] && echo 完整版 || echo 精简版 )"
+say "安装 $NAME$( [ $UPGRADE = 1 ] && echo '（升级，保留现有设置）' )"
 
 # ---------- 依赖 ----------
 need=""
@@ -110,6 +130,9 @@ else
 	TOKEN=$(jsonfilter -i $D/config.json -e '@.token')
 fi
 [ ${#TOKEN} -ge 16 ] || die "config.json 里的 token 不对"
+# AI 开关：纯面板版在 config.json 里写 "ai": false，连接器只接受手机面板的请求
+ucode -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV[1] == "0") c.ai = false; else delete c.ai; fs.writefile(f, sprintf("%.J\n", c));' $D/config.json "$AI" \
+	|| die "写入 config.json 失败"
 [ -s $D/luci_key ] || rnd 32 > $D/luci_key
 if [ ! -s $D/luci_pass ]; then rnd 32 > $D/luci_pass; NEWPASS=1; fi
 # 面板打开 LuCI 原版页面用的专用账号（只给面板内部自动登录用）
@@ -199,12 +222,18 @@ H=${DOMAIN:-<你的隧道域名>}
 echo
 echo "================ 安装完成 ================"
 echo
-echo "Claude 连接器地址（在 Claude 设置 → 连接器 → 添加自定义连接器 里填）："
+echo "已安装：$NAME"
+echo
+echo "手机面板：https://$H/panel/"
+echo
+echo "登录地址（第一次打开面板时粘贴）："
 echo "  https://$H/cgi-bin/mcp/$TOKEN"
+if [ "$AI" = 1 ]; then
+	echo
+	echo "这个登录地址同时也是 Claude 连接器地址：在 Claude 设置 → 连接器 → 添加自定义连接器 里填它。"
+fi
 echo
-echo "手机面板：https://$H/panel/   （第一次打开时粘贴上面的连接器地址登录）"
-echo
-echo "⚠️  这个地址里带着密钥，谁拿到都能完全控制你的路由器：不要发给别人，也不要截图分享。"
+echo "⚠️  登录地址里带着密钥，谁拿到都能完全控制你的路由器：不要发给别人，也不要截图分享。"
 if [ "$ED" = full ]; then
 	echo
 	echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"

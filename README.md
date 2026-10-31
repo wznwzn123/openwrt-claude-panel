@@ -1,29 +1,43 @@
 # openwrt-claude-panel
 
-让 **Claude** 直接管理你家的 OpenWrt 路由器，并附带一个好看的**手机控制面板**（PWA，可添加到主屏幕）。
+OpenWrt 路由器的**手机控制面板**（PWA，可添加到主屏幕），还可以选择接入 **Claude**，用中文对话管理路由器。
 
-- 在 Claude 里用中文说一句「把奈飞切到新加坡节点」「看看谁在占网速」「给这台设备晚上 11 点断网」，它就能直接在路由器上操作。
 - 手机面板覆盖日常要用的一切：OpenClash 节点和订阅、设备管理、流量统计、测速、断线记录、文件管理、终端……不用再在手机上缩放 LuCI。
+- AI 版：在 Claude 里说一句「把奈飞切到新加坡节点」「看看谁在占网速」「给这台设备晚上 11 点断网」，它就能直接在路由器上操作。不想用 AI 就装纯面板版。
 - 全部跑在路由器自带的 `ucode` + `uhttpd` 上，**不需要 Python / Node / Docker**，占用很小。
 - 通过 Cloudflare 隧道访问：**不用公网 IP、不用开端口**。
 
-> ⚠️ 连接器地址里带着密钥，拿到它就等于拿到路由器的 root 权限。请当作密码保管，不要发给别人、不要截图分享。详见下方「安全说明」。
+> ⚠️ 安装后得到的「登录地址」里带着密钥，拿到它就等于拿到路由器的 root 权限。请当作密码保管，不要发给别人、不要截图分享。详见下方「安全说明」。
 
-## 两个版本
+## 四个版本，选一个下载
 
-| | 精简版 `lite` | 完整版 `full` |
+先选**要不要 AI**，再选**精简还是完整**：
+
+| 版本 | 安装包 | 适合 | 安装教程 |
+|---|---|---|---|
+| **AI 版 · 精简版** | `openwrt-claude-panel-ai-lite.tar.gz` | 想用 Claude 管路由器，先试试 | [📖 教程](docs/install-ai-lite.md) |
+| **AI 版 · 完整版** | `openwrt-claude-panel-ai-full.tar.gz` | 想用 Claude，还要推送和云端备份 | [📖 教程](docs/install-ai-full.md) |
+| **纯面板版 · 精简版** | `openwrt-claude-panel-noai-lite.tar.gz` | 不用 AI，自己在手机上点 | [📖 教程](docs/install-noai-lite.md) |
+| **纯面板版 · 完整版** | `openwrt-claude-panel-noai-full.tar.gz` | 不用 AI，要推送和云端备份 | [📖 教程](docs/install-noai-full.md) |
+
+安装包都在 [Releases](../../releases) 页面。
+
+| 功能 | 纯面板版 | AI 版 |
 |---|:---:|:---:|
-| Claude 连接器（30+ 个路由器工具） | ✅ | ✅ |
 | 手机控制面板（OpenClash / 设备 / 流量 / 测速 / 文件 / 终端…） | ✅ | ✅ |
 | 本地看门狗：宽带、DNS、隧道、OpenClash 自动修复，断线记录 | ✅ | ✅ |
-| 设备暂停上网（定时断网）、节点挂了自动切换、每日体检 | ✅ | ✅ |
-| 面板锁（指纹 / 密码） | ✅ | ✅ |
+| 设备暂停上网（定时断网）、节点挂了自动切换、每日体检、面板锁 | ✅ | ✅ |
+| 在 Claude 里用对话管理路由器（30+ 个工具） | — | ✅ |
+
+| 功能 | 精简版 | 完整版 |
+|---|:---:|:---:|
+| 上面表格里的全部功能 | ✅ | ✅ |
 | 手机推送 / 微信推送（PushPlus） | — | ✅ |
 | 云端备份（每天自动，保留 10 份，可一键恢复） | — | ✅ |
 | 断电 / 断网判断（路由器离线时也能从云端看到原因） | — | ✅ |
-| 需要 Cloudflare 账号 | 可选（临时隧道无需账号） | 需要，且需要一个托管在 Cloudflare 的域名 |
+| 需要 Cloudflare | 可选（临时隧道不需要账号） | 需要账号 + 一个托管在 Cloudflare 的域名 |
 
-不确定就先装精简版，以后在路由器上重新运行安装脚本选完整版即可，设置都会保留。
+拿不准就先装**精简版**。以后想换版本：AI 版和纯面板版之间，重新运行安装脚本加 `--ai` / `--no-ai` 即可；精简版升级完整版，下载完整版安装包再装一次。登录地址和设置都会保留。
 
 ## 运行要求
 
@@ -36,28 +50,24 @@
 
 ## 安装
 
-1. 到 [Releases](../../releases) 下载 `openwrt-claude-panel-lite.tar.gz` 或 `openwrt-claude-panel-full.tar.gz`。
-2. 传到路由器并安装：
+**每个版本都有一步一步的教程，照着做就行：** [AI 精简](docs/install-ai-lite.md) · [AI 完整](docs/install-ai-full.md) · [纯面板精简](docs/install-noai-lite.md) · [纯面板完整](docs/install-noai-full.md)。安装包里的 `INSTALL.md` 也是同一份。
 
-   ```sh
-   scp openwrt-claude-panel-lite.tar.gz root@192.168.1.1:/tmp/
-   ssh root@192.168.1.1
-   cd /tmp && tar xzf openwrt-claude-panel-lite.tar.gz && cd openwrt-claude-panel
-   sh install.sh
-   ```
+简单来说：
 
-3. 按提示选择版本、填写隧道信息。装完会打印：
+```sh
+scp openwrt-claude-panel-ai-lite.tar.gz root@192.168.1.1:/tmp/
+ssh root@192.168.1.1
+cd /tmp && tar xzf openwrt-claude-panel-ai-lite.tar.gz && cd openwrt-claude-panel
+sh install.sh
+```
 
-   ```
-   Claude 连接器地址：https://router.example.com/cgi-bin/mcp/<密钥>
-   手机面板：https://router.example.com/panel/
-   ```
+装完会打印手机面板地址和登录地址（AI 版的登录地址同时也是 Claude 连接器地址）。
 
 也可以用参数免交互安装：
 
 ```sh
-sh install.sh --lite --tunnel-token <隧道token> --domain router.example.com
-sh install.sh --full --tunnel-token <隧道token> --domain router.example.com --cloud-url https://router.example.com/cloud
+sh install.sh --ai --lite --tunnel-token <隧道token> --domain router.example.com
+sh install.sh --no-ai --full --tunnel-token <隧道token> --domain router.example.com --cloud-url https://router.example.com/cloud
 ```
 
 ### 隧道：两种方式
@@ -70,9 +80,9 @@ sh install.sh --full --tunnel-token <隧道token> --domain router.example.com --
 
 **命名隧道设置：** Cloudflare 控制台 → Zero Trust → Networks → Tunnels → 新建隧道（类型 Cloudflared）→ 复制安装命令里 `--token` 后面那串 → 在「Public Hostname」里添加 `router.example.com`，服务填 `HTTP` / `127.0.0.1:18765`。把 token 和域名填进安装脚本即可。
 
-## 连接 Claude
+## 连接 Claude（AI 版）
 
-Claude 网页版或 App：**设置 → 连接器 → 添加自定义连接器**，URL 填安装时打印的连接器地址，不需要填 OAuth。之后在对话里就能直接让 Claude 管理路由器。
+Claude 网页版或 App：**设置 → 连接器 → 添加自定义连接器**，URL 填安装时打印的登录地址，不需要填 OAuth。之后在对话里就能直接让 Claude 管理路由器。
 
 Claude 能用的工具包括：路由器状态、设备列表、实时网速、连接列表、OpenClash 节点切换 / 延迟测试 / 模式切换 / 自定义规则、系统日志、服务控制、软件包、uci 读写与回滚、OAF 应用过滤，以及在其他工具做不到时执行 shell 命令。
 
@@ -80,7 +90,7 @@ Claude 能用的工具包括：路由器状态、设备列表、实时网速、�
 
 ## 手机面板
 
-用手机浏览器打开 `https://<你的域名>/panel/`，第一次粘贴连接器地址登录，然后「添加到主屏幕」，就和 App 一样用。
+用手机浏览器打开 `https://<你的域名>/panel/`，第一次粘贴登录地址登录，然后「添加到主屏幕」，就和 App 一样用。
 
 - 首页：在线状态、实时网速、CPU / 内存、快捷操作
 - OpenClash：节点切换与测速、订阅管理、配置文件、覆写、自定义规则、插件设置
@@ -102,8 +112,8 @@ Claude 能用的工具包括：路由器状态、设备列表、实时网速、�
 
 请务必读一下：
 
-- **连接器地址 = 路由器 root 权限。** 地址里的密钥（40 位随机字符）是唯一的访问凭证，它能执行任意命令。泄露后请立即换一个：删除 `/etc/claude-mcp/config.json` 后重新运行 `sh install.sh`，然后在 Claude 和面板里换成新地址（完整版还要更新 Worker 的 `PANEL_TOKEN`）。
-- **面板锁只防「拿到你手机的人」**，不防拿到连接器地址的人。它是浏览器端的保护：清除网站数据会让锁失效（同时也会退出登录，需要重新粘贴地址）。
+- **登录地址 = 路由器 root 权限。**（纯面板版也一样：面板里有终端和文件管理） 地址里的密钥（40 位随机字符）是唯一的访问凭证，它能执行任意命令。泄露后请立即换一个：删除 `/etc/claude-mcp/config.json` 后重新运行 `sh install.sh`，然后在面板（AI 版还有 Claude）里换成新地址（完整版还要更新 Worker 的 `PANEL_TOKEN`）。
+- **面板锁只防「拿到你手机的人」**，不防拿到登录地址的人。它是浏览器端的保护：清除网站数据会让锁失效（同时也会退出登录，需要重新粘贴地址）。
 - 面板里打开的 LuCI 原版页面使用一个专用的 rpcd 账号 `cmcp`（随机密码，保存在 `/etc/claude-mcp/luci_pass`），只有带着面板 Cookie 的请求才能使用。
 - 服务只监听 `127.0.0.1:18765`，局域网和公网都无法直接访问，只能经过 Cloudflare 隧道。
 - 想多一层保护，可以在 Cloudflare Zero Trust 里给 `/panel/*` 加 Access 登录（注意不要拦住 `/cgi-bin/mcp/*`，否则 Claude 连不上）。

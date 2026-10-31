@@ -2584,6 +2584,10 @@ function handle(msg) {
 	let id = msg.id, p = msg.params ?? {};
 	let is_notification = !exists(msg, 'id');
 
+	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
+	if (conf().ai === false && msg.client != 'panel')
+		return is_notification ? null : rpc_error(id, -32001, '这台路由器装的是纯面板版，没有开启 AI 连接器');
+
 	if (substr(msg.method, 0, 6) == 'panel/') {
 		let fn = P[substr(msg.method, 6)];
 		if (type(fn) != 'function') return rpc_error(id, -32601, '面板接口不存在：' + msg.method);

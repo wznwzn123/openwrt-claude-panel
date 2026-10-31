@@ -10,7 +10,7 @@ body{margin:0;min-height:100vh;color:var(--text);font:15px/1.55 -apple-system,"P
 body::before{content:"";position:fixed;inset:-40px;z-index:-1;filter:blur(20px);background:radial-gradient(60% 50% at 12% 8%,#c3d2ff 0,transparent 70%),radial-gradient(55% 45% at 92% 18%,#f6cdf0 0,transparent 70%),radial-gradient(70% 55% at 30% 95%,#b8ecff 0,transparent 70%),var(--bg)}
 :root.dark body::before{background:radial-gradient(55% 45% at 15% 10%,#3a2c8f 0,transparent 70%),radial-gradient(50% 45% at 90% 25%,#13527a 0,transparent 70%),radial-gradient(70% 55% at 40% 100%,#4b1e6b 0,transparent 70%),#0b1024}
 .wrap{padding:18px 16px 40px;max-width:640px;margin:auto}
-.head{display:flex;align-items:center;gap:12px;margin:8px 4px 18px}
+.head{display:flex;align-items:center;margin:8px 4px 18px}
 .head i{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#6a7bff,#1fb5e6);color:#fff;font-style:normal;font-size:22px}
 .head b{font-size:22px;letter-spacing:-.02em}
 .head .logo{width:44px;height:44px;flex:none;filter:drop-shadow(0 4px 10px rgba(47,107,255,.3))}
@@ -24,10 +24,10 @@ body::before{content:"";position:fixed;inset:-40px;z-index:-1;filter:blur(20px);
 .acts .btn span{font-size:24px}
 .acts .full{grid-column:1/-1;flex-direction:row}
 h2{font-size:18px;margin:22px 4px 10px;letter-spacing:-.02em}
-.r{display:flex;align-items:center;gap:12px}
+.r{display:flex;align-items:center}
 .r .ic{width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#6a4dff,#2f6bff 55%,#00c2d8);color:#fff;--card-solid:#2f6bff}
 .r .t{flex:1;min-width:0}.r .t b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.r .t span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
-.r .more{display:flex;gap:6px;margin-top:10px}
+.r .more{display:flex;margin-top:10px}
 .muted{color:var(--muted)}
 .tip{font-size:13.5px;color:var(--muted);line-height:1.7;margin:0}
 .upd{border:1.5px solid var(--brand)}
@@ -41,7 +41,10 @@ h2{font-size:18px;margin:22px 4px 10px;letter-spacing:-.02em}
 .foot{text-align:center;font-size:12.5px;color:var(--muted);margin-top:26px}
 .foot a{color:var(--brand);font-weight:600;text-decoration:none}
 .hidden{display:none!important}
-.add{display:flex;gap:8px;margin-top:10px}
+/* 老版本安卓的网页组件不认 flex 的 gap，用外边距 */
+.head>*+*,.r>*+*{margin-left:12px}
+.r .more>*+*{margin-left:6px}.add>*+*{margin-left:8px}
+.add{display:flex;margin-top:10px}
 .add input{flex:1;min-width:0;padding:11px 14px;border-radius:14px;border:0;background:var(--fill);color:var(--text);font:inherit;font-size:14px;outline:none;-webkit-user-select:text;user-select:text}
 .add input:focus{box-shadow:0 0 0 2px var(--brand)}
 .aerr{color:var(--danger);font-size:13px;margin:8px 2px 0}

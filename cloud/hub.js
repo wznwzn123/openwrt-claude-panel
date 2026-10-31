@@ -270,9 +270,9 @@ export class Hub extends DurableObject {
 		for (const x of u.devs || []) {
 			const d = await this.ctx.storage.get('d:' + x.sub);
 			if (!d || d.state !== 'ok') continue;
-			let b = { last: 0, state: 'wait' };
+			let b = { last: 0, state: 'wait', ver: '' };
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
-			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, bound: x.at });
+			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY };
@@ -386,6 +386,29 @@ export class Hub extends DurableObject {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		return this.unbind(String(uid || ''), sub);
 	}
+	// 托管版登录码：每台新手机第一次打开面板要输。只有账号里绑定了这台路由器的人才能拿；8 位，10 分钟有效，用一次就作废
+	async loginCode(uid, sub) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u || !(u.devs || []).some((x) => x.sub === sub)) return { st: 404, error: '你的账号里没有这台路由器' };
+		const d = await this.ctx.storage.get('d:' + sub);
+		if (!d || d.state !== 'ok') return { st: 404, error: '这台路由器已经不在了' };
+		if (!(await this.hit('lc:' + uid, 30, 3600e3))) return { st: 429, error: '拿得太频繁了，一小时后再试' };
+		const code = rnd(8).toUpperCase(), exp = Date.now() + 600e3;
+		await this.ctx.storage.put('l:' + sub + ':' + code, { uid, exp });
+		return { st: 200, code, exp };
+	}
+	// 路由器那边（凭 RKEY）核对手机上输入的登录码
+	async devLoginCode({ sub, rkey, code }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		if (!(await this.hit('lv:' + sub, 30, 3600e3))) return { st: 429, error: '输错太多次了，一小时后再试' };
+		code = String(code || '').trim().toUpperCase().replace(/[^A-Z2-9]/g, '');
+		const k = 'l:' + sub + ':' + code, x = code.length === 8 ? await this.ctx.storage.get(k) : null;
+		if (!x || x.exp < Date.now()) return { st: 400, error: '登录码不对或已过期（10 分钟有效）。在官网账号页这台路由器下面点「获取登录码」重新拿一个' };
+		await this.ctx.storage.delete(k);
+		const u = await this.ctx.storage.get('u:' + x.uid);
+		if (!u || !(u.devs || []).some((y) => y.sub === sub)) return { st: 400, error: '拿这个登录码的账号已经解绑了这台路由器' };
+		return { st: 200, ok: true, email: maskEmail(u.email) };
+	}
 	async devices() { return [...(await this.ctx.storage.list({ prefix: 'd:' })).values()]; }
 	async invites() { return [...(await this.ctx.storage.list({ prefix: 'i:' })).entries()].map(([k, v]) => ({ code: k.slice(2), ...v })); }
 	async addInvite({ max, days, note }) {
@@ -409,6 +432,11 @@ export class Hub extends DurableObject {
 				else { await this.ctx.storage.delete('d:' + d.sub); await this.addCount(-1); }
 				out.push(d.sub);
 			} catch (e) {}
+		}
+		// 过期没用的登录码、配对码
+		for (const pre of ['l:', 'p:']) {
+			const dead = [...(await this.ctx.storage.list({ prefix: pre })).entries()].filter(([, v]) => !v || v.exp < now).map(([k]) => k);
+			for (let i = 0; i < dead.length; i += 128) await this.ctx.storage.delete(dead.slice(i, i + 128));
 		}
 		return out;
 	}
@@ -535,6 +563,7 @@ async function accountApi(req, env, H, p, body) {
 	if (p === '/api/pair/start') return out(await H.pairStart({ sub: s(b.sub), rkey: s(b.rkey) }));
 	if (p === '/api/dev/accounts') return out(await H.devAccounts({ sub: s(b.sub), rkey: s(b.rkey) }));
 	if (p === '/api/dev/unbind') return out(await H.devUnbind({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
+	if (p === '/api/dev/logincode') return out(await H.devLoginCode({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	const a = p.slice('/api/account/'.length);
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip }));
@@ -548,6 +577,7 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'bind') return out(await H.bind(me.uid, s(b.code), ip));
 	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub)));
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
+	if (a === 'logincode') return out(await H.loginCode(me.uid, s(b.sub)));
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
 	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password)));

@@ -94,4 +94,16 @@ function bl_ruleset_write() {
 	writefile(BL_RULESET + '.tmp', join('\n', lines) + '\n');
 	rename(BL_RULESET + '.tmp', BL_RULESET);
 }
-export { D, shq, sh, readj, writej, now, uci, enc, api, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write };
+// 路由器自己的小工具调用面板接口用的钥匙（只在路由器上，托管版不用输登录码）
+function local_key() {
+	let k = trim(readfile(D + '/local.key') ?? '');
+	if (length(k) >= 32) return k;
+	k = trim(sh("tr -dc 'a-z0-9' < /dev/urandom | head -c 40"));
+	if (length(k) != 40) return '';
+	writefile(D + '/local.key.tmp', k + '\n');
+	sh('chmod 600 ' + shq(D + '/local.key.tmp'));
+	rename(D + '/local.key.tmp', D + '/local.key');
+	return k;
+}
+
+export { D, shq, sh, readj, writej, now, uci, enc, api, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key };

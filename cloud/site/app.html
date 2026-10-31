@@ -15,6 +15,11 @@
 .sech h2{font-size:20px}
 .empty{text-align:center;padding:26px 16px}
 .empty .big{font-size:40px}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:650;background:var(--fill)}.pill.up{background:rgba(255,149,0,.16);color:var(--warn)}
+.mask{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.35)}
+.mask .card{width:100%;max-width:400px;background:var(--bg);text-align:center}
+.lcode{margin:14px 0 6px;font:700 34px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;user-select:all;-webkit-user-select:all}
+.mask .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><span class="muted hidden" id="who" style="font-size:13px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="btn sm hidden" id="outBtn">退出</button></div></div>
 
@@ -71,7 +76,7 @@
 		<div class="err" data-err></div>
 	</div>
 	<div class="sech"><h2>换手机怎么办</h2></div>
-	<div class="card"><p class="muted" style="margin:0;font-size:14px;line-height:1.7">路由器的登录密钥只在你自己的手机和路由器上，这个网站也没有。所以第一次在新手机上打开某台路由器时，要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。之后在这里点「打开面板」就能直接用。</p></div>
+	<div class="card"><p class="muted" style="margin:0;font-size:14px;line-height:1.7">路由器的登录密钥只在你自己的手机和路由器上，这个网站也没有。所以第一次在新手机上打开某台路由器时，要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。<br><b>托管版</b>为了安全，每台手机第一次打开面板还要输一次<b>登录码</b>：在上面这台路由器下面点「获取登录码」，填到新手机上就行，以后这台手机就不用再输了。</p></div>
 	<div class="sech"><h2>账号</h2></div>
 	<div class="card">
 		<form id="fPw">
@@ -120,7 +125,12 @@ function form(id, fn) {
 form('fLogin', async (d) => { await api('login', d); await load(); });
 form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load(); });
 form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load(); });
-form('fBind', async (d, f) => { const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app'); await load(); });
+form('fBind', async (d, f) => {
+	const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app');
+	const me = await load(), dv = me && me.devs.find((x) => x.sub === r.sub);
+	// 刚绑定好：顺手把登录码拿出来（托管版每台手机第一次打开面板要输）
+	if (dv) { try { const c = await api('logincode', { sub: r.sub }); codeBox(c.code, dv, true); } catch (e) {} }
+});
 form('fLink', async (d, f) => { const r = await api('link', { name: d.name, url: d.url }); f.reset(); toast(r.stripped ? '已添加「' + r.name + '」（登录地址里的密钥已去掉，没有保存）' : '已添加「' + r.name + '」'); await load(); });
 form('fPw', async (d, f) => { await api('password', d); f.reset(); toast('密码已修改，其他设备上的登录已退出'); });
 document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () => {
@@ -144,20 +154,42 @@ function render(me) {
 	$('devs').innerHTML = n ? me.devs.map((d) => {
 		const on = !d.off && d.last && Date.now() - d.last < 180e3;
 		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
-		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}</div>
-		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
+		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(d.ver) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
+		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
 	}).join('') + links.map((l) => `<div class="card dev" data-link="${esc(l.id)}"><div class="ic">⌂</div><b>${esc(l.name)}</b>
 		<div class="meta">自建版 · ${esc(l.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))}</div>
 		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
+	$('devs').querySelectorAll('[data-lc]').forEach((b) => (b.onclick = async () => {
+		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub);
+		b.disabled = true;
+		try { const r = await api('logincode', { sub }); codeBox(r.code, d); } catch (x) { toast(x.message); } finally { b.disabled = false; }
+	}));
 	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub; if (!confirm('从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return; try { await api('unbind', { sub }); toast('已解绑'); await load(); } catch (x) { toast(x.message); } }));
 }
+// 登录码弹窗：托管版每台新手机第一次打开面板要输一次
+function codeBox(code, d, fresh) {
+	const m = document.createElement('div'); m.className = 'mask';
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true">${fresh ? '<div class="muted" style="font-size:13.5px;margin-bottom:4px">✓ 已绑定到你的账号</div>' : ''}<h3>「${esc(d.name)}」的登录码</h3>
+		<div class="lcode">${esc(code.slice(0, 4))} ${esc(code.slice(4))}</div>
+		<p class="muted" style="font-size:13.5px;line-height:1.7;margin:0">10 分钟内有效，用一次就作废。<br>在要登录的手机上打开这台路由器的面板，出现「输入登录码」时填进去。<br>点下面「打开面板」会自动填好（已经登录过的手机不用再输）。</p>
+		<div class="acts"><button class="btn" data-cp>复制</button><a class="btn primary" href="https://${esc(d.host)}/panel/#code=${esc(code)}" rel="noopener">打开面板</a><button class="btn" data-x>关闭</button></div></div>`;
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
+	m.querySelector('[data-cp]').onclick = async () => { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (e) { toast('复制不了，长按登录码手动复制'); } };
+	document.body.appendChild(m);
+}
+// 最新版本：用来提示「可更新」
+let latest = '';
+const newer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+const verP = fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j && j.version) latest = j.version; }).catch(() => {});
 async function load() {
 	try {
 		const me = await api('me');
+		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
 		render(me); show('dash');
 		if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }
+		return me;
 	} catch (e) {
 		show('auth');
 		if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }

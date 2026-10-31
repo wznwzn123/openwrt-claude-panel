@@ -151,8 +151,13 @@ else
 fi
 [ ${#TOKEN} -ge 16 ] || die "config.json 里的 token 不对"
 # AI 开关：纯面板版在 config.json 里写 "ai": false，连接器只接受手机面板的请求
-ucode -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV[1] == "0") c.ai = false; else delete c.ai; fs.writefile(f, sprintf("%.J\n", c));' $D/config.json "$AI" \
+# AI 版另外生成一个「Claude 连接器地址」的钥匙（ckey）：只给 Claude 用，打不开面板；托管版的面板要登录码，连接器不用
+CKEY=$(jsonfilter -i $D/config.json -e '@.ckey' 2>/dev/null)
+[ "$AI" = 1 ] && [ ${#CKEY} -lt 16 ] && CKEY=$(rnd 40)
+ucode -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV[1] == "0") c.ai = false; else delete c.ai; if (length(ARGV[2] ?? "") >= 16) c.ckey = ARGV[2]; fs.writefile(f, sprintf("%.J\n", c));' $D/config.json "$AI" "$CKEY" \
 	|| die "写入 config.json 失败"
+# 路由器自己的小工具调用面板接口用的钥匙（托管版不用输登录码）
+[ -s $D/local.key ] || rnd 40 > $D/local.key
 [ -s $D/luci_key ] || rnd 32 > $D/luci_key
 if [ ! -s $D/luci_pass ]; then rnd 32 > $D/luci_pass; NEWPASS=1; fi
 # 面板打开 LuCI 原版页面用的专用账号（只给面板内部自动登录用）
@@ -247,7 +252,7 @@ echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 
 # ---------- 升级系统时保留 ----------
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
+	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -297,15 +302,19 @@ echo "  https://$H/panel/#login=$TOKEN"
 echo "以后添加别的手机：面板里「系统操作 → 添加新手机」扫码就行。"
 if [ "$AI" = 1 ]; then
 	echo
-	echo "这个登录地址同时也是 Claude 连接器地址：在 Claude 设置 → 连接器 → 添加自定义连接器 里填它。"
+	echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）："
+	echo "  https://$H/cgi-bin/mcp/$CKEY"
 fi
 echo
-echo "⚠️  登录地址里带着密钥，谁拿到都能完全控制你的路由器：不要发给别人，也不要截图分享。"
+echo "⚠️  上面的地址里都带着密钥，谁拿到都能控制你的路由器：不要发给别人，也不要截图分享。"
 if [ -n "$HUB" ]; then
 	echo
 	echo "托管版：推送、云端备份、断电断网判断都已经开通，不用再做别的设置。"
 	echo
-	/usr/sbin/cmcp-pair --install || echo "绑定到官网账号：面板里「系统操作 → 绑定到账号」，或者在终端运行 cmcp-pair 拿配对码。"
+	if ! /usr/sbin/cmcp-pair --install; then
+		echo "绑定到官网账号：稍后在这个终端运行 cmcp-pair 拿配对码。"
+		echo "官网暂时连不上的话，先运行 cmcp-logincode 拿一个应急登录码打开面板。"
+	fi
 elif [ "$ED" = full ]; then
 	echo
 	echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"

@@ -83,8 +83,8 @@ run)
 		for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
 			sleep 2
 			m=$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json 2>/dev/null)
-			c=$(curl -s -m 8 -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"panel/update_status","params":{},"client":"panel"}' "http://127.0.0.1:18765/cgi-bin/mcp/$TOK" 2>/dev/null)
-			case "$m:$c" in 200:*jsonrpc*) ok=1; break ;; esac
+			c=$(curl -s -m 8 -X POST -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"panel/update_status\",\"params\":{},\"client\":\"panel\",\"dev\":\"local.$(cat $D/local.key 2>/dev/null)\"}" "http://127.0.0.1:18765/cgi-bin/mcp/$TOK" 2>/dev/null)
+			case "$m:$c" in 200:*\"result\"*) ok=1; break ;; esac
 		done
 	fi
 	if [ $ok = 1 ]; then

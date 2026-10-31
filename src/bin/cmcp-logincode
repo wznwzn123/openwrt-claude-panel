@@ -1,0 +1,19 @@
+#!/bin/sh
+# 托管版的应急登录码：官网打不开、或者路由器还没绑定官网账号时用
+# 在路由器后台的终端里运行（LuCI「服务 → 终端」或者 SSH，不是手机面板里的终端），拿一个 10 分钟有效、只能用一次的登录码
+D=/etc/claude-mcp
+if [ ! -s $D/hub.conf ]; then echo "这台路由器装的不是托管版，打开面板不需要登录码。"; exit 1; fi
+C=$(tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' < /dev/urandom 2>/dev/null | head -c 8)
+[ ${#C} = 8 ] || { echo "生成登录码失败，再运行一次"; exit 1; }
+umask 077
+echo "$C $(( $(date +%s) + 600 ))" > /tmp/cmcp_logincode
+H=$(cat $D/hostname 2>/dev/null)
+echo
+echo "  ┌──────────────────────────┐"
+echo "  │   登录码：$(echo "$C" | cut -c1-4) $(echo "$C" | cut -c5-8)      │"
+echo "  └──────────────────────────┘"
+echo
+echo "  10 分钟内有效，只能用一次（再运行一次这个命令，上一个就作废）。"
+echo "  在手机上打开面板${H:+ https://$H/panel/}，出现「输入登录码」时填进去。"
+echo "  平时更方便的拿法：在官网账号页，这台路由器下面点「获取登录码」。"
+echo

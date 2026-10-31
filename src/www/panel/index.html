@@ -54,7 +54,8 @@ h1,h2,h3{letter-spacing:-.02em}
 .scrim{position:fixed;inset:0;z-index:54;background:rgba(0,0,0,.32);opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
 .scrim.open{opacity:1;pointer-events:auto}
 .sidehead{display:flex;align-items:center;gap:10px;padding:18px 16px 12px}.sidehead b{font-size:16px}
-.sidenav{flex:1;overflow-y:auto;contain:content;-webkit-overflow-scrolling:touch;padding:0 10px max(16px,env(safe-area-inset-bottom));overscroll-behavior:contain}
+.sidenav{flex:1;overflow-y:auto;contain:content;-webkit-overflow-scrolling:touch;padding:0 10px 10px;overscroll-behavior:contain}
+.sideout{display:flex;align-items:center;gap:10px;margin:0 10px max(12px,env(safe-area-inset-bottom));padding:12px 14px;border-radius:14px;border-top:.5px solid var(--line);background:transparent;color:var(--danger);font-size:15px;font-weight:600;text-align:left}.sideout svg{width:20px;height:20px;flex:none}.sideout:active{background:var(--fill)}
 .sidegrp{font-size:12px;font-weight:600;color:var(--muted);padding:14px 10px 6px;letter-spacing:.02em}
 .sidenav button{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:12px;background:transparent;color:var(--text);font-size:15px;font-weight:600;text-align:left;transition:background-color .2s,color .2s}
 .sidenav button i{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:13px;background:var(--fill);color:var(--muted);flex:none}
@@ -391,6 +392,15 @@ pre.out.tall{max-height:none;min-height:40vh}
 .lgmain:active{transform:scale(.97);opacity:.85}
 :root.dark .lgmain{background:#f5f5f7;color:#000}
 .formerr{margin-top:9px;padding:10px 12px;border-radius:12px;background:rgba(255,59,48,.1);color:var(--danger);font-size:13px;line-height:1.55;white-space:pre-wrap}
+#needcode.lgwrap{position:fixed;inset:0;z-index:90;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:max(40px,env(safe-area-inset-top)) 16px 22px;background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
+:root.dark #needcode.lgwrap{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}
+.ncsteps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.75}
+.nccode{font:600 22px/1.2 var(--mono)!important;letter-spacing:3px;text-align:center;text-transform:uppercase}
+.nchub{display:block;width:100%;margin-top:10px;padding:13px;border-radius:14px;text-align:center;font-weight:600;font-size:15px;background:var(--fill);color:var(--text);text-decoration:none}
+.nccode::placeholder{font-size:16px;font-weight:500;letter-spacing:0}
+.devrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:.5px solid var(--line)}.devrow:first-of-type{border-top:0}.devtx{flex:1;min-width:0;text-align:left}.devtx b{font-size:15px}.devtx .muted{font-size:12.5px;line-height:1.5;margin-top:2px;overflow-wrap:anywhere}.devrow .btn{flex:none}
+.ncmore{font-size:12.5px;line-height:1.7;margin-top:14px}
+.ncmore code{font:12px var(--mono);padding:1px 5px;border-radius:6px;background:var(--fill)}
 .lgfoot{position:relative;z-index:1;margin-top:auto;padding-top:20px;font-size:12px;color:var(--muted);letter-spacing:.3px}
 /* 进入动画 */
 main.wrap>section.page.on>*{animation:rise .5s var(--spring) both}
@@ -450,6 +460,7 @@ section.page{display:none}section.page.on{display:block}
 .qrbox svg{display:block;width:100%;height:auto;transition:filter .3s}
 .qrbox span{display:none}
 .qrbox.blur svg{filter:blur(9px)}
+.qrbox.keybox{max-width:none;color:#0b0b0f}.qrbox.blur.keybox{color:transparent;text-shadow:0 0 8px rgba(0,0,0,.55);user-select:none;-webkit-user-select:none}
 .qrbox.blur span{display:grid;place-items:center;position:absolute;inset:0;font-weight:650;color:#0b0b0f;font-size:14px}
 .paircode{font:700 32px/1.2 var(--mono);letter-spacing:4px;text-align:center;margin:6px 0 12px}
 /* 主题设置 */
@@ -481,6 +492,22 @@ section.page{display:none}section.page.on{display:block}
 <div class="lgfoot">我的路由器 · OpenWrt 管理面板</div>
 </div>
 
+<!-- 托管版：这台手机第一次打开面板，要输一次登录码 -->
+<div id="needcode" class="lgwrap hidden" role="dialog" aria-modal="true" aria-labelledby="ncTitle">
+<main class="lgcard">
+	<div class="logo lgbiglogo" aria-hidden="true" style="font-size:30px">🔐</div>
+	<h2 id="ncTitle">输入登录码</h2>
+	<div class="muted" style="font-size:14px;line-height:1.7">为了安全，托管版每台手机第一次打开面板要输一次登录码，输对以后这台手机就不用再输了。</div>
+	<ol class="ncsteps muted"><li>打开官网 <b id="ncHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
+	<label class="lglabel" for="ncInput">登录码</label>
+	<input id="ncInput" class="input nccode" placeholder="8 位登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false">
+	<div id="ncErr" class="formerr hidden"></div>
+	<button id="ncBtn" class="lgmain">确定</button>
+	<a id="ncHub" class="nchub" href="https://yrlove520.com/app" target="_blank" rel="noopener">打开官网拿登录码</a>
+	<div class="ncmore muted">官网账号里还没有这台路由器：用安装时终端里显示的配对码绑定（过期了在路由器后台终端运行 <code>cmcp-pair</code> 再拿一个）。<br>官网打不开、急着用：在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH，不是这个面板里的终端）运行 <code>cmcp-logincode</code>，拿一个应急登录码。<br><a href="#" id="ncOut">换一个登录地址</a></div>
+</main>
+</div>
+
 <div id="app" class="hidden">
 <header class="top" id="topbar">
 	<div class="topin">
@@ -504,6 +531,7 @@ section.page{display:none}section.page.on{display:block}
 	<input class="sideq" id="sideQ" type="search" placeholder="搜索功能，如 DHCP、端口转发" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索功能">
 	<nav class="sidenav" id="sidenav">
 	</nav>
+	<button class="sideout" id="sideOut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>退出登录</button>
 </aside>
 
 <main class="wrap">
@@ -777,10 +805,12 @@ section.page{display:none}section.page.on{display:block}
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="devices" id="devsBtn"><div><b>已登录的手机</b><span class="muted">看看哪些手机能打开面板，把不认识的移除</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="ckey" id="ckeyBtn"><div><b>Claude 连接器地址</b><span class="muted">在 Claude 里添加连接器用（打不开面板）</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="hubbind" id="hubBindBtn"><div><b>绑定到账号</b><span class="muted">把这台路由器加到官网账号里，换手机时好找</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="logout"><div><b>断开此手机</b><span class="muted">清除这台手机保存的密钥</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="logout"><div><b>退出登录</b><span class="muted">这台手机退出面板，下次要重新登录</span></div><span class="muted">›</span></button>
 	</section>
 	<div class="dangerzone"><button class="btn danger" data-t="reboot" style="padding:12px 22px">重启路由器</button></div>
 	<p class="muted" style="text-align:center;margin-top:16px" id="about"></p>
@@ -814,9 +844,14 @@ const store = {
 
 // 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
 try { const m = /^#login=([A-Za-z0-9]{16,64})$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+// 官网「获取登录码 → 打开面板」：网址带 #code=登录码，自动填好
+let pendCode = '';
+try { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (m) { pendCode = m[1].toUpperCase(); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 let token = store.get('rp_token') || store.get('cmcp_token');
 let seq = 0;
 class AuthError extends Error {}
+// 托管版：这台手机还没输过登录码
+class NeedCodeError extends Error {}
 // 连不上路由器时带上原因（short 显示在顶部状态里）
 class OfflineError extends Error { constructor(msg, short) { super(msg); this.short = short; } }
 
@@ -845,7 +880,7 @@ async function rpcOnce(method, params, timeoutMs) {
 		r = await fetch('../cgi-bin/mcp/' + encodeURIComponent(token), {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-			body: JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel' }),
+			body: JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', dev: store.get('rp_dev') || undefined }),
 			signal: ctl.signal, cache: 'no-store',
 		});
 	} catch (e) {
@@ -860,6 +895,7 @@ async function rpcOnce(method, params, timeoutMs) {
 	if (r.status === 504 || r.status === 524) throw new OfflineError('路由器处理超时，可能正忙或卡住了', '超时');
 	if (!r.ok) throw new Error('路由器返回 ' + r.status);
 	const j = await r.json();
+	if (j.error && j.error.code === -32010) { needCode(j.error.data); throw new NeedCodeError(j.error.message); }
 	if (j.error) throw new Error(j.error.message);
 	return j.result;
 }
@@ -977,6 +1013,7 @@ const readText = (f) => new Promise((ok, no) => { const r = new FileReader(); r.
 const readB64 = (f) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).replace(/^data:[^,]*,/, '')); r.onerror = () => no(new Error('读取文件失败')); r.readAsDataURL(f); });
 
 function handleErr(e) {
+	if (e instanceof NeedCodeError) return;
 	if (e instanceof AuthError) return logout('密钥已失效，请重新粘贴连接地址');
 	toast(e.message || String(e), true);
 }
@@ -1312,6 +1349,7 @@ async function refresh(quiet) {
 	try { await load(quiet); }
 	catch (e) {
 		if (my !== loadSeq) return; // 已经有更新的一次加载了，这次的错误不用管
+		if (e instanceof NeedCodeError) return;
 		if (e instanceof AuthError) return logout('密钥已失效，请重新粘贴连接地址');
 		if (e instanceof OfflineError) {
 			setStatus(false, e.short);
@@ -3540,11 +3578,24 @@ const T = {
 	look() { lookSettings(); },
 	addphone() { addPhone(); },
 	rotatekey() { rotateKey(); },
+	devices() { devList(); },
+	ckey() { ckeySheet(); },
 	update() { updSheet(); },
 	hubbind() { hubBind(); },
-	async logout() { if (await confirmBox('断开此手机', '会清除这台手机上保存的密钥，之后需要重新粘贴连接地址。路由器上的设置不受影响。', '断开', true)) logout(); },
+	logout() { signOut(); },
 };
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
+// 退出登录：清掉这台手机上的密钥；托管版顺便让路由器忘掉这台手机（下次要重新输登录码）
+async function signOut() {
+	const dev = !!store.get('rp_dev');
+	if (!(await confirmBox('退出登录', '这台手机退出面板，下次打开要重新粘贴登录地址' + (dev ? '，还要重新输登录码' : '') + '。路由器上的设置不受影响。', '退出登录', true))) return;
+	if (dev) { try { await rpcOnce('panel/device_remove', { self: true }, 8000); } catch (e) {} }
+	store.del('rp_dev');
+	sideOpen(false);
+	logout('');
+	toast('已退出登录');
+}
+$('sideOut').onclick = () => signOut();
 function themeLabel() { $('themeState').textContent = document.documentElement.classList.contains('dark') ? '已开启' : '已关闭'; lookLabel(); }
 
 /* ---------- 主题与背景：玻璃效果、背景（预设或相册里的图），只保存在这台手机上 ---------- */
@@ -3639,7 +3690,7 @@ async function addPhone() {
 	const url = location.origin + location.pathname.replace(/[^/]*$/, '') + '#login=' + token;
 	try { await loadQr(); } catch (e) { return toast(e.message, true); }
 	modal(`<div class="sheethead"><h3>添加新手机</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 12px">用新手机的相机扫这个二维码，打开后就直接登录这个面板，不用再粘贴登录地址。</p>
+	<p class="muted" style="margin:0 0 12px">用新手机的相机扫这个二维码，打开后就直接登录这个面板，不用再粘贴登录地址。${store.get('rp_dev') ? '<br><b>托管版</b>：新手机打开后还要输一次登录码（在官网账号里，这台路由器下面点「获取登录码」）。' : ''}</p>
 	<div class="qrbox blur">${qrSvg(url)}<span>点一下显示二维码</span></div>
 	<div class="notice w" style="margin-top:12px">⚠️ 扫到这个码就等于拿到路由器的全部权限。只给自己或家人的手机扫，扫完就关掉，不要截图、不要发给别人。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><button class="btn primary" data-v="close">完成</button></div>`,
@@ -3724,18 +3775,63 @@ async function updStart(noConfirm) {
 
 // 换一把新的登录密钥：这台手机自动换成新的；其他手机、Claude 连接器要重新填
 async function rotateKey() {
-	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 这台手机自动换成新密钥，不用重新登录\n· 其他已经登录的手机要重新添加（在这台手机「添加新手机」扫码）\n· 在 Claude 里用了连接器的，要换成新的登录地址', '换新密钥', true))) return;
+	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 这台手机自动换成新密钥，不用重新登录\n· 其他已经登录的手机要重新添加（在这台手机「添加新手机」扫码）\n· 用「Claude 连接器地址」加的 Claude 连接器不受影响', '换新密钥', true))) return;
 	let r;
 	try { r = await P('rotate_key', { confirm: 'ROTATE' }, 30000); } catch (e) { return toast(e.message, true); }
 	token = r.token; store.set('rp_token', r.token);
 	const login = location.origin + '/cgi-bin/mcp/' + r.token;
 	modal(`<div class="sheethead"><h3>已换成新密钥</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 10px">旧的登录地址已经作废。这是新的登录地址（也是新的 Claude 连接器地址），点一下显示：</p>
+	<p class="muted" style="margin:0 0 10px">旧的登录地址已经作废。这是新的登录地址，点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(login)}<span>点一下显示</span></div>
 	${r.selfcloud ? '<div class="notice w" style="margin-top:12px">你用的是自建完整版：还要把 Cloudflare Worker 的密钥 <b>PANEL_TOKEN</b> 换成新的登录密钥（地址最后那一串），不然推送和云端备份会连不上。</div>' : ''}
-	<div class="notice" style="margin-top:12px">接下来：其他手机在这台手机「系统操作 → 添加新手机」扫码重新添加；Claude 里删掉旧连接器，用新地址重新添加。</div>
+	<div class="notice" style="margin-top:12px">接下来：其他手机在这台手机「系统操作 → 添加新手机」扫码重新添加。Claude 里如果用的是旧的登录地址，换成「系统操作 → Claude 连接器地址」里的地址。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制新地址</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
+}
+// 「系统操作」里按版本显示的项：已登录的手机（托管版）、Claude 连接器地址（AI 版）
+function moreBtns() { $('devsBtn').classList.toggle('hidden', !store.get('rp_dev')); $('ckeyBtn').classList.toggle('hidden', store.get('rp_ai') !== '1'); }
+const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+function devList() {
+	modal(`<div class="sheethead"><h3>已登录的手机</h3><button class="btn sm" data-v="close">关闭</button></div><div data-dl><div class="muted" style="padding:20px 0;text-align:center">读取中…</div></div>`, (m, close) => {
+		const box = m.querySelector('[data-dl]');
+		const draw = async () => {
+			try {
+				const r = await P('device_list');
+				box.innerHTML = `<p class="muted" style="margin:0 0 8px;font-size:13.5px">这些手机输过登录码，能打开面板。不认识的马上移除：移除后它要重新输登录码才能进来。</p>
+				${r.list.map((d) => `<div class="devrow"><div class="devtx"><b>${esc(d.name)}</b>${d.me ? ' <span class="pill blue">这台</span>' : ''}<div class="muted">${esc(new Date(d.at * 1000).toLocaleDateString('zh-CN'))} 登录 · ${esc(d.via || '')}${d.me ? '' : ' · 最近使用：' + esc(d.seen ? agoS(d.seen) : '路由器重启后还没用过')}</div></div>${d.me ? '' : `<button class="btn sm danger" data-rm="${esc(d.id)}">移除</button>`}</div>`).join('') || '<div class="muted">没有记录</div>'}
+				${r.list.length > 1 ? '<div class="btngrid" style="margin:12px 0 0"><button class="btn danger" data-all>除了这台，全部移除</button></div>' : ''}`;
+				box.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = async () => {
+					if (!(await confirmBox('移除这台手机', '「' + b.closest('.devrow').querySelector('b').textContent + '」要重新输登录码才能打开面板。', '移除', true))) return;
+					busy(b, async () => { await P('device_remove', { id: b.dataset.rm }); toast('已移除'); await draw(); });
+				}));
+				const all = box.querySelector('[data-all]');
+				if (all) all.onclick = async () => {
+					if (!(await confirmBox('移除其他所有手机', '除了这台，其他手机都要重新输登录码才能打开面板。', '全部移除', true))) return;
+					busy(all, async () => { await P('device_remove', { all_others: true }); toast('已移除'); await draw(); });
+				};
+			} catch (e) { box.innerHTML = `<div class="notice w">${esc(e.message)}</div>`; }
+		};
+		draw();
+	});
+}
+async function ckeySheet() {
+	let r;
+	try { r = await P('ckey_info'); } catch (e) { return toast(e.message, true); }
+	if (!r.ai) return toast('这台路由器装的是纯面板版，没有 Claude 连接器', true);
+	modal(`<div class="sheethead"><h3>Claude 连接器地址</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 10px">在 Claude「设置 → 连接器 → 添加自定义连接器」里填这个地址，就能在对话里管理路由器。它只给 Claude 用，打不开面板。点一下显示：</p>
+	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(r.url || '（还没有网址）')}<span>点一下显示</span></div>
+	<div class="notice w" style="margin-top:12px">⚠️ 拿到这个地址就能让 AI 控制你的路由器：不要发给别人。泄露了就点「换一个地址」，旧的马上作废。</div>
+	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 Claude 里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
+	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
+	(m, close) => {
+		qrReveal(m);
+		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
+		m.querySelector('[data-rot]').onclick = async () => {
+			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，Claude 里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
+			try { await P('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }
+		};
+	});
 }
 function hubBind() {
 	modal(`<div class="sheethead"><h3>绑定到账号</h3><button class="btn sm" data-v="close">关闭</button></div><div data-hb><div class="muted" style="padding:20px 0;text-align:center">正在获取配对码…</div></div>`, (m) => {
@@ -3750,7 +3846,7 @@ function hubBind() {
 				<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><a class="btn primary" href="${esc(p.url)}" target="_blank" rel="noopener">打开官网</a></div>
 				<div class="subhd">已绑定这台路由器的账号</div>
 				${accs.length ? accs.map((a) => `<div class="kv"><span>${esc(a.email)}</span><button class="btn sm danger" data-unb="${esc(a.uid)}">移除</button></div>`).join('') : '<div class="muted" style="font-size:13px;margin-top:6px">还没有账号绑定</div>'}
-				<p class="muted" style="font-size:12.5px;margin:12px 0 0">账号只用来在官网列出你的路由器，不能用来打开面板；在新手机上打开面板，还是要用「添加新手机」扫码或登录地址。</p>`;
+				<p class="muted" style="font-size:12.5px;margin:12px 0 0">绑定了的账号可以在官网拿「登录码」：每台新手机第一次打开面板要输一次（还要有登录地址，或者用「添加新手机」扫码）。不认识的账号马上移除。</p>`;
 				box.querySelector('[data-copy]').onclick = () => copyText(p.url);
 				box.querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => {
 					if (!(await confirmBox('移除账号', '把 ' + b.closest('.kv').firstElementChild.textContent + ' 从这台路由器移除？对方的官网账号里就看不到这台路由器了。', '移除', true))) return;
@@ -3899,7 +3995,7 @@ $('prList').addEventListener('click', async (e) => {
 	await busy(null, async () => { const r = await P('kill', { pid: x.pid, force: v === 'kill' }); toast('已结束「' + r.name + '」'); refresh(true); });
 });
 
-const LOAD = { traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
+const LOAD = { traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -3922,6 +4018,8 @@ async function doLogin() {
 		$('about').textContent = '路由器面板 ' + (r.serverInfo?.version || '');
 		start();
 	} catch (e) {
+		// 托管版：密钥是对的，但这台手机还要输登录码
+		if (e instanceof NeedCodeError) { store.set('rp_token', t); start(); return; }
 		token = null;
 		lgErr(e instanceof AuthError ? '密钥不对，请检查地址是否完整' : e.message);
 	} finally { btn.disabled = false; btn.textContent = '连接'; }
@@ -3932,6 +4030,7 @@ function logout(msg) {
 	store.del('rp_token'); store.del('cmcp_token'); store.del('rp_lock');
 	token = null;
 	$('app').classList.add('hidden');
+	$('needcode').classList.add('hidden');
 	$('login').classList.remove('hidden');
 	$('lgInput').value = '';
 	lgErr(msg || '');
@@ -3968,6 +4067,48 @@ function lgBackground() {
 	}
 	size(); requestAnimationFrame(loop);
 }
+
+/* ---------- 托管版：输登录码 ---------- */
+function devName() {
+	const u = navigator.userAgent || '';
+	let os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? '安卓手机' : /Windows/.test(u) ? 'Windows 电脑' : /Mac OS/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux 电脑' : '设备';
+	const m = /Android [\d.]+; ([^;)]+?)(?: Build|\))/.exec(u);
+	if (m && !/^(K|wv)$/.test(m[1].trim())) os += ' ' + m[1].trim();
+	const b = /RouterPanel/.test(u) ? 'App' : /EdgA?\//.test(u) ? 'Edge' : /SamsungBrowser/.test(u) ? '三星浏览器' : /MicroMessenger/.test(u) ? '微信' : /HuaweiBrowser/.test(u) ? '华为浏览器' : /MiuiBrowser|XiaoMi/.test(u) ? '小米浏览器' : /Firefox|FxiOS/.test(u) ? 'Firefox' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /Safari/.test(u) ? 'Safari' : '浏览器';
+	return (os + ' · ' + b).slice(0, 40);
+}
+function ncErr(t) { $('ncErr').textContent = t || ''; $('ncErr').classList.toggle('hidden', !t); }
+function needCode(data) {
+	const w = $('needcode');
+	if (!token) return; // 已经退出了（退出前发出去的请求晚回来）
+	const hub = (data && /^https:\/\/[a-z0-9.-]+$/i.test(data.hub || '')) ? data.hub : 'https://yrlove520.com';
+	$('ncHub').href = hub + '/app';
+	$('ncHubName').textContent = hub.replace(/^https:\/\//, '');
+	if (!w.classList.contains('hidden')) return;
+	w.classList.remove('hidden');
+	ncErr('');
+	if (pendCode) { $('ncInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
+	else setTimeout(() => { try { $('ncInput').focus(); } catch (e) {} }, 300);
+}
+async function ncGo() {
+	const code = $('ncInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+	ncErr('');
+	if (code.length !== 8) return ncErr('登录码是 8 位字母和数字');
+	const btn = $('ncBtn'); btn.disabled = true; btn.textContent = '核对中…';
+	try {
+		const r = await rpcOnce('panel/device_approve', { code, name: devName() }, 30000);
+		store.set('rp_dev', r.dev);
+		btn.textContent = '✓ 登录成功';
+		setTimeout(() => location.reload(), 400);
+	} catch (e) {
+		ncErr(e instanceof AuthError ? '登录地址里的密钥不对，点下面「换一个登录地址」重新粘贴' : e.message);
+		btn.disabled = false; btn.textContent = '确定';
+	}
+}
+$('ncBtn').onclick = ncGo;
+window.addEventListener('hashchange', () => { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (!m) return; history.replaceState(null, '', location.pathname + location.search); if (!$('needcode').classList.contains('hidden')) { $('ncInput').value = m[1].toUpperCase(); ncGo(); } else pendCode = m[1].toUpperCase(); });
+$('ncInput').onkeydown = (e) => { if (e.key === 'Enter') ncGo(); };
+$('ncOut').onclick = (e) => { e.preventDefault(); logout(''); };
 
 let ticker, wdTick = 0;
 function start() {

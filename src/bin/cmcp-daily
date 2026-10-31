@@ -44,7 +44,7 @@ if (g?.now) {
 
 // 4) 订阅流量 / 到期（用面板自己的接口拿）
 const tok = trim(readfile(L.D + '/token') ?? '');
-const P = (m, a) => { let o = L.sh(sprintf("curl -s -m 40 -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {} })), tok)); try { return json(o).result; } catch (e) { return null; } };
+const P = (m, a) => { let o = L.sh(sprintf("curl -s -m 40 -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {}, client: 'panel', dev: 'local.' + L.local_key() })), tok)); try { return json(o).result; } catch (e) { return null; } };
 let stt = P('oc_state');
 let act = filter(stt?.files ?? [], (f) => f.active)[0];
 let sub = act?.sub ? filter(stt?.subs ?? [], (x) => x.name == act.sub)[0] : null;

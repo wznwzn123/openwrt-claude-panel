@@ -162,8 +162,8 @@ cloud_beat() {
 	BEAT_T=$t
 	local URL RKEY TKEY j
 	. "$D/cloud.conf"
-	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s"}' \
-		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")")
+	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s","ver":"%s"}' \
+		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")" "$(sed -n 's/^VER=//p' $D/version 2>/dev/null | tr -dc '0-9a-z.')")
 	( curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" >/dev/null 2>&1 & )
 }
 

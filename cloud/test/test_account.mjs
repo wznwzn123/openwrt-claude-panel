@@ -85,6 +85,28 @@ ok('A 解绑 B 的路由器：B 那边不受影响', (await call(B, '/api/accoun
 ok('A 看不到 B 的路由器', !(await call(A, '/api/account/me')).j.devs.some((d) => d.sub === R2.sub));
 ok('改名只改自己账号里的显示', (await call(A, '/api/account/rename', { sub: R1.sub, alias: '客厅' })).st === 200 && (await call(A, '/api/account/me')).j.devs[0].name === '客厅');
 
+// ---- 托管版登录码 ----
+const lcOf = async (R, code) => { const res = await mod.default.fetch(new Request('https://panel.example/api/dev/logincode', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: R.sub, rkey: R.rkey, code }) }), env); return { st: res.status, j: await res.json() }; };
+ok('没登录拿不到登录码', (await call(anon, '/api/account/logincode', { sub: R1.sub })).st === 401);
+ok('账号里没有的路由器：拿不到登录码', (await call(A, '/api/account/logincode', { sub: R2.sub })).st === 404);
+let LC = await call(A, '/api/account/logincode', { sub: R1.sub });
+ok('绑定了的路由器：拿到 8 位登录码，10 分钟有效', LC.st === 200 && /^[A-Z2-9]{8}$/.test(LC.j.code) && LC.j.exp > Date.now() + 590e3, JSON.stringify(LC.j));
+ok('别的路由器拿这个登录码去核对：不对', (await lcOf(R2, LC.j.code)).st === 400);
+ok('钥匙不对：拒绝核对', (await lcOf({ sub: R1.sub, rkey: R2.rkey }, LC.j.code)).st === 403);
+r = await lcOf(R1, LC.j.code.toLowerCase());
+ok('路由器核对登录码（不分大小写）：通过，带上打了码的账号邮箱', r.st === 200 && r.j.ok && r.j.email === 'al***@x.com', JSON.stringify(r.j));
+ok('登录码只能用一次', (await lcOf(R1, LC.j.code)).st === 400);
+LC = await call(A, '/api/account/logincode', { sub: R1.sub });
+{ const k = 'l:' + R1.sub + ':' + LC.j.code, v = await hub().ctx.storage.get(k); v.exp = Date.now() - 1; await hub().ctx.storage.put(k, v); }
+ok('过期的登录码：不对', (await lcOf(R1, LC.j.code)).st === 400);
+await hub().cleanup();
+ok('每天清理时删掉过期的登录码', !(await hub().ctx.storage.get('l:' + R1.sub + ':' + LC.j.code)));
+LC = await call(A, '/api/account/logincode', { sub: R1.sub });
+await call(A, '/api/account/unbind', { sub: R1.sub });
+ok('拿码的账号解绑了这台路由器：登录码作废', (await lcOf(R1, LC.j.code)).st === 400);
+P = await pairOf(R1); await call(A, '/api/account/bind', { code: P.code }); await call(A, '/api/account/rename', { sub: R1.sub, alias: '客厅' });
+{ let n = 0; for (let i = 0; i < 40; i++) if ((await lcOf(R1, 'ZZZZZZZZ')).st === 429) n++; ok('乱试登录码：一小时 30 次以后就拒绝（前面已经核对过 4 次）', n === 14, n); }
+
 // ---- 自建版路由器：账号里只记网址，不记密钥 ----
 let L1 = await call(A, '/api/account/link', { name: '公司', url: 'https://router.example.com/panel/' });
 ok('添加自建版路由器', L1.st === 200 && L1.j.ok && !L1.j.stripped, JSON.stringify(L1.j));

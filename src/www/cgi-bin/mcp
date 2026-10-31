@@ -57,6 +57,7 @@ function now_str() {
 }
 
 let CONF = null;
+let MODE = 'token', NEED_DEV = false; // MODE：token（登录密钥地址）或 ai（Claude 连接器地址）
 function conf() {
 	if (CONF)
 		return CONF;
@@ -2356,6 +2357,115 @@ P.hub_unbind = function(a) {
 	hub_call('/api/dev/unbind', { uid });
 	return { ok: true };
 };
+/* ---------- 托管版：每台手机第一次打开面板要输一次登录码 ----------
+ * 登录码在官网账号里拿（只有绑定了这台路由器的账号才能拿），或者在路由器后台终端运行 cmcp-logincode 拿一个应急的。
+ * 输对以后给这台手机发一个「手机钥匙」（存在手机浏览器里），以后每次请求都带上；没有它，光有登录密钥也进不来。
+ * Claude 连接器用单独的连接器地址（config.json 的 ckey），不用登录码，但打不开面板。 */
+const ETC = replace(CONF_PATH, /\/[^\/]*$/, ''); // 一般是 /etc/claude-mcp（测试时可以换目录）
+const DEV_PATH = ETC + '/devices.json', SEEN_PATH = '/tmp/cmcp_devseen.json', LC_PATH = '/tmp/cmcp_logincode', LCFAIL_PATH = '/tmp/cmcp_lcfail';
+let DEV_ID = null;
+function is_hosted() { return length(trim(readfile(ETC + '/hub.conf') ?? '')) > 0; }
+function rand_str(n) { let r = trim(sh(sprintf("tr -dc 'a-z0-9' < /dev/urandom | head -c %d", n)).out); return length(r) == n ? r : null; }
+function devs_read() { let d = null; try { d = json(readfile(DEV_PATH) ?? '{}'); } catch (e) {} return type(d) == 'object' ? d : {}; }
+function devs_write(d) { writefile(DEV_PATH + '.tmp', sprintf('%J\n', d)); sh('chmod 600 ' + shq(DEV_PATH + '.tmp')); rename(DEV_PATH + '.tmp', DEV_PATH); }
+function seen_read() { let d = null; try { d = json(readfile(SEEN_PATH) ?? '{}'); } catch (e) {} return type(d) == 'object' ? d : {}; }
+function dev_ok(cred) {
+	if (type(cred) != 'string') return false;
+	let m = match(cred, /^([a-z0-9]{8})\.([a-z0-9]{32})$/);
+	if (!m) {
+		// 路由器自己的小工具（每日报告、一键更新的检查）
+		let lm = match(cred, /^local\.([a-z0-9]{32,64})$/);
+		return !!lm && lm[1] == CL.local_key();
+	}
+	let d = devs_read()[m[1]];
+	if (type(d) != 'object' || d.s != m[2]) return false;
+	DEV_ID = m[1];
+	// 最后使用时间记在内存里（/tmp），不每次写闪存
+	let sn = seen_read(), t = time();
+	if (t - (sn[m[1]] ?? 0) > 60) { sn[m[1]] = t; writefile(SEEN_PATH, sprintf('%J', sn)); }
+	return true;
+}
+function lc_fails() {
+	let t = time(), a = filter(map(split(readfile(LCFAIL_PATH) ?? '', '\n'), (x) => +x), (x) => x > t - 600);
+	return a;
+}
+function lc_fail() { let a = lc_fails(); push(a, time()); writefile(LCFAIL_PATH, join('\n', a) + '\n'); }
+P.device_approve = function(a) {
+	if (!is_hosted()) die('只有托管版需要登录码');
+	if (length(lc_fails()) >= 10) die('登录码输错太多次了，10 分钟后再试');
+	let code = uc(replace('' + (a?.code ?? ''), /[^A-Za-z0-9]/g, ''));
+	if (!match(code, /^[A-Z2-9]{8}$/)) { lc_fail(); die('登录码是 8 位字母和数字，再检查一下'); }
+	let via = null;
+	// 应急登录码（路由器后台终端运行 cmcp-logincode 拿的）
+	let lm = match(readfile(LC_PATH) ?? '', /^([A-Z2-9]{8}) ([0-9]+)/);
+	if (lm && lm[1] == code && +lm[2] > time()) { via = '路由器终端的应急登录码'; sh('rm -f ' + LC_PATH); }
+	else {
+		let c = hub_conf(true);
+		if (!c) { lc_fail(); die('登录码不对'); }
+		let r = sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary %s %s",
+			shq(sprintf('%J', { sub: c.SUB, rkey: c.RKEY, code })), shq(c.HUB + '/api/dev/logincode')));
+		let o = null;
+		try { o = json(r.out); } catch (e) {}
+		if (type(o) != 'object') die('连不上官网，核对不了登录码。稍后再试；急的话在路由器后台终端运行 cmcp-logincode 拿一个应急登录码');
+		if (!o.ok) { lc_fail(); die(o.error ?? '登录码不对'); }
+		via = '账号 ' + (o.email ?? '');
+	}
+	let id = rand_str(8), sec = rand_str(32);
+	if (!id || !sec) die('生成手机钥匙失败，再试一次');
+	let d = devs_read();
+	// 最多记 30 台，超过了去掉最早的
+	let ids = sort(keys(d), (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0));
+	while (length(ids) >= 30) delete d[shift(ids)];
+	let name = substr(replace('' + (a?.name ?? ''), /[\x00-\x1f<>"]/g, ''), 0, 40) || '手机';
+	d[id] = { s: sec, name, at: time(), via };
+	devs_write(d);
+	DEV_ID = id;
+	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + '登录。不是你自己的话，马上在面板「系统操作 → 已登录的手机」里把它移除。'))); } catch (e) {}
+	return { dev: id + '.' + sec, id, name };
+};
+P.device_list = function() {
+	let d = devs_read(), sn = seen_read(), list = [];
+	for (let id in d) push(list, { id, name: d[id].name, at: d[id].at, via: d[id].via, seen: sn[id] ?? null, me: id == DEV_ID });
+	list = sort(list, (x, y) => ((y.me ? 1 : 0) - (x.me ? 1 : 0)) || ((y.seen ?? y.at) - (x.seen ?? x.at)));
+	return { hosted: is_hosted(), list };
+};
+P.device_remove = function(a) {
+	let d = devs_read(), id = a?.self ? (DEV_ID ?? '') : '' + (a?.id ?? '');
+	if (a?.all_others) { for (let k in keys(d)) if (k != DEV_ID) delete d[k]; devs_write(d); return { ok: true }; }
+	if (!d[id]) die('没有这台手机');
+	delete d[id];
+	devs_write(d);
+	return { ok: true, me: id == DEV_ID };
+};
+/* Claude 连接器地址：只给 AI 用，打不开面板（托管版的面板要登录码，连接器不用） */
+function ckey_get(make) {
+	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
+	if (length(c.ckey ?? '') >= 16 || !make) return c.ckey ?? null;
+	c.ckey = rand_str(40);
+	if (!c.ckey) die('生成连接器地址失败，再试一次');
+	writefile(CONF_PATH + '.tmp', sprintf('%.J\n', c));
+	rename(CONF_PATH + '.tmp', CONF_PATH);
+	CONF = null;
+	return c.ckey;
+}
+function ckey_url(k) { let h = trim(readfile('/etc/claude-mcp/hostname') ?? ''); return length(h) ? 'https://' + h + '/cgi-bin/mcp/' + k : null; }
+P.ckey_info = function() {
+	if (conf().ai === false) return { ai: false };
+	let k = ckey_get(true);
+	return { ai: true, url: ckey_url(k), hosted: is_hosted() };
+};
+P.ckey_rotate = function(a) {
+	if (a?.confirm != 'CKEY') die('需要确认');
+	if (conf().ai === false) die('纯面板版没有 Claude 连接器');
+	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
+	c.ckey = rand_str(40);
+	if (!c.ckey) die('生成连接器地址失败，再试一次');
+	writefile(CONF_PATH + '.tmp', sprintf('%.J\n', c));
+	rename(CONF_PATH + '.tmp', CONF_PATH);
+	CONF = null;
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('Claude 连接器地址已更换'), shq('旧的连接器地址已经作废，在 Claude 里把连接器换成新地址。'))); } catch (e) {}
+	return { url: ckey_url(c.ckey) };
+};
 /* ---------- 一键更新：查最新版本、开始更新、看进度（真正的更新由 cmcp-update 在后台做） ---------- */
 function ver_info() {
 	let v = readfile('/etc/claude-mcp/version') ?? '', o = {};
@@ -2411,7 +2521,7 @@ P.rotate_key = function(a) {
 	let cc = readfile('/etc/claude-mcp/cloud.conf') ?? '';
 	// 自建完整版：云端（Worker）用登录密钥来认面板，要提醒用户把 Worker 的 PANEL_TOKEN 也换掉
 	let selfcloud = match(cc, /(^|\n)URL=./) && !match(cc, /(^|\n)PKEY=./);
-	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废。其他手机要重新添加，Claude 连接器要换成新地址。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废，其他手机要重新添加。用「Claude 连接器地址」添加的连接器不受影响。'))); } catch (e) {}
 	return { token: nt, host: trim(readfile('/etc/claude-mcp/hostname') ?? ''), selfcloud: !!selfcloud };
 };
 P.cloud_info = function() {
@@ -2667,6 +2777,19 @@ function handle(msg) {
 	let id = msg.id, p = msg.params ?? {};
 	let is_notification = !exists(msg, 'id');
 
+	// 连接器地址：只给 AI 用，不能调面板接口
+	if (MODE == 'ai' && substr(msg.method, 0, 6) == 'panel/')
+		return is_notification ? null : rpc_error(id, -32001, '这是 Claude 连接器地址，不能用来打开面板');
+	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（输对登录码以后拿到的）
+	if (MODE == 'token' && NEED_DEV && msg.method != 'panel/device_approve' && !dev_ok(msg.dev)) {
+		if (is_notification) return null;
+		let h = hub_conf(true)?.HUB ?? null;
+		return { jsonrpc: '2.0', id, error: { code: -32010,
+			message: msg.client == 'panel'
+				? '这台手机还没登录：托管版每台手机第一次打开面板要输一次登录码'
+				: '托管版的 Claude 连接器要用单独的「Claude 连接器地址」：在手机面板「系统操作 → Claude 连接器地址」里复制，然后在 Claude 里把这个连接器删掉，用新地址重新添加',
+			data: { need_code: true, hub: h } } };
+	}
 	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')
 		return is_notification ? null : rpc_error(id, -32001, '这台路由器装的是纯面板版，没有开启 AI 连接器');
@@ -2736,13 +2859,16 @@ function reqlog(msg, t0, r) {
 
 function main() {
 	let c = conf();
-	let token = c.token ?? '';
+	let token = c.token ?? '', ckey = c.ckey ?? '';
 	let path = getenv('PATH_INFO') ?? '';
 
-	if (length(token) < 16 || path != '/' + token) {
+	if (c.ai !== false && length(ckey) >= 16 && path == '/' + ckey)
+		MODE = 'ai';
+	else if (length(token) < 16 || path != '/' + token) {
 		reply('404 Not Found', { error: 'not found' });
 		return;
 	}
+	NEED_DEV = MODE == 'token' && is_hosted();
 
 	let method = getenv('REQUEST_METHOD') ?? 'GET';
 	if (method == 'GET' || method == 'HEAD') {

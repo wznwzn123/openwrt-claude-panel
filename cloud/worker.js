@@ -165,7 +165,7 @@ export class Watch extends DurableObject {
 	async setup(c) { await this.ctx.storage.put('cfg', c); await this.ensureAlarm(); }
 	async getCfg() { return (await this.ctx.storage.get('cfg')) || null; }
 	// 给官网「我的路由器」看的在线状态（只读，不启动定时器）
-	async brief() { const m = await this.ctx.storage.get(['r', 's']); const r = m.get('r'), s = m.get('s'); return { last: (r && r.last) || 0, state: (s && s.state) || 'wait' }; }
+	async brief() { const m = await this.ctx.storage.get(['r', 's']); const r = m.get('r'), s = m.get('s'); return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String((r && r.rep && r.rep.ver) || '').slice(0, 20) }; }
 	async setOff(off) { const c = await this.getCfg(); if (!c) return; c.off = !!off; await this.ctx.storage.put('cfg', c); }
 	async wipe() { await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll(); }
 	async load() {

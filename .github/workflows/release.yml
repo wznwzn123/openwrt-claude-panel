@@ -1,5 +1,5 @@
 # 发布新版本：在 GitHub 网页的 Actions → 「发布新版本」→ Run workflow，填版本号（例如 v1.0.0）
-# 会自动打四个安装包（AI 版 / 纯面板版 × 精简版 / 完整版），创建 Release 并上传
+# 会自动打安装包（四个自建版；设置了 HUB_URL 时再加两个托管版）和安卓 App，创建 Release 并上传
 name: 发布新版本
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
         run: |
           gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
-            --title "$VERSION：四个版本（AI 版 / 纯面板版 × 精简版 / 完整版）" \
+            --title "$VERSION：托管版 + 四个自建版 + 安卓 App" \
             --notes-file tools/release-notes.md
   android:
     needs: release

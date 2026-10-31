@@ -5,7 +5,8 @@
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>我的路由器</title>
 <link rel="manifest" href="./manifest.json"><link rel="icon" type="image/png" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png">
-<script>try{var d=localStorage.getItem("rp_dark");if(d==="1"||(d===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}</script>
+<script>try{var d=localStorage.getItem("rp_dark");if(d==="1"||(d===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}
+try{var R=document.documentElement,g=localStorage.getItem("rp_glass"),w=localStorage.getItem("rp_wall"),b=localStorage.getItem("rp_wblur"),m=localStorage.getItem("rp_wdim");if(g==="1"||(g===null&&!matchMedia("(prefers-reduced-transparency: reduce)").matches))R.classList.add("glass");if(w)R.setAttribute("data-wall",w);R.style.setProperty("--wblur",(b===null?20:+b)+"px");R.style.setProperty("--wdim",(m===null?0:+m)/100)}catch(e){}</script>
 <style>
 /* 设计沿用「售后雷达」：iOS 风格分组背景、圆角卡片、胶囊按钮、毛玻璃导航与悬浮标签栏 */
 :root{--bg:#f2f2f7;--card:#fff;--card2:#f2f2f7;--text:#0b0b0f;--muted:#6e6e73;--line:rgba(60,60,67,.14);--fill:rgba(120,120,128,.12);--fill2:rgba(120,120,128,.18);--brand:#007aff;--soft:rgba(0,122,255,.12);--danger:#ff3b30;--dsoft:rgba(255,59,48,.12);--ok:#34c759;--oksoft:rgba(52,199,89,.14);--warn:#ff9500;--wsoft:rgba(255,149,0,.14);--glass:rgba(249,249,251,.8);--shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);--spring:cubic-bezier(.32,.72,0,1);--ease:cubic-bezier(.25,.1,.25,1);--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans Mono",monospace;color-scheme:light}
@@ -24,6 +25,9 @@ h1,h2,h3{letter-spacing:-.02em}
 .top{position:sticky;top:0;z-index:20;background:var(--glass);-webkit-backdrop-filter:saturate(160%) blur(16px);backdrop-filter:saturate(160%) blur(16px);border-bottom:.5px solid transparent;padding:10px 16px 8px;padding-top:max(10px,env(safe-area-inset-top));transition:background-color .35s var(--ease),border-color .25s var(--ease),box-shadow .25s var(--ease)}
 /* 顶栏分隔线：页面在最上面时不显示，内容滚到顶栏下面才出现一条很淡的线（深色更淡） */
 .top{border-bottom-left-radius:22px;border-bottom-right-radius:22px}
+/* 顶栏浮起来：离屏幕顶端和两边留一点空，四个角都是圆的 */
+.top{--topm:calc(env(safe-area-inset-top) + 8px);top:var(--topm);margin:var(--topm) 10px 0;border-radius:22px;padding-top:10px}
+.topfade{position:fixed;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 8px);z-index:19;pointer-events:none;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);-webkit-mask-image:linear-gradient(#000 55%,transparent);mask-image:linear-gradient(#000 55%,transparent)}
 .top.scrolled{border-bottom-color:var(--line);box-shadow:0 6px 18px -10px rgba(0,0,0,.12)}
 :root.dark .top.scrolled{border-bottom-color:rgba(255,255,255,.08);box-shadow:0 8px 20px -10px rgba(0,0,0,.6)}
 .topin{max-width:1180px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -208,7 +212,7 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .wdst{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
 .wdst>div{background:var(--card2);border-radius:14px;padding:9px 10px;font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0}
 .wdst>div b{color:var(--text);font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.wdst>div span{margin-left:auto;font-weight:600;white-space:nowrap}.wdst>div span.good{color:var(--ok)}.wdst>div span.bad{color:var(--danger)}
+.wdst>div span{margin-left:auto;font-weight:600;white-space:nowrap;background:none;padding:0}.wdst>div span.good{color:var(--ok)}.wdst>div span.bad{color:var(--danger)}
 .wdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
 .wdot.ok{background:var(--ok)}.wdot.err{background:var(--danger)}.wdot.warn{background:var(--warn)}.wdot.info{background:var(--brand)}
 .okc{color:var(--ok)!important}.badc{color:var(--danger)!important}
@@ -400,7 +404,55 @@ section.page{display:none}section.page.on{display:block}
 @media(max-width:760px){.two,.tasks{grid-template-columns:1fr}}
 @media(max-width:380px){.qbtn i{width:44px;height:44px;border-radius:13px}.qbtn{font-size:11.5px}.stat4 b{font-size:19px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.toast .tbar{animation:toastBar var(--d,3s) linear both!important}}
+
+/* ---------- 玻璃主题：背景图 + 半透明磨砂卡片（:root.glass）；关掉就是原来的简洁样式 ---------- */
+#wall{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;display:none;background:var(--bg)}
+#wall>i{position:absolute;inset:calc(var(--wblur,0px) * -2);filter:blur(var(--wblur,0px));background-size:cover;background-position:center}
+#wall::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--wdim,0))}
+:root.dark #wall::after{background:rgba(0,0,0,calc(var(--wdim,0) + .28))}
+:root.glass #wall{display:block}
+:root.glass body{background:transparent}
+/* 背景预设（设置里的色块用同样的样式） */
+.wp-mist,:root:not([data-wall]):not(.dark) #wall>i,:root[data-wall="mist"] #wall>i{background:radial-gradient(60% 50% at 12% 8%,#c3d2ff 0,transparent 70%),radial-gradient(55% 45% at 92% 18%,#f6cdf0 0,transparent 70%),radial-gradient(70% 55% at 30% 95%,#b8ecff 0,transparent 70%),radial-gradient(50% 40% at 85% 80%,#d9ccff 0,transparent 70%),#eef1f8}
+.wp-night,:root:not([data-wall]).dark #wall>i,:root[data-wall="night"] #wall>i{background:radial-gradient(55% 45% at 15% 10%,#3a2c8f 0,transparent 70%),radial-gradient(50% 45% at 90% 25%,#13527a 0,transparent 70%),radial-gradient(70% 55% at 40% 100%,#4b1e6b 0,transparent 70%),#0b1024}
+.wp-aurora,:root[data-wall="aurora"] #wall>i{background:radial-gradient(60% 50% at 10% 15%,#22c1c3 0,transparent 70%),radial-gradient(55% 50% at 90% 10%,#7b61ff 0,transparent 70%),radial-gradient(70% 55% at 60% 95%,#3fe1a0 0,transparent 70%),#10233a}
+.wp-ocean,:root[data-wall="ocean"] #wall>i{background:radial-gradient(60% 50% at 15% 10%,#8ec5ff 0,transparent 70%),radial-gradient(60% 50% at 95% 40%,#5ee7df 0,transparent 70%),radial-gradient(70% 55% at 30% 100%,#3a7bd5 0,transparent 70%),#cfe8ff}
+.wp-sunset,:root[data-wall="sunset"] #wall>i{background:radial-gradient(60% 50% at 10% 10%,#ffcc70 0,transparent 70%),radial-gradient(60% 50% at 90% 30%,#ff6a88 0,transparent 70%),radial-gradient(70% 55% at 40% 100%,#c850c0 0,transparent 70%),#ffd9c2}
+.wp-mint,:root[data-wall="mint"] #wall>i{background:radial-gradient(60% 50% at 15% 10%,#d4fc79 0,transparent 70%),radial-gradient(60% 50% at 90% 40%,#96e6a1 0,transparent 70%),radial-gradient(70% 55% at 30% 100%,#5fd3c6 0,transparent 70%),#e9fbef}
+.wp-sakura,:root[data-wall="sakura"] #wall>i{background:radial-gradient(60% 50% at 12% 12%,#fbc2eb 0,transparent 70%),radial-gradient(60% 50% at 92% 30%,#a6c1ee 0,transparent 70%),radial-gradient(70% 55% at 35% 100%,#ffd1dc 0,transparent 70%),#fbeef6}
+.wp-graphite,:root[data-wall="graphite"] #wall>i{background:radial-gradient(60% 50% at 15% 10%,#5b6170 0,transparent 70%),radial-gradient(60% 50% at 90% 40%,#3b4150 0,transparent 70%),radial-gradient(70% 55% at 40% 100%,#6b6f7a 0,transparent 70%),#2a2d34}
+:root[data-wall="photo"] #wall>i{background:var(--wimg,#888) center/cover no-repeat}
+/* 玻璃配色：卡片半透明，背景图本身已经模糊，卡片不用再做实时模糊（省电、不卡） */
+:root.glass{--card:rgba(255,255,255,.6);--card2:rgba(255,255,255,.52);--glass:rgba(250,250,252,.55);--fill:rgba(118,118,128,.14);--shadow:inset 0 0 0 .5px rgba(255,255,255,.65),0 8px 28px rgba(31,38,80,.08)}
+:root.glass.dark{--card:rgba(28,28,32,.56);--card2:rgba(72,72,80,.36);--glass:rgba(22,22,26,.55);--fill:rgba(118,118,128,.26);--shadow:inset 0 0 0 .5px rgba(255,255,255,.09),0 8px 28px rgba(0,0,0,.28)}
+/* 会盖在滚动内容上面的地方，用真正的磨砂 */
+:root.glass .top,:root.glass .dock,:root.glass .savebar{-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}
+:root.glass .dock,:root.glass .savebar{border-color:rgba(255,255,255,.5)}:root.glass.dark .dock,:root.glass.dark .savebar{border-color:rgba(255,255,255,.1)}
+:root.glass .side{background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(30px);backdrop-filter:saturate(180%) blur(30px)}
+:root.glass .modal{background:rgba(0,0,0,.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+:root.glass .modal.clear{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+:root.glass .modalbox{background:rgba(242,242,247,.74);-webkit-backdrop-filter:saturate(180%) blur(30px);backdrop-filter:saturate(180%) blur(30px);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.7),0 20px 60px rgba(0,0,0,.22)}
+:root.glass.dark .modalbox{background:rgba(30,30,34,.74);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1),0 20px 60px rgba(0,0,0,.5)}
+:root.glass .modalbox .card{background:rgba(255,255,255,.86)}:root.glass.dark .modalbox .card{background:rgba(52,52,58,.66)}
+:root.glass .seg{background:transparent}
+:root.glass .seg .chip:not(.on){background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.5)}
+:root.glass.dark .seg .chip:not(.on){box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){:root.glass{--glass:rgba(250,250,252,.94)}:root.glass.dark{--glass:rgba(24,24,28,.94)}:root.glass .modalbox{background:rgba(242,242,247,.97)}:root.glass.dark .modalbox{background:rgba(30,30,34,.97)}}
+/* 主题设置 */
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:10px;margin:10px 0 4px}
+.wtile{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;padding:0;font-size:12px;font-weight:600;color:var(--text);min-width:0}
+.wtile i{width:100%;aspect-ratio:3/4;border-radius:14px;display:grid;place-items:center;font-style:normal;color:var(--muted);background-size:cover;background-position:center;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);transition:transform .2s var(--spring),box-shadow .2s}
+.wtile i svg{width:24px;height:24px}
+.wtile.add i{background:var(--fill)}
+.wtile.on i{box-shadow:0 0 0 2.5px var(--brand),inset 0 0 0 .5px rgba(0,0,0,.12)}
+.wtile:active i{transform:scale(.94)}
+.wtile span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.lookoff .wgrid,.lookoff .wsl{opacity:.4;pointer-events:none}
+.wsl{display:grid;grid-template-columns:72px 1fr 40px;align-items:center;gap:10px;margin:12px 0 0;font-size:14px}
+.wsl b{text-align:right;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wsl input{width:100%;accent-color:var(--brand)}
 </style></head><body>
+<div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
 <div id="login" class="lgwrap hidden"><canvas id="lgbg" aria-hidden="true"></canvas>
 <main class="lgcard">
@@ -705,6 +757,7 @@ section.page{display:none}section.page.on{display:block}
 	<div class="sectitle"><b>管理</b></div>
 	<section class="card list">
 		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="logout"><div><b>断开此手机</b><span class="muted">清除这台手机保存的密钥</span></div><span class="muted">›</span></button>
@@ -1174,7 +1227,7 @@ $('scrim').onclick = () => sideOpen(false);
 	addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (dx > 60) sideOpen(true); if (dx < -60) sideOpen(false); x0 = null; }, { passive: true }); })();
 const topLine = () => $('topbar').classList.toggle('scrolled', scrollY > 2);
 addEventListener('scroll', topLine, { passive: true });
-function topH() { document.documentElement.style.setProperty('--toph', ($('topbar').offsetHeight - 2) + 'px'); }
+function topH() { const t = $('topbar'); document.documentElement.style.setProperty('--toph', Math.round(t.offsetHeight + (parseFloat(getComputedStyle(t).marginTop) || 0)) - 2 + 'px'); }
 addEventListener('resize', topH);
 
 let loading = false, loadSeq = 0, loadAt = 0;
@@ -1844,13 +1897,14 @@ async function ncRun(k) {
 		ncAgo();
 	}
 }
+let ncSoon = 0;
 // force：马上全部重测（切换节点、改模式、点刷新后）；否则只测过期的
 function netCheck(force) {
 	if (page !== 'home' || document.hidden) return;
+	if (!force && ncSoon) return; // 已经约好马上全部重测（刚改了模式），定时刷新就别抢先测一遍
 	for (const k in NC_JOB) if (force || Date.now() - (NC.at[k] || 0) > NC_JOB[k].every) ncRun(k);
 }
-let ncSoon;
-const netCheckSoon = (ms) => { clearTimeout(ncSoon); ncSoon = setTimeout(() => netCheck(true), ms || 2500); };
+const netCheckSoon = (ms) => { clearTimeout(ncSoon); ncSoon = setTimeout(() => { ncSoon = 0; netCheck(true); }, ms || 2500); };
 ipRender(); siteRender(); unlRender(); ncAgo();
 $('ncBtn').onclick = () => netCheck(true);
 // 底部快捷栏「IP 检查」用的弹窗
@@ -3409,10 +3463,91 @@ const T = {
 		try { await tool('reboot_router', { confirm: true }); setStatus(false, '重启中'); toast('路由器正在重启，约 2 分钟后自动重连'); setTimeout(() => refresh(true), 120000); } catch (e) { handleErr(e); }
 	},
 	async lock() { lockSettings(); },
+	look() { lookSettings(); },
 	async logout() { if (await confirmBox('断开此手机', '会清除这台手机上保存的密钥，之后需要重新粘贴连接地址。路由器上的设置不受影响。', '断开', true)) logout(); },
 };
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
-function themeLabel() { $('themeState').textContent = document.documentElement.classList.contains('dark') ? '已开启' : '已关闭'; }
+function themeLabel() { $('themeState').textContent = document.documentElement.classList.contains('dark') ? '已开启' : '已关闭'; lookLabel(); }
+
+/* ---------- 主题与背景：玻璃效果、背景（预设或相册里的图），只保存在这台手机上 ---------- */
+const WALLS = [['mist', '晨雾'], ['night', '星空'], ['aurora', '极光'], ['ocean', '海洋'], ['sunset', '日落'], ['mint', '薄荷'], ['sakura', '樱花'], ['graphite', '石墨']];
+const LOOK = {
+	glass() { const g = store.get('rp_glass'); return g === '1' || (g === null && !matchMedia('(prefers-reduced-transparency: reduce)').matches); },
+	wall() { return store.get('rp_wall') || ''; },
+	num(k, d) { const v = store.get(k); return v === null || !isFinite(+v) ? d : +v; },
+};
+function lookApply() {
+	const R = document.documentElement, W = $('wall'), w = LOOK.wall();
+	R.classList.toggle('glass', LOOK.glass());
+	if (w) R.dataset.wall = w; else delete R.dataset.wall;
+	R.style.setProperty('--wblur', LOOK.num('rp_wblur', 20) + 'px');
+	R.style.setProperty('--wdim', LOOK.num('rp_wdim', 0) / 100);
+	const img = w === 'photo' ? store.get('rp_wallimg') : null;
+	if (img) W.style.setProperty('--wimg', `url("${img}")`); else W.style.removeProperty('--wimg');
+	lookLabel();
+}
+function lookLabel() {
+	const el = $('lookState'); if (!el) return;
+	const w = LOOK.wall(), n = w === 'photo' ? '我的图片' : (WALLS.find((x) => x[0] === w) || [0, document.documentElement.classList.contains('dark') ? '星空' : '晨雾'])[1];
+	el.textContent = LOOK.glass() ? '玻璃 · ' + n : '简洁';
+}
+// 相册里的图：缩小后存成 JPEG（太大存不下就再缩）
+async function wallFromFile(f) {
+	if (!f || !/^image\//.test(f.type || 'image/')) throw new Error('请选一张图片');
+	const url = URL.createObjectURL(f);
+	try {
+		const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('读不了这张图片，换一张试试')); i.src = url; });
+		for (const [max, q] of [[1600, 0.85], [1200, 0.8], [900, 0.75]]) {
+			const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+			const c = document.createElement('canvas');
+			c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+			c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+			const d = c.toDataURL('image/jpeg', q);
+			try { localStorage.setItem('rp_wallimg', d); return; } catch (e) {}
+		}
+		throw new Error('图片太大，这台手机存不下，换一张试试');
+	} finally { URL.revokeObjectURL(url); }
+}
+function lookSettings() {
+	const ICON_ADD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+	const body = () => {
+		const w = LOOK.wall() || (document.documentElement.classList.contains('dark') ? 'night' : 'mist'), img = store.get('rp_wallimg');
+		return `<div class="sheethead"><h3>主题与背景</h3><button class="btn sm" data-v="close">完成</button></div>
+		<div class="${LOOK.glass() ? '' : 'lookoff'}" data-lbody>
+		<label class="kv aswon"><span><b>玻璃效果</b><span class="muted">卡片、顶栏、菜单变成半透明磨砂玻璃，透出下面的背景。手机比较卡的话可以关掉，换回简洁样式</span></span><span class="sw"><input type="checkbox" data-lg ${LOOK.glass() ? 'checked' : ''}><i></i></span></label>
+		<div class="subhd" style="border-top:0;padding-top:0;margin-top:10px">背景</div>
+		<div class="wgrid">${WALLS.map(([k, n]) => `<button class="wtile ${w === k ? 'on' : ''}" data-w="${k}"><i class="wp-${k}"></i><span>${n}</span></button>`).join('')}
+		${img ? `<button class="wtile ${w === 'photo' ? 'on' : ''}" data-w="photo"><i style="background-image:url('${img}')"></i><span>我的图片</span></button>` : ''}
+		<button class="wtile add" data-pick><i>${ICON_ADD}</i><span>${img ? '换一张' : '从相册选'}</span></button></div>
+		<input type="file" accept="image/*" hidden data-file>
+		<div class="wsl"><span>背景模糊</span><input type="range" min="0" max="40" step="1" value="${LOOK.num('rp_wblur', 20)}" data-blur><b data-bv>${LOOK.num('rp_wblur', 20)}</b></div>
+		<div class="wsl"><span>背景变暗</span><input type="range" min="0" max="60" step="1" value="${LOOK.num('rp_wdim', 0)}" data-dim><b data-dv>${LOOK.num('rp_wdim', 0)}%</b></div>
+		</div>
+		<p class="muted" style="font-size:12.5px;margin:12px 0 0">背景只保存在这台手机上，不会上传到路由器；每台手机可以设不一样的。</p>
+		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-reset>恢复默认</button><button class="btn primary" data-v="close">完成</button></div>`;
+	};
+	modal(body(), (m) => {
+		m.classList.add('clear'); // 背景实时变化，弹窗后面不压暗
+		const box = m.querySelector('.modalbox');
+		const redraw = () => { const st = box.scrollTop; box.innerHTML = body(); box.scrollTop = st; bind(); };
+		const bind = () => {
+			box.querySelector('[data-lg]').onchange = (e) => { store.set('rp_glass', e.target.checked ? '1' : '0'); lookApply(); box.querySelector('[data-lbody]').classList.toggle('lookoff', !e.target.checked); };
+			box.querySelectorAll('[data-w]').forEach((b) => (b.onclick = () => { store.set('rp_wall', b.dataset.w); lookApply(); box.querySelectorAll('[data-w]').forEach((x) => x.classList.toggle('on', x === b)); }));
+			const file = box.querySelector('[data-file]');
+			box.querySelector('[data-pick]').onclick = () => file.click();
+			file.onchange = async () => {
+				const f = file.files && file.files[0]; if (!f) return;
+				try { await wallFromFile(f); store.set('rp_wall', 'photo'); lookApply(); redraw(); toast('背景已换成这张图片'); }
+				catch (e) { toast(e.message, true); }
+			};
+			const sl = (sel, key, out, unit) => { const i = box.querySelector(sel); i.oninput = () => { store.set(key, i.value); box.querySelector(out).textContent = i.value + unit; lookApply(); }; };
+			sl('[data-blur]', 'rp_wblur', '[data-bv]', ''); sl('[data-dim]', 'rp_wdim', '[data-dv]', '%');
+			box.querySelector('[data-reset]').onclick = () => { ['rp_glass', 'rp_wall', 'rp_wblur', 'rp_wdim', 'rp_wallimg'].forEach((k) => store.del(k)); lookApply(); redraw(); toast('已恢复默认主题'); };
+		};
+		bind();
+	}).then(lookLabel);
+}
+lookApply();
 themeLabel();
 
 /* =====================================================================

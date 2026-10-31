@@ -438,6 +438,14 @@ section.page{display:none}section.page.on{display:block}
 :root.glass .seg .chip:not(.on){background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.5)}
 :root.glass.dark .seg .chip:not(.on){box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){:root.glass{--glass:rgba(250,250,252,.94)}:root.glass.dark{--glass:rgba(24,24,28,.94)}:root.glass .modalbox{background:rgba(242,242,247,.97)}:root.glass.dark .modalbox{background:rgba(30,30,34,.97)}}
+
+/* 二维码 */
+.qrbox{position:relative;background:#fff;border-radius:20px;padding:14px;margin:4px auto 0;max-width:236px;cursor:pointer}
+.qrbox svg{display:block;width:100%;height:auto;transition:filter .3s}
+.qrbox span{display:none}
+.qrbox.blur svg{filter:blur(9px)}
+.qrbox.blur span{display:grid;place-items:center;position:absolute;inset:0;font-weight:650;color:#0b0b0f;font-size:14px}
+.paircode{font:700 32px/1.2 var(--mono);letter-spacing:4px;text-align:center;margin:6px 0 12px}
 /* 主题设置 */
 .wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:10px;margin:10px 0 4px}
 .wtile{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;padding:0;font-size:12px;font-weight:600;color:var(--text);min-width:0}
@@ -759,6 +767,8 @@ section.page{display:none}section.page.on{display:block}
 		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="hubbind" id="hubBindBtn"><div><b>绑定到账号</b><span class="muted">把这台路由器加到官网账号里，换手机时好找</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="logout"><div><b>断开此手机</b><span class="muted">清除这台手机保存的密钥</span></div><span class="muted">›</span></button>
 	</section>
@@ -792,6 +802,8 @@ const store = {
 	del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
 
+// 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
+try { const m = /^#login=([A-Za-z0-9]{16,64})$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 let token = store.get('rp_token') || store.get('cmcp_token');
 let seq = 0;
 class AuthError extends Error {}
@@ -2997,6 +3009,8 @@ const WDK = { sub: '订阅', node: '节点', tunnel: '隧道', wan: '宽带', ne
 let wdData = null;
 /* 云端监测（Cloudflare）：路由器断线时也能读到，因为 /cloud/ 在隧道之前就被 Cloudflare 接住了 */
 let cloud = null, cloudAt = 0, cloudErr = null, cinfo = null;
+// 托管版才有「绑定到账号」
+const hubBtn = () => { const b = $('hubBindBtn'); if (b) b.classList.toggle('hidden', !(cinfo && cinfo.hub)); };
 try { cloud = JSON.parse(store.get('rp_cloud') || 'null'); cinfo = JSON.parse(store.get('rp_cinfo') || 'null'); } catch (e) {}
 // 精简版没有 Cloudflare 云端：路由器说没配置云端，就不去请求 /cloud/，也不显示云端相关卡片
 const noCloud = () => !!cinfo && cinfo.enabled === false;
@@ -3029,7 +3043,7 @@ function cloudLine(c) {
 try { wdData = JSON.parse(store.get('rp_wd') || 'null'); } catch (e) {}
 async function loadWd(quiet, check) {
 	let err = null;
-	const ci = P('cloud_info').then((x) => { cinfo = x; store.set('rp_cinfo', JSON.stringify(x)); }).catch(() => {});
+	const ci = P('cloud_info').then((x) => { cinfo = x; store.set('rp_cinfo', JSON.stringify(x)); hubBtn(); }).catch(() => {});
 	if (!cinfo) await ci;
 	const cp = cloudFetch(true).catch(() => null);
 	try {
@@ -3466,6 +3480,8 @@ const T = {
 	},
 	async lock() { lockSettings(); },
 	look() { lookSettings(); },
+	addphone() { addPhone(); },
+	hubbind() { hubBind(); },
 	async logout() { if (await confirmBox('断开此手机', '会清除这台手机上保存的密钥，之后需要重新粘贴连接地址。路由器上的设置不受影响。', '断开', true)) logout(); },
 };
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
@@ -3550,6 +3566,49 @@ function lookSettings() {
 	}).then(lookLabel);
 }
 lookApply();
+
+/* ---------- 二维码（qr.js 用到时才加载）：添加新手机、绑定到账号 ---------- */
+function loadQr() {
+	if (window.qrcode) return Promise.resolve();
+	return new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'qr.js'; s.onload = ok; s.onerror = () => no(new Error('二维码组件加载失败，检查网络后再试')); document.head.appendChild(s); });
+}
+function qrSvg(text) { const q = window.qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); }
+// 二维码先打码，点一下才显示，免得旁边的人或截图看到
+function qrReveal(m) { m.querySelectorAll('.qrbox.blur').forEach((b) => (b.onclick = () => b.classList.remove('blur'))); }
+async function addPhone() {
+	const url = location.origin + location.pathname.replace(/[^/]*$/, '') + '#login=' + token;
+	try { await loadQr(); } catch (e) { return toast(e.message, true); }
+	modal(`<div class="sheethead"><h3>添加新手机</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 12px">用新手机的相机扫这个二维码，打开后就直接登录这个面板，不用再粘贴登录地址。</p>
+	<div class="qrbox blur">${qrSvg(url)}<span>点一下显示二维码</span></div>
+	<div class="notice w" style="margin-top:12px">⚠️ 扫到这个码就等于拿到路由器的全部权限。只给自己或家人的手机扫，扫完就关掉，不要截图、不要发给别人。</div>
+	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><button class="btn primary" data-v="close">完成</button></div>`,
+	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(url); });
+}
+function hubBind() {
+	modal(`<div class="sheethead"><h3>绑定到账号</h3><button class="btn sm" data-v="close">关闭</button></div><div data-hb><div class="muted" style="padding:20px 0;text-align:center">正在获取配对码…</div></div>`, (m) => {
+		const box = m.querySelector('[data-hb]');
+		const draw = async () => {
+			try {
+				const [p, accs] = await Promise.all([P('hub_pair', {}, 30000), P('hub_accounts', {}, 30000).catch(() => [])]);
+				await loadQr();
+				box.innerHTML = `<p class="muted" style="margin:0 0 6px">在官网登录账号，填入下面的配对码；或者用已登录官网的手机扫码。10 分钟内有效。</p>
+				<div class="paircode">${esc(p.code.slice(0, 4) + ' ' + p.code.slice(4))}</div>
+				<div class="qrbox">${qrSvg(p.url)}</div>
+				<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><a class="btn primary" href="${esc(p.url)}" target="_blank" rel="noopener">打开官网</a></div>
+				<div class="subhd">已绑定这台路由器的账号</div>
+				${accs.length ? accs.map((a) => `<div class="kv"><span>${esc(a.email)}</span><button class="btn sm danger" data-unb="${esc(a.uid)}">移除</button></div>`).join('') : '<div class="muted" style="font-size:13px;margin-top:6px">还没有账号绑定</div>'}
+				<p class="muted" style="font-size:12.5px;margin:12px 0 0">账号只用来在官网列出你的路由器，不能用来打开面板；在新手机上打开面板，还是要用「添加新手机」扫码或登录地址。</p>`;
+				box.querySelector('[data-copy]').onclick = () => copyText(p.url);
+				box.querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => {
+					if (!(await confirmBox('移除账号', '把 ' + b.closest('.kv').firstElementChild.textContent + ' 从这台路由器移除？对方的官网账号里就看不到这台路由器了。', '移除', true))) return;
+					busy(b, async () => { await P('hub_unbind', { uid: b.dataset.unb }, 30000); toast('已移除'); await draw(); });
+				}));
+			} catch (e) { box.innerHTML = `<div class="notice w">${esc(e.message)}</div>`; }
+		};
+		draw();
+	});
+}
 themeLabel();
 
 /* =====================================================================
@@ -3688,7 +3747,7 @@ $('prList').addEventListener('click', async (e) => {
 	await busy(null, async () => { const r = await P('kill', { pid: x.pid, force: v === 'kill' }); toast('已结束「' + r.name + '」'); refresh(true); });
 });
 
-const LOAD = { traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => {}, slog: loadSlog, proc: loadProc, luci: loadLuci };
+const LOAD = { traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

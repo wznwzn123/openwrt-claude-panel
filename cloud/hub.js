@@ -8,6 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
+import { HOME, APP, ADMIN } from './site.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -74,6 +75,24 @@ export async function deprovision(env, { tunnel, dns }) {
 	}
 }
 
+/* ---------- 账号用的小工具 ---------- */
+const SESSION_DAYS = 30;
+const te = new TextEncoder();
+export function normEmail(e) { e = String(e || '').trim().toLowerCase(); return e.length <= 120 && /^[^\s@]+@[^\s@]+\.[a-z0-9-]{2,}$/.test(e) ? e : ''; }
+export function pwError(p) { if (typeof p !== 'string' || p.length < 8) return '密码至少 8 位'; if (p.length > 128) return '密码太长了'; if (/^\d+$/.test(p) || /^(.)\1+$/.test(p)) return '密码太简单了，加点字母或符号'; return ''; }
+export const maskEmail = (e) => { const [a, b] = String(e).split('@'); return (a.length <= 2 ? a[0] + '*' : a.slice(0, 2) + '***') + '@' + b; };
+async function pwHash(pw, salt) {
+	const k = await crypto.subtle.importKey('raw', te.encode(String(pw)), 'PBKDF2', false, ['deriveBits']);
+	const b = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(salt), iterations: 100000 }, k, 256);
+	return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+async function sendMail(env, to, subject, html) {
+	try {
+		const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || 'noreply@' + env.BASE_DOMAIN, to: [to], subject, html }) });
+		return r.ok;
+	} catch (e) { return false; }
+}
+
 /* ---------- 开通中心（全局只有一个，所有登记都在这里排队处理） ---------- */
 export class Hub extends DurableObject {
 	// 开通、删除、封禁一件一件排队做（建隧道要等网络，不排队的话两个人可能同时抢到最后一个名额）
@@ -133,6 +152,10 @@ export class Hub extends DurableObject {
 		if (!d) return false;
 		await deprovision(this.env, d);
 		await this.watch(sub).wipe();
+		for (const uid of d.users || []) {
+			const u = await this.ctx.storage.get('u:' + uid);
+			if (u) { u.devs = (u.devs || []).filter((x) => x.sub !== sub); await this.ctx.storage.put('u:' + uid, u); }
+		}
 		await this.ctx.storage.delete('d:' + sub);
 		await this.addCount(-1);
 		return true;
@@ -159,6 +182,182 @@ export class Hub extends DurableObject {
 		await this.watch(sub).setOff(!!off);
 		await this.ctx.storage.put('d:' + sub, d);
 		return true;
+	}
+
+	/* ---------- 账号（官网登录用）：只管「我的路由器」列表，不保存、也拿不到任何路由器的登录密钥 ---------- */
+	async who(sid) {
+		if (!sid || !/^[a-z2-9]{32}$/.test(sid)) return null;
+		const ss = await this.ctx.storage.get('s:' + sid);
+		if (!ss || ss.exp < Date.now()) { if (ss) await this.ctx.storage.delete('s:' + sid); return null; }
+		const u = await this.ctx.storage.get('u:' + ss.uid);
+		return u ? { uid: u.uid, email: u.email } : null;
+	}
+	async newSession(u) {
+		const sid = rnd(32), now = Date.now();
+		await this.ctx.storage.put('s:' + sid, { uid: u.uid, exp: now + SESSION_DAYS * DAY });
+		u.sids = [...(u.sids || []), sid].slice(-20);
+		await this.ctx.storage.put('u:' + u.uid, u);
+		return sid;
+	}
+	async dropSessions(u, keep) {
+		const del = (u.sids || []).filter((x) => x !== keep);
+		if (del.length) await this.ctx.storage.delete(del.map((x) => 's:' + x));
+		u.sids = keep ? [keep] : [];
+	}
+	// 限流计数：key 在 win 毫秒内最多 max 次
+	async hit(key, max, win) {
+		const now = Date.now(), k = 'r:' + key;
+		const a = ((await this.ctx.storage.get(k)) || []).filter((t) => t > now - win);
+		if (a.length >= max) return false;
+		a.push(now);
+		await this.ctx.storage.put(k, a);
+		return true;
+	}
+	// 邮箱验证码（注册、找回密码）：10 分钟有效，最多试 5 次；同一个邮箱 1 分钟发一次、一天 10 次
+	async mailCode({ email, kind, ip }) {
+		email = normEmail(email);
+		if (!email) return { st: 400, error: '邮箱格式不对' };
+		if (!['reg', 'reset'].includes(kind)) return { st: 400, error: 'bad kind' };
+		if (!this.env.RESEND_API_KEY) return { st: 501, error: '还没有开通邮件服务' };
+		const has = await this.ctx.storage.get('e:' + email);
+		if (kind === 'reg' && has) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
+		if (kind === 'reset' && !has) return { st: 200, ok: true }; // 不告诉别人这个邮箱有没有注册
+		if (!(await this.hit('m1:' + email, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
+		if (!(await this.hit('md:' + email, 10, DAY)) || !(await this.hit('mi:' + ip, 20, 3600e3))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
+		const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+		await this.ctx.storage.put('c:' + kind + ':' + email, { code, exp: Date.now() + 600e3, tries: 0 });
+		const what = kind === 'reg' ? '注册账号' : '重置密码';
+		const sent = await sendMail(this.env, email, `验证码 ${code}（${what}）`, `<p>你正在${what}，验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。如果不是你本人操作，忽略这封邮件就行。</p>`);
+		if (!sent) return { st: 502, error: '邮件没发出去，稍后再试' };
+		return { st: 200, ok: true };
+	}
+	async useCode(email, kind, code) {
+		const k = 'c:' + kind + ':' + email, c = await this.ctx.storage.get(k);
+		if (!c || c.exp < Date.now()) return false;
+		if (!safeEq(String(code || '').trim(), c.code)) { c.tries++; if (c.tries >= 5) await this.ctx.storage.delete(k); else await this.ctx.storage.put(k, c); return false; }
+		await this.ctx.storage.delete(k);
+		return true;
+	}
+	userRegister(a) { return this.lock(() => this._registerUser(a)); }
+	async _registerUser({ email, password, code, ip }) {
+		email = normEmail(email);
+		if (!email) return { st: 400, error: '邮箱格式不对' };
+		const pe = pwError(password); if (pe) return { st: 400, error: pe };
+		if (await this.ctx.storage.get('e:' + email)) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
+		if (!(await this.hit('ri:' + ip, 10, 3600e3))) return { st: 429, error: '注册太频繁了，一小时后再试' };
+		if (this.env.RESEND_API_KEY && !(await this.useCode(email, 'reg', code))) return { st: 400, error: '验证码不对或已过期' };
+		const uid = rnd(12), salt = rnd(16);
+		const u = { uid, email, salt, pw: await pwHash(password, salt), created: Date.now(), devs: [], sids: [], verified: !!this.env.RESEND_API_KEY };
+		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + email]: uid });
+		return { st: 200, sid: await this.newSession(u) };
+	}
+	async userLogin({ email, password, ip }) {
+		email = normEmail(email);
+		if (!email || typeof password !== 'string') return { st: 400, error: '邮箱或密码不对' };
+		if (!(await this.hit('li:' + ip, 30, 900e3))) return { st: 429, error: '尝试太多次了，15 分钟后再试' };
+		const fk = 'lf:' + email, f = ((await this.ctx.storage.get('r:' + fk)) || []).filter((t) => t > Date.now() - 900e3);
+		if (f.length >= 10) return { st: 429, error: '这个账号密码错了太多次，15 分钟后再试' };
+		const uid = await this.ctx.storage.get('e:' + email), u = uid && (await this.ctx.storage.get('u:' + uid));
+		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
+		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); return { st: 401, error: '邮箱或密码不对' }; }
+		return { st: 200, sid: await this.newSession(u) };
+	}
+	async userLogout(sid) { const ss = sid && (await this.ctx.storage.get('s:' + sid)); if (!ss) return; await this.ctx.storage.delete('s:' + sid); const u = await this.ctx.storage.get('u:' + ss.uid); if (u) { u.sids = (u.sids || []).filter((x) => x !== sid); await this.ctx.storage.put('u:' + u.uid, u); } }
+	async me(uid) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return null;
+		const devs = [];
+		for (const x of u.devs || []) {
+			const d = await this.ctx.storage.get('d:' + x.sub);
+			if (!d || d.state !== 'ok') continue;
+			let b = { last: 0, state: 'wait' };
+			try { b = await this.watch(x.sub).brief(); } catch (e) {}
+			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, bound: x.at });
+		}
+		return { email: u.email, created: u.created, verified: !!u.verified, devs, mail: !!this.env.RESEND_API_KEY };
+	}
+	// 路由器那边（凭 RKEY）要一个配对码，用户在官网输入配对码，就把这台路由器加到自己账号里
+	async pairStart({ sub, rkey }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		if (!(await this.hit('ps:' + sub, 20, 3600e3))) return { st: 429, error: '太频繁了，稍后再试' };
+		const code = rnd(8).toUpperCase();
+		await this.ctx.storage.put('p:' + code, { sub, exp: Date.now() + 600e3 });
+		return { st: 200, code, exp: Date.now() + 600e3 };
+	}
+	async devOk(sub, rkey) { if (!SUB_RE.test(sub || '')) return false; const c = await this.watch(sub).getCfg(); return !!c && safeEq(rkey, c.rkey); }
+	bind(uid, code, ip) { return this.lock(() => this._bind(uid, code, ip)); }
+	async _bind(uid, code, ip) {
+		if (!(await this.hit('bi:' + uid, 20, 3600e3))) return { st: 429, error: '试太多次了，一小时后再试' };
+		code = String(code || '').trim().toUpperCase().replace(/[^A-Z2-9]/g, '');
+		const p = code && (await this.ctx.storage.get('p:' + code));
+		if (!p || p.exp < Date.now()) return { st: 400, error: '配对码不对或已过期（10 分钟有效），在路由器面板里重新获取一个' };
+		await this.ctx.storage.delete('p:' + code);
+		const d = await this.ctx.storage.get('d:' + p.sub), u = await this.ctx.storage.get('u:' + uid);
+		if (!d || d.state !== 'ok' || !u) return { st: 400, error: '这台路由器已经不在了' };
+		if (!(u.devs || []).some((x) => x.sub === p.sub)) {
+			if ((u.devs || []).length >= 20) return { st: 400, error: '一个账号最多绑定 20 台路由器' };
+			if ((d.users || []).length >= 20) return { st: 400, error: '这台路由器绑定的账号太多了（最多 20 个）' };
+			u.devs = [...(u.devs || []), { sub: p.sub, at: Date.now() }];
+			d.users = [...(d.users || []), uid];
+			await this.ctx.storage.put({ ['u:' + uid]: u, ['d:' + p.sub]: d });
+		}
+		return { st: 200, ok: true, sub: p.sub, name: d.name || p.sub };
+	}
+	unbind(uid, sub) { return this.lock(() => this._unbind(uid, sub)); }
+	async _unbind(uid, sub) {
+		const u = await this.ctx.storage.get('u:' + uid), d = await this.ctx.storage.get('d:' + sub);
+		if (u) { u.devs = (u.devs || []).filter((x) => x.sub !== sub); await this.ctx.storage.put('u:' + uid, u); }
+		if (d) { d.users = (d.users || []).filter((x) => x !== uid); await this.ctx.storage.put('d:' + sub, d); }
+		return { st: 200, ok: true };
+	}
+	async rename(uid, sub, alias) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		const x = u && (u.devs || []).find((y) => y.sub === sub);
+		if (!x) return { st: 404, error: '你的账号里没有这台路由器' };
+		x.alias = clean(alias, 30);
+		await this.ctx.storage.put('u:' + uid, u);
+		return { st: 200, ok: true };
+	}
+	async userPassword(uid, sid, old, pw) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		if (!safeEq(await pwHash(String(old || ''), u.salt), u.pw)) return { st: 403, error: '原密码不对' };
+		const pe = pwError(pw); if (pe) return { st: 400, error: pe };
+		u.salt = rnd(16); u.pw = await pwHash(pw, u.salt);
+		await this.dropSessions(u, sid); // 其他设备上的登录全部退出
+		await this.ctx.storage.put('u:' + uid, u);
+		return { st: 200, ok: true };
+	}
+	async userReset({ email, code, password }) {
+		email = normEmail(email);
+		const uid = email && (await this.ctx.storage.get('e:' + email)), u = uid && (await this.ctx.storage.get('u:' + uid));
+		if (!u || !(await this.useCode(email, 'reset', code))) return { st: 400, error: '验证码不对或已过期' };
+		const pe = pwError(password); if (pe) return { st: 400, error: pe };
+		u.salt = rnd(16); u.pw = await pwHash(password, u.salt); u.verified = true;
+		await this.dropSessions(u, null);
+		await this.ctx.storage.put('u:' + uid, u);
+		return { st: 200, sid: await this.newSession(u) };
+	}
+	delAccount(uid, password) { return this.lock(() => this._delAccount(uid, password)); }
+	async _delAccount(uid, password) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		if (!safeEq(await pwHash(String(password || ''), u.salt), u.pw)) return { st: 403, error: '密码不对' };
+		for (const x of u.devs || []) { const d = await this.ctx.storage.get('d:' + x.sub); if (d) { d.users = (d.users || []).filter((y) => y !== uid); await this.ctx.storage.put('d:' + x.sub, d); } }
+		await this.dropSessions(u, null);
+		await this.ctx.storage.delete(['u:' + uid, 'e:' + u.email]);
+		return { st: 200, ok: true };
+	}
+	// 路由器面板里看「哪些账号绑定了我」、移除某个账号（凭 RKEY）
+	async devAccounts({ sub, rkey }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		const d = await this.ctx.storage.get('d:' + sub), list = [];
+		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u) list.push({ uid, email: maskEmail(u.email), at: ((u.devs || []).find((x) => x.sub === sub) || {}).at || 0 }); }
+		return { st: 200, list };
+	}
+	async devUnbind({ sub, rkey, uid }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		return this.unbind(String(uid || ''), sub);
 	}
 	async devices() { return [...(await this.ctx.storage.list({ prefix: 'd:' })).values()]; }
 	async invites() { return [...(await this.ctx.storage.list({ prefix: 'i:' })).entries()].map(([k, v]) => ({ code: k.slice(2), ...v })); }
@@ -194,7 +393,7 @@ export async function hubFetch(req, env) {
 	const u = new URL(req.url), p = u.pathname;
 	const body = async () => { try { return await req.json(); } catch (e) { return {}; } };
 	const H = hubObj(env);
-	if (p === '/api/ping') return J({ ok: true, ...(await H.stats()) });
+	if (p === '/api/ping') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY });
 	if (p === '/api/register' && req.method === 'POST') {
 		const b = await body();
 		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, ip: req.headers.get('cf-connecting-ip') || '' });
@@ -222,12 +421,47 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
 		return J({ error: 'not found' }, 404);
 	}
-	if (p === '/' || p === '/index.html') return new Response(HOME, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+	if (p.startsWith('/api/account/') || p === '/api/pair/start' || p.startsWith('/api/dev/')) return accountApi(req, env, H, p, body);
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN }[p];
+	if (pg && req.method === 'GET') return new Response(pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'" } });
+	return J({ error: 'not found' }, 404);
+}
+
+/* ---------- 账号接口（官网）和路由器配对接口 ---------- */
+const getSid = (req) => (/(?:^|;\s*)sid=([a-z2-9]{32})(?:;|$)/.exec(req.headers.get('cookie') || '') || [])[1] || '';
+const sidCookie = (sid, age) => `sid=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+async function accountApi(req, env, H, p, body) {
+	const ip = req.headers.get('cf-connecting-ip') || '';
+	const post = req.method === 'POST';
+	if (post) {
+		// 防跨站：浏览器发来的必须是本站页面；内容必须是 JSON（普通表单发不了）
+		const o = req.headers.get('origin');
+		if (o) { let h = ''; try { h = new URL(o).hostname; } catch (e) {} if (h !== env.BASE_DOMAIN && h !== 'www.' + env.BASE_DOMAIN) return J({ error: 'bad origin' }, 403); }
+		if (!/^application\/json/i.test(req.headers.get('content-type') || '')) return J({ error: 'bad content type' }, 415);
+	}
+	const b = post ? await body() : {};
+	const s = (v) => String(v == null ? '' : v);
+	const out = (r) => { const { st, sid, ...rest } = r; const res = J(sid ? { ok: true, ...rest } : rest, st); if (sid) res.headers.append('set-cookie', sidCookie(sid, 30 * 86400)); return res; };
+	if (!post && p !== '/api/account/me') return J({ error: 'method not allowed' }, 405);
+	// 路由器那边（凭 RKEY）
+	if (p === '/api/pair/start') return out(await H.pairStart({ sub: s(b.sub), rkey: s(b.rkey) }));
+	if (p === '/api/dev/accounts') return out(await H.devAccounts({ sub: s(b.sub), rkey: s(b.rkey) }));
+	if (p === '/api/dev/unbind') return out(await H.devUnbind({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
+	const a = p.slice('/api/account/'.length);
+	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
+	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip }));
+	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip }));
+	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password) }));
+	const sid = getSid(req);
+	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); return res; }
+	const me = await H.who(sid);
+	if (!me) return J({ error: '请先登录', login: true }, 401);
+	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
+	if (a === 'bind') return out(await H.bind(me.uid, s(b.code), ip));
+	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub)));
+	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
+	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password)));
+	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	return J({ error: 'not found' }, 404);
 }
 export async function hubScheduled(env) { await hubObj(env).cleanup(); }
-
-// 官网首页（第二期会换成完整的官网和账号页面）
-const HOME = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>路由器面板</title>
-<style>body{margin:0;font:16px/1.6 -apple-system,"PingFang SC","Noto Sans SC",sans-serif;background:#f2f2f7;color:#111;display:grid;place-items:center;min-height:100vh}main{max-width:480px;padding:32px 20px;text-align:center}h1{font-size:28px;margin:0 0 8px}p{color:#6e6e73}</style></head>
-<body><main><h1>路由器面板</h1><p>OpenWrt 路由器的手机控制面板。官网正在建设中。</p></main></body></html>`;

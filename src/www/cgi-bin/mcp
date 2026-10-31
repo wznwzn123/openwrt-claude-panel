@@ -2333,6 +2333,36 @@ P.daily = function(a) {
 	return cmcp_readj('/etc/claude-mcp/daily.json', null) ?? { none: true };
 };
 
+/* ---------- 托管版：绑定到官网账号（配对码）、看/移除绑定了这台路由器的账号 ---------- */
+function hub_conf(quiet) {
+	let c = {};
+	for (let f in ['/etc/claude-mcp/hub.conf', '/etc/claude-mcp/cloud.conf'])
+		for (let l in split(readfile(f) ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
+	if (!c.HUB || !c.SUB || !c.RKEY) { if (quiet) return null; die('这台路由器没有用托管服务'); }
+	return c;
+}
+function hub_call(path, extra) {
+	let c = hub_conf();
+	let b = { sub: c.SUB, rkey: c.RKEY };
+	for (let k in extra ?? {}) b[k] = extra[k];
+	let r = sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary %s %s", shq(sprintf('%J', b)), shq(c.HUB + path)));
+	let o = null;
+	try { o = json(r.out); } catch (e) {}
+	if (type(o) != 'object') die('连不上托管服务，稍后再试');
+	if (o.error) die(o.error);
+	return o;
+}
+P.hub_pair = function() {
+	let o = hub_call('/api/pair/start');
+	return { code: o.code, exp: o.exp, url: hub_conf().HUB + '/app?pair=' + o.code };
+};
+P.hub_accounts = function() { return hub_call('/api/dev/accounts').list ?? []; };
+P.hub_unbind = function(a) {
+	let uid = '' + (a.uid ?? '');
+	if (!match(uid, /^[a-z2-9]{12}$/)) die('账号编号不对');
+	hub_call('/api/dev/unbind', { uid });
+	return { ok: true };
+};
 P.cloud_info = function() {
 	let c = {};
 	for (let l in split(readfile('/etc/claude-mcp/cloud.conf') ?? '', '\n')) {
@@ -2341,8 +2371,9 @@ P.cloud_info = function() {
 	}
 	if (!c.URL) return { enabled: false };
 	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建版没有 PKEY，面板就用登录密钥
-	return { enabled: true, url: c.URL, tablet: c.URL + '/beat/t/' + c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY };
+	return { enabled: true, url: c.URL, tablet: c.URL + '/beat/t/' + c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
 };
+
 P.wd_check = function() {
 	sh('/usr/sbin/cmcp-watchdog once');
 	return P.wd();

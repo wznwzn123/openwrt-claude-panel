@@ -1,0 +1,120 @@
+// 官网页面（真浏览器）：首页、注册登录、配对绑定（含 ?pair= 自动绑定）、改名、解绑、退出、管理员页面
+// 需要 Playwright：node test/test_site.mjs [--shots 目录]
+import http from 'http';
+import { createRequire } from 'module';
+import { load, memStorage } from './load.mjs';
+const { chromium } = createRequire(import.meta.url)('playwright');
+const mod = await load();
+const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
+const SHOTS = process.argv.includes('--shots') ? process.argv[process.argv.indexOf('--shots') + 1] : '';
+const realFetch = globalThis.fetch;
+let CFn = 0;
+globalThis.fetch = async (input, init = {}) => {
+	const url = typeof input === 'string' ? input : input.url, u = new URL(url), m = (init.method || 'GET').toUpperCase();
+	if (u.hostname === 'api.cloudflare.com') { const R = (result) => new Response(JSON.stringify({ success: true, result, errors: [] })); if (m === 'POST' && u.pathname.endsWith('/cfd_tunnel')) return R({ id: 'tun' + ++CFn, token: 'tok' }); if (m === 'POST') return R({ id: 'dns' + ++CFn }); return R({}); }
+	if (u.hostname === 'localhost') return realFetch(input, init);
+	return new Response('{}');
+};
+const env = { BASE_DOMAIN: 'localhost', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '50', VAPID_PUB: '', VAPID_PRIV: '' };
+const ns = (Cls) => { const objs = new Map(); return { idFromName: (n) => n, get(id) { if (!objs.has(id)) objs.set(id, new Cls({ storage: memStorage() }, env)); return objs.get(id); } }; };
+env.W = ns(mod.Watch); env.H = ns(mod.Hub);
+const server = http.createServer(async (req, res) => {
+	const chunks = []; for await (const c of req) chunks.push(c);
+	const body = chunks.length ? Buffer.concat(chunks) : undefined;
+	const r = await mod.default.fetch(new Request('http://localhost' + req.url, { method: req.method, headers: req.headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body }), env);
+	const h = {}; r.headers.forEach((v, k) => { if (k !== 'set-cookie') h[k] = v; });
+	const sc = r.headers.getSetCookie ? r.headers.getSetCookie() : []; if (sc.length) h['set-cookie'] = sc;
+	res.writeHead(r.status, h); res.end(Buffer.from(await r.arrayBuffer()));
+});
+await new Promise((z) => server.listen(8127, z));
+const B = 'http://localhost:8127';
+const api = async (path, body, hdr = {}) => (await realFetch(B + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...hdr }, body: body ? JSON.stringify(body) : undefined })).json();
+const ADM = { authorization: 'Bearer admin-key-1234567890' };
+const inv = (await api('/api/admin/invites', { max: 5 }, ADM)).invite.code;
+const R1 = await api('/api/register', { invite: inv, name: 'Kwrt', model: 'JDCloud AX1800' });
+const R2 = await api('/api/register', { invite: inv, name: 'OpenWrt', model: 'Xiaomi AX3000T' });
+const pairOf = async (R) => (await api('/api/pair/start', { sub: R.sub, rkey: R.rkey })).code;
+const W = (ms) => new Promise((z) => setTimeout(z, ms));
+const browser = await chromium.launch();
+const errs = [];
+for (const dark of [false, true]) {
+	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
+	const page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
+	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : 'alice-pass-1') : undefined));
+	const shot = async (n) => { if (SHOTS) await page.screenshot({ path: SHOTS + '/site-' + n + (dark ? '-dark' : '') + '.png', fullPage: n === 'home' }); };
+	const T = dark ? '（深色）' : '';
+	await page.goto(B + '/'); await W(300);
+	ok('首页能打开' + T, /用手机管好家里的/.test(await page.textContent('body')));
+	await shot('home');
+	if (dark) { await ctx.close(); continue; }
+	// 注册
+	await page.goto(B + '/app'); await W(500);
+	ok('没登录：显示登录表单', await page.isVisible('#fLogin'));
+	ok('没开邮件服务：注册不需要验证码', !(await page.isVisible('#fReg [data-mail]')));
+	await page.click('[data-tab="reg"]');
+	await page.fill('#fReg [name=email]', 'alice@x.com'); await page.fill('#fReg [name=password]', '123');
+	await page.click('#fReg button.primary'); await W(300);
+	ok('密码太短：浏览器先拦住（不提交）', await page.isVisible('#fReg'));
+	await page.fill('#fReg [name=password]', 'alice-pass-1'); await page.click('#fReg button.primary'); await W(800);
+	ok('注册后进入「我的路由器」，显示邮箱', await page.isVisible('#vDash') && (await page.textContent('#who')) === 'alice@x.com');
+	ok('还没有路由器：提示怎么绑定', /还没有绑定路由器/.test(await page.textContent('#devs')));
+	await shot('empty');
+	// 绑定
+	await page.fill('#fBind [name=code]', 'WRONG123'); await page.click('#fBind button'); await W(500);
+	ok('配对码不对：提示', /配对码不对/.test(await page.textContent('#vDash')));
+	await page.fill('#fBind [name=code]', await pairOf(R1)); await page.click('#fBind button'); await W(800);
+	ok('输入配对码：绑定成功，出现在列表里', /Kwrt/.test(await page.textContent('#devs')) && /JDCloud AX1800/.test(await page.textContent('#devs')));
+	ok('「打开面板」指向这台的专属网址', (await page.getAttribute('#devs a.btn', 'href')) === 'https://' + R1.host + '/panel/');
+	ok('还没上线：显示离线', /离线/.test(await page.textContent('#devs')));
+	await realFetch(B.replace('localhost', R1.host).replace(':8127', ':8127') + '/', {}).catch(() => {});
+	// 心跳后变在线（直接调云端）
+	await mod.default.fetch(new Request('https://' + R1.host + '/cloud/beat/r/' + R1.rkey, { method: 'POST', body: '{}' }), env);
+	await page.reload(); await W(800);
+	ok('路由器发心跳后：显示在线', /在线/.test(await page.textContent('#devs .meta')));
+	// 改名
+	await page.click('#devs [data-ren]'); await W(800);
+	ok('改名', /客厅路由器/.test(await page.textContent('#devs')));
+	await shot('dash');
+	// ?pair= 自动绑定
+	await page.goto(B + '/app?pair=' + (await pairOf(R2))); await W(1200);
+	ok('打开带 ?pair= 的链接：已登录时自动绑定', /OpenWrt/.test(await page.textContent('#devs')) && (await page.locator('#devs .dev').count()) === 2);
+	ok('自动绑定后地址栏里的配对码去掉了', !(await page.evaluate(() => location.search)));
+	// 解绑
+	await page.click('#devs .dev:last-child [data-unb]'); await W(800);
+	ok('解绑（先确认）', (await page.locator('#devs .dev').count()) === 1);
+	// 退出、未登录时 ?pair=
+	await page.click('#outBtn'); await W(500);
+	ok('退出：回到登录', await page.isVisible('#fLogin'));
+	await page.goto(B + '/app?pair=' + (await pairOf(R2))); await W(600);
+	ok('没登录打开配对链接：提示登录后会自动绑定', /登录或注册后，会自动把这台路由器绑定/.test(await page.textContent('#vAuth')));
+	await page.fill('#fLogin [name=email]', 'alice@x.com'); await page.fill('#fLogin [name=password]', 'wrong-pass'); await page.click('#fLogin button.primary'); await W(500);
+	ok('密码错：提示', /邮箱或密码不对/.test(await page.textContent('#fLogin')));
+	await page.fill('#fLogin [name=password]', 'alice-pass-1'); await page.click('#fLogin button.primary'); await W(1500);
+	ok('登录后自动绑定那台路由器', (await page.locator('#devs .dev').count()) === 2);
+	ok('不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
+	// 改密码
+	await page.fill('#fPw [name=old]', 'alice-pass-1'); await page.fill('#fPw [name=password]', 'alice-pass-2'); await page.click('#fPw button'); await W(600);
+	ok('修改密码成功', /密码已修改/.test(await page.textContent('#toast')));
+	// 管理员页面
+	await page.goto(B + '/admin'); await W(400);
+	await page.fill('#fKey [name=k]', 'wrong-key-1234567890'); await page.click('#fKey button'); await W(500);
+	ok('管理页：密钥不对进不去', /密钥不对/.test(await page.textContent('#vKey')));
+	await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(800);
+	ok('管理页：显示已开通数量和名额', (await page.textContent('#sCount')) === '2' && (await page.textContent('#sMax')) === '50');
+	ok('管理页：列出路由器和绑定的账号数', /Kwrt/.test(await page.textContent('#devs')) && /1 个账号/.test(await page.textContent('#devs')));
+	await page.fill('#fInv [name=note]', '给朋友'); await page.click('#fInv button'); await W(800);
+	ok('管理页：生成邀请码', /给朋友/.test(await page.textContent('#invs')));
+	await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="off"]'); await W(800);
+	ok('管理页：封禁', /已封禁/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
+	await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="on"]'); await W(800);
+	ok('管理页：解封', !/已封禁/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
+	await page.reload(); await W(800);
+	ok('管理页：刷新后还在（密钥存在这个标签页）', await page.isVisible('#vMain'));
+	await shot('admin');
+	await ctx.close();
+}
+ok('页面没有报错', !errs.length, errs.join(' | '));
+await browser.close(); server.close();
+console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
+console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
+process.exit(results.every((x) => x[1]) ? 0 : 1);

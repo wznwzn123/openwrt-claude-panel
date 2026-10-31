@@ -1,0 +1,96 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>托管服务管理</title><meta name="robots" content="noindex">
+<style>/*COMMON_CSS*/
+.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat .card{text-align:center;padding:14px 8px}.stat b{display:block;font-size:24px}.stat span{font-size:12.5px;color:var(--muted)}
+.sech{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:22px 4px 10px}.sech h2{font-size:19px}
+.item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 0;border-bottom:.5px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item .l{min-width:0}.item .l b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.item .l span{font-size:12.5px;color:var(--muted)}
+.item .acts{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
+.g3{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g3 .full{grid-column:1/-1}
+</style></head><body><div class="wrap">
+<div class="top"><a class="logo" href="/"><i>⌂</i>托管服务管理</a><button class="btn sm hidden" id="outBtn">退出</button></div>
+<section id="vKey" class="card hidden" style="max-width:420px;margin:8vh auto 0">
+	<form id="fKey"><label class="f">管理员密钥（ADMIN_KEY）</label><input class="input" name="k" type="password" autocomplete="off" required>
+	<div class="err" data-err></div><button class="btn primary" style="width:100%">进入</button></form>
+	<p class="muted" style="font-size:12.5px;margin:12px 0 0">密钥只保存在这个浏览器标签页里，关掉就清除。</p>
+</section>
+<section id="vMain" class="hidden">
+	<div class="stat"><div class="card"><b id="sCount">—</b><span>已开通</span></div><div class="card"><b id="sMax">—</b><span>名额上限</span></div><div class="card"><b id="sOn">—</b><span>在线（6 小时内）</span></div></div>
+	<div class="sech"><h2>邀请码</h2></div>
+	<div class="card">
+		<form id="fInv" class="g3">
+			<div><label class="f">能开通几台</label><input class="input" name="max" type="number" min="1" max="1000" value="1" required></div>
+			<div><label class="f">几天后过期（0 = 不过期）</label><input class="input" name="days" type="number" min="0" max="3650" value="30" required></div>
+			<div class="full"><label class="f">备注（给谁的）</label><input class="input" name="note" maxlength="60"></div>
+			<div class="full"><button class="btn primary">生成邀请码</button><span class="err" data-err></span></div>
+		</form>
+		<div id="invs" style="margin-top:8px"></div>
+	</div>
+	<div class="sech"><h2>路由器</h2><button class="btn sm" id="cleanBtn">清理 90 天没上线的</button></div>
+	<div class="card"><input class="input" id="q" placeholder="搜索子域名、名称、型号" style="margin-bottom:6px"><div id="devs"></div></div>
+</section>
+<div class="toast hide" id="toast"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+let tt; function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove('hide'); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), 2600); }
+let KEY = ''; try { KEY = sessionStorage.getItem('hubkey') || ''; } catch (e) {}
+async function api(method, path, body) {
+	const r = await fetch('/api/admin/' + path, { method, headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+	let j = {}; try { j = await r.json(); } catch (e) {}
+	if (r.status === 401) { logout(); throw new Error('管理员密钥不对'); }
+	if (!r.ok) throw new Error(j.error || '出错了（' + r.status + '）');
+	return j;
+}
+const day = (t) => t ? new Date(t).toLocaleDateString('zh-CN') : '—';
+const ago = (t) => { if (!t) return '—'; const s = (Date.now() - t) / 1000; return s < 3600 ? Math.max(1, Math.round(s / 60)) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+function logout() { KEY = ''; try { sessionStorage.removeItem('hubkey'); } catch (e) {} $('vKey').classList.remove('hidden'); $('vMain').classList.add('hidden'); $('outBtn').classList.add('hidden'); }
+$('outBtn').onclick = logout;
+$('fKey').onsubmit = async (e) => { e.preventDefault(); KEY = e.target.k.value.trim(); try { await load(); try { sessionStorage.setItem('hubkey', KEY); } catch (x) {} } catch (x) { e.target.querySelector('[data-err]').textContent = x.message; } };
+let DEVS = [];
+function renderDevs() {
+	const q = $('q').value.trim().toLowerCase();
+	const list = DEVS.filter((d) => !q || [d.sub, d.name, d.model].join(' ').toLowerCase().includes(q)).sort((a, b) => (b.seen || 0) - (a.seen || 0));
+	$('devs').innerHTML = list.length ? list.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>${esc(d.name || d.sub)} <span>${esc(d.sub)}</span></b>
+		<span>${d.state !== 'ok' ? '开通中' : d.off ? '⛔ 已封禁' : '最后上线 ' + ago(d.seen)} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span></div>
+		<div class="acts">${d.off ? '<button class="btn sm" data-op="on">解封</button>' : '<button class="btn sm" data-op="off">封禁</button>'}<button class="btn sm danger" data-op="delete">删除</button></div></div>`).join('') : '<p class="muted" style="text-align:center">没有路由器</p>';
+}
+$('q').oninput = renderDevs;
+$('devs').onclick = async (e) => {
+	const b = e.target.closest('[data-op]'); if (!b) return;
+	const sub = b.closest('[data-sub]').dataset.sub, op = b.dataset.op;
+	const msg = { off: '封禁后它的网址立刻打不开，推送和备份也停止。确定封禁 ' + sub + '？', on: '解封 ' + sub + '？', delete: '删除后隧道、网址、云端数据（含备份）全部删掉，不能恢复。确定删除 ' + sub + '？' }[op];
+	if (!confirm(msg)) return;
+	b.disabled = true;
+	try { await api('POST', 'devices/' + sub + '/' + op); toast('已完成'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+};
+function renderInv(list) {
+	list.sort((a, b) => b.created - a.created);
+	$('invs').innerHTML = list.length ? list.map((i) => { const dead = (i.exp && i.exp < Date.now()) || i.used >= i.max;
+		return `<div class="item" data-code="${esc(i.code)}"><div class="l"><b><code>${esc(i.code)}</code>${dead ? ' <span>（已失效）</span>' : ''}</b><span>已用 ${i.used} / ${i.max} · ${i.exp ? day(i.exp) + ' 过期' : '不过期'}${i.note ? ' · ' + esc(i.note) : ''}</span></div>
+		<div class="acts"><button class="btn sm" data-copy>复制</button><button class="btn sm danger" data-del>作废</button></div></div>`; }).join('') : '<p class="muted">还没有邀请码</p>';
+}
+$('invs').onclick = async (e) => {
+	const row = e.target.closest('[data-code]'); if (!row) return;
+	const code = row.dataset.code;
+	if (e.target.closest('[data-copy]')) { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (x) { prompt('复制邀请码：', code); } }
+	if (e.target.closest('[data-del]') && confirm('作废邀请码 ' + code + '？已经开通的路由器不受影响。')) { try { await api('DELETE', 'invites/' + code); await load(); } catch (x) { toast(x.message); } }
+};
+$('fInv').onsubmit = async (e) => {
+	e.preventDefault(); const f = e.target, err = f.querySelector('[data-err]'); err.textContent = '';
+	try { const r = await api('POST', 'invites', { max: +f.max.value, days: +f.days.value, note: f.note.value }); f.note.value = ''; toast('邀请码：' + r.invite.code); await load(); } catch (x) { err.textContent = x.message; }
+};
+$('cleanBtn').onclick = async () => { if (!confirm('删除所有 90 天没上线的路由器？')) return; try { const r = await api('POST', 'cleanup'); toast('清理了 ' + r.removed.length + ' 台'); await load(); } catch (x) { toast(x.message); } };
+async function load() {
+	const [d, i] = await Promise.all([api('GET', 'devices'), api('GET', 'invites')]);
+	DEVS = d.list; $('sCount').textContent = d.count; $('sMax').textContent = d.max;
+	$('sOn').textContent = d.list.filter((x) => x.seen && Date.now() - x.seen < 6 * 3600e3 + 600e3).length;
+	renderDevs(); renderInv(i.list);
+	$('vKey').classList.add('hidden'); $('vMain').classList.remove('hidden'); $('outBtn').classList.remove('hidden');
+}
+if (KEY) load().catch(() => logout()); else logout();
+</script></body></html>

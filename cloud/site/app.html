@@ -1,0 +1,152 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>我的路由器 · 账号</title><meta name="robots" content="noindex">
+<style>/*COMMON_CSS*/
+.auth{max-width:420px;margin:6vh auto 0}
+.tabs{display:flex;gap:6px;padding:4px;border-radius:99px;background:var(--fill);margin-bottom:14px}
+.tabs button{flex:1;padding:9px;border-radius:99px;background:transparent;font-weight:650}
+.tabs button.on{background:var(--card);box-shadow:var(--shadow)}
+.dev{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center}
+.dev+.dev{margin-top:12px}
+.dev .ic{grid-row:span 2;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#6a7bff,#1fb5e6);color:#fff;font-size:22px}
+.dev b{font-size:16.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .meta{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.dev .acts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sech{display:flex;justify-content:space-between;align-items:center;margin:22px 4px 10px}
+.sech h2{font-size:20px}
+.empty{text-align:center;padding:26px 16px}
+.empty .big{font-size:40px}
+</style></head><body><div class="wrap">
+<div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><span class="muted hidden" id="who" style="font-size:13px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="btn sm hidden" id="outBtn">退出</button></div></div>
+
+<!-- 登录 / 注册 / 找回密码 -->
+<section class="auth hidden" id="vAuth">
+	<div class="tabs"><button data-tab="login" class="on">登录</button><button data-tab="reg">注册</button></div>
+	<div class="card">
+		<form id="fLogin">
+			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" required>
+			<label class="f">密码</label><input class="input" name="password" type="password" autocomplete="current-password" required>
+			<div class="err" data-err></div>
+			<button class="btn primary" style="width:100%">登录</button>
+			<p style="text-align:center;margin:12px 0 0"><a href="#" id="toReset">忘记密码？</a></p>
+		</form>
+		<form id="fReg" class="hidden">
+			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" required>
+			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
+			<label class="f">密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+			<div class="err" data-err></div>
+			<button class="btn primary" style="width:100%">注册</button>
+		</form>
+		<form id="fReset" class="hidden">
+			<p class="muted" style="margin:0 0 4px">输入注册时的邮箱，我们会发一个验证码。</p>
+			<label class="f">邮箱</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="email" type="email" autocomplete="email" required><button type="button" class="btn" data-send="reset">发送</button></div>
+			<label class="f">验证码</label><input class="input" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required>
+			<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+			<div class="err" data-err></div>
+			<button class="btn primary" style="width:100%">重置密码并登录</button>
+			<p style="text-align:center;margin:12px 0 0"><a href="#" data-back>返回登录</a></p>
+		</form>
+	</div>
+	<p class="muted" style="font-size:13px;text-align:center;margin-top:14px">账号只记录你有哪几台路由器，不保存路由器的登录密钥。</p>
+</section>
+
+<!-- 我的路由器 -->
+<section class="hidden" id="vDash">
+	<div class="sech"><h2>我的路由器</h2><span class="muted" id="cnt" style="font-size:13px"></span></div>
+	<div id="devs"></div>
+	<div class="sech"><h2>添加路由器</h2></div>
+	<div class="card">
+		<p class="muted" style="margin:0 0 10px;font-size:14px">在路由器面板里打开「系统操作 → 绑定到账号」，把显示的配对码填在这里（10 分钟内有效）。</p>
+		<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">绑定</button></form>
+		<div class="err" data-err></div>
+	</div>
+	<div class="sech"><h2>换手机怎么办</h2></div>
+	<div class="card"><p class="muted" style="margin:0;font-size:14px;line-height:1.7">路由器的登录密钥只在你自己的手机和路由器上，这个网站也没有。所以第一次在新手机上打开某台路由器时，要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。之后在这里点「打开面板」就能直接用。</p></div>
+	<div class="sech"><h2>账号</h2></div>
+	<div class="card">
+		<form id="fPw">
+			<label class="f">原密码</label><input class="input" name="old" type="password" autocomplete="current-password" required>
+			<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+			<div class="err" data-err></div>
+			<button class="btn">修改密码</button>
+		</form>
+		<hr style="border:0;border-top:.5px solid var(--line);margin:18px 0">
+		<button class="btn danger" id="delBtn">注销账号</button>
+	</div>
+</section>
+<div class="toast hide" id="toast"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+let tt;
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove('hide'); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), 2600); }
+async function api(path, body) {
+	const r = await fetch('/api/account/' + path, body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+	let j = {}; try { j = await r.json(); } catch (e) {}
+	if (!r.ok) { const e = new Error(j.error || '出错了（' + r.status + '）'); e.login = j.login; throw e; }
+	return j;
+}
+const pair = new URLSearchParams(location.search).get('pair') || '';
+let mailOn = false;
+function show(v) { $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
+function tab(t) {
+	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset');
+}
+document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
+$('toReset').onclick = (e) => { e.preventDefault(); if (!mailOn) return toast('还没有开通邮件服务，忘记密码请联系管理员'); tab('reset'); };
+document.querySelector('[data-back]').onclick = (e) => { e.preventDefault(); tab('login'); };
+// 表单通用：提交时按钮变灰，出错显示在表单里
+function form(id, fn) {
+	const f = $(id), err = f.querySelector('[data-err]') || f.parentNode.querySelector('[data-err]');
+	f.onsubmit = async (e) => {
+		e.preventDefault();
+		const btn = f.querySelector('button:not([type=button])'); btn.disabled = true; if (err) err.textContent = '';
+		try { await fn(Object.fromEntries(new FormData(f)), f); } catch (x) { if (err) err.textContent = x.message; else toast(x.message); }
+		finally { btn.disabled = false; }
+	};
+}
+form('fLogin', async (d) => { await api('login', d); await load(); });
+form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load(); });
+form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load(); });
+form('fBind', async (d, f) => { const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app'); await load(); });
+form('fPw', async (d, f) => { await api('password', d); f.reset(); toast('密码已修改，其他设备上的登录已退出'); });
+document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () => {
+	const f = b.closest('form'), email = f.email.value.trim(), err = f.querySelector('[data-err]');
+	if (!email) return (err.textContent = '先填邮箱');
+	b.disabled = true; err.textContent = '';
+	try { await api('code', { email, kind: b.dataset.send }); toast('验证码已发到邮箱'); let n = 60; const t = setInterval(() => { b.textContent = --n + ' 秒'; if (n <= 0) { clearInterval(t); b.textContent = '发送'; b.disabled = false; } }, 1000); }
+	catch (x) { err.textContent = x.message; b.disabled = false; }
+}));
+$('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); show('auth'); tab('login'); };
+$('delBtn').onclick = async () => {
+	const pw = prompt('注销后账号和绑定记录都会删除（路由器本身不受影响）。输入密码确认：');
+	if (!pw) return;
+	try { await api('delete', { password: pw }); toast('账号已注销'); show('auth'); tab('login'); } catch (x) { toast(x.message); }
+};
+const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+function render(me) {
+	$('who').textContent = me.email;
+	$('cnt').textContent = me.devs.length ? me.devs.length + ' 台' : '';
+	$('devs').innerHTML = me.devs.length ? me.devs.map((d) => {
+		const on = !d.off && d.last && Date.now() - d.last < 180e3;
+		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
+		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}</div>
+		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
+	}).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。在路由器面板里打开「系统操作 → 绑定到账号」，把配对码填到下面。</p></div>`;
+	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
+	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub; if (!confirm('从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return; try { await api('unbind', { sub }); toast('已解绑'); await load(); } catch (x) { toast(x.message); } }));
+}
+async function load() {
+	try {
+		const me = await api('me');
+		render(me); show('dash');
+		if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }
+	} catch (e) {
+		show('auth');
+		if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
+	}
+}
+fetch('/api/ping').then((r) => r.json()).then((j) => { mailOn = !!j.mail; document.querySelector('#fReg [data-mail]').classList.toggle('hidden', !mailOn); }).catch(() => {});
+tab('login'); load();
+</script></body></html>

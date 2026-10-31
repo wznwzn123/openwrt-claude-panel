@@ -35,4 +35,4 @@ tag = "v1"
 new_sqlite_classes = ["Watch", "Hub"]
 
 # 密钥用命令设置，不要写在这里：
-#   CF_API_TOKEN  ADMIN_KEY  VAPID_PRIV  VAPID_PUB
+#   CF_API_TOKEN  ADMIN_KEY  VAPID_PRIV  VAPID_PUB  RESEND_API_KEY（可选，开邮件验证码）

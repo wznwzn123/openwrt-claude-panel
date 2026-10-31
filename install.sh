@@ -266,6 +266,10 @@ echo "手机面板：https://$H/panel/"
 echo
 echo "登录地址（第一次打开面板时粘贴）："
 echo "  https://$H/cgi-bin/mcp/$TOKEN"
+echo
+echo "或者在手机上直接打开这个链接，自动登录（同样不要发给别人）："
+echo "  https://$H/panel/#login=$TOKEN"
+echo "以后添加别的手机：面板里「系统操作 → 添加新手机」扫码就行。"
 if [ "$AI" = 1 ]; then
 	echo
 	echo "这个登录地址同时也是 Claude 连接器地址：在 Claude 设置 → 连接器 → 添加自定义连接器 里填它。"
@@ -275,6 +279,7 @@ echo "⚠️  登录地址里带着密钥，谁拿到都能完全控制你的路
 if [ -n "$HUB" ]; then
 	echo
 	echo "托管版：推送、云端备份、断电断网判断都已经开通，不用再做别的设置。"
+	echo "想在官网账号里看到这台路由器：面板里「系统操作 → 绑定到账号」，再到 $HUB/app 输入配对码。"
 elif [ "$ED" = full ]; then
 	echo
 	echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"

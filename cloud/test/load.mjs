@@ -6,10 +6,10 @@ import { pathToFileURL } from 'url';
 const SHIM = 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }';
 export async function load() {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcp-w-'));
-	for (const f of ['worker.js', 'hub.js']) {
+	for (const f of ['worker.js', 'hub.js', 'site.js']) {
 		const src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')
 			.replace("import { DurableObject } from 'cloudflare:workers';", SHIM)
-			.replace("from './hub.js'", "from './hub.mjs'");
+			.replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
 		fs.writeFileSync(path.join(dir, f.replace('.js', '.mjs')), src);
 	}
 	return import(pathToFileURL(path.join(dir, 'worker.mjs')).href);

@@ -50,6 +50,8 @@ npx wrangler secret put VAPID_PRIV -c wrangler.hosted.toml
 npx wrangler secret put VAPID_PUB -c wrangler.hosted.toml
 ```
 
+官网页面在 `cloud/site/` 里，改完运行 `node tools/build-site.mjs` 再部署。
+
 打开 `https://example.com/api/ping`，看到 `{"ok":true,...}` 就部署好了。
 
 ### 4. 发邀请码
@@ -68,6 +70,35 @@ GitHub 仓库 → **Settings → Secrets and variables → Actions → Variables
 
 - `openwrt-claude-panel-hosted-ai.tar.gz`（AI 版 · 托管版）
 - `openwrt-claude-panel-hosted-noai.tar.gz`（纯面板版 · 托管版）
+
+## 官网和账号
+
+部署后，主域名就是官网：
+
+| 网址 | 内容 |
+|---|---|
+| `https://example.com/` | 官网首页（介绍、下载、教程） |
+| `https://example.com/app` | 用户账号：邮箱 + 密码登录，「我的路由器」列表，输入配对码绑定 |
+| `https://example.com/admin` | 你的管理页：看名额、生成/作废邀请码、封禁/解封/删除路由器（用 ADMIN_KEY 进入） |
+
+- **账号只记录「谁有哪几台路由器」**，不保存、也拿不到任何路由器的登录密钥。账号里点「打开面板」会跳到那台路由器的专属网址；第一次在新手机上打开，要用已经能用的手机在面板里「添加新手机」扫码授权。
+- 路由器面板「系统操作 → 绑定到账号」会显示 8 位配对码（10 分钟有效），在官网账号里输入就绑定了。面板里也能看到、移除绑定了这台路由器的账号。
+- 密码用 PBKDF2（10 万轮）加盐保存；同一账号 15 分钟内输错 10 次锁定；改密码会让其他设备上的登录全部退出。
+- 只接受本站页面发来的请求（防跨站），登录 Cookie 是 HttpOnly + Secure + SameSite=Lax，并且只属于主域名，路由器的子域名读不到。
+
+### 邮件（注册验证码、找回密码，可选）
+
+不设置邮件的话，注册不需要验证码，忘记密码只能找你重置。要开启：
+
+1. 注册 [Resend](https://resend.com)（免费每月 3000 封），在 **Domains** 里添加 `example.com`，按提示在 Cloudflare 加几条 DNS 记录完成验证
+2. 在 Resend 创建 API Key
+3. 设置：
+
+```sh
+npx wrangler secret put RESEND_API_KEY -c wrangler.hosted.toml
+```
+
+发件地址默认是 `noreply@example.com`，想换的话在 `wrangler.hosted.toml` 的 `[vars]` 里加 `MAIL_FROM = "你想要的地址"`。
 
 ## 管理接口
 

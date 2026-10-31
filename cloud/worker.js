@@ -4,6 +4,8 @@
 // - 根据「谁还在报告」判断离线原因，变化时记一条事件
 // - 面板在路由器断线时也能从这里读到实时情况（路由 <你的面板域名>/cloud/*，在隧道之前就被 Cloudflare 接住）
 import { DurableObject } from 'cloudflare:workers';
+import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE } from './hub.js';
+export { Hub };
 
 const STALE = 150e3; // 超过 150 秒没心跳算失联（心跳每 60 秒一次）
 const PROBE_FAILS = 2; // 隧道连续 2 次探测失败才算断
@@ -159,6 +161,11 @@ export function pushFor(e) {
 
 const BK_CHUNK = 120 * 1024, BK_MAX = 10, BK_LIMIT = 20 * 1024 * 1024;
 export class Watch extends DurableObject {
+	// 托管模式：每台路由器一个 Watch，配置（钥匙、探测地址、是否封禁）由开通中心写进来
+	async setup(c) { await this.ctx.storage.put('cfg', c); await this.ensureAlarm(); }
+	async getCfg() { return (await this.ctx.storage.get('cfg')) || null; }
+	async setOff(off) { const c = await this.getCfg(); if (!c) return; c.off = !!off; await this.ctx.storage.put('cfg', c); }
+	async wipe() { await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll(); }
 	async load() {
 		const m = await this.ctx.storage.get(['r', 't', 's', 'probe', 'tw']);
 		return { r: m.get('r'), t: m.get('t'), s: m.get('s'), probe: m.get('probe'), tw: m.get('tw') };
@@ -238,13 +245,24 @@ export class Watch extends DurableObject {
 		// 心跳一回来就马上更新判断（不用等下一分钟）
 		await this.evaluate(db, now);
 		await this.ensureAlarm();
+		// 托管模式：每 6 小时告诉开通中心「这台还在用」（90 天没上线的会被回收）
+		if (who === 'r' && this.env.BASE_DOMAIN && this.env.H) {
+			const c = await this.getCfg();
+			if (c && (!c.seenAt || now - c.seenAt > 6 * 3600e3)) {
+				c.seenAt = now;
+				await this.ctx.storage.put('cfg', c);
+				try { await this.env.H.get(this.env.H.idFromName('hub')).seen(c.sub, now); } catch (e) {}
+			}
+		}
 	}
 	async alarm() {
 		const now = Date.now();
+		let probeUrl = this.env.PROBE_URL;
+		if (this.env.BASE_DOMAIN) { const c = await this.getCfg(); if (!c || c.off) return; probeUrl = c.probe; }
 		const db = await this.load();
 		let code = 0;
 		try {
-			const res = await fetch(this.env.PROBE_URL + '?cf=' + now, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(10000) });
+			const res = await fetch(probeUrl + '?cf=' + now, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(10000) });
 			code = res.status;
 		} catch (e) { code = 0; }
 		const p = db.probe || { fail: 0 };
@@ -311,32 +329,53 @@ export class Watch extends DurableObject {
 	}
 }
 
+// 这个请求是哪台路由器的：自建模式只有一台；托管模式看子域名（钥匙存在那台路由器自己的 Watch 里）
+async function tenant(u, env) {
+	if (!env.BASE_DOMAIN) return { w: env.W.get(env.W.idFromName('home')), rkey: env.RKEY, tkey: env.TKEY, pkey: env.PANEL_TOKEN };
+	const h = u.hostname, base = '.' + env.BASE_DOMAIN;
+	if (!h.endsWith(base)) return null;
+	const sub = h.slice(0, -base.length);
+	if (!SUB_RE.test(sub)) return null;
+	const w = env.W.get(env.W.idFromName('dev:' + sub));
+	const c = await w.getCfg();
+	if (!c || c.off) return null;
+	return { w, rkey: c.rkey, tkey: c.tkey, pkey: c.pkey, sub };
+}
 const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 
 export default {
 	async fetch(req, env) {
-		try { return await handle(req, env); } catch (e) { return J({ error: '云端出错：' + (e && e.message || e) }, 500); }
+		try {
+			if (env.BASE_DOMAIN) {
+				const h = new URL(req.url).hostname;
+				if (h === env.BASE_DOMAIN || h === 'www.' + env.BASE_DOMAIN) return await hubFetch(req, env);
+			}
+			return await handle(req, env);
+		} catch (e) { return J({ error: '云端出错：' + (e && e.message || e) }, 500); }
 	},
+	async scheduled(ev, env) { if (env.BASE_DOMAIN) await hubScheduled(env); },
 };
 async function handle(req, env) {
 	{
 		const u = new URL(req.url);
 		const p = u.pathname.split('/').filter(Boolean); // cloud, beat, r|t, key
 		if (p[0] !== 'cloud') return J({ error: 'not found' }, 404);
-		const w = env.W.get(env.W.idFromName('home'));
+		const T = await tenant(u, env);
+		if (!T) return J({ error: 'not found' }, 404);
+		const w = T.w;
 		if (p[1] === 'beat' && p.length === 4) {
-			if (p[2] === 'r' && p[3] === env.RKEY) {
+			if (p[2] === 'r' && safeEq(p[3], T.rkey)) {
 				let rep = null;
 				if (req.method === 'POST') { try { rep = await req.json(); } catch (e) {} }
 				await w.beat('r', rep);
 				return J({ ok: true });
 			}
-			if (p[2] === 't' && p[3] === env.TKEY) { await w.beat('t'); return J({ ok: true }); }
+			if (p[2] === 't' && safeEq(p[3], T.tkey)) { await w.beat('t'); return J({ ok: true }); }
 			return J({ error: 'bad key' }, 403);
 		}
 		// 路由器发来的通知（新设备、节点切换、DNS/OpenClash 故障…）
 		if (p[1] === 'n' && p.length === 3 && req.method === 'POST') {
-			if (p[2] !== env.RKEY) return J({ error: 'bad key' }, 403);
+			if (!safeEq(p[2], T.rkey)) return J({ error: 'bad key' }, 403);
 			let b = {};
 			try { b = await req.json(); } catch (e) {}
 			if (!b.title) return J({ error: 'no title' }, 400);
@@ -346,7 +385,7 @@ async function handle(req, env) {
 		}
 		// 云端备份（只有路由器拿着 RKEY 能用；面板经路由器转发）
 		if (p[1] === 'bk' && p.length >= 3) {
-			if (p[2] !== env.RKEY) return J({ error: 'bad key' }, 403);
+			if (!safeEq(p[2], T.rkey)) return J({ error: 'bad key' }, 403);
 			const id = p[3];
 			if (!id && req.method === 'POST') {
 				const buf = await req.arrayBuffer();
@@ -376,7 +415,7 @@ async function handle(req, env) {
 		if (p[1] === 'push' && req.method === 'POST') {
 			let b = {};
 			try { b = await req.json(); } catch (e) {}
-			if (!b.token || b.token !== env.PANEL_TOKEN) return J({ error: 'bad token' }, 403);
+			if (!safeEq(b.token, T.pkey)) return J({ error: 'bad token' }, 403);
 			if (b.op === 'test') {
 				const sent = await w.push({ title: '测试通知 🔔', body: '能看到这条，说明路由器有情况时会推送到这台手机', tag: 'test', lvl: 'info', force: true });
 				return J({ ok: true, sent, subs: await w.subs('list', b), wx: await w.wxInfo() });
@@ -396,7 +435,7 @@ async function handle(req, env) {
 		if (p[1] === 's' && req.method === 'POST') {
 			let b = {};
 			try { b = await req.json(); } catch (e) {}
-			if (!b.token || b.token !== env.PANEL_TOKEN) return J({ error: 'bad token' }, 403);
+			if (!safeEq(b.token, T.pkey)) return J({ error: 'bad token' }, 403);
 			if (b.clear) await w.clear();
 			return J(await w.status());
 		}

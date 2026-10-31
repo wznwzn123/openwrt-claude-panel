@@ -1,8 +1,8 @@
 // 推送加密 / 签名 / 订阅管理的测试：用 Node 自带 crypto 独立实现解密和验签（和 Worker 里的 WebCrypto 代码不是同一套）
 import fs from 'fs';
 import nc from 'node:crypto';
-const src = fs.readFileSync(new URL('../worker.js', import.meta.url), 'utf8').replace("import { DurableObject } from 'cloudflare:workers';", 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }');
-const mod = await import('data:text/javascript,' + encodeURIComponent(src));
+import { load } from './load.mjs';
+const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
 const b64u = (b) => Buffer.from(b).toString('base64url');
 

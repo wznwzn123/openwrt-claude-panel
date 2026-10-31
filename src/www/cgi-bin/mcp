@@ -2340,7 +2340,8 @@ P.cloud_info = function() {
 		if (m) c[m[1]] = m[2];
 	}
 	if (!c.URL) return { enabled: false };
-	return { enabled: true, url: c.URL, tablet: c.URL + '/beat/t/' + c.TKEY };
+	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建版没有 PKEY，面板就用登录密钥
+	return { enabled: true, url: c.URL, tablet: c.URL + '/beat/t/' + c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY };
 };
 P.wd_check = function() {
 	sh('/usr/sbin/cmcp-watchdog once');

@@ -1,8 +1,8 @@
 // 云端备份：上传、分块、列表、下载还原一致、删除、只留 10 份、密钥校验、大小限制
 import fs from 'fs';
 import nc from 'node:crypto';
-const src = fs.readFileSync(new URL('../worker.js', import.meta.url), 'utf8').replace("import { DurableObject } from 'cloudflare:workers';", 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }');
-const mod = await import('data:text/javascript,' + encodeURIComponent(src));
+import { load } from './load.mjs';
+const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
 const mem = new Map(); let alarm = null, bigVal = 0;
 const storage = {

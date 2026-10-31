@@ -16,6 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 打包
+        env:
+          HUB_URL: ${{ vars.HUB_URL }}
         run: sh tools/pack.sh "${{ inputs.version }}"
       - name: 创建 Release 并上传安装包
         env:

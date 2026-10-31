@@ -1,0 +1,38 @@
+# 托管服务（给别人开通专属网址）的 Cloudflare Worker 配置
+# 部署步骤见 cloud/HOSTING.md；把下面的 example.com 和几个 ID 换成你自己的
+name = "router-hub"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+routes = [
+  # 主域名：官网和开通接口
+  { pattern = "example.com", custom_domain = true },
+  # 每台路由器的子域名下的 /cloud/：推送、云端备份、断电断网判断（其他路径直接走隧道到路由器）
+  { pattern = "*.example.com/cloud/*", zone_name = "example.com" }
+]
+
+# 每天清理一次：90 天没上线的路由器自动回收
+[triggers]
+crons = ["17 19 * * *"]
+
+[vars]
+BASE_DOMAIN = "example.com"
+CF_ACCOUNT_ID = "你的账户 ID"
+CF_ZONE_ID = "example.com 的区域 ID"
+MAX_DEVICES = "1000"
+VAPID_SUB = "mailto:you@example.com"
+
+[[durable_objects.bindings]]
+name = "W"
+class_name = "Watch"
+
+[[durable_objects.bindings]]
+name = "H"
+class_name = "Hub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Watch", "Hub"]
+
+# 密钥用命令设置，不要写在这里：
+#   CF_API_TOKEN  ADMIN_KEY  VAPID_PRIV  VAPID_PUB

@@ -9,6 +9,10 @@
 #   --lite       精简版：手机面板 + 本地看门狗（不需要 Cloudflare 账号）
 #   --full       完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断）
 #
+# 托管版（用别人提供的托管服务，自动拿到专属网址，不用自己弄 Cloudflare）：
+#   --hub https://托管服务网址   托管安装包里已经写好，一般不用填
+#   --invite 邀请码              找提供托管服务的人要
+#
 # 其他可选参数（不填就交互询问）：
 #   --domain router.example.com    面板域名（用 Cloudflare 命名隧道时填）
 #   --tunnel-token <token>         Cloudflare 隧道 token（留空 = 临时隧道，地址每次重启都会变）
@@ -21,7 +25,7 @@ set -e
 SRC=$(cd "$(dirname "$0")" && pwd)/src
 WWW=/www-claude-mcp
 D=/etc/claude-mcp
-ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0
+ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0; HUB=""; INV=""
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m ✓\033[0m %s\n' "$*"; }
@@ -46,8 +50,10 @@ while [ $# -gt 0 ]; do
 		--domain) DOMAIN=$2; shift ;;
 		--tunnel-token) TTOK=$2; shift ;;
 		--cloud-url) CURL_=$2; shift ;;
+		--hub) HUB=$2; shift ;;
+		--invite) INV=$2; shift ;;
 		--yes|-y) YES=1 ;;
-		-h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,25p' "$0"; exit 0 ;;
 		*) die "不认识的参数：$1" ;;
 	esac
 	shift
@@ -62,10 +68,17 @@ UPGRADE=0
 
 # ---------- 选版本 ----------
 # 发布的安装包里有 EDITION 文件，写着这个包是哪个版本；参数可以覆盖它
-PKG_AI=""; PKG_ED=""
+PKG_AI=""; PKG_ED=""; PKG_HUB=""
 [ -f "$SRC/../EDITION" ] && . "$SRC/../EDITION"
 [ -n "$AI" ] || AI=$PKG_AI
 [ -n "$ED" ] || ED=$PKG_ED
+[ -n "$HUB" ] || HUB=$PKG_HUB
+[ -z "$HUB" ] && [ -s "$D/hub.conf" ] && HUB=$(sed -n 's/^HUB=//p' "$D/hub.conf")
+HUB=${HUB%/}
+if [ -n "$HUB" ]; then
+	case "$HUB" in https://*) ;; *) die "托管服务网址应该是 https:// 开头" ;; esac
+	ED=full   # 托管版自带云端（推送、云端备份、断电断网判断）
+fi
 if [ -z "$AI" ]; then
 	def=1; [ $UPGRADE = 1 ] && grep -q '"ai": *false' "$D/config.json" && def=2
 	echo
@@ -83,7 +96,7 @@ if [ -z "$ED" ]; then
 	case "$n" in 2) ED=full ;; *) ED=lite ;; esac
 fi
 [ "$ED" = full ] && [ ! -f "$SRC/bin/cmcp-backup" ] && die "这个安装包是精简版，装完整版请下载 full 包"
-NAME="$( [ "$AI" = 1 ] && echo AI版 || echo 纯面板版 )·$( [ "$ED" = full ] && echo 完整版 || echo 精简版 )"
+NAME="$( [ "$AI" = 1 ] && echo AI版 || echo 纯面板版 )·$( [ -n "$HUB" ] && echo 托管版 || { [ "$ED" = full ] && echo 完整版 || echo 精简版; } )"
 say "安装 $NAME$( [ $UPGRADE = 1 ] && echo '（升级，保留现有设置）' )"
 
 # ---------- 依赖 ----------
@@ -149,8 +162,33 @@ fi
 umask 022
 ok "密钥已就绪"
 
+# ---------- 托管版：用邀请码开通专属网址（隧道、子域名、云端钥匙都由托管服务自动分配） ----------
+if [ -n "$HUB" ]; then
+	if [ -s $D/hub.conf ] && grep -q '^PKEY=' $D/cloud.conf 2>/dev/null; then
+		ok "已经开通过托管服务，保留现在的网址"
+	else
+		[ -n "$INV" ] || ask INV "邀请码（找提供托管服务的人要）" ""
+		inv=$(printf '%s' "$INV" | tr -cd 'A-Za-z0-9')
+		[ -n "$inv" ] || die "托管版需要邀请码"
+		nm=$(uci -q get system.@system[0].hostname 2>/dev/null | tr -cd 'A-Za-z0-9._-' | cut -c1-40 || true)
+		md=$(cat /tmp/sysinfo/model 2>/dev/null | tr -cd 'A-Za-z0-9 ._()-' | cut -c1-60 || true)
+		say "向托管服务申请专属网址"
+		R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\"}" "$HUB/api/register" || true)
+		jf() { jsonfilter -s "$R" -e "@.$1" 2>/dev/null || true; }
+		SUB=$(jf sub)
+		[ -n "$SUB" ] || { e=$(jf error); die "开通失败：${e:-连不上托管服务 $HUB}"; }
+		HOST=$(jf host)
+		(umask 077
+		 printf '%s' "$(jf token)" > $D/tunnel_token
+		 printf 'URL=%s\nRKEY=%s\nTKEY=%s\nPKEY=%s\n' "$(jf url)" "$(jf rkey)" "$(jf tkey)" "$(jf pkey)" > $D/cloud.conf
+		 printf 'HUB=%s\nSUB=%s\n' "$HUB" "$SUB" > $D/hub.conf)
+		printf '%s\n' "$HOST" > $D/hostname
+		ok "开通成功：https://$HOST"
+	fi
+fi
+
 # ---------- 隧道 ----------
-if [ $UPGRADE = 0 ] || [ -n "$DOMAIN$TTOK" ]; then
+if [ -z "$HUB" ] && { [ $UPGRADE = 0 ] || [ -n "$DOMAIN$TTOK" ]; }; then
 	echo
 	echo "  Claude 要通过公网 HTTPS 访问路由器，这里用 Cloudflare 隧道（不用开端口、不用公网 IP）。"
 	echo "  · 有自己的域名：在 Cloudflare Zero Trust 建一条隧道，把 域名 → http://127.0.0.1:18765，然后把隧道 token 填进来"
@@ -168,7 +206,7 @@ fi
 DOMAIN=$(cat $D/hostname 2>/dev/null || true)
 
 # ---------- 完整版：云端 ----------
-if [ "$ED" = full ]; then
+if [ "$ED" = full ] && [ -z "$HUB" ]; then
 	[ ! -s $D/cloud.conf ] && [ -s $D/cloud.conf.off ] && mv -f $D/cloud.conf.off $D/cloud.conf
 	if [ ! -s $D/cloud.conf ] || [ -n "$CURL_" ]; then
 		[ -n "$CURL_" ] || ask CURL_ "云端地址" "${DOMAIN:+https://$DOMAIN/cloud}"
@@ -178,8 +216,8 @@ if [ "$ED" = full ]; then
 		TKEY=$(sed -n 's/^TKEY=//p' $D/cloud.conf 2>/dev/null || true); [ -n "$TKEY" ] || TKEY=$(rnd 32)
 		(umask 077; printf 'URL=%s\nRKEY=%s\nTKEY=%s\n' "$CURL_" "$RKEY" "$TKEY" > $D/cloud.conf)
 	fi
-	. $D/cloud.conf
 fi
+[ "$ED" = full ] && . $D/cloud.conf
 
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
@@ -234,7 +272,10 @@ if [ "$AI" = 1 ]; then
 fi
 echo
 echo "⚠️  登录地址里带着密钥，谁拿到都能完全控制你的路由器：不要发给别人，也不要截图分享。"
-if [ "$ED" = full ]; then
+if [ -n "$HUB" ]; then
+	echo
+	echo "托管版：推送、云端备份、断电断网判断都已经开通，不用再做别的设置。"
+elif [ "$ED" = full ]; then
 	echo
 	echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"
 	echo "  PANEL_TOKEN = $TOKEN"

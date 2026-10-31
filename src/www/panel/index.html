@@ -3000,13 +3000,15 @@ let cloud = null, cloudAt = 0, cloudErr = null, cinfo = null;
 try { cloud = JSON.parse(store.get('rp_cloud') || 'null'); cinfo = JSON.parse(store.get('rp_cinfo') || 'null'); } catch (e) {}
 // 精简版没有 Cloudflare 云端：路由器说没配置云端，就不去请求 /cloud/，也不显示云端相关卡片
 const noCloud = () => !!cinfo && cinfo.enabled === false;
+// 读云端用的钥匙：托管版有单独的面板钥匙，自建版用登录密钥
+const cloudKey = () => (cinfo && cinfo.pkey) || token;
 async function cloudFetch(force) {
 	if (noCloud()) { cloud = null; cloudErr = null; return null; }
 	if (!force && cloud && Date.now() - cloudAt < 15000) return cloud;
 	cloudAt = Date.now();
 	const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 12000);
 	try {
-		const r = await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), signal: ctl.signal, cache: 'no-store' });
+		const r = await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey() }), signal: ctl.signal, cache: 'no-store' });
 		if (!r.ok) throw new Error(r.status === 403 ? '云端密钥不对' : '云端返回 ' + r.status);
 		const j = await r.json();
 		j.synced = Date.now(); cloud = j; cloudErr = null;
@@ -3133,7 +3135,7 @@ function renderWd(err) {
 		const x = ev.target.closest('[data-wdclear]');
 		if (x && await confirmBox('清空断线记录', '路由器和云端的记录都会清空，之前的断线原因就看不到了。', '清空', true)) busy(x, async () => {
 			await P('wd_clear', {});
-			await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, clear: true }) }).catch(() => {});
+			await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), clear: true }) }).catch(() => {});
 			toast('已清空'); refresh(true);
 		});
 		if (ev.target.closest('[data-tablet]')) tabletHelp();
@@ -3145,7 +3147,7 @@ function renderWd(err) {
 const PUSH = { st: null, at: 0 };
 const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 async function cloudPush(b) {
-	const r = await fetch('../cloud/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, ...b }), cache: 'no-store' });
+	const r = await fetch('../cloud/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), ...b }), cache: 'no-store' });
 	if (!r.ok) {
 		let m = null;
 		try { m = (await r.json()).error; } catch (e) {}

@@ -84,15 +84,16 @@ public class MainActivity extends AppCompatActivity {
         FrameLayout root = new FrameLayout(this);
         home = new WebView(this);
         site = new WebView(this);
-        root.addView(site, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // 首页一直在下面显示着，网页窗口盖在上面、需要时拿开（来回隐藏首页会导致它重绘不全）
         root.addView(home, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(site, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
         setupHome();
         setupSite();
         ContextCompat.registerReceiver(this, onDownload, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() {
-                if (site.getVisibility() == View.VISIBLE && home.getVisibility() != View.VISIBLE) {
+                if (site.getVisibility() == View.VISIBLE) {
                     if (site.canGoBack()) site.goBack(); else showHome();
                 } else finish();
             }
@@ -115,6 +116,7 @@ public class MainActivity extends AppCompatActivity {
         getWindow().setStatusBarColor(c);
         getWindow().setNavigationBarColor(c);
         getWindow().getDecorView().setBackgroundColor(c);
+        if (site != null) site.setBackgroundColor(c);  // 网页还没加载出来时的底色，深色时不闪白
         View dv = getWindow().getDecorView();
         int f = dv.getSystemUiVisibility();
         f = d ? (f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
@@ -238,8 +240,8 @@ public class MainActivity extends AppCompatActivity {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e) { toast("没有可以打开这个链接的应用"); }
     }
     // 用 INVISIBLE 不用 GONE：隐藏时网页照常排版，切回来不会空白
-    private void showHome() { home.setVisibility(View.VISIBLE); site.setVisibility(View.INVISIBLE); home.bringToFront(); home.invalidate(); js(home, "window.refresh && refresh()"); }
-    private void showSite() { site.setVisibility(View.VISIBLE); home.setVisibility(View.INVISIBLE); site.bringToFront(); }
+    private void showHome() { site.setVisibility(View.INVISIBLE); js(home, "window.refresh && refresh()"); }
+    private void showSite() { site.setVisibility(View.VISIBLE); site.invalidate(); }
     private void js(WebView w, String code) { runOnUiThread(() -> w.evaluateJavascript(code, null)); }
     private void toast(String t) { runOnUiThread(() -> Toast.makeText(this, t, Toast.LENGTH_SHORT).show()); }
 

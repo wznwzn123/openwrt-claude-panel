@@ -64,7 +64,17 @@ jobs:
           node ../tools/build-site.mjs
       - name: 部署
         working-directory: cloud
-        run: npx -y wrangler@4 deploy -c wrangler.ci.toml
+        run: |
+          set +e
+          npx -y wrangler@4 deploy -c wrangler.ci.toml > "$RUNNER_TEMP/d.log" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/d.log"
+          if [ $rc -ne 0 ]; then
+            # 把出错信息放进运行结果的提示里，手机上直接能看到
+            msg=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/d.log" | grep -v '^\s*$' | tail -25 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+            echo "::error title=部署失败::$msg"
+            exit $rc
+          fi
       - name: 设置密钥
         working-directory: cloud
         env:

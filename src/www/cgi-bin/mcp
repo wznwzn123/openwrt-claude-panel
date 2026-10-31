@@ -2356,6 +2356,47 @@ P.hub_unbind = function(a) {
 	hub_call('/api/dev/unbind', { uid });
 	return { ok: true };
 };
+/* ---------- 一键更新：查最新版本、开始更新、看进度（真正的更新由 cmcp-update 在后台做） ---------- */
+function ver_info() {
+	let v = readfile('/etc/claude-mcp/version') ?? '', o = {};
+	for (let l in split(v, '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) o[m[1]] = m[2]; }
+	return { cur: o.VER ?? '', code: o.CODE ?? '' };
+}
+// 版本号比大小：1.3.10 > 1.3.9
+function ver_newer(a, b) {
+	let x = map(split(replace(a ?? '', /^v/, ''), '.'), (n) => +n || 0), y = map(split(replace(b ?? '', /^v/, ''), '.'), (n) => +n || 0);
+	for (let i = 0; i < 3; i++) if ((x[i] ?? 0) != (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+	return false;
+}
+P.update_check = function(a) {
+	let v = ver_info(), cf = '/tmp/cmcp_latest.json', c = null;
+	try { c = json(readfile(cf) ?? 'null'); } catch (e) {}
+	if (!c || a?.force || time() - (c.at ?? 0) > 3600) {
+		let hub = match(readfile('/etc/claude-mcp/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
+		let j = null;
+		try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/app/version'))).out); } catch (e) {}
+		if (type(j) == 'object' && j.version) { c = { at: time(), latest: j.version, notes: j.notes ?? '', force: !!j.force, min: j.min ?? '' }; writefile(cf, sprintf('%J', c)); }
+		else if (!c) die('查不到最新版本：连不上官网，稍后再试');
+	}
+	let newer = !length(v.cur) || v.cur == 'dev' ? true : ver_newer(c.latest, v.cur);
+	return { cur: v.cur || null, code: v.code || null, latest: c.latest, notes: c.notes, newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))) };
+};
+P.update_start = function(a) {
+	if (a?.confirm != 'UPDATE') die('需要确认');
+	let r = null;
+	try { r = json(sh('/usr/sbin/cmcp-update start').out); } catch (e) {}
+	if (!r) die('没能开始更新：路由器上没有 cmcp-update（版本太旧，先用安装命令手动升级一次）');
+	if (r.busy) die('已经在更新了，等一会儿');
+	return { started: true };
+};
+P.update_status = function() {
+	let s = null;
+	try { s = json(readfile('/tmp/cmcp_update.json') ?? 'null'); } catch (e) {}
+	if (type(s) != 'object') s = { state: 'idle' };
+	s.cur = ver_info().cur;
+	return s;
+};
+
 /* ---------- 换一把新的登录密钥：旧的登录地址马上作废（截图泄露、手机丢了时用） ---------- */
 P.rotate_key = function(a) {
 	if (a?.confirm != 'ROTATE') die('需要确认');

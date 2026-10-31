@@ -76,6 +76,10 @@ h1,h2,h3{letter-spacing:-.02em}
 .ngb.kids>div{margin-left:23px;padding-left:8px;border-left:1.5px solid var(--line)}
 .sidenav .kids button{padding:8px 10px;font-size:14px;font-weight:500}.sidenav .kids button i{display:none}
 .sidenav button .org{margin-left:auto;font-style:normal;text-decoration:none;font-size:10.5px;font-weight:600;color:var(--muted);opacity:.75;flex:none}
+.updcard{margin-bottom:12px;border:1.5px solid var(--brand)}.updcard .updtop{display:flex;align-items:center;justify-content:space-between}.updcard .updtop>div>*{display:block}.updcard .updtop .muted{font-size:12.5px;margin-top:2px}
+.updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;max-height:7.5em;overflow:hidden}
+.linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.updsteps{margin:10px 0 4px;padding:0;list-style:none}.updsteps li{padding:7px 0;color:var(--muted);font-size:14px}.updsteps li.on{color:var(--text);font-weight:600}.updsteps li.ok{color:var(--ok)}.updsteps li.ok::before{content:'✓ '}.updsteps li.on::before{content:'⏳ '}
 .sidenav .ng.flash>button{background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
 .sidenav button .path{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:1px}
 .sidenav button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -109,6 +113,7 @@ body.luci .dock{display:none}
 .fico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;font-size:14px;background:var(--fill)}
 .fico.d{background:var(--soft);color:var(--brand)}
 /* 按钮：胶囊 + 按下缩放 */
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none}
 .btn{background:var(--fill);color:var(--text);padding:9px 15px;border-radius:999px;font-weight:600;font-size:14px;line-height:1.2;transition:transform .18s var(--spring),opacity .18s,background-color .25s var(--ease),color .25s}
 .btn:active{transform:scale(.95);opacity:.75}
 .btn:disabled{opacity:.45}
@@ -505,6 +510,8 @@ section.page{display:none}section.page.on{display:block}
 
 <!-- 概览 -->
 <section class="page on" id="p-home">
+	<div class="card updcard hidden" id="rUpd"><div class="updtop"><div><b>路由器有新版本 <span id="rUpdV"></span></b><span class="muted" id="rUpdCur"></span></div><button class="btn sm primary" id="rUpdGo">一键更新</button></div>
+		<p class="muted" id="rUpdN"></p><button class="linkbtn" id="rUpdLater">以后再说</button></div>
 	<section class="grid two">
 		<div class="hero">
 			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
@@ -765,6 +772,7 @@ section.page{display:none}section.page.on{display:block}
 	</section>
 	<div class="sectitle"><b>管理</b></div>
 	<section class="card list">
+		<button class="file" data-t="update"><div><b>检查更新</b><span class="muted" id="updState">路由器面板的版本</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
@@ -3532,6 +3540,7 @@ const T = {
 	look() { lookSettings(); },
 	addphone() { addPhone(); },
 	rotatekey() { rotateKey(); },
+	update() { updSheet(); },
 	hubbind() { hubBind(); },
 	async logout() { if (await confirmBox('断开此手机', '会清除这台手机上保存的密钥，之后需要重新粘贴连接地址。路由器上的设置不受影响。', '断开', true)) logout(); },
 };
@@ -3636,6 +3645,83 @@ async function addPhone() {
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(url); });
 }
+/* ---------- 一键更新：路由器上的面板和程序（App 自己的更新是另外一回事） ---------- */
+let UPD = null;
+const updLaterKey = () => (UPD ? UPD.latest : '') + '@' + new Date().toDateString();
+async function updCheck(force) {
+	let r;
+	try { r = await P('update_check', { force: !!force }, 25000); } catch (e) { if (force) toast(e.message, true); return null; }
+	if (!r || typeof r !== 'object' || !r.latest) return null;
+	UPD = r;
+	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
+	const later = store.get('rp_upd_later') === updLaterKey();
+	$('rUpd').classList.toggle('hidden', !UPD.newer || (later && !UPD.force));
+	if (UPD.newer) {
+		$('rUpdV').textContent = 'v' + UPD.latest;
+		$('rUpdCur').textContent = '现在是 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '，一键更新，设置都保留，不会断网';
+		$('rUpdN').textContent = UPD.notes || '';
+		$('rUpdLater').classList.toggle('hidden', !!UPD.force);
+		// 必须更新：弹窗关不掉
+		if (UPD.force && !document.querySelector('.modal[data-upd]')) updSheet(true);
+	}
+	return UPD;
+}
+$('rUpdGo').onclick = () => updStart();
+$('rUpdLater').onclick = () => { store.set('rp_upd_later', updLaterKey()); $('rUpd').classList.add('hidden'); };
+async function updSheet(forced) {
+	if (!forced) { const r = await updCheck(true); if (!r) return; }
+	const u = UPD;
+	modal(`<div class="sheethead"><h3>${u.newer ? '路由器有新版本' : '检查更新'}</h3>${u.force ? '' : '<button class="btn sm" data-v="close">关闭</button>'}</div>
+	<div class="kv"><span>现在的版本</span><b>${esc(u.cur ? 'v' + u.cur : '旧版（没有记录版本号）')}</b></div>
+	<div class="kv"><span>最新版本</span><b>${esc('v' + u.latest)}</b></div>
+	${u.newer ? `<div class="notice" style="white-space:pre-line;margin-top:10px;line-height:1.6">${esc(u.notes || '修复了一些问题')}</div>
+	${u.force ? '<div class="notice w" style="margin-top:10px">这个版本必须更新，更新后才能继续使用。</div>' : ''}
+	<p class="muted" style="font-size:13px;margin:10px 0 0">路由器自己下载同一种安装包，在后台装好。网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。装完起不来会自动退回现在的版本。</p>
+	<div class="btngrid" style="margin:12px 0 0">${u.force ? '' : '<button class="btn" data-v="close">以后再说</button>'}<button class="btn primary" data-go>一键更新</button></div>`
+	: '<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>'}`,
+	(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; const g = m.querySelector('[data-go]'); if (g) g.onclick = () => { close(null); updStart(true); }; });
+}
+const UPD_STEPS = [['downloading', '下载新版安装包'], ['installing', '安装（保留所有设置）'], ['check', '重新启动面板服务'], ['done', '完成']];
+async function updStart(noConfirm) {
+	if (!UPD) await updCheck(true);
+	if (!noConfirm && !(await confirmBox('一键更新', '更新到 v' + (UPD?.latest || '最新版') + '？\n网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。', '开始更新'))) return;
+	try { await P('update_start', { confirm: 'UPDATE' }, 20000); } catch (e) { return toast(e.message, true); }
+	let lost = 0, t0 = Date.now(), fin = false;
+	modal(`<h3>正在更新路由器面板</h3><ul class="updsteps" data-steps></ul><p class="muted" data-msg style="font-size:13px;margin:6px 0 0">开始…</p><div class="btngrid hidden" data-end style="margin:12px 0 0"><button class="btn primary" data-done>完成</button></div>`,
+	(m, close) => {
+		m.dataset.lock = 1; m.dataset.upd = 1;
+		const draw = (st, msg, reloading) => {
+			const idx = { queued: 0, downloading: 0, installing: 1, rollback: 2, done: 3, rolledback: 3, failed: 3 }[st] ?? 0;
+			const cur = reloading ? 2 : idx;
+			m.querySelector('[data-steps]').innerHTML = UPD_STEPS.map((x, i) => `<li class="${i < cur || (st === 'done' && i === 3) ? 'ok' : i === cur && st !== 'failed' && st !== 'rolledback' ? 'on' : ''}">${esc(x[1])}</li>`).join('');
+			m.querySelector('[data-msg]').textContent = msg;
+		};
+		const end = (ok, msg) => {
+			fin = true;
+			draw(ok ? 'done' : 'failed', msg);
+			m.querySelector('[data-end]').classList.remove('hidden');
+			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) location.reload(); };
+		};
+		const poll = async () => {
+			if (fin) return;
+			if (Date.now() - t0 > 6 * 60e3) return end(false, '还没更新完：过几分钟刷新面板看看版本号；如果一直这样，用安装命令手动升级。');
+			try {
+				const s = await P('update_status', {}, 8000);
+				lost = 0;
+				if (s.state === 'done') return end(true, s.msg + '。点「完成」刷新面板，就是新版了。');
+				if (s.state === 'rolledback' || s.state === 'failed') return end(false, s.msg);
+				draw(s.state, s.msg || '');
+			} catch (e) {
+				lost++;
+				draw('installing', '面板服务正在重启，马上回来…', true);
+			}
+			setTimeout(poll, 2000);
+		};
+		draw('downloading', '正在下载新版安装包');
+		setTimeout(poll, 1500);
+	});
+}
+
 // 换一把新的登录密钥：这台手机自动换成新的；其他手机、Claude 连接器要重新填
 async function rotateKey() {
 	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 这台手机自动换成新密钥，不用重新登录\n· 其他已经登录的手机要重新添加（在这台手机「添加新手机」扫码）\n· 在 Claude 里用了连接器的，要换成新的登录地址', '换新密钥', true))) return;
@@ -3922,6 +4008,7 @@ function start() {
 	if (!$('about').textContent) setTimeout(() =>
 		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器面板 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
 	watchJobs();
+	setTimeout(() => updCheck(false), 4000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); } });
 

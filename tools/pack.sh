@@ -24,7 +24,7 @@ for ai in ai noai; do
 		mkdir -p "$d"
 		cp -r src docs install.sh uninstall.sh README.md LICENSE "$d/"
 		cp "docs/install-$k.md" "$d/INSTALL.md"
-		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$ed" > "$d/EDITION"
+		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$ed" "${V#v}" "$k" > "$d/EDITION"
 		if [ "$ed" = lite ]; then
 			rm -f "$d/src/bin/cmcp-backup"
 		else
@@ -42,7 +42,7 @@ if [ -n "$HUB_URL" ]; then
 		mkdir -p "$d"
 		cp -r src docs install.sh uninstall.sh README.md LICENSE "$d/"
 		cp docs/install-hosted.md "$d/INSTALL.md"
-		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=full\nPKG_HUB=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$HUB_URL" > "$d/EDITION"
+		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=full\nPKG_HUB=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$HUB_URL" "${V#v}" "$k" > "$d/EDITION"
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done
 fi

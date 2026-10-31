@@ -1,0 +1,104 @@
+#!/bin/sh
+# 一键更新：下载跟现在同一种的最新安装包 → 校验 → 备份现在的程序 → 后台安装（保留所有设置）→ 检查面板 → 不行就自动退回
+# 用法：cmcp-update start    面板点「一键更新」时调用：把自己复制到 /tmp 再转到后台运行，马上返回
+#       cmcp-update status   看进度（/tmp/cmcp_update.json）
+#       cmcp-update run      真正干活（start 会调用它，一般不用手动运行）
+# 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_DL（下载地址）、CMCP_NOSVC=1（不重启服务）
+R=${CMCP_ROOT:-}
+D=$R/etc/claude-mcp
+ST=${CMCP_ST:-/tmp/cmcp_update.json}
+LOCK=/tmp/cmcp_update.lock
+W=/tmp/cmcp_upd
+BK=/tmp/cmcp_upd_backup.tgz
+LOG=/tmp/cmcp_update.log
+GH=https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download
+
+esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+state() { # state 状态 说明 [目标版本]
+	printf '{"state":"%s","msg":"%s","from":"%s","to":"%s","code":"%s","t":%s}\n' "$1" "$(esc "$2")" "$FROM" "${3:-$TO}" "$CODE" "$(date +%s)" > "$ST.tmp" && mv -f "$ST.tmp" "$ST"
+}
+svc() { [ "$CMCP_NOSVC" = 1 ] && return 0; [ -x /etc/init.d/$1 ] && /etc/init.d/$1 $2 >/dev/null 2>&1; }
+
+# 现在装的是哪种安装包（老版本没有 version 文件：按设置推算）
+CODE=$(sed -n 's/^CODE=//p' $D/version 2>/dev/null)
+FROM=$(sed -n 's/^VER=//p' $D/version 2>/dev/null)
+if [ -z "$CODE" ]; then
+	grep -q '"ai": *false' $D/config.json 2>/dev/null && CODE=noai || CODE=ai
+	if [ -s $D/hub.conf ]; then CODE=hosted-$CODE
+	elif grep -q '^URL=.' $D/cloud.conf 2>/dev/null; then CODE=$CODE-full
+	else CODE=$CODE-lite; fi
+fi
+[ -n "$FROM" ] || FROM=旧版
+TO=""
+HUB=$(sed -n 's/^HUB=//p' $D/hub.conf 2>/dev/null)
+BASE=${CMCP_DL:-${HUB:-https://yrlove520.com}/dl}
+PKG=openwrt-claude-panel-$CODE.tar.gz
+
+case "$1" in
+status)
+	cat "$ST" 2>/dev/null || echo '{"state":"idle"}' ;;
+start)
+	if [ -d "$LOCK" ] && [ $(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) )) -lt 900 ]; then echo '{"busy":true}'; exit 0; fi
+	rmdir "$LOCK" 2>/dev/null
+	state queued "准备更新"
+	# 复制到 /tmp 再跑：安装时会覆盖 /usr/sbin 里的这个脚本，正在运行的脚本被改写会出错
+	cp -f "$0" /tmp/cmcp-update.run && chmod 755 /tmp/cmcp-update.run
+	if command -v start-stop-daemon >/dev/null 2>&1; then
+		start-stop-daemon -S -b -x /bin/sh -- /tmp/cmcp-update.run run
+	else
+		( setsid /bin/sh /tmp/cmcp-update.run run >/dev/null 2>&1 & ) 2>/dev/null || ( /bin/sh /tmp/cmcp-update.run run >/dev/null 2>&1 & )
+	fi
+	echo '{"started":true}' ;;
+run)
+	mkdir "$LOCK" 2>/dev/null || exit 0
+	trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+	: > "$LOG"
+	rm -rf "$W"; mkdir -p "$W" && cd "$W" || { state failed "临时目录建不了"; exit 1; }
+	# 1. 下载：先走官网（大陆快），不行再直连 GitHub
+	state downloading "正在下载新版安装包"
+	got=""
+	for b in "$BASE" "$GH"; do
+		if curl -fsSL -m 180 -o "$PKG" "$b/$PKG" 2>>"$LOG" && curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG"; then got=$b; break; fi
+	done
+	[ -n "$got" ] || { state failed "下载失败：连不上官网和 GitHub，稍后再试"; exit 1; }
+	# 2. 校验：跟发布时算好的校验值对得上才装
+	grep " $PKG\$" SHA256SUMS > one.sum 2>/dev/null
+	if [ ! -s one.sum ] || ! sha256sum -c one.sum >>"$LOG" 2>&1; then state failed "安装包校验没通过（可能下载不完整），没有安装，稍后再试"; exit 1; fi
+	tar xzf "$PKG" 2>>"$LOG" && [ -f openwrt-claude-panel/install.sh ] || { state failed "安装包解压失败"; exit 1; }
+	TO=$(sed -n 's/^PKG_VER=//p' openwrt-claude-panel/EDITION 2>/dev/null)
+	if [ -n "$TO" ] && [ "$TO" = "$FROM" ] && [ "$2" != force ]; then state done "已经是最新版（v$TO）"; rm -rf "$W"; exit 0; fi
+	# 3. 备份现在的程序（设置不动，安装本来就会保留设置）
+	state installing "正在安装 v$TO（面板会断开一会儿，不会断网）"
+	( cd "${R:-/}" && tar czf "$BK" www-claude-mcp usr/share/ucode/cmcp usr/sbin/cmcp-* etc/init.d/claude-mcp etc/init.d/cmcp-watchdog \
+		etc/hotplug.d/ntp/90-cmcp-synced etc/claude-mcp/luci-gate etc/claude-mcp/oc_cbi.lua etc/claude-mcp/oc_line.lua etc/claude-mcp/version 2>>"$LOG" ) || true
+	# 4. 安装：版本类型跟现在一样，不问任何问题
+	case "$CODE" in *noai*) AIF=--no-ai ;; *) AIF=--ai ;; esac
+	case "$CODE" in *-lite) EDF=--lite ;; *-full) EDF=--full ;; *) EDF="" ;; esac
+	( cd openwrt-claude-panel && sh install.sh --yes $AIF $EDF ) >>"$LOG" 2>&1
+	rc=$?
+	# 5. 检查：面板服务能打开、连接器能回答
+	ok=0
+	if [ $rc = 0 ]; then
+		TOK=$(sed -n 's/.*"token": *"\([A-Za-z0-9]*\)".*/\1/p' $D/config.json 2>/dev/null)
+		for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+			sleep 2
+			m=$(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json 2>/dev/null)
+			c=$(curl -s -m 8 -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"panel/update_status","params":{},"client":"panel"}' "http://127.0.0.1:18765/cgi-bin/mcp/$TOK" 2>/dev/null)
+			case "$m:$c" in 200:*jsonrpc*) ok=1; break ;; esac
+		done
+	fi
+	if [ $ok = 1 ]; then
+		state done "已更新到 v$TO"
+		[ -x "$R/usr/sbin/cmcp-notify" ] && [ "$CMCP_NOSVC" != 1 ] && "$R/usr/sbin/cmcp-notify" info update "路由器面板已更新到 v$TO" "从 v$FROM 一键更新" update >/dev/null 2>&1
+		rm -rf "$W" "$BK"
+		exit 0
+	fi
+	# 6. 不行：退回旧版本
+	state rollback "新版没能正常启动，正在退回 v$FROM"
+	if [ -s "$BK" ]; then ( cd "${R:-/}" && tar xzf "$BK" ) >>"$LOG" 2>&1; fi
+	svc claude-mcp restart; svc cmcp-watchdog restart
+	state rolledback "更新没成功，已经退回 v$FROM，一切照旧。原因：$(tail -n 3 "$LOG" | tr '\n' ' ' | cut -c1-200)" "$TO"
+	exit 1 ;;
+*)
+	echo "用法：$0 start | status | run"; exit 1 ;;
+esac

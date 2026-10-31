@@ -9,7 +9,7 @@ a{color:var(--brand);text-decoration:none;font-weight:600}
 button,input,select{font:inherit;color:inherit}
 button{border:0;cursor:pointer}
 .wrap{max-width:960px;margin:auto;padding:16px 16px 60px}
-.top{position:sticky;top:8px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 18px;padding:10px 14px;border-radius:22px;background:var(--card);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px);box-shadow:var(--shadow)}
+.top{position:sticky;top:8px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 18px;padding:10px 14px;border-radius:22px;background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px);box-shadow:var(--shadow)}
 .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;color:var(--text)}
 .logo i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#6a7bff,#1fb5e6);color:#fff;font-style:normal;font-size:18px}
 .card{background:var(--card);border-radius:22px;padding:18px;box-shadow:var(--shadow);min-width:0}
@@ -28,3 +28,7 @@ label.f{display:block;margin:12px 0 6px;font-size:13px;font-weight:600;color:var
 .hidden{display:none!important}
 .dot{width:9px;height:9px;border-radius:50%;background:#aaa;display:inline-block;flex:none}.dot.on{background:var(--ok)}.dot.off{background:var(--danger)}
 h1,h2,h3{letter-spacing:-.02em;margin:0}
+
+/* 顶栏上面那一条：往上滚的内容在这里淡出，不会从顶栏上方露出来 */
+body::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 34px);z-index:9;pointer-events:none;background:linear-gradient(var(--bg) 45%,color-mix(in srgb,var(--bg) 0%,transparent))}
+h2,.sech{scroll-margin-top:90px}

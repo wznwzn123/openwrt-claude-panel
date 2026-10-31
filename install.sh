@@ -75,7 +75,7 @@ UPGRADE=0
 
 # ---------- 选版本 ----------
 # 发布的安装包里有 EDITION 文件，写着这个包是哪个版本；参数可以覆盖它
-PKG_AI=""; PKG_ED=""; PKG_HUB=""
+PKG_AI=""; PKG_ED=""; PKG_HUB=""; PKG_VER=""; PKG_CODE=""
 [ -f "$SRC/../EDITION" ] && . "$SRC/../EDITION"
 [ -n "$AI" ] || AI=$PKG_AI
 [ -n "$ED" ] || ED=$PKG_ED
@@ -104,7 +104,7 @@ if [ -z "$ED" ]; then
 fi
 [ "$ED" = full ] && [ ! -f "$SRC/bin/cmcp-backup" ] && die "这个安装包是精简版，装完整版请下载 full 包"
 NAME="$( [ "$AI" = 1 ] && echo AI版 || echo 纯面板版 )·$( [ -n "$HUB" ] && echo 托管版 || { [ "$ED" = full ] && echo 完整版 || echo 精简版; } )"
-say "安装 $NAME$( [ $UPGRADE = 1 ] && echo '（升级，保留现有设置）' )"
+say "安装 $NAME${PKG_VER:+（v$PKG_VER）}$( [ $UPGRADE = 1 ] && echo '，升级，保留现有设置' )"
 
 # ---------- 依赖 ----------
 need=""
@@ -247,10 +247,16 @@ echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 
 # ---------- 升级系统时保留 ----------
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-watchdog; do
+	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
+
+# ---------- 记下装的是哪个版本（面板「一键更新」要用：下载同一种安装包） ----------
+# 按实际装好的算（可能用 --ai / --no-ai 改过安装包默认的版本）
+CODE=$( [ "$AI" = 1 ] && echo ai || echo noai )
+if [ -n "$HUB" ]; then CODE=hosted-$CODE; else CODE=$CODE-$ED; fi
+printf 'VER=%s\nCODE=%s\nAT=%s\n' "${PKG_VER:-dev}" "$CODE" "$(date +%s)" > $D/version
 
 # ---------- 启动 ----------
 say "启动服务"

@@ -42,6 +42,13 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 	</ol>
 </div>
 
+<h2 class="sec" id="app">安卓 App</h2>
+<div class="card"><div class="row" style="justify-content:space-between;gap:14px">
+	<div style="flex:1;min-width:220px"><b style="font-size:16px">路由器面板 App</b><p class="muted" style="margin:6px 0 0;font-size:14px">扫码添加路由器、几台路由器一键切换、下载备份更方便；有新版本会自动提醒。安卓 7.0 以上可用。</p></div>
+	<a class="btn primary" href="/app/router-panel.apk" id="apkBtn">下载安卓 App</a>
+</div><p class="muted" style="font-size:12.5px;margin:12px 0 0" id="apkVer">安装时如果提示「未知来源」，允许一次就行。苹果手机直接用浏览器打开面板，「添加到主屏幕」即可。</p></div>
+<script>fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j.version) document.getElementById('apkBtn').textContent = '下载安卓 App（' + j.version + '）'; }).catch(() => {});</script>
+
 <h2 class="sec">安全</h2>
 <div class="card"><table>
 	<tr><th style="width:34%">登录密钥</th><td>只在你的路由器和你自己的手机上生成、保存。托管服务<b>拿不到</b>，所以也<b>进不了</b>你的路由器。</td></tr>

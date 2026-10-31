@@ -68,7 +68,7 @@ function parse(t) {
 	if (m) return 'https://' + m[1] + '/panel/#login=' + m[2];
 	m = /^https:\/\/([a-z0-9.-]+(?::\d+)?)\/panel\/(?:index\.html)?(#login=[A-Za-z0-9]{16,64})?$/i.exec(t);
 	if (m) return 'https://' + m[1] + '/panel/' + (m[2] || '');
-	if (HUB && /^https:\/\/[a-z0-9.-]+\/app\?pair=[A-Za-z2-9]{6,12}$/i.test(t) && t.startsWith(HUB + '/')) return t;
+	if (HUB && t.startsWith(HUB + '/app?pair=') && /^[^\s]+\/app\?pair=[A-Za-z2-9]{6,12}$/.test(t)) return t;
 	return null;
 }
 function onScan(t) { const u = parse(t); if (u) A.open(u); else alert('这个二维码不是路由器面板的。请扫面板里「添加新手机」或「绑定到账号」的二维码。'); }

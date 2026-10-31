@@ -32,6 +32,10 @@ sleep 2
 adb shell am start -n $PKG/.MainActivity
 sleep 10
 adb exec-out screencap -p > $OUT/5-home-dark.png
+# 开着 App 切回浅色：不重开也要跟着变
+adb shell cmd uimode night no
+sleep 4
+adb exec-out screencap -p > $OUT/6-live-light.png
 adb logcat -d > $OUT/logcat.txt
 if grep -E "FATAL EXCEPTION" $OUT/logcat.txt; then echo "::error::App 崩溃了"; grep -A30 "FATAL EXCEPTION" $OUT/logcat.txt | head -60; exit 1; fi
 echo "::notice::App 启动正常，没有崩溃"

@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -95,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
                 } else finish();
             }
         });
+        applyBars();
         showHome();
         // 只在调试包里：自动化测试用 am start --es open 网址 / --ez scan true
         if (BuildConfig.DEBUG) {
@@ -102,6 +105,27 @@ public class MainActivity extends AppCompatActivity {
             if (o != null) openUrl(o);
             if (getIntent().getBooleanExtra("scan", false)) new Bridge().scan();
         }
+    }
+
+    /* ---------- 深色模式：老版本系统 WebView 不认系统设置，由 App 自己告诉首页 ---------- */
+    private boolean isDark() { return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES; }
+    private void applyBars() {
+        boolean d = isDark();
+        int c = d ? Color.parseColor("#0B1024") : Color.parseColor("#EEF1F8");
+        getWindow().setStatusBarColor(c);
+        getWindow().setNavigationBarColor(c);
+        getWindow().getDecorView().setBackgroundColor(c);
+        View dv = getWindow().getDecorView();
+        int f = dv.getSystemUiVisibility();
+        f = d ? (f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        if (Build.VERSION.SDK_INT >= 26) f = d ? (f & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (f | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        dv.setSystemUiVisibility(f);
+    }
+    // 切换深色/浅色时不重建页面（不然面板会重新加载），只更新颜色
+    @Override public void onConfigurationChanged(Configuration c) {
+        super.onConfigurationChanged(c);
+        applyBars();
+        if (home != null) js(home, "window.setDark && setDark(" + isDark() + ")");
     }
 
     @Override protected void onDestroy() { try { unregisterReceiver(onDownload); } catch (Exception e) {} super.onDestroy(); }
@@ -222,6 +246,7 @@ public class MainActivity extends AppCompatActivity {
     /** 只给 App 首页用的接口 */
     private class Bridge {
         @JavascriptInterface public String version() { return BuildConfig.VERSION_NAME; }
+        @JavascriptInterface public boolean dark() { return isDark(); }
         @JavascriptInterface public String hub() { return BuildConfig.HUB_URL; }
         @JavascriptInterface public String routers() { return MainActivity.this.routers().toString(); }
         @JavascriptInterface public void saveRouters(String json) { try { save(new JSONArray(json)); } catch (Exception e) {} }

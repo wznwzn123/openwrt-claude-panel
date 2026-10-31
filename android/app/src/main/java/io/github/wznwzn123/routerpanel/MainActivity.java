@@ -213,8 +213,9 @@ public class MainActivity extends AppCompatActivity {
     private void external(String url) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e) { toast("没有可以打开这个链接的应用"); }
     }
-    private void showHome() { home.setVisibility(View.VISIBLE); site.setVisibility(View.GONE); js(home, "window.refresh && refresh()"); }
-    private void showSite() { site.setVisibility(View.VISIBLE); home.setVisibility(View.GONE); }
+    // 用 INVISIBLE 不用 GONE：隐藏时网页照常排版，切回来不会空白
+    private void showHome() { home.setVisibility(View.VISIBLE); site.setVisibility(View.INVISIBLE); home.bringToFront(); home.invalidate(); js(home, "window.refresh && refresh()"); }
+    private void showSite() { site.setVisibility(View.VISIBLE); home.setVisibility(View.INVISIBLE); site.bringToFront(); }
     private void js(WebView w, String code) { runOnUiThread(() -> w.evaluateJavascript(code, null)); }
     private void toast(String t) { runOnUiThread(() -> Toast.makeText(this, t, Toast.LENGTH_SHORT).show()); }
 

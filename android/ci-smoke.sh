@@ -50,16 +50,22 @@ sleep 10
 adb exec-out screencap -p > $OUT/8-manual-add.png
 # 相册识别：识别一张二维码图片（内容是 https://example.com/panel/）→ 打开面板
 adb shell am force-stop $PKG
-adb shell mkdir -p /sdcard/Android/data/$PKG/files
-adb push android/ci/qr-test.png /sdcard/Android/data/$PKG/files/qr-test.png
-adb shell am start -n $PKG/.MainActivity --es qrfile /sdcard/Android/data/$PKG/files/qr-test.png
+adb shell am start -n $PKG/.MainActivity --ez qrtest true
 sleep 10
 adb exec-out screencap -p > $OUT/9-album-qr.png
+# 点「相册识别」：打开系统的选图片界面
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es homejs 'App.pickQr()'"
+sleep 8
+adb exec-out screencap -p > $OUT/11-album-picker.png
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 # 首页（新布局和图标）
 adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity
 sleep 6
 adb exec-out screencap -p > $OUT/10-home-new.png
 adb logcat -d > $OUT/logcat.txt
+grep -A3 "识别二维码失败" $OUT/logcat.txt | head -8 | sed 's/^/::warning::/'
 if grep -E "FATAL EXCEPTION" $OUT/logcat.txt; then echo "::error::App 崩溃了"; grep -A30 "FATAL EXCEPTION" $OUT/logcat.txt | head -60; exit 1; fi
 echo "::notice::App 启动正常，没有崩溃"

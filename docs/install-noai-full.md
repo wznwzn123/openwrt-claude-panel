@@ -10,10 +10,17 @@
 ## 你需要准备
 
 - 一台 **OpenWrt 22.03 或更新**的路由器（Kwrt、ImmortalWrt 等也可以），并且能上网
-- 一台电脑，用来登录路由器的命令行（Windows 10/11、macOS 自带 `ssh` 和 `scp`，不用另装软件）
+- 一台电脑，用来登录路由器的命令行（Windows 10/11、macOS 自带 `ssh` 和 `scp`，不用另装软件）。**只有手机也行**，见下面「只用手机装」
 - 路由器闪存剩余空间 **40 MB 以上**（主要是 Cloudflare 隧道程序）。登录路由器后运行 `df -h /overlay` 看 `Available` 一列
 - 一个 **Cloudflare 账号**（免费）和一个**托管在 Cloudflare 上的域名**（例如 `example.com`；完整版必须用自己的域名）
 - 电脑上装好 **Node.js 18 或更新**（https://nodejs.org 下载 LTS 版安装），用来部署云端
+
+> **只用手机装：** 手机连上家里 Wi-Fi，打开路由器后台「服务 → 终端」（或手机 SSH 软件），粘贴下面这条命令，然后从第 3 步接着看。详细步骤见 [📱 手机教程](install-phone.md)。
+>
+> ```sh
+> # 下载并安装「纯面板版 · 完整版」（代号 noai-full）
+> cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-noai-full.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh
+> ```
 
 下面的命令里，`192.168.1.1` 换成你路由器的地址，`router.example.com` 换成你自己的域名。
 
@@ -176,7 +183,9 @@ sh uninstall.sh --purge  # 全部删掉
 
 **手机打不开面板？** 先确认路由器能上网；登录路由器运行 `/etc/init.d/claude-mcp restart`，再看 `logread | grep -E "uhttpd|cloudflared"` 有没有报错。
 
-**登录地址泄露了怎么办？** 登录路由器运行 `rm /etc/claude-mcp/config.json && cd /tmp/openwrt-claude-panel && sh install.sh`，会生成新的登录地址，旧的立刻失效（Worker 的 PANEL_TOKEN 也要更新）。
+**登录地址泄露了怎么办？** 面板「系统操作 → 换登录密钥」，旧的登录地址立刻失效，这台手机自动换成新的；其他手机重新添加（Worker 的 PANEL_TOKEN 也要更新）。
+
+**连着家里的 Wi-Fi 时面板打不开，换成手机流量就好？** 打开面板的流量经过了 OpenClash 的代理节点，节点卡了就打不开。面板每 3 分钟自动检查，代理打不开会自动改走直连（需要先在面板「拉黑名单」里启用过一次规则集）。
 
 **没装 OpenClash 能用吗？** 能。节点、订阅、规则这些 OpenClash 功能用不了，其他功能都正常。
 

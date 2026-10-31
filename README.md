@@ -11,18 +11,45 @@ OpenWrt 路由器的**手机控制面板**（PWA，可添加到主屏幕），�
 
 > ⚠️ 安装后得到的「登录地址」里带着密钥，拿到它就等于拿到路由器的 root 权限。请当作密码保管，不要发给别人、不要截图分享。详见下方「安全说明」。
 
-## 四个版本，选一个下载
+## 简洁版教程：5 分钟装好（托管版，只用手机）
 
-先选**要不要 AI**，再选**精简还是完整**：
+> 想看每一步的截图和说明：[📱 手机教程（详细版）](docs/install-phone.md)
 
-| 版本 | 安装包 | 适合 | 安装教程 |
+**你需要：** 一台 OpenWrt 22.03 以上的路由器（Kwrt、ImmortalWrt 都行）、一部手机、一个**邀请码**（找提供托管服务的人要）。
+
+1. **打开路由器的终端**：手机连上家里的 Wi-Fi，浏览器打开路由器后台（比如 `http://192.168.1.1`）→「服务」→「终端」，用 `root` 和路由器密码登录。后台没有「终端」的话，用手机 SSH 软件（JuiceSSH、Termius）连 `root@路由器地址`。
+2. **粘贴安装命令**，回车：
+   ```sh
+   # ⚠️ 下面的 hosted-ai 决定装哪个版本，对照下面的表换成你要的代号，其他地方别动
+   cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh
+   ```
+3. **输入邀请码**：屏幕出现「邀请码」时粘贴进去，回车。
+4. **装完会显示**：专属网址、登录地址、自动登录链接，还有**配对码和绑定链接**。把登录地址存好（别发给别人）。
+5. **打开面板**：手机浏览器打开「自动登录链接」，然后「添加到主屏幕」（或者装[安卓 App](#安卓-app)）。
+6. **AI 版**：Claude → 设置 → 连接器 → 添加自定义连接器，地址填「登录地址」。
+7. **（可选）绑定官网账号**：打开终端里的绑定链接，登录或注册后自动绑定，换手机时好找。
+8. **开推送**：面板 →「断线记录」→「手机通知」→「开启通知」。
+
+装好后家里其他手机：在已登录的手机上「系统操作 → 添加新手机」，新手机扫码就行。
+
+## 选哪个版本：一条命令，换一个代号
+
+上面那条命令能装任何一个版本，只要把 `hosted-ai` 换成下面的代号：
+
+| 版本 | 代号 | 适合 | 详细教程 |
 |---|---|---|---|
-| **AI 版 · 精简版** | `openwrt-claude-panel-ai-lite.tar.gz` | 想用 Claude 管路由器，先试试 | [📖 教程](docs/install-ai-lite.md) |
-| **AI 版 · 完整版** | `openwrt-claude-panel-ai-full.tar.gz` | 想用 Claude，还要推送和云端备份 | [📖 教程](docs/install-ai-full.md) |
-| **纯面板版 · 精简版** | `openwrt-claude-panel-noai-lite.tar.gz` | 不用 AI，自己在手机上点 | [📖 教程](docs/install-noai-lite.md) |
-| **纯面板版 · 完整版** | `openwrt-claude-panel-noai-full.tar.gz` | 不用 AI，要推送和云端备份 | [📖 教程](docs/install-noai-full.md) |
+| **托管版 · AI 版** | `hosted-ai` | 有邀请码，想在 Claude 里用对话管路由器 | [📖](docs/install-hosted.md) |
+| **托管版 · 纯面板版** | `hosted-noai` | 有邀请码，只要手机面板 | [📖](docs/install-hosted.md) |
+| **自建版 · AI 版 · 完整版** | `ai-full` | 用自己的 Cloudflare 和域名，要推送和云端备份 | [📖](docs/install-ai-full.md) |
+| **自建版 · AI 版 · 精简版** | `ai-lite` | 用自己的 Cloudflare，先试试 | [📖](docs/install-ai-lite.md) |
+| **自建版 · 纯面板版 · 完整版** | `noai-full` | 不用 AI，要推送和云端备份 | [📖](docs/install-noai-full.md) |
+| **自建版 · 纯面板版 · 精简版** | `noai-lite` | 不用 AI，在手机上点点就行 | [📖](docs/install-noai-lite.md) |
 
-安装包都在 [Releases](../../releases) 页面。
+> 例：要装「自建版 · 纯面板版 · 精简版」，就把命令里的 `hosted-ai` 改成 `noai-lite`。
+
+- **托管版**：不用注册 Cloudflare、不用买域名，输邀请码就有专属网址，推送、云端备份、断电断网判断全都自带。
+- **自建版**：用你自己的 Cloudflare 账号和域名（精简版也可以用临时隧道，不要账号）。
+- 安装包也可以在 [Releases](../../releases) 下载；`yrlove520.com/dl/` 是从 GitHub 转过来的，大陆的路由器下载更快。
 
 | 功能 | 纯面板版 | AI 版 |
 |---|:---:|:---:|
@@ -32,23 +59,23 @@ OpenWrt 路由器的**手机控制面板**（PWA，可添加到主屏幕），�
 | 磨砂玻璃主题，自定义背景（预设或相册图片） | ✅ | ✅ |
 | 在 Claude 里用对话管理路由器（30+ 个工具） | — | ✅ |
 
-| 功能 | 精简版 | 完整版 |
+| 功能 | 自建精简版 | 自建完整版 / 托管版 |
 |---|:---:|:---:|
 | 上面表格里的全部功能 | ✅ | ✅ |
 | 手机推送 / 微信推送（PushPlus） | — | ✅ |
 | 云端备份（每天自动，保留 10 份，可一键恢复） | — | ✅ |
 | 断电 / 断网判断（路由器离线时也能从云端看到原因） | — | ✅ |
-| 需要 Cloudflare | 可选（临时隧道不需要账号） | 需要账号 + 一个托管在 Cloudflare 的域名 |
+| 需要 Cloudflare | 可选（临时隧道不需要账号） | 自建：账号 + 域名；托管：不需要 |
 
-拿不准就先装**精简版**。以后想换版本：AI 版和纯面板版之间，重新运行安装脚本加 `--ai` / `--no-ai` 即可；精简版升级完整版，下载完整版安装包再装一次。登录地址和设置都会保留。
+拿不准就装**托管版**（有邀请码）或**自建精简版**。以后换版本，用新代号再装一次，登录地址和设置都会保留。
 
 ## 安卓 App
 
-在 [Releases](../../releases) 下载 `router-panel.apk`，或者在托管服务的官网下载（大陆也能下）。
+在官网下载：**[yrlove520.com/app/router-panel.apk](https://yrlove520.com/app/router-panel.apk)**（大陆也能下），或者在 [Releases](../../releases) 下载 `router-panel.apk`。安卓 7.0 以上可用。
 
-- 扫码添加路由器（扫面板里「添加新手机」的二维码），几台路由器一键切换
-- 下载备份、从相册选背景图都能用
-- 打开时自动检查更新，有新版本一键安装
+- 添加路由器四种方式：**扫码**（扫面板里「添加新手机」的二维码）、**相册识别**（二维码在截图里）、**粘贴**登录地址、**手动添加**（输入框里填登录地址）
+- 几台路由器一键切换；下载备份、从相册选背景图都能用
+- 有新版本时打开 App 就弹窗提醒，一键下载安装；重要更新会要求必须更新
 - 苹果手机不用装 App：浏览器打开面板，「添加到主屏幕」就行
 
 App 只是面板的外壳，面板的新功能更新路由器上的安装包就有，不用每次都更新 App。
@@ -64,9 +91,9 @@ App 只是面板的外壳，面板的新功能更新路由器上的安装包就�
 
 ## 安装
 
-**每个版本都有一步一步的教程，照着做就行：** [AI 精简](docs/install-ai-lite.md) · [AI 完整](docs/install-ai-full.md) · [纯面板精简](docs/install-noai-lite.md) · [纯面板完整](docs/install-noai-full.md)。安装包里的 `INSTALL.md` 也是同一份。
+**只用手机：** 照上面的[简洁版教程](#简洁版教程5-分钟装好托管版只用手机)或[📱 手机教程](docs/install-phone.md)。
 
-简单来说：
+**用电脑：** 每个版本都有一步一步的教程：[托管版](docs/install-hosted.md) · [AI 精简](docs/install-ai-lite.md) · [AI 完整](docs/install-ai-full.md) · [纯面板精简](docs/install-noai-lite.md) · [纯面板完整](docs/install-noai-full.md)。安装包里的 `INSTALL.md` 也是同一份。简单来说：
 
 ```sh
 scp openwrt-claude-panel-ai-lite.tar.gz root@192.168.1.1:/tmp/
@@ -80,6 +107,7 @@ sh install.sh
 也可以用参数免交互安装：
 
 ```sh
+sh install.sh --invite 邀请码                # 托管版：邀请码直接写在命令里
 sh install.sh --ai --lite --tunnel-token <隧道token> --domain router.example.com
 sh install.sh --no-ai --full --tunnel-token <隧道token> --domain router.example.com --cloud-url https://router.example.com/cloud
 ```
@@ -112,6 +140,8 @@ Claude 能用的工具包括：路由器状态、设备列表、实时网速、�
 - 流量统计、网速测试（代理 / 直连）、连接列表
 - 文件管理、终端、系统日志、进程、LuCI 原版页面（自动登录）
 - 断线记录与看门狗、每日体检、云端备份（完整版）、手机通知（完整版）
+- 连着家里 Wi-Fi 时，面板自动选「直连」还是「走代理节点」：节点卡了或断了会自动改走直连，不用重启 OpenClash
+- 添加新手机（扫码登录）、换登录密钥（旧地址马上作废）、绑定到官网账号（托管版）
 - 面板锁：指纹或 4–6 位数字密码，离开 5 分钟自动上锁
 - 主题与背景：默认磨砂玻璃风格，可选 8 款预设背景或手机相册里的图片，调模糊和明暗；也能一键换回简洁样式
 
@@ -127,7 +157,7 @@ Claude 能用的工具包括：路由器状态、设备列表、实时网速、�
 
 请务必读一下：
 
-- **登录地址 = 路由器 root 权限。**（纯面板版也一样：面板里有终端和文件管理） 地址里的密钥（40 位随机字符）是唯一的访问凭证，它能执行任意命令。泄露后请立即换一个：删除 `/etc/claude-mcp/config.json` 后重新运行 `sh install.sh`，然后在面板（AI 版还有 Claude）里换成新地址（完整版还要更新 Worker 的 `PANEL_TOKEN`）。
+- **登录地址 = 路由器 root 权限。**（纯面板版也一样：面板里有终端和文件管理） 地址里的密钥（40 位随机字符）是唯一的访问凭证，它能执行任意命令。泄露后请立即换一个：面板「系统操作 → 换登录密钥」，旧地址马上作废；然后其他手机重新添加、Claude 里换成新地址（自建完整版还要更新 Worker 的 `PANEL_TOKEN`）。
 - **面板锁只防「拿到你手机的人」**，不防拿到登录地址的人。它是浏览器端的保护：清除网站数据会让锁失效（同时也会退出登录，需要重新粘贴地址）。
 - 面板里打开的 LuCI 原版页面使用一个专用的 rpcd 账号 `cmcp`（随机密码，保存在 `/etc/claude-mcp/luci_pass`），只有带着面板 Cookie 的请求才能使用。
 - 服务只监听 `127.0.0.1:18765`，局域网和公网都无法直接访问，只能经过 Cloudflare 隧道。
@@ -151,7 +181,7 @@ sh uninstall.sh --purge
 |---|---|
 | `/www-claude-mcp/cgi-bin/mcp` | 连接器主程序（ucode CGI） |
 | `/www-claude-mcp/panel/` | 手机面板 |
-| `/usr/sbin/cmcp-*` | 看门狗、节点自动切换、设备暂停、流量统计、每日体检、通知、云端备份 |
+| `/usr/sbin/cmcp-*` | 看门狗、节点自动切换、设备暂停、流量统计、每日体检、通知、云端备份、面板直连自动选择（`cmcp-route`）、拿配对码（`cmcp-pair`） |
 | `/usr/share/ucode/cmcp/lib.uc` | 共用函数 |
 | `/etc/init.d/claude-mcp` | 面板服务（uhttpd）+ Cloudflare 隧道 |
 | `/etc/init.d/cmcp-watchdog` | 看门狗 |
@@ -165,7 +195,15 @@ sh uninstall.sh --purge
 
 **没装 OpenClash 能用吗？** 能。系统、设备、流量、文件、终端、看门狗等功能不依赖 OpenClash；节点、订阅、规则、分流测速这些 OpenClash 相关功能就用不了。
 
-**侧边栏里有的原版页面打不开？** 侧边栏里「在面板中打开的 LuCI 原版页面」是按 Kwrt / ImmortalWrt 的菜单整理的，其他固件上个别页面可能不存在；新装的插件会自动出现在「服务」里。
+**侧边栏和 LuCI 后台的菜单不一样？** 侧边栏按用途重新分了组：OpenClash、PassWall 在「代理」里，终端用面板自己的（「工具」里），「服务」里也有这几个的入口。侧边栏会读路由器的真实菜单：没装的插件不显示，新装的插件自动出现在对应的组里。
+
+**连着家里的 Wi-Fi 时面板打不开，换成手机流量就好？** 手机连家里 Wi-Fi 时，打开面板的流量会经过 OpenClash，节点卡了就打不开。面板每 3 分钟会自动检查，代理打不开就改走直连（需要先在面板「拉黑名单」里启用过一次规则集）。急的话先用手机流量打开。
+
+**托管版安装时，邀请码提问一闪而过？** 新版已经修好。旧版可以在安装目录里运行 `sh install.sh --invite 邀请码`。
+
+**配对码过期了？** 在路由器终端运行 `cmcp-pair` 再拿一个，或者在面板「系统操作 → 绑定到账号」里拿。
+
+**想自己运营托管服务（给别人发邀请码）？** 见 [cloud/HOSTING.md](cloud/HOSTING.md)，手机上用 GitHub 一键部署就行。
 
 **会不会和 LuCI 冲突？** 不会。面板用的是独立的 uhttpd 实例（只监听 127.0.0.1:18765），不改动原有的 LuCI 和 Web 服务。
 

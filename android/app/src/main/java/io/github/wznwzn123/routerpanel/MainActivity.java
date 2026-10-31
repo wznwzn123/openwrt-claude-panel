@@ -131,11 +131,11 @@ public class MainActivity extends AppCompatActivity {
             String o = getIntent().getStringExtra("open");
             if (o != null) openUrl(o);
             if (getIntent().getBooleanExtra("scan", false)) new Bridge().scan();
-            // --es homejs 代码：首页加载好后执行（测弹窗、手动添加）；--es qrfile 路径：识别这张图片里的二维码（测相册识别）
+            // --es homejs 代码：首页加载好后执行（测弹窗、手动添加）
             String hj = getIntent().getStringExtra("homejs");
             if (hj != null) home.postDelayed(() -> js(home, hj), 2500);
-            String qf = getIntent().getStringExtra("qrfile");
-            if (qf != null) home.postDelayed(() -> new Thread(() -> decodeQr(Uri.fromFile(new java.io.File(qf)))).start(), 2500);
+            // --ez qrtest true：识别调试包里自带的二维码图片（assets/qr-test.png，内容是 https://example.com/panel/）
+            if (getIntent().getBooleanExtra("qrtest", false)) home.postDelayed(() -> new Thread(() -> decodeQr(() -> getAssets().open("qr-test.png"))).start(), 2500);
         }
     }
 
@@ -302,17 +302,19 @@ public class MainActivity extends AppCompatActivity {
     private void showHome() { site.setVisibility(View.INVISIBLE); js(home, "window.refresh && refresh()"); }
     private void showSite() { site.setVisibility(View.VISIBLE); site.invalidate(); }
     // 识别图片里的二维码：大图先缩小，再用两种方式各试一次
-    private void decodeQr(Uri uri) {
+    private interface Src { InputStream open() throws Exception; }
+    private void decodeQr(Uri uri) { decodeQr(() -> getContentResolver().openInputStream(uri)); }
+    private void decodeQr(Src open) {
         try {
             BitmapFactory.Options o = new BitmapFactory.Options();
             o.inJustDecodeBounds = true;
-            try (InputStream in = getContentResolver().openInputStream(uri)) { BitmapFactory.decodeStream(in, null, o); }
+            try (InputStream in = open.open()) { BitmapFactory.decodeStream(in, null, o); }
             int side = Math.max(o.outWidth, o.outHeight), ss = 1;
             while (side / ss > 2000) ss *= 2;
             BitmapFactory.Options o2 = new BitmapFactory.Options();
             o2.inSampleSize = ss;
             Bitmap b;
-            try (InputStream in = getContentResolver().openInputStream(uri)) { b = BitmapFactory.decodeStream(in, null, o2); }
+            try (InputStream in = open.open()) { b = BitmapFactory.decodeStream(in, null, o2); }
             if (b == null) throw new Exception("not image");
             int w = b.getWidth(), h = b.getHeight();
             int[] px = new int[w * h];
@@ -327,6 +329,7 @@ public class MainActivity extends AppCompatActivity {
             catch (Exception e) { text = new MultiFormatReader().decode(new BinaryBitmap(new GlobalHistogramBinarizer(src)), hints).getText(); }
             js(home, "onScan(" + JSONObject.quote(text) + ")");
         } catch (Exception e) {
+            android.util.Log.w("RouterPanel", "识别二维码失败", e);
             toast("这张图片里没找到二维码。请用清楚一点的截图（面板里的二维码要先点一下，去掉模糊再截图）");
         }
     }

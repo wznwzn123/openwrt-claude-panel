@@ -13,6 +13,7 @@
 .steps li{counter-increment:s;display:flex;gap:12px;align-items:flex-start}
 .steps li::before{content:counter(s);flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:9px 6px;border-bottom:.5px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
+pre.cmd{margin:10px 0 8px;padding:12px 14px;border-radius:14px;background:var(--fill);font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;color:var(--text)}
 footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a><a class="btn sm primary" href="/app">登录</a></div></div>
@@ -32,19 +33,26 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 	<div class="card feat"><div class="ic">🤖</div><b>可选：接入 Claude</b><p>AI 版可以在 Claude 里用中文说「把奈飞切到新加坡节点」，它就直接帮你操作。</p></div>
 </div>
 
-<h2 class="sec" id="start">怎么开始</h2>
+<h2 class="sec" id="start">怎么开始（只用手机，5 分钟）</h2>
 <div class="card">
 	<ol class="steps">
 		<li><div><b>拿到邀请码</b><div class="muted">托管服务需要邀请码，找提供服务的人要。</div></div></li>
-		<li><div><b>下载托管版安装包</b><div class="muted">在 <a href="https://github.com/wznwzn123/openwrt-claude-panel/releases/latest" rel="noopener">GitHub Releases</a> 下载 <code>hosted-noai</code>（纯面板版）或 <code>hosted-ai</code>（AI 版）。</div></div></li>
-		<li><div><b>装到路由器上</b><div class="muted">传到路由器运行 <code>sh install.sh</code>，输入邀请码，自动得到你的专属网址。<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">看详细教程</a></div></div></li>
-		<li><div><b>手机打开，添加到主屏幕</b><div class="muted">在路由器面板「系统操作 → 绑定到账号」把路由器加到你的账号里，以后登录这里就能看到你所有的路由器。</div></div></li>
+		<li><div><b>打开路由器的终端</b><div class="muted">手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。</div></div></li>
+		<li><div><b>粘贴这条命令，回车</b><div class="muted">装纯面板版就把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>，其他地方别动：</div>
+			<pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
+cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh</pre>
+			<button class="btn sm" id="copyCmd" type="button">复制命令</button></div></li>
+		<li><div><b>输入邀请码</b><div class="muted">装完会显示你的专属网址、登录地址、自动登录链接，还有<b>配对码</b>。登录地址带着密钥，存好别发给别人。</div></div></li>
+		<li><div><b>打开面板</b><div class="muted">手机打开「自动登录链接」，再「添加到主屏幕」，或者装下面的安卓 App。AI 版把登录地址填到 Claude 的「自定义连接器」里。</div></div></li>
+		<li><div><b>（可选）绑定账号</b><div class="muted">打开终端里的绑定链接，<a href="/app">登录或注册</a>后自动绑定，以后换手机一眼找到自己的路由器。</div></div></li>
 	</ol>
+	<p class="muted" style="margin:14px 0 0;font-size:13.5px">每一步的详细说明：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">📱 手机教程</a> · 用电脑装：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>
 </div>
+<script>document.getElementById('copyCmd').onclick = async (e) => { const t = document.getElementById('cmd').textContent; try { await navigator.clipboard.writeText(t); e.target.textContent = '已复制 ✓'; } catch (x) { const r = document.createRange(); r.selectNodeContents(document.getElementById('cmd')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); e.target.textContent = '已选中，长按复制'; } setTimeout(() => (e.target.textContent = '复制命令'), 2500); };</script>
 
 <h2 class="sec" id="app">安卓 App</h2>
 <div class="card"><div class="row" style="justify-content:space-between;gap:14px">
-	<div style="flex:1;min-width:220px"><b style="font-size:16px">路由器面板 App</b><p class="muted" style="margin:6px 0 0;font-size:14px">扫码添加路由器、几台路由器一键切换、下载备份更方便；有新版本会自动提醒。安卓 7.0 以上可用。</p></div>
+	<div style="flex:1;min-width:220px"><b style="font-size:16px">路由器面板 App</b><p class="muted" style="margin:6px 0 0;font-size:14px">扫码、相册识别二维码、粘贴或手动添加路由器，几台一键切换；有新版本打开就提醒。安卓 7.0 以上可用。</p></div>
 	<a class="btn primary" href="/app/router-panel.apk" id="apkBtn">下载安卓 App</a>
 </div><p class="muted" style="font-size:12.5px;margin:12px 0 0" id="apkVer">安装时如果提示「未知来源」，允许一次就行。苹果手机直接用浏览器打开面板，「添加到主屏幕」即可。</p></div>
 <script>fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j.version) document.getElementById('apkBtn').textContent = '下载安卓 App（' + j.version + '）'; }).catch(() => {});</script>

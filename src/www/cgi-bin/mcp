@@ -2416,7 +2416,7 @@ P.device_approve = function(a) {
 	// 最多记 30 台，超过了去掉最早的
 	let ids = sort(keys(d), (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0));
 	while (length(ids) >= 30) delete d[shift(ids)];
-	let name = substr(replace('' + (a?.name ?? ''), /[\x00-\x1f<>"]/g, ''), 0, 40) || '手机';
+	let name = substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || '手机';
 	d[id] = { s: sec, name, at: time(), via };
 	devs_write(d);
 	DEV_ID = id;

@@ -100,6 +100,18 @@ npx wrangler secret put RESEND_API_KEY -c wrangler.hosted.toml
 
 发件地址默认是 `noreply@example.com`，想换的话在 `wrangler.hosted.toml` 的 `[vars]` 里加 `MAIL_FROM = "你想要的地址"`。
 
+## 安卓 App
+
+- 官网首页有「下载安卓 App」，地址是 `https://example.com/app/router-panel.apk`：托管服务从 GitHub 最新 Release 转过来，**大陆用户走你的域名下载，不用访问 GitHub**（仓库公开后才能下载）。
+- App 打开时会问 `https://example.com/api/app/version` 有没有新版本，有就提示一键更新。
+- 发布新版本时，「发布新版本」会顺便打包 App 并签名，传到 Release 里，文件名 `router-panel.apk`。
+
+### 签名密码（只需设置一次）
+
+App 的签名密钥已经加密放在仓库里（`android/signing/router-panel.jks.enc`），解开它需要一个密码。在 GitHub 仓库 **Settings → Secrets and variables → Actions → Secrets → New repository secret**：名字 `ANDROID_SIGNING_PASS`，值是那串密码。
+
+⚠️ 这个密码和密钥文件要另外备份好。安卓只允许同一个签名的新版本覆盖旧版，丢了以后发布的新版本，大家只能卸载重装。
+
 ## 管理接口
 
 都要带 `Authorization: Bearer 你的ADMIN_KEY`：

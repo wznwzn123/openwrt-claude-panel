@@ -18,14 +18,15 @@ jobs:
           gradle-version: '8.7'
       - name: 打测试包
         run: |
-          gradle -p android --no-daemon assembleRelease -PVERSION_NAME=0.0.1 -PVERSION_CODE=1 -PHUB_URL=https://example.com
-          cp android/app/build/outputs/apk/release/app-release.apk router-panel.apk
+          gradle -p android --no-daemon assembleRelease assembleDebug -PVERSION_NAME=0.0.1 -PVERSION_CODE=1 -PHUB_URL=https://example.com
+          cp android/app/build/outputs/apk/release/app-release.apk router-panel-release.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk router-panel.apk
       - name: 包信息
         run: |
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
-          $BT/aapt2 dump badging router-panel.apk | head -6 | while read -r l; do echo "::notice::$l"; done
-          $BT/aapt2 dump permissions router-panel.apk | while read -r l; do echo "::notice::$l"; done
-          echo "::notice::大小 $(stat -c %s router-panel.apk) 字节"
+          echo "::notice::$($BT/aapt2 dump badging router-panel-release.apk | head -1)"
+          echo "::notice::权限：$($BT/aapt2 dump permissions router-panel-release.apk | grep -o "name='[^']*'" | tr '\n' ' ')"
+          echo "::notice::正式包大小 $(stat -c %s router-panel-release.apk) 字节"
       - name: 打开 KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

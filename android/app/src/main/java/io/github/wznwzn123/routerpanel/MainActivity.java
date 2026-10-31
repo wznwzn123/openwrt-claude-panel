@@ -96,6 +96,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         showHome();
+        // 只在调试包里：自动化测试用 am start --es open 网址 / --ez scan true
+        if (BuildConfig.DEBUG) {
+            String o = getIntent().getStringExtra("open");
+            if (o != null) openUrl(o);
+            if (getIntent().getBooleanExtra("scan", false)) new Bridge().scan();
+        }
     }
 
     @Override protected void onDestroy() { try { unregisterReceiver(onDownload); } catch (Exception e) {} super.onDestroy(); }

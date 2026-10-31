@@ -1,0 +1,65 @@
+{
+  "name": "我的路由器",
+  "short_name": "路由器",
+  "description": "管理家里的 OpenWrt 路由器和 OpenClash",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f2f7",
+  "theme_color": "#f2f2f7",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "断线记录",
+      "short_name": "断线记录",
+      "description": "看路由器什么时候断过网、为什么断",
+      "url": "./?p=wd",
+      "icons": [{ "src": "sc2/wd.png", "sizes": "144x144", "type": "image/png" }]
+    },
+    {
+      "name": "节点",
+      "short_name": "节点",
+      "description": "切换代理节点、测速",
+      "url": "./?p=proxy",
+      "icons": [{ "src": "sc2/proxy.png", "sizes": "144x144", "type": "image/png" }]
+    },
+    {
+      "name": "设备",
+      "short_name": "设备",
+      "description": "看连着的设备、暂停上网",
+      "url": "./?p=dev",
+      "icons": [{ "src": "sc2/dev.png", "sizes": "144x144", "type": "image/png" }]
+    },
+    {
+      "name": "流量统计",
+      "short_name": "流量",
+      "description": "每台设备用了多少流量",
+      "url": "./?p=traf",
+      "icons": [{ "src": "sc2/traf.png", "sizes": "144x144", "type": "image/png" }]
+    }
+  ]
+}

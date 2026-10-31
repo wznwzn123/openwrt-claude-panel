@@ -1,0 +1,134 @@
+#!/usr/bin/ucode
+// 节点自动切换（看门狗每分钟调用一次）
+// 当前节点连续测不通 → 优先换同地区延迟最低的节点，同地区都不通才换别的地区 → 断开走旧节点的连接 → 通知
+// 设置：/etc/claude-mcp/autosw.json {"enabled":true,"group":"Zou"}
+'use strict';
+import * as L from 'cmcp.lib';
+import { mkdir, stat, readfile } from 'fs';
+
+const CF = L.D + '/autosw.json', SF = '/tmp/cmcp_autosw.json', HF = L.D + '/autosw_hist.json';
+const TEST = 'https://www.gstatic.com/generate_204';
+const cfg = L.readj(CF, { enabled: true, group: 'Zou' });
+const arg = ARGV[0];
+if (!cfg.enabled && arg != 'test') exit(0);
+// test = 模拟一次（面板上的「模拟」按钮）：不真的切换、不发通知、不受锁影响
+const T = arg == 'test';
+if (!T && !mkdir('/tmp/cmcp_autosw.lock')) { let s = stat('/tmp/cmcp_autosw.lock'); if (s && L.now() - s.mtime < 120) exit(0); }
+const out = (o) => { if (T) print(sprintf('%J\n', o)); };
+const done = (code) => { if (!T) L.sh('rmdir /tmp/cmcp_autosw.lock'); exit(code ?? 0); };
+
+let st = L.readj(SF, { last: 0, allfail: false });
+const save = () => L.writej(SF, st);
+const t = L.now();
+
+// 家里断网时不折腾节点
+if (!length(L.sh('ping -c1 -W2 223.5.5.5 >/dev/null && echo y || ping -c1 -W2 119.29.29.29 >/dev/null && echo y'))) { out({ err: '家里宽带现在上不了网，先不动节点' }); done(); }
+
+const GROUPS = ['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay', 'Smart'];
+const INFO = /剩余|到期|官网|流量|过期|套餐|更新|客户端|网址|订阅|重置|公告|群/;
+const REG = [['HK', /🇭🇰|香港|港|\bHK\b|Hong ?Kong/i], ['TW', /🇹🇼|台湾|台灣|\bTW\b|Taiwan/i], ['JP', /🇯🇵|日本|东京|大阪|\bJP\b|Japan/i],
+	['SG', /🇸🇬|新加坡|狮城|\bSG\b|Singapore/i], ['US', /🇺🇸|美国|美國|\bUS\b|United States|洛杉矶|圣何塞/i], ['KR', /🇰🇷|韩国|首尔|\bKR\b|Korea/i],
+	['GB', /🇬🇧|英国|伦敦|\bUK\b|\bGB\b/i], ['DE', /🇩🇪|德国|法兰克福|\bDE\b/i], ['CA', /🇨🇦|加拿大|\bCA\b/i], ['AE', /🇦🇪|迪拜|阿联酋/i]];
+const region = (n) => { for (let r in REG) if (match(n, r[1])) return r[0]; return '?'; };
+
+// 机场订阅的流量和到期时间（订阅链接返回的 subscription-userinfo），缓存 6 小时
+const SUBF = '/tmp/cmcp_subinfo.json';
+function subinfo(fresh) {
+	let c = L.readj(SUBF, null);
+	if (!fresh && c && t - c.at < 6 * 3600) return c;
+	let base = replace(replace(L.uci('openclash.config.config_path'), /^.*\//, ''), /\.ya?ml$/, ''), addr = null, ua = null;
+	for (let i = 0; i < 20; i++) {
+		let n = L.uci('openclash.@config_subscribe[' + i + '].name');
+		if (!length(n)) break;
+		if (n == base) { addr = L.uci('openclash.@config_subscribe[' + i + '].address'); ua = L.uci('openclash.@config_subscribe[' + i + '].sub_ua'); break; }
+	}
+	if (!length(addr)) return c;
+	let h = lc(L.sh(sprintf('curl -sLI -X GET -m 8 -o /dev/null -D - -H %s %s', L.shq('User-Agent: ' + (length(ua) ? ua : 'clash-verge')), L.shq(addr))));
+	let m = match(h, /subscription-userinfo:[ \t]*([^\r\n]+)/);
+	if (!m) return c;   // 取不到（比如节点全挂了连不上订阅网站）就用上次的
+	let v = (k) => { let x = match(m[1], regexp(k + '=([0-9]+)')); return x ? +x[1] : 0; };
+	let r = { at: t, name: base, up: v('upload'), down: v('download'), total: v('total'), expire: v('expire') };
+	L.writej(SUBF, r);
+	return r;
+}
+// 流量用光 / 到期了吗
+function subbad(i) {
+	if (!i) return null;
+	if (i.total > 0 && i.up + i.down >= i.total) return 'traffic';
+	if (i.expire > 0 && i.expire <= t) return 'expire';
+	return null;
+}
+const GB = (b) => sprintf('%.1f GB', b / 1073741824.0);
+const day = (x) => trim(L.sh('date -d @' + x + ' +%Y-%m-%d'));
+
+const g = L.api('GET', '/proxies/' + L.enc(cfg.group), null, 6);
+if (g.code != 200 || g.json?.type != 'Selector') { out({ err: '找不到手动选择的策略组「' + cfg.group + '」（OpenClash 没在运行，或者组名变了）' }); done(); }
+const cur = g.json.now, all = g.json.all ?? [];
+const px = L.api('GET', '/proxies', null, 8).json?.proxies ?? {};
+const isNode = (n) => px[n] && !(px[n].type in GROUPS) && !(px[n].type in ['Direct', 'Reject', 'RejectDrop', 'Pass', 'Compatible']) && !match(n, INFO);
+// 当前选的是另一个策略组（比如「自动选择」）或直连：它自己会处理，不管
+if (!isNode(cur) && !T) done();
+
+const delay = (n, tmo) => +(L.api('GET', '/proxies/' + L.enc(n) + '/delay?timeout=' + tmo + '&url=' + L.enc(TEST), null, tmo / 1000 + 3).json?.delay ?? 0);
+let d1 = delay(cur, 5000);
+if (!T) {
+	if (d1 > 0) {
+		st.fail = 0; st.allfail = false;
+		// 节点正常时顺便更新订阅信息（6 小时一次）；续费了就清掉「用光了」的标记
+		let si = subinfo(false);
+		if (st.subbad && !subbad(si)) { st.subbad = null; L.notify('ok', 'sub', '机场订阅恢复正常', '剩余流量 ' + GB(si.total - si.up - si.down) + (si.expire ? '，' + day(si.expire) + ' 到期' : '') + '。节点自动切换照常工作。', 'sub'); }
+		save(); done();
+	}
+	L.sh('sleep 3'); if (delay(cur, 5000) > 0) { save(); done(); }
+	// 3 分钟内刚换过就先不换，避免来回跳
+	if (t - (st.last ?? 0) < 180) done();
+	// 订阅流量用光或到期了：换节点也没用，不切换，只提醒一次
+	let si = subinfo(true), bad = subbad(si);
+	if (bad) {
+		if (st.subbad != bad) {
+			st.subbad = bad;
+			L.notify('err', 'sub', bad == 'traffic' ? '机场订阅流量用光了' : '机场订阅已经到期',
+				(bad == 'traffic' ? '订阅「' + si.name + '」已用 ' + GB(si.up + si.down) + '，共 ' + GB(si.total) + '。' : '订阅「' + si.name + '」' + day(si.expire) + ' 到期了。') +
+				'节点连不上是因为这个，换节点也没用，所以没有自动切换。续费或重置流量后会自动恢复。', 'sub');
+		}
+		save(); done();
+	}
+	st.subbad = null;
+}
+
+const res = L.api('GET', '/group/' + L.enc(cfg.group) + '/delay?timeout=3000&url=' + L.enc(TEST), null, 15).json ?? {};
+const myr = region(cur);
+let best = null, bestAny = null;
+for (let n in all) {
+	if (n == cur || !isNode(n)) continue;
+	let d = +res[n] || 0;
+	if (d <= 0) continue;
+	if (!bestAny || d < bestAny.d) bestAny = { n, d };
+	if (region(n) == myr && myr != '?' && (!best || d < best.d)) best = { n, d };
+}
+let pick = best ?? bestAny;
+if (T) { let si = subinfo(true); out({ sub: si, subbad: subbad(si), cur, node: isNode(cur), curDelay: d1, region: myr, pick, same: !!best, tested: length(filter(all, (n) => n != cur && isNode(n))), ok: length(filter(keys(res), (n) => +res[n] > 0 && isNode(n))) }); done(); }
+if (!pick) {
+	if (!st.allfail) { st.allfail = true; L.notify('err', 'node', '所有节点都连不上', '策略组「' + cfg.group + '」里的节点全部测不通，可能是机场出了问题或订阅过期了', 'node'); }
+	save(); done();
+}
+
+L.api('PUT', '/proxies/' + L.enc(cfg.group), { name: pick.n }, 6);
+// 断开还挂在旧节点上的连接，让它们马上走新节点（面板自己的连接保留）
+const hp = split(trim(readfile('/etc/claude-mcp/hostname') ?? ''), '.');
+const host = length(hp) > 2 ? join('.', slice(hp, 1)) : join('.', hp);
+const cn = L.api('GET', '/connections', null, 8).json?.connections ?? [];
+let n = 0;
+for (let c in cn) {
+	if (!(cur in (c.chains ?? []))) continue;
+	if (host && index(c.metadata?.host ?? '', host) >= 0) continue;
+	L.api('DELETE', '/connections/' + L.enc(c.id), null, 3); n++;
+}
+st.last = t; st.fail = 0; st.allfail = false;
+// 切换记录存到闪存（很少写，重启也不丢）
+let hist = [ { t, from: cur, to: pick.n, d: pick.d, same: !!best }, ...L.readj(HF, []) ];
+L.writej(HF, slice(hist, 0, 20));
+save();
+L.notify('warn', 'node', '节点自动切换：' + cur + ' → ' + pick.n,
+	'「' + cur + '」连不上了，已自动换到' + (best ? '同地区' : '其他地区') + '的「' + pick.n + '」（延迟 ' + pick.d + ' ms），断开了 ' + n + ' 条旧连接', 'node');
+done();

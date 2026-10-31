@@ -1,0 +1,28 @@
+# Cloudflare Worker：路由器云端监测 / 推送 / 云端备份（完整版用）
+# 部署步骤见 cloud/README.md
+name = "router-watch"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+# 把 Worker 挂在面板域名的 /cloud/* 上：路由器断线时，面板依然能从 Cloudflare 读到实时情况
+# 把 router.example.com 换成你的面板域名（必须是托管在 Cloudflare 上的域名）
+routes = [
+  { pattern = "router.example.com/cloud/*", zone_name = "example.com" }
+]
+
+[vars]
+# Cloudflare 每分钟探测一次这个地址，判断隧道通不通
+PROBE_URL = "https://router.example.com/panel/manifest.json"
+# Web Push 的联系方式（填你的邮箱或面板地址都行）
+VAPID_SUB = "mailto:you@example.com"
+
+[[durable_objects.bindings]]
+name = "W"
+class_name = "Watch"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Watch"]
+
+# 下面这些是密钥，不要写在这里，用命令设置（见 README）：
+#   PANEL_TOKEN  RKEY  TKEY  VAPID_PRIV  VAPID_PUB

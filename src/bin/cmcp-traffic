@@ -1,0 +1,114 @@
+#!/usr/bin/ucode
+// 每分钟运行一次（看门狗调用）：
+// 1. 统计每台设备的流量：从 OpenClash 的连接列表算出这一分钟每条连接新增了多少，按设备、按「走代理 / 直连」累计
+//    今天的数字放内存（/tmp），每 30 分钟和跨天时写进闪存（/etc/claude-mcp/traffic/年-月.json），断电最多丢半小时
+// 2. 发现新设备连上 Wi-Fi 时发通知
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile, mkdir, stat, glob, unlink } from 'fs';
+
+const TS = '/tmp/cmcp_traf.json', TD = L.D + '/traffic', KNOWN = L.D + '/known_devices.json';
+if (!mkdir('/tmp/cmcp_traf.lock')) {
+	// 上一次还没跑完（或者异常退出留下的锁超过 3 分钟）
+	let s = stat('/tmp/cmcp_traf.lock');
+	if (s && L.now() - s.mtime < 180) exit(0);
+}
+mkdir(TD);
+const t = L.now(), day = trim(L.sh('date +%Y-%m-%d')), mon = substr(day, 0, 7);
+const mf = (m) => TD + '/' + m + '.json';
+
+let st = L.readj(TS, null);
+let mdata = L.readj(mf(mon), { days: {}, names: {} });
+if (!st || st.day != day) {
+	// 第一次运行（开机后）或跨天：先把昨天的写进闪存
+	if (st && st.day) {
+		let om = substr(st.day, 0, 7), od = om == mon ? mdata : L.readj(mf(om), { days: {}, names: {} });
+		od.days[st.day] = st.today; for (let k in st.names) od.names[k] = st.names[k];
+		L.writej(mf(om), od);
+		if (om == mon) mdata = od;
+	}
+	st = { day, conns: st?.conns ?? {}, today: mdata.days[day] ?? {}, names: mdata.names ?? {}, flushed: t, tot: st?.tot, at: st?.at };
+}
+
+const devs = L.lan_devices();
+// 路由器自己的所有地址（局域网、WAN、隧道……）：这些地址发出的流量算「路由器自己」
+const mine = {};
+for (let l in split(L.sh("ip -o addr show | awk '{print $4}'"), '\n')) { let a = split(trim(l), '/')[0]; if (length(a)) mine[a] = 1; }
+const key = (ip) => {
+	if (!ip || mine[ip] || substr(ip, 0, 4) == 'fe80' || ip == '::1') return 'router';
+	let d = devs[ip];
+	if (d?.mac) { if (d.name) st.names[d.mac] = d.name; return d.mac; }
+	return ip;
+};
+
+// 1) 流量
+const r = L.api('GET', '/connections', null, 8);
+if (r.code == 200 && r.json) {
+	let seen = {}, add = {}, su = 0, sd = 0;
+	for (let c in r.json.connections ?? []) {
+		let u = +c.upload || 0, dn = +c.download || 0, p = st.conns[c.id];
+		let du = p ? u - p[0] : u, dd = p ? dn - p[1] : dn;
+		seen[c.id] = [u, dn];
+		if (du < 0 || dd < 0) continue;
+		if (!du && !dd) continue;
+		let k = key(c.metadata?.sourceIP), direct = (c.chains?.[0] ?? '') == 'DIRECT';
+		let a = add[k] ?? [0, 0, 0, 0]; // 代理上传, 代理下载, 直连上传, 直连下载
+		if (direct) { a[2] += du; a[3] += dd; } else { a[0] += du; a[1] += dd; }
+		add[k] = a; su += du; sd += dd;
+	}
+	// 两次统计之间开始又结束的短连接，连接列表里看不到；用 OpenClash 的总计数器补上，按这一分钟各设备的用量比例分
+	let U = +r.json.uploadTotal || 0, D = +r.json.downloadTotal || 0;
+	if (st.tot && U >= st.tot[0] && D >= st.tot[1] && t - (st.at ?? 0) < 300) {
+		let ru = U - st.tot[0] - su, rd = D - st.tot[1] - sd, w = su + sd;
+		if (ru > 0 || rd > 0) {
+			if (w > 0) {
+				for (let k in add) {
+					let a = add[k], f = (a[0] + a[1] + a[2] + a[3]) * 1.0 / w, pr = (a[0] + a[1]) * 1.0 / ((a[0] + a[1] + a[2] + a[3]) || 1);
+					let xu = ru > 0 ? int(ru * f) : 0, xd = rd > 0 ? int(rd * f) : 0;
+					a[0] += int(xu * pr); a[2] += xu - int(xu * pr); a[1] += int(xd * pr); a[3] += xd - int(xd * pr);
+				}
+			} else {
+				let a = add.other ?? [0, 0, 0, 0];
+				a[0] += ru > 0 ? ru : 0; a[1] += rd > 0 ? rd : 0; add.other = a;
+			}
+		}
+	}
+	st.tot = [U, D]; st.at = t;
+	for (let k in add) {
+		let a = st.today[k] ?? [0, 0, 0, 0], b = add[k];
+		for (let i = 0; i < 4; i++) a[i] += b[i];
+		st.today[k] = a;
+	}
+	st.conns = seen;
+}
+if (t - (st.flushed ?? 0) >= 1800) {
+	mdata.days[day] = st.today; for (let k in st.names) mdata.names[k] = st.names[k];
+	L.writej(mf(mon), mdata);
+	st.flushed = t;
+	// 只留最近 3 个月
+	let fs = sort(glob(TD + '/*.json'));
+	while (length(fs) > 3) unlink(shift(fs));
+}
+L.writej(TS, st);
+
+// 2) 新设备
+let known = L.readj(KNOWN, null);
+let first = known == null;
+known ??= {};
+let fresh = [];
+for (let ip in devs) {
+	let d = devs[ip];
+	if (!d.mac || d.mac == '00:00:00:00:00:00') continue;
+	// 只算真的在线的（刚拿到地址，或者邻居表里能连上）
+	let alive = (d.lease && d.lease > t) || d.state in ['REACHABLE', 'DELAY', 'PROBE', 'STALE'];
+	if (!alive) continue;
+	if (!known[d.mac]) {
+		known[d.mac] = { first: t, name: d.name, ip };
+		if (!first) push(fresh, { mac: d.mac, name: d.name, ip });
+	} else if (d.name && !known[d.mac].name) known[d.mac].name = d.name;
+}
+if (first || length(fresh)) L.writej(KNOWN, known);
+for (let d in fresh)
+	L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备'), sprintf('IP %s · MAC %s\n不认识的话，可以在面板「设备」里把它暂停上网或拉黑', d.ip, d.mac), 'newdev-' + d.mac);
+
+L.sh('rmdir /tmp/cmcp_traf.lock');

@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+# 路由器看门狗（检查宽带、外网、DNS、隧道、面板、OpenClash，记录断线原因）
+START=99
+STOP=05
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance watchdog
+	procd_set_param command /usr/sbin/cmcp-watchdog run
+	procd_set_param respawn 3600 5 0
+	procd_close_instance
+}
+
+# 正常关机/重启时留个记号，开机后就能区分「正常重启」和「断电/死机」
+shutdown() {
+	/usr/sbin/cmcp-watchdog shutdown
+	stop
+}

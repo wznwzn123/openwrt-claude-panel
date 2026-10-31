@@ -1,0 +1,283 @@
+#!/bin/sh
+# 路由器看门狗：每 30 秒检查一次 宽带 / 外网 / DNS / 隧道 / 面板服务 / OpenClash，
+# 出问题时自动修复，并把原因记到 /etc/claude-mcp/events.log（在闪存上，断电重启也不会丢）。
+# 用法：cmcp-watchdog run | once | shutdown
+# 测试用环境变量：FAKE_WAN/FAKE_GW/FAKE_NET/FAKE_DNS/FAKE_TPID/FAKE_READY/FAKE_PANEL/FAKE_CLASH，DRYRUN=1 不真的重启
+
+D=${WD_DIR:-/etc/claude-mcp}
+EV=$D/events.log
+HB=$D/heartbeat
+CS=$D/clean_shutdown
+ST=${WD_STATE:-/tmp/cmcp_wd.state}
+TL=/tmp/claude-mcp-tunnel.log
+MAXL=400
+INTERVAL=30
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+
+now() { date +%s; }
+# JSON 字符串转义（多行保留为 \n）
+esc() { printf '%s' "$1" | tr '\t\r' '  ' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} {if (NR>1) print "\\n"; print}'; }
+# ev 等级 类别 说明 [详情] [开始时间] [结束时间]
+ev() {
+	printf '{"t":%s,"lvl":"%s","kind":"%s","msg":"%s","detail":"%s","from":%s,"to":%s}\n' \
+		"$(now)" "$1" "$2" "$(esc "$3")" "$(esc "$4")" "${5:-0}" "${6:-0}" >> "$EV"
+	local n; n=$(wc -l < "$EV")
+	[ "$n" -gt $((MAXL + 50)) ] && tail -n $MAXL "$EV" > "$EV.tmp" && mv "$EV.tmp" "$EV"
+	logger -t cmcp-watchdog "[$2] $3"
+	# 这几类问题路由器自己推送到手机（断网、隧道、断电由云端判断后推送）
+	case "$2" in dns|clash|mem|panel|watchdog) [ "$1" != info ] && cloud_push "$1" "$2" "$3" "$4" ;; esac
+}
+# 推送到手机（后台发，不耽误检查）
+cloud_push() {
+	[ -f "$D/cloud.conf" ] && [ "$DRYRUN" != 1 ] || return 0
+	local URL RKEY TKEY j
+	. "$D/cloud.conf"
+	j=$(printf '{"lvl":"%s","kind":"%s","title":"%s","body":"%s","tag":"%s"}' "$1" "$2" "$(esc "$3")" "$(esc "$4" | cut -c1-600)" "$2")
+	( curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/n/$RKEY" >/dev/null 2>&1 & )
+}
+fmt() { date -d "@$1" '+%m-%d %H:%M:%S' 2>/dev/null || echo "$1"; }
+mins() { local s=$(( $2 - $1 )); [ $s -lt 60 ] && echo "${s} 秒" || echo "$(( (s + 30) / 60 )) 分钟"; }
+
+# ---------- 探测 ----------
+wan_json() { ubus call network.interface.wan status 2>/dev/null; }
+p_wan() { [ -n "$FAKE_WAN" ] && { [ "$FAKE_WAN" = 1 ]; return; }; [ "$(wan_json | jsonfilter -e '@.up')" = "true" ]; }
+gw() { wan_json | jsonfilter -e '@.route[@.target="0.0.0.0"].nexthop' 2>/dev/null | head -n1; }
+p_gw() { [ -n "$FAKE_GW" ] && { [ "$FAKE_GW" = 1 ]; return; }; local g; g=$(gw); [ -z "$g" ] && return 0; ping -c1 -W2 "$g" >/dev/null 2>&1 || ping -c1 -W2 "$g" >/dev/null 2>&1; }
+p_net() { [ -n "$FAKE_NET" ] && { [ "$FAKE_NET" = 1 ]; return; }; for h in 223.5.5.5 119.29.29.29 1.1.1.1; do ping -c1 -W2 $h >/dev/null 2>&1 && return 0; done; return 1; }
+p_dns() { [ -n "$FAKE_DNS" ] && { [ "$FAKE_DNS" = 1 ]; return; }; timeout 6 nslookup www.baidu.com 127.0.0.1 2>/dev/null | grep -q '^Name:' || timeout 6 nslookup www.qq.com 127.0.0.1 2>/dev/null | grep -q '^Name:'; }
+tpid() { [ -n "$FAKE_TPID" ] && { [ "$FAKE_TPID" = 0 ] || echo "$FAKE_TPID"; return; }; pidof cloudflared | awk '{print $1}'; }
+ready() {
+	[ -n "$FAKE_READY" ] && { echo "$FAKE_READY"; return; }
+	local p r
+	for p in 20241 20242 20243 20244 20245; do
+		r=$(curl -s -m 2 "http://127.0.0.1:$p/ready" 2>/dev/null | jsonfilter -e '@.readyConnections' 2>/dev/null)
+		[ -n "$r" ] && { echo "$r"; return; }
+	done
+	echo 0
+}
+p_panel() { [ -n "$FAKE_PANEL" ] && { [ "$FAKE_PANEL" = 1 ]; return; }; [ "$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json)" = 200 ]; }
+cpid() { [ -n "$FAKE_CLASH" ] && { [ "$FAKE_CLASH" = 0 ] || echo "$FAKE_CLASH"; return; }; pidof clash mihomo 2>/dev/null | awk '{print $1}'; }
+
+tunlog() {
+	local l
+	[ -f "$TL" ] && l=$(grep -v precheck "$TL" | grep -i -E '"level":"(error|warn)"|unregist|terminat|retry|fail' | grep -v -E 'ping_group|ICMP proxy|Group ID|config.yml was empty|fetch features|context canceled|ended abruptly' | tail -n 6 | cut -c1-300)
+	[ -n "$l" ] && echo "隧道日志：
+$l" || echo "隧道日志里没有错误记录"
+}
+wanlog() { logread 2>/dev/null | grep -E "netifd: .*(wan|Interface|link)|udhcpc|pppd|odhcp6c" | grep -v -i -E 'wifi|radio|phy[0-9]' | tail -n 6 | cut -c1-200; }
+oclog() { grep -v '^time=' /tmp/openclash.log 2>/dev/null | tail -n "${1:-6}" | cut -c1-200; }
+memavail() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
+
+# ---------- 状态 ----------
+load() {
+	WAN=ok; NET=ok; DNS=ok; TUN=ok; PANEL=ok; CLASH=ok; CLASH_PID=; TFAIL=0; PFAIL=0; DFAIL=0; CFAIL=0
+	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0
+	[ -f "$ST" ] && . "$ST"
+}
+save() {
+	cat > "$ST.tmp" <<EOF
+WAN=$WAN; NET=$NET; DNS=$DNS; TUN=$TUN; PANEL=$PANEL; CLASH=$CLASH; CLASH_PID=$CLASH_PID
+TFAIL=$TFAIL; PFAIL=$PFAIL; DFAIL=$DFAIL; CFAIL=$CFAIL
+WAN_T=$WAN_T; NET_T=$NET_T; DNS_T=$DNS_T; TUN_T=$TUN_T; CLASH_T=$CLASH_T; LAST_RS=$LAST_RS; RS_LIST="$RS_LIST"; HB_T=$HB_T; BOOT_DONE=$BOOT_DONE; MEMW=$MEMW
+TCAUSE="$TCAUSE"; BT0=$BT0; BEAT_T=$BEAT_T; OOMN=$OOMN; ASW_T=$ASW_T
+CHECK_T=$(now); READY=$RDY; TPID=$TP
+EOF
+	mv "$ST.tmp" "$ST"
+}
+
+# ---------- 开机：判断上次是怎么断的 ----------
+boot_check() {
+	[ "$BOOT_DONE" = 1 ] && return
+	local up; up=${FAKE_UP:-$(cut -d. -f1 /proc/uptime)}
+	if [ "$up" -gt 900 ]; then BOOT_DONE=1; return; fi
+	# 路由器没有电池时钟：刚开机时系统时间停在断电前最后写文件的那一刻，联网对时后才跳到正确时间。
+	# 所以要等对时成功（ntpd 通知，或发现系统时间被调过）再记，不然开机时间和断了多久都是错的
+	local t bt last reason lvl detail note= ibt
+	t=$(now); ibt=$(( t - up ))
+	[ -z "$BT0" ] && BT0=$ibt
+	if [ ! -f "${WD_NTP:-/tmp/cmcp_ntp_synced}" ] && [ $(( ibt - BT0 )) -lt 30 ] && [ $(( BT0 - ibt )) -lt 30 ]; then
+		[ "$up" -lt 600 ] && return
+		note="
+（路由器一直没对上时间，以上时间可能不准）"
+	fi
+	[ "$NET" = ok ] || [ "$up" -gt 600 ] || return
+	bt=$ibt; last=$(cat "$HB" 2>/dev/null)
+	if [ -f "$CS" ]; then
+		reason="路由器重启了（正常重启：执行了重启命令或在网页上点了重启）"; lvl=info; last=$(cat "$CS"); rm -f "$CS"
+	else
+		reason="路由器意外重启：断电、拔了电源或系统死机（重启前没有正常关机）"; lvl=err
+	fi
+	[ -n "$last" ] && [ "$last" -lt "$bt" ] 2>/dev/null || last=$bt
+	detail="开机时间 $(fmt $bt)"
+	[ "$lvl" = err ] && detail="$detail
+断电前最后一次正常运行记录 $(fmt $last)（每 5 分钟记一次，实际断电在这之后 5 分钟内）
+从最后记录到开机共 $(mins $last $bt)"
+	detail="$detail$note"
+	if ls /sys/fs/pstore/* >/dev/null 2>&1; then
+		detail="$detail
+发现内核崩溃日志：
+$(cat /sys/fs/pstore/* 2>/dev/null | tail -n 12 | cut -c1-200)"
+		reason="路由器死机后自动重启（内核崩溃）"
+	fi
+	ev "$lvl" boot "$reason" "$detail" "$last" "$bt"
+	BOOT_DONE=1
+}
+
+restart_tunnel() {
+	local t; t=$(now)
+	# 防止反复重启：3 分钟内最多 1 次，1 小时内最多 8 次
+	RS_LIST=$(for x in $RS_LIST; do [ $(( t - x )) -lt 3600 ] && echo $x; done | tr '\n' ' ')
+	local n; n=$(echo $RS_LIST | wc -w)
+	[ $(( t - LAST_RS )) -lt 180 ] && return
+	if [ "$n" -ge 8 ]; then
+		[ "$n" -eq 8 ] && ev err watchdog "1 小时内已经自动重启隧道 8 次还是连不上，暂停自动重启，请检查网络" "$(tunlog)"
+		RS_LIST="$RS_LIST $t"; LAST_RS=$t; return
+	fi
+	LAST_RS=$t; RS_LIST="$RS_LIST $t"
+	if [ "$DRYRUN" = 1 ]; then
+		ev warn watchdog "已自动重启隧道（第 $((n + 1)) 次，测试模式，没有真的重启）" ""
+	elif [ -n "$TP" ]; then
+		# 卡死的进程可能不理普通 kill，5 秒后还在就强制结束；procd 会自动重新拉起
+		kill "$TP" 2>/dev/null
+		local i=0; while [ $i -lt 5 ] && kill -0 "$TP" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+		kill -0 "$TP" 2>/dev/null && kill -9 "$TP" 2>/dev/null
+		ev warn watchdog "已自动重启隧道（1 小时内第 $((n + 1)) 次）" ""
+	else
+		/etc/init.d/claude-mcp start >/dev/null 2>&1
+		ev warn watchdog "隧道程序没在运行，已重新启动（1 小时内第 $((n + 1)) 次）" ""
+	fi
+}
+
+# 云端心跳：每分钟把状态报告给 Cloudflare（路由器断线时，面板还能从云端看到实时情况）
+cloud_beat() {
+	[ -f "$D/cloud.conf" ] || return
+	[ $(( t - BEAT_T )) -ge 55 ] || return
+	BEAT_T=$t
+	local URL RKEY TKEY j
+	. "$D/cloud.conf"
+	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s"}' \
+		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")")
+	( curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" >/dev/null 2>&1 & )
+}
+
+check() {
+	mkdir /tmp/cmcp_wd.lock 2>/dev/null || return
+	load
+	local t; t=$(now)
+
+	# 宽带 / 上级网络 / 外网 / DNS
+	if p_wan; then
+		if [ "$WAN" != ok ]; then ev ok wan "宽带恢复连接（断了 $(mins $WAN_T $t)）" "" "$WAN_T" "$t"; WAN=ok; fi
+		if p_net; then
+			if [ "$NET" != ok ]; then ev ok net "外网恢复（断了 $(mins $NET_T $t)）" "" "$NET_T" "$t"; NET=ok; fi
+		else
+			if [ "$NET" = ok ]; then
+				NET=down; NET_T=$t
+				if p_gw; then ev err net "宽带连着，但上不了外网（上级路由器或运营商没网）" "网关 $(gw) 能连上，但 223.5.5.5 / 119.29.29.29 / 1.1.1.1 都 ping 不通"
+				else ev err net "连不上上级路由器 / 光猫（网关 $(gw) 没反应）" "$(wanlog)"; fi
+			fi
+		fi
+	else
+		NET=down
+		if [ "$WAN" = ok ]; then WAN=down; WAN_T=$t; NET_T=$t; ev err wan "宽带断开（WAN 口没有连接）" "$(wanlog)"; fi
+	fi
+	if [ "$NET" = ok ]; then
+		if p_dns; then
+			if [ "$DNS" != ok ]; then ev ok dns "DNS 恢复正常（坏了 $(mins $DNS_T $t)）" "" "$DNS_T" "$t"; DNS=ok; fi; DFAIL=0
+		else
+			DFAIL=$((DFAIL + 1))
+			if [ "$DNS" = ok ] && [ "$DFAIL" -ge 2 ]; then DNS=down; DNS_T=$t; ev err dns "DNS 解析失败：外网是通的，但域名解析不出来（OpenClash 或 dnsmasq 出了问题）" "$(logread 2>/dev/null | grep -E 'dnsmasq|openclash' | grep -v -E 'luci|dispatcher|uhttpd' | tail -n 5 | cut -c1-200)"; fi
+		fi
+	fi
+
+	# 隧道
+	TP=$(tpid); RDY=$(ready)
+	if [ -n "$TP" ] && [ "${RDY:-0}" -gt 0 ] 2>/dev/null; then
+		if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 Claude 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE" "$TUN_T" "$t"; TUN=ok; fi
+		TFAIL=0; TCAUSE=
+	else
+		TFAIL=$((TFAIL + 1))
+		local cause det
+		if [ "$WAN" != ok ]; then cause="宽带断开"
+		elif [ "$NET" != ok ]; then cause="外网不通"
+		elif [ -z "$TP" ]; then cause="隧道程序没在运行"
+		else cause="隧道程序在运行，但连不上 Cloudflare"
+		fi
+		# 第 2 次检查还不行才算断（避免一瞬间的抖动）
+		if [ "$TUN" = ok ] && [ "$TFAIL" -ge 2 ]; then
+			TUN=down; TUN_T=$((t - INTERVAL)); TCAUSE=$cause
+			case "$cause" in 宽带断开|外网不通) det="跟着$cause一起断的，网络恢复后隧道会自己连回来" ;; *) det=$(tunlog) ;; esac
+			ev err tunnel "隧道断开：$cause（这段时间面板和 Claude 都连不上路由器）" "$det"
+		fi
+		[ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TCAUSE" != "$cause" ] && TCAUSE="$TCAUSE → $cause"
+		# 外网是通的才重启隧道，断网时重启没用
+		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && restart_tunnel
+	fi
+
+	# 面板服务
+	if p_panel; then
+		[ "$PANEL" != ok ] && ev ok panel "面板服务恢复" ""
+		PANEL=ok; PFAIL=0
+	else
+		PFAIL=$((PFAIL + 1))
+		if [ "$PFAIL" -ge 2 ] && [ "$PANEL" = ok ]; then
+			PANEL=down
+			if [ "$DRYRUN" = 1 ]; then ev err panel "面板服务没响应，已自动重启（测试模式，没有真的重启）" ""
+			else /etc/init.d/claude-mcp restart >/dev/null 2>&1; ev err panel "面板服务没响应，已自动重启" ""; fi
+		fi
+	fi
+
+	# OpenClash
+	if [ "$(uci -q get openclash.config.enable)" = 1 ]; then
+		local cp; cp=$(cpid)
+		if [ -n "$cp" ]; then
+			if [ "$CLASH" != ok ]; then ev ok clash "OpenClash 内核恢复运行（停了 $(mins $CLASH_T $t)）" "" "$CLASH_T" "$t"; CLASH=ok
+			elif [ -n "$CLASH_PID" ] && [ "$cp" != "$CLASH_PID" ]; then ev info clash "OpenClash 重启了（期间会断网十几秒）" "$(oclog 6)"; fi
+			CLASH_PID=$cp; CFAIL=0
+		else
+			CFAIL=$((CFAIL + 1))
+			if [ "$CLASH" = ok ] && [ "$CFAIL" -ge 3 ]; then CLASH=down; CLASH_T=$((t - 2 * INTERVAL)); ev err clash "OpenClash 开着，但代理内核没在运行（海外网站会打不开）" "$(oclog 8)"; fi
+		fi
+	else
+		CLASH=ok; CLASH_PID=
+	fi
+
+	# 内存
+	local m; m=$(memavail)
+	if [ "${m:-999}" -lt 25 ] && [ "$MEMW" = 0 ]; then MEMW=1; ev warn mem "内存快用完了（只剩 ${m}MB），可能导致程序被系统杀掉" "$(top -bn1 2>/dev/null | head -n 12 | cut -c1-120)"; fi
+	[ "${m:-999}" -gt 50 ] && MEMW=0
+	# 内存耗尽时内核会强行结束程序（OOM），记下来是谁被杀了
+	local oom; oom=${FAKE_OOM:-$(dmesg 2>/dev/null | grep -c -i -E 'out of memory|oom-kill')}
+	if [ -n "$OOMN" ] && [ "${oom:-0}" -gt "$OOMN" ]; then
+		ev err mem "内存耗尽，系统强行结束了程序" "$(dmesg 2>/dev/null | grep -i -E 'killed process|out of memory' | tail -n 3 | cut -c1-200)"
+	fi
+	OOMN=${oom:-0}
+
+	boot_check
+	cloud_beat
+	# 每分钟：当前节点连不上就自动换；统计流量（后台跑，不耽误检查；家里断网或 OpenClash 没跑时不动）
+	if [ $(( t - ASW_T )) -ge 55 ] && [ "$DRYRUN" != 1 ]; then
+		ASW_T=$t
+		[ "$NET" = ok ] && [ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-autosw ] && ( /usr/sbin/cmcp-autosw >/dev/null 2>&1 & )
+		# 每台设备的流量统计 + 新设备连上时提醒
+		[ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-traffic ] && ( /usr/sbin/cmcp-traffic >/dev/null 2>&1 & )
+	fi
+	# 暂停上网：规则被防火墙重载冲掉了就补回来、到期自动恢复、每天定时断网开始时断开现有连接（用过这个功能才检查）
+	[ "$DRYRUN" != 1 ] && [ -f "$D/pause.json" ] && [ -x /usr/sbin/cmcp-pause ] && /usr/sbin/cmcp-pause check >/dev/null 2>&1
+	# 心跳：每 5 分钟写一次闪存，用来判断断电时间（开机记录写完之前不能写，否则会盖掉断电前的最后记录）
+	if [ "$BOOT_DONE" = 1 ] && [ $(( t - HB_T )) -ge 300 ]; then echo "$t" > "$HB"; HB_T=$t; fi
+	save
+	rmdir /tmp/cmcp_wd.lock
+}
+
+case "$1" in
+	run)
+		rmdir /tmp/cmcp_wd.lock 2>/dev/null
+		load; [ -f "$EV" ] || ev info watchdog "看门狗已启动，开始记录断线原因" ""
+		while true; do check; sleep $INTERVAL; done ;;
+	once) check ;;
+	shutdown)
+		echo "$(now)" > "$CS"; now > "$HB"
+		ev info reboot "路由器正在关机或重启（正常操作）" "" ;;
+	*) echo "用法：$0 run | once | shutdown"; exit 1 ;;
+esac

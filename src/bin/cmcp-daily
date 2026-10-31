@@ -1,0 +1,107 @@
+#!/usr/bin/ucode
+// 每天体检（定时任务每天 9:00 运行；面板里也能点「现在体检」）
+// 汇总过去 24 小时：断线、内存、节点、订阅、陌生设备、存储空间、温度、备份 → 写 /etc/claude-mcp/daily.json 并交给云端
+// 每天 9:00 把结果推送到手机（微信 / 浏览器）；面板里点「现在体检」只更新面板，不推送
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile } from 'fs';
+
+const t = L.now(), since = t - 86400;
+let items = [];
+const add = (lvl, title, detail) => push(items, { lvl, title, detail: detail ?? '' });
+const mins = (s) => s < 60 ? s + ' 秒' : s < 3600 ? int(s / 60 + 0.5) + ' 分钟' : sprintf('%.1f 小时', s / 3600);
+
+// 1) 断线
+let evs = [];
+for (let l in split(readfile(L.D + '/events.log') ?? '', '\n')) { try { let e = json(l); if (e.t >= since) push(evs, e); } catch (e) {} }
+const NET = ['wan', 'net', 'tunnel', 'boot', 'dns', 'clash', 'panel'];
+let outs = filter(evs, (e) => e.lvl == 'err' && e.kind in NET);
+let longest = 0;
+for (let e in evs) if (e.lvl == 'ok' && e.kind in NET && e.from && e.to && e.to - e.from > longest) longest = e.to - e.from;
+if (length(outs)) {
+	let kinds = {}; for (let e in outs) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
+	const KN = { wan: '宽带断开', net: '外网不通', tunnel: '隧道断开', boot: '意外重启', dns: 'DNS 故障', clash: 'OpenClash 停止', panel: '面板服务' };
+	add(length(outs) >= 3 ? 'err' : 'warn', '过去 24 小时出问题 ' + length(outs) + ' 次' + (longest ? '，最长 ' + mins(longest) : ''),
+		join('、', map(keys(kinds), (k) => (KN[k] ?? k) + ' ' + kinds[k] + ' 次')));
+} else add('ok', '过去 24 小时没有断线');
+
+// 2) 内存
+let mi = readfile('/proc/meminfo') ?? '', av = int(+(match(mi, /MemAvailable:\s+(\d+)/)?.[1] ?? 0) / 1024);
+let ooms = filter(evs, (e) => e.kind == 'mem' && e.lvl == 'err');
+if (length(ooms)) add('err', '内存耗尽 ' + length(ooms) + ' 次，系统强行结束过程序', ooms[0].detail);
+else if (av < 30) add('warn', '可用内存偏少：' + av + ' MB', '在「进程」页可以看是谁占的');
+else add('ok', '内存正常（可用 ' + av + ' MB）');
+
+// 3) 节点
+let ac = L.readj(L.D + '/autosw.json', { enabled: true, group: 'Zou' });
+let g = L.api('GET', '/proxies/' + L.enc(ac.group), null, 6).json;
+if (g?.now) {
+	let d = +(L.api('GET', '/proxies/' + L.enc(g.now) + '/delay?timeout=5000&url=' + L.enc('https://www.gstatic.com/generate_204'), null, 8).json?.delay ?? 0);
+	let sw = filter(evs, (e) => e.kind == 'node');
+	if (d <= 0) add('err', '当前节点「' + g.now + '」测不通', ac.enabled ? '自动切换会处理' : '自动切换没开，需要手动换节点');
+	else add(length(sw) >= 3 ? 'warn' : 'ok', '节点「' + g.now + '」正常（' + d + ' ms）' + (length(sw) ? '，24 小时内自动切换了 ' + length(sw) + ' 次' : ''), length(sw) >= 3 ? '切换太频繁，可能这个地区的节点都不太稳' : '');
+} else add('warn', 'OpenClash 没在运行，测不了节点');
+
+// 4) 订阅流量 / 到期（用面板自己的接口拿）
+const tok = trim(readfile(L.D + '/token') ?? '');
+const P = (m, a) => { let o = L.sh(sprintf("curl -s -m 40 -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {} })), tok)); try { return json(o).result; } catch (e) { return null; } };
+let stt = P('oc_state');
+let act = filter(stt?.files ?? [], (f) => f.active)[0];
+let sub = act?.sub ? filter(stt?.subs ?? [], (x) => x.name == act.sub)[0] : null;
+if (sub) {
+	let si = P('sub_info', { sid: sub.sid });
+	let used = (+si?.upload || 0) + (+si?.download || 0), total = +si?.total || 0, exp = +si?.expire || 0;
+	let msg = [];
+	let lvl = 'ok';
+	if (total > 0) {
+		let pct = int(used * 100 / total);
+		if (pct >= 90) { lvl = 'err'; push(msg, '流量已用 ' + pct + '%'); }
+		else if (pct >= 80) { lvl = 'warn'; push(msg, '流量已用 ' + pct + '%'); }
+		else push(msg, '流量用了 ' + pct + '%');
+	}
+	if (exp > 0) {
+		let days = int((exp - t) / 86400);
+		if (days < 0) { lvl = 'err'; push(msg, '已经过期'); }
+		else if (days <= 7) { lvl = lvl == 'err' ? 'err' : 'warn'; push(msg, days + ' 天后到期'); }
+		else push(msg, days + ' 天后到期');
+	}
+	if (length(msg)) add(lvl, '订阅「' + sub.name + '」' + join('，', msg));
+}
+
+// 5) 陌生设备
+let known = L.readj(L.D + '/known_devices.json', {});
+let nd = [];
+for (let m in known) if (known[m].first >= since) push(nd, (known[m].name ?? '未知设备') + '（' + known[m].ip + '）');
+if (length(nd)) add('warn', '24 小时内有 ' + length(nd) + ' 台新设备连上', join('\n', nd));
+else add('ok', '没有陌生设备连上');
+
+// 6) 存储空间 / 温度
+let df = split(trim(L.sh("df -k /overlay | tail -n 1")), /\s+/);
+if (length(df) >= 5) { let free = int(+df[3] / 1024), tot = +df[1] / 1024; if (tot > 0 && free * 100 / tot < 10) add('warn', '存储空间快满了：只剩 ' + free + ' MB'); else add('ok', '存储空间充足（还剩 ' + free + ' MB）'); }
+let temp = +(trim(readfile('/sys/class/thermal/thermal_zone0/temp') ?? '0')) / 1000;
+if (temp >= 85) add('err', '温度过高：' + int(temp) + '°C', '检查通风');
+else if (temp >= 75) add('warn', '温度偏高：' + int(temp) + '°C');
+else if (temp > 0) add('ok', '温度正常（' + int(temp) + '°C）');
+
+// 7) 备份
+let bl = +trim(readfile(L.D + '/backup_last') ?? '0');
+if (!bl) add('warn', '还没有云端备份', '在「云端备份」页点「立即备份」');
+else if (t - bl > 2 * 86400) add('warn', '云端备份已经 ' + int((t - bl) / 86400) + ' 天没更新了', '每天 4:07 应该自动备份一次，可能上传失败了');
+else add('ok', '云端备份正常（' + (t - bl < 86400 ? int((t - bl) / 3600) + ' 小时前' : int((t - bl) / 86400) + ' 天前') + '）');
+
+let bad = filter(items, (i) => i.lvl != 'ok');
+let rep = { t, ok: !length(bad), items, summary: length(bad) ? '发现 ' + length(bad) + ' 个问题' : '一切正常' };
+L.writej(L.D + '/daily.json', rep);
+// 推送到手机：标题一句话说结论，正文问题在前、正常的在后，每项一行
+let cf = {};
+for (let l in split(readfile(L.D + '/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) cf[m[1]] = m[2]; }
+if (cf.URL && ARGV[0] != 'local') {
+	const IC = { err: '🔴', warn: '🟡', ok: '✅' };
+	let lines = map(sort([...items], (a, b) => ({ err: 0, warn: 1, ok: 2 })[a.lvl] - ({ err: 0, warn: 1, ok: 2 })[b.lvl]), (i) => IC[i.lvl] + ' ' + i.title);
+	let worst = length(filter(items, (i) => i.lvl == 'err')) ? 'err' : length(bad) ? 'warn' : 'ok';
+	let msg = { lvl: worst, kind: 'daily', tag: 'daily',
+		title: '每日体检：' + (length(bad) ? '发现 ' + length(bad) + ' 个问题' : '一切正常'),
+		body: join('\n', lines) };
+	L.sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary %s %s", L.shq(sprintf('%J', msg)), L.shq(cf.URL + '/n/' + cf.RKEY)));
+}
+print(sprintf('%J\n', rep));

@@ -1,0 +1,5 @@
+#!/bin/sh
+# 对时成功后留个记号：看门狗要等时间对准了才记开机时间
+[ "$ACTION" = step ] && touch /tmp/cmcp_ntp_synced
+[ "$ACTION" = stratum ] && [ "${stratum:-16}" != 16 ] && touch /tmp/cmcp_ntp_synced
+exit 0

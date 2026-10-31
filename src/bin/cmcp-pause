@@ -1,0 +1,114 @@
+#!/usr/bin/ucode
+// 设备暂停上网（按 MAC 地址）：
+//   暂停到某个时间点（到点自动恢复）+ 每天定时断网（比如 23:00–07:00）
+// 规则放在 mangle 表 PREROUTING 第一条的 CMCP_PAUSE 链里，比 OpenClash 的规则先生效；只放行 DHCP（保持能拿到 IP）
+// 这台路由器有硬件加速（NSS），已经建立的连接不经过防火墙，所以暂停开始时要把这台设备现有的连接全部删掉
+// 数据：/etc/claude-mcp/pause.json {"MAC":{"name":..,"until":时间戳,"sched":[{"from":"23:00","to":"07:00"}]}}
+// 用法：cmcp-pause apply   重新生成规则（面板改了设置后调用）
+//       cmcp-pause check   看门狗每 30 秒调一次：规则被防火墙重载冲掉了、有到期的、定时暂停开始/结束了，就重新生成
+//       cmcp-pause status  打印每台设备现在是否在暂停
+'use strict';
+import * as L from 'cmcp.lib';
+import { access, readfile } from 'fs';
+
+const F = L.D + '/pause.json', ON = '/tmp/cmcp_pause_on.json', CH = 'CMCP_PAUSE';
+const ipt = filter(['iptables', 'ip6tables'], (b) => access('/usr/sbin/' + b, 'x'));
+
+// 我们的链必须是 PREROUTING 的第一条
+function hooked() {
+	for (let b in ipt) if (trim(L.sh(b + " -t mangle -S PREROUTING | sed -n 2p")) != '-A PREROUTING -j ' + CH) return false;
+	return true;
+}
+// 本地时间和 UTC 差多少分钟（xt_time 按 UTC 算）
+const off = (() => { let z = trim(L.sh('date +%z')), m = match(z, /^([+-])(\d\d)(\d\d)$/); return m ? (m[1] == '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : 480; })();
+const mins = (hm) => { let m = match(hm ?? '', /^(\d{1,2}):(\d\d)$/); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+function utc(hm) {
+	let x = mins(hm);
+	if (x == null) return null;
+	x = ((x - off) % 1440 + 1440) % 1440;
+	return sprintf('%02d:%02d', x / 60, x % 60);
+}
+// 现在是否在这台设备的暂停时间内
+function active(e, t) {
+	if (e.until && e.until > t) return true;
+	let now = ((int(t / 60) + off) % 1440 + 1440) % 1440;
+	for (let s in e.sched ?? []) {
+		let a = mins(s.from), b = mins(s.to);
+		if (a == null || b == null || a == b) continue;
+		if (a < b ? (now >= a && now < b) : (now >= a || now < b)) return true;
+	}
+	return false;
+}
+// 这台设备现在的 IP（IPv4 从 DHCP 和邻居表找，IPv6 从邻居表找）
+function ips(mac) {
+	let r = {};
+	for (let l in split(readfile('/tmp/dhcp.leases') ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 3 && lc(f[1]) == mac) r[f[2]] = 1; }
+	for (let l in split(L.sh('ip neigh show dev br-lan; ip -6 neigh show dev br-lan'), '\n')) {
+		let m = match(l, /^(\S+) lladdr ([0-9a-f:]+)/);
+		if (m && m[2] == mac) r[m[1]] = 1;
+	}
+	return keys(r);
+}
+// 断开这台设备现有的所有连接：内核连接记录（同时撤掉硬件加速）+ OpenClash 里的连接
+function kill(mac) {
+	let list = ips(mac);
+	if (!length(list)) return 0;
+	let cmd = [];
+	for (let ip in list) push(cmd, 'conntrack -D -s ' + L.shq(ip) + ' >/dev/null 2>&1', 'conntrack -D -d ' + L.shq(ip) + ' >/dev/null 2>&1');
+	L.sh(join('; ', cmd));
+	let n = 0, set = {};
+	for (let ip in list) set[ip] = 1;
+	let cn = L.api('GET', '/connections', null, 6).json?.connections ?? [];
+	for (let c in cn) if (set[c.metadata?.sourceIP]) { L.api('DELETE', '/connections/' + L.enc(c.id), null, 3); n++; }
+	return n;
+}
+function apply() {
+	let p = L.readj(F, {}), t = L.now(), ch = false, rules = [], on = {};
+	for (let mac in p) {
+		let e = p[mac];
+		if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) { delete p[mac]; ch = true; continue; }
+		if (e.until && e.until <= t) { delete e.until; ch = true; }
+		let ok = filter(e.sched ?? [], (s) => utc(s.from) && utc(s.to) && s.from != s.to);
+		if (length(ok) != length(e.sched ?? [])) { e.sched = ok; ch = true; }
+		if (!e.until && !length(e.sched ?? [])) { delete p[mac]; ch = true; continue; }
+		let mm = '-m mac --mac-source ' + mac;
+		push(rules, mm + ' -p udp --dport 67:68 -j RETURN', mm + ' -p udp --dport 546:547 -j RETURN');
+		if (e.until) push(rules, mm + ' -m time --datestop ' + trim(L.sh('date -u -d @' + e.until + ' +%Y-%m-%dT%H:%M:%S')) + ' -j DROP');
+		for (let s in e.sched ?? []) push(rules, mm + ' -m time --timestart ' + utc(s.from) + ' --timestop ' + utc(s.to) + ' -j DROP');
+		if (active(e, t)) on[mac] = 1;
+	}
+	if (ch) L.writej(F, p);
+	for (let b in ipt) {
+		let cmd = [b + ' -t mangle -N ' + CH + ' >/dev/null 2>&1', b + ' -t mangle -F ' + CH];
+		for (let r in rules) push(cmd, b + ' -t mangle -A ' + CH + ' ' + r);
+		// 不是第一条就挪到第一条
+		push(cmd, 'while ' + b + ' -t mangle -D PREROUTING -j ' + CH + ' >/dev/null 2>&1; do :; done', b + ' -t mangle -I PREROUTING 1 -j ' + CH);
+		L.sh(join('; ', cmd));
+	}
+	// 刚开始暂停的设备：断开它现有的连接
+	let was = L.readj(ON, {});
+	for (let mac in on) if (!was[mac]) kill(mac);
+	L.writej(ON, on);
+	return p;
+}
+
+switch (ARGV[0]) {
+case 'apply': apply(); break;
+case 'check': {
+	let p = L.readj(F, {}), t = L.now(), was = L.readj(ON, {}), need = false;
+	for (let m in p) {
+		if (p[m].until && p[m].until <= t) need = true;
+		if (!!active(p[m], t) != !!was[m]) need = true;
+	}
+	for (let m in was) if (!p[m]) need = true;
+	if (need || !hooked()) apply();
+	break;
+}
+case 'status': {
+	let p = L.readj(F, {}), t = L.now(), o = {};
+	for (let m in p) o[m] = active(p[m], t);
+	print(sprintf('%J\n', o));
+	break;
+}
+default: print('用法：cmcp-pause apply | check | status\n');
+}

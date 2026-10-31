@@ -1,0 +1,26 @@
+#!/bin/sh
+# 把路由器配置备份到 Cloudflare（每天凌晨 4:07 自动，云端只留最近 10 份；面板里也能点「立即备份」）
+# 内容 = 系统升级时会保留的全部文件（所有设置、OpenClash 配置和规则、面板），去掉能重新下载的大文件（内核、GEO 数据库）
+# 备份文件和 LuCI「备份/升级」页面导出的格式一样，可以直接在那里恢复
+# 用法：cmcp-backup [auto|manual]
+D=/etc/claude-mcp
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+[ -f "$D/cloud.conf" ] || { echo "没有配置云端"; exit 1; }
+. "$D/cloud.conf"
+mkdir /tmp/cmcp_bk.lock 2>/dev/null || { echo "已经在备份了"; exit 1; }
+trap 'rm -rf /tmp/cmcp_bk.lock /tmp/cmcp_bk.tgz /tmp/cmcp_bk.list' EXIT
+kind=${1:-manual}
+{ sysupgrade -l 2>/dev/null; find /www-claude-mcp -type f 2>/dev/null; } | \
+	grep -v -E '^/etc/openclash/(core|history|cache\.db|.*\.(dat|mmdb|metadb|db))' | \
+	grep -v -E '/etc/claude-mcp/(bak/|.*\.bak$|panel-index\.before-|traffic/)' | \
+	grep -v -E '\.(dat|mmdb|metadb)$' | sort -u > /tmp/cmcp_bk.list
+tar czf /tmp/cmcp_bk.tgz -T /tmp/cmcp_bk.list 2>/dev/null
+sz=$(wc -c < /tmp/cmcp_bk.tgz)
+[ "$sz" -gt 1000 ] || { echo "打包失败"; exit 1; }
+[ "$sz" -lt 20000000 ] || { echo "备份太大（$sz 字节）"; exit 1; }
+name="$(uci -q get system.@system[0].hostname || echo router)-$(date +%Y%m%d-%H%M)"
+r=$(curl -s -m 120 -X POST -H 'Content-Type: application/gzip' --data-binary @/tmp/cmcp_bk.tgz "$URL/bk/$RKEY?name=$name&kind=$kind&files=$(wc -l < /tmp/cmcp_bk.list)")
+case "$r" in
+	*'"ok":true'*) date +%s > "$D/backup_last"; echo "$r" ;;
+	*) echo "上传失败：$r"; [ "$kind" = auto ] && /usr/sbin/cmcp-notify warn backup "云端自动备份失败" "$r"; exit 1 ;;
+esac

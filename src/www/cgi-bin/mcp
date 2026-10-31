@@ -1,0 +1,2711 @@
+#!/usr/bin/ucode
+// Claude 路由器连接器 (MCP over HTTP, CGI)
+// 运行在 OpenWrt 自带的 ucode + uhttpd 上，无需安装额外运行环境。
+'use strict';
+
+import { readfile, writefile, popen, stat, stdin, rename, mkdir, open as fs_open } from 'fs';
+
+const VERSION = '2.2.0';
+const CONF_PATH = getenv('CLAUDE_MCP_CONF') || '/etc/claude-mcp/config.json';
+const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
+
+/* ---------------- 基础工具 ---------------- */
+
+function shq(s) {
+	return "'" + replace('' + s, "'", "'\\''") + "'";
+}
+
+function sh(cmd) {
+	let p = popen('export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ' + cmd + ' 2>&1', 'r');
+	if (!p)
+		return { code: -1, out: '' };
+	let out = p.read('all') ?? '';
+	let code = p.close();
+	return { code, out };
+}
+
+function trim_nl(s) {
+	return rtrim(s ?? '', '\r\n');
+}
+
+function urlenc(s) {
+	let o = '';
+	s = '' + s;
+	for (let i = 0; i < length(s); i++) {
+		let c = ord(s, i);
+		if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) ||
+		    c == 45 || c == 46 || c == 95 || c == 126)
+			o += chr(c);
+		else
+			o += sprintf('%%%02X', c);
+	}
+	return o;
+}
+
+function fmt_bytes(n) {
+	n = +n || 0;
+	if (n < 1024) return sprintf('%dB', n);
+	if (n < 1048576) return sprintf('%.1fKB', n / 1024);
+	if (n < 1073741824) return sprintf('%.1fMB', n / 1048576);
+	return sprintf('%.2fGB', n / 1073741824);
+}
+
+function now_str() {
+	let t = localtime();
+	return sprintf('%04d%02d%02d-%02d%02d%02d', t.year, t.mon, t.mday, t.hour, t.min, t.sec);
+}
+
+let CONF = null;
+function conf() {
+	if (CONF)
+		return CONF;
+	let raw = readfile(CONF_PATH);
+	CONF = (raw ? json(raw) : null) ?? {};
+	CONF.uci = CONF.uci || 'uci';
+	CONF.init_dir = CONF.init_dir || '/etc/init.d';
+	CONF.custom_dir = CONF.custom_dir || '/etc/openclash/custom';
+	CONF.openclash_log = CONF.openclash_log || '/tmp/openclash.log';
+	return CONF;
+}
+
+function uci_get(key) {
+	let r = sh(conf().uci + ' -q get ' + shq(key));
+	return r.code == 0 ? trim_nl(r.out) : null;
+}
+
+/* ---------------- Clash / mihomo 控制接口 ---------------- */
+
+function controller() {
+	let c = conf();
+	let base = c.api_base, secret = c.api_secret;
+	if (!base) {
+		let port = uci_get('openclash.config.cn_port') || '9090';
+		base = 'http://127.0.0.1:' + port;
+	}
+	if (secret == null)
+		secret = uci_get('openclash.config.dashboard_password') ?? '';
+	return { base, secret };
+}
+
+function api(method, path, body, timeout) {
+	let ctl = controller();
+	let cmd = sprintf("curl -sS --noproxy '*' -m %d -X %s", timeout || 10, method);
+	if (length(ctl.secret))
+		cmd += ' -H ' + shq('Authorization: Bearer ' + ctl.secret);
+	if (body != null)
+		cmd += " -H 'Content-Type: application/json' --data-binary " + shq(sprintf('%J', body));
+	cmd += " -w '\\n%{http_code}' " + shq(ctl.base + path);
+
+	let r = sh(cmd);
+	let out = r.out, pos = -1;
+	for (let i = length(out) - 1; i >= 0; i--)
+		if (ord(out, i) == 10) { pos = i; break; }
+
+	let status = +(pos >= 0 ? substr(out, pos + 1) : out) || 0;
+	let text = pos >= 0 ? substr(out, 0, pos) : '';
+
+	if (r.code != 0 || status == 0)
+		die(sprintf('无法连接 Clash 控制接口 %s（OpenClash 是否在运行？）%s', ctl.base, trim_nl(out)));
+
+	let data = null;
+	if (length(text))
+		try { data = json(text); } catch (e) { data = text; }
+
+	if (status >= 400)
+		die(sprintf('Clash 接口返回 %d：%s', status,
+			type(data) == 'object' ? (data.message ?? sprintf('%J', data)) : text));
+
+	return data;
+}
+
+const GROUP_TYPES = { Selector: 1, URLTest: 1, Fallback: 1, LoadBalance: 1, Relay: 1, Smart: 1 };
+
+function last_delay(p) {
+	let h = p?.history;
+	if (type(h) == 'array' && length(h))
+		return h[length(h) - 1].delay;
+	return null;
+}
+
+/* ---------------- 工具实现 ---------------- */
+
+const T = {};
+
+T.router_status = function() {
+	let lines = [];
+	let ver = null, cfg = null, conns = null;
+	try { ver = api('GET', '/version'); } catch (e) { push(lines, 'Clash 内核：未运行或无法连接（' + e + '）'); }
+	if (ver) {
+		push(lines, sprintf('Clash 内核：运行中，版本 %s%s', ver.version ?? '?', ver.meta ? '（Meta）' : ''));
+		try { cfg = api('GET', '/configs'); } catch (e) {}
+		try { conns = api('GET', '/connections'); } catch (e) {}
+	}
+	if (cfg)
+		push(lines, sprintf('代理模式：%s，混合端口：%s', cfg.mode ?? '?', cfg['mixed-port'] ?? '?'));
+	if (conns)
+		push(lines, sprintf('当前连接数：%d，累计下载 %s，上传 %s',
+			length(conns.connections ?? []), fmt_bytes(conns.downloadTotal), fmt_bytes(conns.uploadTotal)));
+
+	const keys = {
+		'enable': 'OpenClash 开关',
+		'config_path': '当前配置文件',
+		'en_mode': '运行模式',
+		'enable_custom_clash_rules': '自定义规则开关',
+		'cn_port': '控制面板端口',
+		'china_ip_route': '区域绕过(大陆)',
+	};
+	for (let k, label in keys) {
+		let v = uci_get('openclash.config.' + k);
+		if (v != null)
+			push(lines, label + '：' + v);
+	}
+
+	let oaf = sh('pgrep -f oafd >/dev/null 2>&1 && echo yes || echo no');
+	push(lines, 'OAF 应用过滤进程：' + (trim_nl(oaf.out) == 'yes' ? '运行中' : '未检测到'));
+	return join('\n', lines);
+};
+
+T.list_proxy_groups = function(a) {
+	let data = api('GET', '/proxies');
+	let px = data?.proxies ?? {};
+
+	if (a.group) {
+		let g = px[a.group];
+		if (!g) die('找不到策略组：' + a.group);
+		let out = [sprintf('策略组 %s（%s），当前选择：%s', a.group, g.type, g.now ?? '-')];
+		let kw = a.filter ? lc(a.filter) : null;
+		for (let name in (g.all ?? [])) {
+			if (kw && index(lc(name), kw) < 0) continue;
+			let p = px[name] ?? {};
+			let d = last_delay(p);
+			push(out, sprintf('%s %s | %s | %s', name == g.now ? '▶' : '·', name, p.type ?? '?',
+				d == null ? '未测' : (d == 0 ? '超时' : d + 'ms')));
+		}
+		return join('\n', out);
+	}
+
+	let out = ['策略组列表（名称 | 类型 | 当前选择 | 节点数）：'];
+	for (let name, p in px) {
+		if (!GROUP_TYPES[p.type] || name == 'GLOBAL') continue;
+		push(out, sprintf('%s | %s | %s | %d', name, p.type, p.now ?? '-', length(p.all ?? [])));
+	}
+	return join('\n', out);
+};
+
+T.test_delay = function(a) {
+	if (!a.name) die('缺少 name');
+	let url = a.url || 'https://www.gstatic.com/generate_204';
+	let tmo = +a.timeout || 5000;
+	let q = sprintf('?url=%s&timeout=%d', urlenc(url), tmo);
+
+	let px = api('GET', '/proxies')?.proxies ?? {};
+	let p = px[a.name];
+	if (!p) die('找不到节点或策略组：' + a.name);
+
+	if (GROUP_TYPES[p.type]) {
+		let res = api('GET', '/group/' + urlenc(a.name) + '/delay' + q, null, tmo / 1000 + 20);
+		let rows = [];
+		for (let n in (p.all ?? []))
+			push(rows, { n, d: res?.[n] });
+		rows = sort(rows, (x, y) => (x.d ?? 1e9) - (y.d ?? 1e9));
+		let out = [sprintf('策略组 %s 测速结果（%s）：', a.name, url)];
+		for (let r in rows)
+			push(out, sprintf('%s：%s', r.n, r.d == null ? '超时/不可用' : r.d + 'ms'));
+		return join('\n', out);
+	}
+
+	let res = null;
+	try {
+		res = api('GET', '/proxies/' + urlenc(a.name) + '/delay' + q, null, tmo / 1000 + 5);
+	} catch (e) {
+		return sprintf('%s：超时或不可用（%s）', a.name, e);
+	}
+	return sprintf('%s：%sms', a.name, res?.delay ?? '?');
+};
+
+/* 面板的域名（比如 router.example.com → example.com）：切节点时不断开访问面板的连接 */
+function panel_domain() {
+	let h = trim(readfile('/etc/claude-mcp/hostname') ?? '');
+	let p = split(h, '.');
+	return length(p) > 2 ? join('.', slice(p, 1)) : h;
+}
+T.switch_proxy = function(a) {
+	if (!a.group || !a.node) die('需要 group 和 node');
+	let px = api('GET', '/proxies')?.proxies ?? {};
+	let g = px[a.group];
+	if (!g) die('找不到策略组：' + a.group);
+	if (g.type != 'Selector') die(sprintf('策略组 %s 是 %s 类型，只有 Selector 类型可以手动切换', a.group, g.type));
+	if (index(g.all ?? [], a.node) < 0) die(sprintf('节点「%s」不在策略组 %s 中，请先用 list_proxy_groups 查看准确名称', a.node, a.group));
+
+	let before = g.now;
+	api('PUT', '/proxies/' + urlenc(a.group), { name: a.node });
+	let after = api('GET', '/proxies/' + urlenc(a.group))?.now;
+	let msg = sprintf('已切换策略组 %s：%s → %s', a.group, before, after);
+	if (a.close_connections) {
+		// 只断开走这个策略组的连接；面板自己的连接保留，并且等回复送出去以后再断，
+		// 否则手机收不到「切换成功」，还会以为连不上路由器
+		let d = panel_domain(), ids = [];
+		for (let c in (api('GET', '/connections')?.connections ?? [])) {
+			let m = c.metadata ?? {}, h = lc(m.host || m.sniffHost || '');
+			if (length(d) && (h == d || substr(h, -length(d) - 1) == '.' + d)) continue;
+			if (index(c.chains ?? [], a.group) < 0) continue;
+			push(ids, c.id);
+		}
+		if (length(ids)) {
+			let ctl = controller();
+			writefile('/tmp/cmcp_close_ids', join('\n', ids) + '\n');
+			sh(sprintf("nohup sh -c 'sleep 1; while read id; do curl -s --noproxy \"*\" -m 3 -X DELETE -H %s %s/connections/$id >/dev/null 2>&1; done < /tmp/cmcp_close_ids; rm -f /tmp/cmcp_close_ids' >/dev/null 2>&1 </dev/null &",
+				replace(shq('Authorization: Bearer ' + ctl.secret), "'", "'\\''"), ctl.base));
+		}
+		msg += sprintf('，并断开了走这个策略组的 %d 条旧连接（面板自己的连接保留）', length(ids));
+	}
+	return msg;
+};
+
+T.set_mode = function(a) {
+	if (index(['rule', 'global', 'direct'], a.mode) < 0) die('mode 只能是 rule / global / direct');
+	api('PATCH', '/configs', { mode: a.mode });
+	return '代理模式已改为：' + a.mode + '（临时生效，OpenClash 重启后恢复配置中的模式）';
+};
+
+T.list_connections = function(a) {
+	let data = api('GET', '/connections');
+	let list = data?.connections ?? [];
+	let kw = a.filter ? lc(a.filter) : null;
+	let limit = +a.limit || 50;
+	let rows = [];
+
+	for (let c in list) {
+		let m = c.metadata ?? {};
+		let host = (m.host || m.sniffHost || m.destinationIP || '?') + ':' + (m.destinationPort ?? '');
+		let chain = join(' ← ', c.chains ?? []);
+		let rule = (c.rule ?? '') + (length(c.rulePayload ?? '') ? ':' + c.rulePayload : '');
+		let line = sprintf('%s | %s | %s | %s | ↓%s ↑%s | 来自 %s | id=%s',
+			host, m.network ?? '', rule, chain, fmt_bytes(c.download), fmt_bytes(c.upload),
+			m.sourceIP ?? '?', c.id);
+		if (kw && index(lc(line), kw) < 0) continue;
+		push(rows, { dl: +c.download || 0, line });
+	}
+
+	rows = sort(rows, (x, y) => y.dl - x.dl);
+	let out = [sprintf('活跃连接 %d 条%s，显示 %d 条（主机 | 协议 | 命中规则 | 代理链 | 流量 | 来源 | id）：',
+		length(list), kw ? '（过滤后 ' + length(rows) + ' 条）' : '', length(rows) < limit ? length(rows) : limit)];
+	for (let i = 0; i < length(rows) && i < limit; i++)
+		push(out, rows[i].line);
+	return join('\n', out);
+};
+
+T.close_connections = function(a) {
+	if (a.id) {
+		api('DELETE', '/connections/' + urlenc(a.id));
+		return '已断开连接 ' + a.id;
+	}
+	api('DELETE', '/connections');
+	return '已断开全部连接（相当于 OpenClash 的「关闭链接」）';
+};
+
+T.list_rules = function(a) {
+	let rules = api('GET', '/rules')?.rules ?? [];
+	let kw = a.filter ? lc(a.filter) : null;
+	let limit = +a.limit || 60, offset = +a.offset || 0;
+	let rows = [];
+	for (let i = 0; i < length(rules); i++) {
+		let r = rules[i];
+		let line = sprintf('%d. %s,%s → %s', i + 1, r.type, r.payload, r.proxy);
+		if (kw && index(lc(line), kw) < 0) continue;
+		push(rows, line);
+	}
+	let out = [sprintf('生效规则共 %d 条%s：', length(rules), kw ? '，匹配 ' + length(rows) + ' 条' : '')];
+	for (let i = offset; i < length(rows) && i < offset + limit; i++)
+		push(out, rows[i]);
+	if (length(rows) > offset + limit)
+		push(out, sprintf('……还有 %d 条，可用 offset=%d 继续查看', length(rows) - offset - limit, offset + limit));
+	return join('\n', out);
+};
+
+T.get_logs = function(a) {
+	let lvl = a.level || 'info';
+	if (index(['debug', 'info', 'warning', 'error'], lvl) < 0) lvl = 'info';
+	let secs = +a.seconds || 3;
+	if (secs < 1) secs = 1;
+	if (secs > 15) secs = 15;
+
+	let ctl = controller();
+	let cmd = sprintf("curl -sS -N --noproxy '*' -m %d", secs);
+	if (length(ctl.secret))
+		cmd += ' -H ' + shq('Authorization: Bearer ' + ctl.secret);
+	cmd += ' ' + shq(ctl.base + '/logs?level=' + lvl);
+	let r = sh(cmd);
+
+	let kw = a.filter ? lc(a.filter) : null;
+	let out = [];
+	for (let l in split(r.out, '\n')) {
+		l = trim(l);
+		if (!length(l) || substr(l, 0, 1) != '{') continue;
+		let o = null;
+		try { o = json(l); } catch (e) { continue; }
+		let s = sprintf('[%s] %s', o.type, o.payload);
+		if (kw && index(lc(s), kw) < 0) continue;
+		push(out, s);
+	}
+	if (!length(out))
+		return sprintf('采集了 %d 秒的实时日志（级别 %s），期间没有新日志。可以让用户先去操作对应 App，再调用一次。', secs, lvl);
+	return sprintf('最近 %d 秒实时日志（%d 条）：\n', secs, length(out)) + join('\n', out);
+};
+
+function rules_path(n) {
+	return conf().custom_dir + (+n == 2 ? '/openclash_custom_rules_2.list' : '/openclash_custom_rules.list');
+}
+
+T.get_custom_rules = function(a) {
+	let p = rules_path(a.file);
+	let txt = readfile(p);
+	if (txt == null) die('读取失败：' + p);
+	let en = uci_get('openclash.config.enable_custom_clash_rules');
+	let lines = split(txt, '\n');
+	let out = [];
+	for (let i = 0; i < length(lines); i++) {
+		if (a.hide_comments && match(lines[i], /^\s*#/)) continue;
+		push(out, sprintf('%3d| %s', i + 1, lines[i]));
+	}
+	return sprintf('文件：%s（%s）\n自定义规则开关：%s\n', p,
+		+a.file == 2 ? '候补匹配，排在原有规则之后' : '优先匹配，排在原有规则之前',
+		en == '1' ? '已开启' : '未开启') + join('\n', out);
+};
+
+function restart_openclash_bg() {
+	sh(sprintf("nohup sh -c 'sleep 2; %s/openclash restart' >/dev/null 2>&1 </dev/null &", conf().init_dir));
+}
+
+T.set_custom_rules = function(a) {
+	if (type(a.content) != 'string') die('content 必须是完整的文件内容（字符串）');
+	let content = a.content;
+	if (!match(content, /(^|\n)rules:[ \t]*(\n|$)/))
+		die('内容里缺少顶格的「rules:」行。请保留文件原有的「rules:」行，规则写在它下面，每行以「- 」开头。');
+
+	// 检查规则行：rules: 之后、非注释、非空行必须以 "- " 开头
+	let lines = split(content, '\n'), in_rules = false, bad = [];
+	for (let i = 0; i < length(lines); i++) {
+		let l = lines[i];
+		if (match(l, /^rules:[ \t]*$/)) { in_rules = true; continue; }
+		if (match(l, /^[A-Za-z-]+:/)) { in_rules = false; continue; }
+		if (!in_rules || match(l, /^\s*(#|$)/)) continue;
+		if (!match(l, /^- [A-Z-]+,/))
+			push(bad, sprintf('第 %d 行：%s', i + 1, l));
+		else if (match(l, /，/))
+			push(bad, sprintf('第 %d 行含全角逗号：%s', i + 1, l));
+	}
+	if (length(bad) && !a.force)
+		die('以下规则行格式可疑（应顶格以「- 类型,」开头、使用半角逗号）。确认无误可传 force=true：\n' + join('\n', bad));
+
+	// 检查节点/策略组名是否存在（Clash 在运行时才检查）
+	let missing = [];
+	try {
+		let px = api('GET', '/proxies')?.proxies ?? {};
+		const builtin = { DIRECT: 1, REJECT: 1, 'REJECT-DROP': 1, PASS: 1, COMPATIBLE: 1 };
+		in_rules = false;
+		for (let l in lines) {
+			if (match(l, /^rules:[ \t]*$/)) { in_rules = true; continue; }
+			if (match(l, /^[A-Za-z-]+:/)) { in_rules = false; continue; }
+			if (!in_rules || !match(l, /^- /)) continue;
+			let parts = split(replace(substr(l, 2), /\s+#.*$/, ''), ',');
+			let target = null;
+			for (let j = length(parts) - 1; j >= 1; j--) {
+				let t = trim(parts[j]);
+				if (t == 'no-resolve' || t == 'src') continue;
+				target = t; break;
+			}
+			if (target && !builtin[target] && !px[target] && index(missing, target) < 0)
+				push(missing, target);
+		}
+	} catch (e) {}
+	if (length(missing) && !a.force)
+		die('这些目标在当前配置里不存在（OpenClash 会跳过对应规则）：\n' + join('\n', missing) +
+			'\n请用 list_proxy_groups 查看准确的节点名后修改；确认无误可传 force=true。');
+
+	let p = rules_path(a.file);
+	let old = readfile(p);
+	if (old != null)
+		writefile(p + '.bak', old);
+	if (!writefile(p + '.tmp', content) || !rename(p + '.tmp', p))
+		die('写入失败：' + p);
+
+	let msg = '已保存 ' + p + (old != null ? '（旧版本备份为 .bak，可用 restore_custom_rules 还原）' : '');
+	if (a.enable !== false && uci_get('openclash.config.enable_custom_clash_rules') != '1') {
+		sh(conf().uci + ' set openclash.config.enable_custom_clash_rules=1 && ' + conf().uci + ' commit openclash');
+		msg += '，并已打开「自定义规则」开关';
+	}
+	if (a.apply !== false) {
+		restart_openclash_bg();
+		msg += '。OpenClash 正在后台重启（约 10–30 秒，期间网络会短暂中断），之后用 list_rules 确认规则已生效';
+	} else
+		msg += '。尚未生效，需调用 restart_openclash';
+	return msg;
+};
+
+T.restore_custom_rules = function(a) {
+	let p = rules_path(a.file);
+	let bak = readfile(p + '.bak');
+	if (bak == null) die('没有找到备份：' + p + '.bak');
+	let cur = readfile(p);
+	writefile(p, bak);
+	if (cur != null) writefile(p + '.bak', cur);
+	if (a.apply !== false) restart_openclash_bg();
+	return '已从备份还原 ' + p + (a.apply !== false ? '，OpenClash 正在后台重启' : '');
+};
+
+T.restart_openclash = function() {
+	restart_openclash_bg();
+	return 'OpenClash 正在后台重启（约 10–30 秒，期间网络会短暂中断）。稍后用 router_status 或 openclash_log 查看结果。';
+};
+
+T.openclash_log = function(a) {
+	let n = +a.lines || 60;
+	if (n > 400) n = 400;
+	let r = sh(sprintf('tail -n %d %s', n, shq(conf().openclash_log)));
+	let out = r.out;
+	if (a.filter) {
+		let kw = lc(a.filter), keep = [];
+		for (let l in split(out, '\n'))
+			if (index(lc(l), kw) >= 0) push(keep, l);
+		out = join('\n', keep);
+	}
+	return length(trim(out)) ? out : '（日志为空）';
+};
+
+/* ---------------- OAF 应用过滤 ---------------- */
+
+T.oaf_show = function(a) {
+	let out = [];
+	let r = sh(conf().uci + ' show appfilter');
+	push(out, '== uci show appfilter ==');
+	push(out, r.code == 0 ? trim_nl(r.out) : '（读取失败，OAF 可能未安装）');
+	for (let f in ['/proc/net/af_client', '/tmp/af_client.list']) {
+		let t = readfile(f);
+		if (t != null) {
+			push(out, '== ' + f + ' ==');
+			push(out, trim_nl(t));
+		}
+	}
+	return join('\n', out);
+};
+
+T.oaf_find_app = function(a) {
+	if (!a.keyword) die('缺少 keyword');
+	let kw = lc(a.keyword), out = [], cls = '';
+	for (let f in (conf().feature_file ? [conf().feature_file] : ['/tmp/feature.cfg', '/etc/appfilter/feature.cfg', '/usr/share/appfilter/feature.cfg'])) {
+		let t = readfile(f);
+		if (t == null) continue;
+		for (let l in split(t, '\n')) {
+			let m = match(l, /^#class\s+(\S+)\s+(.*)$/);
+			if (m) { cls = m[1] + ' ' + m[2]; continue; }
+			let m2 = match(l, /^(\d+)\s+([^:]+):/);
+			if (m2 && index(lc(m2[2]), kw) >= 0)
+				push(out, sprintf('应用ID %s | %s | 分类 %s', m2[1], m2[2], cls));
+		}
+		return length(out) ? '特征库 ' + f + '：\n' + join('\n', out) : '特征库里没有找到包含「' + a.keyword + '」的应用';
+	}
+	die('没有找到 OAF 特征库文件');
+};
+
+T.oaf_uci = function(a) {
+	let ops = a.operations;
+	if (type(ops) != 'array' || !length(ops)) die('operations 必须是非空数组');
+	let U = conf().uci, log = [];
+	for (let op in ops) {
+		let k = op.key ?? '';
+		if (op.op != 'add' && !match(k, /^appfilter(\.(@[A-Za-z0-9_]+\[-?[0-9]+\]|[A-Za-z0-9_-]+)){1,2}$/))
+			die('只允许修改 appfilter 配置，非法 key：' + k);
+		let cmd;
+		switch (op.op) {
+		case 'set':      cmd = sprintf('%s set %s', U, shq(k + '=' + (op.value ?? ''))); break;
+		case 'add_list': cmd = sprintf('%s add_list %s', U, shq(k + '=' + (op.value ?? ''))); break;
+		case 'del_list': cmd = sprintf('%s del_list %s', U, shq(k + '=' + (op.value ?? ''))); break;
+		case 'delete':   cmd = sprintf('%s delete %s', U, shq(k)); break;
+		case 'add':
+			if (!match(op.value ?? '', /^[A-Za-z0-9_]+$/)) die('add 需要 value=节类型');
+			cmd = sprintf('%s add appfilter %s', U, op.value); break;
+		default: die('不支持的操作：' + op.op);
+		}
+		let r = sh(cmd);
+		push(log, sprintf('%s %s %s → %s', op.op, k, op.value ?? '', r.code == 0 ? ('成功' + (length(trim(r.out)) ? '：' + trim(r.out) : '')) : '失败：' + trim(r.out)));
+		if (r.code != 0) {
+			sh(U + ' revert appfilter');
+			die('操作失败，已撤销本次所有未提交的修改：\n' + join('\n', log));
+		}
+	}
+	if (a.commit !== false) {
+		sh(U + ' commit appfilter');
+		push(log, '已提交');
+		if (a.restart !== false) {
+			sh(sprintf("nohup sh -c '%s/appfilter restart' >/dev/null 2>&1 </dev/null &", conf().init_dir));
+			push(log, 'OAF 正在后台重启');
+		}
+	}
+	return join('\n', log);
+};
+
+/* ---------------- 系统 / 设备 / 网络 ---------------- */
+
+T.system_info = function() {
+	let out = [];
+	let model = trim(readfile('/tmp/sysinfo/model') ?? readfile('/proc/device-tree/model') ?? '');
+	if (length(model)) push(out, '型号：' + model);
+
+	let osr = readfile('/etc/openwrt_release') ?? '';
+	let m = match(osr, /DISTRIB_DESCRIPTION='([^']*)'/);
+	if (m) push(out, '系统：' + m[1]);
+
+	let up = readfile('/proc/uptime');
+	if (up) {
+		let s = +split(up, ' ')[0];
+		push(out, sprintf('运行时间：%d天%d时%d分', s / 86400, (s % 86400) / 3600, (s % 3600) / 60));
+	}
+
+	let la = readfile('/proc/loadavg');
+	if (la) {
+		let p = split(trim(la), ' ');
+		push(out, sprintf('CPU 负载：%s / %s / %s（1/5/15 分钟）', p[0], p[1], p[2]));
+	}
+
+	let mem = readfile('/proc/meminfo') ?? '';
+	let tot = +(match(mem, /MemTotal:\s+(\d+)/)?.[1] ?? 0);
+	let av = +(match(mem, /MemAvailable:\s+(\d+)/)?.[1] ?? 0);
+	if (tot)
+		push(out, sprintf('内存：已用 %s / 共 %s（%d%%）', fmt_bytes((tot - av) * 1024), fmt_bytes(tot * 1024), (tot - av) * 100 / tot));
+
+	let temps = [];
+	let tz = sh("for z in /sys/class/thermal/thermal_zone*/temp; do [ -f \"$z\" ] && cat \"$z\"; done");
+	for (let l in split(trim(tz.out), '\n')) {
+		let v = +l;
+		if (v > 1000) v = v / 1000;
+		if (v > 0) push(temps, sprintf('%.1f°C', v));
+	}
+	if (length(temps)) push(out, '温度：' + join(' / ', temps));
+
+	let df = sh("df -h / /overlay /tmp 2>/dev/null | grep -v '^Filesystem'");
+	if (length(trim(df.out))) {
+		push(out, '存储（文件系统 大小 已用 可用 使用率 挂载点）：');
+		for (let l in split(trim(df.out), '\n')) push(out, '  ' + l);
+	}
+	return join('\n', out);
+};
+
+T.net_speed = function(a) {
+	let secs = +a.seconds || 2;
+	if (secs < 1) secs = 1;
+	if (secs > 10) secs = 10;
+	let r = sh(sprintf('cat /proc/net/dev; echo @@@; sleep %d; cat /proc/net/dev', secs));
+	let halves = split(r.out, '@@@');
+	if (length(halves) < 2) die('采样失败');
+	function parse(txt) {
+		let o = {};
+		for (let l in split(txt, '\n')) {
+			let mm = match(l, /^\s*([A-Za-z0-9._@-]+):\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/);
+			if (mm) o[mm[1]] = { rx: +mm[2], tx: +mm[3] };
+		}
+		return o;
+	}
+	let s1 = parse(halves[0]), s2 = parse(halves[1]);
+	let rows = [];
+	for (let k, d in s2) {
+		if (k == 'lo' || (a.interface && k != a.interface)) continue;
+		let o = s1[k] ?? d;
+		push(rows, { k, rx: (d.rx - o.rx) / secs, tx: (d.tx - o.tx) / secs, total_rx: d.rx, total_tx: d.tx });
+	}
+	rows = sort(rows, (x, y) => (y.rx + y.tx) - (x.rx + x.tx));
+	let out = [sprintf('各接口实时速率（%d 秒平均，↓接收 ↑发送 | 开机以来累计）：', secs)];
+	for (let x in rows)
+		push(out, sprintf('%s  ↓%s/s ↑%s/s | 累计 ↓%s ↑%s', x.k, fmt_bytes(x.rx), fmt_bytes(x.tx), fmt_bytes(x.total_rx), fmt_bytes(x.total_tx)));
+	return join('\n', out);
+};
+
+T.device_list = function() {
+	let arp = {};
+	for (let l in split(readfile('/proc/net/arp') ?? '', '\n')) {
+		let mm = match(l, /^(\d+\.\d+\.\d+\.\d+)\s+\S+\s+(0x\S+)\s+([0-9a-fA-F:]{17})\s+\S+\s+(\S+)/);
+		if (mm && mm[3] != '00:00:00:00:00:00' && mm[2] != '0x0')
+			arp[lc(mm[3])] = { ip: mm[1], dev: mm[4] };
+	}
+	let names = {};
+	for (let l in split(readfile('/etc/ethers') ?? '', '\n')) {
+		let mm = match(l, /^([0-9a-fA-F:]{17})\s+(\S+)/);
+		if (mm) names[lc(mm[1])] = mm[2];
+	}
+	let out = ['设备列表（● 在线 ○ 离线 | IP | MAC | 名称 | 接口）：'], seen = {};
+	for (let l in split(trim(readfile('/tmp/dhcp.leases') ?? ''), '\n')) {
+		let p = split(l, ' ');
+		if (length(p) < 4) continue;
+		let mac = lc(p[1]);
+		seen[mac] = 1;
+		push(out, sprintf('%s %s | %s | %s | %s', arp[mac] ? '●' : '○', p[2], mac,
+			p[3] != '*' ? p[3] : (names[mac] ?? '(未知)'), arp[mac]?.dev ?? '-'));
+	}
+	for (let mac, e in arp) {
+		if (seen[mac]) continue;
+		push(out, sprintf('● %s | %s | %s | %s', e.ip, mac, names[mac] ?? '(静态 IP / 无 DHCP 记录)', e.dev));
+	}
+	return join('\n', out);
+};
+
+T.network_info = function() {
+	let out = [];
+	for (let ifc in ['wan', 'wan6']) {
+		let r = sh(sprintf('ubus call network.interface.%s status', ifc));
+		let d = null;
+		try { d = json(r.out); } catch (e) {}
+		if (type(d) != 'object') continue;
+		push(out, sprintf('%s：%s，协议 %s，设备 %s', ifc, d.up ? '已连接' : '未连接', d.proto ?? '?', d.l3_device ?? d.device ?? '?'));
+		for (let x in (d['ipv4-address'] ?? [])) push(out, '  IPv4：' + x.address + '/' + x.mask);
+		for (let x in (d['ipv6-address'] ?? [])) push(out, '  IPv6：' + x.address + '/' + x.mask);
+		for (let x in (d.route ?? [])) if (x.target == '0.0.0.0' || x.target == '::') push(out, '  网关：' + x.nexthop);
+		if (length(d['dns-server'] ?? [])) push(out, '  DNS：' + join(' ', d['dns-server']));
+		if (d.uptime) push(out, sprintf('  已连接 %d 小时 %d 分', d.uptime / 3600, (d.uptime % 3600) / 60));
+	}
+	if (!length(out)) push(out, '（无法通过 ubus 读取 WAN 状态）');
+	push(out, '== 接口地址 ==');
+	push(out, trim_nl(sh("ip -o -4 addr show | awk '{print $2, $4}'; ip -o -6 addr show scope global | awk '{print $2, $4}'").out));
+	push(out, '== 默认路由 ==');
+	push(out, trim_nl(sh('ip route show default; ip -6 route show default').out));
+	return join('\n', out);
+};
+
+/* ---------------- 服务 / 重启 ---------------- */
+
+function valid_service(name) {
+	if (!match(name ?? '', /^[A-Za-z0-9_.-]+$/)) die('非法服务名：' + name);
+	if (!stat(conf().init_dir + '/' + name)) die('服务不存在：' + name + '（用 list_services 查看）');
+}
+
+T.list_services = function() {
+	let dir = conf().init_dir;
+	let r = sh(sprintf("cd %s && for s in *; do [ -x \"$s\" ] || continue; if ./\"$s\" enabled >/dev/null 2>&1; then e=是; else e=否; fi; if ./\"$s\" running >/dev/null 2>&1; then u=运行中; else u=-; fi; echo \"$s | $e | $u\"; done", shq(dir)));
+	return '服务（名称 | 开机自启 | 运行状态，部分服务不支持状态查询显示 -）：\n' + trim_nl(r.out);
+};
+
+T.service_control = function(a) {
+	valid_service(a.name);
+	if (index(['restart', 'start', 'stop', 'reload', 'enable', 'disable'], a.action) < 0)
+		die('action 只能是 restart / start / stop / reload / enable / disable');
+	if (a.name == 'claude-mcp' && index(['stop', 'disable'], a.action) >= 0)
+		die('停止或禁用 claude-mcp 会让我立刻失去连接，且无法远程恢复。如确实需要，请在路由器终端手动执行。');
+
+	let cmd = sprintf('%s/%s %s', conf().init_dir, a.name, a.action);
+	const slow = { network: 1, firewall: 1, openclash: 1, 'claude-mcp': 1, dnsmasq: 1, uhttpd: 1, odhcpd: 1 };
+	if (slow[a.name] && index(['restart', 'stop', 'reload', 'start'], a.action) >= 0) {
+		sh(sprintf("nohup sh -c 'sleep 1; %s' >/dev/null 2>&1 </dev/null &", cmd));
+		return sprintf('已在后台执行：%s。这类服务会短暂影响网络或本次连接，等 10–30 秒后再查看状态。', cmd);
+	}
+	let r = sh(cmd);
+	return sprintf('%s → %s%s', cmd, r.code == 0 ? '完成' : '失败（退出码 ' + r.code + '）', length(trim(r.out)) ? '\n' + trim(r.out) : '');
+};
+
+T.reboot_router = function(a) {
+	if (a.confirm !== true)
+		die('重启会让整个网络中断约 1–3 分钟。请先征得用户同意，再以 confirm=true 调用。');
+	sh("nohup sh -c 'sleep 3; reboot' >/dev/null 2>&1 </dev/null &");
+	return '路由器将在 3 秒后重启，约 1–3 分钟后恢复。重启后连接器会自动重连，地址不变。';
+};
+
+/* ---------------- 防火墙 / 端口转发 ---------------- */
+
+T.firewall_overview = function() {
+	let U = conf().uci;
+	let r = sh(U + ' -q show firewall');
+	let secs = {}, order = [];
+	for (let l in split(r.out, '\n')) {
+		let mm = match(l, /^firewall\.([^.=]+)=(\S+)$/);
+		if (mm) { secs[mm[1]] = { _type: mm[2] }; push(order, mm[1]); continue; }
+		mm = match(l, /^firewall\.([^.=]+)\.([^=]+)=(.*)$/);
+		if (mm && secs[mm[1]]) secs[mm[1]][mm[2]] = replace(mm[3], /'/g, '');
+	}
+	let out = { zone: [], forwarding: [], redirect: [], rule: [] };
+	for (let i = 0; i < length(order); i++) {
+		let id = order[i], s = secs[id], ref = sprintf('firewall.%s', id);
+		switch (s._type) {
+		case 'zone':
+			push(out.zone, sprintf('%s：入站 %s / 出站 %s / 转发 %s，网络 %s%s  [%s]', s.name ?? '?', s.input ?? '-', s.output ?? '-', s.forward ?? '-', s.network ?? '-', s.masq == '1' ? '，NAT' : '', ref));
+			break;
+		case 'forwarding':
+			push(out.forwarding, sprintf('%s → %s  [%s]', s.src ?? '?', s.dest ?? '?', ref));
+			break;
+		case 'redirect':
+			push(out.redirect, sprintf('%s%s：%s %s 端口 %s → %s:%s  [%s]', s.enabled == '0' ? '（已停用）' : '', s.name ?? '(未命名)', s.src ?? 'wan', s.proto ?? 'tcp udp', s.src_dport ?? '?', s.dest_ip ?? '?', s.dest_port ?? s.src_dport ?? '', ref));
+			break;
+		case 'rule':
+			push(out.rule, sprintf('%s%s：%s→%s %s %s → %s  [%s]', s.enabled == '0' ? '（已停用）' : '', s.name ?? '(未命名)', s.src ?? '*', s.dest ?? '本机', s.proto ?? '', s.dest_port ? '端口 ' + s.dest_port : '', s.target ?? '?', ref));
+			break;
+		}
+	}
+	return join('\n', [
+		'== 区域 ==', ...out.zone,
+		'== 区域转发 ==', ...out.forwarding,
+		'== 端口转发 ==', ...(length(out.redirect) ? out.redirect : ['（无）']),
+		'== 通信规则 ==', ...out.rule,
+		'',
+		'添加端口转发可用 uci_set：op=add config=firewall value=redirect，再 set firewall.@redirect[-1].name/src/src_dport/dest/dest_ip/dest_port/proto，reload=firewall。'
+	]);
+};
+
+/* ---------------- 通用 uci ---------------- */
+
+const KEY_RE = /^[a-z0-9_-]+(\.(@[A-Za-z0-9_-]+\[-?[0-9]+\]|[A-Za-z0-9_-]+)){0,2}$/;
+const SECRET_RE = /(key|pass|secret|token|psk)/i;
+const BACKUP_DIR = '/etc/claude-mcp/uci-backup';
+
+T.uci_show = function(a) {
+	if (a.config == null)
+		return '配置文件列表：\n' + trim_nl(sh('ls ' + (conf().uci_dir || '/etc/config')).out) +
+			'\n\n用 config=<名称> 查看，常用：network（网络/接口）、wireless（Wi-Fi）、dhcp（DHCP/DNS）、firewall（防火墙）、system（系统）';
+	let k = a.config + (a.key ? '.' + a.key : '');
+	if (index(a.key ?? '', a.config + '.') == 0) k = a.key;
+	if (!match(k, KEY_RE)) die('非法配置名或 key：' + k);
+	let r = sh(sprintf('%s show %s', conf().uci, shq(k)));
+	if (r.code != 0) die('读取失败：' + trim(r.out));
+	return length(trim(r.out)) ? r.out : '（空）';
+};
+
+T.uci_set = function(a) {
+	let ops = a.operations;
+	if (type(ops) != 'array' || !length(ops)) die('operations 必须是非空数组');
+	let U = conf().uci, cfgs = {}, log = [];
+
+	for (let op in ops) {
+		let k = op.op == 'add' ? (op.config ?? '') : (op.key ?? '');
+		if (!match(k, KEY_RE)) die('非法 key：' + k);
+		if (op.op != 'add' && !match(k, /\./)) die('key 需要包含配置名和节名，如 wireless.@wifi-iface[0].ssid：' + k);
+		cfgs[split(k, '.')[0]] = 1;
+	}
+	if (cfgs['claude-mcp']) die('不允许通过本工具修改 claude-mcp 自身配置');
+
+	mkdir('/etc/claude-mcp');
+	mkdir(BACKUP_DIR);
+	let stamp = now_str();
+	for (let c in cfgs) {
+		let e = sh(sprintf('%s export %s', U, shq(c)));
+		if (e.code == 0) writefile(sprintf('%s/%s.%s', BACKUP_DIR, c, stamp), e.out);
+	}
+
+	for (let op in ops) {
+		let k = op.key, v = op.value ?? '', cmd;
+		switch (op.op) {
+		case 'set':      cmd = sprintf('%s set %s', U, shq(k + '=' + v)); break;
+		case 'add_list': cmd = sprintf('%s add_list %s', U, shq(k + '=' + v)); break;
+		case 'del_list': cmd = sprintf('%s del_list %s', U, shq(k + '=' + v)); break;
+		case 'delete':   cmd = sprintf('%s delete %s', U, shq(k)); break;
+		case 'rename':   cmd = sprintf('%s rename %s', U, shq(k + '=' + v)); break;
+		case 'add':
+			if (!match(v, /^[A-Za-z0-9_-]+$/)) die('add 需要 value=节类型，如 redirect、rule、host');
+			k = op.config;
+			cmd = sprintf('%s add %s %s', U, shq(k), shq(v));
+			break;
+		default:
+			die('不支持的操作：' + op.op);
+		}
+		let r = sh(cmd);
+		let shown = (match(k, SECRET_RE) && op.op != 'add') ? '******' : v;
+		push(log, sprintf('%s %s %s → %s', op.op, k, shown, r.code == 0 ? ('成功' + (length(trim(r.out)) ? '：' + trim(r.out) : '')) : '失败：' + trim(r.out)));
+		if (r.code != 0) {
+			for (let c in cfgs) sh(U + ' revert ' + shq(c));
+			die('操作失败，已撤销本次全部修改：\n' + join('\n', log));
+		}
+	}
+
+	if (a.commit === false) {
+		push(log, '已暂存未提交（可用 uci_show 检查；再次调用 commit=true 提交，或 uci_revert 放弃）');
+		return join('\n', log);
+	}
+	for (let c in cfgs) sh(U + ' commit ' + shq(c));
+	push(log, sprintf('已提交 %s，修改前的备份在 %s/<配置>.%s', join('、', keys(cfgs)), BACKUP_DIR, stamp));
+
+	const RELOAD = {
+		network: '/etc/init.d/network reload',
+		firewall: '/etc/init.d/firewall reload',
+		dhcp: '/etc/init.d/dnsmasq restart; /etc/init.d/odhcpd restart',
+		wireless: 'wifi reload',
+		system: '/etc/init.d/system reload',
+	};
+	if (a.reload) {
+		let cmd = RELOAD[a.reload];
+		if (!cmd) die('reload 只能是：' + join(' / ', keys(RELOAD)));
+		sh(sprintf("nohup sh -c 'sleep 1; %s' >/dev/null 2>&1 </dev/null &", cmd));
+		push(log, '已在后台执行：' + cmd + (a.reload == 'network' || a.reload == 'wireless' ? '（网络 / Wi-Fi 会短暂中断）' : ''));
+	} else
+		push(log, '注意：修改已保存但尚未生效，需要 reload（network / firewall / dhcp / wireless / system）或 service_control 重启相关服务。');
+	return join('\n', log);
+};
+
+T.uci_revert = function(a) {
+	if (!match(a.config ?? '', /^[a-z0-9_-]+$/)) die('需要 config');
+	sh(conf().uci + ' revert ' + shq(a.config));
+	return '已放弃 ' + a.config + ' 未提交的修改';
+};
+
+T.uci_backups = function(a) {
+	if (a.restore) {
+		if (!match(a.restore, /^[a-z0-9_-]+\.[0-9]{8}-[0-9]{6}$/)) die('restore 格式应为 <配置>.<时间>，如 network.20261027-235000');
+		let f = BACKUP_DIR + '/' + a.restore;
+		if (!stat(f)) die('备份不存在：' + f);
+		let c = split(a.restore, '.')[0];
+		let r = sh(sprintf('%s import %s < %s && %s commit %s', conf().uci, shq(c), shq(f), conf().uci, shq(c)));
+		if (r.code != 0) die('还原失败：' + trim(r.out));
+		return sprintf('已把 %s 还原为 %s 的备份。还需 reload 对应服务才生效。', c, a.restore);
+	}
+	let r = sh(sprintf('ls -1t %s 2>/dev/null | head -n 40', shq(BACKUP_DIR)));
+	return length(trim(r.out)) ? '配置备份（新→旧，用 restore=<名称> 还原）：\n' + trim_nl(r.out) : '还没有配置备份';
+};
+
+/* ---------------- 日志 / 软件包 ---------------- */
+
+T.system_log = function(a) {
+	let n = +a.lines || 80;
+	if (n > 500) n = 500;
+	let cmd = 'logread';
+	if (a.filter) cmd += ' | grep -i -- ' + shq(a.filter);
+	cmd += ' | tail -n ' + n;
+	let r = sh(cmd);
+	if (!length(trim(r.out))) r = sh('dmesg | tail -n ' + n);
+	return length(trim(r.out)) ? r.out : '（没有日志）';
+};
+
+function pkgmgr() {
+	if (length(trim(sh('command -v apk').out))) return 'apk';
+	if (length(trim(sh('command -v opkg').out))) return 'opkg';
+	die('没有找到 opkg 或 apk');
+}
+
+T.packages = function(a) {
+	let pm = pkgmgr(), act = a.action ?? 'list', name = a.name ?? '';
+	if (length(name) && !match(name, /^[A-Za-z0-9_.+-]+$/)) die('非法包名');
+	let cmd;
+	switch (act) {
+	case 'list':
+		cmd = pm == 'apk' ? 'apk info -v' : 'opkg list-installed';
+		if (length(name)) cmd += ' | grep -i -- ' + shq(name);
+		break;
+	case 'search':
+		if (!length(name)) die('search 需要 name');
+		cmd = pm == 'apk' ? 'apk update >/dev/null 2>&1; apk search -d ' + shq(name) : 'opkg update >/dev/null 2>&1; opkg find ' + shq('*' + name + '*');
+		break;
+	case 'upgradable':
+		cmd = pm == 'apk' ? 'apk update >/dev/null 2>&1; apk version -l "<"' : 'opkg update >/dev/null 2>&1; opkg list-upgradable';
+		break;
+	case 'install':
+	case 'remove':
+		if (!length(name)) die(act + ' 需要 name');
+		if (act == 'remove' && match(name, /^(base-files|busybox|kernel|libc|procd|ubus|uci|ucode|uhttpd|curl|cloudflared|dropbear|firewall4?|netifd|opkg|apk-tools)$/))
+			die('为避免系统损坏或失去连接，不允许通过本工具卸载 ' + name);
+		cmd = pm == 'apk'
+			? (act == 'install' ? 'apk update >/dev/null 2>&1; apk add ' : 'apk del ') + shq(name)
+			: (act == 'install' ? 'opkg update >/dev/null 2>&1; opkg install ' : 'opkg remove ') + shq(name);
+		break;
+	default:
+		die('action 只能是 list / search / upgradable / install / remove');
+	}
+	let r = sh(cmd);
+	let out = r.out;
+	if (length(out) > 30000) out = substr(out, 0, 30000) + '\n……（输出过长已截断）';
+	return sprintf('[%s] %s（退出码 %d）\n%s', pm, act, r.code, out);
+};
+
+/* ---------------- 高级：命令行 ---------------- */
+
+T.run_command = function(a) {
+	if (conf().allow_shell === false) die('命令行功能已在路由器上关闭（claude-mcp shell on 可开启）');
+	if (type(a.command) != 'string' || !length(trim(a.command))) die('缺少 command');
+	let t = +a.timeout || 30;
+	if (t < 1) t = 1;
+	if (t > 110) t = 110;
+	let has_to = length(trim(sh('command -v timeout').out)) > 0;
+	let r = sh(has_to ? sprintf('timeout %d sh -c %s', t, shq(a.command)) : 'sh -c ' + shq(a.command));
+	let out = r.out;
+	if (length(out) > 40000) out = substr(out, 0, 40000) + '\n……（输出过长已截断）';
+	return sprintf('退出码 %d%s\n%s', r.code, r.code == 124 || r.code == 143 ? '（超时被终止）' : '', out);
+};
+
+/* ---------------- 手机面板用的结构化接口 ---------------- */
+
+function read_ifbytes(dev) {
+	for (let l in split(readfile('/proc/net/dev') ?? '', '\n')) {
+		let m = match(l, /^\s*([A-Za-z0-9._@-]+):\s*(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/);
+		if (m && m[1] == dev) return { rx: +m[2], tx: +m[3] };
+	}
+	return null;
+}
+
+const P = {};
+
+/* CPU 使用率：读 /proc/stat，两次之间的空闲比例 */
+function cpu_stat() {
+	let m = match(readfile('/proc/stat') ?? '', /^cpu\s+(\d+) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+) ?(\d*)/);
+	if (!m) return null;
+	let tot = 0;
+	for (let i = 1; i <= 8; i++) tot += +(m[i] || 0);
+	return { tot, idle: +m[4] + +m[5] };
+}
+
+/* OpenClash 正在做什么：启动日志最后一行（中文），日志没变就用缓存，不重复翻译 */
+function oc_line() {
+	// 启动/停止过程中看启动日志；平时（启动日志被 OpenClash 网页清空后）看插件日志最后一行
+	let raw = trim(sh("{ grep . /tmp/openclash_start.log 2>/dev/null || tail -n 400 /tmp/openclash.log 2>/dev/null | grep -v '^time='; } | tail -n 1").out);
+	if (!length(raw)) return null;
+	let cf = '/tmp/cmcp_ocline.json', c = null;
+	try { c = json(readfile(cf) ?? 'null'); } catch (e) {}
+	if (c?.raw == raw) return c.line;
+	let line = null;
+	try { line = json(trim(sh('printf "%s\\n" ' + shq(raw) + ' | lua /etc/claude-mcp/oc_line.lua').out)); } catch (e) {}
+	if (line) writefile(cf, sprintf('%J', { raw, line }));
+	return line;
+}
+
+P.overview = function() {
+	let o = { clash: { running: false }, system: {}, wan: null, speed: null };
+
+	try {
+		let v = api('GET', '/version', null, 4);
+		o.clash.running = true;
+		o.clash.version = v?.version;
+		let c = api('GET', '/configs', null, 4);
+		o.clash.mode = c?.mode;
+		let cn = api('GET', '/connections', null, 4);
+		o.clash.connections = length(cn?.connections ?? []);
+		o.clash.download_total = cn?.downloadTotal ?? 0;
+		o.clash.upload_total = cn?.uploadTotal ?? 0;
+	} catch (e) {
+		o.clash.error = '' + e;
+	}
+	o.clash.config = uci_get('openclash.config.config_path');
+	o.clash.line = oc_line();
+	// OpenClash 是否正在启动/停止（只查这一个进程，比查全部后台任务快）
+	o.clash.busy = +trim(sh("ps w | grep '/etc/init.d/openclash' | grep -v grep | grep -c .").out) > 0;
+	// 启动早就完成了：不再显示启动日志最后一句（「请等待服务器上线」之类），改成「运行正常 · 已运行多久」
+	if (!o.clash.busy && o.clash.running) {
+		let pid = trim(split(trim(sh('pidof clash').out), ' ')[0] ?? ''), st = length(pid) ? readfile('/proc/' + pid + '/stat') : null;
+		let f = st ? split(trim(substr(st, index(st, ')') + 1)), ' ') : [];
+		let age = length(f) > 19 ? +split(readfile('/proc/uptime') ?? '0', ' ')[0] - +f[19] / 100.0 : 0;
+		if (age > 60) {
+			let d = age / 86400 | 0, h = (age % 86400) / 3600 | 0, m = (age % 3600) / 60 | 0;
+			o.clash.line = { t: null, lv: null, msg: '运行正常 · 内核已运行 ' + (d ? d + ' 天 ' + h + ' 小时' : h ? h + ' 小时 ' + m + ' 分' : m + ' 分钟') };
+		}
+	}
+	o.clash.custom_rules = uci_get('openclash.config.enable_custom_clash_rules') == '1';
+
+	let s = o.system;
+	let cs0 = cpu_stat(), CF = '/tmp/cmcp_cpu.json', pc = null;
+	try { pc = json(readfile(CF) ?? 'null'); } catch (e) {}
+	s.model = trim(readfile('/tmp/sysinfo/model') ?? readfile('/proc/device-tree/model') ?? '');
+	s.firmware = match(readfile('/etc/openwrt_release') ?? '', /DISTRIB_DESCRIPTION='([^']*)'/)?.[1];
+	s.uptime = +split(readfile('/proc/uptime') ?? '0', ' ')[0];
+	s.load = split(trim(readfile('/proc/loadavg') ?? ''), ' ')[0];
+	let cpus = length(filter(split(readfile('/proc/cpuinfo') ?? '', '\n'), (l) => match(l, /^processor\s*:/)));
+	s.cpus = cpus || 1;
+	let mem = readfile('/proc/meminfo') ?? '';
+	s.mem_total = +(match(mem, /MemTotal:\s+(\d+)/)?.[1] ?? 0) * 1024;
+	s.mem_avail = +(match(mem, /MemAvailable:\s+(\d+)/)?.[1] ?? 0) * 1024;
+	let t = trim(sh("cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null").out);
+	if (match(t, /^[0-9]+$/)) s.temp = +t > 1000 ? +t / 1000 : +t;
+
+	let w = null;
+	try { w = json(sh('ubus call network.interface.wan status').out); } catch (e) {}
+	let dev = null;
+	if (type(w) == 'object') {
+		o.wan = { up: !!w.up, proto: w.proto, ip: w['ipv4-address']?.[0]?.address, uptime: w.uptime ?? 0 };
+		dev = w.l3_device ?? w.device;
+	}
+	if (!dev) dev = trim(sh("ip route show default | awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1); exit}}'").out);
+	if (length(dev ?? '')) {
+		/* 用上一次的采样算网速，不用每次都等 1 秒；没有近期采样时只等 0.4 秒 */
+		let up = () => +split(readfile('/proc/uptime') ?? '0', ' ')[0];
+		let SF = '/tmp/cmcp_speed.json', prev = null;
+		try { prev = json(readfile(SF) ?? 'null'); } catch (e) {}
+		let b = read_ifbytes(dev), tb = up(), a = null, dt = 0;
+		if (b && prev?.dev == dev && tb - prev.t >= 0.8 && tb - prev.t <= 20 && b.rx >= prev.rx && b.tx >= prev.tx) { a = prev; dt = tb - prev.t; }
+		else if (b) {
+			a = b; let ta = tb;
+			sh('F=/tmp/cmcp_sp.$$; mkfifo $F && { read -t 0.4 x <> $F; rm -f $F; }');
+			b = read_ifbytes(dev); tb = up(); dt = tb - ta;
+		}
+		if (a && b) {
+			if (dt < 0.1) dt = 0.1;
+			o.speed = { dev, rx: int((b.rx - a.rx) / dt + 0.5), tx: int((b.tx - a.tx) / dt + 0.5), rx_total: b.rx, tx_total: b.tx };
+			writefile(SF, sprintf('%J', { dev, t: tb, rx: b.rx, tx: b.tx }));
+		}
+	}
+	/* 有近期采样就跟它比（准），没有就跟这次请求开头比（中间等过 0.4 秒） */
+	let cs1 = cpu_stat(), ut = +split(readfile('/proc/uptime') ?? '0', ' ')[0];
+	if (cs1) {
+		let a = (pc && ut - pc.t >= 0.5 && ut - pc.t <= 20 && cs1.tot > pc.tot) ? pc : cs0;
+		if (a && cs1.tot - a.tot >= 10) s.cpu = int(1000 * (1 - (cs1.idle - a.idle) * 1.0 / (cs1.tot - a.tot)) + 0.5) / 10;
+		writefile(CF, sprintf('%J', { t: ut, tot: cs1.tot, idle: cs1.idle }));
+	}
+	return o;
+};
+
+P.groups = function() {
+	let px = api('GET', '/proxies')?.proxies ?? {};
+	let names = px.GLOBAL?.all ?? keys(px);
+	let out = [];
+	for (let n in names) {
+		let g = px[n];
+		if (!g || !GROUP_TYPES[g.type] || n == 'GLOBAL') continue;
+		let nodes = [];
+		for (let m in (g.all ?? [])) {
+			let p = px[m] ?? {};
+			push(nodes, { name: m, type: p.type ?? '', delay: last_delay(p), group: !!GROUP_TYPES[p.type] });
+		}
+		push(out, { name: n, type: g.type, now: g.now, nodes });
+	}
+	return { groups: out };
+};
+
+function lease_map() {
+	let names = {};
+	for (let l in split(trim(readfile('/tmp/dhcp.leases') ?? ''), '\n')) {
+		let p = split(l, ' ');
+		if (length(p) >= 4) names[p[2]] = { mac: lc(p[1]), name: p[3] != '*' ? p[3] : null };
+	}
+	return names;
+}
+
+P.devices = function() {
+	let leases = lease_map();
+	let arp = {}, wdev = {};
+	for (let w in ['wan', 'wan6']) try { let st = json(sh('ifstatus ' + w).out); if (st?.l3_device) wdev[st.l3_device] = 1; if (st?.device) wdev[st.device] = 1; } catch (e) {}
+	for (let l in split(readfile('/proc/net/arp') ?? '', '\n')) {
+		let m = match(l, /^(\d+\.\d+\.\d+\.\d+)\s+\S+\s+(0x\S+)\s+([0-9a-fA-F:]{17})\s+\S+\s+(\S+)/);
+		if (m && m[2] != '0x0' && m[3] != '00:00:00:00:00:00' && !wdev[m[4]]) arp[m[1]] = { mac: lc(m[3]), dev: m[4] };
+	}
+	let stats = {};
+	try {
+		for (let c in (api('GET', '/connections', null, 5)?.connections ?? [])) {
+			let ip = c.metadata?.sourceIP;
+			if (!ip) continue;
+			if (!stats[ip]) stats[ip] = { conns: 0, dl: 0, ul: 0, proxied: 0 };
+			stats[ip].conns++;
+			stats[ip].dl += +c.download || 0;
+			stats[ip].ul += +c.upload || 0;
+			if ((c.chains ?? [])[0] && c.chains[0] != 'DIRECT') stats[ip].proxied++;
+		}
+	} catch (e) {}
+
+	let seen = {}, list = [];
+	function add(ip) {
+		if (seen[ip]) return;
+		seen[ip] = 1;
+		let l = leases[ip] ?? {}, a = arp[ip] ?? {};
+		push(list, { ip, mac: l.mac ?? a.mac, name: l.name, online: !!arp[ip] || !!stats[ip], iface: a.dev, stats: stats[ip] });
+	}
+	for (let ip in keys(leases)) add(ip);
+	for (let ip in keys(arp)) add(ip);
+	for (let ip in keys(stats)) if (match(ip, /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./)) add(ip);
+	list = sort(list, (x, y) => ((y.online ? 1 : 0) - (x.online ? 1 : 0)) || ((y.stats?.dl ?? 0) - (x.stats?.dl ?? 0)));
+	return { devices: list };
+};
+
+P.connections = function(a) {
+	let data = api('GET', '/connections');
+	let leases = lease_map();
+	let kw = a?.filter ? lc(a.filter) : null, list = [];
+	for (let c in (data?.connections ?? [])) {
+		let m = c.metadata ?? {};
+		let e = {
+			id: c.id,
+			host: (m.host || m.sniffHost || m.destinationIP || '?'),
+			port: m.destinationPort,
+			net: m.network,
+			src: m.sourceIP,
+			src_name: leases[m.sourceIP]?.name,
+			rule: (c.rule ?? '') + (length(c.rulePayload ?? '') ? ':' + c.rulePayload : ''),
+			chain: c.chains ?? [],
+			dl: +c.download || 0,
+			ul: +c.upload || 0,
+			start: c.start,
+		};
+		if (kw && index(lc(sprintf('%J', e)), kw) < 0) continue;
+		push(list, e);
+	}
+	list = sort(list, (x, y) => (y.dl + y.ul) - (x.dl + x.ul));
+	if (length(list) > 300) list = slice(list, 0, 300);
+	return { total: length(data?.connections ?? []), download_total: data?.downloadTotal, upload_total: data?.uploadTotal, connections: list };
+};
+
+/* ---------------- 面板：OpenClash 全功能接口 ---------------- */
+
+const OC_SH = '/usr/share/openclash';
+const OC_FILE_DIRS = {
+	config: '/etc/openclash/config',
+	custom: '/etc/openclash/custom',
+	overwrite: '/etc/openclash/overwrite',
+	proxy_provider: '/etc/openclash/proxy_provider',
+	rule_provider: '/etc/openclash/rule_provider',
+};
+const OC_SEC_TYPES = { config_subscribe: 1, dns_servers: 1, config_overwrite: 1, authentication: 1, lan_ac_traffic: 1 };
+const UNLOCK_LABELS = {
+	prime_video: 'Amazon Prime Video', bahamut: 'Bahamut Anime', bilibili: 'Bilibili', claude: 'Claude',
+	dazn: 'DAZN', discovery: 'Discovery Plus', disney: 'Disney Plus', gemini: 'Gemini', google: 'Google',
+	hbo_max: 'HBO Max', netflix: 'Netflix', openai: 'OpenAI', paramount: 'Paramount Plus', spotify: 'Spotify',
+	steam: 'Steam', tvb: 'TVB Anywhere+', ytb: 'YouTube Premium',
+};
+const OC_JOBS = {
+	sub: 'openclash\\.sh', geo: 'openclash_geo\\.sh', chnroute: 'openclash_chnroute\\.sh',
+	core: 'openclash_core\\.sh', plugin: 'openclash_update\\.sh', debug: 'openclash_debug\\.sh',
+	service: '/etc/init\\.d/openclash',
+};
+
+function ucur() { let c = require('uci').cursor(); c.load('openclash'); return c; }
+function bg(cmd) { sh(sprintf('nohup sh -c %s >/dev/null 2>&1 </dev/null &', shq(cmd))); }
+function opt_key(k) { if (type(k) != 'string' || !match(k, /^[a-z0-9_]+$/)) die('非法选项：' + k); return k; }
+function opt_val(v) {
+	if (type(v) == 'array') return map(v, (x) => '' + x);
+	if (type(v) == 'bool') return v ? '1' : '0';
+	return '' + v;
+}
+
+function oc_all() {
+	let all = ucur().get_all('openclash') ?? {};
+	let secs = sort(values(all), (a, b) => a['.index'] - b['.index']);
+	let out = { config: {}, subs: [], dns: [], overwrite: [], auth: [] };
+	let map_t = { config_subscribe: 'subs', dns_servers: 'dns', config_overwrite: 'overwrite', authentication: 'auth' };
+	for (let s in secs) {
+		let o = { sid: s['.name'] };
+		for (let k, v in s)
+			if (substr(k, 0, 1) != '.') o[k] = v;
+		if (s['.type'] == 'openclash') { if (s['.name'] == 'config') out.config = o; continue; }
+		let t = map_t[s['.type']] ?? s['.type'];
+		if (!out[t]) out[t] = [];
+		push(out[t], o);
+	}
+	return out;
+}
+
+function oc_file_path(kind, name) {
+	let d = OC_FILE_DIRS[kind];
+	if (!d) die('未知目录：' + kind);
+	if (type(name) != 'string' || !length(name) || index(name, '/') >= 0 || substr(name, 0, 1) == '.' || length(name) > 120)
+		die('文件名不合法');
+	return d + '/' + name;
+}
+
+function oc_backup_file(kind, p) {
+	if (!stat(p)) return null;
+	mkdir('/etc/claude-mcp/bak');
+	let b = sprintf('/etc/claude-mcp/bak/%s.%s.%s', kind, replace(p, /.*\//, ''), now_str());
+	sh(sprintf('cp -f %s %s; ls -1t /etc/claude-mcp/bak/ | sed -n "41,\\$p" | while read f; do rm -f "/etc/claude-mcp/bak/$f"; done', shq(p), shq(b)));
+	return b;
+}
+
+function oc_jobs() {
+	let ps = sh('ps w').out, o = {};
+	for (let k, re in OC_JOBS) {
+		o[k] = false;
+		for (let l in split(ps, '\n'))
+			if (match(l, regexp(re)) && index(l, 'grep') < 0 && index(l, 'ucode') < 0 && (k != 'sub' || index(l, 'openclash.sh') >= 0)) { o[k] = true; break; }
+	}
+	return o;
+}
+
+P.oc_state = function() {
+	let a = oc_all(), cfg = a.config, FS = require('fs');
+	let ver = null, live = null;
+	try { ver = api('GET', '/version', null, 3); live = api('GET', '/configs', null, 3); } catch (e) {}
+	let files = [];
+	for (let n in (FS.lsdir('/etc/openclash/config') ?? [])) {
+		if (!match(n, /\.ya?ml$/)) continue;
+		let p = '/etc/openclash/config/' + n, st = stat(p);
+		let sub = null;
+		for (let s in a.subs) if (s.name + '.yaml' == n || s.name + '.yml' == n) sub = s.name;
+		push(files, { name: n, path: p, size: st?.size, mtime: st?.mtime, active: cfg.config_path == p, sub });
+	}
+	files = sort(files, (x, y) => (y.active ? 1 : 0) - (x.active ? 1 : 0) || (x.name < y.name ? -1 : 1));
+	let core = ver?.version;
+	if (!core) {
+		let m = match(sh('/etc/openclash/clash -v 2>/dev/null | head -1').out, /(alpha-[0-9a-z]+|v[0-9.]+[0-9a-z.-]*)/);
+		core = m ? m[1] : null;
+	}
+	let pm = match(sh('(opkg list-installed luci-app-openclash 2>/dev/null; apk list -I luci-app-openclash 2>/dev/null) | head -1').out, /([0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?)/);
+	return {
+		running: !!ver, core, plugin: pm ? pm[1] : null,
+		mode: live?.mode ?? cfg.proxy_mode, log_level: live?.['log-level'] ?? cfg.log_level,
+		tun: live?.tun?.enable ?? null, mixed_port: live?.['mixed-port'],
+		lan_ip: replace(uci_get('network.lan.ipaddr') ?? '', /\/.*/, ''),
+		cfg, files, subs: a.subs, dns: a.dns, overwrite: a.overwrite, auth: a.auth,
+		jobs: oc_jobs(),
+	};
+};
+
+P.oc_set = function(a) {
+	let c = ucur(), n = 0;
+	for (let k, v in (a.set ?? {})) {
+		opt_key(k);
+		if (v == null || v === '') c.delete('openclash', 'config', k);
+		else c.set('openclash', 'config', k, opt_val(v));
+		n++;
+	}
+	if (!n) die('没有要修改的选项');
+	c.commit('openclash');
+	if (a.restart) restart_openclash_bg();
+	return { ok: true, changed: n, restarting: !!a.restart };
+};
+
+P.oc_sec = function(a) {
+	let c = ucur(), sid = a.sid;
+	if (a.op == 'add') {
+		if (!OC_SEC_TYPES[a.type]) die('不支持的类型：' + a.type);
+		sid = c.add('openclash', a.type);
+		if (!sid) die('添加失败');
+	} else {
+		let t = sid ? c.get('openclash', sid) : null;
+		if (!t || !OC_SEC_TYPES[t]) die('找不到这个条目（可能已被删除）');
+	}
+	let old_name = a.op == 'delete' ? c.get('openclash', sid, 'name') : null;
+	if (a.op == 'delete') c.delete('openclash', sid);
+	else
+		for (let k, v in (a.values ?? {})) {
+			opt_key(k);
+			if (v == null || v === '') c.delete('openclash', sid, k);
+			else c.set('openclash', sid, k, opt_val(v));
+		}
+	c.commit('openclash');
+	let removed = null;
+	if (old_name && a.delete_file) {
+		let p = '/etc/openclash/config/' + old_name + '.yaml';
+		if (stat(p) && uci_get('openclash.config.config_path') != p) { oc_backup_file('config', p); sh('rm -f ' + shq(p)); removed = p; }
+	}
+	if (a.restart) restart_openclash_bg();
+	return { ok: true, sid, removed };
+};
+
+P.sub_update = function(a) {
+	if (oc_jobs().sub) die('已有订阅正在更新，请稍等');
+	bg(sprintf('%s/openclash.sh %s', OC_SH, a.name ? shq(a.name) : ''));
+	return { ok: true };
+};
+
+P.sub_info = function(a) {
+	let s = a.sid ? ucur().get_all('openclash', a.sid) : null;
+	if (!s?.address) die('这个订阅没有填写地址');
+	let url = trim(split(s.address, '\n')[0]);
+	let r = sh(sprintf('curl -sS -L -m 12 -o /dev/null -D - -A %s %s', shq(s.sub_ua || 'clash.meta'), shq(url)));
+	let m = match(lc(r.out), /subscription-userinfo:[ \t]*([^\r\n]+)/);
+	if (!m) return { ok: false, msg: r.code != 0 ? '订阅地址连接失败' : '这个机场没有提供流量信息' };
+	let o = { ok: true };
+	for (let kv in split(m[1], ';')) {
+		let p = match(trim(kv), /^([a-z]+)=([0-9.e+]+)/);
+		if (p) o[p[1]] = +p[2];
+	}
+	return o;
+};
+
+P.files = function(a) {
+	let d = OC_FILE_DIRS[a.kind];
+	if (!d) die('未知目录：' + a.kind);
+	let out = [];
+	for (let n in (require('fs').lsdir(d) ?? [])) {
+		let st = stat(d + '/' + n);
+		if (st?.type == 'file') push(out, { name: n, size: st.size, mtime: st.mtime });
+	}
+	return { dir: d, files: sort(out, (x, y) => x.name < y.name ? -1 : 1) };
+};
+
+P.file_read = function(a) {
+	let p = oc_file_path(a.kind, a.name), st = stat(p);
+	if (!st) die('文件不存在：' + a.name);
+	if (st.size > 3 * 1024 * 1024) die('文件超过 3MB，手机上不方便查看');
+	let s = readfile(p) ?? '';
+	let bin = false;
+	for (let c = 0; c < 9 && !bin; c++) if (index(s, chr(c)) >= 0) bin = true;
+	if (bin) return { name: a.name, size: st.size, mtime: st.mtime, binary: true };
+	return { name: a.name, size: st.size, mtime: st.mtime, content: s };
+};
+
+P.file_save = function(a) {
+	if (type(a.content) != 'string') die('缺少文件内容');
+	if (a.kind == 'custom' && (a.name == 'openclash_custom_rules.list' || a.name == 'openclash_custom_rules_2.list'))
+		return { ok: true, msg: T.set_custom_rules({ content: a.content, file: a.name == 'openclash_custom_rules.list' ? 1 : 2, apply: !!a.restart, enable: true, force: !!a.force }) };
+	let p = oc_file_path(a.kind, a.name);
+	if (a.kind == 'config' && !match(a.name, /\.ya?ml$/)) die('配置文件名必须以 .yaml 结尾');
+	if (a.kind == 'config' && !a.force) {
+		let tmp = '/tmp/cmcp_cfgtest.yaml';
+		writefile(tmp, a.content);
+		let r = sh('/etc/openclash/clash -t -d /etc/openclash -f ' + tmp + ' 2>&1 | tail -n 6');
+		sh('rm -f ' + tmp);
+		if (index(r.out, 'test failed') >= 0 || index(lc(r.out), 'error') >= 0 && index(r.out, 'successful') < 0)
+			die('配置文件校验没通过，没有保存：\n' + trim(r.out));
+	}
+	let b = oc_backup_file(a.kind, p);
+	if (writefile(p + '.cmcp_tmp', a.content) == null) die('写入失败');
+	rename(p + '.cmcp_tmp', p);
+	if (a.kind == 'custom' && match(a.name, /\.sh$/)) sh('chmod 755 ' + shq(p));
+	let restarting = false;
+	if (a.restart) { restart_openclash_bg(); restarting = true; }
+	return { ok: true, backup: b, restarting };
+};
+
+P.file_delete = function(a) {
+	let p = oc_file_path(a.kind, a.name);
+	if (!stat(p)) die('文件不存在');
+	if (a.kind == 'custom') die('自定义文件不能删除，可以清空内容');
+	if (a.kind == 'config' && uci_get('openclash.config.config_path') == p) die('这是正在使用的配置文件，先切换到其他配置再删除');
+	let b = oc_backup_file(a.kind, p);
+	sh('rm -f ' + shq(p));
+	return { ok: true, backup: b };
+};
+
+P.file_rename = function(a) {
+	let p = oc_file_path(a.kind, a.name), q = oc_file_path(a.kind, a.to);
+	if (a.kind != 'config') die('只能重命名配置文件');
+	if (!match(a.to, /\.ya?ml$/)) die('新名字必须以 .yaml 结尾');
+	if (!stat(p)) die('文件不存在');
+	if (stat(q)) die('已有同名文件');
+	rename(p, q);
+	let c = ucur(), changed = false;
+	if (uci_get('openclash.config.config_path') == p) { c.set('openclash', 'config', 'config_path', q); changed = true; }
+	if (changed) c.commit('openclash');
+	return { ok: true, active_changed: changed };
+};
+
+P.cfg_switch = function(a) {
+	let p = oc_file_path('config', a.name);
+	if (!stat(p)) die('配置文件不存在');
+	let c = ucur();
+	c.set('openclash', 'config', 'config_path', p);
+	c.set('openclash', 'config', 'enable', '1');
+	c.commit('openclash');
+	restart_openclash_bg();
+	return { ok: true };
+};
+
+P.quick = function(a) {
+	let act = a.action;
+	switch (act) {
+	case 'start':
+	case 'stop':
+	case 'restart': {
+		let c = ucur();
+		c.set('openclash', 'config', 'enable', act == 'stop' ? '0' : '1');
+		c.commit('openclash');
+		bg(sprintf('sleep 2; /etc/init.d/openclash %s', act));
+		return { ok: true, msg: { start: 'OpenClash 正在启动', stop: 'OpenClash 正在停止', restart: 'OpenClash 正在重启' }[act] };
+	}
+	case 'flush_dns': {
+		let r1 = api('POST', '/cache/fakeip/flush', null, 5), r2 = null;
+		try { r2 = api('POST', '/cache/dns/flush', null, 5); } catch (e) {}
+		return { ok: true, msg: 'DNS 缓存和 Fake-IP 缓存已清空' };
+	}
+	case 'update_geo':
+		bg(sprintf('for t in ipdb geoip geosite geoasn; do %s/openclash_geo.sh $t; done', OC_SH));
+		return { ok: true, msg: 'GEO 数据库开始在后台更新（ipdb、GeoIP、GeoSite、ASN）' };
+	case 'update_chnroute':
+		bg(OC_SH + '/openclash_chnroute.sh');
+		return { ok: true, msg: '大陆白名单开始在后台更新' };
+	case 'update_core':
+		bg('bash ' + OC_SH + "/openclash_core.sh 'Meta'");
+		return { ok: true, msg: '内核开始在后台更新，完成后 OpenClash 会自动重启' };
+	case 'update_plugin':
+		bg('bash ' + OC_SH + "/openclash_update.sh 'plugin_update'");
+		return { ok: true, msg: '插件开始在后台更新，完成后会自动重启' };
+	case 'reload_firewall':
+		bg('/etc/init.d/openclash reload firewall');
+		return { ok: true, msg: '正在重新加载 OpenClash 防火墙规则' };
+	case 'clear_log':
+		sh(': > /tmp/openclash.log');
+		return { ok: true, msg: '插件日志已清空' };
+	case 'log_level':
+		if (index(['debug', 'info', 'warning', 'error', 'silent'], a.arg) < 0) die('日志级别不对');
+		api('PATCH', '/configs', { 'log-level': a.arg });
+		return { ok: true, msg: '内核日志级别已改为 ' + a.arg + '（重启后恢复插件设置）' };
+	case 'debug': {
+		sh(sprintf('timeout 90 %s/openclash_debug.sh >/dev/null 2>&1', OC_SH));
+		let t = readfile('/tmp/openclash_debug.log') ?? '';
+		return { ok: true, text: length(t) > 200000 ? substr(t, 0, 200000) + '\n…（已截断）' : t };
+	}
+	case 'restart_dashboard':
+		return { ok: true };
+	}
+	die('未知操作：' + act);
+};
+
+P.jobs = function() {
+	let t = sh('tail -n 12 /tmp/openclash.log').out;
+	return { jobs: oc_jobs(), log: t };
+};
+
+P.versions = function(a) {
+	let br = uci_get('openclash.config.release_branch') || 'master';
+	let r = sh(sprintf("timeout 40 lua -e 'local ov=dofile(\"%s/openclash_version.lua\"); local c=ov.fetch_version_history(\"%s\", %s); print(require(\"luci.jsonc\").stringify(c and c.latest or {}))'",
+		OC_SH, replace(br, /[^a-z]/g, ''), a.force ? 'true' : 'false'));
+	let latest = {};
+	try { latest = json(trim(r.out)); } catch (e) {}
+	let st = P.oc_state();
+	return { core: st.core, plugin: st.plugin, latest, branch: br };
+};
+
+P.myip = function() {
+	let d = '/tmp/cmcp_ip';
+	const Q = {
+		ipip: 'http://myip.ipip.net',
+		cn3322: 'http://ip.3322.net',
+		ipsb: 'https://api.ip.sb/geoip',
+		ipinfo: 'https://ipinfo.io/json',
+		cf: 'https://www.cloudflare.com/cdn-cgi/trace',
+	};
+	let cmd = ['rm -rf ' + d, 'mkdir -p ' + d];
+	for (let k, u in Q) push(cmd, sprintf("curl -sS -m 8 -A 'Mozilla/5.0 (Linux; Android 14)' %s > %s/%s 2>/dev/null &", shq(u), d, k));
+	sh(join('\n', cmd) + '\nwait');
+	let rd = (k) => trim(readfile(d + '/' + k) ?? '');
+	let out = { domestic: null, overseas: [] };
+	let t = rd('ipip'), m = match(t, /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/), gp = index(t, '来自于');
+	if (m) out.domestic = { src: 'IPIP.net', ip: m[1], geo: gp >= 0 ? trim(replace(substr(t, gp + length('来自于')), /^(：|:)/, '')) : '' };
+	else if (match(rd('cn3322'), /^[0-9.]+$/)) out.domestic = { src: '3322.net', ip: rd('cn3322'), geo: '' };
+	try { let j = json(rd('ipsb')); if (j?.ip) push(out.overseas, { src: 'IP.SB', ip: j.ip, geo: join(' ', filter([j.country, j.region != j.country ? j.region : null, j.city, j.organization ?? j.isp], (x) => x)) }); } catch (e) {}
+	try { let j = json(rd('ipinfo')); if (j?.ip) push(out.overseas, { src: 'IPinfo', ip: j.ip, geo: join(' ', filter([j.country, j.region, j.city, j.org], (x) => x)) }); } catch (e) {}
+	let cf = rd('cf'), ci = match(cf, /ip=([^\n]+)/), cl = match(cf, /loc=([^\n]+)/), cc = match(cf, /colo=([^\n]+)/);
+	if (ci) push(out.overseas, { src: 'Cloudflare', ip: ci[1], geo: (cl ? cl[1] : '') + (cc ? ' · 机房 ' + cc[1] : '') });
+	sh('rm -rf ' + d);
+	return out;
+};
+
+P.site_check = function(a) {
+	let sites = a.sites ?? [
+		{ key: 'baidu', url: 'https://www.baidu.com' }, { key: 'taobao', url: 'https://www.taobao.com' },
+		{ key: 'google', url: 'https://www.google.com/generate_204' }, { key: 'github', url: 'https://github.com' },
+		{ key: 'youtube', url: 'https://www.youtube.com' }, { key: 'claude', url: 'https://claude.ai' },
+	];
+	let d = '/tmp/cmcp_site', cmd = ['rm -rf ' + d, 'mkdir -p ' + d], i = 0;
+	for (let s in sites) {
+		if (!match(s.url ?? '', /^https?:\/\/[A-Za-z0-9.:\/_?=&%-]+$/)) die('地址不合法：' + s.url);
+		push(cmd, sprintf("curl -sk -o /dev/null -m 8 -A 'Mozilla/5.0' -w '%%{http_code} %%{time_connect} %%{time_starttransfer}' %s > %s/%d 2>/dev/null &", shq(s.url), d, i++));
+	}
+	sh(join('\n', cmd) + '\nwait');
+	let out = [];
+	i = 0;
+	for (let s in sites) {
+		let p = split(trim(readfile(d + '/' + (i++)) ?? ''), ' ');
+		let code = +p[0] || 0;
+		push(out, { key: s.key, url: s.url, ok: code > 0 && code < 500, code, ms: code ? int((+p[2] || +p[1] || 0) * 1000 + 0.5) : null });
+	}
+	sh('rm -rf ' + d);
+	return { sites: out };
+};
+
+P.unlock = function(a) {
+	let list = a.services;
+	if (type(list) != 'array' || !length(list)) list = split(uci_get('openclash.config.unlock_check_services') || 'netflix,ytb,openai,claude', ',');
+	let d = '/tmp/cmcp_unlock', cmd = ["rm -rf " + d, "mkdir -p " + d], ks = [];
+	for (let k in list) {
+		k = trim(k);
+		if (!UNLOCK_LABELS[k] || index(ks, k) >= 0) continue;
+		push(ks, k);
+		push(cmd, sprintf('timeout 60 lua %s/openclash_streaming_unlock.lua %s check > %s/%s 2>/dev/null &', OC_SH, shq(UNLOCK_LABELS[k]), d, k));
+	}
+	if (!length(ks)) die('没有可检测的服务');
+	sh(join('\n', cmd) + '\nwait');
+	// 同时检测时偶尔会有个别服务失败（互相抢资源），失败的再单独测一次
+	let rd = (k) => { let r = null; for (let l in split(readfile(d + '/' + k) ?? '', '\n')) if (match(l, /^\{/)) try { r = json(l); } catch (e) {} return r; };
+	for (let k in ks) if (!(+(rd(k)?.st) > 0)) sh(sprintf('timeout 30 lua %s/openclash_streaming_unlock.lua %s check > %s/%s 2>/dev/null', OC_SH, shq(UNLOCK_LABELS[k]), d, k));
+	let out = [];
+	for (let k in ks) {
+		let r = rd(k);
+		push(out, { key: k, label: UNLOCK_LABELS[k], st: r?.st ?? 0, region: r?.region, node: r?.node });
+	}
+	sh('rm -rf ' + d);
+	return { results: out, all: keys(UNLOCK_LABELS) };
+};
+
+P.providers = function() {
+	let px = {}, rs = {};
+	try { px = api('GET', '/providers/proxies')?.providers ?? {}; } catch (e) {}
+	try { rs = api('GET', '/providers/rules')?.providers ?? {}; } catch (e) {}
+	let out = { proxies: [], rules: [] };
+	for (let n, p in px) {
+		if (p.vehicleType == 'Compatible' || n == 'default') continue;
+		push(out.proxies, { name: n, vehicle: p.vehicleType, updated: p.updatedAt, count: length(p.proxies ?? []), info: p.subscriptionInfo });
+	}
+	for (let n, p in rs)
+		push(out.rules, { name: n, behavior: p.behavior, format: p.format, vehicle: p.vehicleType, updated: p.updatedAt, count: p.ruleCount });
+	return out;
+};
+
+P.provider_update = function(a) {
+	if (a.kind != 'proxies' && a.kind != 'rules') die('kind 只能是 proxies / rules');
+	if (!a.name) die('缺少名称');
+	if (a.health) api('GET', '/providers/proxies/' + urlenc(a.name) + '/healthcheck', null, 60);
+	else api('PUT', '/providers/' + a.kind + '/' + urlenc(a.name), null, 60);
+	return { ok: true };
+};
+
+P.rules = function(a) {
+	let list = api('GET', '/rules')?.rules ?? [], kw = a.filter ? lc(a.filter) : null, out = [], i = 0;
+	for (let r in list) {
+		i++;
+		if (kw && index(lc((r.type ?? '') + ' ' + (r.payload ?? '') + ' ' + (r.proxy ?? '')), kw) < 0) continue;
+		push(out, { i, type: r.type, payload: r.payload, proxy: r.proxy, size: r.size });
+	}
+	let off = +a.offset || 0, lim = +a.limit || 200;
+	return { total: length(list), matched: length(out), rules: slice(out, off, off + lim) };
+};
+
+P.backup = function(a) {
+	let f = '/tmp/cmcp_backup.tar.gz';
+	sh(sprintf('cd / && tar -czf %s etc/config/openclash etc/openclash/config etc/openclash/custom etc/openclash/overwrite 2>/dev/null', f));
+	let st = stat(f);
+	if (!st) die('打包失败');
+	let b64 = sh('base64 ' + f + ' | tr -d "\\n"').out;
+	sh('rm -f ' + f);
+	return { name: 'openclash-backup-' + now_str() + '.tar.gz', size: st.size, b64 };
+};
+
+
+/* ---------------- 面板：第二批（设置结构、按钮、诊断、日志、备份） ---------------- */
+
+const OC_CBI = '/etc/claude-mcp/oc_cbi.lua';
+const OC_PAGES = { 'settings': 1, 'config-overwrite': 1, 'config-subscribe': 1, 'config-subscribe-edit': 1, 'custom-dns-edit': 1 };
+const DL_DIR = '/www-claude-mcp/panel/dl';
+
+function cbi_call(args, timeout) {
+	let r = sh(sprintf('timeout %d lua %s %s', timeout || 60, OC_CBI, join(' ', map(args, (x) => shq(x)))));
+	let j = null;
+	for (let l in split(r.out, '\n')) if (match(l, /^\{/)) try { j = json(l); } catch (e) {}
+	if (!j) die('读取 OpenClash 页面定义失败：' + substr(trim(r.out), 0, 300));
+	if (j.error) die(j.error);
+	return j;
+}
+
+P.oc_schema = function(a) {
+	if (!OC_PAGES[a.page]) die('未知页面：' + a.page);
+	if (a.sid != null && !match(a.sid, /^[A-Za-z0-9_]+$/)) die('sid 不合法');
+	let key = a.page + (a.sid ? '_x' : '');
+	let cf = '/tmp/cmcp_schema_' + key + '.json', st = stat(cf);
+	let ucst = stat('/etc/config/openclash');
+	if (!a.fresh && st && time() - st.mtime < 600 && ucst && st.mtime >= ucst.mtime) {
+		try { return json(readfile(cf)); } catch (e) {}
+	}
+	let sid = a.sid;
+	if ((a.page == 'config-subscribe-edit' || a.page == 'custom-dns-edit') && !sid) {
+		let t = a.page == 'config-subscribe-edit' ? 'config_subscribe' : 'dns_servers';
+		let c = ucur();
+		c.foreach('openclash', t, (s) => { if (!sid) sid = s['.name']; });
+		if (!sid) {
+			sid = c.add('openclash', t);
+			c.commit('openclash');
+			let j = cbi_call(['schema', a.page, sid]);
+			c = ucur(); c.delete('openclash', sid); c.commit('openclash');
+			writefile(cf, sprintf('%J', j));
+			return j;
+		}
+	}
+	let args = ['schema', a.page];
+	if (sid) push(args, sid);
+	let j = cbi_call(args);
+	writefile(cf, sprintf('%J', j));
+	return j;
+};
+
+P.oc_button = function(a) {
+	if (!OC_PAGES[a.page]) die('未知页面：' + a.page);
+	if (type(a.option) != 'string' || !length(a.option) || length(a.option) > 80) die('按钮名不合法');
+	let args = ['press', a.page, a.option];
+	if (a.sid) push(args, a.sid);
+	cbi_call(args, 100);
+	return { ok: true };
+};
+
+/* 和 OpenClash 原版一样：同时修改运行中的内核和插件设置，重启后也保持 */
+P.set_mode = function(a) {
+	if (index(['rule', 'global', 'direct'], a.mode) < 0) die('模式只能是 rule / global / direct');
+	let live = false;
+	try { api('PATCH', '/configs', { mode: a.mode }, 5); live = true; } catch (e) {}
+	let c = ucur();
+	c.set('openclash', 'config', 'proxy_mode', a.mode);
+	c.commit('openclash');
+	return { ok: true, live };
+};
+
+P.run_mode = function(a) {
+	const OK = { 'fake-ip': 1, 'fake-ip-tun': 1, 'fake-ip-mix': 1, 'redir-host': 1, 'redir-host-tun': 1, 'redir-host-mix': 1 };
+	if (!OK[a.mode]) die('运行模式不对：' + a.mode);
+	let c = ucur();
+	c.set('openclash', 'config', 'en_mode', a.mode);
+	c.commit('openclash');
+	restart_openclash_bg();
+	return { ok: true };
+};
+
+P.diag = function(a) {
+	let addr = trim('' + (a.addr ?? ''));
+	addr = replace(addr, /^[a-z]+:\/\//i, '');
+	addr = replace(addr, /[\/:].*$/, '');
+	if (!match(addr, /^[A-Za-z0-9.-]{1,253}$/)) die('请输入域名或 IP，例如 www.google.com');
+	let script = a.type == 'dns' ? 'openclash_debug_dns.lua' : 'openclash_debug_getcon.lua';
+	if (a.type == 'dns' && match(addr, /^[0-9.]+$/)) die('DNS 诊断只能输入域名');
+	let r = sh(sprintf('timeout 40 %s/%s %s', OC_SH, script, shq(addr)));
+	let t = trim(r.out);
+	return { text: length(t) ? t : '没有输出（OpenClash 可能没有运行）' };
+};
+
+P.logs = function(a) {
+	let n = +a.lines || 300;
+	if (n > 2000) n = 2000;
+	let plugin = trim(sh(sprintf("grep -v '^time=\"' /tmp/openclash.log | tail -n %d", n)).out);
+	let core = trim(sh(sprintf("grep '^time=\"' /tmp/openclash.log | tail -n %d", n)).out);
+	let start = trim(readfile('/tmp/openclash_start.log') ?? '');
+	let level = null;
+	try { level = api('GET', '/configs', null, 3)?.['log-level']; } catch (e) {}
+	return { plugin, core, start, level, size: stat('/tmp/openclash.log')?.size ?? 0 };
+};
+
+P.dashboard_state = function() {
+	let ui = '/usr/share/openclash/ui/', c = ucur();
+	return {
+		dashboard_type: c.get('openclash', 'config', 'dashboard_type') || 'Official',
+		yacd_type: c.get('openclash', 'config', 'yacd_type') || 'Official',
+		default_dashboard: c.get('openclash', 'config', 'default_dashboard') || '',
+		installed: { dashboard: !!stat(ui + 'dashboard'), yacd: !!stat(ui + 'yacd'), metacubexd: !!stat(ui + 'metacubexd'), zashboard: !!stat(ui + 'zashboard') },
+		port: c.get('openclash', 'config', 'cn_port') || '9090',
+		lan_ip: replace(uci_get('network.lan.ipaddr') ?? '', /\/.*/, ''),
+		secret: uci_get('openclash.config.dashboard_password') ?? '',
+	};
+};
+
+P.dashboard = function(a) {
+	const NAMES = { Dashboard: 1, Yacd: 1, Metacubexd: 1, Zashboard: 1 };
+	if (!NAMES[a.name]) die('未知面板：' + a.name);
+	let c = ucur();
+	if (a.op == 'default') {
+		if (!stat('/usr/share/openclash/ui/' + lc(a.name))) die('这个面板还没安装');
+		c.set('openclash', 'config', 'default_dashboard', lc(a.name));
+		c.commit('openclash');
+		return { ok: true };
+	}
+	if (a.op == 'delete') {
+		sh('rm -rf ' + shq('/usr/share/openclash/ui/' + lc(a.name)));
+		return { ok: true };
+	}
+	let t = a.type == 'Meta' ? 'Meta' : 'Official';
+	let r = sh(sprintf('timeout 100 %s/openclash_download_dashboard.sh %s %s', OC_SH, shq(a.name), shq(t)));
+	if (r.code != 0) die('下载失败（退出码 ' + r.code + '），可能是网络问题，稍后再试');
+	if (a.name == 'Dashboard') c.set('openclash', 'config', 'dashboard_type', t);
+	if (a.name == 'Yacd') c.set('openclash', 'config', 'yacd_type', t);
+	c.commit('openclash');
+	return { ok: true };
+};
+
+P.age = function(a) {
+	let core = '/etc/openclash/core/clash_meta';
+	if (a.op == 'public') {
+		if (!match(a.secret ?? '', /^AGE-SECRET-KEY-[A-Z0-9-]+$/)) die('私钥格式不对');
+		let o = trim(sh(sprintf('%s age convert %s', core, shq(a.secret))).out);
+		if (!match(o, /^age1/)) die('无法计算公钥：' + o);
+		return { public: o };
+	}
+	let o = sh(sprintf('%s age %s', core, a.algo == 'pq' ? 'keygen-pq' : 'keygen')).out;
+	let sec = match(o, /(AGE-SECRET-KEY-[A-Z0-9-]+)/), pub = match(o, /(age1[a-z0-9]+)/);
+	if (!sec) die('生成失败：' + trim(o));
+	return { secret: sec[1], public: pub ? pub[1] : null };
+};
+
+/* 备份文件放到面板的 dl 目录，用随机文件名直接下载，10 分钟后删除 */
+function dl_put(src, name) {
+	mkdir(DL_DIR);
+	sh(sprintf('find %s -type f -mmin +10 -delete 2>/dev/null', DL_DIR));
+	let rnd = trim(sh("tr -dc 'a-z0-9' < /dev/urandom | head -c 24").out);
+	let dir = DL_DIR + '/' + rnd;
+	mkdir(dir);
+	let dst = dir + '/' + name;
+	sh(sprintf('mv -f %s %s', shq(src), shq(dst)));
+	sh(sprintf("nohup sh -c 'sleep 600; rm -rf %s' >/dev/null 2>&1 </dev/null &", dir));
+	return { url: 'dl/' + rnd + '/' + urlenc(name), name, size: stat(dst)?.size };
+}
+
+P.backup_file = function(a) {
+	const SCOPES = {
+		all: 'cp -f /etc/config/openclash /etc/openclash/openclash; tar -C /etc/openclash -czf %s . ; rm -f /etc/openclash/openclash',
+		ex_core: "cp -f /etc/config/openclash /etc/openclash/openclash; echo core > /tmp/cmcp_ex.txt; echo ./core >> /tmp/cmcp_ex.txt; tar -C /etc/openclash -X /tmp/cmcp_ex.txt -czf %s . ; rm -f /etc/openclash/openclash /tmp/cmcp_ex.txt",
+		config: "cp -f /etc/config/openclash /etc/openclash/openclash; tar -C /etc/openclash -czf %s ./openclash ./config ./custom ./overwrite 2>/dev/null; rm -f /etc/openclash/openclash",
+		core: 'tar -C /etc/openclash -czf %s ./core',
+		rule: 'tar -C /etc/openclash -czf %s ./rule_provider',
+		proxy: 'tar -C /etc/openclash -czf %s ./proxy_provider',
+	};
+	let s = a.scope || 'config';
+	if (!SCOPES[s]) die('未知备份类型');
+	let tmp = '/tmp/cmcp_bk.tar.gz';
+	sh('rm -f ' + tmp);
+	sh(sprintf(SCOPES[s], tmp));
+	if (!stat(tmp)) die('打包失败');
+	return dl_put(tmp, sprintf('openclash-%s-%s.tar.gz', s, now_str()));
+};
+
+P.file_download = function(a) {
+	let p = oc_file_path(a.kind, a.name);
+	if (!stat(p)) die('文件不存在');
+	let tmp = '/tmp/cmcp_dlfile';
+	sh(sprintf('cp -f %s %s', shq(p), tmp));
+	return dl_put(tmp, a.name);
+};
+
+P.restore = function(a) {
+	if (type(a.b64) != 'string' || length(a.b64) < 40) die('没有收到备份文件');
+	let tmp = '/tmp/cmcp_restore.tar.gz', dir = '/tmp/cmcp_restore';
+	writefile(tmp + '.b64', a.b64);
+	sh(sprintf('rm -rf %s; mkdir -p %s; base64 -d %s.b64 > %s; rm -f %s.b64', dir, dir, tmp, tmp, tmp));
+	let t = sh(sprintf('tar -xzf %s -C %s 2>&1', tmp, dir));
+	sh('rm -f ' + tmp);
+	if (t.code != 0) { sh('rm -rf ' + dir); die('不是有效的 OpenClash 备份（tar.gz）：' + trim(t.out)); }
+	let ls = sh(sprintf('cd %s && find . -maxdepth 2 | head -50', dir)).out;
+	if (!match(ls, /\.\/(openclash|config|custom|overwrite|core|rule_provider|proxy_provider)/)) {
+		sh('rm -rf ' + dir); die('备份里没有 OpenClash 的文件');
+	}
+	sh(sprintf('mkdir -p /etc/claude-mcp/bak; cp -f /etc/config/openclash /etc/claude-mcp/bak/openclash.uci.before-restore.%s', now_str()));
+	sh(sprintf('cd %s && for d in config custom overwrite core rule_provider proxy_provider; do [ -d "$d" ] && mkdir -p /etc/openclash/$d && cp -rf "$d"/. /etc/openclash/$d/; done; [ -f openclash ] && cp -f openclash /etc/config/openclash; chmod 755 /etc/openclash/core/* 2>/dev/null', dir));
+	sh('rm -rf ' + dir);
+	if (a.restart) restart_openclash_bg();
+	return { ok: true, files: trim(ls) };
+};
+
+P.oc_reset = function(a) {
+	if (a.confirm !== 'RESET') die('需要确认');
+	sh(sprintf('mkdir -p /etc/claude-mcp/bak; cp -f /etc/config/openclash /etc/claude-mcp/bak/openclash.uci.before-reset.%s', now_str()));
+	sh("uci set openclash.config.enable=0; uci commit openclash; /etc/init.d/openclash stop >/dev/null 2>&1; mkdir -p /etc/openclash/custom /etc/openclash/overwrite /etc/openclash/rule_provider; cp -f /usr/share/openclash/backup/openclash /etc/config/openclash; cp -f /usr/share/openclash/backup/openclash_custom* /etc/openclash/custom/; cp -f /usr/share/openclash/backup/openclash_force_sniffing* /etc/openclash/custom/; cp -f /usr/share/openclash/backup/openclash_sniffing* /etc/openclash/custom/; cp -f /usr/share/openclash/backup/china_ip_route.ipset /etc/openclash/china_ip_route.ipset; cp -f /usr/share/openclash/backup/china_ip6_route.ipset /etc/openclash/china_ip6_route.ipset; cp -f /usr/share/openclash/backup/overwrite/default /etc/openclash/overwrite/default");
+	return { ok: true };
+};
+
+P.overwrite_fetch = function(a) {
+	let s = a.sid ? ucur().get_all('openclash', a.sid) : null;
+	if (!s || s['.type'] != 'config_overwrite') die('找不到这个覆写模块');
+	if (!match(s.url ?? '', /^https?:\/\/\S+$/)) die('这个模块没有订阅地址');
+	if (!match(s.name ?? '', /^[A-Za-z0-9._-]+$/)) die('模块名只能包含字母、数字、点、下划线和横线');
+	let tmp = '/tmp/cmcp_ow_dl';
+	let r = sh(sprintf('curl -fsSL --connect-timeout 5 -m 30 --retry 2 %s -o %s', shq(s.url), tmp));
+	if (r.code != 0 || !stat(tmp)?.size) { sh('rm -f ' + tmp); die('下载失败：' + trim(r.out)); }
+	let p = '/etc/openclash/overwrite/' + s.name;
+	oc_backup_file('overwrite', p);
+	sh(sprintf('mv -f %s %s', tmp, shq(p)));
+	return { ok: true, size: stat(p)?.size };
+};
+
+P.core_ps = function() {
+	let pid = trim(sh("pidof clash 2>/dev/null | awk '{print $1}'").out);
+	if (!length(pid)) return { running: false };
+	let st = readfile('/proc/' + pid + '/status') ?? '';
+	let rss = +(match(st, /VmRSS:\s+(\d+)/)?.[1] ?? 0) * 1024;
+	return { running: true, pid: +pid, rss };
+};
+
+/* 快捷操作第二批，其余交给原来的 P.quick */
+const QUICK_BASE = P.quick;
+P.quick = function(a) {
+	switch (a.action) {
+	case 'flush_smart':
+		try { api('POST', '/cache/smart/flush', null, 5); }
+		catch (e) {
+			if (index('' + (type(e) == 'object' ? e.message : e), '404') >= 0) return { ok: true, msg: '当前内核不是 Smart 版，没有 Smart 缓存，不需要清理' };
+			die(type(e) == 'object' ? e.message : '' + e);
+		}
+		return { ok: true, msg: 'Smart 策略缓存已清空' };
+	case 'stream_cache':
+		sh('rm -rf /etc/openclash/history/streaming_unlock_cache');
+		return { ok: true, msg: '流媒体解锁检测缓存已清空' };
+	case 'one_key_update':
+		bg('bash ' + OC_SH + "/openclash_update.sh 'one_key_update'");
+		return { ok: true, msg: '一键更新已开始（插件 + 内核），完成后会自动重启' };
+	case 'update_model':
+		bg(OC_SH + '/openclash_lgbm.sh');
+		return { ok: true, msg: 'LightGBM 模型开始在后台更新' };
+	case 'update_geo_one': {
+		let t = { ipdb: 1, geoip: 1, geosite: 1, geoasn: 1 };
+		if (!t[a.arg]) die('未知数据库');
+		bg(sprintf('%s/openclash_geo.sh %s', OC_SH, a.arg));
+		return { ok: true, msg: '已开始在后台更新' };
+	}
+	case 'clear_start_log':
+		sh(': > /tmp/openclash_start.log');
+		return { ok: true, msg: '启动日志已清空' };
+	}
+	return QUICK_BASE(a);
+};
+
+P.oc_sections = function(a) {
+	if (!OC_SEC_TYPES[a.type]) die('不支持的类型：' + a.type);
+	let out = [];
+	ucur().foreach('openclash', a.type, (s) => {
+		let o = { sid: s['.name'] };
+		for (let k, v in s) if (substr(k, 0, 1) != '.') o[k] = v;
+		push(out, o);
+	});
+	return { sections: out };
+};
+
+P.oc_move = function(a) {
+	let c = ucur(), t = a.sid ? c.get('openclash', a.sid) : null;
+	if (!t || !OC_SEC_TYPES[t]) die('找不到这个条目');
+	let list = [];
+	c.foreach('openclash', t, (s) => push(list, s['.name']));
+	let i = index(list, a.sid), j = i + (a.dir == 'up' ? -1 : 1);
+	if (j < 0 || j >= length(list)) return { ok: true };
+	let all = [];
+	c.foreach('openclash', null, (s) => push(all, s['.name']));
+	let pos = index(all, list[j]);
+	c.reorder('openclash', a.sid, pos);
+	c.commit('openclash');
+	return { ok: true };
+};
+
+/* ---------------- 面板：第三批（终端、文件管理、拉黑） ---------------- */
+
+function shell_allowed() { if (conf().allow_shell === false) die('路由器上已关闭命令行功能（claude-mcp shell on 可以重新打开）'); }
+
+P.term = function(a) {
+	shell_allowed();
+	let cmd = '' + (a.cmd ?? ''), cwd = '' + (a.cwd || '/root');
+	if (!length(trim(cmd))) die('命令为空');
+	if (!stat(cwd)) cwd = '/';
+	let t = +a.timeout || 60;
+	if (t > 110) t = 110;
+	let mark = '__CMCP_CWD__';
+	let script = sprintf('cd %s 2>/dev/null || cd /\n%s\n__rc=$?\necho\necho %s"$(pwd)"\nexit $__rc', shq(cwd), cmd, mark);
+	let r = sh(sprintf('timeout %d sh -c %s', t, shq(script)));
+	let out = r.out, ncwd = cwd;
+	let i = rindex(out, mark);
+	if (i >= 0) { ncwd = trim(substr(out, i + length(mark))); out = substr(out, 0, i); }
+	out = replace(out, /\n+$/, '');
+	if (length(out) > 60000) out = '…（前面的输出太长，已省略）\n' + substr(out, length(out) - 60000);
+	return { out, code: r.code == 124 || r.code == 143 ? 'timeout' : r.code, cwd: ncwd };
+};
+
+const FS_PROTECT = ['/', '/bin', '/boot', '/dev', '/etc', '/lib', '/overlay', '/proc', '/rom', '/root', '/sbin', '/sys', '/tmp', '/usr', '/var', '/www', '/etc/config', '/etc/init.d', '/usr/bin', '/usr/lib', '/usr/sbin', '/www-claude-mcp', '/www-claude-mcp/cgi-bin', '/etc/claude-mcp', '/etc/openclash'];
+function fs_path(p) {
+	if (type(p) != 'string' || substr(p, 0, 1) != '/' || index(p, '\0') >= 0) die('路径必须是以 / 开头的绝对路径');
+	let parts = [];
+	for (let x in split(p, '/')) {
+		if (x == '' || x == '.') continue;
+		if (x == '..') { pop(parts); continue; }
+		push(parts, x);
+	}
+	return '/' + join('/', parts);
+}
+function fs_guard_write(p) {
+	shell_allowed();
+	if (index(FS_PROTECT, p) >= 0) die('这是系统关键目录，不能删除或改名：' + p);
+	if (match(p, /^\/(proc|sys|dev|rom)(\/|$)/)) die('这个位置不能修改：' + p);
+	if (p == '/www-claude-mcp/cgi-bin/mcp' || p == '/usr/bin/claude-mcp') die('这是面板自身的程序，不能在这里删除或改名');
+}
+
+P.fs_list = function(a) {
+	let p = fs_path(a.path || '/');
+	let st = stat(p);
+	if (!st) die('不存在：' + p);
+	if (st.type != 'directory') die('不是文件夹：' + p);
+	let out = [];
+	for (let n in (require('fs').lsdir(p) ?? [])) {
+		let f = (p == '/' ? '' : p) + '/' + n, s = stat(f), l = require('fs').lstat(f);
+		if (!l) continue;
+		push(out, { name: n, dir: s?.type == 'directory', link: l.type == 'link', size: s?.size ?? 0, mtime: (s ?? l).mtime, mode: sprintf('%03o', ((s ?? l).mode ?? 0) & 4095) });
+	}
+	out = sort(out, (x, y) => (y.dir - x.dir) || (lc(x.name) < lc(y.name) ? -1 : 1));
+	let df = sh(sprintf("df -h %s 2>/dev/null | tail -n 1 | awk '{print $4\" 可用 / 共 \"$2}'", shq(p))).out;
+	return { path: p, items: out, free: trim(df) };
+};
+
+P.fs_read = function(a) {
+	let p = fs_path(a.path), st = stat(p);
+	if (!st) die('文件不存在');
+	if (st.type != 'file') die('不是普通文件');
+	if (st.size > 2 * 1024 * 1024) return { path: p, size: st.size, mtime: st.mtime, toobig: true };
+	let s = readfile(p) ?? '';
+	for (let c = 0; c < 9; c++) if (index(s, chr(c)) >= 0) return { path: p, size: st.size, mtime: st.mtime, binary: true };
+	return { path: p, size: st.size, mtime: st.mtime, content: s };
+};
+
+P.fs_write = function(a) {
+	let p = fs_path(a.path);
+	shell_allowed();
+	if (match(p, /^\/(proc|sys|dev|rom)(\/|$)/)) die('这个位置不能写入');
+	let st = stat(p);
+	if (st && st.type == 'directory') die('这是文件夹');
+	if (st && !a.overwrite && a.create) die('已经有同名文件');
+	let dir = replace(p, /\/[^\/]*$/, '') || '/';
+	if (!stat(dir)) die('文件夹不存在：' + dir);
+	let bak = null;
+	if (st && st.size < 2 * 1024 * 1024) {
+		mkdir('/etc/claude-mcp/bak');
+		bak = sprintf('/etc/claude-mcp/bak/file.%s.%s', replace(p, /\//g, '_'), now_str());
+		sh(sprintf('cp -f %s %s; ls -1t /etc/claude-mcp/bak/ | sed -n "41,\\$p" | while read f; do rm -f "/etc/claude-mcp/bak/$f"; done', shq(p), shq(bak)));
+	}
+	let tmp = p + '.cmcp_tmp';
+	if (a.b64 != null) {
+		writefile(tmp + '.b64', a.b64);
+		let r = sh(sprintf('base64 -d %s > %s; rm -f %s', shq(tmp + '.b64'), shq(tmp), shq(tmp + '.b64')));
+		if (r.code != 0) { sh('rm -f ' + shq(tmp)); die('文件解码失败'); }
+	} else {
+		if (type(a.content) != 'string') die('缺少内容');
+		if (writefile(tmp, a.content) == null) die('写入失败（空间不足或没有权限？）');
+	}
+	if (st) sh(sprintf('chmod --reference=%s %s 2>/dev/null', shq(p), shq(tmp)));
+	rename(tmp, p);
+	return { ok: true, backup: bak, size: stat(p)?.size };
+};
+
+P.fs_mkdir = function(a) {
+	let p = fs_path(a.path);
+	shell_allowed();
+	if (stat(p)) die('已经存在');
+	let r = sh('mkdir -p ' + shq(p));
+	if (r.code != 0) die(trim(r.out));
+	return { ok: true };
+};
+
+P.fs_delete = function(a) {
+	let p = fs_path(a.path);
+	fs_guard_write(p);
+	let st = require('fs').lstat(p);
+	if (!st) die('不存在');
+	if (st.type == 'directory' && !a.recursive) {
+		let n = length(require('fs').lsdir(p) ?? []);
+		if (n) die('文件夹不是空的（里面有 ' + n + ' 项）');
+	}
+	let r = sh('rm -rf ' + shq(p));
+	if (r.code != 0) die(trim(r.out));
+	return { ok: true };
+};
+
+P.fs_rename = function(a) {
+	let p = fs_path(a.path), q = fs_path(a.to);
+	fs_guard_write(p);
+	if (stat(q)) die('目标已存在');
+	let r = sh(sprintf('mv %s %s', shq(p), shq(q)));
+	if (r.code != 0) die(trim(r.out));
+	return { ok: true };
+};
+
+P.fs_copy = function(a) {
+	let p = fs_path(a.path), q = fs_path(a.to);
+	shell_allowed();
+	if (stat(q)) die('目标已存在');
+	let r = sh(sprintf('cp -a %s %s', shq(p), shq(q)));
+	if (r.code != 0) die(trim(r.out));
+	return { ok: true };
+};
+
+P.fs_chmod = function(a) {
+	let p = fs_path(a.path);
+	fs_guard_write(p);
+	if (!match('' + a.mode, /^[0-7]{3,4}$/)) die('权限格式不对，例如 755');
+	let r = sh(sprintf('chmod %s %s', a.mode, shq(p)));
+	if (r.code != 0) die(trim(r.out));
+	return { ok: true };
+};
+
+P.fs_download = function(a) {
+	let p = fs_path(a.path), st = stat(p);
+	if (!st) die('不存在');
+	let name = replace(p, /.*\//, '') || 'root';
+	let tmp = '/tmp/cmcp_fsdl';
+	sh('rm -rf ' + tmp);
+	if (st.type == 'directory') {
+		let r = sh(sprintf('tar -czf %s -C %s %s', tmp, shq(replace(p, /\/[^\/]*$/, '') || '/'), shq(name)));
+		if (r.code != 0 && !stat(tmp)) die('打包失败');
+		name += '.tar.gz';
+	} else {
+		if (st.size > 200 * 1024 * 1024) die('文件太大');
+		sh(sprintf('cp -f %s %s', shq(p), tmp));
+	}
+	return dl_put(tmp, name);
+};
+
+/* ---------- 拉黑名单：被拉黑的设备所有流量直连（只能用大陆网络） ---------- */
+const BL_FILE = '/etc/claude-mcp/blacklist.json';
+const BL_PROVIDER = 'cmcp_blacklist';
+const BL_RULESET = '/etc/openclash/rule_provider/cmcp_blacklist.yaml';
+const BL_CUSTOM = '/etc/openclash/custom/openclash_custom_rules.list';
+const BL_MARK = '# [cmcp-blacklist]';
+
+function bl_load() { let j = null; try { j = json(readfile(BL_FILE) ?? '[]'); } catch (e) {} return type(j) == 'array' ? j : []; }
+function bl_save(l) { writefile(BL_FILE + '.tmp', sprintf('%J', l)); rename(BL_FILE + '.tmp', BL_FILE); }
+function bl_write_ruleset(l) {
+	// 注意：面板域名不放进来——从大陆直连 Cloudflare 很慢（每个请求 0.6–2 秒），走代理节点只要 0.1–0.2 秒
+	let lines = ['# 由路由器面板「拉黑名单」自动生成，不要手动修改', 'payload:'];
+	// 路由器自己连 Cloudflare 的流量（隧道、云端报告）走直连：不受代理节点抽风影响。只认路由器上的程序，手机等设备照旧走代理
+	push(lines, '  - PROCESS-NAME,cloudflared', '  - DST-PORT,7844', '  - AND,((DOMAIN-SUFFIX,' + panel_domain() + '),(PROCESS-NAME,curl))', '  - AND,((DOMAIN,api.cloudflare.com),(PROCESS-NAME,curl))');
+	for (let e in l) push(lines, sprintf("  - SRC-IP-CIDR,%s/32", e.ip));
+	mkdir('/etc/openclash/rule_provider');
+	writefile(BL_RULESET + '.tmp', join('\n', lines) + '\n');
+	rename(BL_RULESET + '.tmp', BL_RULESET);
+}
+function bl_custom_ready() { return index(readfile(BL_CUSTOM) ?? '', BL_MARK) >= 0; }
+function bl_live() { try { let r = api('GET', '/providers/rules', null, 4); return !!(r?.providers?.[BL_PROVIDER]); } catch (e) { return false; } }
+function bl_mac(m) { m = lc(trim('' + (m ?? ''))); if (!match(m, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('MAC 地址不对：' + m); return m; }
+
+/* 给设备固定 IP（已有固定分配就沿用），返回最终 IP */
+function bl_pin(mac, ip, name) {
+	let c = require('uci').cursor(), found = null;
+	c.load('dhcp');
+	c.foreach('dhcp', 'host', (s) => {
+		let macs = type(s.mac) == 'array' ? s.mac : split(lc(s.mac ?? ''), ' ');
+		for (let m in macs) if (lc(m) == mac) found = s;
+	});
+	if (found) return { ip: found.ip, created: false };
+	if (!match(ip ?? '', /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，先让它连上网再拉黑');
+	let sid = c.add('dhcp', 'host');
+	c.set('dhcp', sid, 'mac', mac);
+	c.set('dhcp', sid, 'ip', ip);
+	if (name && match(name, /^[A-Za-z0-9._-]+$/)) c.set('dhcp', sid, 'name', name);
+	c.set('dhcp', sid, 'cmcp_black', '1');
+	c.commit('dhcp');
+	sh('/etc/init.d/dnsmasq reload >/dev/null 2>&1');
+	return { ip, created: true };
+}
+function bl_unpin(mac) {
+	let c = require('uci').cursor(), del = [];
+	c.load('dhcp');
+	c.foreach('dhcp', 'host', (s) => { if (s.cmcp_black == '1' && lc(s.mac ?? '') == mac) push(del, s['.name']); });
+	for (let s in del) c.delete('dhcp', s);
+	if (length(del)) { c.commit('dhcp'); sh('/etc/init.d/dnsmasq reload >/dev/null 2>&1'); }
+}
+function bl_apply(ip) {
+	try { api('PUT', '/providers/rules/' + BL_PROVIDER, null, 10); } catch (e) { return false; }
+	if (ip) try {
+		for (let cn in (api('GET', '/connections', null, 5)?.connections ?? []))
+			if (cn.metadata?.sourceIP == ip) try { api('DELETE', '/connections/' + cn.id, null, 3); } catch (e) {}
+	} catch (e) {}
+	return true;
+}
+
+/* ---------- 看门狗：断线记录 ---------- */
+const WD_EV = '/etc/claude-mcp/events.log';
+P.wd = function(a) {
+	let lines = split(trim(readfile(WD_EV) ?? ''), '\n'), ev = [], lim = +(a?.limit ?? 300);
+	for (let i = length(lines) - 1; i >= 0 && length(ev) < lim; i--) {
+		if (!length(lines[i])) continue;
+		try { push(ev, json(lines[i])); } catch (e) {}
+	}
+	let st = {};
+	for (let l in split(readfile('/tmp/cmcp_wd.state') ?? '', '\n'))
+		for (let kv in split(l, ';')) {
+			let m = match(trim(kv), /^([A-Z_]+)="?([^"]*)"?$/);
+			if (m) st[m[1]] = m[2];
+		}
+	let run = false;
+	try { run = !!json(sh("ubus call service list '{\"name\":\"cmcp-watchdog\"}'").out)?.['cmcp-watchdog']?.instances?.watchdog?.running; } catch (e) {}
+	return {
+		events: ev, state: st, running: run, now: time(),
+		uptime: +split(readfile('/proc/uptime') ?? '0', ' ')[0],
+		heartbeat: +(trim(readfile('/etc/claude-mcp/heartbeat') ?? '0') || 0),
+	};
+};
+/* 云端监测：给面板平板（证人）的报告网址 */
+/* 切节点前先测一下这个节点通不通（测不通就提醒，免得切过去连面板都打不开） */
+P.node_check = function(a) {
+	if (!a?.node) die('需要 node');
+	try {
+		let r = api('GET', '/proxies/' + urlenc(a.node) + '/delay?timeout=3000&url=' + urlenc('https://www.gstatic.com/generate_204'), null, 8);
+		return { ok: (+r?.delay || 0) > 0, delay: +r?.delay || 0 };
+	} catch (e) { return { ok: false, delay: 0 }; }
+};
+
+/* ---------- 节点自动切换 ---------- */
+function cmcp_readj(f, def) { try { let s = readfile(f); return s ? json(s) : def; } catch (e) { return def; } }
+function cmcp_writej(f, o) { writefile(f + '.tmp', sprintf('%J', o)); sh('mv ' + shq(f + '.tmp') + ' ' + shq(f)); }
+
+P.autosw = function(a) {
+	let f = '/etc/claude-mcp/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' });
+	if (a?.set) {
+		if (a.enabled != null) c.enabled = !!a.enabled;
+		if (a.group) c.group = '' + a.group;
+		cmcp_writej(f, c);
+	}
+	let groups = [], now = null;
+	try {
+		for (let n, p in api('GET', '/proxies', null, 6)?.proxies ?? {})
+			if (p.type == 'Selector' && n != 'GLOBAL') { push(groups, n); if (n == c.group) now = p.now; }
+	} catch (e) {}
+	let r = { enabled: !!c.enabled, group: c.group, now, groups, hist: cmcp_readj('/etc/claude-mcp/autosw_hist.json', []), sub: cmcp_readj('/tmp/cmcp_subinfo.json', null) };
+	// 模拟一次：当前节点要是挂了，会换到哪个
+	if (a?.dry) {
+		let o = trim(sh('/usr/sbin/cmcp-autosw test').out), j = null;
+		try { j = json(o); } catch (e) {}
+		if (!j) die('模拟失败：' + (o || '没有输出'));
+		r.dry = j;
+	}
+	return r;
+};
+
+/* ---------- 设备暂停上网 ---------- */
+function pause_out() {
+	let p = cmcp_readj('/etc/claude-mcp/pause.json', {}), st = {};
+	try { st = json(trim(sh('/usr/sbin/cmcp-pause status').out)) ?? {}; } catch (e) {}
+	for (let m in p) p[m].on = !!st[m];
+	return { devs: p, now: time() };
+}
+P.pause_list = function() { return pause_out(); };
+P.pause_set = function(a) {
+	let mac = lc(a?.mac ?? '');
+	if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) die('这台设备读不到 MAC 地址，没法暂停');
+	let f = '/etc/claude-mcp/pause.json', p = cmcp_readj(f, {}), e = p[mac] ?? {};
+	if (a.name) e.name = substr('' + a.name, 0, 40);
+	if (a.resume) delete e.until;
+	if (+a.minutes > 0) e.until = time() + int(+a.minutes * 60);
+	if (+a.until > time()) e.until = int(+a.until);
+	if (type(a.sched) == 'array') {
+		e.sched = [];
+		for (let s in a.sched)
+			if (match(s?.from ?? '', /^([01]?\d|2[0-3]):[0-5]\d$/) && match(s?.to ?? '', /^([01]?\d|2[0-3]):[0-5]\d$/) && s.from != s.to)
+				push(e.sched, { from: s.from, to: s.to });
+		e.sched = slice(e.sched, 0, 6);
+	}
+	if (!e.until && !length(e.sched ?? [])) delete p[mac]; else p[mac] = e;
+	cmcp_writej(f, p);
+	// 生成规则；刚开始暂停的设备，现有连接会被马上断开
+	sh('/usr/sbin/cmcp-pause apply');
+	return pause_out();
+};
+
+/* ---------- 流量统计 ---------- */
+P.traffic = function() {
+	let days = {}, names = {};
+	for (let f in split(trim(sh('ls /etc/claude-mcp/traffic/*.json 2>/dev/null').out), '\n')) {
+		if (!length(f)) continue;
+		let m = cmcp_readj(f, null);
+		if (!m) continue;
+		for (let d in m.days ?? {}) days[d] = m.days[d];
+		for (let k in m.names ?? {}) names[k] = m.names[k];
+	}
+	let st = cmcp_readj('/tmp/cmcp_traf.json', null);
+	if (st?.day) { days[st.day] = st.today; for (let k in st.names ?? {}) names[k] = st.names[k]; }
+	// 名字：认识的设备 → 现在的 DHCP 名字 → 静态分配起的名字（后面的优先）
+	let kn = cmcp_readj('/etc/claude-mcp/known_devices.json', {});
+	for (let m in kn) if (kn[m].name && !names[m]) names[m] = kn[m].name;
+	for (let l in split(readfile('/tmp/dhcp.leases') ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 4 && f[3] != '*') names[lc(f[1])] = f[3]; }
+	let cur = null;
+	for (let l in split(sh("uci -q show dhcp | grep -E '\\.(mac|name)='").out, '\n')) {
+		let m = match(l, /^dhcp\.([^.]+)\.(mac|name)='?([^']*)'?$/);
+		if (!m) continue;
+		cur ??= {}; cur[m[1]] ??= {}; cur[m[1]][m[2]] = m[3];
+	}
+	for (let s in cur ?? {}) if (cur[s].mac && cur[s].name) for (let mm in split(lc(cur[s].mac), ' ')) names[mm] = cur[s].name;
+	return { days, names, today: st?.day ?? null, at: st?.at ?? null };
+};
+
+/* ---------- Kwrt 后台菜单（侧边栏自动加入新装的插件） ---------- */
+// 用面板的自动登录账号读一次 LuCI 菜单，翻译成中文；只有装 / 卸软件包以后才重新读
+P.luci_menu = function(a) {
+	let key = trim(sh('date -r /usr/lib/opkg/status +%s 2>/dev/null; ls /usr/share/luci/menu.d /usr/lib/lua/luci/controller 2>/dev/null | md5sum').out);
+	let cf = '/tmp/cmcp_menu_list.json', c = cmcp_readj(cf, null);
+	if (c && c.key == key && !a?.force) return { items: c.items };
+	let pass = trim(readfile('/etc/claude-mcp/luci_pass') ?? '');
+	if (!length(pass)) die('还没启用 LuCI 页面的自动登录');
+	let jar = '/tmp/cmcp_menu_jar';
+	sh(sprintf("curl -s -m 10 -c %s -o /dev/null --data-urlencode 'luci_username=cmcp' --data-urlencode %s http://127.0.0.1/cgi-bin/luci/", jar, shq('luci_password=' + pass)));
+	let r = sh(sprintf('curl -s -m 20 -b %s http://127.0.0.1/cgi-bin/luci/admin/menu; rm -f %s', jar, jar)), m = null;
+	try { m = json(r.out); } catch (e) {}
+	let adm = m?.children?.admin?.children;
+	if (!adm) die('读不到 LuCI 的菜单');
+	let C = null;
+	try { C = require('luci.core'); C.load_catalog('zh-cn', '/usr/lib/lua/luci/i18n'); C.change_catalog('zh-cn'); } catch (e) { C = null; }
+	const tr = (s) => (C ? C.translate(s) : null) ?? s;
+	const ok = (n) => n && n.title && n.satisfied !== false;
+	const kids = (base, n) => {
+		let o = [];
+		for (let k in n.children ?? {}) if (ok(n.children[k])) push(o, [base + '/' + k, tr(n.children[k].title), +n.children[k].order || 0]);
+		return map(sort(o, (x, y) => x[2] - y[2]), (x) => [x[0], x[1]]);
+	};
+	let items = [];
+	for (let cat in adm) {
+		let c = adm[cat];
+		if (!ok(c) || cat in ['logout', 'menu', 'translations', 'ubus', 'uci']) continue;
+		let ch = filter(keys(c.children ?? {}), (k) => ok(c.children[k]));
+		// 没有下一级的一级菜单本身就是一个页面
+		if (!length(ch)) { push(items, { p: 'admin/' + cat, t: tr(c.title), g: tr(c.title), o: +c.order || 0, kids: [] }); continue; }
+		for (let it in ch) {
+			let n = c.children[it], p = 'admin/' + cat + '/' + it;
+			push(items, { p, t: tr(n.title), g: tr(c.title), o: +n.order || 0, kids: kids(p, n) });
+		}
+	}
+	cmcp_writej(cf, { key, items });
+	return { items };
+};
+
+// 延迟：同一连接连发 3 次请求，取「发出请求 → 收到第一个字节」最短的一次（不受 fake-ip 本地握手影响）
+function cmcp_rtt(px, url) {
+	let o = sh('curl -s -m 6 ' + px + ' -o /dev/null -o /dev/null -o /dev/null -w ' + shq('%{time_starttransfer} %{time_pretransfer}\n') + ' ' + shq(url) + ' ' + shq(url) + ' ' + shq(url)).out, best = null;
+	for (let l in split(trim(o), '\n')) { let x = split(l, ' '), v = (+x[0] - +x[1]) * 1000; if (+x[0] > 0 && (best == null || v < best)) best = v; }
+	return best == null ? null : int(best + 0.5);
+}
+P.speedtest = function(a) {
+	let d = '/tmp/cmcp_st', r = { kind: a.kind == 'direct' ? 'direct' : 'proxy' };
+	// 同一时间只测一个，避免互相抢带宽（超过 2 分钟的旧锁当作残留）
+	if (sh('[ -d ' + d + ' ] && [ $(( $(date +%s) - $(date -r ' + d + ' +%s) )) -lt 120 ]').code == 0) die('正在测速，请稍等');
+	sh('rm -rf ' + d + '; mkdir -p ' + d);
+	let f = (n) => split(trim(readfile(d + '/' + n) ?? ''), ' ');
+	if (r.kind == 'direct') {
+		r.ping = cmcp_rtt('', 'https://www.baidu.com/favicon.ico');
+		sh(sprintf("curl -sL -o /dev/null -m 8 -w '%%{size_download} %%{time_total}' %s > %s/a & curl -sL -o /dev/null -m 8 -w '%%{size_download} %%{time_total}' %s > %s/b & wait",
+			shq('https://mirrors.aliyun.com/ubuntu/ls-lR.gz'), d, shq('https://mirrors.cloud.tencent.com/ubuntu/ls-lR.gz'), d));
+		let x = f('a'), y = f('b'), bytes = (+x[0] || 0) + (+y[0] || 0), tt = max(+x[1] || 0, +y[1] || 0);
+		r.down = tt > 0 ? (bytes * 8 / tt / 1e6) : 0;
+		r.bytes = bytes;
+		r.via = '宽带直连（阿里云、腾讯云镜像）';
+	} else {
+		let user = uci_get('openclash.@authentication[0].username'), pass = uci_get('openclash.@authentication[0].password'), port = uci_get('openclash.config.mixed_port') || '7893';
+		let px = '-x ' + shq('http://' + (user && uci_get('openclash.@authentication[0].enabled') == '1' ? user + ':' + pass + '@' : '') + '127.0.0.1:' + port);
+		r.ping = cmcp_rtt(px, 'https://speed.cloudflare.com/__down?bytes=0');
+		sh(sprintf("curl -s -o /dev/null -m 6 %s -w '%%{size_download} %%{time_total}' 'https://speed.cloudflare.com/__down?bytes=50000000' > %s/a 2>/dev/null </dev/null & curl -s -o /dev/null -m 6 %s -w '%%{size_download} %%{time_total}' 'https://speed.cloudflare.com/__down?bytes=50000000' > %s/b 2>/dev/null </dev/null & sleep 2; true", px, d, px, d));
+		// 看看测速走的是哪个节点
+		try {
+			for (let c in api('GET', '/connections', null, 4)?.connections ?? [])
+				if (index(c.metadata?.host ?? '', 'speed.cloudflare.com') >= 0) { r.via = join(' → ', reverse(c.chains ?? [])); break; }
+		} catch (e) {}
+		sh('i=0; while [ $i -lt 10 ] && [ ! -s ' + d + '/a -o ! -s ' + d + '/b ]; do sleep 1; i=$((i+1)); done');
+		let x = f('a'), y = f('b'), bytes = (+x[0] || 0) + (+y[0] || 0), tt = max(+x[1] || 0, +y[1] || 0);
+		r.down = tt > 0 ? (bytes * 8 / tt / 1e6) : 0;
+		// 上传：从 /dev/zero 边读边传，不占内存
+		let u = split(trim(sh("head -c 60000000 /dev/zero | curl -s -o /dev/null -m 5 " + px + " -X POST -T - -H 'Content-Type: application/octet-stream' -w '%{size_upload} %{time_total}' 'https://speed.cloudflare.com/__up'").out), ' ');
+		r.up = +u[1] > 0 ? (+u[0] * 8 / +u[1] / 1e6) : 0;
+		r.bytes = bytes + (+u[0] || 0);
+	}
+	sh('rm -rf ' + d);
+	r.down = int(r.down * 10 + 0.5) / 10.0; if (r.up != null) r.up = int(r.up * 10 + 0.5) / 10.0;
+	r.t = time();
+	writefile('/tmp/cmcp_speed_' + r.kind + '.json', sprintf('%J', r));
+	return r;
+};
+P.speed_last = function() {
+	return { proxy: cmcp_readj('/tmp/cmcp_speed_proxy.json', null), direct: cmcp_readj('/tmp/cmcp_speed_direct.json', null) };
+};
+
+
+/* ---------- 云端备份（存在 Cloudflare，经路由器转发，面板拿不到云端密钥） ---------- */
+function bk_cloud() {
+	let c = {};
+	for (let l in split(readfile('/etc/claude-mcp/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
+	if (!c.URL || !c.RKEY) die('还没有设置云端（云端备份是完整版功能）');
+	return c;
+}
+function bk_id(a) { let id = '' + (a.id ?? ''); if (!match(id, /^[a-z0-9]{4,16}$/)) die('备份编号不对'); return id; }
+function bk_fetch(id) {
+	let c = bk_cloud(), f = '/tmp/cmcp_bkget.tgz';
+	sh('rm -f ' + f);
+	let r = sh(sprintf('curl -s -f -m 120 -o %s %s', f, shq(c.URL + '/bk/' + c.RKEY + '/' + id)));
+	if (r.code != 0 || !stat(f)) { sh('rm -f ' + f); die('从云端下载备份失败'); }
+	if (sh('tar tzf ' + f + ' >/dev/null 2>&1').code != 0) { sh('rm -f ' + f); die('备份文件损坏，没有还原'); }
+	return f;
+}
+P.bk_list = function() {
+	let c = bk_cloud(), r = sh(sprintf('curl -s -m 20 %s', shq(c.URL + '/bk/' + c.RKEY))), j = null;
+	try { j = json(r.out); } catch (e) {}
+	if (!j?.ok) die('连不上云端备份' + (j?.error ? '：' + j.error : ''));
+	let cron = sh("grep -q cmcp-backup /etc/crontabs/root 2>/dev/null").code == 0;
+	return { list: j.list, max: j.max, auto: cron, running: !!stat('/tmp/cmcp_bk.lock') };
+};
+P.bk_now = function() {
+	let r = sh('/usr/sbin/cmcp-backup manual 2>&1');
+	let j = null; try { j = json(trim(r.out)); } catch (e) {}
+	if (r.code != 0 || !j?.ok) die(trim(r.out) || '备份失败');
+	return j;
+};
+P.bk_del = function(a) {
+	let c = bk_cloud(), id = bk_id(a);
+	let r = sh(sprintf('curl -s -m 20 -X DELETE %s', shq(c.URL + '/bk/' + c.RKEY + '/' + id))), j = null;
+	try { j = json(r.out); } catch (e) {}
+	if (!j?.ok) die('删除失败');
+	return { ok: true };
+};
+P.bk_dl = function(a) {
+	let id = bk_id(a), f = bk_fetch(id);
+	return dl_put(f, (match('' + (a.name ?? ''), /^[A-Za-z0-9_.-]{1,60}$/) ? a.name : 'router-backup-' + id) + '.tar.gz');
+};
+// 还原：先下载并检查，确认没问题才动手；还原 = sysupgrade -r（和 LuCI「恢复备份」一样），然后重启
+P.bk_restore = function(a) {
+	let id = bk_id(a), f = bk_fetch(id), keep = '/tmp/cmcp_restore.tgz';
+	sh('mv -f ' + f + ' ' + keep);
+	// 动手前先把现在的设置也存一份（目标备份已经下载到本地，不怕被挤掉）
+	let pre = sh('/usr/sbin/cmcp-backup manual 2>&1');
+	if (pre.code != 0 && !a.force) { sh('rm -f ' + keep); die('还原前备份当前设置失败：' + trim(pre.out)); }
+	sh('( sleep 3; /usr/sbin/cmcp-watchdog shutdown; sysupgrade -r ' + keep + ' && sync && reboot ) >/dev/null 2>&1 </dev/null &');
+	return { ok: true };
+};
+
+/* ---------- 每日体检：读最近一次结果；run=1 现在体检一次（只更新面板，不推送） ---------- */
+P.daily = function(a) {
+	if (a?.run) {
+		let r = sh('/usr/sbin/cmcp-daily local 2>&1');
+		if (r.code != 0) die('体检失败：' + substr(trim(r.out), 0, 200));
+	}
+	return cmcp_readj('/etc/claude-mcp/daily.json', null) ?? { none: true };
+};
+
+P.cloud_info = function() {
+	let c = {};
+	for (let l in split(readfile('/etc/claude-mcp/cloud.conf') ?? '', '\n')) {
+		let m = match(l, /^([A-Z]+)=(.*)$/);
+		if (m) c[m[1]] = m[2];
+	}
+	if (!c.URL) return { enabled: false };
+	return { enabled: true, url: c.URL, tablet: c.URL + '/beat/t/' + c.TKEY };
+};
+P.wd_check = function() {
+	sh('/usr/sbin/cmcp-watchdog once');
+	return P.wd();
+};
+P.wd_clear = function() {
+	writefile(WD_EV, sprintf('%J\n', { t: time(), lvl: 'info', kind: 'watchdog', msg: '记录已清空', detail: '', from: 0, to: 0 }));
+	return { ok: true };
+};
+
+/* ---------- 面板：内嵌 Kwrt 原版页面 / 系统日志 / 进程 ---------- */
+P.luci_key = function() {
+	return { key: trim(readfile('/etc/claude-mcp/luci_key') ?? '') };
+};
+P.slog = function(a) {
+	let n = +a.lines || 300;
+	if (n > 1000) n = 1000;
+	let cmd = a.kind == 'kern' ? 'dmesg' : 'logread';
+	if (length(a.filter ?? '')) cmd += ' | grep -i -- ' + shq(a.filter);
+	cmd += ' | tail -n ' + n;
+	return { text: sh(cmd).out };
+};
+P.procs = function() {
+	let r = sh("top -bn1 | awk 'NR>4 && $1 ~ /^[0-9]+$/ {c=$7; sub(/%/,\"\",c); print $1\"\\t\"c}'; echo ===; " +
+		"for d in /proc/[0-9]*; do p=${d#/proc/}; [ -r $d/status ] || continue; " +
+		"awk -v p=$p '/^Name:/{n=$2} /^State:/{s=$2} /^VmRSS:/{m=$2} /^PPid:/{pp=$2} END{print p\"\\t\"pp\"\\t\"s\"\\t\"(m+0)\"\\t\"n}' $d/status 2>/dev/null; " +
+		"printf '%s\\t' $p; tr '\\0' ' ' < $d/cmdline 2>/dev/null | cut -c1-300; echo; done").out;
+	let parts = split(r, '===\n'), cpu = {}, info = {}, cmd = {};
+	for (let l in split(parts[0] ?? '', '\n')) { let f = split(l, '\t'); if (length(f) == 2) cpu[f[0]] = +f[1]; }
+	for (let l in split(parts[1] ?? '', '\n')) {
+		let f = split(l, '\t');
+		if (length(f) == 5) info[f[0]] = f;
+		else if (length(f) == 2 && info[f[0]]) cmd[f[0]] = f[1];
+	}
+	let me = {}, keep = trim(sh("pidof uhttpd cloudflared procd rpcd ubusd netifd").out);
+	for (let x in split(keep, ' ')) if (length(x)) me[x] = true;
+	let list = [];
+	for (let pid in info) {
+		let f = info[pid], c = trim(cmd[pid] ?? '');
+		c = replace(c, /(--token|--secret|-secret|password[= ])\s*\S+/g, '$1 ***');
+		push(list, { pid: +pid, ppid: +f[1], st: f[2], mem: +f[3], name: f[4], cmd: length(c) ? c : '[' + f[4] + ']', cpu: cpu[pid] ?? 0, sys: !!me[pid] || +pid < 3 });
+	}
+	let mi = readfile('/proc/meminfo') ?? '', m = match(mi, /MemTotal:\s+(\d+)/), av = match(mi, /MemAvailable:\s+(\d+)/);
+	return { list, total: m ? +m[1] : 0, avail: av ? +av[1] : 0 };
+};
+P.kill = function(a) {
+	let pid = +a.pid;
+	if (!(pid > 2)) die('不能结束这个进程');
+	let name = trim(readfile('/proc/' + pid + '/comm') ?? '');
+	if (!length(name)) die('进程已经不在了');
+	if (name in ['procd', 'ubusd', 'rpcd', 'netifd', 'uhttpd', 'cloudflared', 'dropbear', 'init'])
+		die('「' + name + '」是系统或面板自己要用的进程，结束它会断网或让面板失联，已拦下');
+	let r = sh('kill ' + (a.force ? '-9 ' : '') + pid);
+	if (r.code != 0) die(trim(r.out) || '结束失败');
+	return { ok: true, name };
+};
+
+P.black_state = function() {
+	let l = bl_load(), devs = P.devices().devices;
+	return {
+		entries: l, devices: devs,
+		ready: bl_custom_ready(), live: bl_live(),
+		custom_on: uci_get('openclash.config.enable_custom_clash_rules') == '1',
+		lan_ac_mode: uci_get('openclash.config.lan_ac_mode') ?? '0',
+	};
+};
+
+/* 第一次使用：把规则集写进「优先匹配」自定义规则，需要重启 OpenClash 一次 */
+P.black_setup = function(a) {
+	bl_write_ruleset(bl_load());
+	let s = readfile(BL_CUSTOM) ?? 'rules:\n';
+	if (index(s, BL_MARK) < 0) {
+		if (!match(s, /(^|\n)rules:[ \t]*(\n|$)/)) die('自定义规则文件里找不到「rules:」行，没有修改');
+		oc_backup_file('custom', BL_CUSTOM);
+		let entry = sprintf('  %s: %s 由路由器面板「拉黑名单」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
+		s = replace(s, /(^|\n)rules:[ \t]*\n/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
+		if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
+		else s = 'rule-providers:\n' + entry + s;
+		writefile(BL_CUSTOM + '.cmcp_tmp', s);
+		rename(BL_CUSTOM + '.cmcp_tmp', BL_CUSTOM);
+	}
+	let c = ucur();
+	if (c.get('openclash', 'config', 'enable_custom_clash_rules') != '1') { c.set('openclash', 'config', 'enable_custom_clash_rules', '1'); c.commit('openclash'); }
+	if (a.restart) restart_openclash_bg();
+	return { ok: true, restarting: !!a.restart };
+};
+
+P.black_set = function(a) {
+	let mac = a.mac ? bl_mac(a.mac) : null, l = bl_load();
+	if (!mac && !match(a.ip ?? '', /^\d+\.\d+\.\d+\.\d+$/)) die('缺少 MAC 或 IP');
+	let key = mac ?? ('ip:' + a.ip), i = -1;
+	const kof = (x) => x.mac ?? ('ip:' + x.ip);
+	for (let k = 0; k < length(l); k++) if (kof(l[k]) == key) i = k;
+	if (a.on) {
+		if (i >= 0) return { ok: true, already: true };
+		let p = mac ? bl_pin(mac, a.ip, a.name) : { ip: a.ip, created: false };
+		push(l, { mac, ip: p.ip, name: a.name ?? null, pinned: p.created, at: time() });
+		bl_save(l); bl_write_ruleset(l);
+		let live = bl_apply(p.ip);
+		return { ok: true, ip: p.ip, pinned: p.created, live, need_setup: !bl_custom_ready() || !live };
+	}
+	if (i < 0) return { ok: true };
+	let e = l[i];
+	l = filter(l, (x) => kof(x) != key);
+	bl_save(l); bl_write_ruleset(l);
+	if (e.pinned && mac && !a.keep_ip) bl_unpin(mac);
+	let live = bl_apply(e.ip);
+	return { ok: true, live };
+};
+/* ---------------- 工具定义 ---------------- */
+
+function S(props, req) { return { type: 'object', properties: props ?? {}, required: req ?? [] }; }
+const str = (d) => ({ type: 'string', description: d });
+const int = (d) => ({ type: 'integer', description: d });
+const bool = (d) => ({ type: 'boolean', description: d });
+const RO = { readOnlyHint: true, openWorldHint: false };
+const RW = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+const DX = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
+
+const TOOLS = [
+	{ name: 'router_status', title: '路由器状态', annotations: RO,
+	  description: '查看 OpenClash/Clash 内核运行状态、版本、代理模式、连接数、当前配置文件、自定义规则开关、区域绕过和 OAF 是否运行。排查问题时先调用它。',
+	  inputSchema: S() },
+	{ name: 'list_proxy_groups', title: '查看策略组/节点', annotations: RO,
+	  description: '不带参数：列出所有策略组及当前选择。带 group：列出该组全部节点、类型和最近一次延迟（▶ 为当前选中）。节点名含国旗 emoji 和空格，修改规则或切换时必须使用这里返回的准确名称。',
+	  inputSchema: S({ group: str('策略组名，如 Zou'), filter: str('只显示名称包含该关键字的节点，如 日本') }) },
+	{ name: 'test_delay', title: '测速', annotations: RO,
+	  description: '测试单个节点或整个策略组的延迟。name 是策略组时会并发测试组内全部节点并按延迟排序。',
+	  inputSchema: S({ name: str('节点名或策略组名'), url: str('测速地址，默认 https://www.gstatic.com/generate_204'), timeout: int('超时毫秒，默认 5000') }, ['name']) },
+	{ name: 'switch_proxy', title: '切换节点', annotations: RW,
+	  description: '把 Selector 类型策略组切换到指定节点（立即生效，不重启）。',
+	  inputSchema: S({ group: str('策略组名'), node: str('节点名（准确名称）'), close_connections: bool('切换后断开现有连接，让 App 立刻走新节点') }, ['group', 'node']) },
+	{ name: 'set_mode', title: '切换代理模式', annotations: RW,
+	  description: '临时切换 Clash 代理模式：rule（规则）/ global（全局）/ direct（直连）。',
+	  inputSchema: S({ mode: { type: 'string', enum: ['rule', 'global', 'direct'] } }, ['mode']) },
+	{ name: 'list_connections', title: '查看连接', annotations: RO,
+	  description: '查看当前活跃连接：域名、命中的规则、代理链、流量、来源设备 IP。filter 可按域名/规则/节点/IP 过滤，例如 douyin、DIRECT、台湾。',
+	  inputSchema: S({ filter: str('过滤关键字'), limit: int('最多显示条数，默认 50') }) },
+	{ name: 'close_connections', title: '断开连接', annotations: DX,
+	  description: '断开指定 id 的连接；不传 id 则断开全部（等同「关闭链接」），App 会重新连接并应用新规则。',
+	  inputSchema: S({ id: str('连接 id（来自 list_connections）') }) },
+	{ name: 'list_rules', title: '查看生效规则', annotations: RO,
+	  description: '查看 Clash 当前实际生效的规则（含自定义规则），可按关键字过滤。用于确认自定义规则是否被加载、指向哪个节点。',
+	  inputSchema: S({ filter: str('过滤关键字'), limit: int('默认 60'), offset: int('分页起点') }) },
+	{ name: 'get_logs', title: '实时日志', annotations: RO,
+	  description: '采集 Clash 内核几秒钟的实时日志（连接走向、报错）。可让用户同时操作 App 再调用。',
+	  inputSchema: S({ level: { type: 'string', enum: ['debug', 'info', 'warning', 'error'] }, seconds: int('采集秒数 1-15，默认 3'), filter: str('过滤关键字') }) },
+	{ name: 'get_custom_rules', title: '读取自定义规则', annotations: RO,
+	  description: '读取 OpenClash「覆写设置 → 规则设置」里的自定义规则文件。file=1 为上面的「优先匹配」框（默认），file=2 为下面的「候补匹配」框。修改前先读取。',
+	  inputSchema: S({ file: { type: 'integer', enum: [1, 2] }, hide_comments: bool('隐藏 # 注释行') }) },
+	{ name: 'set_custom_rules', title: '保存自定义规则', annotations: DX,
+	  description: '用 content 覆盖整个自定义规则文件（先用 get_custom_rules 读取，在原内容基础上修改，保留 rules: 行和注释），自动备份、校验格式和节点名，然后后台重启 OpenClash 使其生效。重启期间网络会断 10–30 秒，包括这次对话。',
+	  inputSchema: S({ content: str('完整文件内容'), file: { type: 'integer', enum: [1, 2] }, apply: bool('保存后重启生效，默认 true'), enable: bool('同时打开自定义规则开关，默认 true'), force: bool('跳过格式和节点名校验') }, ['content']) },
+	{ name: 'restore_custom_rules', title: '还原自定义规则', annotations: DX,
+	  description: '把自定义规则还原为上一次保存前的备份（.bak）并重启生效。',
+	  inputSchema: S({ file: { type: 'integer', enum: [1, 2] }, apply: bool('默认 true') }) },
+	{ name: 'restart_openclash', title: '重启 OpenClash', annotations: DX,
+	  description: '后台重启 OpenClash（网络会中断 10–30 秒）。',
+	  inputSchema: S() },
+	{ name: 'openclash_log', title: 'OpenClash 日志', annotations: RO,
+	  description: '查看 OpenClash 插件日志（启动过程、配置报错、规则被跳过的原因等）。',
+	  inputSchema: S({ lines: int('末尾行数，默认 60'), filter: str('过滤关键字') }) },
+	{ name: 'oaf_show', title: 'OAF 配置', annotations: RO,
+	  description: '查看 OAF 应用过滤的全部 uci 配置（appfilter）以及在线设备信息。修改前先查看现有结构。',
+	  inputSchema: S() },
+	{ name: 'oaf_find_app', title: 'OAF 查找应用', annotations: RO,
+	  description: '在 OAF 特征库中按名称查找应用 ID，例如 抖音、TikTok、王者。',
+	  inputSchema: S({ keyword: str('应用名关键字') }, ['keyword']) },
+	{ name: 'oaf_uci', title: '修改 OAF 配置', annotations: DX,
+	  description: '修改 OAF（appfilter）的 uci 配置并重启 OAF。只允许 appfilter.* 的键。每个操作：{op: set|add_list|del_list|delete|add, key: "appfilter.节.选项", value}。先用 oaf_show 了解现有配置结构再改。',
+	  inputSchema: S({
+		operations: { type: 'array', items: S({ op: { type: 'string', enum: ['set', 'add_list', 'del_list', 'delete', 'add'] }, key: str('如 appfilter.global.enable'), value: str('值') }, ['op']) },
+		commit: bool('默认 true'), restart: bool('提交后重启 OAF，默认 true')
+	  }, ['operations']) },
+
+	{ name: 'system_info', title: '系统信息', annotations: RO,
+	  description: '路由器型号、固件版本、运行时间、CPU 负载、内存、温度、存储占用。',
+	  inputSchema: S() },
+	{ name: 'net_speed', title: '实时网速', annotations: RO,
+	  description: '采样几秒，显示各网络接口的实时上下行速率和累计流量。',
+	  inputSchema: S({ seconds: int('采样秒数 1-10，默认 2'), interface: str('只看某个接口，如 pppoe-wan、br-lan') }) },
+	{ name: 'device_list', title: '设备列表', annotations: RO,
+	  description: '连接到路由器的设备：IP、MAC、主机名、是否在线。结合 list_connections 的来源 IP 可以知道哪台设备在用什么。',
+	  inputSchema: S() },
+	{ name: 'network_info', title: '网络信息', annotations: RO,
+	  description: 'WAN/WAN6 拨号状态、公网 IP、网关、DNS、各接口地址和默认路由。',
+	  inputSchema: S() },
+	{ name: 'list_services', title: '服务列表', annotations: RO,
+	  description: '列出路由器上所有服务（/etc/init.d）、是否开机自启、是否在运行。',
+	  inputSchema: S() },
+	{ name: 'service_control', title: '控制服务', annotations: DX,
+	  description: '对服务执行 restart / start / stop / reload / enable / disable，例如重启 AdGuardHome、dnsmasq、network。网络类服务在后台执行，会短暂断网。',
+	  inputSchema: S({ name: str('服务名（来自 list_services）'), action: { type: 'string', enum: ['restart', 'start', 'stop', 'reload', 'enable', 'disable'] } }, ['name', 'action']) },
+	{ name: 'reboot_router', title: '重启路由器', annotations: DX,
+	  description: '重启整个路由器（全家断网约 1–3 分钟，之后自动恢复）。必须先征得用户同意，并传 confirm=true。',
+	  inputSchema: S({ confirm: bool('用户已确认重启') }, ['confirm']) },
+	{ name: 'firewall_overview', title: '防火墙与端口转发', annotations: RO,
+	  description: '查看防火墙区域、端口转发、通信规则，每条后面附有 uci 路径，修改时配合 uci_set 使用。',
+	  inputSchema: S() },
+	{ name: 'uci_show', title: '读取配置', annotations: RO,
+	  description: '读取任意 uci 配置。不带参数列出全部配置文件；config=network / wireless / dhcp / firewall / system 等查看完整内容；可加 key 只看某节或某项（如 key=lan 或 key=@wifi-iface[0]）。',
+	  inputSchema: S({ config: str('配置名'), key: str('节或选项（可省略配置名前缀）') }) },
+	{ name: 'uci_set', title: '修改配置', annotations: DX,
+	  description: '修改任意 uci 配置：Wi-Fi 名称密码、DHCP 静态分配、端口转发、DNS 等。修改前自动备份，任一步失败自动撤销。reload 指定后才生效。警告：改错 network / firewall 可能导致整个路由器断网，届时我无法远程修复，只能由用户在本地处理——这类修改必须先向用户说明风险并确认。先用 uci_show 看清现有结构再改。',
+	  inputSchema: S({
+		operations: { type: 'array', items: S({
+			op: { type: 'string', enum: ['set', 'add_list', 'del_list', 'delete', 'rename', 'add'] },
+			key: str('如 wireless.@wifi-iface[0].ssid、dhcp.@host[-1].ip'),
+			config: str('op=add 时的配置名，如 firewall'),
+			value: str('值；op=add 时为节类型，如 redirect / host')
+		}, ['op']) },
+		commit: bool('默认 true；false 只暂存'),
+		reload: { type: 'string', enum: ['network', 'firewall', 'dhcp', 'wireless', 'system'] }
+	  }, ['operations']) },
+	{ name: 'uci_revert', title: '放弃未提交修改', annotations: RW,
+	  description: '放弃某个配置中暂存但未提交的修改。',
+	  inputSchema: S({ config: str('配置名') }, ['config']) },
+	{ name: 'uci_backups', title: '配置备份', annotations: DX,
+	  description: '列出 uci_set 自动生成的配置备份；传 restore=<备份名> 还原（之后需 reload 对应服务）。',
+	  inputSchema: S({ restore: str('要还原的备份名，如 network.20261027-235000') }) },
+	{ name: 'system_log', title: '系统日志', annotations: RO,
+	  description: '查看系统日志（logread），可按关键字过滤，例如 pppoe、dnsmasq、kernel、AdGuard。',
+	  inputSchema: S({ lines: int('行数，默认 80'), filter: str('过滤关键字') }) },
+	{ name: 'packages', title: '软件包', annotations: DX,
+	  description: '管理软件包：list（已安装，可用 name 过滤）/ search / upgradable / install / remove。安装和卸载前要征得用户同意。',
+	  inputSchema: S({ action: { type: 'string', enum: ['list', 'search', 'upgradable', 'install', 'remove'] }, name: str('包名或关键字') }) },
+	{ name: 'run_command', title: '执行命令', annotations: DX,
+	  description: '以 root 身份在路由器上执行 shell 命令（最长 110 秒）。其他工具做不到时再用。执行会修改系统的命令前，先告诉用户要做什么。不要执行会切断网络或停止 claude-mcp / cloudflared 的命令。',
+	  inputSchema: S({ command: str('shell 命令'), timeout: int('超时秒数，默认 30') }, ['command']) },
+];
+
+/* ---------------- MCP / JSON-RPC ---------------- */
+
+function rpc_result(id, result) { return { jsonrpc: '2.0', id, result }; }
+function rpc_error(id, code, message) { return { jsonrpc: '2.0', id, error: { code, message } }; }
+
+function handle(msg) {
+	if (type(msg) != 'object' || msg.jsonrpc != '2.0' || type(msg.method) != 'string')
+		return rpc_error(msg?.id ?? null, -32600, 'Invalid Request');
+
+	let id = msg.id, p = msg.params ?? {};
+	let is_notification = !exists(msg, 'id');
+
+	if (substr(msg.method, 0, 6) == 'panel/') {
+		let fn = P[substr(msg.method, 6)];
+		if (type(fn) != 'function') return rpc_error(id, -32601, '面板接口不存在：' + msg.method);
+		try { return rpc_result(id, fn(p)); }
+		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
+	}
+
+	switch (msg.method) {
+	case 'initialize':
+		return rpc_result(id, {
+			protocolVersion: index(PROTOCOLS, p.protocolVersion) >= 0 ? p.protocolVersion : PROTOCOLS[1],
+			capabilities: { tools: { listChanged: false } },
+			serverInfo: { name: 'openwrt-router', title: '我的路由器', version: VERSION },
+			instructions: '这是用户家里 OpenWrt 路由器（可能装有 OpenClash、OAF 应用过滤等插件，先用工具查看实际情况）的完整管理工具，可查看状态、设备、网速，控制服务，读写任意 uci 配置，执行命令。断网类操作（改 network/firewall、重启路由器或网络、停止服务）一旦出错，用户会失去网络、你也会失去连接，执行前必须说明影响并得到用户确认。修改规则前先 get_custom_rules 读取原文件并在其基础上修改；节点名必须用 list_proxy_groups 返回的准确名称（含国旗和空格）。set_custom_rules / restart_openclash 会让网络中断 10–30 秒，执行前告诉用户。'
+		});
+	case 'ping':
+		return rpc_result(id, {});
+	case 'tools/list':
+		return rpc_result(id, { tools: filter(TOOLS, (t) => !(t.name == 'run_command' && conf().allow_shell === false)) });
+	case 'tools/call': {
+		let fn = T[p.name];
+		if (!fn)
+			return rpc_error(id, -32602, '未知工具：' + p.name);
+		try {
+			let text = fn(p.arguments ?? {});
+			return rpc_result(id, { content: [{ type: 'text', text: '' + text }] });
+		} catch (e) {
+			let m = type(e) == 'object' ? e.message : '' + e;
+			return rpc_result(id, { content: [{ type: 'text', text: '出错：' + m }], isError: true });
+		}
+	}
+	default:
+		if (is_notification || match(msg.method, /^notifications\//))
+			return null;
+		return rpc_error(id, -32601, 'Method not found: ' + msg.method);
+	}
+}
+
+function reply(status, body, extra) {
+	print('Status: ' + status + '\r\n');
+	print('Cache-Control: no-store\r\n');
+	if (extra) print(extra);
+	if (body != null) {
+		print('Content-Type: application/json\r\n\r\n');
+		print(sprintf('%J', body));
+	} else
+		print('Content-Length: 0\r\n\r\n');
+}
+
+/* 记录每个请求在路由器上花了多久（排查「面板慢」用），只留最近的 */
+function reqlog(msg, t0, r) {
+	try {
+		let t1 = clock(true), ms = ((t1[0] - t0[0]) * 1000000000 + (t1[1] - t0[1])) / 1000000;
+		let m = msg?.method ?? '?';
+		if (m == 'tools/call') m += ':' + (msg.params?.name ?? '');
+		let lf = '/tmp/cmcp_req.log', st = stat(lf);
+		if (st && st.size > 300000) rename(lf, lf + '.1');
+		let h = fs_open(lf, 'a');
+		if (h) { h.write(sprintf('%d %s %d %s\n', time(), m, ms, r?.error ? 'ERR' : 'ok')); h.close(); }
+	} catch (e) {}
+}
+
+
+function main() {
+	let c = conf();
+	let token = c.token ?? '';
+	let path = getenv('PATH_INFO') ?? '';
+
+	if (length(token) < 16 || path != '/' + token) {
+		reply('404 Not Found', { error: 'not found' });
+		return;
+	}
+
+	let method = getenv('REQUEST_METHOD') ?? 'GET';
+	if (method == 'GET' || method == 'HEAD') {
+		reply('405 Method Not Allowed', null, 'Allow: POST, DELETE\r\n');
+		return;
+	}
+	if (method == 'DELETE') {
+		reply('200 OK', null);
+		return;
+	}
+	if (method != 'POST') {
+		reply('405 Method Not Allowed', null, 'Allow: POST\r\n');
+		return;
+	}
+
+	let len = +(getenv('CONTENT_LENGTH') ?? 0);
+	if (len <= 0 || len > 4 * 1024 * 1024) {
+		reply('400 Bad Request', rpc_error(null, -32700, 'Empty or oversized body'));
+		return;
+	}
+	let body = '';
+	while (length(body) < len) {
+		let chunk = stdin.read(len - length(body));
+		if (chunk == null || !length(chunk)) break;
+		body += chunk;
+	}
+
+	let msg = null;
+	try { msg = json(body); } catch (e) {
+		reply('400 Bad Request', rpc_error(null, -32700, 'Parse error'));
+		return;
+	}
+
+	if (type(msg) == 'array') {
+		let res = [];
+		for (let m in msg) {
+			let r = handle(m);
+			if (r != null) push(res, r);
+		}
+		if (length(res)) reply('200 OK', res); else reply('202 Accepted', null);
+		return;
+	}
+
+	let t0 = clock(true);
+	let r = handle(msg);
+	if (r == null)
+		reply('202 Accepted', null);
+	else
+		reply('200 OK', r);
+	reqlog(msg, t0, r);
+}
+
+main();

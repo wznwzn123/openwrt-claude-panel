@@ -1,0 +1,16 @@
+#!/bin/sh
+# 发一条通知：记到断线记录里，并通过 Cloudflare 推送到手机
+# 用法：cmcp-notify 等级(ok|info|warn|err) 类别 标题 [详情] [标签]
+D=/etc/claude-mcp
+EV=$D/events.log
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+esc() { printf '%s' "$1" | tr '\t\r' '  ' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} {if (NR>1) print "\\n"; print}'; }
+lvl=${1:-info}; kind=${2:-info}; title=$3; body=$4; tag=${5:-$kind}
+[ -n "$title" ] || exit 1
+printf '{"t":%s,"lvl":"%s","kind":"%s","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "$lvl" "$kind" "$(esc "$title")" "$(esc "$body")" >> "$EV"
+logger -t cmcp-notify "[$kind] $title"
+[ -f "$D/cloud.conf" ] || exit 0
+. "$D/cloud.conf"
+j=$(printf '{"lvl":"%s","kind":"%s","title":"%s","body":"%s","tag":"%s"}' "$lvl" "$kind" "$(esc "$title")" "$(esc "$body")" "$(esc "$tag")")
+curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/n/$RKEY" >/dev/null 2>&1
+exit 0

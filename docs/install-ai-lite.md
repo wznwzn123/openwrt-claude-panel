@@ -84,10 +84,11 @@ sh install.sh
 登录地址（第一次打开面板时粘贴）：
   https://router.example.com/cgi-bin/mcp/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-这个登录地址同时也是 Claude 连接器地址：……
+Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）：
+  https://router.example.com/cgi-bin/mcp/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
 ```
 
-**把登录地址复制保存好**（比如存到密码管理器）。⚠️ 这个地址里带着密钥，拿到它就等于拿到路由器的最高权限：**不要发给别人，也不要截图分享**。
+**把登录地址和 Claude 连接器地址复制保存好**（比如存到密码管理器）。⚠️ 地址里带着密钥，拿到它就等于拿到路由器的最高权限：**不要发给别人，也不要截图分享**。
 
 ## 第 5 步：在手机上打开面板
 
@@ -104,7 +105,7 @@ sh install.sh
 ## 第 6 步：连接 Claude
 
 1. 打开 Claude（网页版 https://claude.ai 或 App）→ **设置 → 连接器 → 添加自定义连接器**
-2. 名称填「我的路由器」，URL 填**登录地址**（就是第 4 步那个），不用填 OAuth，保存
+2. 名称填「我的路由器」，URL 填 **Claude 连接器地址**（第 4 步显示的，不是登录地址；忘了在面板「系统操作 → Claude 连接器地址」里复制），不用填 OAuth，保存
 3. 新开一个对话，试试：
 
    - 「看看路由器现在的状态」
@@ -121,10 +122,12 @@ sh install.sh
 - 「设备」页可以给孩子的设备设**定时断网**（比如每天 23:00–07:00）
 - OpenClash 的节点、订阅、规则、覆写都能在面板里改，不用再开电脑
 - 想换个样子：「系统操作」→「主题与背景」，可以选预设背景或手机相册里的图片，调模糊和明暗；手机比较卡的话可以关掉玻璃效果
+- 有新版本时面板首页会提示，点「**一键更新**」，设置都保留、不会断网，装不好会自动退回
+- 手机不用了：侧边栏最下面「**退出登录**」
 
 ## 升级 / 卸载
 
-**升级**：下载新版的 `openwrt-claude-panel-ai-lite.tar.gz`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。
+**升级**：面板首页提示有新版时点「一键更新」（v1.3.1 起）；或者下载新版的 `openwrt-claude-panel-ai-lite.tar.gz`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。
 
 **卸载**：
 
@@ -144,11 +147,13 @@ sh uninstall.sh --purge  # 全部删掉
 grep -o "https://[a-z0-9-]*\.trycloudflare\.com" /tmp/claude-mcp-tunnel.log | tail -1
 ```
 
-登录地址里 `/cgi-bin/mcp/` 后面的密钥不会变，只要把前面的域名换成新的，Claude 里的连接器地址也要一起改。长期使用建议换成自己的域名：重新运行 `sh install.sh --tunnel-token <token> --domain router.example.com`。
+登录地址里 `/cgi-bin/mcp/` 后面的密钥不会变，只要把前面的域名换成新的，Claude 里的连接器地址也要一起改域名。长期使用建议换成自己的域名：重新运行 `sh install.sh --tunnel-token <token> --domain router.example.com`。
 
 **手机打不开面板？** 先确认路由器能上网；登录路由器运行 `/etc/init.d/claude-mcp restart`，再看 `logread | grep -E "uhttpd|cloudflared"` 有没有报错。
 
-**登录地址泄露了怎么办？** 面板「系统操作 → 换登录密钥」，旧的登录地址立刻失效，这台手机自动换成新的；其他手机重新添加（Claude 里的连接器也要换成新地址）。
+**登录地址泄露了怎么办？** 面板「系统操作 → 换登录密钥」，旧的登录地址立刻失效，这台手机自动换成新的；其他手机重新添加。Claude 连接器地址是另一把钥匙，不受影响；它泄露了在「系统操作 → Claude 连接器地址」里换一个。
+
+**「终端」是哪个？** 安装、升级都在**路由器后台的终端**（LuCI「服务 → 终端」或 SSH，用户名 `root`、密码是后台密码）里做。手机面板里也有个终端，它已经是 root，不用登录（输 `password` 会提示 command not found，因为那不是命令）。
 
 **连着家里的 Wi-Fi 时面板打不开，换成手机流量就好？** 打开面板的流量经过了 OpenClash 的代理节点，节点卡了就打不开。面板每 3 分钟自动检查，代理打不开会自动改走直连（需要先在面板「拉黑名单」里启用过一次规则集）。
 

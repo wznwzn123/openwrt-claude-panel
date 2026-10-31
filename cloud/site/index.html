@@ -37,14 +37,15 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 <div class="card">
 	<ol class="steps">
 		<li><div><b>拿到邀请码</b><div class="muted">托管服务需要邀请码，找提供服务的人要。</div></div></li>
-		<li><div><b>打开路由器的终端</b><div class="muted">手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。</div></div></li>
+		<li><div><b>打开路由器后台的终端</b><div class="muted">手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（不是装好以后面板里的那个终端。）</div></div></li>
 		<li><div><b>粘贴这条命令，回车</b><div class="muted">装纯面板版就把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>，其他地方别动：</div>
 			<pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
 cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh</pre>
 			<button class="btn sm" id="copyCmd" type="button">复制命令</button></div></li>
-		<li><div><b>输入邀请码</b><div class="muted">装完会显示你的专属网址、登录地址、自动登录链接，还有<b>配对码</b>。登录地址带着密钥，存好别发给别人。</div></div></li>
-		<li><div><b>打开面板</b><div class="muted">手机打开「自动登录链接」，再「添加到主屏幕」，或者装下面的安卓 App。AI 版把登录地址填到 Claude 的「自定义连接器」里。</div></div></li>
-		<li><div><b>（可选）绑定账号</b><div class="muted">打开终端里的绑定链接，<a href="/app">登录或注册</a>后自动绑定，以后换手机一眼找到自己的路由器。</div></div></li>
+		<li><div><b>输入邀请码</b><div class="muted">装完会显示你的专属网址、登录地址、自动登录链接、（AI 版）Claude 连接器地址，最下面是大字的<b>配对码</b>。这些地址带着密钥，存好别发给别人。</div></div></li>
+		<li><div><b>打开面板</b><div class="muted">手机打开「自动登录链接」。为了安全，托管版每台手机第一次要输一次<b>登录码</b>，先放着别关。</div></div></li>
+		<li><div><b>绑定账号，拿登录码</b><div class="muted">打开终端里的绑定链接，<a href="/app">登录或注册</a>后自动绑定，并自动显示登录码；点「打开面板」就自动填好了。之后「添加到主屏幕」，或者装下面的安卓 App。</div></div></li>
+		<li><div><b>AI 版：连上 Claude</b><div class="muted">把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里。</div></div></li>
 	</ol>
 	<p class="muted" style="margin:14px 0 0;font-size:13.5px">每一步的详细说明：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">📱 手机教程</a> · 用电脑装：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>
 </div>
@@ -60,8 +61,9 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 <h2 class="sec">安全</h2>
 <div class="card"><table>
 	<tr><th style="width:34%">登录密钥</th><td>只在你的路由器和你自己的手机上生成、保存。托管服务<b>拿不到</b>，所以也<b>进不了</b>你的路由器。</td></tr>
-	<tr><th>新手机</th><td>第一次在新手机上打开路由器，要用已经能用的手机在面板里点「添加新手机」扫码授权。</td></tr>
-	<tr><th>账号</th><td>账号只记录「你有哪几台路由器」，方便换手机时找到它们。</td></tr>
+	<tr><th>新手机</th><td>新手机要有登录地址（或者用已经能用的手机「添加新手机」扫码），还要输一次<b>登录码</b>。登录码只有绑定了这台路由器的账号才能拿，10 分钟有效、用一次就作废。就算登录地址泄露了，没有登录码也打不开面板。</td></tr>
+	<tr><th>账号</th><td>账号记录「你有哪几台路由器」，用来拿登录码。账号本身拿不到密钥，不能直接打开面板。</td></tr>
+	<tr><th>Claude 连接器</th><td>AI 版给 Claude 单独一把钥匙，只能给 Claude 用、打不开面板，泄露了可以单独换。</td></tr>
 	<tr><th>不想用了</th><td>路由器上运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</td></tr>
 </table></div>
 

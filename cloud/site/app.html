@@ -63,7 +63,7 @@
 		<p class="muted" style="margin:0 0 8px;font-size:14px">输入 8 位配对码（10 分钟内有效）。配对码从哪来：</p>
 		<ul class="muted" style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:1.75">
 			<li><b>刚装完托管版</b>：安装结束时终端里就显示了配对码和绑定链接</li>
-			<li><b>已经装好</b>：路由器面板「系统操作 → 绑定到账号」，或者在路由器终端运行 <code>cmcp-pair</code></li>
+			<li><b>已经装好</b>：路由器面板「系统操作 → 绑定到账号」，或者在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH）运行 <code>cmcp-pair</code></li>
 			<li>配对码只有用<b>邀请码装的托管版</b>才有；自己用 Cloudflare 搭的<b>自建版</b>，用下面的「添加自建版路由器」</li>
 		</ul>
 		<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">绑定</button></form>

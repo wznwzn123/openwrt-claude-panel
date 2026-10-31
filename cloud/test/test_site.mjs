@@ -13,6 +13,7 @@ globalThis.fetch = async (input, init = {}) => {
 	const url = typeof input === 'string' ? input : input.url, u = new URL(url), m = (init.method || 'GET').toUpperCase();
 	if (u.hostname === 'api.cloudflare.com') { const R = (result) => new Response(JSON.stringify({ success: true, result, errors: [] })); if (m === 'POST' && u.pathname.endsWith('/cfd_tunnel')) return R({ id: 'tun' + ++CFn, token: 'tok' }); if (m === 'POST') return R({ id: 'dns' + ++CFn }); return R({}); }
 	if (u.hostname === 'localhost') return realFetch(input, init);
+	if (u.hostname === 'api.github.com') return new Response(JSON.stringify({ tag_name: 'v1.3.2', assets: [{ name: 'router-panel.apk' }], body: '## 这个版本的更新\n- 测试', published_at: '2026-11-01T00:00:00Z' }));
 	return new Response('{}');
 };
 const env = { BASE_DOMAIN: 'localhost', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '50', VAPID_PUB: '', VAPID_PRIV: '' };
@@ -64,13 +65,23 @@ for (const dark of [false, true]) {
 	ok('配对码不对：提示', /配对码不对/.test(await page.textContent('#vDash')));
 	await page.fill('#fBind [name=code]', await pairOf(R1)); await page.click('#fBind button'); await W(800);
 	ok('输入配对码：绑定成功，出现在列表里', /Kwrt/.test(await page.textContent('#devs')) && /JDCloud AX1800/.test(await page.textContent('#devs')));
+	ok('绑定好后自动弹出登录码（8 位），「打开面板」带着登录码', await page.isVisible('.mask') && /^[A-Z2-9]{4} [A-Z2-9]{4}$/.test((await page.textContent('.mask .lcode')).trim()) && new RegExp('^https://' + R1.host + '/panel/#code=[A-Z2-9]{8}$').test(await page.getAttribute('.mask a.btn', 'href')));
+	await shot('logincode');
+	await page.click('.mask [data-x]'); await W(300);
+	ok('登录码弹窗能关掉', !(await page.isVisible('.mask')));
 	ok('「打开面板」指向这台的专属网址', (await page.getAttribute('#devs a.btn', 'href')) === 'https://' + R1.host + '/panel/');
+	await page.click('#devs [data-lc]'); await W(600);
+	ok('每台托管版路由器下面有「获取登录码」，点了显示新的登录码', await page.isVisible('.mask') && /10 分钟内有效/.test(await page.textContent('.mask')));
+	await page.click('.mask', { position: { x: 5, y: 5 } }); await W(300);
+	ok('点弹窗外面也能关掉', !(await page.isVisible('.mask')));
 	ok('还没上线：显示离线', /离线/.test(await page.textContent('#devs')));
 	await realFetch(B.replace('localhost', R1.host).replace(':8127', ':8127') + '/', {}).catch(() => {});
 	// 心跳后变在线（直接调云端）
-	await mod.default.fetch(new Request('https://' + R1.host + '/cloud/beat/r/' + R1.rkey, { method: 'POST', body: '{}' }), env);
+	await mod.default.fetch(new Request('https://' + R1.host + '/cloud/beat/r/' + R1.rkey, { method: 'POST', body: '{"ver":"1.3.1"}' }), env);
 	await page.reload(); await W(800);
 	ok('路由器发心跳后：显示在线', /在线/.test(await page.textContent('#devs .meta')));
+	ok('显示路由器的版本号（心跳里报的）', /v1\.3\.1/.test(await page.textContent('#devs .meta')));
+	ok('比最新版旧：标「可更新」', /可更新到 v1\.3\.2/.test(await page.textContent('#devs .meta .pill.up')));
 	// 改名
 	await page.click('#devs [data-ren]'); await W(800);
 	ok('改名', /客厅路由器/.test(await page.textContent('#devs')));
@@ -79,6 +90,7 @@ for (const dark of [false, true]) {
 	await page.goto(B + '/app?pair=' + (await pairOf(R2))); await W(1200);
 	ok('打开带 ?pair= 的链接：已登录时自动绑定', /OpenWrt/.test(await page.textContent('#devs')) && (await page.locator('#devs .dev').count()) === 2);
 	ok('自动绑定后地址栏里的配对码去掉了', !(await page.evaluate(() => location.search)));
+	if (await page.isVisible('.mask')) { await page.click('.mask [data-x]'); await W(300); }
 	// 解绑
 	await page.click('#devs .dev:last-child [data-unb]'); await W(800);
 	ok('解绑（先确认）', (await page.locator('#devs .dev').count()) === 1);
@@ -91,6 +103,7 @@ for (const dark of [false, true]) {
 	ok('密码错：提示', /邮箱或密码不对/.test(await page.textContent('#fLogin')));
 	await page.fill('#fLogin [name=password]', 'alice-pass-1'); await page.click('#fLogin button.primary'); await W(1500);
 	ok('登录后自动绑定那台路由器', (await page.locator('#devs .dev').count()) === 2);
+	if (await page.isVisible('.mask')) { await page.click('.mask [data-x]'); await W(300); }
 	ok('不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
 	// 改密码
 	await page.fill('#fPw [name=old]', 'alice-pass-1'); await page.fill('#fPw [name=password]', 'alice-pass-2'); await page.click('#fPw button'); await W(600);

@@ -63,10 +63,10 @@ def doc(ai, ed):
     o.append(h('记下登录地址'))
     o += ['安装完成后会显示：', '', '```', f'已安装：{title.replace(" ", "")}', '', '手机面板：https://router.example.com/panel/', '',
           '登录地址（第一次打开面板时粘贴）：', '  https://router.example.com/cgi-bin/mcp/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']
-    if A: o += ['', '这个登录地址同时也是 Claude 连接器地址：……']
+    if A: o += ['', 'Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）：', '  https://router.example.com/cgi-bin/mcp/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy']
     if full: o += ['', '---------- 完整版：把下面 3 个值设成 Worker 的密钥 ----------', '  PANEL_TOKEN = ……', '  RKEY        = ……', '  TKEY        = ……']
     o += ['```', '',
-          '**把登录地址复制保存好**（比如存到密码管理器）。⚠️ 这个地址里带着密钥，拿到它就等于拿到路由器的最高权限：**不要发给别人，也不要截图分享**。']
+          ('**把登录地址和 Claude 连接器地址复制保存好**' if A else '**把登录地址复制保存好**') + '（比如存到密码管理器）。⚠️ 地址里带着密钥，拿到它就等于拿到路由器的最高权限：**不要发给别人，也不要截图分享**。']
     if full: o += ['', '完整版还要记下最后那 3 个值（PANEL_TOKEN、RKEY、TKEY），后面「部署 Cloudflare 云端」那一步要用。忘了也没关系，以后在路由器上运行 `cat /etc/claude-mcp/config.json /etc/claude-mcp/cloud.conf` 就能看到。']
 
     o.append(h('在手机上打开面板'))
@@ -82,7 +82,7 @@ def doc(ai, ed):
     if A:
         o.append(h('连接 Claude'))
         o += ['1. 打开 Claude（网页版 https://claude.ai 或 App）→ **设置 → 连接器 → 添加自定义连接器**',
-              '2. 名称填「我的路由器」，URL 填**登录地址**（就是第 4 步那个），不用填 OAuth，保存',
+              '2. 名称填「我的路由器」，URL 填 **Claude 连接器地址**（第 4 步显示的，不是登录地址；忘了在面板「系统操作 → Claude 连接器地址」里复制），不用填 OAuth，保存',
               '3. 新开一个对话，试试：', '',
               '   - 「看看路由器现在的状态」', '   - 「谁在占网速？」', '   - 「把节点切到延迟最低的日本节点」', '   - 「OpenClash 最近有什么报错？」', '',
               '会断网的操作（改网络、重启路由器、重启 OpenClash）Claude 会先说明影响，等你确认才执行；改设置前会自动备份，可以让它回滚。']
@@ -113,25 +113,28 @@ def doc(ai, ed):
           '- 每天 9:00 自动**体检**一次' + ('，结果推送到手机' if full else '，结果在「断线记录」页查看'),
           '- 「设备」页可以给孩子的设备设**定时断网**（比如每天 23:00–07:00）',
           '- OpenClash 的节点、订阅、规则、覆写都能在面板里改，不用再开电脑',
-          '- 想换个样子：「系统操作」→「主题与背景」，可以选预设背景或手机相册里的图片，调模糊和明暗；手机比较卡的话可以关掉玻璃效果']
+          '- 想换个样子：「系统操作」→「主题与背景」，可以选预设背景或手机相册里的图片，调模糊和明暗；手机比较卡的话可以关掉玻璃效果',
+          '- 有新版本时面板首页会提示，点「**一键更新**」，设置都保留、不会断网，装不好会自动退回',
+          '- 手机不用了：侧边栏最下面「**退出登录**」']
 
     o += ['\n## 升级 / 卸载\n',
-          f'**升级**：下载新版的 `{pkg}`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。', '',
+          f'**升级**：面板首页提示有新版时点「一键更新」（v1.3.1 起）；或者下载新版的 `{pkg}`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。', '',
           '**卸载**：', '', '```sh', 'cd /tmp/openwrt-claude-panel', 'sh uninstall.sh          # 保留设置和记录，以后重装还能接着用', 'sh uninstall.sh --purge  # 全部删掉', '```', '',
           '（`/tmp` 重启后会清空，到时候重新解压一次安装包即可。）']
 
     o += ['\n## 常见问题\n']
     if not full:
         o += ['**临时隧道的地址变了，怎么查新地址？** 登录路由器运行：', '', '```sh', 'grep -o "https://[a-z0-9-]*\\.trycloudflare\\.com" /tmp/claude-mcp-tunnel.log | tail -1', '```', '',
-              '登录地址里 `/cgi-bin/mcp/` 后面的密钥不会变，只要把前面的域名换成新的' + ('，Claude 里的连接器地址也要一起改' if A else '') + '。长期使用建议换成自己的域名：重新运行 `sh install.sh --tunnel-token <token> --domain router.example.com`。', '']
+              '登录地址里 `/cgi-bin/mcp/` 后面的密钥不会变，只要把前面的域名换成新的' + ('，Claude 里的连接器地址也要一起改域名' if A else '') + '。长期使用建议换成自己的域名：重新运行 `sh install.sh --tunnel-token <token> --domain router.example.com`。', '']
     o += ['**手机打不开面板？** 先确认路由器能上网；登录路由器运行 `/etc/init.d/claude-mcp restart`，再看 `logread | grep -E "uhttpd|cloudflared"` 有没有报错。', '',
-          '**登录地址泄露了怎么办？** 面板「系统操作 → 换登录密钥」，旧的登录地址立刻失效，这台手机自动换成新的；其他手机重新添加' + ('（Claude 里的连接器也要换成新地址' + ('，Worker 的 PANEL_TOKEN 也要更新）' if full else '）') if A else ('（Worker 的 PANEL_TOKEN 也要更新）' if full else '')) + '。', '',
+          '**登录地址泄露了怎么办？** 面板「系统操作 → 换登录密钥」，旧的登录地址立刻失效，这台手机自动换成新的；其他手机重新添加' + ('（Worker 的 PANEL_TOKEN 也要更新）' if full else '') + '。' + ('Claude 连接器地址是另一把钥匙，不受影响；它泄露了在「系统操作 → Claude 连接器地址」里换一个。' if A else ''), '',
+          '**「终端」是哪个？** 安装、升级都在**路由器后台的终端**（LuCI「服务 → 终端」或 SSH，用户名 `root`、密码是后台密码）里做。手机面板里也有个终端，它已经是 root，不用登录（输 `password` 会提示 command not found，因为那不是命令）。', '',
           '**连着家里的 Wi-Fi 时面板打不开，换成手机流量就好？** 打开面板的流量经过了 OpenClash 的代理节点，节点卡了就打不开。面板每 3 分钟自动检查，代理打不开会自动改走直连（需要先在面板「拉黑名单」里启用过一次规则集）。', '',
           '**没装 OpenClash 能用吗？** 能。节点、订阅、规则这些 OpenClash 功能用不了，其他功能都正常。', '']
     if A:
         o += ['**以后不想用 AI 了？** 重新运行 `sh install.sh --no-ai`，就变成纯面板版，Claude 连不上了，面板照常用。', '']
     else:
-        o += ['**以后想用 Claude 管理路由器？** 重新运行 `sh install.sh --ai`，就变成 AI 版，登录地址不变，把它填到 Claude 的自定义连接器里即可。', '']
+        o += ['**以后想用 Claude 管理路由器？** 重新运行 `sh install.sh --ai`，就变成 AI 版，装完会显示「Claude 连接器地址」，把它填到 Claude 的自定义连接器里即可。', '']
     if not full:
         o += ['**以后想要推送和云端备份？** 下载对应的完整版安装包，按[完整版教程](install-' + ai + '-full.md)操作，设置都会保留。', '']
     return '\n'.join(o) + '\n'

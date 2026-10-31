@@ -152,7 +152,7 @@ fi
 [ ${#TOKEN} -ge 16 ] || die "config.json 里的 token 不对"
 # AI 开关：纯面板版在 config.json 里写 "ai": false，连接器只接受手机面板的请求
 # AI 版另外生成一个「Claude 连接器地址」的钥匙（ckey）：只给 Claude 用，打不开面板；托管版的面板要登录码，连接器不用
-CKEY=$(jsonfilter -i $D/config.json -e '@.ckey' 2>/dev/null)
+CKEY=$(jsonfilter -i $D/config.json -e '@.ckey' 2>/dev/null || true)
 [ "$AI" = 1 ] && [ ${#CKEY} -lt 16 ] && CKEY=$(rnd 40)
 ucode -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV[1] == "0") c.ai = false; else delete c.ai; if (length(ARGV[2] ?? "") >= 16) c.ckey = ARGV[2]; fs.writefile(f, sprintf("%.J\n", c));' $D/config.json "$AI" "$CKEY" \
 	|| die "写入 config.json 失败"

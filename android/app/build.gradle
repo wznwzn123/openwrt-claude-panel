@@ -1,0 +1,44 @@
+// 安卓 App：手机面板和官网的外壳（扫码添加路由器、下载文件、自动检查更新）
+// 版本号、托管服务网址由打包时传入：-PVERSION_NAME=1.2.0 -PVERSION_CODE=10200 -PHUB_URL=https://example.com
+plugins { id 'com.android.application' }
+
+def ksFile = System.getenv('KEYSTORE_FILE')
+android {
+    namespace 'io.github.wznwzn123.routerpanel'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'io.github.wznwzn123.routerpanel'
+        minSdk 24
+        targetSdk 34
+        versionCode((project.findProperty('VERSION_CODE') ?: '1') as int)
+        versionName(project.findProperty('VERSION_NAME') ?: '0.0.1')
+        buildConfigField 'String', 'HUB_URL', "\"${project.findProperty('HUB_URL') ?: ''}\""
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv('KEYSTORE_PASS')
+                keyAlias 'router'
+                keyPassword System.getenv('KEYSTORE_PASS')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            // 没有正式签名密钥时（测试构建）用调试签名，不能拿去发布
+            signingConfig ksFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+}

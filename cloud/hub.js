@@ -422,9 +422,44 @@ export async function hubFetch(req, env) {
 		return J({ error: 'not found' }, 404);
 	}
 	if (p.startsWith('/api/account/') || p === '/api/pair/start' || p.startsWith('/api/dev/')) return accountApi(req, env, H, p, body);
+	if (p === '/api/app/version') return appVersion(env);
+	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
 	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN }[p];
 	if (pg && req.method === 'GET') return new Response(pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'" } });
 	return J({ error: 'not found' }, 404);
+}
+
+/* ---------- 安卓 App：最新版本号和安装包（从 GitHub Release 转过来，走自己的域名，大陆也能下） ---------- */
+const repoOf = (env) => env.GITHUB_REPO || 'wznwzn123/openwrt-claude-panel';
+async function cached(key, ttl, make) {
+	const cache = typeof caches !== 'undefined' ? caches.default : null;
+	const k = new Request('https://cache.local/' + key);
+	if (cache) { const hit = await cache.match(k); if (hit) return hit.json(); }
+	const v = await make();
+	if (cache && v) await cache.put(k, new Response(JSON.stringify(v), { headers: { 'cache-control': 'max-age=' + ttl } }));
+	return v;
+}
+// 更新说明：取发布说明里「这个版本的更新」那一节
+const notesOf = (b) => { b = String(b || '').replace(/\r/g, ''); const m = /## 这个版本的更新\n([\s\S]*?)(?:\n## |$)/.exec(b); return (m ? m[1] : b).trim().slice(0, 800); };
+async function appVersion(env) {
+	const cors = { 'access-control-allow-origin': '*' };
+	try {
+		const v = await cached('app-version', 1800, async () => {
+			const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases/latest', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
+			if (!r.ok) return null;
+			const j = await r.json();
+			if (!(j.assets || []).some((a) => a.name === 'router-panel.apk')) return null;
+			return { version: String(j.tag_name || '').replace(/^v/, ''), notes: notesOf(j.body), apk: '/app/router-panel.apk', at: j.published_at };
+		});
+		const res = J(v ? { ok: true, ...v } : { ok: false, error: '还没有发布安卓 App' }, v ? 200 : 404);
+		for (const [k, x] of Object.entries(cors)) res.headers.set(k, x);
+		return res;
+	} catch (e) { const res = J({ ok: false, error: '检查更新失败' }, 502); res.headers.set('access-control-allow-origin', '*'); return res; }
+}
+async function appApk(env) {
+	const r = await fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/router-panel.apk', { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	if (!r.ok) return J({ error: '还没有发布安卓 App' }, 404);
+	return new Response(r.body, { headers: { 'content-type': 'application/vnd.android.package-archive', 'content-disposition': 'attachment; filename="router-panel.apk"', 'cache-control': 'public, max-age=600' } });
 }
 
 /* ---------- 账号接口（官网）和路由器配对接口 ---------- */

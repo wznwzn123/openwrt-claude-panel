@@ -1,0 +1,118 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>路由器面板</title>
+<style>
+:root{--bg:#eef1f8;--card:rgba(255,255,255,.66);--text:#0b0b0f;--muted:#6e6e73;--line:rgba(60,60,67,.14);--fill:rgba(118,118,128,.14);--brand:#007aff;--ok:#34c759;--danger:#ff3b30;--shadow:inset 0 0 0 .5px rgba(255,255,255,.65),0 8px 28px rgba(31,38,80,.08)}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1024;--card:rgba(28,28,32,.58);--text:#f5f5f7;--muted:#98989f;--line:rgba(255,255,255,.1);--fill:rgba(118,118,128,.26);--brand:#0a84ff;--shadow:inset 0 0 0 .5px rgba(255,255,255,.09),0 8px 28px rgba(0,0,0,.28)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;min-height:100vh;color:var(--text);font:15px/1.55 -apple-system,"PingFang SC","Noto Sans SC",system-ui,sans-serif;background:var(--bg);-webkit-user-select:none;user-select:none}
+body::before{content:"";position:fixed;inset:-40px;z-index:-1;filter:blur(20px);background:radial-gradient(60% 50% at 12% 8%,#c3d2ff 0,transparent 70%),radial-gradient(55% 45% at 92% 18%,#f6cdf0 0,transparent 70%),radial-gradient(70% 55% at 30% 95%,#b8ecff 0,transparent 70%),var(--bg)}
+@media(prefers-color-scheme:dark){body::before{background:radial-gradient(55% 45% at 15% 10%,#3a2c8f 0,transparent 70%),radial-gradient(50% 45% at 90% 25%,#13527a 0,transparent 70%),radial-gradient(70% 55% at 40% 100%,#4b1e6b 0,transparent 70%),#0b1024}}
+.wrap{padding:18px 16px 40px;max-width:640px;margin:auto}
+.head{display:flex;align-items:center;gap:12px;margin:8px 4px 18px}
+.head i{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#6a7bff,#1fb5e6);color:#fff;font-style:normal;font-size:22px}
+.head b{font-size:22px;letter-spacing:-.02em}
+.card{background:var(--card);border-radius:22px;padding:16px;box-shadow:var(--shadow)}
+.card+.card{margin-top:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border:0;border-radius:99px;background:var(--fill);color:var(--text);font:inherit;font-weight:650;cursor:pointer}
+.btn:active{transform:scale(.96)}.btn.primary{background:var(--brand);color:#fff}.btn.danger{color:var(--danger)}.btn.sm{padding:7px 13px;font-size:13.5px}
+.btn:disabled{opacity:.5}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.acts .btn{padding:14px 8px;border-radius:18px;flex-direction:column;gap:4px}
+.acts .btn span{font-size:24px}
+.acts .full{grid-column:1/-1;flex-direction:row}
+h2{font-size:18px;margin:22px 4px 10px;letter-spacing:-.02em}
+.r{display:flex;align-items:center;gap:12px}
+.r .ic{width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;background:var(--fill);font-size:20px}
+.r .t{flex:1;min-width:0}.r .t b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.r .t span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.r .more{display:flex;gap:6px;margin-top:10px}
+.muted{color:var(--muted)}
+.tip{font-size:13.5px;color:var(--muted);line-height:1.7;margin:0}
+.upd{border:1.5px solid var(--brand)}
+.upd p{margin:6px 0 10px;font-size:13.5px;color:var(--muted);white-space:pre-line;max-height:120px;overflow:auto}
+.foot{text-align:center;font-size:12.5px;color:var(--muted);margin-top:26px}
+.foot a{color:var(--brand);font-weight:600;text-decoration:none}
+.hidden{display:none!important}
+</style></head><body><div class="wrap">
+<div class="head"><i>⌂</i><div><b>路由器面板</b><div class="muted" style="font-size:13px">管理家里的 OpenWrt 路由器</div></div></div>
+
+<div class="card upd hidden" id="upd"><b>发现新版本 <span id="updV"></span></b><p id="updN"></p><button class="btn primary" id="updBtn" style="width:100%">更新</button></div>
+
+<div class="acts">
+	<button class="btn" id="scanBtn"><span>📷</span>扫码添加</button>
+	<button class="btn" id="pasteBtn"><span>🔗</span>粘贴登录地址</button>
+	<button class="btn full hidden" id="hubBtn">👤 官网账号（我的路由器）</button>
+</div>
+
+<h2>我的路由器</h2>
+<div id="list"></div>
+
+<h2>怎么添加</h2>
+<div class="card"><p class="tip">
+	<b>扫码</b>：在已经能用的手机上打开面板，「系统操作 → 添加新手机」，用这里的「扫码添加」扫一下。<br>
+	<b>粘贴</b>：安装时显示的登录地址（<code>https://…/cgi-bin/mcp/…</code>）复制后点「粘贴登录地址」。<br>
+	登录密钥只保存在这台手机上，不会上传到任何地方。
+</p></div>
+
+<div class="foot">版本 <span id="ver"></span> · <a href="#" id="chk">检查更新</a></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const A = window.App || { version: () => 'dev', hub: () => '', routers: () => '[]', saveRouters() {}, open: (u) => (location.href = u), external: (u) => window.open(u), scan: () => alert('只有 App 里能扫码'), update() {} };
+const HUB = (A.hub() || '').replace(/\/$/, '');
+$('ver').textContent = A.version();
+// 认出扫到或粘贴的内容：登录地址 / 面板 + #login / 官网配对链接
+function parse(t) {
+	t = String(t || '').trim();
+	let m = /^https:\/\/([a-z0-9.-]+(?::\d+)?)\/cgi-bin\/mcp\/([A-Za-z0-9]{16,64})\/?$/i.exec(t);
+	if (m) return 'https://' + m[1] + '/panel/#login=' + m[2];
+	m = /^https:\/\/([a-z0-9.-]+(?::\d+)?)\/panel\/(?:index\.html)?(#login=[A-Za-z0-9]{16,64})?$/i.exec(t);
+	if (m) return 'https://' + m[1] + '/panel/' + (m[2] || '');
+	if (HUB && /^https:\/\/[a-z0-9.-]+\/app\?pair=[A-Za-z2-9]{6,12}$/i.test(t) && t.startsWith(HUB + '/')) return t;
+	return null;
+}
+function onScan(t) { const u = parse(t); if (u) A.open(u); else alert('这个二维码不是路由器面板的。请扫面板里「添加新手机」或「绑定到账号」的二维码。'); }
+$('scanBtn').onclick = () => A.scan();
+$('pasteBtn').onclick = async () => {
+	let t = '';
+	try { t = await navigator.clipboard.readText(); } catch (e) {}
+	if (!parse(t)) t = prompt('粘贴登录地址（https://…/cgi-bin/mcp/…）：', '') || '';
+	if (!t) return;
+	const u = parse(t);
+	if (u) A.open(u); else alert('这不是登录地址。登录地址像这样：https://xxx/cgi-bin/mcp/一串字母数字');
+};
+if (HUB) { $('hubBtn').classList.remove('hidden'); $('hubBtn').onclick = () => A.open(HUB + '/app'); }
+const ago = (t) => { if (!t) return ''; const s = (Date.now() - t) / 1000; return s < 3600 ? '刚刚打开过' : s < 86400 ? Math.round(s / 3600) + ' 小时前打开' : Math.round(s / 86400) + ' 天前打开'; };
+function refresh() {
+	let list = [];
+	try { list = JSON.parse(A.routers()); } catch (e) {}
+	list.sort((a, b) => (b.at || 0) - (a.at || 0));
+	$('list').innerHTML = list.length ? list.map((r, i) => `<div class="card" data-i="${i}"><div class="r"><div class="ic">⌂</div><div class="t"><b>${esc(r.name)}</b><span>${esc(r.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))} · ${ago(r.at)}</span></div><button class="btn primary sm" data-open>打开</button></div>
+		<div class="more"><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-del>移除</button></div></div>`).join('')
+		: '<div class="card"><p class="tip" style="text-align:center">还没有路由器。点上面的「扫码添加」或「粘贴登录地址」。</p></div>';
+	$('list').querySelectorAll('[data-i]').forEach((el) => {
+		const r = list[+el.dataset.i];
+		el.querySelector('[data-open]').onclick = () => A.open(r.url);
+		el.querySelector('[data-ren]').onclick = () => { const n = prompt('给这台路由器起个名字：', r.name); if (n && n.trim()) { r.name = n.trim().slice(0, 30); A.saveRouters(JSON.stringify(list)); refresh(); } };
+		el.querySelector('[data-del]').onclick = () => { if (!confirm('从列表里移除「' + r.name + '」？路由器本身不受影响，以后可以重新扫码添加。')) return; list.splice(+el.dataset.i, 1); A.saveRouters(JSON.stringify(list)); refresh(); };
+	});
+}
+// 检查更新：问托管服务最新版本号，比现在的新就提示
+const vnum = (v) => String(v || '').replace(/^v/, '').split('.').map((x) => parseInt(x, 10) || 0);
+const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+async function checkUpdate(manual) {
+	if (!HUB) { if (manual) alert('这个版本没有设置更新地址'); return; }
+	try {
+		const j = await (await fetch(HUB + '/api/app/version', { cache: 'no-store' })).json();
+		if (j.version && newer(j.version, A.version())) {
+			$('updV').textContent = j.version; $('updN').textContent = j.notes || '';
+			$('upd').classList.remove('hidden');
+			$('updBtn').onclick = () => { $('updBtn').disabled = true; $('updBtn').textContent = '正在下载…'; A.update(HUB + (j.apk || '/app/router-panel.apk')); };
+		} else if (manual) alert('已经是最新版（' + A.version() + '）');
+	} catch (e) { if (manual) alert('检查更新失败，稍后再试'); }
+}
+function onUpdateFail() { $('updBtn').disabled = false; $('updBtn').textContent = '更新'; }
+$('chk').onclick = (e) => { e.preventDefault(); checkUpdate(true); };
+refresh();
+checkUpdate(false);
+</script></body></html>

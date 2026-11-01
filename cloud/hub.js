@@ -409,6 +409,9 @@ export class Hub extends DurableObject {
 		if (!u || !(u.devs || []).some((y) => y.sub === sub)) return { st: 400, error: '拿这个登录码的账号已经解绑了这台路由器' };
 		return { st: 200, ok: true, email: maskEmail(u.email) };
 	}
+	// 杂项小数据（比如最后一次查到的最新版本）
+	async meta(k) { return (await this.ctx.storage.get('m:' + k)) || null; }
+	async setMeta(k, v) { const old = await this.ctx.storage.get('m:' + k); if (JSON.stringify(old) !== JSON.stringify(v)) await this.ctx.storage.put('m:' + k, v); }
 	async devices() { return [...(await this.ctx.storage.list({ prefix: 'd:' })).values()]; }
 	async invites() { return [...(await this.ctx.storage.list({ prefix: 'i:' })).entries()].map(([k, v]) => ({ code: k.slice(2), ...v })); }
 	async addInvite({ max, days, note }) {
@@ -499,22 +502,44 @@ async function cached(key, ttl, make) {
 // App 弹窗里是纯文字：去掉 Markdown 的加粗、链接、代码标记，「- 」换成「• 」
 const plain = (t) => t.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^- /gm, '• ');
 const notesOf = (b) => { b = String(b || '').replace(/\r/g, ''); const m = /## 这个版本的更新\n([\s\S]*?)(?:\n## |$)/.exec(b); return plain((m ? m[1] : b).trim()).slice(0, 800); };
+// 最新发布：先问 GitHub 接口；Cloudflare 的出口 IP 是很多网站共用的，GitHub 接口每小时 60 次的限制常常被别人用光（返回 403），
+// 这时改从发布页的跳转（拿版本号）和原始文件（拿更新说明）读，这两个没有这种限制
+async function latestRelease(env) {
+	const repo = repoOf(env), H = { 'user-agent': 'router-panel-hub' };
+	try {
+		const r = await fetch('https://api.github.com/repos/' + repo + '/releases/latest', { headers: { ...H, accept: 'application/vnd.github+json' } });
+		if (r.ok) { const j = await r.json(); return { tag: String(j.tag_name || ''), body: String(j.body || ''), apk: (j.assets || []).some((a) => a.name === 'router-panel.apk'), at: j.published_at || '' }; }
+		if (r.status === 404) return { none: true };
+	} catch (e) {}
+	try {
+		const r = await fetch('https://github.com/' + repo + '/releases/latest', { redirect: 'manual', headers: H });
+		const m = /\/releases\/tag\/([^/?#]+)$/.exec(r.headers.get('location') || '');
+		if (!m) return r.status === 404 ? { none: true } : null;
+		const tag = decodeURIComponent(m[1]);
+		let body = '';
+		try { const n = await fetch('https://raw.githubusercontent.com/' + repo + '/' + encodeURIComponent(tag) + '/tools/release-notes.md', { headers: H }); if (n.ok) body = await n.text(); } catch (e) {}
+		let apk = false;
+		try { const a = await fetch('https://github.com/' + repo + '/releases/download/' + encodeURIComponent(tag) + '/router-panel.apk', { method: 'HEAD', redirect: 'manual', headers: H }); apk = a.status >= 200 && a.status < 400; } catch (e) {}
+		return { tag, body, apk, at: '' };
+	} catch (e) { return null; }
+}
 async function appVersion(env) {
 	const cors = { 'access-control-allow-origin': '*' };
+	const out = (o, st) => { const res = J(o, st); for (const [k, x] of Object.entries(cors)) res.headers.set(k, x); return res; };
 	try {
 		const v = await cached('app-version', 1800, async () => {
-			const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases/latest', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
-			if (!r.ok) return null;
-			const j = await r.json();
-			if (!(j.assets || []).some((a) => a.name === 'router-panel.apk')) return null;
+			const x = await latestRelease(env);
+			// GitHub 暂时连不上：用上一次查到的（存在开通中心里），不至于没有更新提示
+			if (!x) { try { return (await hubObj(env).meta('appver')) || null; } catch (e) { return null; } }
+			if (x.none || !x.apk) return null;
 			// 强制更新：发布说明里写「【必须更新】」，或者写「最低版本：1.2.1」（比这个旧的必须更新）
-			const body = String(j.body || ''), mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(body);
-			return { version: String(j.tag_name || '').replace(/^v/, ''), notes: notesOf(j.body), apk: '/app/router-panel.apk', at: j.published_at, force: body.includes('【必须更新】'), min: mv ? mv[1] : '' };
+			const mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(x.body);
+			const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), apk: '/app/router-panel.apk', at: x.at, force: x.body.includes('【必须更新】'), min: mv ? mv[1] : '' };
+			try { await hubObj(env).setMeta('appver', o); } catch (e) {}
+			return o;
 		});
-		const res = J(v ? { ok: true, ...v } : { ok: false, error: '还没有发布安卓 App' }, v ? 200 : 404);
-		for (const [k, x] of Object.entries(cors)) res.headers.set(k, x);
-		return res;
-	} catch (e) { const res = J({ ok: false, error: '检查更新失败' }, 502); res.headers.set('access-control-allow-origin', '*'); return res; }
+		return v ? out({ ok: true, ...v }, 200) : out({ ok: false, error: '还没有发布安卓 App' }, 404);
+	} catch (e) { return out({ ok: false, error: '检查更新失败' }, 502); }
 }
 async function appApk(env) {
 	const r = await fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/router-panel.apk', { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });

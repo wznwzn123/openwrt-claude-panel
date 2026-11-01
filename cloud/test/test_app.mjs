@@ -2,10 +2,13 @@
 import { load, memStorage } from './load.mjs';
 const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
-let rel = null, gh = 0; const dl = [];
+let rel = null, gh = 0, apiDown = false, allDown = false; const dl = [], raw = [];
 globalThis.fetch = async (input) => {
 	const url = typeof input === 'string' ? input : input.url;
-	if (url.includes('api.github.com/repos/wznwzn123/openwrt-claude-panel/releases/latest')) { gh++; return rel ? new Response(JSON.stringify(rel)) : new Response('{}', { status: 404 }); }
+	if (url.includes('api.github.com/repos/wznwzn123/openwrt-claude-panel/releases/latest')) { gh++; if (apiDown) return new Response('{"message":"API rate limit exceeded"}', { status: 403 }); return rel ? new Response(JSON.stringify(rel)) : new Response('{}', { status: 404 }); }
+	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest') { if (allDown) throw new Error('down'); return rel ? new Response('', { status: 302, headers: { location: 'https://github.com/wznwzn123/openwrt-claude-panel/releases/tag/' + rel.tag_name } }) : new Response('nf', { status: 404 }); }
+	if (url.startsWith('https://raw.githubusercontent.com/wznwzn123/openwrt-claude-panel/')) { raw.push(url); return rel ? new Response(rel.body) : new Response('nf', { status: 404 }); }
+	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/download/')) return rel && rel.assets.some((a) => url.endsWith('/' + a.name)) ? new Response(null, { status: 302, headers: { location: 'https://objects.example/x' } }) : new Response('nf', { status: 404 });
 	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/openwrt-claude-panel-') || url.endsWith('/latest/download/SHA256SUMS')) { dl.push(url); return rel ? new Response(new Uint8Array([31, 139, 8, 0]), { status: 200 }) : new Response('nf', { status: 404 }); }
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/router-panel.apk') return rel ? new Response(new Uint8Array([80, 75, 3, 4, 1, 2]), { status: 200 }) : new Response('nf', { status: 404 });
 	return new Response('{}');
@@ -47,6 +50,16 @@ for (const bad of ['../etc/passwd', 'router-panel.apk', 'openwrt-claude-panel-ho
 rel = { tag_name: 'v1.3.1', body: '## 这个版本的更新\n\n- **只用手机就能装**：见 [📱 手机教程](https://x/y.md)，运行 `cmcp-pair`', assets: [{ name: 'router-panel.apk' }] };
 k = await (await get('/api/app/version')).json();
 ok('更新说明去掉 Markdown 符号（App 弹窗是纯文字）', k.notes === '• 只用手机就能装：见 📱 手机教程，运行 cmcp-pair', JSON.stringify(k.notes));
+// GitHub 接口被限流（Cloudflare 出口 IP 共用，每小时 60 次常被用光）：改从发布页跳转和原始文件读
+rel = { tag_name: 'v1.3.2', body: '## 这个版本的更新\n\n- 修复登录码\n\n最低版本：1.3.0', assets: [{ name: 'router-panel.apk' }] };
+apiDown = true;
+r = await get('/api/app/version'); k = await r.json();
+ok('GitHub 接口返回 403：从发布页拿到版本号、从原始文件拿到更新说明', r.status === 200 && k.version === '1.3.2' && k.notes.startsWith('• 修复登录码') && k.min === '1.3.0' && raw.some((u) => u.includes('/v1.3.2/tools/release-notes.md')), JSON.stringify(k));
+rel = { tag_name: 'v1.3.3', body: '## 这个版本的更新\n\n- 只有安装包', assets: [{ name: 'x.tar.gz' }] };
+ok('接口被限流、这个版本没有 App 安装包：当作没发布', (await get('/api/app/version')).status === 404);
+allDown = true;
+r = await get('/api/app/version'); k = await r.json();
+ok('GitHub 完全连不上：用上一次查到的版本，照样有更新提示', r.status === 200 && k.version === '1.3.2', JSON.stringify(k));
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

@@ -1069,6 +1069,69 @@ function lease_map() {
 	return names;
 }
 
+/* ---------- 首页：实时网速（每 2 秒一次，只读 /proc/net/dev，很轻）、今日流量、在线设备 ---------- */
+P.live = function() {
+	let SF = '/tmp/cmcp_speed.json', prev = null;
+	try { prev = json(readfile(SF) ?? 'null'); } catch (e) {}
+	let dev = prev?.dev;
+	if (!dev) {
+		let w = null;
+		try { w = json(sh('ubus call network.interface.wan status').out); } catch (e) {}
+		dev = w?.l3_device ?? w?.device ?? trim(sh("ip route show default | awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1); exit}}'").out);
+	}
+	if (!length(dev ?? '')) return { dev: null, rx: null, tx: null };
+	let b = read_ifbytes(dev), t = +split(readfile('/proc/uptime') ?? '0', ' ')[0];
+	if (!b) { sh('rm -f ' + SF); return { dev, rx: null, tx: null }; }
+	let dt = prev?.dev == dev ? t - prev.t : -1;
+	// 两次请求挨得太近：直接给上一次算好的，不重新算（不准）
+	if (dt >= 0 && dt < 0.5 && prev.rr != null) return { dev, rx: prev.rr, tx: prev.tr };
+	let o = { dev, rx: null, tx: null };
+	if (dt >= 0.5 && dt <= 20 && b.rx >= prev.rx && b.tx >= prev.tx) { o.rx = int((b.rx - prev.rx) / dt + 0.5); o.tx = int((b.tx - prev.tx) / dt + 0.5); }
+	writefile(SF, sprintf('%J', { dev, t, rx: b.rx, tx: b.tx, rr: o.rx, tr: o.tx }));
+	return o;
+};
+// 连在 Wi-Fi 上的设备（MAC 地址）
+function wifi_macs() {
+	let out = sh("for i in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do iw dev $i station dump 2>/dev/null | awk '/^Station/{print $2}'; done").out;
+	if (!length(trim(out)))
+		out = sh("for i in $(iwinfo 2>/dev/null | awk '/ESSID/{print $1}'); do iwinfo $i assoclist 2>/dev/null | awk '/^[0-9A-Fa-f][0-9A-Fa-f]:/{print $1}'; done").out;
+	let m = {};
+	for (let l in split(out, '\n')) { l = lc(trim(l)); if (match(l, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) m[l] = 1; }
+	return m;
+}
+P.home_stats = function() {
+	// 今日流量（cmcp-traffic 每分钟统计一次，按设备分开；要 OpenClash 在运行才统计得到）
+	let tr = null;
+	try { tr = P.traffic(); } catch (e) {}
+	let day = tr?.today, td = (day && tr.days?.[day]) ?? {}, dl = 0, ul = 0, list = [];
+	for (let k in td) {
+		let a = td[k];
+		if (type(a) != 'array') continue;
+		let u = (+a[0] || 0) + (+a[2] || 0), d = (+a[1] || 0) + (+a[3] || 0);
+		ul += u; dl += d;
+		push(list, { id: k, name: k == 'other' ? '其他' : (tr.names?.[k] ?? null), dl: d, ul: u });
+	}
+	list = sort(list, (x, y) => (y.dl + y.ul) - (x.dl + x.ul));
+	let top = slice(filter(list, (x) => x.id != 'other' && x.dl + x.ul > 0), 0, 3);
+	// 在线设备：局域网里有 ARP 记录的（去掉外网口），按 Wi-Fi 连接列表分出无线、有线
+	let wdev = {};
+	for (let w in ['wan', 'wan6']) try { let st = json(sh('ifstatus ' + w).out); if (st?.l3_device) wdev[st.l3_device] = 1; if (st?.device) wdev[st.device] = 1; } catch (e) {}
+	let on = {};
+	for (let l in split(readfile('/proc/net/arp') ?? '', '\n')) {
+		let m = match(l, /^(\d+\.\d+\.\d+\.\d+)\s+\S+\s+(0x\S+)\s+([0-9a-fA-F:]{17})\s+\S+\s+(\S+)/);
+		if (m && m[2] != '0x0' && m[3] != '00:00:00:00:00:00' && !wdev[m[4]]) on[lc(m[3])] = 1;
+	}
+	let wm = wifi_macs(), wifi = 0, all = {};
+	for (let mac in on) if (wm[mac]) wifi++;
+	// Wi-Fi 上连着但还没有 ARP 记录的（刚连上、或者没要 IP），也算在线
+	for (let mac in wm) if (!on[mac]) { on[mac] = 1; wifi++; }
+	for (let mac in on) all[mac] = 1;
+	let lm = lease_map();
+	for (let ip in lm) if (lm[ip]?.mac) all[lm[ip].mac] = 1;
+	let n = length(keys(on));
+	return { today: { day, dl, ul, top, counting: !!tr?.at && time() - tr.at < 600 }, devices: { online: n, wifi, wired: n - wifi, total: length(keys(all)) } };
+};
+
 P.devices = function() {
 	let leases = lease_map();
 	let arp = {}, wdev = {};

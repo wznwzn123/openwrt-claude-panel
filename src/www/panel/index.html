@@ -77,6 +77,18 @@ h1,h2,h3{letter-spacing:-.02em}
 .ngb.kids>div{margin-left:23px;padding-left:8px;border-left:1.5px solid var(--line)}
 .sidenav .kids button{padding:8px 10px;font-size:14px;font-weight:500}.sidenav .kids button i{display:none}
 .sidenav button .org{margin-left:auto;font-style:normal;text-decoration:none;font-size:10.5px;font-weight:600;color:var(--muted);opacity:.75;flex:none}
+.mcard{margin-bottom:12px;padding:18px}.mlink{cursor:pointer;-webkit-user-select:none;user-select:none;transition:transform .18s var(--spring)}.mlink:active{transform:scale(.985)}
+.mhd{display:flex;align-items:center;gap:12px}.mhd>div{flex:1;min-width:0}.mhd b{font-size:17px;display:block}.mhd .muted{font-size:13px}
+.mic{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:10px;background:var(--soft)}.mic svg{width:20px;height:20px}
+.mgo{text-decoration:none;color:var(--muted);font-size:24px;line-height:1}
+.dn{color:var(--brand)}.up{color:#30b0c7}:root.dark .up{color:#40c8e0}.upl{stroke:#30b0c7}:root.dark .upl{stroke:#40c8e0}
+.mrates{display:flex;gap:28px;margin:16px 0 6px}.mrates>div{min-width:0}.mrates .muted{display:block;font-size:13px}.mrates s{text-decoration:none;font-weight:700}
+.mrates b{display:block;font-size:30px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;white-space:nowrap}.mrates b small{font-size:.62em;font-weight:650;margin-left:3px}
+.mchart{display:block;width:100%;height:120px;margin-top:6px;border-top:.5px solid var(--line)}
+.mtot{display:flex;gap:22px;flex-wrap:wrap;margin:14px 0 2px}.mtot b{font-size:28px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.msub{font-size:13px;margin-bottom:6px}
+.mrow{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:15.5px}.mrow svg{width:18px;height:18px;flex:none;color:var(--muted)}.mrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
+.mdev{display:flex;align-items:center;gap:28px;margin-top:12px}.mdev>b{font-size:54px;font-weight:700;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums}.mdev .muted{font-size:15px;line-height:1.55}.mdev .faint{opacity:.7;font-size:14px}
 .updcard{margin-bottom:12px;border:1.5px solid var(--brand)}.updcard .updtop{display:flex;align-items:center;justify-content:space-between}.updcard .updtop>div>*{display:block}.updcard .updtop .muted{font-size:12.5px;margin-top:2px}
 .updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;max-height:7.5em;overflow:hidden}
 .linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
@@ -536,10 +548,30 @@ section.page{display:none}section.page.on{display:block}
 
 <main class="wrap">
 
-<!-- 概览 -->
-<section class="page on" id="p-home">
+<!-- 首页：打开面板默认就是这一页 -->
+<section class="page" id="p-main">
 	<div class="card updcard hidden" id="rUpd"><div class="updtop"><div><b>路由器有新版本 <span id="rUpdV"></span></b><span class="muted" id="rUpdCur"></span></div><button class="btn sm primary" id="rUpdGo">一键更新</button></div>
 		<p class="muted" id="rUpdN"></p><button class="linkbtn" id="rUpdLater">以后再说</button></div>
+	<div class="notice w hidden" id="mOffBox" style="margin-bottom:12px"><b>连不上路由器</b><div id="mOff" class="hidden"></div></div>
+	<section class="card mcard" id="mLive">
+		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg></span><div><b>实时流量</b><span class="muted">每 2 秒刷新</span></div></div>
+		<div class="mrates"><div><span class="muted"><s class="dn">↓</s> 下行</span><b class="dn" id="mRx">—</b></div><div><span class="muted"><s class="up">↑</s> 上行</span><b class="up" id="mTx">—</b></div></div>
+		<svg class="mchart" id="mChart" viewBox="0 0 300 110" preserveAspectRatio="none" aria-label="最近 2 分钟的网速曲线"></svg>
+	</section>
+	<section class="card mcard mlink" id="mToday" role="button" tabindex="0" data-mgo="traf">
+		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="11" width="3" height="9" rx="1"/><rect x="9" y="6" width="3" height="14" rx="1"/><rect x="14" y="9" width="3" height="11" rx="1"/><rect x="19" y="13" width="2.5" height="7" rx="1"/></svg></span><div><b>今日流量</b></div><s class="mgo">›</s></div>
+		<div class="mtot"><b class="dn" id="mDl">—</b><b class="up" id="mUl">—</b></div>
+		<div class="muted msub" id="mTopT">今天用得最多</div>
+		<div id="mTop"></div>
+	</section>
+	<section class="card mcard mlink" id="mDev" role="button" tabindex="0" data-mgo="dev">
+		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="13" height="10" rx="1.5"/><path d="M1.5 18h15"/><rect x="17.5" y="8" width="4.5" height="10" rx="1.2"/></svg></span><div><b>在线设备</b></div><s class="mgo">›</s></div>
+		<div class="mdev"><b id="mOn">—</b><div class="muted"><div>无线 <span id="mWifi">—</span></div><div>有线 <span id="mWired">—</span></div><div class="faint">共 <span id="mAll">—</span> 台</div></div></div>
+	</section>
+</section>
+
+<!-- 概览 -->
+<section class="page" id="p-home">
 	<section class="grid two">
 		<div class="hero">
 			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
@@ -858,7 +890,7 @@ class OfflineError extends Error { constructor(msg, short) { super(msg); this.sh
 /* ---------- 和路由器通信 ---------- */
 // 只读的请求：卡住 10 秒就自动再试一次（网络偶尔丢一个请求很常见，没必要让页面干等 60 秒）
 // 会改动东西的请求不自动重试，免得执行两次；本身就要联网测很久的（IP 检查、解锁检测、诊断）给足时间
-const READS = new Set(['overview', 'oc_state', 'jobs', 'wd', 'black_state', 'cloud_info', 'groups', 'providers', 'connections', 'oc_sections', 'files', 'file_read', 'dashboard_state', 'oc_schema', 'logs', 'rules', 'core_ps', 'fs_list', 'fs_read', 'node_check', 'slog', 'procs', 'luci_key',
+const READS = new Set(['live', 'home_stats', 'overview', 'oc_state', 'jobs', 'wd', 'black_state', 'cloud_info', 'groups', 'providers', 'connections', 'oc_sections', 'files', 'file_read', 'dashboard_state', 'oc_schema', 'logs', 'rules', 'core_ps', 'fs_list', 'fs_read', 'node_check', 'slog', 'procs', 'luci_key',
 	'tools/call:system_info', 'tools/call:network_info', 'tools/call:firewall_overview', 'tools/call:list_services', 'tools/call:system_log']);
 async function rpc(method, params, timeoutMs) {
 	const key = method === 'tools/call' ? 'tools/call:' + (params && params.name) : method.replace(/^panel\//, '');
@@ -1071,8 +1103,10 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程' };
+const TITLES = { main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
+// 首页：不归任何分类，放在最上面
+const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
 const NAV = [
 	{ g: '状态', items: [
 		{ p: 'home', i: '◉', t: '概览' },
@@ -1232,7 +1266,7 @@ const pageTitle = (p) => TITLES[p] || NAVK[p]?.t || '';
 let navOpen;
 try { navOpen = JSON.parse(store.get('rp_nav') || 'null'); } catch (e) {}
 if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 1, '网络': 1, '工具': 1 };
-const NAV_IC = {"cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"]};
+const NAV_IC = {"main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"]};
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
@@ -1254,9 +1288,10 @@ function renderNav() {
 			if (it.link) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
+		if ('首页 主页 home'.includes(q)) hits.unshift(navBtn(NAV_TOP, false, false));
 		nav.innerHTML = hits.length ? hits.join('') : '<div class="empty">没有找到这个功能</div>';
 	} else {
-		nav.innerHTML = NAV.map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
+		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
 			!g.items.length && g.empty ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:${PKG_PAGE}">去安装 ›</button></div>` :
 			g.items.map((it) => {
 				if (!it.kids) return navBtn(it, false, g.noic);
@@ -1287,6 +1322,7 @@ async function go(p) {
 	navMark();
 	$('pageTitle').textContent = pageTitle(p);
 	store.set('rp_page', p);
+	try { sessionStorage.setItem('rp_page', p); } catch (e) {}
 	const sliding = $('side').classList.contains('open') && innerWidth < 900;
 	sideOpen(false);
 	const swap = () => {
@@ -1356,7 +1392,8 @@ async function refresh(quiet) {
 			if ($('topSub').textContent === '正在连接…') $('topSub').textContent = '连不上路由器';
 			pxRender(PX.running, PX.mode, false);
 			if (page === 'home') { $('hHead').textContent = '连不上路由器'; $('hDesc').textContent = e.message + '。下面是上次的数据。'; }
-			const homeOff = () => page === 'home' && $('hHead').textContent === '连不上路由器';
+			if (page === 'main') mOff(e.message + '。下面是上次的数据。');
+			const homeOff = () => (page === 'home' && $('hHead').textContent === '连不上路由器') || (page === 'main' && !$('mOff').classList.contains('hidden'));
 			// 只有「根本连不上 / 超时」才可能是手机网络的问题；收到 Cloudflare 的 530/502 说明手机网络是通的
 			const netErr = ['离线', '超时', '手机没网'].includes(e.short);
 			cloudFetch(Date.now() - cloudAt > 10000).then((c) => {
@@ -1364,16 +1401,16 @@ async function refresh(quiet) {
 				const l = cloudLine(c);
 				if (l) {
 					setStatus(false, c.label[c.s.state]);
-					if (homeOff()) $('hDesc').textContent = 'Cloudflare 实时判断 · ' + l + '。下面是上次的数据。';
+					if (homeOff()) offText('Cloudflare 实时判断 · ' + l + '。下面是上次的数据。');
 				} else if (netErr && c.s.state === 'ok' && c.r && cNow(c) - c.r.last < 150e3 && !c.probe?.fail) {
 					// 云端说路由器好好的，那就是手机到路由器这段网络的问题
 					setStatus(false, '手机网络问题');
-					if (homeOff()) $('hDesc').textContent = `Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 OpenClash 正在重启。稍后下拉刷新就好。下面是上次的数据。`;
+					if (homeOff()) offText(`Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 OpenClash 正在重启。稍后下拉刷新就好。下面是上次的数据。`);
 				}
 			}).catch(() => {
 				if (!netErr) return;
 				setStatus(false, '手机网络问题');
-				if (homeOff()) $('hDesc').textContent = '路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳。如果手机连着家里这台路由器的 Wi-Fi，也可能是 OpenClash 正在重启，或者代理节点出了问题（面板会在几分钟内自动改走直连）；急的话先换成手机流量打开。下面是上次的数据。';
+				if (homeOff()) offText('路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳。如果手机连着家里这台路由器的 Wi-Fi，也可能是 OpenClash 正在重启，或者代理节点出了问题（面板会在几分钟内自动改走直连）；急的话先换成手机流量打开。下面是上次的数据。');
 			});
 		} else if (/连不上|超时/.test(e.message)) setStatus(false, '离线');
 		if (!quiet) toast(e.message, true);
@@ -3995,7 +4032,75 @@ $('prList').addEventListener('click', async (e) => {
 	await busy(null, async () => { const r = await P('kill', { pid: x.pid, force: v === 'kill' }); toast('已结束「' + r.name + '」'); refresh(true); });
 });
 
-const LOAD = { traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
+/* ---------- 首页：实时流量（每 2 秒）、今日流量、在线设备 ---------- */
+const MH = { rx: [], tx: [], n: 60, statsAt: 0, timer: 0 };
+function bps(v) {
+	if (v == null) return '—';
+	const b = v * 8;
+	if (b >= 1e9) return (b / 1e9).toFixed(2) + '<small>Gbps</small>';
+	if (b >= 1e6) return (b / 1e6).toFixed(b >= 1e8 ? 0 : 1) + '<small>Mbps</small>';
+	return (b / 1e3).toFixed(b >= 1e5 ? 0 : 1) + '<small>Kbps</small>';
+}
+function mOff(t) { $('mOffBox').classList.toggle('hidden', !t); $('mOff').classList.toggle('hidden', !t); $('mOff').textContent = t || ''; }
+function offText(t) { if (page === 'home') $('hDesc').textContent = t; else if (page === 'main') mOff(t); }
+function mChart() {
+	const W = 300, H = 110, all = MH.rx.concat(MH.tx).filter((x) => x != null);
+	const max = Math.max(125000, ...all) * 1.15; // 至少 1 Mbps 的刻度，曲线不会贴顶
+	// 点还没攒满时铺满整个宽度（刚打开就是一条完整的曲线）
+	const pts = (arr) => arr.map((v, i) => [(W * i) / Math.max(arr.length - 1, 1), H - 4 - ((v || 0) / max) * (H - 10)]);
+	const line = (p) => p.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('');
+	const area = (p) => p.length ? line(p) + `L${p[p.length - 1][0].toFixed(1)} ${H}L${p[0][0].toFixed(1)} ${H}Z` : '';
+	const r = pts(MH.rx), t = pts(MH.tx);
+	$('mChart').innerHTML = `<defs><linearGradient id="mgR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--brand)" stop-opacity=".32"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs>
+		<line x1="0" y1="${(H / 2).toFixed(0)}" x2="${W}" y2="${(H / 2).toFixed(0)}" stroke="var(--line)" stroke-width=".6" vector-effect="non-scaling-stroke"/>
+		${r.length > 1 ? `<path d="${area(r)}" fill="url(#mgR)"/><path d="${line(r)}" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : ''}
+		${t.length > 1 ? `<path d="${line(t)}" fill="none" class="upl" stroke-width="1.8" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : ''}`;
+}
+async function mLive() {
+	const r = await P('live', {}, 6000);
+	if (r.rx == null) { $('mRx').innerHTML = $('mRx').innerHTML === '—' ? '…' : $('mRx').innerHTML; return; }
+	MH.rx.push(r.rx); MH.tx.push(r.tx);
+	if (MH.rx.length > MH.n) { MH.rx.shift(); MH.tx.shift(); }
+	$('mRx').innerHTML = bps(r.rx); $('mTx').innerHTML = bps(r.tx);
+	mChart();
+	try { sessionStorage.setItem('rp_mh', JSON.stringify({ rx: MH.rx, tx: MH.tx, at: Date.now() })); } catch (e) {}
+}
+const DEV_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="11" rx="1.5"/><path d="M8 19.5h8"/></svg>';
+function mStatsRender(r) {
+	const t = r.today || {}, d = r.devices || {};
+	$('mDl').textContent = '↓ ' + B(t.dl || 0); $('mUl').textContent = '↑ ' + B(t.ul || 0);
+	const top = t.top || [];
+	$('mTopT').textContent = top.length ? '今天用得最多' : (t.counting ? '今天还没有设备用流量' : '要 OpenClash 在运行才统计得到每台设备的流量');
+	$('mTop').innerHTML = top.map((x) => `<div class="mrow">${DEV_SVG}<span>${esc(x.name || x.id)}</span><em>${esc(B(x.dl + x.ul))}</em></div>`).join('');
+	$('mOn').textContent = d.online ?? '—'; $('mWifi').textContent = d.wifi ?? '—'; $('mWired').textContent = d.wired ?? '—'; $('mAll').textContent = d.total ?? '—';
+}
+async function mStats() {
+	const r = await P('home_stats', {}, 15000);
+	MH.statsAt = Date.now();
+	store.set('rp_mstats', JSON.stringify(r));
+	mStatsRender(r);
+}
+async function loadMain() {
+	// 先把上次的数据画出来
+	if (!MH.rx.length) { try { const h = JSON.parse(sessionStorage.getItem('rp_mh') || 'null'); if (h && Date.now() - h.at < 60e3) { MH.rx = h.rx; MH.tx = h.tx; mChart(); } } catch (e) {} }
+	if (!MH.statsAt) { try { const o = JSON.parse(store.get('rp_mstats') || 'null'); if (o) mStatsRender(o); } catch (e) {} }
+	const tasks = [mLive().then(() => { mOff(''); setStatus(true, '在线'); })];
+	if (Date.now() - MH.statsAt > 30e3) tasks.push(mStats());
+	await Promise.all(tasks);
+}
+// 首页在前台时每 2 秒刷新网速，每 30 秒刷新今日流量和设备
+function mTick() {
+	clearTimeout(MH.timer);
+	MH.timer = setTimeout(async () => {
+		if (page === 'main' && !document.hidden && !LK.on && !document.querySelector('.modal') && $('needcode').classList.contains('hidden')) {
+			try { await mLive(); mOff(''); if (Date.now() - MH.statsAt > 30e3) await mStats(); } catch (e) { if (!(e instanceof NeedCodeError)) refresh(true); }
+		}
+		mTick();
+	}, 2000);
+}
+$$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
+
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -4126,7 +4231,9 @@ function start() {
 	try { navExtra(JSON.parse(store.get('rp_menu') || '[]'), false); renderNav(); } catch (e) {}
 	setTimeout(loadMenu, 2500);
 	const qp = new URLSearchParams(location.search).get('p');
-	const p = validPage(qp) ? qp : store.get('rp_page');
+	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
+	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}
+	const p = validPage(qp) ? qp : validPage(sp) ? sp : 'main';
 	if (qp) try { history.replaceState(null, '', location.pathname); } catch (e) {}
 	page = '';
 	// 先用上次的数据把首页画出来，路由器回来后再刷新
@@ -4134,8 +4241,9 @@ function start() {
 		const o = JSON.parse(store.get('rp_ov') || 'null');
 		if (o) { delete o.speed; if (!validPage(p) || p === 'home') renderOv(o, true); else renderSub(o); setStatus(false, '连接中…'); }
 	} catch (e) {}
-	go(validPage(p) ? p : 'home');
+	go(p);
 	if (validPage(p) && p !== 'home') setTimeout(() => P('overview').then((o) => { store.set('rp_ov', JSON.stringify(o)); renderSub(o); }).catch(() => {}), 1200);
+	mTick();
 	clearInterval(ticker);
 	ticker = setInterval(() => {
 		if (document.hidden || LK.on || document.querySelector('.modal')) return;

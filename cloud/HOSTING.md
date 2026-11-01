@@ -84,10 +84,19 @@ npx wrangler secret put VAPID_PUB -c wrangler.hosted.toml
 ```sh
 curl -X POST https://example.com/api/admin/invites \
   -H "Authorization: Bearer 你的ADMIN_KEY" -H "Content-Type: application/json" \
-  -d '{"max": 5, "days": 30, "note": "给朋友"}'
+  -d '{"max": 20, "days": 7, "svc": 7, "note": "酷安第一帖"}'
 ```
 
-`max` 是这个码能开通几台，`days` 是几天后过期（0 = 不过期）。
+`max` 是这个码能开通几台，`days` 是这个码几天内能拿来开通（0 = 一直能用），`svc` 是开通后能用几天（**试用期**，0 = 不限期）。
+
+手机上更方便：仓库的 **Actions →「生成邀请码」→ Run workflow**，填好点运行，邀请码显示在运行结果里。也可以在管理页 `/admin` 里生成。
+
+### 试用期和续期码
+
+- 用带试用期（`svc`）的邀请码开通的路由器有**到期时间**。官网账号页会显示「到期时间、还剩几天」；到期前 3 天推送提醒一次。
+- **到期后自动暂停**：专属网址打不开，推送、云端备份、断电断网判断都停；家里上网和路由器上的设置不受影响。暂停超过 30 天还没续，就删掉，腾出名额。
+- **续期**：用户找你要续期码，在官网账号页这台路由器下面点「续期」输入。续期码只能用一次；没到期就在原到期时间上加，已到期就从输入那天算，**暂停的马上恢复**（管理员封禁的不会自动解封）。
+- 生成续期码：**Actions →「生成续期码」**（3 个月填 90 天，可以一次生成好几个），或者管理页 `/admin` 的「续期码」。作废：**Actions →「作废邀请码或续期码」**。
 
 ### 5. 让发布的安装包带上托管服务网址
 
@@ -148,11 +157,14 @@ App 的签名密钥已经加密放在仓库里（`android/signing/router-panel.j
 | `POST /api/admin/devices/{子域名}/on` | 解封 |
 | `POST /api/admin/devices/{子域名}/delete` | 删除（回收隧道和子域名） |
 | `GET /api/admin/invites` | 所有邀请码 |
-| `POST /api/admin/invites` | 新建邀请码 `{max, days, note}` |
+| `POST /api/admin/invites` | 新建邀请码 `{max, days, svc, note}`（`svc`：开通后试用几天，0 = 不限期） |
 | `DELETE /api/admin/invites/{邀请码}` | 作废邀请码 |
+| `GET /api/admin/renewals` | 所有续期码（用过的会写给哪台用了） |
+| `POST /api/admin/renewals` | 新建续期码 `{days, count, note}` |
+| `DELETE /api/admin/renewals/{续期码}` | 作废续期码 |
 | `POST /api/admin/cleanup` | 立刻清理 90 天没上线的 |
 
 ## 费用
 
 - 隧道：每个账号 1000 条以内免费
-- Worker 和 Durable Objects：每台路由器每分钟一次心跳和一次探测。免费额度大约够 20–30 台，再多需要 Workers 付费版（每月 5 美元起）
+- Worker 和 Durable Objects：路由器每分钟发一次心跳；一切正常时，心跳最多每 3 分钟交给 Durable Object 一次（每叫醒一次大约按 10 秒计费），状态一变马上交。免费额度大约够 20 台，再多需要 Workers 付费版（每月 5 美元起）。在 Cloudflare 后台「Workers 和 Pages」「Durable Objects」里能看到用量

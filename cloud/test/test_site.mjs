@@ -41,7 +41,7 @@ const errs = [];
 for (const dark of [false, true]) {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
-	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : 'alice-pass-1') : undefined));
+	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : d.message().includes('续期码') ? 'rnwcode234' : 'alice-pass-1') : undefined));
 	const shot = async (n) => { if (SHOTS) await page.screenshot({ path: SHOTS + '/site-' + n + (dark ? '-dark' : '') + '.png', fullPage: n === 'home' }); };
 	const T = dark ? '（深色）' : '';
 	await page.goto(B + '/'); await W(300);
@@ -82,6 +82,18 @@ for (const dark of [false, true]) {
 	ok('路由器发心跳后：显示在线', /在线/.test(await page.textContent('#devs .meta')));
 	ok('显示路由器的版本号（心跳里报的）', /v1\.3\.1/.test(await page.textContent('#devs .meta')));
 	ok('比最新版旧：标「可更新」', /可更新到 v1\.3\.2/.test(await page.textContent('#devs .meta .pill.up')));
+	// 试用期：显示到期时间、续期
+	if (!dark) {
+		const H = env.H.get('hub'), dk = 'd:' + R1.sub, dv = await H.ctx.storage.get(dk); dv.exp = Date.now() + 2 * 86400e3; await H.ctx.storage.put(dk, dv);
+		await H.ctx.storage.put('k:RNWCODE234', { days: 90, created: Date.now(), note: '', used: 0 });
+		await page.reload(); await W(800);
+		ok('试用的路由器：显示到期时间和还剩几天，快到期标黄', /托管服务到期：\d{4}-\d\d-\d\d（还剩 2 天）/.test(await page.textContent('#devs .expline')) && (await page.getAttribute('#devs .expline', 'class')).includes('warn'));
+		await shot('trial');
+		await page.click('#devs [data-renew]'); await W(1000);
+		ok('点「续期」输入续期码：续上 90 天', /还剩 92 天/.test(await page.textContent('#devs .expline')), await page.textContent('#devs .expline'));
+		const dv2 = await H.ctx.storage.get(dk); delete dv2.exp; await H.ctx.storage.put(dk, dv2); await page.reload(); await W(800);
+		ok('不限期的路由器：不显示到期，也没有续期按钮', !(await page.$('#devs .expline')) && !(await page.$('#devs [data-renew]')));
+	}
 	// 改名
 	await page.click('#devs [data-ren]'); await W(800);
 	ok('改名', /客厅路由器/.test(await page.textContent('#devs')));

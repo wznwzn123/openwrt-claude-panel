@@ -23,11 +23,23 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 	<div class="card">
 		<form id="fInv" class="g3">
 			<div><label class="f">能开通几台</label><input class="input" name="max" type="number" min="1" max="1000" value="1" required></div>
-			<div><label class="f">几天后过期（0 = 不过期）</label><input class="input" name="days" type="number" min="0" max="3650" value="30" required></div>
+			<div><label class="f">邀请码几天内能用（0 = 一直能用）</label><input class="input" name="days" type="number" min="0" max="3650" value="7" required></div>
+			<div><label class="f">开通后试用几天（0 = 不限期）</label><input class="input" name="svc" type="number" min="0" max="3650" value="7" required></div>
 			<div class="full"><label class="f">备注（给谁的）</label><input class="input" name="note" maxlength="60"></div>
 			<div class="full"><button class="btn primary">生成邀请码</button><span class="err" data-err></span></div>
 		</form>
 		<div id="invs" style="margin-top:8px"></div>
+	</div>
+	<div class="sech"><h2>续期码</h2></div>
+	<div class="card">
+		<p class="muted" style="margin:0 0 6px;font-size:13px">试用到期前，用户找你要续期码，在官网账号页这台路由器下面点「续期」输入。一个码只能用一次。</p>
+		<form id="fRen" class="g3">
+			<div><label class="f">续几天</label><input class="input" name="days" type="number" min="1" max="3650" value="90" required></div>
+			<div><label class="f">生成几个</label><input class="input" name="count" type="number" min="1" max="50" value="1" required></div>
+			<div class="full"><label class="f">备注（给谁的）</label><input class="input" name="note" maxlength="60"></div>
+			<div class="full"><button class="btn primary">生成续期码</button><span class="err" data-err></span></div>
+		</form>
+		<div id="rens" style="margin-top:8px"></div>
 	</div>
 	<div class="sech"><h2>路由器</h2><button class="btn sm" id="cleanBtn">清理 90 天没上线的</button></div>
 	<div class="card"><input class="input" id="q" placeholder="搜索子域名、名称、型号" style="margin-bottom:6px"><div id="devs"></div></div>
@@ -56,7 +68,7 @@ function renderDevs() {
 	const q = $('q').value.trim().toLowerCase();
 	const list = DEVS.filter((d) => !q || [d.sub, d.name, d.model].join(' ').toLowerCase().includes(q)).sort((a, b) => (b.seen || 0) - (a.seen || 0));
 	$('devs').innerHTML = list.length ? list.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>${esc(d.name || d.sub)} <span>${esc(d.sub)}</span></b>
-		<span>${d.state !== 'ok' ? '开通中' : d.off ? '⛔ 已封禁' : '最后上线 ' + ago(d.seen)} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span></div>
+		<span>${d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '⏸ 已到期暂停' : '⛔ 已封禁') : '最后上线 ' + ago(d.seen)}${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span></div>
 		<div class="acts">${d.off ? '<button class="btn sm" data-op="on">解封</button>' : '<button class="btn sm" data-op="off">封禁</button>'}<button class="btn sm danger" data-op="delete">删除</button></div></div>`).join('') : '<p class="muted" style="text-align:center">没有路由器</p>';
 }
 $('q').oninput = renderDevs;
@@ -71,7 +83,7 @@ $('devs').onclick = async (e) => {
 function renderInv(list) {
 	list.sort((a, b) => b.created - a.created);
 	$('invs').innerHTML = list.length ? list.map((i) => { const dead = (i.exp && i.exp < Date.now()) || i.used >= i.max;
-		return `<div class="item" data-code="${esc(i.code)}"><div class="l"><b><code>${esc(i.code)}</code>${dead ? ' <span>（已失效）</span>' : ''}</b><span>已用 ${i.used} / ${i.max} · ${i.exp ? day(i.exp) + ' 过期' : '不过期'}${i.note ? ' · ' + esc(i.note) : ''}</span></div>
+		return `<div class="item" data-code="${esc(i.code)}"><div class="l"><b><code>${esc(i.code)}</code>${dead ? ' <span>（已失效）</span>' : ''}</b><span>已用 ${i.used} / ${i.max} · ${i.exp ? day(i.exp) + ' 过期' : '不过期'} · ${i.svc ? '开通后试用 ' + i.svc + ' 天' : '开通后不限期'}${i.note ? ' · ' + esc(i.note) : ''}</span></div>
 		<div class="acts"><button class="btn sm" data-copy>复制</button><button class="btn sm danger" data-del>作废</button></div></div>`; }).join('') : '<p class="muted">还没有邀请码</p>';
 }
 $('invs').onclick = async (e) => {
@@ -82,14 +94,29 @@ $('invs').onclick = async (e) => {
 };
 $('fInv').onsubmit = async (e) => {
 	e.preventDefault(); const f = e.target, err = f.querySelector('[data-err]'); err.textContent = '';
-	try { const r = await api('POST', 'invites', { max: +f.max.value, days: +f.days.value, note: f.note.value }); f.note.value = ''; toast('邀请码：' + r.invite.code); await load(); } catch (x) { err.textContent = x.message; }
+	try { const r = await api('POST', 'invites', { max: +f.max.value, days: +f.days.value, svc: +f.svc.value, note: f.note.value }); f.note.value = ''; toast('邀请码：' + r.invite.code); await load(); } catch (x) { err.textContent = x.message; }
+};
+function renderRen(list) {
+	list.sort((a, b) => b.created - a.created);
+	$('rens').innerHTML = list.length ? list.map((k) => `<div class="item" data-rcode="${esc(k.code)}"><div class="l"><b><code>${esc(k.code)}</code>${k.used ? ' <span>（已用）</span>' : ''}</b><span>续 ${k.days} 天${k.used ? ' · ' + day(k.used) + ' 给 ' + esc(k.sub) + ' 用了（' + esc(k.by || '') + '）' : ''}${k.note ? ' · ' + esc(k.note) : ''}</span></div>
+		<div class="acts">${k.used ? '' : '<button class="btn sm" data-copy>复制</button><button class="btn sm danger" data-del>作废</button>'}</div></div>`).join('') : '<p class="muted">还没有续期码</p>';
+}
+$('rens').onclick = async (e) => {
+	const row = e.target.closest('[data-rcode]'); if (!row) return;
+	const code = row.dataset.rcode;
+	if (e.target.closest('[data-copy]')) { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (x) { prompt('复制续期码：', code); } }
+	if (e.target.closest('[data-del]') && confirm('作废续期码 ' + code + '？')) { try { await api('DELETE', 'renewals/' + code); await load(); } catch (x) { toast(x.message); } }
+};
+$('fRen').onsubmit = async (e) => {
+	e.preventDefault(); const f = e.target, err = f.querySelector('[data-err]'); err.textContent = '';
+	try { const r = await api('POST', 'renewals', { days: +f.days.value, count: +f.count.value, note: f.note.value }); f.note.value = ''; toast('续期码：' + r.list.map((x) => x.code).join('、')); await load(); } catch (x) { err.textContent = x.message; }
 };
 $('cleanBtn').onclick = async () => { if (!confirm('删除所有 90 天没上线的路由器？')) return; try { const r = await api('POST', 'cleanup'); toast('清理了 ' + r.removed.length + ' 台'); await load(); } catch (x) { toast(x.message); } };
 async function load() {
-	const [d, i] = await Promise.all([api('GET', 'devices'), api('GET', 'invites')]);
+	const [d, i, k] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals')]);
 	DEVS = d.list; $('sCount').textContent = d.count; $('sMax').textContent = d.max;
 	$('sOn').textContent = d.list.filter((x) => x.seen && Date.now() - x.seen < 6 * 3600e3 + 600e3).length;
-	renderDevs(); renderInv(i.list);
+	renderDevs(); renderInv(i.list); renderRen(k.list);
 	$('vKey').classList.add('hidden'); $('vMain').classList.remove('hidden'); $('outBtn').classList.remove('hidden');
 }
 if (KEY) load().catch(() => logout()); else logout();

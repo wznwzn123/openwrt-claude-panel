@@ -1,4 +1,4 @@
-# 生成邀请码：Actions →「生成邀请码」→ Run workflow，填人数、有效天数、备注；生成的邀请码显示在运行结果的提示里
+# 生成邀请码：Actions →「生成邀请码」→ Run workflow，填人数、码几天内能用、开通后试用几天、备注；生成的邀请码显示在运行结果的提示里
 name: 生成邀请码
 on:
   workflow_dispatch:
@@ -8,7 +8,11 @@ on:
         required: true
         default: '20'
       days:
-        description: 几天内有效（0 = 不过期）
+        description: 这个码几天内能用来开通（0 = 一直能用）
+        required: true
+        default: '7'
+      svc:
+        description: 开通后试用几天（0 = 不限期）
         required: true
         default: '7'
       note:
@@ -26,14 +30,15 @@ jobs:
       MAX: ${{ inputs.max }}
       DAYS: ${{ inputs.days }}
       NOTE: ${{ inputs.note }}
+      SVC: ${{ inputs.svc }}
     steps:
       - name: 生成
         run: |
           [ -n "$HUB" ] && [ -n "$AK" ] || { echo "::error::没有设置 HUB_URL 或 HUB_ADMIN_KEY"; exit 1; }
-          B=$(jq -nc --arg m "$MAX" --arg d "$DAYS" --arg n "$NOTE" '{max: ($m|tonumber), days: ($d|tonumber), note: $n}')
+          B=$(jq -nc --arg m "$MAX" --arg d "$DAYS" --arg n "$NOTE" --arg s "$SVC" '{max: ($m|tonumber), days: ($d|tonumber), svc: ($s|tonumber), note: $n}')
           R=$(curl -sS -m 20 -X POST -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' -d "$B" "$HUB/api/admin/invites")
           C=$(echo "$R" | jq -r '.invite.code // empty')
           [ -n "$C" ] || { echo "::error::生成失败：$R"; exit 1; }
-          echo "::notice::邀请码：$C（最多 $MAX 人，$( [ "$DAYS" = 0 ] && echo 不过期 || echo "$DAYS 天内有效")）"
+          echo "::notice::邀请码：$C（最多 $MAX 人，$( [ "$DAYS" = 0 ] && echo 一直能用 || echo "$DAYS 天内能用")，$( [ "$SVC" = 0 ] && echo 开通后不限期 || echo "开通后试用 $SVC 天")）"
           R=$(curl -sS -m 20 "$HUB/api/ping")
           echo "::notice::托管服务现在一共 $(echo "$R" | jq -r .count) 台路由器（上限 $(echo "$R" | jq -r .max)）"

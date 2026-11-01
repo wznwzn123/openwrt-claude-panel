@@ -22,6 +22,7 @@ export const safeEq = (a, b) => {
 const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 const clean = (s, n) => String(s || '').replace(/[^\p{L}\p{N} ._()\-]/gu, '').slice(0, n);
 const DAY = 86400e3;
+const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10); // 按北京 / 台北时间显示日期
 export const LIMITS = { perIpHour: 5, allHour: 60, idleDays: 90, pendingMs: 3600e3 };
 
 /* ---------- Cloudflare API ---------- */
@@ -142,8 +143,10 @@ export class Hub extends DurableObject {
 		const keys = { rkey: rnd(32), tkey: rnd(32), pkey: rnd(32) };
 		const h = host(this.env, sub);
 		await this.watch(sub).setup({ sub, ...keys, probe: 'https://' + h + '/panel/manifest.json' });
-		await this.ctx.storage.put('d:' + sub, { sub, state: 'ok', created: now, seen: now, invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns });
-		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', ...keys };
+		// 试用码：开通后只能用 svc 天，到期前找提供服务的人要续期码；普通邀请码不限期
+		const exp = +inv.svc > 0 ? now + inv.svc * DAY : 0;
+		await this.ctx.storage.put('d:' + sub, { sub, state: 'ok', created: now, seen: now, invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp });
+		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, ...keys };
 	}
 	// 删除一台：删子域名和隧道、清空它的云端数据、腾出名额
 	remove(sub) { return this.lock(() => this._remove(sub)); }
@@ -174,11 +177,13 @@ export class Hub extends DurableObject {
 	}
 	// 封禁：删掉子域名（网址立刻打不开）、云端功能拒绝；解封：重新加回子域名
 	setOff(sub, off) { return this.lock(() => this._setOff(sub, off)); }
-	async _setOff(sub, off) {
+	// why：'exp' = 到期自动暂停（续期后自动恢复）；不写 = 管理员封禁（续期也不会解封）
+	async _setOff(sub, off, why) {
 		const d = await this.ctx.storage.get('d:' + sub);
 		if (!d || d.state !== 'ok') return false;
-		if (off && !d.off) { await dnsDel(this.env, d.dns); d.dns = null; d.off = Date.now(); }
-		if (!off && d.off) { d.dns = await dnsAdd(this.env, sub, d.tunnel); delete d.off; }
+		if (off && !d.off) { await dnsDel(this.env, d.dns); d.dns = null; d.off = Date.now(); d.offWhy = why || 'admin'; }
+		else if (off && d.off && !why) d.offWhy = 'admin'; // 到期暂停的，管理员又封禁了：续期也不解封
+		if (!off && d.off) { d.dns = await dnsAdd(this.env, sub, d.tunnel); delete d.off; delete d.offWhy; }
 		await this.watch(sub).setOff(!!off);
 		await this.ctx.storage.put('d:' + sub, d);
 		return true;
@@ -272,7 +277,7 @@ export class Hub extends DurableObject {
 			if (!d || d.state !== 'ok') continue;
 			let b = { last: 0, state: 'wait', ver: '' };
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
-			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at });
+			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp') });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY };
@@ -414,14 +419,62 @@ export class Hub extends DurableObject {
 	async setMeta(k, v) { const old = await this.ctx.storage.get('m:' + k); if (JSON.stringify(old) !== JSON.stringify(v)) await this.ctx.storage.put('m:' + k, v); }
 	async devices() { return [...(await this.ctx.storage.list({ prefix: 'd:' })).values()]; }
 	async invites() { return [...(await this.ctx.storage.list({ prefix: 'i:' })).entries()].map(([k, v]) => ({ code: k.slice(2), ...v })); }
-	async addInvite({ max, days, note }) {
+	async addInvite({ max, days, note, svc }) {
 		let code;
 		do { code = rnd(10).toUpperCase(); } while (await this.ctx.storage.get('i:' + code));
-		const inv = { max: Math.max(1, Math.min(1000, +max || 1)), used: 0, created: Date.now(), exp: +days > 0 ? Date.now() + days * DAY : 0, note: clean(note, 60) };
+		const inv = { max: Math.max(1, Math.min(1000, +max || 1)), used: 0, created: Date.now(), exp: +days > 0 ? Date.now() + days * DAY : 0, note: clean(note, 60), svc: Math.max(0, Math.min(3650, Math.round(+svc || 0))) };
 		await this.ctx.storage.put('i:' + code, inv);
 		return { code, ...inv };
 	}
 	async delInvite(code) { return this.ctx.storage.delete('i:' + String(code || '').toUpperCase()); }
+	/* ---------- 续期码：试用到期前找提供服务的人要，在官网账号页（或路由器上）输入，给这台路由器加天数 ---------- */
+	async renewals() { return [...(await this.ctx.storage.list({ prefix: 'k:' })).entries()].map(([k, v]) => ({ code: k.slice(2), ...v })); }
+	async addRenewals({ days, count, note }) {
+		const n = Math.max(1, Math.min(50, Math.round(+count || 1))), d = Math.max(1, Math.min(3650, Math.round(+days || 90))), out = [];
+		for (let i = 0; i < n; i++) {
+			let code;
+			do { code = rnd(10).toUpperCase(); } while ((await this.ctx.storage.get('k:' + code)) || (await this.ctx.storage.get('i:' + code)));
+			const k = { days: d, created: Date.now(), note: clean(note, 60), used: 0 };
+			await this.ctx.storage.put('k:' + code, k);
+			out.push({ code, ...k });
+		}
+		return out;
+	}
+	async delRenewal(code) { return this.ctx.storage.delete('k:' + String(code || '').toUpperCase()); }
+	renew(sub, code, by) { return this.lock(() => this._renew(sub, code, by)); }
+	async _renew(sub, code, by) {
+		if (!(await this.hit('rn:' + sub, 20, 3600e3))) return { st: 429, error: '试太多次了，一小时后再试' };
+		code = String(code || '').trim().toUpperCase().replace(/[^A-Z2-9]/g, '');
+		const k = code && (await this.ctx.storage.get('k:' + code)), d = await this.ctx.storage.get('d:' + sub);
+		if (!d || d.state !== 'ok') return { st: 404, error: '没有这台路由器' };
+		if (!k) return { st: 400, error: '续期码不对' };
+		if (k.used) return { st: 400, error: '这个续期码已经用过了' };
+		if (!d.exp) return { st: 400, error: '这台路由器不限期，不用续期' };
+		const now = Date.now();
+		d.exp = Math.max(now, d.exp) + k.days * DAY;
+		delete d.warn3; delete d.warn0;
+		k.used = now; k.sub = sub; k.by = clean(by, 40);
+		await this.ctx.storage.put({ ['k:' + code]: k, ['d:' + sub]: d });
+		// 到期暂停的：续上以后马上恢复（管理员封禁的不动）
+		if (d.off && d.offWhy === 'exp') await this._setOff(sub, false);
+		try { await this.watch(sub).push({ title: '✅ 托管服务已续期', body: '续了 ' + k.days + ' 天，到期时间 ' + ymd(d.exp) + '。', tag: 'svc', lvl: 'ok' }); } catch (e) {}
+		return { st: 200, ok: true, exp: d.exp, days: k.days };
+	}
+	async accountRenew(uid, email, sub, code) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u || !(u.devs || []).some((x) => x.sub === sub)) return { st: 404, error: '你的账号里没有这台路由器' };
+		return this.renew(sub, code, maskEmail(email));
+	}
+	// 路由器那边（凭 RKEY）看自己的到期时间
+	async devInfo({ sub, rkey }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		const d = await this.ctx.storage.get('d:' + sub);
+		return { st: 200, exp: (d && d.exp) || 0, off: !!(d && d.off), offWhy: (d && d.offWhy) || null };
+	}
+	async devRenew({ sub, rkey, code }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		return this.renew(sub, code, '路由器');
+	}
 	async stats() { return { count: await this.count(), max: this.max() }; }
 	// 每天清理：90 天没上线的回收；开通到一半卡住超过 1 小时的也清掉
 	cleanup(now) { return this.lock(() => this._cleanup(now || Date.now())); }
@@ -434,6 +487,22 @@ export class Hub extends DurableObject {
 				if (d.state === 'ok') await this._remove(d.sub);
 				else { await this.ctx.storage.delete('d:' + d.sub); await this.addCount(-1); }
 				out.push(d.sub);
+			} catch (e) {}
+		}
+		// 试用 / 续期到期：提前 3 天提醒一次；到期暂停（网址打不开、云端功能停）；暂停超过 30 天删掉，腾出名额
+		for (const d of await this.devices()) {
+			if (d.state !== 'ok' || !d.exp) continue;
+			const w = this.watch(d.sub);
+			try {
+				if (!d.off && now < d.exp && d.exp - now < 3 * DAY && !d.warn3) {
+					d.warn3 = now; await this.ctx.storage.put('d:' + d.sub, d);
+					await w.push({ title: '托管服务 ' + ymd(d.exp) + ' 到期', body: '还剩不到 3 天。到期后专属网址会暂停（家里上网不受影响）。找提供服务的人要续期码，在官网账号页这台路由器下面点「续期」输入。', tag: 'svc', lvl: 'warn', force: true });
+				} else if (!d.off && now >= d.exp) {
+					await this._setOff(d.sub, true, 'exp');
+					await w.push({ title: '⚠️ 托管服务已到期，已暂停', body: '专属网址打不开了，推送和云端备份也停了；家里上网不受影响，路由器上的设置都还在。找提供服务的人要续期码，在官网账号页这台路由器下面点「续期」，输入后马上恢复。', tag: 'svc', lvl: 'err', force: true });
+				} else if (d.off && d.offWhy === 'exp' && now - d.exp > 30 * DAY) {
+					await this._remove(d.sub); out.push(d.sub);
+				}
 			} catch (e) {}
 		}
 		// 过期没用的登录码、配对码
@@ -476,6 +545,9 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'invites' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.invites() });
 		if (a[0] === 'invites' && !a[1] && req.method === 'POST') return J({ ok: true, invite: await H.addInvite(await body()) });
 		if (a[0] === 'invites' && a[1] && req.method === 'DELETE') return J({ ok: await H.delInvite(a[1]) });
+		if (a[0] === 'renewals' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.renewals() });
+		if (a[0] === 'renewals' && !a[1] && req.method === 'POST') return J({ ok: true, list: await H.addRenewals(await body()) });
+		if (a[0] === 'renewals' && a[1] && req.method === 'DELETE') return J({ ok: await H.delRenewal(a[1]) });
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
 		return J({ error: 'not found' }, 404);
 	}
@@ -589,6 +661,8 @@ async function accountApi(req, env, H, p, body) {
 	if (p === '/api/dev/accounts') return out(await H.devAccounts({ sub: s(b.sub), rkey: s(b.rkey) }));
 	if (p === '/api/dev/unbind') return out(await H.devUnbind({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
 	if (p === '/api/dev/logincode') return out(await H.devLoginCode({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
+	if (p === '/api/dev/info') return out(await H.devInfo({ sub: s(b.sub), rkey: s(b.rkey) }));
+	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	const a = p.slice('/api/account/'.length);
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip }));
@@ -603,6 +677,7 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub)));
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
 	if (a === 'logincode') return out(await H.loginCode(me.uid, s(b.sub)));
+	if (a === 'renew') return out(await H.accountRenew(me.uid, me.email, s(b.sub), s(b.code)));
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
 	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password)));

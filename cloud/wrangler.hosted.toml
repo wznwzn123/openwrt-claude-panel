@@ -11,9 +11,9 @@ routes = [
   { pattern = "*.example.com/cloud/*", zone_name = "example.com" }
 ]
 
-# 每天清理一次：90 天没上线的路由器自动回收
+# 每小时检查一次：试用 / 续期到期提醒和暂停；90 天没上线的路由器自动回收
 [triggers]
-crons = ["17 19 * * *"]
+crons = ["17 * * * *"]
 
 [vars]
 BASE_DOMAIN = "example.com"

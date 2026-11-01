@@ -15,6 +15,7 @@
 .sech h2{font-size:20px}
 .empty{text-align:center;padding:26px 16px}
 .empty .big{font-size:40px}
+.expline{grid-column:1/-1;margin-top:6px;padding:8px 11px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--muted);line-height:1.6}.expline.warn{background:rgba(255,149,0,.14);color:var(--warn)}.expline.bad{background:rgba(255,59,48,.12);color:var(--danger)}
 .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:650;background:var(--fill)}.pill.up{background:rgba(255,149,0,.16);color:var(--warn)}
 .mask{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.35)}
 .mask .card{width:100%;max-width:400px;background:var(--bg);text-align:center}
@@ -146,16 +147,21 @@ $('delBtn').onclick = async () => {
 	if (!pw) return;
 	try { await api('delete', { password: pw }); toast('账号已注销'); show('auth'); tab('login'); } catch (x) { toast(x.message); }
 };
+const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 function render(me) {
 	$('who').textContent = me.email;
 	const links = me.links || [], n = me.devs.length + links.length;
 	$('cnt').textContent = n ? n + ' 台' : '';
 	$('devs').innerHTML = n ? me.devs.map((d) => {
-		const on = !d.off && d.last && Date.now() - d.last < 180e3;
+		const on = !d.off && d.last && Date.now() - d.last < 360e3;
+		const left = d.exp ? Math.ceil((d.exp - Date.now()) / 86400e3) : null;
+		const expTxt = !d.exp ? '' : d.expired ? '<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。找提供服务的人要续期码，点下面「续期」输入，马上恢复</div>'
+			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，找提供服务的人要续期码' : ''}</div>`;
 		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
-		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(d.ver) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
-		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
+		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(d.ver) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
+		${expTxt}
+		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button>${d.exp ? '<button class="btn sm" data-renew>续期</button>' : ''}<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
 	}).join('') + links.map((l) => `<div class="card dev" data-link="${esc(l.id)}"><div class="ic">⌂</div><b>${esc(l.name)}</b>
 		<div class="meta">自建版 · ${esc(l.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))}</div>
 		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
@@ -163,6 +169,12 @@ function render(me) {
 		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub);
 		b.disabled = true;
 		try { const r = await api('logincode', { sub }); codeBox(r.code, d); } catch (x) { toast(x.message); } finally { b.disabled = false; }
+	}));
+	$('devs').querySelectorAll('[data-renew]').forEach((b) => (b.onclick = async () => {
+		const sub = b.closest('[data-sub]').dataset.sub, code = prompt('输入续期码（找提供服务的人要）：');
+		if (!code || !code.trim()) return;
+		b.disabled = true;
+		try { const r = await api('renew', { sub, code: code.trim() }); toast('已续期 ' + r.days + ' 天，到期时间 ' + ymd(r.exp)); await load(); } catch (x) { toast(x.message); } finally { b.disabled = false; }
 	}));
 	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));

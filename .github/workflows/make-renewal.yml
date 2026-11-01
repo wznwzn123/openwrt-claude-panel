@@ -1,0 +1,38 @@
+# 生成续期码：Actions →「生成续期码」→ Run workflow，填续几天、生成几个、备注；续期码显示在运行结果的提示里
+# 用户在官网账号页这台路由器下面点「续期」输入；一个码只能用一次
+name: 生成续期码
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 续几天（3 个月填 90）
+        required: true
+        default: '90'
+      count:
+        description: 生成几个
+        required: true
+        default: '1'
+      note:
+        description: 备注（给谁的）
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  renewal:
+    runs-on: ubuntu-latest
+    env:
+      HUB: ${{ vars.HUB_URL }}
+      AK: ${{ secrets.HUB_ADMIN_KEY }}
+      DAYS: ${{ inputs.days }}
+      COUNT: ${{ inputs.count }}
+      NOTE: ${{ inputs.note }}
+    steps:
+      - name: 生成
+        run: |
+          [ -n "$HUB" ] && [ -n "$AK" ] || { echo "::error::没有设置 HUB_URL 或 HUB_ADMIN_KEY"; exit 1; }
+          B=$(jq -nc --arg d "$DAYS" --arg c "$COUNT" --arg n "$NOTE" '{days: ($d|tonumber), count: ($c|tonumber), note: $n}')
+          R=$(curl -sS -m 20 -X POST -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' -d "$B" "$HUB/api/admin/renewals")
+          L=$(echo "$R" | jq -r '[.list[]?.code] | join("  ")')
+          [ -n "$L" ] || { echo "::error::生成失败：$R"; exit 1; }
+          echo "::notice::续期码（每个续 $DAYS 天，只能用一次）：$L"

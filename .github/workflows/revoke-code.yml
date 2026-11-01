@@ -1,0 +1,24 @@
+# 作废邀请码或续期码：Actions →「作废邀请码或续期码」→ Run workflow，填码（已经开通的路由器不受影响）
+name: 作废邀请码或续期码
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: 要作废的邀请码或续期码
+        required: true
+permissions:
+  contents: read
+jobs:
+  revoke:
+    runs-on: ubuntu-latest
+    env:
+      HUB: ${{ vars.HUB_URL }}
+      AK: ${{ secrets.HUB_ADMIN_KEY }}
+      CODE: ${{ inputs.code }}
+    steps:
+      - name: 作废
+        run: |
+          C=$(echo "$CODE" | tr -dc 'A-Za-z0-9' | tr a-z A-Z)
+          [ -n "$C" ] || { echo "::error::码不对"; exit 1; }
+          for k in invites renewals; do curl -sS -m 20 -X DELETE -H "Authorization: Bearer $AK" "$HUB/api/admin/$k/$C" >/dev/null; done
+          echo "::notice::已作废：$C"

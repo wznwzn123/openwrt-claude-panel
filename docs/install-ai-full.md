@@ -186,7 +186,7 @@ npx wrangler secret put VAPID_PUB
 
 ## 升级 / 卸载
 
-**升级**：面板首页提示有新版时点「一键更新」（v1.3.1 起）；或者下载新版的 `openwrt-claude-panel-ai-full.tar.gz`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。
+**升级**：面板首页提示有新版时点「一键更新」（v2.0.2 起；v2.0.1 及更早的版本先用下面的办法手动升级一次）；或者下载新版的 `openwrt-claude-panel-ai-full.tar.gz`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。
 
 **卸载**：
 

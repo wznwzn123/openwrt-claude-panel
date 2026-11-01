@@ -90,7 +90,9 @@ h1,h2,h3{letter-spacing:-.02em}
 .mrow{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:15.5px}.mrow svg{width:18px;height:18px;flex:none;color:var(--muted)}.mrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
 .mdev{display:flex;align-items:center;gap:28px;margin-top:12px}.mdev>b{font-size:54px;font-weight:700;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums}.mdev .muted{font-size:15px;line-height:1.55}.mdev .faint{opacity:.7;font-size:14px}
 .updcard{margin-bottom:12px;border:1.5px solid var(--brand)}.updcard .updtop{gap:12px}.updcard .updtop .btn{flex:none;white-space:nowrap}.updcard .updtop{display:flex;align-items:center;justify-content:space-between}.updcard .updtop>div>*{display:block}.updcard .updtop .muted{font-size:12.5px;margin-top:2px}
-.updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;max-height:7.5em;overflow:hidden}
+.updcard .updtop>div{min-width:0}.updcard #rUpdCur{white-space:pre-line}
+.updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.updcard .updfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:4px}.updcard .updfoot .linkbtn{padding:8px 0 2px}.updcard #rUpdMore{color:var(--brand);font-weight:600}
 .linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
 .updsteps{margin:10px 0 4px;padding:0;list-style:none}.updsteps li{padding:7px 0;color:var(--muted);font-size:14px}.updsteps li.on{color:var(--text);font-weight:600}.updsteps li.ok{color:var(--ok)}.updsteps li.ok::before{content:'✓ '}.updsteps li.on::before{content:'⏳ '}
 .sidenav .ng.flash>button{background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
@@ -553,7 +555,7 @@ section.page{display:none}section.page.on{display:block}
 <!-- 首页：打开面板默认就是这一页 -->
 <section class="page" id="p-main">
 	<div class="card updcard hidden" id="rUpd"><div class="updtop"><div><b>路由器有新版本 <span id="rUpdV"></span></b><span class="muted" id="rUpdCur"></span></div><button class="btn sm primary" id="rUpdGo">一键更新</button></div>
-		<p class="muted" id="rUpdN"></p><button class="linkbtn" id="rUpdLater">以后再说</button></div>
+		<p class="muted" id="rUpdN"></p><div class="updfoot"><button class="linkbtn" id="rUpdMore">查看完整更新内容</button><button class="linkbtn" id="rUpdLater">以后再说</button></div></div>
 	<div class="card updcard hidden" id="mSvc"><div class="updtop"><div><b id="mSvcT">托管服务快到期了</b><span class="muted" id="mSvcD"></span></div><button class="btn sm primary" id="mSvcGo">申请续期</button></div></div>
 	<div class="notice w hidden" id="mOffBox" style="margin-bottom:12px"><b>连不上路由器</b><div id="mOff" class="hidden"></div></div>
 	<section class="card mcard" id="mLive">
@@ -3754,8 +3756,9 @@ async function updCheck(force) {
 	$('rUpd').classList.toggle('hidden', !UPD.newer || (later && !UPD.force));
 	if (UPD.newer) {
 		$('rUpdV').textContent = 'v' + UPD.latest;
-		$('rUpdCur').textContent = '现在是 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '，一键更新，设置都保留，不会断网';
+		$('rUpdCur').textContent = '现在是 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '\n设置都保留，不会断网';
 		$('rUpdN').textContent = UPD.notes || '';
+		// 首页只放前 3 行；「查看完整更新内容」在弹窗里能上下滑着看全
 		$('rUpdLater').classList.toggle('hidden', !!UPD.force);
 		// 必须更新：弹窗关不掉
 		if (UPD.force && !document.querySelector('.modal[data-upd]')) updSheet(true);
@@ -3763,6 +3766,7 @@ async function updCheck(force) {
 	return UPD;
 }
 $('rUpdGo').onclick = () => updStart();
+$('rUpdMore').onclick = () => updSheet(true);
 $('rUpdLater').onclick = () => { store.set('rp_upd_later', updLaterKey()); $('rUpd').classList.add('hidden'); };
 async function updSheet(forced) {
 	if (!forced) { const r = await updCheck(true); if (!r) return; }

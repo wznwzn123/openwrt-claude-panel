@@ -3,7 +3,7 @@
 # 用法：cmcp-update start    面板点「一键更新」时调用：把自己复制到 /tmp 再转到后台运行，马上返回
 #       cmcp-update status   看进度（/tmp/cmcp_update.json）
 #       cmcp-update run      真正干活（start 会调用它，一般不用手动运行）
-# 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_DL（下载地址）、CMCP_NOSVC=1（不重启服务）
+# 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_DL / CMCP_GH（下载地址）、CMCP_ST（进度文件）、CMCP_NOSVC=1（不重启服务）
 R=${CMCP_ROOT:-}
 D=$R/etc/claude-mcp
 ST=${CMCP_ST:-/tmp/cmcp_update.json}
@@ -11,7 +11,7 @@ LOCK=/tmp/cmcp_update.lock
 W=/tmp/cmcp_upd
 BK=/tmp/cmcp_upd_backup.tgz
 LOG=/tmp/cmcp_update.log
-GH=https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download
+GH=${CMCP_GH:-https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download}
 
 esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 state() { # state 状态 说明 [目标版本]
@@ -43,10 +43,12 @@ start)
 	state queued "准备更新"
 	# 复制到 /tmp 再跑：安装时会覆盖 /usr/sbin 里的这个脚本，正在运行的脚本被改写会出错
 	cp -f "$0" /tmp/cmcp-update.run && chmod 755 /tmp/cmcp-update.run
-	if command -v start-stop-daemon >/dev/null 2>&1; then
-		start-stop-daemon -S -b -x /bin/sh -- /tmp/cmcp-update.run run
+	# 转到后台：用 setsid 脱离面板进程（面板重启也不会带走它）。
+	# 不用 start-stop-daemon：BusyBox 版的 -x /bin/sh 看到别的 sh 在跑（比如看门狗）就以为「已经在跑」而不启动
+	if command -v setsid >/dev/null 2>&1; then
+		( setsid /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	else
-		( setsid /bin/sh /tmp/cmcp-update.run run >/dev/null 2>&1 & ) 2>/dev/null || ( /bin/sh /tmp/cmcp-update.run run >/dev/null 2>&1 & )
+		( trap '' HUP; /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	fi
 	echo '{"started":true}' ;;
 run)

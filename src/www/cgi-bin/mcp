@@ -2589,8 +2589,12 @@ P.update_check = function(a) {
 P.update_start = function(a) {
 	if (a?.confirm != 'UPDATE') die('需要确认');
 	let r = null;
-	try { r = json(sh('/usr/sbin/cmcp-update start').out); } catch (e) {}
-	if (!r) die('没能开始更新：路由器上没有 cmcp-update（版本太旧，先用安装命令手动升级一次）');
+	if (!stat('/usr/sbin/cmcp-update')) die('没能开始更新：路由器上没有 cmcp-update（版本太旧，先用安装命令手动升级一次）');
+	// 只看最后一行：前面就算混进别的输出（工具的提示、警告），也不影响判断
+	let out = trim(sh('/usr/sbin/cmcp-update start 2>/dev/null').out ?? '');
+	let last = out ? split(out, '\n')[-1] : '';
+	try { r = json(last); } catch (e) {}
+	if (type(r) != 'object') die('没能开始更新：后台更新程序没有正常回应，稍后再试；一直这样就用安装命令手动升级一次');
 	if (r.busy) die('已经在更新了，等一会儿');
 	return { started: true };
 };
@@ -2598,6 +2602,9 @@ P.update_status = function() {
 	let s = null;
 	try { s = json(readfile('/tmp/cmcp_update.json') ?? 'null'); } catch (e) {}
 	if (type(s) != 'object') s = { state: 'idle' };
+	// 「准备更新」超过 45 秒还没动，而且后台没在跑：说明没能转到后台，别让面板一直等
+	if (s.state == 'queued' && time() - (+s.t || 0) > 45 && !stat('/tmp/cmcp_update.lock'))
+		s = { ...s, state: 'failed', msg: '后台没能开始更新，再点一次「一键更新」试试；一直这样就用安装命令手动升级一次' };
 	s.cur = ver_info().cur;
 	return s;
 };

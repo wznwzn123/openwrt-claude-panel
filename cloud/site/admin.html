@@ -105,7 +105,7 @@ function renderAps() {
 	const done = APS.filter((a) => a.logged).slice(0, 20);
 	$('apN').textContent = pend.length ? pend.length + ' 份待审核' : '';
 	const row = (a) => `<div class="item" data-ap="${esc(a.sub)}"><div class="l"><b>${esc(a.email)} <span>${esc(a.name)}（${esc(a.sub)}）</span></b>
-		<span>从哪里知道的：${esc(a.source)} · 相关账号：${esc(a.contact)}${a.note ? ' · 备注：' + esc(a.note) : ''}</span>
+		<span>从哪里知道的：${esc(a.source)} · 相关账号：${esc(a.contact)}${a.note ? ' · 备注（想申请多少天）：' + esc(a.note) : ''}</span>
 		<span>申请日期 ${day(a.at)} · 到期 ${day(a.exp)}${a.expired ? '（已到期暂停）' : ''}${a.logged ? ' · ' + (a.status === 'ok' ? '✅ ' + day(a.decided) + ' 通过，续了 ' + a.days + ' 天' : '❌ ' + day(a.decided) + ' 拒绝' + (a.reason ? '：' + esc(a.reason) : '')) : ''}</span></div>
 		${a.logged ? '' : '<div class="acts"><button class="btn sm primary" data-ok>通过</button><button class="btn sm danger" data-no>拒绝</button></div>'}</div>`;
 	$('aps').innerHTML = (pend.length ? pend.map(row).join('') : '<p class="muted">没有待审核的申请</p>') + (done.length ? '<p class="muted" style="margin:12px 0 4px;font-size:13px">最近审核过的</p>' + done.map(row).join('') : '');

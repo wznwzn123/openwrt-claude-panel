@@ -201,7 +201,7 @@ function applyBox(d, email, auto) {
 			<select class="input" name="src" required><option value="">请选择</option><option>酷安</option><option>朋友介绍</option><option>GitHub</option><option>抖音 / 小红书</option><option>其他</option></select>
 			<input class="input hidden" name="srcx" placeholder="具体是哪里" maxlength="40" style="margin-top:8px">
 			<label class="f">相关账号（比如酷安账号、微信号，方便联系你）</label><input class="input" name="contact" maxlength="80" required>
-			<label class="f">备注（可以不填）</label><input class="input" name="note" maxlength="200">
+			<label class="f">备注：想申请多少天（可以不填）</label><input class="input" name="note" maxlength="200" placeholder="比如：想申请 90 天（3 个月）">
 			<label class="f">申请日期</label><input class="input" name="day" value="${today}" readonly>
 			<div class="err" data-err></div>
 			<div class="acts"><button type="button" class="btn" data-x>${auto ? '以后再说' : '取消'}</button><button class="btn primary">提交申请</button></div>

@@ -1,6 +1,7 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>托管服务管理</title><meta name="robots" content="noindex">
 <style>/*COMMON_CSS*/
+.pill{display:inline-block;padding:1px 9px;border-radius:99px;background:rgba(255,149,0,.16);color:var(--warn);font-weight:650}.pill:empty{display:none}
 .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .stat .card{text-align:center;padding:14px 8px}.stat b{display:block;font-size:24px}.stat span{font-size:12.5px;color:var(--muted)}
 .sech{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:22px 4px 10px}.sech h2{font-size:19px}
@@ -19,6 +20,8 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 </section>
 <section id="vMain" class="hidden">
 	<div class="stat"><div class="card"><b id="sCount">—</b><span>已开通</span></div><div class="card"><b id="sMax">—</b><span>名额上限</span></div><div class="card"><b id="sOn">—</b><span>在线（6 小时内）</span></div></div>
+	<div class="sech"><h2>续期申请 <span class="pill" id="apN" style="font-size:13px;vertical-align:middle"></span></h2></div>
+	<div class="card"><div id="aps"></div></div>
 	<div class="sech"><h2>邀请码</h2></div>
 	<div class="card">
 		<form id="fInv" class="g3">
@@ -96,6 +99,26 @@ $('fInv').onsubmit = async (e) => {
 	e.preventDefault(); const f = e.target, err = f.querySelector('[data-err]'); err.textContent = '';
 	try { const r = await api('POST', 'invites', { max: +f.max.value, days: +f.days.value, svc: +f.svc.value, note: f.note.value }); f.note.value = ''; toast('邀请码：' + r.invite.code); await load(); } catch (x) { err.textContent = x.message; }
 };
+let APS = [];
+function renderAps() {
+	const pend = APS.filter((a) => a.status === 'pending' && !a.logged).sort((a, b) => a.at - b.at);
+	const done = APS.filter((a) => a.logged).slice(0, 20);
+	$('apN').textContent = pend.length ? pend.length + ' 份待审核' : '';
+	const row = (a) => `<div class="item" data-ap="${esc(a.sub)}"><div class="l"><b>${esc(a.email)} <span>${esc(a.name)}（${esc(a.sub)}）</span></b>
+		<span>从哪里知道的：${esc(a.source)} · 相关账号：${esc(a.contact)}${a.note ? ' · 备注：' + esc(a.note) : ''}</span>
+		<span>申请日期 ${day(a.at)} · 到期 ${day(a.exp)}${a.expired ? '（已到期暂停）' : ''}${a.logged ? ' · ' + (a.status === 'ok' ? '✅ ' + day(a.decided) + ' 通过，续了 ' + a.days + ' 天' : '❌ ' + day(a.decided) + ' 拒绝' + (a.reason ? '：' + esc(a.reason) : '')) : ''}</span></div>
+		${a.logged ? '' : '<div class="acts"><button class="btn sm primary" data-ok>通过</button><button class="btn sm danger" data-no>拒绝</button></div>'}</div>`;
+	$('aps').innerHTML = (pend.length ? pend.map(row).join('') : '<p class="muted">没有待审核的申请</p>') + (done.length ? '<p class="muted" style="margin:12px 0 4px;font-size:13px">最近审核过的</p>' + done.map(row).join('') : '');
+}
+$('aps').onclick = async (e) => {
+	const b = e.target.closest('[data-ok],[data-no]'); if (!b) return;
+	const sub = b.closest('[data-ap]').dataset.ap, okk = b.hasAttribute('data-ok');
+	let body;
+	if (okk) { const d = prompt('通过：续几天？', '90'); if (d == null) return; body = { days: +d || 90 }; }
+	else { const r = prompt('拒绝的原因（会推送给用户，可以不填）：', ''); if (r == null) return; body = { reason: r }; }
+	b.disabled = true;
+	try { const r = await api('POST', 'applications/' + sub + '/' + (okk ? 'approve' : 'reject'), body); toast(okk ? '已通过，到期时间 ' + day(r.exp) : '已拒绝'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+};
 function renderRen(list) {
 	list.sort((a, b) => b.created - a.created);
 	$('rens').innerHTML = list.length ? list.map((k) => `<div class="item" data-rcode="${esc(k.code)}"><div class="l"><b><code>${esc(k.code)}</code>${k.used ? ' <span>（已用）</span>' : ''}</b><span>续 ${k.days} 天${k.used ? ' · ' + day(k.used) + ' 给 ' + esc(k.sub) + ' 用了（' + esc(k.by || '') + '）' : ''}${k.note ? ' · ' + esc(k.note) : ''}</span></div>
@@ -113,10 +136,11 @@ $('fRen').onsubmit = async (e) => {
 };
 $('cleanBtn').onclick = async () => { if (!confirm('删除所有 90 天没上线的路由器？')) return; try { const r = await api('POST', 'cleanup'); toast('清理了 ' + r.removed.length + ' 台'); await load(); } catch (x) { toast(x.message); } };
 async function load() {
-	const [d, i, k] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals')]);
+	const [d, i, k, ap] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications')]);
+	APS = ap.list;
 	DEVS = d.list; $('sCount').textContent = d.count; $('sMax').textContent = d.max;
 	$('sOn').textContent = d.list.filter((x) => x.seen && Date.now() - x.seen < 6 * 3600e3 + 600e3).length;
-	renderDevs(); renderInv(i.list); renderRen(k.list);
+	renderDevs(); renderInv(i.list); renderRen(k.list); renderAps();
 	$('vKey').classList.add('hidden'); $('vMain').classList.remove('hidden'); $('outBtn').classList.remove('hidden');
 }
 if (KEY) load().catch(() => logout()); else logout();

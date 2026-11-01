@@ -277,7 +277,7 @@ export class Hub extends DurableObject {
 			if (!d || d.state !== 'ok') continue;
 			let b = { last: 0, state: 'wait', ver: '' };
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
-			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp') });
+			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), apply: await this.applyBrief(x.sub, uid) });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY };
@@ -450,15 +450,68 @@ export class Hub extends DurableObject {
 		if (!k) return { st: 400, error: '续期码不对' };
 		if (k.used) return { st: 400, error: '这个续期码已经用过了' };
 		if (!d.exp) return { st: 400, error: '这台路由器不限期，不用续期' };
+		k.used = Date.now(); k.sub = sub; k.by = clean(by, 40);
+		await this.ctx.storage.put('k:' + code, k);
+		const exp = await this._grant(d, k.days);
+		return { st: 200, ok: true, exp, days: k.days };
+	}
+	// 给一台路由器加天数：没到期在原到期时间上加，到期了从今天算；到期暂停的马上恢复（管理员封禁的不动）
+	async _grant(d, days, why) {
 		const now = Date.now();
-		d.exp = Math.max(now, d.exp) + k.days * DAY;
-		delete d.warn3; delete d.warn0;
-		k.used = now; k.sub = sub; k.by = clean(by, 40);
-		await this.ctx.storage.put({ ['k:' + code]: k, ['d:' + sub]: d });
-		// 到期暂停的：续上以后马上恢复（管理员封禁的不动）
-		if (d.off && d.offWhy === 'exp') await this._setOff(sub, false);
-		try { await this.watch(sub).push({ title: '✅ 托管服务已续期', body: '续了 ' + k.days + ' 天，到期时间 ' + ymd(d.exp) + '。', tag: 'svc', lvl: 'ok' }); } catch (e) {}
-		return { st: 200, ok: true, exp: d.exp, days: k.days };
+		d.exp = Math.max(now, d.exp || now) + days * DAY;
+		delete d.warn3;
+		await this.ctx.storage.put('d:' + d.sub, d);
+		if (d.off && d.offWhy === 'exp') await this._setOff(d.sub, false);
+		try { await this.watch(d.sub).push({ title: '✅ 托管服务已续期', body: (why ? why + '，' : '') + '续了 ' + days + ' 天，到期时间 ' + ymd(d.exp) + '。', tag: 'svc', lvl: 'ok' }); } catch (e) {}
+		return d.exp;
+	}
+	/* ---------- 续期申请：到期（或快到期）时，用户在官网账号页填申请表；管理员在管理页通过或拒绝 ---------- */
+	apply(uid, email, a) { return this.lock(() => this._apply(uid, email, a)); }
+	async _apply(uid, email, { sub, source, contact, note }) {
+		const u = await this.ctx.storage.get('u:' + uid), d = await this.ctx.storage.get('d:' + sub);
+		if (!u || !(u.devs || []).some((x) => x.sub === sub) || !d || d.state !== 'ok') return { st: 404, error: '你的账号里没有这台路由器' };
+		if (!d.exp) return { st: 400, error: '这台路由器不限期，不用申请续期' };
+		source = String(source || '').trim().slice(0, 60); contact = String(contact || '').trim().slice(0, 80); note = String(note || '').trim().slice(0, 300);
+		if (!source) return { st: 400, error: '请填写从哪里知道的' };
+		if (!contact) return { st: 400, error: '请填写相关账号' };
+		// 每个账号同一时间只能有一份待审核的申请：审核完（通过或拒绝）才能再提交
+		const mine = [...(await this.ctx.storage.list({ prefix: 'ap:' })).values()].find((x) => x.uid === uid && x.status === 'pending');
+		if (mine) return { st: 400, error: '你已经提交过申请（' + ymd(mine.at) + '），等审核完成才能再次提交' };
+		if (!(await this.hit('ap:' + uid, 5, DAY))) return { st: 429, error: '今天提交太多次了，明天再试' };
+		const ap = { id: rnd(10), sub, uid, email, name: d.name || sub, source, contact, note, at: Date.now(), status: 'pending', exp: d.exp, expired: !!(d.off && d.offWhy === 'exp') };
+		await this.ctx.storage.put('ap:' + sub, ap);
+		await this.notifyAdmin('新的续期申请：' + ap.name, `账号：${email}\n从哪里知道的：${source}\n相关账号：${contact}${note ? '\n备注：' + note : ''}\n到期时间：${ymd(d.exp)}${ap.expired ? '（已到期暂停）' : ''}\n\n到管理页审核：https://${this.env.BASE_DOMAIN}/admin`);
+		return { st: 200, ok: true, at: ap.at };
+	}
+	async applications() { return [...(await this.ctx.storage.list({ prefix: 'ap:' })).values()].concat((await this.ctx.storage.get('aplog')) || []); }
+	decide(sub, ok, a) { return this.lock(() => this._decide(sub, ok, a)); }
+	async _decide(sub, ok, { days, reason }) {
+		const ap = await this.ctx.storage.get('ap:' + sub), d = await this.ctx.storage.get('d:' + sub);
+		if (!ap || ap.status !== 'pending') return { st: 404, error: '没有待审核的申请' };
+		ap.status = ok ? 'ok' : 'no'; ap.decided = Date.now(); ap.reason = String(reason || '').trim().slice(0, 200);
+		if (ok) {
+			if (!d || d.state !== 'ok') return { st: 404, error: '这台路由器已经不在了' };
+			ap.days = Math.max(1, Math.min(3650, Math.round(+days || 90)));
+			ap.newExp = await this._grant(d, ap.days, '续期申请通过了');
+		} else if (d) {
+			try { await this.watch(sub).push({ title: '续期申请没有通过', body: ap.reason || '可以联系提供服务的人问问原因。', tag: 'svc', lvl: 'warn' }); } catch (e) {}
+		}
+		await this.ctx.storage.put('ap:' + sub, ap);
+		// 审核过的另外留一份记录（最近 200 条），以后再申请时 ap:sub 会被新申请覆盖
+		const log = (await this.ctx.storage.get('aplog')) || [];
+		log.unshift({ ...ap, logged: true });
+		await this.ctx.storage.put('aplog', log.slice(0, 200));
+		return { st: 200, ok: true, exp: ap.newExp || null };
+	}
+	async applyBrief(sub, uid) {
+		const ap = await this.ctx.storage.get('ap:' + sub);
+		return ap && ap.uid === uid ? { status: ap.status, at: ap.at, decided: ap.decided || 0, reason: ap.reason || '', days: ap.days || 0 } : null;
+	}
+	// 有新申请时发邮件给管理员（设置了 ADMIN_EMAIL 和邮件服务才发）
+	async notifyAdmin(subject, text) {
+		if (!this.env.ADMIN_EMAIL || !this.env.RESEND_API_KEY) return;
+		const html = String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]).replace(/\n/g, '<br>');
+		try { await sendMail(this.env, this.env.ADMIN_EMAIL, subject, html); } catch (e) {}
 	}
 	async accountRenew(uid, email, sub, code) {
 		const u = await this.ctx.storage.get('u:' + uid);
@@ -548,6 +601,8 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'renewals' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.renewals() });
 		if (a[0] === 'renewals' && !a[1] && req.method === 'POST') return J({ ok: true, list: await H.addRenewals(await body()) });
 		if (a[0] === 'renewals' && a[1] && req.method === 'DELETE') return J({ ok: await H.delRenewal(a[1]) });
+		if (a[0] === 'applications' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.applications() });
+		if (a[0] === 'applications' && SUB_RE.test(a[1] || '') && (a[2] === 'approve' || a[2] === 'reject') && req.method === 'POST') { const r = await H.decide(a[1], a[2] === 'approve', await body()); return J(r.st === 200 ? r : { error: r.error }, r.st); }
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
 		return J({ error: 'not found' }, 404);
 	}
@@ -678,6 +733,7 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
 	if (a === 'logincode') return out(await H.loginCode(me.uid, s(b.sub)));
 	if (a === 'renew') return out(await H.accountRenew(me.uid, me.email, s(b.sub), s(b.code)));
+	if (a === 'apply') return out(await H.apply(me.uid, me.email, { sub: s(b.sub), source: s(b.source), contact: s(b.contact), note: s(b.note) }));
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
 	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password)));

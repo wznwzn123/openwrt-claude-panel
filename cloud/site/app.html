@@ -18,7 +18,8 @@
 .expline{grid-column:1/-1;margin-top:6px;padding:8px 11px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--muted);line-height:1.6}.expline.warn{background:rgba(255,149,0,.14);color:var(--warn)}.expline.bad{background:rgba(255,59,48,.12);color:var(--danger)}
 .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:650;background:var(--fill)}.pill.up{background:rgba(255,149,0,.16);color:var(--warn)}
 .mask{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.35)}
-.mask .card{width:100%;max-width:400px;background:var(--bg);text-align:center}
+.mask .card{width:100%;max-width:400px;background:var(--bg);text-align:center;max-height:calc(100vh - 32px);overflow-y:auto}
+.mask .apcard{text-align:left}.apcard select.input{appearance:none;-webkit-appearance:none}.apcard .acts{justify-content:flex-end}.apcard input[readonly]{opacity:.7}
 .lcode{margin:14px 0 6px;font:700 34px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;user-select:all;-webkit-user-select:all}
 .mask .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
 </style></head><body><div class="wrap">
@@ -156,12 +157,14 @@ function render(me) {
 	$('devs').innerHTML = n ? me.devs.map((d) => {
 		const on = !d.off && d.last && Date.now() - d.last < 360e3;
 		const left = d.exp ? Math.ceil((d.exp - Date.now()) / 86400e3) : null;
-		const expTxt = !d.exp ? '' : d.expired ? '<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。找提供服务的人要续期码，点下面「续期」输入，马上恢复</div>'
-			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，找提供服务的人要续期码' : ''}</div>`;
+		const ap = d.apply, apTxt = !ap ? '' : ap.status === 'pending' ? `<br>📝 续期申请已提交（${esc(ymd(ap.at))}），等待审核`
+			: ap.status === 'no' ? `<br>续期申请没有通过（${esc(ymd(ap.decided))}）${ap.reason ? '：' + esc(ap.reason) : ''}，可以重新申请` : ap.decided && Date.now() - ap.decided < 7 * 86400e3 ? `<br>✅ 续期申请已通过，续了 ${ap.days} 天` : '';
+		const expTxt = !d.exp ? '' : d.expired ? `<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。点下面「申请续期」填表，审核通过后马上恢复；有续期码的点「续期」输入${apTxt}</div>`
+			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，可以点「申请续期」' : ''}${apTxt}</div>`;
 		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
 		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(d.ver) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
 		${expTxt}
-		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button>${d.exp ? '<button class="btn sm" data-renew>续期</button>' : ''}<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
+		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button>${d.exp && (d.expired || left <= 7) ? `<button class="btn sm${d.expired ? ' primary' : ''}" data-apply ${ap && ap.status === 'pending' ? 'disabled' : ''}>${ap && ap.status === 'pending' ? '审核中' : '申请续期'}</button>` : ''}${d.exp ? '<button class="btn sm" data-renew>续期码</button>' : ''}<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
 	}).join('') + links.map((l) => `<div class="card dev" data-link="${esc(l.id)}"><div class="ic">⌂</div><b>${esc(l.name)}</b>
 		<div class="meta">自建版 · ${esc(l.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))}</div>
 		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
@@ -170,6 +173,10 @@ function render(me) {
 		b.disabled = true;
 		try { const r = await api('logincode', { sub }); codeBox(r.code, d); } catch (x) { toast(x.message); } finally { b.disabled = false; }
 	}));
+	$('devs').querySelectorAll('[data-apply]').forEach((b) => (b.onclick = () => applyBox(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub), me.email)));
+	// 有路由器到期暂停了、还没申请（或者上次被拒）：打开页面就弹出申请表（每次打开只弹一次）
+	const due = me.devs.find((x) => x.expired && !(x.apply && x.apply.status === 'pending'));
+	if (due && !document.querySelector('.mask') && !applyShown[due.sub]) { applyShown[due.sub] = 1; applyBox(due, me.email, true); }
 	$('devs').querySelectorAll('[data-renew]').forEach((b) => (b.onclick = async () => {
 		const sub = b.closest('[data-sub]').dataset.sub, code = prompt('输入续期码（找提供服务的人要）：');
 		if (!code || !code.trim()) return;
@@ -179,6 +186,39 @@ function render(me) {
 	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub; if (!confirm('从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return; try { await api('unbind', { sub }); toast('已解绑'); await load(); } catch (x) { toast(x.message); } }));
+}
+// 续期申请表：到期弹窗里填；提交后等管理员审核（审核完才能再提交）
+const applyShown = {};
+function applyBox(d, email, auto) {
+	const m = document.createElement('div'); m.className = 'mask';
+	const today = ymd(Date.now());
+	m.innerHTML = `<div class="card apcard" role="dialog" aria-modal="true">
+		<h3>${auto ? '⚠️ 托管服务已到期' : '申请续期'}</h3>
+		<p class="muted" style="font-size:13.5px;line-height:1.7;margin:6px 0 10px">${auto ? `「${esc(d.name)}」的托管服务已经到期暂停（家里上网和路由器设置都不受影响）。填下面的申请表，审核通过后马上恢复。` : `给「${esc(d.name)}」申请续期，审核通过后自动续上。`}</p>
+		<form id="fApply" autocomplete="off">
+			<label class="f">用户账号</label><input class="input" name="acc" value="${esc(email)}" readonly>
+			<label class="f">你是从哪里知道我们的</label>
+			<select class="input" name="src" required><option value="">请选择</option><option>酷安</option><option>朋友介绍</option><option>GitHub</option><option>抖音 / 小红书</option><option>其他</option></select>
+			<input class="input hidden" name="srcx" placeholder="具体是哪里" maxlength="40" style="margin-top:8px">
+			<label class="f">相关账号（比如酷安账号、微信号，方便联系你）</label><input class="input" name="contact" maxlength="80" required>
+			<label class="f">备注（可以不填）</label><input class="input" name="note" maxlength="200">
+			<label class="f">申请日期</label><input class="input" name="day" value="${today}" readonly>
+			<div class="err" data-err></div>
+			<div class="acts"><button type="button" class="btn" data-x>${auto ? '以后再说' : '取消'}</button><button class="btn primary">提交申请</button></div>
+			<p class="muted" style="font-size:12px;margin:10px 0 0">提交后要等审核完成才能再次提交。有续期码的，关掉这个窗口，点路由器下面的「续期码」输入。</p>
+		</form></div>`;
+	m.onclick = (e) => { if (e.target.closest('[data-x]')) m.remove(); };
+	const f = m.querySelector('#fApply');
+	f.src.onchange = () => f.srcx.classList.toggle('hidden', !['其他', '朋友介绍'].includes(f.src.value));
+	f.onsubmit = async (e) => {
+		e.preventDefault();
+		const err = f.querySelector('[data-err]'), btn = f.querySelector('button.primary'); err.textContent = '';
+		const source = f.src.value + (f.srcx.value.trim() ? '：' + f.srcx.value.trim() : '');
+		btn.disabled = true;
+		try { await api('apply', { sub: d.sub, source, contact: f.contact.value.trim(), note: f.note.value.trim() }); m.remove(); toast('申请已提交，等待审核'); await load(); }
+		catch (x) { err.textContent = x.message; } finally { btn.disabled = false; }
+	};
+	document.body.appendChild(m);
 }
 // 登录码弹窗：托管版每台新手机第一次打开面板要输一次
 function codeBox(code, d, fresh) {

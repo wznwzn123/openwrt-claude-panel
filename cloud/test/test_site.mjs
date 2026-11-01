@@ -41,7 +41,7 @@ const errs = [];
 for (const dark of [false, true]) {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
-	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : d.message().includes('续期码') ? 'rnwcode234' : 'alice-pass-1') : undefined));
+	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : d.message().includes('续期码') ? 'rnwcode234' : d.message().includes('续几天') ? '90' : 'alice-pass-1') : undefined));
 	const shot = async (n) => { if (SHOTS) await page.screenshot({ path: SHOTS + '/site-' + n + (dark ? '-dark' : '') + '.png', fullPage: n === 'home' }); };
 	const T = dark ? '（深色）' : '';
 	await page.goto(B + '/'); await W(300);
@@ -91,7 +91,24 @@ for (const dark of [false, true]) {
 		await shot('trial');
 		await page.click('#devs [data-renew]'); await W(1000);
 		ok('点「续期」输入续期码：续上 90 天', /还剩 92 天/.test(await page.textContent('#devs .expline')), await page.textContent('#devs .expline'));
-		const dv2 = await H.ctx.storage.get(dk); delete dv2.exp; await H.ctx.storage.put(dk, dv2); await page.reload(); await W(800);
+		// 到期：打开账号页自动弹出申请表
+		const dv3 = await H.ctx.storage.get(dk); dv3.exp = Date.now() - 1000; await H.ctx.storage.put(dk, dv3); await H.cleanup(); await page.reload(); await W(1000);
+		ok('到期暂停：打开账号页自动弹出「托管服务已到期」申请表', await page.isVisible('#fApply') && /托管服务已到期/.test(await page.textContent('.mask')));
+		ok('申请表：用户账号自动填好（只读）、申请日期是今天', (await page.inputValue('#fApply [name=acc]')) === 'alice@x.com' && (await page.inputValue('#fApply [name=day]')) === new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10));
+		await shot('apply');
+		await page.click('#fApply button.primary'); await W(300);
+		ok('没选从哪里知道的：浏览器先拦住', await page.isVisible('#fApply'));
+		await page.selectOption('#fApply [name=src]', '其他'); await W(100);
+		ok('选「其他」：出现「具体是哪里」', await page.isVisible('#fApply [name=srcx]'));
+		await page.fill('#fApply [name=srcx]', 'B 站'); await page.fill('#fApply [name=contact]', 'coolapk:alice'); await page.click('#fApply button.primary'); await W(1000);
+		ok('提交后：显示「已提交，等待审核」，按钮变成「审核中」不能再点', !(await page.isVisible('.mask')) && /等待审核/.test(await page.textContent('#devs .expline')) && await page.isDisabled('#devs [data-apply]'));
+		await page.reload(); await W(800);
+		ok('审核中：刷新也不会再弹申请表', !(await page.isVisible('.mask')));
+		const ap = await H.ctx.storage.get('ap:' + R1.sub);
+		ok('申请内容存好了：从哪里知道（其他：B 站）、相关账号', ap && ap.source === '其他：B 站' && ap.contact === 'coolapk:alice' && ap.status === 'pending');
+		await H.decide(R1.sub, true, { days: 90 }); await page.reload(); await W(800);
+		ok('管理员通过后：恢复，显示「已通过，续了 90 天」', /已通过，续了 90 天/.test(await page.textContent('#devs .expline')) && /还剩 90 天/.test(await page.textContent('#devs .expline')));
+		const dv2 = await H.ctx.storage.get(dk); delete dv2.exp; await H.ctx.storage.put(dk, dv2); await H.ctx.storage.delete('ap:' + R1.sub); await page.reload(); await W(800);
 		ok('不限期的路由器：不显示到期，也没有续期按钮', !(await page.$('#devs .expline')) && !(await page.$('#devs [data-renew]')));
 	}
 	// 改名
@@ -135,6 +152,16 @@ for (const dark of [false, true]) {
 	ok('管理页：解封', !/已封禁/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
 	await page.reload(); await W(800);
 	ok('管理页：刷新后还在（密钥存在这个标签页）', await page.isVisible('#vMain'));
+	if (!dark) {
+		const H = env.H.get('hub'), dk = 'd:' + R1.sub, dv = await H.ctx.storage.get(dk);
+		dv.exp = Date.now() - 1000; await H.ctx.storage.put(dk, dv); await H.cleanup();
+		await H.apply((await H.ctx.storage.get('e:alice@x.com')), 'alice@x.com', { sub: R1.sub, source: '酷安', contact: 'coolapk:alice', note: '想继续用' });
+		await page.reload(); await W(1000);
+		ok('管理页：续期申请列表（账号、从哪里知道、相关账号、申请日期、已到期），标出待审核几份', /alice@x\.com/.test(await page.textContent('#aps')) && /酷安/.test(await page.textContent('#aps')) && /coolapk:alice/.test(await page.textContent('#aps')) && /已到期暂停/.test(await page.textContent('#aps')) && /1 份待审核/.test(await page.textContent('#apN')));
+		await shot('admin-apply');
+		await page.click('#aps [data-ok]'); await W(1000);
+		ok('管理页：点「通过」续 90 天，路由器恢复，申请进「最近审核过的」', !(await H.ctx.storage.get(dk)).off && /通过，续了 90 天/.test(await page.textContent('#aps')) && !(await page.$('#aps [data-ok]')));
+	}
 	await shot('admin');
 	await ctx.close();
 }

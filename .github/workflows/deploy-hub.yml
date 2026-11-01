@@ -7,6 +7,7 @@
 #                  HUB_RUNTIME_TOKEN  托管服务运行时用的令牌（只有 Tunnel 和 DNS 编辑）
 #                  HUB_ADMIN_KEY      管理密钥（发邀请码、封禁），32 位以上随机字符
 #                  RESEND_API_KEY     （可选）邮件验证码
+#   变量 Variables：ADMIN_EMAIL        （可选）有人提交续期申请时，发邮件通知这个邮箱（要先设好 RESEND_API_KEY）
 # 推送密钥（VAPID）第一次部署时自动生成，以后不变；不会出现在日志里。
 name: 部署托管服务
 on:
@@ -81,10 +82,11 @@ jobs:
           RT: ${{ secrets.HUB_RUNTIME_TOKEN }}
           AK: ${{ secrets.HUB_ADMIN_KEY }}
           RS: ${{ secrets.RESEND_API_KEY }}
+          AE: ${{ vars.ADMIN_EMAIL }}
         run: |
           HAVE=$(npx -y wrangler@4 secret list -c wrangler.ci.toml --format json | jq -r '.[].name')
-          jq -n --arg rt "$RT" --arg ak "$AK" --arg rs "$RS" \
-            '{CF_API_TOKEN: $rt, ADMIN_KEY: $ak} + (if $rs != "" then {RESEND_API_KEY: $rs} else {} end)' > "$RUNNER_TEMP/s.json"
+          jq -n --arg rt "$RT" --arg ak "$AK" --arg rs "$RS" --arg ae "$AE" \
+            '{CF_API_TOKEN: $rt, ADMIN_KEY: $ak} + (if $rs != "" then {RESEND_API_KEY: $rs} else {} end) + (if $ae != "" then {ADMIN_EMAIL: $ae} else {} end)' > "$RUNNER_TEMP/s.json"
           # 推送密钥只在第一次生成：换了的话，大家手机上已经开的通知都会失效
           if ! echo "$HAVE" | grep -qx VAPID_PUB; then
             OUT=$(node gen-vapid.mjs)

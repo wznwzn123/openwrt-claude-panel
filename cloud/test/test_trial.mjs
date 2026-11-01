@@ -124,6 +124,41 @@ T += 31 * DAY; const cnt0 = (await (await api('GET', '/api/ping')).json()).count
 ok('暂停超过 30 天还没续：删掉，腾出名额', !(await dev(B.sub)) && (await (await api('GET', '/api/ping')).json()).count === cnt0 - 1);
 ok('作废续期码', (await adm('DELETE', '/renewals/' + K3)).status === 200 && !(await (await adm('GET', '/renewals')).json()).list.some((x) => x.code === K3));
 
+// ---- 续期申请表 ----
+const TRIAL3 = (await (await adm('POST', '/invites', { max: 2, days: 1, svc: 7 })).json()).invite.code;
+const C = await (await reg(TRIAL3, '2.2.3.1')).json(), D2 = await (await reg(TRIAL3, '2.2.3.2')).json();
+await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }, { sub: C.sub, at: T }, { sub: D2.sub, at: T }] });
+T = C.exp + 60e3; await hub().cleanup();
+await hub().ctx.storage.put({ ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } }); // 时间往后跳了很多，会话重新续上
+ok('[申请] 第三台到期暂停', (await dev(C.sub)).off);
+ok('[申请] 没填从哪里知道：拒绝', (await acc(sid, 'apply', { sub: C.sub, contact: 'coolapk:alice' })).status === 400);
+ok('[申请] 没填相关账号：拒绝', (await acc(sid, 'apply', { sub: C.sub, source: '酷安' })).status === 400);
+ok('[申请] 不限期的路由器不用申请', (await acc(sid, 'apply', { sub: P.sub, source: '酷安', contact: 'x' })).status === 400);
+ok('[申请] 别人的路由器不能申请', (await acc(sidB, 'apply', { sub: C.sub, source: '酷安', contact: 'x' })).status === 404);
+r = await (await acc(sid, 'apply', { sub: C.sub, source: '酷安', contact: 'coolapk:alice', note: '很好用' })).json();
+ok('[申请] 填好提交：成功，带申请日期', r.ok && r.at === T);
+m = await me(sid);
+ok('[申请] 账号页显示「已提交，等待审核」', m.devs.find((x) => x.sub === C.sub).apply.status === 'pending');
+ok('[申请] 审核完之前不能再提交（同一台）', /等审核完成才能再次提交/.test((await (await acc(sid, 'apply', { sub: C.sub, source: '酷安', contact: 'x' })).json()).error));
+ok('[申请] 审核完之前不能再提交（换另一台也不行，每个账号一次只能一份）', (await acc(sid, 'apply', { sub: D2.sub, source: '酷安', contact: 'x' })).status === 400);
+let L = (await (await adm('GET', '/applications')).json()).list.filter((x) => !x.logged);
+ok('[申请] 管理页看得到：账号、从哪里知道、相关账号、申请日期、已到期', L.length === 1 && L[0].email === 'alice@x.com' && L[0].source === '酷安' && L[0].contact === 'coolapk:alice' && L[0].at === T && L[0].expired);
+ok('[申请] 不是管理员看不到', (await api('GET', '/api/admin/applications')).status === 401);
+PUSH.length = 0;
+r = await (await adm('POST', '/applications/' + C.sub + '/reject', { reason: '名额满了' })).json();
+ok('[申请] 拒绝：推送原因给用户，还是暂停', r.ok && PUSH.some((x) => /没有通过/.test(x.title) && /名额满了/.test(x.body)) && (await dev(C.sub)).off);
+m = await me(sid);
+ok('[申请] 账号页显示「没有通过」和原因', m.devs.find((x) => x.sub === C.sub).apply.status === 'no' && m.devs.find((x) => x.sub === C.sub).apply.reason === '名额满了');
+ok('[申请] 审核完就能再提交', (await acc(sid, 'apply', { sub: C.sub, source: '朋友介绍：小王', contact: 'wx:alice' })).status === 200);
+ok('[申请] 已经审核过的不能再审', (await adm('POST', '/applications/' + D2.sub + '/approve', {})).status === 404);
+PUSH.length = 0;
+r = await (await adm('POST', '/applications/' + C.sub + '/approve', { days: 90 })).json();
+d = await dev(C.sub);
+ok('[申请] 通过：续 90 天（从今天算），马上恢复，推送给用户', r.ok && Math.abs(d.exp - (T + 90 * DAY)) < 5000 && !d.off && PUSH.some((x) => /已续期/.test(x.title) && /申请通过/.test(x.body)));
+L = (await (await adm('GET', '/applications')).json()).list;
+ok('[申请] 审核记录留着（通过和拒绝都有）', L.filter((x) => x.logged).length === 2 && L.some((x) => x.logged && x.status === 'no') && L.some((x) => x.logged && x.status === 'ok' && x.days === 90));
+ok('[申请] 再申请另一台：可以（上一份审核完了）', (await acc(sid, 'apply', { sub: D2.sub, source: '酷安', contact: 'x' })).status === 200);
+
 mod.Watch.prototype.push = origPush; Date.now = realNow;
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] !== undefined && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

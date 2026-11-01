@@ -1109,7 +1109,7 @@ P.home_stats = function() {
 		if (type(a) != 'array') continue;
 		let u = (+a[0] || 0) + (+a[2] || 0), d = (+a[1] || 0) + (+a[3] || 0);
 		ul += u; dl += d;
-		push(list, { id: k, name: k == 'other' ? '其他' : (tr.names?.[k] ?? null), dl: d, ul: u });
+		push(list, { id: k, name: k == 'other' ? '其他' : k == 'router' ? '路由器自己' : (tr.names?.[k] ?? null), dl: d, ul: u });
 	}
 	list = sort(list, (x, y) => (y.dl + y.ul) - (x.dl + x.ul));
 	let top = slice(filter(list, (x) => x.id != 'other' && x.dl + x.ul > 0), 0, 3);

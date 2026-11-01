@@ -376,17 +376,18 @@ async function beatRoute(req, env, u, who, key) {
 	// 平板（证人）的心跳不合并：已经装好的面板按「150 秒内」判断平板在不在报告，合并了会误报；而且用平板的人很少
 	const cache = who === 'r' && typeof caches !== 'undefined' ? caches.default : null;
 	const ck = new Request('https://' + u.hostname + '/__beat/' + who);
+	let why = cache ? 'miss' : 'nocache'; // 为什么这次要交过去（方便排查）
 	if (cache) {
 		try {
 			const hit = await cache.match(ck);
-			if (hit) { const c = await hit.json(); if (c.kh === kh && c.sig === sig && Date.now() - c.at < BEAT_GAP) return J({ ok: true }); }
-		} catch (e) {}
+			if (hit) { const c = await hit.json(); why = c.kh !== kh ? 'key' : c.sig !== sig ? 'changed' : Date.now() - c.at >= BEAT_GAP ? 'due' : ''; if (!why) return J({ ok: true, m: 1 }); }
+		} catch (e) { why = 'err'; }
 	}
 	const r = await w.beatIn(who, key, rep);
 	if (r === 'off') return J({ error: 'not found' }, 404);
 	if (r !== 'ok') return J({ error: 'bad key' }, 403);
-	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) {} }
-	return J({ ok: true });
+	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) { why += ',puterr:' + String(e && e.message || e).slice(0, 80); } }
+	return J({ ok: true, m: 0, why });
 }
 async function tenant(u, env) {
 	if (!env.BASE_DOMAIN) return { w: env.W.get(env.W.idFromName('home')), rkey: env.RKEY, tkey: env.TKEY, pkey: env.PANEL_TOKEN };

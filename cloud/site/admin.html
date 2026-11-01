@@ -20,7 +20,7 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 </section>
 <section id="vMain" class="hidden">
 	<div class="stat"><div class="card"><b id="sCount">—</b><span>已开通</span></div><div class="card"><b id="sMax">—</b><span>名额上限</span></div><div class="card"><b id="sOn">—</b><span>在线（6 小时内）</span></div></div>
-	<div class="sech"><h2>续期申请 <span class="pill" id="apN" style="font-size:13px;vertical-align:middle"></span></h2></div>
+	<div class="sech" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2>续期申请 <span class="pill" id="apN" style="font-size:13px;vertical-align:middle"></span></h2><button class="btn sm" id="mailTest" type="button" title="有新申请时会发邮件提醒你；点这里发一封试试">发测试邮件</button></div>
 	<div class="card"><div id="aps"></div></div>
 	<div class="sech"><h2>邀请码</h2></div>
 	<div class="card">
@@ -65,6 +65,12 @@ const day = (t) => t ? new Date(t).toLocaleDateString('zh-CN') : '—';
 const ago = (t) => { if (!t) return '—'; const s = (Date.now() - t) / 1000; return s < 3600 ? Math.max(1, Math.round(s / 60)) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 function logout() { KEY = ''; try { sessionStorage.removeItem('hubkey'); } catch (e) {} $('vKey').classList.remove('hidden'); $('vMain').classList.add('hidden'); $('outBtn').classList.add('hidden'); }
 $('outBtn').onclick = logout;
+$('mailTest').onclick = async () => {
+	const b = $('mailTest'); b.disabled = true;
+	try { const r = await api('POST', 'testmail'); toast('测试邮件已发到 ' + r.to + '，没收到的话看看垃圾箱'); }
+	catch (x) { toast(x.message); }
+	b.disabled = false;
+};
 $('fKey').onsubmit = async (e) => { e.preventDefault(); KEY = e.target.k.value.trim(); try { await load(); try { sessionStorage.setItem('hubkey', KEY); } catch (x) {} } catch (x) { e.target.querySelector('[data-err]').textContent = x.message; } };
 let DEVS = [];
 function renderDevs() {

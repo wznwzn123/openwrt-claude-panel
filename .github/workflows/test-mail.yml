@@ -1,0 +1,24 @@
+# 发测试邮件：Actions →「发测试邮件」→ Run workflow
+# 确认 ADMIN_EMAIL（变量）和 RESEND_API_KEY（密钥）都设好、官网重新部署过以后，邮件真的能发到你的邮箱
+# 也可以在官网管理页「续期申请」右边点「发测试邮件」
+name: 发测试邮件
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mail:
+    runs-on: ubuntu-latest
+    env:
+      HUB: ${{ vars.HUB_URL }}
+      AK: ${{ secrets.HUB_ADMIN_KEY }}
+    steps:
+      - name: 发送
+        run: |
+          [ -n "$HUB" ] && [ -n "$AK" ] || { echo "::error::没有设置 HUB_URL 或 HUB_ADMIN_KEY"; exit 1; }
+          R=$(curl -sS -m 30 -X POST -H "Authorization: Bearer $AK" "$HUB/api/admin/testmail")
+          if echo "$R" | jq -e '.ok == true' >/dev/null; then
+            echo "::notice::测试邮件已发出（收件邮箱：$(echo "$R" | jq -r '.to' | sed 's/^\(..\)[^@]*/\1***/')），没收到看看垃圾箱"
+          else
+            echo "::error::没发出去：$(echo "$R" | jq -r '.error // .')"; exit 1
+          fi

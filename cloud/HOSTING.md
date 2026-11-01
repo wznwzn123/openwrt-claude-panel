@@ -56,6 +56,7 @@ GitHub 仓库 **Settings → Secrets and variables → Actions**：
 | Secrets | `HUB_RUNTIME_TOKEN` | 运行令牌（第 2 步那个） |
 | Secrets | `HUB_ADMIN_KEY` | 自己编的 32 位以上随机字符，管理用，另外存好 |
 | Secrets | `RESEND_API_KEY` | （可选）邮件验证码，见下文 |
+| Variables | `ADMIN_EMAIL` | （可选）有人提交续期申请时发邮件提醒你，见下文 |
 
 然后 **Actions → 部署托管服务 → Run workflow**。几分钟后显示绿勾，结果里写着「部署好了」就完成了。推送密钥第一次部署时自动生成。以后改了代码，再运行一次就是更新。
 
@@ -133,6 +134,8 @@ npx wrangler secret put RESEND_API_KEY -c wrangler.hosted.toml
 ```
 
 发件地址默认是 `noreply@example.com`，想换的话在 `wrangler.hosted.toml` 的 `[vars]` 里加 `MAIL_FROM = "你想要的地址"`。
+
+**新申请提醒：**在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 加 `ADMIN_EMAIL` = 你的邮箱，再部署一次。以后有人提交续期申请就会发邮件给你。设好后在管理页「续期申请」右边点「**发测试邮件**」（或者 **Actions → 发测试邮件**），确认能收到；发不出去的话会显示邮件服务给的原因。
 
 ## 安卓 App
 

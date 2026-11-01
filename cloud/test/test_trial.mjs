@@ -163,6 +163,29 @@ L = (await (await adm('GET', '/applications')).json()).list;
 ok('[申请] 审核记录留着（通过和拒绝都有）', L.filter((x) => x.logged).length === 2 && L.some((x) => x.logged && x.status === 'no') && L.some((x) => x.logged && x.status === 'ok' && x.days === 90));
 ok('[申请] 再申请另一台：可以（上一份审核完了）', (await acc(sid, 'apply', { sub: D2.sub, source: '酷安', contact: 'x' })).status === 200);
 
+/* ---------- 管理员邮件通知（ADMIN_EMAIL） ---------- */
+r = await adm('POST', '/testmail');
+let j = await r.json();
+ok('[管理员邮件] 没设 ADMIN_EMAIL：测试邮件提示先设置，不假装发出去', r.status === 502 && !j.ok && /ADMIN_EMAIL/.test(j.error), JSON.stringify(j));
+ok('[管理员邮件] 没设 ADMIN_EMAIL：新申请不给管理员发信', !MAILS.some((m) => /新的续期申请/.test(m.subject)));
+env.ADMIN_EMAIL = 'boss@x.com';
+let n0 = MAILS.length;
+r = await adm('POST', '/testmail'); j = await r.json();
+ok('[管理员邮件] 发测试邮件：发到 ADMIN_EMAIL，带管理页地址', r.status === 200 && j.ok && j.to === 'boss@x.com' && MAILS.length === n0 + 1 && MAILS.at(-1).to[0] === 'boss@x.com' && /测试邮件/.test(MAILS.at(-1).subject) && /panel\.example\/admin/.test(MAILS.at(-1).html), JSON.stringify(j));
+ok('[管理员邮件] 测试邮件要管理员密钥', (await api('POST', '/api/admin/testmail')).status === 401);
+const f1 = globalThis.fetch;
+globalThis.fetch = async (input, init = {}) => { const url = typeof input === 'string' ? input : input.url; if (url === 'https://api.resend.com/emails') return new Response('{"message":"The panel.example domain is not verified"}', { status: 403 }); return f1(input, init); };
+r = await adm('POST', '/testmail'); j = await r.json();
+ok('[管理员邮件] 邮件服务拒收：把原因带回管理页', r.status === 502 && /403/.test(j.error) && /not verified/.test(j.error), JSON.stringify(j));
+globalThis.fetch = f1;
+// 先把 D2 那份审核掉，再提交一份新的，看管理员有没有收到提醒
+await adm('POST', '/applications/' + D2.sub + '/reject', { reason: '测试' });
+n0 = MAILS.length;
+ok('[管理员邮件] 有人提交续期申请：提交成功', (await acc(sid, 'apply', { sub: D2.sub, source: '酷安帖子', contact: 'qq:123', note: '想要 90 天' })).status === 200);
+const am = MAILS.slice(n0).find((m) => m.to[0] === 'boss@x.com');
+ok('[管理员邮件] 管理员收到提醒：账号、从哪里知道的、相关账号、备注、审核地址都在', !!am && /新的续期申请/.test(am.subject) && /alice@x\.com/.test(am.html) && /酷安帖子/.test(am.html) && /qq:123/.test(am.html) && /想要 90 天/.test(am.html) && /\/admin/.test(am.html), JSON.stringify(am || MAILS.slice(n0)));
+delete env.ADMIN_EMAIL;
+
 mod.Watch.prototype.push = origPush; Date.now = realNow;
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] !== undefined && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

@@ -161,6 +161,14 @@ for (const dark of [false, true]) {
 		await shot('admin-apply');
 		await page.click('#aps [data-ok]'); await W(1000);
 		ok('管理页：点「通过」续 90 天，路由器恢复，申请进「最近审核过的」', !(await H.ctx.storage.get(dk)).off && /通过，续了 90 天/.test(await page.textContent('#aps')) && !(await page.$('#aps [data-ok]')));
+		await page.click('#mailTest'); await W(800);
+		ok('管理页：「发测试邮件」没设邮箱时提示去设置 ADMIN_EMAIL', /ADMIN_EMAIL/.test(await page.textContent('#toast')));
+		env.ADMIN_EMAIL = 'boss@x.com'; env.RESEND_API_KEY = 're_test';
+		await W(2700); await page.click('#mailTest'); await W(800);
+		ok('管理页：「发测试邮件」发出去后告诉你发到哪个邮箱', /测试邮件已发到 boss@x\.com/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+		const mb = await page.locator('#mailTest').boundingBox(), hb = await page.locator('h2:has(#apN)').boundingBox();
+		ok('管理页：「发测试邮件」按钮和「续期申请」标题在同一行', mb && hb && Math.abs((mb.y + mb.height / 2) - (hb.y + hb.height / 2)) < 14);
+		delete env.ADMIN_EMAIL; delete env.RESEND_API_KEY;
 	}
 	await shot('admin');
 	await ctx.close();

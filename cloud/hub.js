@@ -518,6 +518,20 @@ export class Hub extends DurableObject {
 			: `<p>你好，</p><p>你给路由器「${e(ap.name)}」提交的续期申请<b>没有通过</b>。${ap.reason ? '</p><p>原因：' + e(ap.reason) : ''}</p><p>可以在官网账号页重新申请：<a href="${url}">${url}</a></p><p>（家里上网和路由器上的设置一直不受影响。）</p>`;
 		return sendMail(this.env, ap.email, ap.status === 'ok' ? '续期申请已通过：' + ap.name + ' 到期时间 ' + ymd(ap.newExp) : '续期申请没有通过：' + ap.name, html);
 	}
+	// 管理页「发测试邮件」：确认 ADMIN_EMAIL 和邮件服务都能用，发不出去时把邮件服务的原话带回来
+	async testMail() {
+		const to = this.env.ADMIN_EMAIL;
+		if (!to) return { ok: false, error: '还没设置 ADMIN_EMAIL（GitHub 仓库 → Settings → Variables → ADMIN_EMAIL），设置好后重新部署官网' };
+		if (!this.env.RESEND_API_KEY) return { ok: false, to, error: '还没设置邮件服务 RESEND_API_KEY' };
+		const at = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+		try {
+			const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + this.env.RESEND_API_KEY, 'content-type': 'application/json' },
+				body: JSON.stringify({ from: this.env.MAIL_FROM || 'noreply@' + this.env.BASE_DOMAIN, to: [to], subject: '测试邮件：续期申请通知已经打开', html: `<p>这是一封测试邮件（${at}）。</p><p>以后有人在官网提交续期申请，会发邮件到这个邮箱提醒你，去管理页审核：<a href="https://${this.env.BASE_DOMAIN}/admin">https://${this.env.BASE_DOMAIN}/admin</a></p>` }) });
+			if (r.ok) return { ok: true, to };
+			let msg = ''; try { const j = await r.json(); msg = j.message || j.error || ''; } catch (e) {}
+			return { ok: false, to, error: '邮件服务没接受（' + r.status + '）' + (msg ? '：' + String(msg).slice(0, 200) : '') };
+		} catch (e) { return { ok: false, to, error: '连不上邮件服务：' + String(e?.message || e).slice(0, 120) }; }
+	}
 	// 有新申请时发邮件给管理员（设置了 ADMIN_EMAIL 和邮件服务才发）
 	async notifyAdmin(subject, text) {
 		if (!this.env.ADMIN_EMAIL || !this.env.RESEND_API_KEY) return;
@@ -615,6 +629,7 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'applications' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.applications() });
 		if (a[0] === 'applications' && SUB_RE.test(a[1] || '') && (a[2] === 'approve' || a[2] === 'reject') && req.method === 'POST') { const r = await H.decide(a[1], a[2] === 'approve', await body()); return J(r.st === 200 ? r : { error: r.error }, r.st); }
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
+		if (a[0] === 'testmail' && req.method === 'POST') { const r = await H.testMail(); return J(r, r.ok ? 200 : 502); }
 		return J({ error: 'not found' }, 404);
 	}
 	if (p.startsWith('/api/account/') || p === '/api/pair/start' || p.startsWith('/api/dev/')) return accountApi(req, env, H, p, body);

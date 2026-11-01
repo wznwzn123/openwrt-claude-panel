@@ -1,0 +1,32 @@
+# 给已经发布的版本补上 / 重新生成 app-version.json（App 只有自己改了才提示更新）
+# 一般用不到：「发布新版本」会自动生成。老版本发布时还没有这个文件时用一次
+name: 补 App 版本文件
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要补的发布版本（例如 v2.0.3）
+        required: true
+permissions:
+  contents: write
+jobs:
+  appver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 生成并上传
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          git checkout -q "$TAG" -- tools/release-notes.md 2>/dev/null || true
+          # 只看这个版本当时的历史：App 在这个版本之前最后一次改动是哪个版本
+          c=$(git log -1 --format=%H "$TAG" -- android/app android/build.gradle android/settings.gradle android/gradle.properties || true)
+          T=$( [ -n "$c" ] && git tag --contains "$c" --sort=v:refname | grep -E '^v[0-9]+(\.[0-9]+){0,2}$' | head -1 || true)
+          [ -n "$T" ] || T=$TAG
+          body=$(git show "$T:tools/release-notes.md" 2>/dev/null || true)
+          jq -n --arg v "${T#v}" --arg b "$body" '{version: $v, body: $b, force: true}' > app-version.json
+          gh release upload "$TAG" app-version.json --clobber
+          echo "::notice::$TAG 的 App 版本：${T#v}"

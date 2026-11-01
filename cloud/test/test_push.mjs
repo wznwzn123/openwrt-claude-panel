@@ -105,7 +105,7 @@ ok('不同的通知照常推', r.sent === 1 && JSON.parse(decrypt(sent[2].body).
 await call('POST', '/cloud/beat/r/rk', { wan: 'ok', net: 'ok', dns: 'ok', tun: 'ok', panel: 'ok', clash: 'ok', ready: 4 });
 await obj.alarm();
 const n0 = sent.length;
-const st = await storage.get('r'); st.last = Date.now() - 200e3; await storage.put('r', st);
+const st = await storage.get('r'); st.last = Date.now() - 320e3; await storage.put('r', st); // 超过 5 分钟没心跳
 globalThis.fetch = async (u, init) => { if (String(u).startsWith('https://fcm.')) { sent.push({ body: Buffer.from(init.body), h: init.headers }); return new Response('', { status: 201 }); } return new Response('', { status: 530 }); };
 await obj.alarm(); await obj.alarm();
 const offline = sent.slice(n0).map((x) => JSON.parse(decrypt(x.body).text).title);

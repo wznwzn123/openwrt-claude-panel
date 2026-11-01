@@ -1,13 +1,15 @@
 // 路由器云端监测（Cloudflare Worker + Durable Object）
 // - 路由器每分钟发心跳（带看门狗状态），平板（证人）每分钟发心跳
-// - 每分钟从 Cloudflare 探测一次隧道
+// - 省用量：一切正常、状态没变时，心跳最多每 3 分钟交给 Durable Object 一次（每叫醒一次大约按 10 秒计费）；
+//   状态一变（宽带、DNS、隧道、OpenClash 出问题）马上交。隧道探测在收心跳时顺便做；不正常时才每分钟定时检查
 // - 根据「谁还在报告」判断离线原因，变化时记一条事件
 // - 面板在路由器断线时也能从这里读到实时情况（路由 <你的面板域名>/cloud/*，在隧道之前就被 Cloudflare 接住）
 import { DurableObject } from 'cloudflare:workers';
 import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE } from './hub.js';
 export { Hub };
 
-const STALE = 150e3; // 超过 150 秒没心跳算失联（心跳每 60 秒一次）
+const BEAT_GAP = 170e3; // 一切正常时，心跳最多每 3 分钟（隔 170 秒以上）交给 Durable Object 一次
+const STALE = 300e3; // 超过 5 分钟没收到交过来的心跳算失联（正常时最多隔 4 分钟交一次）
 const PROBE_FAILS = 2; // 隧道连续 2 次探测失败才算断
 const MAX_EV = 300;
 
@@ -234,6 +236,37 @@ export class Watch extends DurableObject {
 		await this.addEvents(ev);
 		return s;
 	}
+	// 收心跳并核对钥匙（省掉单独读一次配置）：钥匙不对返回 'bad'，被封禁或不存在返回 'off'
+	async beatIn(who, key, rep) {
+		let want;
+		if (this.env.BASE_DOMAIN) {
+			const c = await this.getCfg();
+			if (!c || c.off) return 'off';
+			want = who === 'r' ? c.rkey : c.tkey;
+		} else want = who === 'r' ? this.env.RKEY : this.env.TKEY;
+		if (!safeEq(String(key || ''), String(want || ''))) return 'bad';
+		await this.beat(who, rep);
+		return 'ok';
+	}
+	async probeNow(db, now) {
+		let probeUrl = this.env.PROBE_URL;
+		if (this.env.BASE_DOMAIN) { const c = await this.getCfg(); if (!c || c.off) return false; probeUrl = c.probe; }
+		if (!probeUrl) return true;
+		let code = 0;
+		try {
+			const res = await fetch(probeUrl + '?cf=' + now, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(10000) });
+			code = res.status;
+		} catch (e) { code = 0; }
+		const p = db.probe || { fail: 0 };
+		db.probe = code === 200 ? { at: now, code, fail: 0 } : { at: now, code, fail: (p.fail || 0) + 1, firstFail: p.fail ? p.firstFail : now };
+		await this.ctx.storage.put('probe', db.probe);
+		return true;
+	}
+	// 下一次定时检查：一切正常时，只在心跳断了的那一刻才检查（平时不另外叫醒）；不正常时每分钟检查一次
+	async schedule(db, now) {
+		const healthy = !!(db.s && db.s.state === 'ok' && db.r && now - db.r.last < STALE && (!db.probe || db.probe.fail === 0));
+		await this.ctx.storage.setAlarm(healthy ? Math.max(now + 60e3, db.r.last + STALE + 5e3) : now + 60e3);
+	}
 	async beat(who, rep) {
 		const now = Date.now();
 		const db = await this.load();
@@ -244,9 +277,10 @@ export class Watch extends DurableObject {
 			db.t = { last: now, first: (db.t && db.t.first) || now };
 			await this.ctx.storage.put('t', db.t);
 		}
-		// 心跳一回来就马上更新判断（不用等下一分钟）
-		await this.evaluate(db, now);
-		await this.ensureAlarm();
+		// 隧道探测顺便做（正常时每 3 分钟左右一次），再马上更新判断
+		if (who === 'r' && (!db.probe || db.probe.fail > 0 || now - db.probe.at > BEAT_GAP - 20e3)) await this.probeNow(db, now);
+		db.s = await this.evaluate(db, now);
+		await this.schedule(db, now);
 		// 托管模式：每 6 小时告诉开通中心「这台还在用」（90 天没上线的会被回收）
 		if (who === 'r' && this.env.BASE_DOMAIN && this.env.H) {
 			const c = await this.getCfg();
@@ -259,19 +293,10 @@ export class Watch extends DurableObject {
 	}
 	async alarm() {
 		const now = Date.now();
-		let probeUrl = this.env.PROBE_URL;
-		if (this.env.BASE_DOMAIN) { const c = await this.getCfg(); if (!c || c.off) return; probeUrl = c.probe; }
 		const db = await this.load();
-		let code = 0;
-		try {
-			const res = await fetch(probeUrl + '?cf=' + now, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(10000) });
-			code = res.status;
-		} catch (e) { code = 0; }
-		const p = db.probe || { fail: 0 };
-		db.probe = code === 200 ? { at: now, code, fail: 0 } : { at: now, code, fail: (p.fail || 0) + 1, firstFail: p.fail ? p.firstFail : now };
-		await this.ctx.storage.put('probe', db.probe);
-		await this.evaluate(db, now);
-		await this.ctx.storage.setAlarm(now + 60e3);
+		if (!(await this.probeNow(db, now))) return; // 被封禁或已删除：不再检查
+		db.s = await this.evaluate(db, now);
+		await this.schedule(db, now);
 	}
 	async status() {
 		await this.ensureAlarm();
@@ -332,6 +357,37 @@ export class Watch extends DurableObject {
 }
 
 // 这个请求是哪台路由器的：自建模式只有一台；托管模式看子域名（钥匙存在那台路由器自己的 Watch 里）
+// 心跳：一切正常、状态没变、离上次交给 Durable Object 不到 170 秒，就只在这里记一下（用 Cloudflare 的缓存），不叫醒它
+// 缓存只在同一个机房有效；换了机房、缓存被清掉，就照常交过去，不会漏
+const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'ready', 'tcause', 'ver'];
+export const beatSig = (rep) => JSON.stringify(BEAT_KEYS.map((k) => (rep && rep[k] != null ? rep[k] : null)));
+async function beatRoute(req, env, u, who, key) {
+	if (who !== 'r' && who !== 't') return J({ error: 'not found' }, 404);
+	let w;
+	if (env.BASE_DOMAIN) {
+		const base = '.' + env.BASE_DOMAIN, h = u.hostname;
+		if (!h.endsWith(base) || !SUB_RE.test(h.slice(0, -base.length))) return J({ error: 'not found' }, 404);
+		w = env.W.get(env.W.idFromName('dev:' + h.slice(0, -base.length)));
+	} else w = env.W.get(env.W.idFromName('home'));
+	let rep = null;
+	if (who === 'r' && req.method === 'POST') { try { rep = await req.json(); } catch (e) {} }
+	const sig = who === 'r' ? beatSig(rep) : 't';
+	const kh = b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(key)))).slice(0, 16);
+	// 平板（证人）的心跳不合并：已经装好的面板按「150 秒内」判断平板在不在报告，合并了会误报；而且用平板的人很少
+	const cache = who === 'r' && typeof caches !== 'undefined' ? caches.default : null;
+	const ck = new Request('https://' + u.hostname + '/__beat/' + who);
+	if (cache) {
+		try {
+			const hit = await cache.match(ck);
+			if (hit) { const c = await hit.json(); if (c.kh === kh && c.sig === sig && Date.now() - c.at < BEAT_GAP) return J({ ok: true }); }
+		} catch (e) {}
+	}
+	const r = await w.beatIn(who, key, rep);
+	if (r === 'off') return J({ error: 'not found' }, 404);
+	if (r !== 'ok') return J({ error: 'bad key' }, 403);
+	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) {} }
+	return J({ ok: true });
+}
 async function tenant(u, env) {
 	if (!env.BASE_DOMAIN) return { w: env.W.get(env.W.idFromName('home')), rkey: env.RKEY, tkey: env.TKEY, pkey: env.PANEL_TOKEN };
 	const h = u.hostname, base = '.' + env.BASE_DOMAIN;
@@ -362,19 +418,10 @@ async function handle(req, env) {
 		const u = new URL(req.url);
 		const p = u.pathname.split('/').filter(Boolean); // cloud, beat, r|t, key
 		if (p[0] !== 'cloud') return J({ error: 'not found' }, 404);
+		if (p[1] === 'beat' && p.length === 4) return beatRoute(req, env, u, p[2], p[3]);
 		const T = await tenant(u, env);
 		if (!T) return J({ error: 'not found' }, 404);
 		const w = T.w;
-		if (p[1] === 'beat' && p.length === 4) {
-			if (p[2] === 'r' && safeEq(p[3], T.rkey)) {
-				let rep = null;
-				if (req.method === 'POST') { try { rep = await req.json(); } catch (e) {} }
-				await w.beat('r', rep);
-				return J({ ok: true });
-			}
-			if (p[2] === 't' && safeEq(p[3], T.tkey)) { await w.beat('t'); return J({ ok: true }); }
-			return J({ error: 'bad key' }, 403);
-		}
 		// 路由器发来的通知（新设备、节点切换、DNS/OpenClash 故障…）
 		if (p[1] === 'n' && p.length === 3 && req.method === 'POST') {
 			if (!safeEq(p[2], T.rkey)) return J({ error: 'bad key' }, 403);

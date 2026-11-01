@@ -2483,7 +2483,7 @@ P.device_approve = function(a) {
 	d[id] = { s: sec, name, at: time(), via };
 	devs_write(d);
 	DEV_ID = id;
-	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + '登录。不是你自己的话，马上在面板「系统操作 → 已登录的手机」里把它移除。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「系统操作 → 已登录的手机」里把它移除。'))); } catch (e) {}
 	return { dev: id + '.' + sec, id, name };
 };
 P.device_list = function() {

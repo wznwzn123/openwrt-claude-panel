@@ -1402,7 +1402,7 @@ async function refresh(quiet) {
 				if (l) {
 					setStatus(false, c.label[c.s.state]);
 					if (homeOff()) offText('Cloudflare 实时判断 · ' + l + '。下面是上次的数据。');
-				} else if (netErr && c.s.state === 'ok' && c.r && cNow(c) - c.r.last < 150e3 && !c.probe?.fail) {
+				} else if (netErr && c.s.state === 'ok' && c.r && cNow(c) - c.r.last < 300e3 && !c.probe?.fail) {
 					// 云端说路由器好好的，那就是手机到路由器这段网络的问题
 					setStatus(false, '手机网络问题');
 					if (homeOff()) offText(`Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 OpenClash 正在重启。稍后下拉刷新就好。下面是上次的数据。`);
@@ -3256,7 +3256,7 @@ function renderWd(err) {
 			<div class="kv"><span>路由器报告</span><span>${rAgo}</span></div>
 			<div class="kv"><span>隧道探测</span><span>${pr}</span></div>
 			<div class="kv"><span>平板（证人）</span><span class="${c && c.t ? (tFresh ? 'okc' : 'badc') : ''}">${tb}</span></div>
-			<p class="muted" style="font-size:12.5px;margin:8px 0 0">Cloudflare 每分钟检查一次路由器，路由器断电、断网时也照常记录。${!c || !c.t ? '加一台平板作证，断线时就能分清是断电还是断网。' : ''}</p>
+			<p class="muted" style="font-size:12.5px;margin:8px 0 0">Cloudflare 一直在收路由器的心跳（一切正常时每 3 分钟记一次），路由器断电、断网时也照常判断和记录。${!c || !c.t ? '加一台平板作证，断线时就能分清是断电还是断网。' : ''}</p>
 			<div class="btngrid" style="margin:10px 0 0"><button class="btn" data-tablet>平板设置方法</button></div>
 		</section>`;
 	}

@@ -38,6 +38,8 @@ const reg = (invite, ip = '1.1.1.1', extra = {}) => api('POST', '/api/register',
 const hub = () => env.H.get('hub');
 const dev = async (sub) => (await hub().ctx.storage.get('d:' + sub));
 const DAY = 86400e3;
+const MAILS = []; env.RESEND_API_KEY = 're_test';
+const f0 = globalThis.fetch; globalThis.fetch = async (input, init = {}) => { const url = typeof input === 'string' ? input : input.url; if (url === 'https://api.resend.com/emails') { MAILS.push(JSON.parse(init.body)); return new Response('{"id":"m"}'); } return f0(input, init); };
 let T = Date.now(); const realNow = Date.now; Date.now = () => T;
 // 记下推送给路由器的通知（Watch.push）
 const PUSH = [];
@@ -146,6 +148,7 @@ ok('[申请] 管理页看得到：账号、从哪里知道、相关账号、申�
 ok('[申请] 不是管理员看不到', (await api('GET', '/api/admin/applications')).status === 401);
 PUSH.length = 0;
 r = await (await adm('POST', '/applications/' + C.sub + '/reject', { reason: '名额满了' })).json();
+ok('[申请] 拒绝：发邮件给申请人，写清原因和重新申请的地址', MAILS.some((m) => m.to[0] === 'alice@x.com' && /没有通过/.test(m.subject) && /名额满了/.test(m.html) && /panel\.example\/app/.test(m.html)) && r.mailed === true, JSON.stringify(MAILS.map((m) => m.subject)));
 ok('[申请] 拒绝：推送原因给用户，还是暂停', r.ok && PUSH.some((x) => /没有通过/.test(x.title) && /名额满了/.test(x.body)) && (await dev(C.sub)).off);
 m = await me(sid);
 ok('[申请] 账号页显示「没有通过」和原因', m.devs.find((x) => x.sub === C.sub).apply.status === 'no' && m.devs.find((x) => x.sub === C.sub).apply.reason === '名额满了');
@@ -154,6 +157,7 @@ ok('[申请] 已经审核过的不能再审', (await adm('POST', '/applications/
 PUSH.length = 0;
 r = await (await adm('POST', '/applications/' + C.sub + '/approve', { days: 90 })).json();
 d = await dev(C.sub);
+ok('[申请] 通过：发邮件给申请人，写清续了几天、到期时间、不用重装', MAILS.some((m) => /已通过/.test(m.subject) && /90 天/.test(m.html) && /不用重新安装/.test(m.html)) && r.mailed === true);
 ok('[申请] 通过：续 90 天（从今天算），马上恢复，推送给用户', r.ok && Math.abs(d.exp - (T + 90 * DAY)) < 5000 && !d.off && PUSH.some((x) => /已续期/.test(x.title) && /申请通过/.test(x.body)));
 L = (await (await adm('GET', '/applications')).json()).list;
 ok('[申请] 审核记录留着（通过和拒绝都有）', L.filter((x) => x.logged).length === 2 && L.some((x) => x.logged && x.status === 'no') && L.some((x) => x.logged && x.status === 'ok' && x.days === 90));

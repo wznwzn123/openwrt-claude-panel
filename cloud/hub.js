@@ -496,16 +496,27 @@ export class Hub extends DurableObject {
 		} else if (d) {
 			try { await this.watch(sub).push({ title: '续期申请没有通过', body: ap.reason || '可以联系提供服务的人问问原因。', tag: 'svc', lvl: 'warn' }); } catch (e) {}
 		}
+		// 发邮件告诉申请人结果（不管他开没开手机推送都能收到）
+		ap.mailed = await this.mailResult(ap);
 		await this.ctx.storage.put('ap:' + sub, ap);
 		// 审核过的另外留一份记录（最近 200 条），以后再申请时 ap:sub 会被新申请覆盖
 		const log = (await this.ctx.storage.get('aplog')) || [];
 		log.unshift({ ...ap, logged: true });
 		await this.ctx.storage.put('aplog', log.slice(0, 200));
-		return { st: 200, ok: true, exp: ap.newExp || null };
+		return { st: 200, ok: true, exp: ap.newExp || null, mailed: !!ap.mailed };
 	}
 	async applyBrief(sub, uid) {
 		const ap = await this.ctx.storage.get('ap:' + sub);
 		return ap && ap.uid === uid ? { status: ap.status, at: ap.at, decided: ap.decided || 0, reason: ap.reason || '', days: ap.days || 0 } : null;
+	}
+	async mailResult(ap) {
+		if (!this.env.RESEND_API_KEY || !ap.email) return false;
+		const e = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+		const url = 'https://' + this.env.BASE_DOMAIN + '/app';
+		const html = ap.status === 'ok'
+			? `<p>你好，</p><p>你给路由器「${e(ap.name)}」提交的续期申请<b>已通过</b>，续了 <b>${ap.days} 天</b>，到期时间 <b>${ymd(ap.newExp)}</b>。</p><p>路由器已经恢复，不用重新安装，也不用输入任何码，手机打开面板就能直接用。</p><p>到期时间可以在官网账号页查看：<a href="${url}">${url}</a></p>`
+			: `<p>你好，</p><p>你给路由器「${e(ap.name)}」提交的续期申请<b>没有通过</b>。${ap.reason ? '</p><p>原因：' + e(ap.reason) : ''}</p><p>可以在官网账号页重新申请：<a href="${url}">${url}</a></p><p>（家里上网和路由器上的设置一直不受影响。）</p>`;
+		return sendMail(this.env, ap.email, ap.status === 'ok' ? '续期申请已通过：' + ap.name + ' 到期时间 ' + ymd(ap.newExp) : '续期申请没有通过：' + ap.name, html);
 	}
 	// 有新申请时发邮件给管理员（设置了 ADMIN_EMAIL 和邮件服务才发）
 	async notifyAdmin(subject, text) {

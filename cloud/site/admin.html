@@ -106,7 +106,7 @@ function renderAps() {
 	$('apN').textContent = pend.length ? pend.length + ' 份待审核' : '';
 	const row = (a) => `<div class="item" data-ap="${esc(a.sub)}"><div class="l"><b>${esc(a.email)} <span>${esc(a.name)}（${esc(a.sub)}）</span></b>
 		<span>从哪里知道的：${esc(a.source)} · 相关账号：${esc(a.contact)}${a.note ? ' · 备注（想申请多少天）：' + esc(a.note) : ''}</span>
-		<span>申请日期 ${day(a.at)} · 到期 ${day(a.exp)}${a.expired ? '（已到期暂停）' : ''}${a.logged ? ' · ' + (a.status === 'ok' ? '✅ ' + day(a.decided) + ' 通过，续了 ' + a.days + ' 天' : '❌ ' + day(a.decided) + ' 拒绝' + (a.reason ? '：' + esc(a.reason) : '')) : ''}</span></div>
+		<span>申请日期 ${day(a.at)} · 到期 ${day(a.exp)}${a.expired ? '（已到期暂停）' : ''}${a.logged ? ' · ' + (a.status === 'ok' ? '✅ ' + day(a.decided) + ' 通过，续了 ' + a.days + ' 天' : '❌ ' + day(a.decided) + ' 拒绝' + (a.reason ? '：' + esc(a.reason) : '')) + (a.mailed ? ' · 已发邮件通知' : ' · 邮件没发出去') : ''}</span></div>
 		${a.logged ? '' : '<div class="acts"><button class="btn sm primary" data-ok>通过</button><button class="btn sm danger" data-no>拒绝</button></div>'}</div>`;
 	$('aps').innerHTML = (pend.length ? pend.map(row).join('') : '<p class="muted">没有待审核的申请</p>') + (done.length ? '<p class="muted" style="margin:12px 0 4px;font-size:13px">最近审核过的</p>' + done.map(row).join('') : '');
 }
@@ -117,7 +117,7 @@ $('aps').onclick = async (e) => {
 	if (okk) { const d = prompt('通过：续几天？', '90'); if (d == null) return; body = { days: +d || 90 }; }
 	else { const r = prompt('拒绝的原因（会推送给用户，可以不填）：', ''); if (r == null) return; body = { reason: r }; }
 	b.disabled = true;
-	try { const r = await api('POST', 'applications/' + sub + '/' + (okk ? 'approve' : 'reject'), body); toast(okk ? '已通过，到期时间 ' + day(r.exp) : '已拒绝'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+	try { const r = await api('POST', 'applications/' + sub + '/' + (okk ? 'approve' : 'reject'), body); toast((okk ? '已通过，到期时间 ' + day(r.exp) : '已拒绝') + (r.mailed ? '，已发邮件通知他' : '，邮件没发出去（他开了推送的话会收到推送）')); await load(); } catch (x) { toast(x.message); b.disabled = false; }
 };
 function renderRen(list) {
 	list.sort((a, b) => b.created - a.created);

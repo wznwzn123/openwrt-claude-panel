@@ -89,7 +89,7 @@ h1,h2,h3{letter-spacing:-.02em}
 .msub{font-size:13px;margin-bottom:6px}
 .mrow{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:15.5px}.mrow svg{width:18px;height:18px;flex:none;color:var(--muted)}.mrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mrow em{font-style:normal;color:var(--muted);font-variant-numeric:tabular-nums}
 .mdev{display:flex;align-items:center;gap:28px;margin-top:12px}.mdev>b{font-size:54px;font-weight:700;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums}.mdev .muted{font-size:15px;line-height:1.55}.mdev .faint{opacity:.7;font-size:14px}
-.updcard{margin-bottom:12px;border:1.5px solid var(--brand)}.updcard .updtop{display:flex;align-items:center;justify-content:space-between}.updcard .updtop>div>*{display:block}.updcard .updtop .muted{font-size:12.5px;margin-top:2px}
+.updcard{margin-bottom:12px;border:1.5px solid var(--brand)}.updcard .updtop{gap:12px}.updcard .updtop .btn{flex:none;white-space:nowrap}.updcard .updtop{display:flex;align-items:center;justify-content:space-between}.updcard .updtop>div>*{display:block}.updcard .updtop .muted{font-size:12.5px;margin-top:2px}
 .updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;max-height:7.5em;overflow:hidden}
 .linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
 .updsteps{margin:10px 0 4px;padding:0;list-style:none}.updsteps li{padding:7px 0;color:var(--muted);font-size:14px}.updsteps li.on{color:var(--text);font-weight:600}.updsteps li.ok{color:var(--ok)}.updsteps li.ok::before{content:'✓ '}.updsteps li.on::before{content:'⏳ '}
@@ -378,7 +378,9 @@ pre.out.tall{max-height:none;min-height:40vh}
 .nch .spin{font-size:13px;color:var(--brand)}
 .ipl{display:grid;grid-template-columns:auto 1fr;gap:10px 10px;align-items:center}
 .ipl .tg{font-size:11.5px;font-weight:700;padding:4px 8px;border-radius:8px;background:var(--soft);color:var(--brand)}
-.ipl .tg.cn{background:var(--wsoft);color:var(--warn)}
+.ipl .tg.cn{background:var(--wsoft);color:var(--warn)}.ipl .tg.v6{background:var(--oksoft);color:var(--ok)}
+.ipl .ipk{font-style:normal;font-weight:650;margin-right:6px;padding:0 5px;border-radius:5px;background:var(--fill)}.ipl .ipk.dc{background:var(--wsoft);color:var(--warn)}
+.ipfull{margin-left:auto;font-size:12.5px;font-weight:600}
 .ipl b{display:block;font-size:15px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .ipl small{display:block;font-size:12px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -552,6 +554,7 @@ section.page{display:none}section.page.on{display:block}
 <section class="page" id="p-main">
 	<div class="card updcard hidden" id="rUpd"><div class="updtop"><div><b>路由器有新版本 <span id="rUpdV"></span></b><span class="muted" id="rUpdCur"></span></div><button class="btn sm primary" id="rUpdGo">一键更新</button></div>
 		<p class="muted" id="rUpdN"></p><button class="linkbtn" id="rUpdLater">以后再说</button></div>
+	<div class="card updcard hidden" id="mSvc"><div class="updtop"><div><b id="mSvcT">托管服务快到期了</b><span class="muted" id="mSvcD"></span></div><button class="btn sm primary" id="mSvcGo">申请续期</button></div></div>
 	<div class="notice w hidden" id="mOffBox" style="margin-bottom:12px"><b>连不上路由器</b><div id="mOff" class="hidden"></div></div>
 	<section class="card mcard" id="mLive">
 		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg></span><div><b>实时流量</b><span class="muted">每 2 秒刷新</span></div></div>
@@ -613,7 +616,7 @@ section.page{display:none}section.page.on{display:block}
 	<div class="sectitle"><b>快捷操作</b></div>
 	<section class="card"><div class="qgrid" id="qGrid"></div></section>
 	<div class="sectitle"><b>网络检测</b><span class="actions" style="flex-wrap:nowrap"><span class="live off" id="ncLive"><i></i><span id="ncAgo">实时</span></span><button class="btn sm" id="ncBtn" aria-label="重新检测">↻</button></span></div>
-	<section class="card nc" id="ncIp"><div class="nch"><span>出口 IP</span></div><div class="ipl" id="ipList"></div></section>
+	<section class="card nc" id="ncIp"><div class="nch"><span>出口 IP</span><a class="ipfull" href="https://ipcheck.ing/" target="_blank" rel="noopener">完整检测 ↗</a></div><div class="ipl" id="ipList"></div></section>
 	<section class="card nc" id="ncSite"><div class="nch"><span>网站访问</span></div><div class="tiles" id="siteTiles"></div></section>
 	<section class="card nc" id="ncUnl"><div class="nch"><span>流媒体 / AI 解锁</span><span class="muted" id="unlNode" style="font-weight:500;font-size:12px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div><div class="tiles" id="unlTiles"></div></section>
 	<div class="sectitle"><b>宽带</b><span class="pill" id="wanPill">—</span></div>
@@ -837,6 +840,7 @@ section.page{display:none}section.page.on{display:block}
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="svc" id="svcBtn"><div><b>托管服务</b><span class="muted" id="svcState">—</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="devices" id="devsBtn"><div><b>已登录的手机</b><span class="muted">看看哪些手机能打开面板，把不认识的移除</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="ckey" id="ckeyBtn"><div><b>Claude 连接器地址</b><span class="muted">在 Claude 里添加连接器用（打不开面板）</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
@@ -1984,9 +1988,12 @@ function ipRender() {
 	if (!r) { el.innerHTML = '<div class="muted" style="grid-column:1/-1;font-size:13px"><span class="spin">↻</span> 正在查询…</div>'; return; }
 	const rows = [];
 	if (r.domestic) rows.push(['国内', 'cn', r.domestic]);
-	const seen = new Set();
-	(r.overseas || []).forEach((x) => { if (!seen.has(x.ip)) { seen.add(x.ip); rows.push(['海外', '', x]); } });
-	el.innerHTML = rows.length ? rows.map(([k, c, x]) => `<span class="tg ${c}">${k}</span><span style="min-width:0"><b>${esc(x.ip)}</b><small>${esc((x.geo || '').replace(/\s+/g, ' ').trim() || x.src)}</small></span>`).join('')
+	// 同一个 IP 只显示一行；ip-api 的中文归属地和「机房 / 家庭宽带」合并到那一行
+	const byIp = new Map();
+	(r.overseas || []).forEach((x) => { const o = byIp.get(x.ip); if (!o) byIp.set(x.ip, { ...x }); else { if (x.kind) o.kind = x.kind; if (x.src === 'ip-api' && x.geo) o.geo = x.geo; } });
+	byIp.forEach((x) => rows.push(['海外', '', x]));
+	if ('v6' in r) rows.push(['IPv6', 'v6', r.v6 ? { ip: r.v6, geo: '有 IPv6' } : { ip: '没有 IPv6', geo: '这台路由器现在用不了 IPv6', none: true }]);
+	el.innerHTML = rows.length ? rows.map(([k, c, x]) => `<span class="tg ${c}">${k}</span><span style="min-width:0"><b${x.none ? ' class="muted"' : ''}>${esc(x.ip)}</b><small>${x.kind ? `<i class="ipk${x.kind === '机房 IP' ? ' dc' : ''}">${esc(x.kind)}</i>` : ''}${esc((x.geo || '').replace(/\s+/g, ' ').trim() || x.src)}</small></span>`).join('')
 		: '<div class="muted" style="grid-column:1/-1;font-size:13px">查不到，可能是网络不通</div>';
 }
 function siteRender() {
@@ -2057,7 +2064,7 @@ async function checkIp(btn, box) {
 	box.innerHTML = '<div class="empty"><span class="spin">↻</span> 正在查询…</div>';
 	await busy(btn, async () => {
 		NC.ip = await P('myip', {}, 40000); NC.at.ip = Date.now(); ipRender(); ncAgo();
-		box.innerHTML = `<div class="ipl" style="padding:6px 2px">${$('ipList').innerHTML}</div>`;
+		box.innerHTML = `<div class="ipl" style="padding:6px 2px">${$('ipList').innerHTML}</div><a class="btn" style="margin-top:12px;width:100%" href="https://ipcheck.ing/" target="_blank" rel="noopener">用 IPCheck.ing 完整检测 ↗</a><p class="muted" style="font-size:12px;margin:6px 0 0">完整检测测的是这台手机现在的网络：连着家里 Wi-Fi 时就是家里的网络。</p>`;
 	}, false);
 }
 async function diagSheet(type) {
@@ -3616,6 +3623,7 @@ const T = {
 	addphone() { addPhone(); },
 	rotatekey() { rotateKey(); },
 	devices() { devList(); },
+	svc() { svcSheet(); },
 	ckey() { ckeySheet(); },
 	update() { updSheet(); },
 	hubbind() { hubBind(); },
@@ -3826,6 +3834,43 @@ async function rotateKey() {
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
 }
 // 「系统操作」里按版本显示的项：已登录的手机（托管版）、Claude 连接器地址（AI 版）
+// 托管服务的到期时间：系统操作里显示；还剩 3 天以内首页提示去申请续期
+const ymd = (ms) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+let SVC = null;
+function svcRender() {
+	const s = SVC;
+	$('svcBtn').classList.toggle('hidden', !s || !s.hosted);
+	if (!s || !s.hosted) { $('mSvc').classList.add('hidden'); return; }
+	const left = s.exp ? Math.ceil((s.exp - Date.now()) / 86400e3) : null;
+	$('svcState').textContent = s.exp == null ? '查不到到期时间' : !s.exp ? '不限期' : left <= 0 ? '已到期' : '到期 ' + ymd(s.exp) + '（还剩 ' + left + ' 天）';
+	const warn = s.exp && left <= 3;
+	$('mSvc').classList.toggle('hidden', !warn);
+	if (warn) { $('mSvcT').textContent = left <= 0 ? '托管服务已到期' : '托管服务还剩 ' + left + ' 天到期'; $('mSvcD').textContent = '到期时间 ' + ymd(s.exp) + '。去官网账号页点「申请续期」填个表，审核通过自动续上，不用重装'; }
+}
+async function svcLoad(force) {
+	try { SVC = await P('svc_info', { force: !!force }); store.set('rp_svc', JSON.stringify(SVC)); } catch (e) {}
+	svcRender();
+	return SVC;
+}
+try { SVC = JSON.parse(store.get('rp_svc') || 'null'); } catch (e) {}
+$('mSvcGo').onclick = () => { if (SVC && SVC.hub) window.open(SVC.hub + '/app', '_blank', 'noopener'); };
+async function svcSheet() {
+	const s = await svcLoad(true);
+	if (!s || !s.hosted) return toast('这台路由器不是托管版', true);
+	const left = s.exp ? Math.ceil((s.exp - Date.now()) / 86400e3) : null;
+	modal(`<div class="sheethead"><h3>托管服务</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<div class="kv"><span>到期时间</span><b>${s.exp == null ? '查不到' : !s.exp ? '不限期' : esc(ymd(s.exp)) + (left > 0 ? '（还剩 ' + left + ' 天）' : '（已到期）')}</b></div>
+	${s.exp ? `<p class="muted" style="font-size:13px;margin:10px 0 0;line-height:1.7">快到期时去官网账号页，在这台路由器下面点「申请续期」填个表，审核通过就自动续上，不用重装、不用换码。有续期码的也可以直接在这里输入。</p>
+	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-code>输入续期码</button><a class="btn primary" href="${esc(s.hub + '/app')}" target="_blank" rel="noopener">去官网申请续期</a></div>` : '<p class="muted" style="font-size:13px;margin:10px 0 0">这台路由器不限期，不用续期。</p>'}`,
+	(m, close) => {
+		const b = m.querySelector('[data-code]');
+		if (b) b.onclick = async () => {
+			const code = await promptBox('输入续期码', '找提供服务的人要的续期码');
+			if (!code) return;
+			try { const r = await P('svc_renew', { code }, 30000); toast('已续期 ' + r.days + ' 天，到期时间 ' + ymd(r.exp)); close(null); svcLoad(true); } catch (e) { toast(e.message, true); }
+		};
+	});
+}
 function moreBtns() { $('devsBtn').classList.toggle('hidden', !store.get('rp_dev')); $('ckeyBtn').classList.toggle('hidden', store.get('rp_ai') !== '1'); }
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 function devList() {
@@ -4081,6 +4126,7 @@ async function mStats() {
 	mStatsRender(r);
 }
 async function loadMain() {
+	svcRender(); if (!SVC || Date.now() - (SVC._at || 0) > 3600e3) svcLoad(false).then(() => { if (SVC) SVC._at = Date.now(); });
 	// 先把上次的数据画出来
 	if (!MH.rx.length) { try { const h = JSON.parse(sessionStorage.getItem('rp_mh') || 'null'); if (h && Date.now() - h.at < 60e3) { MH.rx = h.rx; MH.tx = h.tx; mChart(); } } catch (e) {} }
 	if (!MH.statsAt) { try { const o = JSON.parse(store.get('rp_mstats') || 'null'); if (o) mStatsRender(o); } catch (e) {} }
@@ -4100,7 +4146,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

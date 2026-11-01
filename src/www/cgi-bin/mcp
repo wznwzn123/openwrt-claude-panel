@@ -1513,17 +1513,30 @@ P.myip = function() {
 		ipsb: 'https://api.ip.sb/geoip',
 		ipinfo: 'https://ipinfo.io/json',
 		cf: 'https://www.cloudflare.com/cdn-cgi/trace',
+		// 中文的归属地和运营商，还能看出是不是机房 IP
+		ipapi: 'http://ip-api.com/json/?lang=zh-CN&fields=status,query,country,regionName,city,isp,as,hosting,proxy,mobile',
 	};
 	let cmd = ['rm -rf ' + d, 'mkdir -p ' + d];
 	for (let k, u in Q) push(cmd, sprintf("curl -sS -m 8 -A 'Mozilla/5.0 (Linux; Android 14)' %s > %s/%s 2>/dev/null &", shq(u), d, k));
+	// IPv6：只走 IPv6 去问，问得到就是有 IPv6
+	push(cmd, sprintf("curl -6 -sS -m 6 %s > %s/v6 2>/dev/null &", shq('https://api6.ipify.org'), d));
 	sh(join('\n', cmd) + '\nwait');
 	let rd = (k) => trim(readfile(d + '/' + k) ?? '');
-	let out = { domestic: null, overseas: [] };
+	let out = { domestic: null, overseas: [], v6: null };
 	let t = rd('ipip'), m = match(t, /([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/), gp = index(t, '来自于');
 	if (m) out.domestic = { src: 'IPIP.net', ip: m[1], geo: gp >= 0 ? trim(replace(substr(t, gp + length('来自于')), /^(：|:)/, '')) : '' };
 	else if (match(rd('cn3322'), /^[0-9.]+$/)) out.domestic = { src: '3322.net', ip: rd('cn3322'), geo: '' };
 	try { let j = json(rd('ipsb')); if (j?.ip) push(out.overseas, { src: 'IP.SB', ip: j.ip, geo: join(' ', filter([j.country, j.region != j.country ? j.region : null, j.city, j.organization ?? j.isp], (x) => x)) }); } catch (e) {}
 	try { let j = json(rd('ipinfo')); if (j?.ip) push(out.overseas, { src: 'IPinfo', ip: j.ip, geo: join(' ', filter([j.country, j.region, j.city, j.org], (x) => x)) }); } catch (e) {}
+	try {
+		let j = json(rd('ipapi'));
+		if (j?.status == 'success' && j.query) {
+			let kind = j.hosting ? '机房 IP' : j.mobile ? '移动网络' : '家庭宽带';
+			push(out.overseas, { src: 'ip-api', ip: j.query, geo: join(' ', filter([j.country, j.regionName != j.country ? j.regionName : null, j.city, j.isp], (x) => x)), kind, asn: j.as ?? null });
+		}
+	} catch (e) {}
+	let v6 = rd('v6');
+	if (match(v6, /^[0-9a-fA-F:]+$/) && index(v6, ':') >= 0) out.v6 = v6;
 	let cf = rd('cf'), ci = match(cf, /ip=([^\n]+)/), cl = match(cf, /loc=([^\n]+)/), cc = match(cf, /colo=([^\n]+)/);
 	if (ci) push(out.overseas, { src: 'Cloudflare', ip: ci[1], geo: (cl ? cl[1] : '') + (cc ? ' · 机房 ' + cc[1] : '') });
 	sh('rm -rf ' + d);
@@ -2412,6 +2425,25 @@ function hub_call(path, extra) {
 P.hub_pair = function() {
 	let o = hub_call('/api/pair/start');
 	return { code: o.code, exp: o.exp, url: hub_conf().HUB + '/app?pair=' + o.code };
+};
+/* 托管服务的到期时间（试用 / 续期）：问官网，缓存 1 小时 */
+P.svc_info = function(a) {
+	let c = hub_conf(true);
+	if (!c) return { hosted: false };
+	let cf = '/tmp/cmcp_svc.json', o = cmcp_readj(cf, null);
+	if (!o || a?.force || time() - (o.at ?? 0) > 3600) {
+		let r = null;
+		try { r = hub_call('/api/dev/info'); } catch (e) {}
+		if (r) { o = { at: time(), exp: r.exp ?? 0, off: !!r.off }; writefile(cf, sprintf('%J', o)); }
+	}
+	return { hosted: true, hub: c.HUB, exp: o?.exp ?? null, off: !!o?.off };
+};
+P.svc_renew = function(a) {
+	let code = uc(replace('' + (a?.code ?? ''), /[^A-Za-z0-9]/g, ''));
+	if (length(code) < 6) die('续期码不对');
+	let r = hub_call('/api/dev/renew', { code });
+	sh('rm -f /tmp/cmcp_svc.json');
+	return { exp: r.exp, days: r.days };
 };
 P.hub_accounts = function() { return hub_call('/api/dev/accounts').list ?? []; };
 P.hub_unbind = function(a) {

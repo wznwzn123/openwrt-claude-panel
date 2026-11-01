@@ -25,8 +25,27 @@ ev() {
 	[ "$n" -gt $((MAXL + 50)) ] && tail -n $MAXL "$EV" > "$EV.tmp" && mv "$EV.tmp" "$EV"
 	logger -t cmcp-watchdog "[$2] $3"
 	# 这几类问题路由器自己推送到手机（断网、隧道、断电由云端判断后推送）
-	case "$2" in dns|clash|mem|panel|watchdog) [ "$1" != info ] && cloud_push "$1" "$2" "$3" "$4" ;; esac
+	case "$2" in dns|clash|mem|kernel|panel|watchdog) [ "$1" != info ] && cloud_push "$1" "$2" "$3" "$4" ;; esac
 }
+# 死机前的线索：内存快用完、程序被系统杀掉、内核报错时，把当时的内存情况和最近的内核日志存到闪存
+# （系统日志只在内存里，死机重启就没了）；开机后在「意外重启」那条记录里写出来。10 分钟最多存一次
+CLUE=$D/crashclue.txt
+clue() {
+	[ "$DRYRUN" = 1 ] && return
+	local t; t=$(now)
+	[ $(( t - ${CLUE_T:-0} )) -lt 600 ] && return
+	CLUE_T=$t
+	{
+		echo "$t $1"
+		awk '/^MemAvailable/{a=$2}/^SUnreclaim/{u=$2}/^SwapTotal/{st=$2}/^SwapFree/{sf=$2}END{printf "当时的内存：可用 %dMB，内核占用 %dMB，交换区已用 %dMB\n", a/1024, u/1024, (st-sf)/1024}' /proc/meminfo
+		echo "-- 内存占用最多的程序"
+		top -bn1 2>/dev/null | sed -n '5,10p' | cut -c1-110
+		echo "-- 最近的内核日志"
+		dmesg 2>/dev/null | tail -n 30 | cut -c1-200
+	} > "$CLUE.tmp" 2>/dev/null && mv -f "$CLUE.tmp" "$CLUE"
+}
+# 内核里这些字样说明出问题了（死机前常见的征兆）：驱动出错、要不到内存、卡住
+KERR_RE='Oops|BUG:|WARNING:|Call trace|page allocation failure|Unable to handle|hung_task|blocked for more than|soft lockup|rcu.*stall|ath11k.*(crash|firmware crashed|failed to|timed out|timeout)|nss.*(fail|crash|timeout)'
 # 推送到手机（后台发，不耽误检查）
 cloud_push() {
 	[ -f "$D/cloud.conf" ] && [ "$DRYRUN" != 1 ] || return 0
@@ -71,7 +90,7 @@ memavail() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
 # ---------- 状态 ----------
 load() {
 	WAN=ok; NET=ok; DNS=ok; TUN=ok; PANEL=ok; CLASH=ok; CLASH_PID=; TFAIL=0; PFAIL=0; DFAIL=0; CFAIL=0
-	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0
+	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0
 	[ -f "$ST" ] && . "$ST"
 }
 save() {
@@ -79,7 +98,7 @@ save() {
 WAN=$WAN; NET=$NET; DNS=$DNS; TUN=$TUN; PANEL=$PANEL; CLASH=$CLASH; CLASH_PID=$CLASH_PID
 TFAIL=$TFAIL; PFAIL=$PFAIL; DFAIL=$DFAIL; CFAIL=$CFAIL
 WAN_T=$WAN_T; NET_T=$NET_T; DNS_T=$DNS_T; TUN_T=$TUN_T; CLASH_T=$CLASH_T; LAST_RS=$LAST_RS; RS_LIST="$RS_LIST"; HB_T=$HB_T; BOOT_DONE=$BOOT_DONE; MEMW=$MEMW
-TCAUSE="$TCAUSE"; BT0=$BT0; BEAT_T=$BEAT_T; OOMN=$OOMN; ASW_T=$ASW_T
+TCAUSE="$TCAUSE"; BT0=$BT0; BEAT_T=$BEAT_T; OOMN=$OOMN; ASW_T=$ASW_T; KERRN=$KERRN; CLUE_T=$CLUE_T
 CHECK_T=$(now); READY=$RDY; TPID=$TP
 EOF
 	mv "$ST.tmp" "$ST"
@@ -120,6 +139,17 @@ boot_check() {
 		[ "${1:-999}" -lt 45 ] 2>/dev/null && detail="$detail（内存很紧张，很可能是内存不够导致死机）"
 	fi
 	detail="$detail$note"
+	# 死机前存下来的线索（断电前 30 分钟以内的才算）
+	if [ "$lvl" = err ] && [ -s "$CLUE" ]; then
+		local ct cr; ct=$(head -n 1 "$CLUE" | cut -d' ' -f1); cr=$(head -n 1 "$CLUE" | cut -d' ' -f2-)
+		if [ -n "$ct" ] && [ "$ct" -le "$bt" ] 2>/dev/null && [ $(( last - ct )) -lt 1800 ] 2>/dev/null; then
+			detail="$detail
+死机前 $(mins $ct $bt) 发现：$cr
+$(grep -E "^当时的内存" "$CLUE")
+$(grep -E "$KERR_RE|killed process|Out of memory" "$CLUE" | tail -n 8 | cut -c1-180)"
+		fi
+		mv -f "$CLUE" "$CLUE.prev"
+	fi
 	if ls /sys/fs/pstore/* >/dev/null 2>&1; then
 		detail="$detail
 发现内核崩溃日志：
@@ -251,14 +281,22 @@ check() {
 
 	# 内存
 	local m; m=$(memavail)
-	if [ "${m:-999}" -lt 25 ] && [ "$MEMW" = 0 ]; then MEMW=1; ev warn mem "内存快用完了（只剩 ${m}MB），可能导致程序被系统杀掉" "$(top -bn1 2>/dev/null | head -n 12 | cut -c1-120)"; fi
+	if [ "${m:-999}" -lt 25 ] && [ "$MEMW" = 0 ]; then MEMW=1; ev warn mem "内存快用完了（只剩 ${m}MB），可能导致程序被系统杀掉" "$(top -bn1 2>/dev/null | head -n 12 | cut -c1-120)"; clue "内存快用完了（只剩 ${m}MB）"; fi
 	[ "${m:-999}" -gt 50 ] && MEMW=0
 	# 内存耗尽时内核会强行结束程序（OOM），记下来是谁被杀了
 	local oom; oom=${FAKE_OOM:-$(dmesg 2>/dev/null | grep -c -i -E 'out of memory|oom-kill')}
 	if [ -n "$OOMN" ] && [ "${oom:-0}" -gt "$OOMN" ]; then
 		ev err mem "内存耗尽，系统强行结束了程序" "$(dmesg 2>/dev/null | grep -i -E 'killed process|out of memory' | tail -n 3 | cut -c1-200)"
+		clue "内存耗尽，系统强行结束了程序"
 	fi
 	OOMN=${oom:-0}
+	# 内核报错：记一条、推送到手机、存一份线索（开机时内核自己打出来的不算：第一次只记下有几条）
+	local kc; kc=${FAKE_KERR:-$(dmesg 2>/dev/null | grep -c -E "$KERR_RE")}
+	if [ -n "$KERRN" ] && [ "${kc:-0}" -gt "$KERRN" ]; then
+		ev warn kernel "内核报错了（驱动出错或要不到内存，死机前常见的征兆）" "$(dmesg 2>/dev/null | grep -E "$KERR_RE" | tail -n 4 | cut -c1-200)"
+		clue "内核报错"
+	fi
+	KERRN=${kc:-0}
 
 	boot_check
 	cloud_beat

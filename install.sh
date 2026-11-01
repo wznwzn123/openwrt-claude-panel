@@ -204,6 +204,7 @@ if [ -n "$HUB" ]; then
 		 printf 'HUB=%s\nSUB=%s\n' "$HUB" "$SUB" > $D/hub.conf)
 		printf '%s\n' "$HOST" > $D/hostname
 		ok "开通成功：https://$HOST"
+		EXP=$(jf exp); [ "${EXP:-0}" -gt 0 ] 2>/dev/null && SVC_END=$(date -d "@$((EXP / 1000))" '+%Y-%m-%d' 2>/dev/null || echo "")
 	fi
 fi
 
@@ -310,6 +311,10 @@ echo "⚠️  上面的地址里都带着密钥，谁拿到都能控制你的路
 if [ -n "$HUB" ]; then
 	echo
 	echo "托管版：推送、云端备份、断电断网判断都已经开通，不用再做别的设置。"
+	if [ -n "$SVC_END" ]; then
+		echo
+		echo "⏳ 这是试用：用到 $SVC_END。快到期时在官网账号页（$HUB/app）点「申请续期」填个表，审核通过就自动续上，不用重装。"
+	fi
 	echo
 	if ! /usr/sbin/cmcp-pair --install; then
 		echo "绑定到官网账号：稍后在这个终端运行 cmcp-pair 拿配对码。"

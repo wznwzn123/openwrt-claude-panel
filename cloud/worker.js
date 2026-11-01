@@ -359,7 +359,8 @@ export class Watch extends DurableObject {
 // 这个请求是哪台路由器的：自建模式只有一台；托管模式看子域名（钥匙存在那台路由器自己的 Watch 里）
 // 心跳：一切正常、状态没变、离上次交给 Durable Object 不到 170 秒，就只在这里记一下（用 Cloudflare 的缓存），不叫醒它
 // 缓存只在同一个机房有效；换了机房、缓存被清掉，就照常交过去，不会漏
-const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'ready', 'tcause', 'ver'];
+// 只看会影响判断的字段（隧道连接数 ready 会在 2～4 之间跳，不算变化）
+const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver'];
 export const beatSig = (rep) => JSON.stringify(BEAT_KEYS.map((k) => (rep && rep[k] != null ? rep[k] : null)));
 async function beatRoute(req, env, u, who, key) {
 	if (who !== 'r' && who !== 't') return J({ error: 'not found' }, 404);

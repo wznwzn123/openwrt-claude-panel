@@ -3,7 +3,8 @@
 # 2. 用邀请码开通（托管服务会建隧道、建子域名）
 # 3. 在这台 GitHub 机器上跑 cloudflared，假装是路由器，放一个测试页面
 # 4. 从外网打开 https://子域名/panel/manifest.json，看能不能通
-# 5. 注销（删隧道、删子域名）、删掉邀请码
+# 5. 检查 v1.3.1 的新接口：配对码、核对登录码、最新版本、官网下载安装包
+# 6. 注销（删隧道、删子域名）、删掉邀请码
 name: 托管服务自检
 on:
   workflow_dispatch:
@@ -53,6 +54,23 @@ jobs:
           echo "::error::外网打不开 https://$HOST/panel/manifest.json，最后返回：$(echo "$R" | head -c 300)"
           grep -iE "error|ERR|Registered" cf.log | tail -5 | sed 's/^/::warning::cloudflared: /'
           exit 1
+      - name: 新接口：配对码、登录码、最新版本、安装包下载
+        run: |
+          fail=0
+          R=$(curl -sS -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RK\"}" "$HUB/api/pair/start")
+          echo "$R" | jq -e '.code | test("^[A-Z2-9]{8}$")' >/dev/null && echo "::notice::配对码：路由器凭钥匙能拿到" || { echo "::error::拿配对码失败：$R"; fail=1; }
+          R=$(curl -sS -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RK\",\"code\":\"ZZZZZZZZ\"}" "$HUB/api/dev/logincode")
+          echo "$R" | grep -q '登录码不对' && echo "::notice::登录码：乱填的会被拒绝" || { echo "::error::核对登录码的接口不对：$R"; fail=1; }
+          R=$(curl -sS -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"wrongwrongwrongwrongwrongwrong12\",\"code\":\"ZZZZZZZZ\"}" "$HUB/api/dev/logincode")
+          echo "$R" | grep -q '钥匙不对' && echo "::notice::登录码：钥匙不对的拒绝" || { echo "::error::钥匙不对也没拒绝：$R"; fail=1; }
+          R=$(curl -sS -m 30 "$HUB/api/app/version")
+          V=$(echo "$R" | jq -r '.version // empty')
+          [ -n "$V" ] && echo "::notice::最新版本：v$V" || { echo "::error::查不到最新版本：$R"; fail=1; }
+          mkdir -p dl && cd dl
+          curl -fsSL -m 120 -o p.tar.gz "$HUB/dl/openwrt-claude-panel-hosted-ai.tar.gz" && curl -fsSL -m 30 -o SHA256SUMS "$HUB/dl/SHA256SUMS" || { echo "::error::官网下载安装包失败"; exit 1; }
+          sed -n 's/  openwrt-claude-panel-hosted-ai.tar.gz$/  p.tar.gz/p' SHA256SUMS | sha256sum -c - >/dev/null && echo "::notice::官网下载的安装包校验通过" || { echo "::error::安装包校验不对"; fail=1; }
+          tar xzf p.tar.gz && grep -q "PKG_VER=$V" openwrt-claude-panel/EDITION && echo "::notice::安装包版本和最新版本一致（v$V）" || { echo "::error::安装包版本不对：$(cat openwrt-claude-panel/EDITION)"; fail=1; }
+          exit $fail
       - name: 注销，删掉测试用的一切
         if: always()
         run: |

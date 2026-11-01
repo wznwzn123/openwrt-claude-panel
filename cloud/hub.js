@@ -676,6 +676,16 @@ async function latestRelease(env) {
 		return { tag, body, apk, at: '' };
 	} catch (e) { return null; }
 }
+// App 自己的版本：发布时如果 App 的代码没改，就沿用上一次改动时的版本号（写在 Release 的 app-version.json 里）
+// 这样只是路由器那边更新时，App 不会跟着弹窗；App 真改了才提示，而且必须更新
+async function appMeta(env) {
+	try {
+		const r = await fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/app-version.json', { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+		if (!r.ok) return null;
+		const j = await r.json();
+		return j && typeof j.version === 'string' && /^v?\d+(\.\d+){0,2}$/.test(j.version) ? j : null;
+	} catch (e) { return null; }
+}
 async function appVersion(env) {
 	const cors = { 'access-control-allow-origin': '*' };
 	const out = (o, st) => { const res = J(o, st); for (const [k, x] of Object.entries(cors)) res.headers.set(k, x); return res; };
@@ -686,8 +696,12 @@ async function appVersion(env) {
 			if (!x) { try { return (await hubObj(env).meta('appver')) || null; } catch (e) { return null; } }
 			if (x.none || !x.apk) return null;
 			// 强制更新：发布说明里写「【必须更新】」，或者写「最低版本：1.2.1」（比这个旧的必须更新）
+			const m = await appMeta(env);
 			const mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(x.body);
-			const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), apk: '/app/router-panel.apk', at: x.at, force: x.body.includes('【必须更新】'), min: mv ? mv[1] : '' };
+			const o = m
+				? { version: m.version.replace(/^v/, ''), notes: notesOf(m.body || ''), apk: '/app/router-panel.apk', at: m.at || x.at, force: m.force !== false, min: '' }
+				// 老的发布没有 app-version.json：照旧用发布的版本号
+				: { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), apk: '/app/router-panel.apk', at: x.at, force: x.body.includes('【必须更新】'), min: mv ? mv[1] : '' };
 			try { await hubObj(env).setMeta('appver', o); } catch (e) {}
 			return o;
 		});

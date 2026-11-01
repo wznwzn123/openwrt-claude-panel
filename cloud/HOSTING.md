@@ -140,7 +140,7 @@ npx wrangler secret put RESEND_API_KEY -c wrangler.hosted.toml
 ## 安卓 App
 
 - 官网首页有「下载安卓 App」，地址是 `https://example.com/app/router-panel.apk`：托管服务从 GitHub 最新 Release 转过来，**大陆用户走你的域名下载，不用访问 GitHub**（仓库公开后才能下载）。
-- App 打开时会问 `https://example.com/api/app/version` 有没有新版本，有就提示一键更新。
+- App 打开时会问 `https://example.com/api/app/version` 有没有新版本。**只有 App 自己的代码改了才提示，而且必须更新**；只是路由器那边更新时 App 不弹窗。发布时会自动比较：App 的代码（`android/app` 和 gradle 设置）从上次发布到现在没改，Release 里的 `app-version.json` 就沿用 App 上次改动时的版本号。
 - 发布新版本时，「发布新版本」会顺便打包 App 并签名，传到 Release 里，文件名 `router-panel.apk`。
 
 ### 签名密码（只需设置一次）

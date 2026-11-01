@@ -23,6 +23,7 @@ for ai in ai noai; do
 		d=dist/tmp/$k/openwrt-claude-panel
 		mkdir -p "$d"
 		cp -r src docs install.sh uninstall.sh README.md LICENSE "$d/"
+		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
 		cp "docs/install-$k.md" "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$ed" "${V#v}" "$k" > "$d/EDITION"
 		if [ "$ed" = lite ]; then
@@ -41,6 +42,7 @@ if [ -n "$HUB_URL" ]; then
 		d=dist/tmp/$k/openwrt-claude-panel
 		mkdir -p "$d"
 		cp -r src docs install.sh uninstall.sh README.md LICENSE "$d/"
+		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
 		cp docs/install-hosted.md "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=full\nPKG_HUB=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$HUB_URL" "${V#v}" "$k" > "$d/EDITION"
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel

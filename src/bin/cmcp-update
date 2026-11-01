@@ -50,6 +50,15 @@ start)
 	else
 		( trap '' HUP; /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	fi
+	# 等后台真的跑起来（拿到锁、或者进度已经变了）再返回：免得面板这边一结束就把还没脱离的后台进程带走。
+	# 最多等 10 次（BusyBox 的 sleep 不认小数时每次 1 秒，也不会超过面板等待的 20 秒）
+	i=0
+	while [ $i -lt 10 ]; do
+		[ -d "$LOCK" ] && break
+		grep -q '"state":"queued"' "$ST" 2>/dev/null || break
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
 	echo '{"started":true}' ;;
 run)
 	mkdir "$LOCK" 2>/dev/null || exit 0

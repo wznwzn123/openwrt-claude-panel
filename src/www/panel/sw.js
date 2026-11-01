@@ -23,6 +23,15 @@ self.addEventListener('activate', (e) => {
 		await self.clients.claim();
 	})());
 });
+// 面板发现路由器升级了：重新下载一遍面板放进缓存，下载好再告诉它刷新
+self.addEventListener('message', (e) => {
+	if (!e.data || e.data.t !== 'refresh') return;
+	e.waitUntil((async () => {
+		const c = await caches.open(CACHE);
+		await Promise.all(SHELL.map((u) => fetch(u, { cache: 'no-cache' }).then((r) => (r.ok ? c.put(u, r) : null)).catch(() => {})));
+		if (e.ports && e.ports[0]) e.ports[0].postMessage('ok');
+	})());
+});
 self.addEventListener('fetch', (e) => {
 	const req = e.request, u = new URL(req.url);
 	if (req.method !== 'GET' || u.origin !== location.origin || u.pathname.includes('/cgi-bin/') || u.pathname.includes('/dl/')) return;

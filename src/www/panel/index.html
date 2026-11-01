@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta charset="utf-8"><meta name="panel-ver" content="dev"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>我的路由器</title>
@@ -3745,10 +3745,38 @@ async function addPhone() {
 }
 /* ---------- 一键更新：路由器上的面板和程序（App 自己的更新是另外一回事） ---------- */
 let UPD = null;
+/* 路由器升级后，手机里缓存的还是旧面板（面板先从缓存打开，新版下次打开才生效）：
+   发现路由器上的版本跟这份面板不一样，就把缓存换成新版、自动刷新一次 */
+const PANEL_VER = document.querySelector('meta[name="panel-ver"]')?.content || '';
+async function refreshPanel() {
+	try {
+		const sw = navigator.serviceWorker, reg = sw && await sw.getRegistration();
+		if (reg) {
+			// sw.js 变了：装好新的（安装时会重新下载面板），等它接管
+			const changed = new Promise((res) => { sw.addEventListener('controllerchange', res, { once: true }); setTimeout(res, 8000); });
+			await reg.update().catch(() => {});
+			if (reg.installing || reg.waiting) await changed;
+			// sw.js 没变：让它重新下载一遍面板再刷新
+			else if (sw.controller) await new Promise((res) => { const ch = new MessageChannel(); ch.port1.onmessage = res; sw.controller.postMessage({ t: 'refresh' }, [ch.port2]); setTimeout(res, 8000); });
+		}
+	} catch (e) {}
+	location.reload();
+}
+function panelVerCheck(cur) {
+	if (!cur || !/^\d/.test(PANEL_VER) || cur === PANEL_VER) return false;
+	// 每个版本只自动刷新一次，万一没换成功也不会一直刷
+	let tried = ''; try { tried = sessionStorage.getItem('rp_verfix') || ''; } catch (e) {}
+	if (tried === cur) return false;
+	try { sessionStorage.setItem('rp_verfix', cur); } catch (e) {}
+	toast('路由器面板已更新到 v' + cur + '，正在换成新版…');
+	refreshPanel();
+	return true;
+}
 const updLaterKey = () => (UPD ? UPD.latest : '') + '@' + new Date().toDateString();
 async function updCheck(force) {
 	let r;
 	try { r = await P('update_check', { force: !!force }, 25000); } catch (e) { if (force) toast(e.message, true); return null; }
+	if (r && typeof r === 'object' && panelVerCheck(r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
 	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
@@ -3800,7 +3828,7 @@ async function updStart(noConfirm) {
 			fin = true;
 			draw(ok ? 'done' : 'failed', msg);
 			m.querySelector('[data-end]').classList.remove('hidden');
-			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) location.reload(); };
+			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) refreshPanel(); };
 		};
 		const poll = async () => {
 			if (fin) return;
@@ -4119,8 +4147,11 @@ function mStatsRender(r) {
 	const t = r.today || {}, d = r.devices || {};
 	$('mDl').textContent = '↓ ' + B(t.dl || 0); $('mUl').textContent = '↑ ' + B(t.ul || 0);
 	const top = t.top || [];
-	$('mTopT').textContent = top.length ? '今天用得最多' : (t.counting ? '今天还没有设备用流量' : '要 OpenClash 在运行才统计得到每台设备的流量');
-	$('mTop').innerHTML = top.map((x) => `<div class="mrow">${DEV_SVG}<span>${esc(x.name || x.id)}</span><em>${esc(B(x.dl + x.ul))}</em></div>`).join('');
+	$('mTopT').textContent = top.length ? '今天用得最多（下行 + 上行合计）' : (t.counting ? '今天还没有设备用流量' : '要 OpenClash 在运行才统计得到每台设备的流量');
+	// 同一台手机连 2.4G 和 5G 时可能各用一个随机地址，名字一样：后面的标上「另一个地址」，免得看成两台
+	const seen = {};
+	$('mTop').innerHTML = top.map((x) => { const n = x.name || x.id, dup = seen[n]; seen[n] = 1;
+		return `<div class="mrow" title="${esc(x.id)}">${DEV_SVG}<span>${esc(n)}${dup ? '<small class="muted">（另一个地址）</small>' : ''}</span><em>${esc(B(x.dl + x.ul))}</em></div>`; }).join('');
 	$('mOn').textContent = d.online ?? '—'; $('mWifi').textContent = d.wifi ?? '—'; $('mWired').textContent = d.wired ?? '—'; $('mAll').textContent = d.total ?? '—';
 }
 async function mStats() {

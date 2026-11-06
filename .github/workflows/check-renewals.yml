@@ -45,5 +45,7 @@ jobs:
           const pend = ap.filter((a) => !a.logged && a.status === 'pending').length;
           console.log(lines.length ? lines.join('\n') : '还没有审核通过的申请');
           console.log(`待审核：${pend} 份`);
+          const dj = JSON.parse(fs.readFileSync('dv.json', 'utf8'));
+          console.log(`回收站保留天数：${dj.trashDays ?? '（线上还是旧版）'} · 受保护的路由器：${dv.filter((x) => x.prot).map((x) => ms(x.sub)).join('、') || '没有'} · 回收站里：${dv.filter((x) => x.offWhy === 'deleted').length} 台`);
           for (const l of lines) if (/没续上|⚠️/.test(l)) console.log('::warning::' + l);
           EOF

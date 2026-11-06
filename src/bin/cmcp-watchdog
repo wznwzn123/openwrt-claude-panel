@@ -91,12 +91,45 @@ $l" || echo "隧道日志里没有错误记录"
 }
 wanlog() { logread 2>/dev/null | grep -E "netifd: .*(wan|Interface|link)|udhcpc|pppd|odhcp6c" | grep -v -i -E 'wifi|radio|phy[0-9]' | tail -n 6 | cut -c1-200; }
 oclog() { grep -v '^time=' /tmp/openclash.log 2>/dev/null | tail -n "${1:-6}" | cut -c1-200; }
-memavail() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
+memavail() { [ -n "$FAKE_MEM" ] && { echo "$FAKE_MEM"; return; }; awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
+# 内存保护：可用内存连续两次低于 MEM_LOW（默认 30MB）时，先清缓存；清完还不够、OpenClash 在跑，就平稳重启 OpenClash
+# 释放内存（会断网十几秒，比内存耗尽死机重启好得多）。重启 OpenClash 至少隔 30 分钟、一天最多 6 次。
+# 不想要自动重启 OpenClash：touch /etc/claude-mcp/memguard.off（还会清缓存和提醒）
+MEM_LOW=${MEM_LOW:-30}
+drop_caches() { [ "$DRYRUN" = 1 ] && return; sync; echo 3 > /proc/sys/vm/drop_caches 2>/dev/null; echo 1 > /proc/sys/vm/compact_memory 2>/dev/null; }
+memtop() { top -bn1 2>/dev/null | sed -n '5,10p' | cut -c1-110; }
+mem_guard() {
+	local m=$1 t=$2 m2 day
+	if [ "${m:-999}" -ge "$MEM_LOW" ]; then MLOW=0; return; fi
+	MLOW=$((MLOW + 1))
+	[ "$MLOW" -lt 2 ] && return
+	# 清缓存：5 分钟最多一次
+	[ $(( t - MD_T )) -lt 300 ] && return
+	MD_T=$t; drop_caches
+	m2=${FAKE_MEM2:-$(memavail)}
+	if [ "${m2:-0}" -ge "$MEM_LOW" ]; then
+		# 清缓存就够了：半小时最多记一条，不推送
+		[ $(( t - MDL_T )) -ge 1800 ] && { MDL_T=$t; ev info mem "内存只剩 ${m}MB，已自动清理缓存，现在可用 ${m2}MB" ""; }
+		MLOW=0; return
+	fi
+	day=$(( (t + 28800) / 86400 )); [ "$MG_D" != "$day" ] && { MG_D=$day; MGN=0; }
+	if [ -f "$D/memguard.off" ] || [ "$(uci -q get openclash.config.enable)" != 1 ] || [ -z "$(cpid)" ] || [ $(( t - MG_T )) -lt 1800 ] || [ "$MGN" -ge 6 ]; then return; fi
+	MG_T=$t; MGN=$((MGN + 1)); clue "内存只剩 ${m2}MB，自动重启 OpenClash 释放内存"
+	if [ "$DRYRUN" = 1 ]; then ev warn mem "内存只剩 ${m2}MB（清理缓存后还是不够），已自动重启 OpenClash 释放内存（测试模式，没有真的重启）" "$(memtop)"
+	else
+		ev warn mem "内存只剩 ${m2}MB（清理缓存后还是不够），已自动重启 OpenClash 释放内存，会断网十几秒" "避免内存耗尽导致路由器死机重启。今天第 ${MGN} 次。
+当时占内存最多的程序：
+$(memtop)"
+		( /etc/init.d/openclash restart >/dev/null 2>&1 & )
+	fi
+	# 这次重启是自己做的，下一轮不再当成「OpenClash 重启了」另记一条
+	CLASH_PID=; MLOW=0
+}
 
 # ---------- 状态 ----------
 load() {
 	WAN=ok; NET=ok; DNS=ok; TUN=ok; PANEL=ok; CLASH=ok; CLASH_PID=; TFAIL=0; PFAIL=0; DFAIL=0; CFAIL=0
-	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; RSN=0; TGONE=0; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0
+	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; RSN=0; TGONE=0; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0; MLOW=0; MD_T=0; MDL_T=0; MG_T=0; MG_D=; MGN=0
 	[ -f "$ST" ] && . "$ST"
 }
 save() {
@@ -105,6 +138,7 @@ WAN=$WAN; NET=$NET; DNS=$DNS; TUN=$TUN; PANEL=$PANEL; CLASH=$CLASH; CLASH_PID=$C
 TFAIL=$TFAIL; PFAIL=$PFAIL; DFAIL=$DFAIL; CFAIL=$CFAIL
 WAN_T=$WAN_T; NET_T=$NET_T; DNS_T=$DNS_T; TUN_T=$TUN_T; CLASH_T=$CLASH_T; LAST_RS=$LAST_RS; RSN=$RSN; TGONE=$TGONE; HB_T=$HB_T; BOOT_DONE=$BOOT_DONE; MEMW=$MEMW
 TCAUSE="$TCAUSE"; BT0=$BT0; BEAT_T=$BEAT_T; OOMN=$OOMN; ASW_T=$ASW_T; KERRN=$KERRN; CLUE_T=$CLUE_T
+MLOW=$MLOW; MD_T=$MD_T; MDL_T=$MDL_T; MG_T=$MG_T; MG_D=$MG_D; MGN=$MGN
 CHECK_T=$(now); READY=$RDY; TPID=$TP
 EOF
 	mv "$ST.tmp" "$ST"
@@ -298,6 +332,7 @@ check() {
 	local m; m=$(memavail)
 	if [ "${m:-999}" -lt 25 ] && [ "$MEMW" = 0 ]; then MEMW=1; ev warn mem "内存快用完了（只剩 ${m}MB），可能导致程序被系统杀掉" "$(top -bn1 2>/dev/null | head -n 12 | cut -c1-120)"; clue "内存快用完了（只剩 ${m}MB）"; fi
 	[ "${m:-999}" -gt 50 ] && MEMW=0
+	mem_guard "$m" "$t"
 	# 内存耗尽时内核会强行结束程序（OOM），记下来是谁被杀了
 	local oom; oom=${FAKE_OOM:-$(dmesg 2>/dev/null | grep -c -i -E 'out of memory|oom-kill')}
 	if [ -n "$OOMN" ] && [ "${oom:-0}" -gt "$OOMN" ]; then

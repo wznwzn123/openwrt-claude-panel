@@ -11,6 +11,10 @@
 .item .acts{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
 code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 .g3{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g3 .full{grid-column:1/-1}
+.dlg{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.dlg .card{width:min(460px,100%);margin:0 0 env(safe-area-inset-bottom);background:var(--bg);box-shadow:0 12px 40px rgba(0,0,0,.25)}.dlg h3{margin:0 0 4px;font-size:18px}
+.dchips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 8px}.dchips .btn.on{background:var(--brand,#007aff);color:#fff}
+.dprev{margin:10px 0 2px;font-size:14px;line-height:1.6}.dprev b{color:var(--brand,#007aff)}.dprev .bad{color:var(--danger,#ff3b30)}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>托管服务管理</a><button class="btn sm hidden" id="outBtn">退出</button></div>
 <section id="vKey" class="card hidden" style="max-width:420px;margin:8vh auto 0">
@@ -112,7 +116,7 @@ function renderAps() {
 	$('apN').textContent = pend.length ? pend.length + ' 份待审核' : '';
 	const row = (a) => `<div class="item" data-ap="${esc(a.sub)}"><div class="l"><b>${esc(a.email)} <span>${esc(a.name)}（${esc(a.sub)}）</span></b>
 		<span>从哪里知道的：${esc(a.source)} · 相关账号：${esc(a.contact)}${a.note ? ' · 备注（想申请多少天）：' + esc(a.note) : ''}</span>
-		<span>申请日期 ${day(a.at)} · 到期 ${day(a.exp)}${a.expired ? '（已到期暂停）' : ''}${a.logged ? ' · ' + (a.status === 'ok' ? '✅ ' + day(a.decided) + ' 通过，续了 ' + a.days + ' 天' : '❌ ' + day(a.decided) + ' 拒绝' + (a.reason ? '：' + esc(a.reason) : '')) + (a.mailed ? ' · 已发邮件通知' : ' · 邮件没发出去') : ''}</span></div>
+		<span>申请日期 ${day(a.at)} · ${a.logged && a.status === 'ok' && a.newExp ? '到期 ' + day(a.oldExp ?? a.exp) + ' → <b style="display:inline;color:var(--ok,#34c759)">' + day(a.newExp) + '</b>' : '现在到期 ' + day(a.logged ? a.exp : (a.curExp ?? a.exp))}${!a.logged && (a.curOff ?? a.expired) ? '（已到期暂停）' : ''}${a.logged ? ' · ' + (a.status === 'ok' ? '✅ ' + day(a.decided) + ' 通过，续了 ' + a.days + ' 天' : '❌ ' + day(a.decided) + ' 拒绝' + (a.reason ? '：' + esc(a.reason) : '')) + (a.mailed ? ' · 已发邮件通知' : ' · 邮件没发出去') : ''}</span></div>
 		${a.logged ? '' : '<div class="acts"><button class="btn sm primary" data-ok>通过</button><button class="btn sm danger" data-no>拒绝</button></div>'}</div>`;
 	$('aps').innerHTML = (pend.length ? pend.map(row).join('') : '<p class="muted">没有待审核的申请</p>') + (done.length ? '<p class="muted" style="margin:12px 0 4px;font-size:13px">最近审核过的</p>' + done.map(row).join('') : '');
 }
@@ -120,11 +124,53 @@ $('aps').onclick = async (e) => {
 	const b = e.target.closest('[data-ok],[data-no]'); if (!b) return;
 	const sub = b.closest('[data-ap]').dataset.ap, okk = b.hasAttribute('data-ok');
 	let body;
-	if (okk) { const d = prompt('通过：续几天？', '90'); if (d == null) return; body = { days: +d || 90 }; }
+	if (okk) { const ap = APS.find((x) => x.sub === sub && !x.logged); const n = await pickDays(ap); if (!n) return; body = { days: n }; }
 	else { const r = prompt('拒绝的原因（会推送给用户，可以不填）：', ''); if (r == null) return; body = { reason: r }; }
 	b.disabled = true;
 	try { const r = await api('POST', 'applications/' + sub + '/' + (okk ? 'approve' : 'reject'), body); toast((okk ? '已通过，到期时间 ' + day(r.exp) : '已拒绝') + (r.mailed ? '，已发邮件通知他' : '，邮件没发出去（他开了推送的话会收到推送）')); await load(); } catch (x) { toast(x.message); b.disabled = false; }
 };
+// 续几天：「180」「180天」「１８０」都认；认不出返回 0
+function parseDays(v) {
+	const s = String(v ?? '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+	const m = /\d+/.exec(s); if (!m) return 0;
+	const n = +m[0]; return n >= 1 && n <= 3650 ? n : 0;
+}
+// 通过续期：选天数（按钮或自己填），看清新的到期时间再确认
+function pickDays(ap) {
+	return new Promise((done) => {
+		const base = Math.max(Date.now(), (ap && (ap.curExp ?? ap.exp)) || 0);
+		// 备注里写了「180天」「6个月」「半年」「1年」就照着预填，否则默认 90 天
+		const want = (() => { const t = String((ap && ap.note) || '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+			let m; if ((m = /(\d+)\s*天/.exec(t))) return parseDays(m[1]);
+			if ((m = /(\d+)\s*个?月/.exec(t))) return parseDays(+m[1] * 30);
+			if (/半年/.test(t)) return 180;
+			if ((m = /(\d+)\s*年/.exec(t))) return parseDays(+m[1] * 365);
+			return 0; })();
+		const el = document.createElement('div'); el.className = 'dlg';
+		el.innerHTML = `<div class="card"><h3>通过续期申请</h3><p class="muted" style="margin:0;font-size:13px">${esc(ap ? ap.email + ' · ' + ap.name : '')}${ap && ap.note ? '<br>备注：' + esc(ap.note) : ''}</p>
+			<div class="dchips">${[30, 90, 180, 365].map((d) => `<button class="btn sm" data-d="${d}">${d} 天</button>`).join('')}</div>
+			<input class="input" data-in inputmode="numeric" placeholder="或者自己填天数（1–3650）" autocomplete="off">
+			<div class="dprev" data-prev></div>
+			<div class="g3" style="margin-top:12px"><button class="btn" data-x>取消</button><button class="btn primary" data-go disabled>确定通过</button></div></div>`;
+		document.body.appendChild(el);
+		const inp = el.querySelector('[data-in]'), prev = el.querySelector('[data-prev]'), go = el.querySelector('[data-go]');
+		const show = () => {
+			const raw = inp.value.trim(), n = parseDays(raw);
+			el.querySelectorAll('[data-d]').forEach((b) => b.classList.toggle('on', +b.dataset.d === n));
+			if (!raw) { prev.innerHTML = '选一个天数，或者自己填'; go.disabled = true; return 0; }
+			if (!n) { prev.innerHTML = '<span class="bad">天数不对：填 1 到 3650 之间的数字</span>'; go.disabled = true; return 0; }
+			prev.innerHTML = `续 <b>${n} 天</b>：到期 ${day(ap && (ap.curExp ?? ap.exp))} → <b>${day(base + n * 86400e3)}</b>`;
+			go.disabled = false; go.textContent = '确定续 ' + n + ' 天'; return n;
+		};
+		el.querySelectorAll('[data-d]').forEach((b) => (b.onclick = () => { inp.value = b.dataset.d; show(); }));
+		inp.oninput = show;
+		inp.value = String(want || 90); show();
+		const close = (v) => { el.remove(); done(v); };
+		el.querySelector('[data-x]').onclick = () => close(0);
+		el.onclick = (e) => { if (e.target === el) close(0); };
+		go.onclick = () => close(show());
+	});
+}
 function renderRen(list) {
 	list.sort((a, b) => b.created - a.created);
 	$('rens').innerHTML = list.length ? list.map((k) => `<div class="item" data-rcode="${esc(k.code)}"><div class="l"><b><code>${esc(k.code)}</code>${k.used ? ' <span>（已用）</span>' : ''}</b><span>续 ${k.days} 天${k.used ? ' · ' + day(k.used) + ' 给 ' + esc(k.sub) + ' 用了（' + esc(k.by || '') + '）' : ''}${k.note ? ' · ' + esc(k.note) : ''}</span></div>

@@ -186,6 +186,23 @@ const am = MAILS.slice(n0).find((m) => m.to[0] === 'boss@x.com');
 ok('[管理员邮件] 管理员收到提醒：账号、从哪里知道的、相关账号、备注、审核地址都在', !!am && /新的续期申请/.test(am.subject) && /alice@x\.com/.test(am.html) && /酷安帖子/.test(am.html) && /qq:123/.test(am.html) && /想要 90 天/.test(am.html) && /\/admin/.test(am.html), JSON.stringify(am || MAILS.slice(n0)));
 delete env.ADMIN_EMAIL;
 
+/* ---------- 续期天数：认「180天」和全角数字；不对就报错，不悄悄按 90 天 ---------- */
+let P0 = (await (await adm('GET', '/applications')).json()).list.find((x) => x.sub === D2.sub && !x.logged);
+let d0 = await dev(D2.sub);
+ok('[天数] 待审核的申请带上路由器「现在」的到期时间', P0 && P0.curExp === (d0.exp || 0), JSON.stringify({ cur: P0 && P0.curExp, exp: d0.exp }));
+r = await adm('POST', '/applications/' + D2.sub + '/approve', { days: '半年' });
+ok('[天数] 填的不是数字：报错「天数不对」，不再默认 90 天', r.status === 400 && /天数不对/.test((await r.json()).error));
+ok('[天数] 报错后申请还在待审核，到期时间没动', (await (await adm('GET', '/applications')).json()).list.some((x) => x.sub === D2.sub && !x.logged && x.status === 'pending') && (await dev(D2.sub)).exp === d0.exp);
+ok('[天数] 没填天数：也报错', (await adm('POST', '/applications/' + D2.sub + '/approve', {})).status === 400);
+ok('[天数] 超过 3650 天：报错', (await adm('POST', '/applications/' + D2.sub + '/approve', { days: 5000 })).status === 400);
+const base0 = Math.max(T, d0.exp || T);
+r = await (await adm('POST', '/applications/' + D2.sub + '/approve', { days: '１８０天' })).json();
+let d1 = await dev(D2.sub);
+ok('[天数] 填「１８０天」（全角 + 天字）：续了 180 天', r.ok && d1.exp === base0 + 180 * DAY && r.exp === d1.exp, JSON.stringify({ r, exp: d1.exp, want: base0 + 180 * DAY }));
+let LG = (await (await adm('GET', '/applications')).json()).list.find((x) => x.sub === D2.sub && x.logged && x.status === 'ok');
+ok('[天数] 审核记录写着原到期和新到期（管理页显示「旧 → 新」）', LG && LG.days === 180 && LG.oldExp === (d0.exp || 0) && LG.newExp === d1.exp, JSON.stringify(LG && { days: LG.days, oldExp: LG.oldExp, newExp: LG.newExp }));
+ok('[天数] 审核结果邮件写的是 180 天', MAILS.some((m) => /已通过/.test(m.subject) && /180 天/.test(m.html)));
+
 mod.Watch.prototype.push = origPush; Date.now = realNow;
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] !== undefined && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

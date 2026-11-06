@@ -87,6 +87,12 @@ async function pwHash(pw, salt) {
 	const b = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(salt), iterations: 100000 }, k, 256);
 	return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
+// 续期天数：「180」「180天」「１８０」都认；认不出或不在 1–3650 天返回 0（不再悄悄按 90 天处理）
+export function parseDays(v) {
+	const s = String(v ?? '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+	const m = /\d+/.exec(s); if (!m) return 0;
+	const n = +m[0]; return n >= 1 && n <= 3650 ? n : 0;
+}
 async function sendMail(env, to, subject, html) {
 	try {
 		const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || 'noreply@' + env.BASE_DOMAIN, to: [to], subject, html }) });
@@ -483,15 +489,23 @@ export class Hub extends DurableObject {
 		await this.notifyAdmin('新的续期申请：' + ap.name, `账号：${email}\n从哪里知道的：${source}\n相关账号：${contact}${note ? '\n备注：' + note : ''}\n到期时间：${ymd(d.exp)}${ap.expired ? '（已到期暂停）' : ''}\n\n到管理页审核：https://${this.env.BASE_DOMAIN}/admin`);
 		return { st: 200, ok: true, at: ap.at };
 	}
-	async applications() { return [...(await this.ctx.storage.list({ prefix: 'ap:' })).values()].concat((await this.ctx.storage.get('aplog')) || []); }
+	async applications() {
+		const pend = [...(await this.ctx.storage.list({ prefix: 'ap:' })).values()];
+		// 待审核的带上路由器「现在」的到期时间（申请记录里的是提交时的）
+		for (const a of pend) { const d = await this.ctx.storage.get('d:' + a.sub); if (d) { a.curExp = d.exp || 0; a.curOff = !!d.off; } }
+		return pend.concat((await this.ctx.storage.get('aplog')) || []);
+	}
 	decide(sub, ok, a) { return this.lock(() => this._decide(sub, ok, a)); }
 	async _decide(sub, ok, { days, reason }) {
 		const ap = await this.ctx.storage.get('ap:' + sub), d = await this.ctx.storage.get('d:' + sub);
 		if (!ap || ap.status !== 'pending') return { st: 404, error: '没有待审核的申请' };
+		const n = ok ? parseDays(days) : 0;
+		if (ok && !n) return { st: 400, error: '续的天数不对：填 1 到 3650 之间的数字' };
+		if (ok && (!d || d.state !== 'ok')) return { st: 404, error: '这台路由器已经不在了' };
 		ap.status = ok ? 'ok' : 'no'; ap.decided = Date.now(); ap.reason = String(reason || '').trim().slice(0, 200);
 		if (ok) {
-			if (!d || d.state !== 'ok') return { st: 404, error: '这台路由器已经不在了' };
-			ap.days = Math.max(1, Math.min(3650, Math.round(+days || 90)));
+			ap.days = n;
+			ap.oldExp = d.exp || 0;  // 通过那一刻的到期时间（申请记录里的 exp 是提交申请时的）
 			ap.newExp = await this._grant(d, ap.days, '续期申请通过了');
 		} else if (d) {
 			try { await this.watch(sub).push({ title: '续期申请没有通过', body: ap.reason || '可以联系提供服务的人问问原因。', tag: 'svc', lvl: 'warn' }); } catch (e) {}

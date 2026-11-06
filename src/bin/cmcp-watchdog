@@ -2,7 +2,7 @@
 # 路由器看门狗：每 30 秒检查一次 宽带 / 外网 / DNS / 隧道 / 面板服务 / OpenClash，
 # 出问题时自动修复，并把原因记到 /etc/claude-mcp/events.log（在闪存上，断电重启也不会丢）。
 # 用法：cmcp-watchdog run | once | shutdown
-# 测试用环境变量：FAKE_WAN/FAKE_GW/FAKE_NET/FAKE_DNS/FAKE_TPID/FAKE_READY/FAKE_PANEL/FAKE_CLASH，DRYRUN=1 不真的重启
+# 测试用环境变量：FAKE_WAN/FAKE_GW/FAKE_NET/FAKE_DNS/FAKE_TPID/FAKE_READY/FAKE_PANEL/FAKE_CLASH/FAKE_TGONE，DRYRUN=1 不真的重启
 
 D=${WD_DIR:-/etc/claude-mcp}
 EV=$D/events.log
@@ -77,6 +77,12 @@ ready() {
 p_panel() { [ -n "$FAKE_PANEL" ] && { [ "$FAKE_PANEL" = 1 ]; return; }; [ "$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json)" = 200 ]; }
 cpid() { [ -n "$FAKE_CLASH" ] && { [ "$FAKE_CLASH" = 0 ] || echo "$FAKE_CLASH"; return; }; pidof clash mihomo 2>/dev/null | awk '{print $1}'; }
 
+# 隧道在 Cloudflare 上已经不存在了（被删除）/ 钥匙作废：重启隧道也没用。只看这次启动以后的日志，免得被以前的旧记录误判
+tun_gone() {
+	[ -n "$FAKE_TGONE" ] && { [ "$FAKE_TGONE" = 1 ]; return; }
+	[ -f "$TL" ] || return 1
+	tail -n 300 "$TL" | awk '/Starting tunnel|Starting metrics server/{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' | grep -q -E 'Unauthorized: (Tunnel not found|Invalid tunnel secret)|Invalid tunnel token|tunnel credentials (file )?(doesn.t exist|are invalid)'
+}
 tunlog() {
 	local l
 	[ -f "$TL" ] && l=$(grep -v precheck "$TL" | grep -i -E '"level":"(error|warn)"|unregist|terminat|retry|fail' | grep -v -E 'ping_group|ICMP proxy|Group ID|config.yml was empty|fetch features|context canceled|ended abruptly' | tail -n 6 | cut -c1-300)
@@ -90,14 +96,14 @@ memavail() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
 # ---------- 状态 ----------
 load() {
 	WAN=ok; NET=ok; DNS=ok; TUN=ok; PANEL=ok; CLASH=ok; CLASH_PID=; TFAIL=0; PFAIL=0; DFAIL=0; CFAIL=0
-	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0
+	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; RSN=0; TGONE=0; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0
 	[ -f "$ST" ] && . "$ST"
 }
 save() {
 	cat > "$ST.tmp" <<EOF
 WAN=$WAN; NET=$NET; DNS=$DNS; TUN=$TUN; PANEL=$PANEL; CLASH=$CLASH; CLASH_PID=$CLASH_PID
 TFAIL=$TFAIL; PFAIL=$PFAIL; DFAIL=$DFAIL; CFAIL=$CFAIL
-WAN_T=$WAN_T; NET_T=$NET_T; DNS_T=$DNS_T; TUN_T=$TUN_T; CLASH_T=$CLASH_T; LAST_RS=$LAST_RS; RS_LIST="$RS_LIST"; HB_T=$HB_T; BOOT_DONE=$BOOT_DONE; MEMW=$MEMW
+WAN_T=$WAN_T; NET_T=$NET_T; DNS_T=$DNS_T; TUN_T=$TUN_T; CLASH_T=$CLASH_T; LAST_RS=$LAST_RS; RSN=$RSN; TGONE=$TGONE; HB_T=$HB_T; BOOT_DONE=$BOOT_DONE; MEMW=$MEMW
 TCAUSE="$TCAUSE"; BT0=$BT0; BEAT_T=$BEAT_T; OOMN=$OOMN; ASW_T=$ASW_T; KERRN=$KERRN; CLUE_T=$CLUE_T
 CHECK_T=$(now); READY=$RDY; TPID=$TP
 EOF
@@ -162,26 +168,35 @@ $(cat /sys/fs/pstore/* 2>/dev/null | tail -n 12 | cut -c1-200)"
 
 restart_tunnel() {
 	local t; t=$(now)
-	# 防止反复重启：3 分钟内最多 1 次，1 小时内最多 8 次
-	RS_LIST=$(for x in $RS_LIST; do [ $(( t - x )) -lt 3600 ] && echo $x; done | tr '\n' ' ')
-	local n; n=$(echo $RS_LIST | wc -w)
-	[ $(( t - LAST_RS )) -lt 180 ] && return
-	if [ "$n" -ge 8 ]; then
-		[ "$n" -eq 8 ] && ev err watchdog "1 小时内已经自动重启隧道 8 次还是连不上，暂停自动重启，请检查网络" "$(tunlog)"
-		RS_LIST="$RS_LIST $t"; LAST_RS=$t; return
+	# 隧道已经被删除（钥匙作废）：重启没用，只提醒一次怎么恢复
+	if tun_gone; then
+		if [ "$TGONE" != 1 ]; then
+			TGONE=1
+			if [ -s "$D/hub.conf" ]; then
+				ev err watchdog "托管网址已被删除：Cloudflare 上找不到这台路由器的隧道，重启隧道也没用" "家里上网和路由器上的设置都不受影响。恢复方法：
+① 联系提供服务的人：如果是 30 天内删的，他可以在管理页一键恢复，恢复后什么都不用做；
+② 已经彻底删除了：找他要一个新的邀请码，手机连家里 Wi-Fi，打开路由器后台「服务 → 终端」，把安装命令再运行一次，加上 --invite 新邀请码（网址会换成新的，设置都保留）。
+$(tunlog)"
+			else
+				ev err watchdog "隧道已被删除：Cloudflare 上找不到这条隧道（或者隧道 token 作废了），重启隧道也没用" "到 Cloudflare Zero Trust 重新建一条隧道，把新的 token 用安装脚本重新填一次。
+$(tunlog)"
+			fi
+		fi
+		return
 	fi
-	LAST_RS=$t; RS_LIST="$RS_LIST $t"
-	if [ "$DRYRUN" = 1 ]; then
-		ev warn watchdog "已自动重启隧道（第 $((n + 1)) 次，测试模式，没有真的重启）" ""
-	elif [ -n "$TP" ]; then
+	# 连续重启逐渐拉长间隔：第一次马上重启，之后隔 3、10、10、30、30 分钟，再往后每小时一次（不再每 3 分钟一直重启）
+	local gap; case "$RSN" in 0|1) gap=180 ;; 2|3) gap=600 ;; 4|5) gap=1800 ;; *) gap=3600 ;; esac
+	[ $(( t - LAST_RS )) -lt $gap ] && return
+	RSN=$((RSN + 1)); LAST_RS=$t
+	# 前 3 次每次记一笔；第 4 次说明「之后改成慢慢重试」；再往后不记（隧道恢复时会记总共断了多久）
+	if [ "$RSN" -le 3 ]; then ev warn watchdog "已自动重启隧道（连续第 $RSN 次）$([ "$DRYRUN" = 1 ] && echo '，测试模式，没有真的重启')" ""
+	elif [ "$RSN" -eq 4 ]; then ev err watchdog "隧道重启了 3 次还是连不上，之后改成每 30 分钟、每小时再试一次" "$(tunlog)"
+	fi
+	if [ "$DRYRUN" != 1 ] && [ -n "$TP" ]; then
 		# 卡死的进程可能不理普通 kill，5 秒后还在就强制结束；procd 会自动重新拉起
 		kill "$TP" 2>/dev/null
 		local i=0; while [ $i -lt 5 ] && kill -0 "$TP" 2>/dev/null; do sleep 1; i=$((i + 1)); done
 		kill -0 "$TP" 2>/dev/null && kill -9 "$TP" 2>/dev/null
-		ev warn watchdog "已自动重启隧道（1 小时内第 $((n + 1)) 次）" ""
-	else
-		/etc/init.d/claude-mcp start >/dev/null 2>&1
-		ev warn watchdog "隧道程序没在运行，已重新启动（1 小时内第 $((n + 1)) 次）" ""
 	fi
 }
 
@@ -230,8 +245,8 @@ check() {
 	# 隧道
 	TP=$(tpid); RDY=$(ready)
 	if [ -n "$TP" ] && [ "${RDY:-0}" -gt 0 ] 2>/dev/null; then
-		if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 Claude 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE" "$TUN_T" "$t"; TUN=ok; fi
-		TFAIL=0; TCAUSE=
+		if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 Claude 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE$([ "$RSN" -gt 0 ] && echo "，期间自动重启了 $RSN 次隧道")" "$TUN_T" "$t"; TUN=ok; fi
+		TFAIL=0; TCAUSE=; RSN=0; TGONE=0
 	else
 		TFAIL=$((TFAIL + 1))
 		local cause det

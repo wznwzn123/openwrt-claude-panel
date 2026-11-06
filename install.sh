@@ -176,6 +176,18 @@ ok "密钥已就绪"
 
 # ---------- 托管版：用邀请码开通专属网址（隧道、子域名、云端钥匙都由托管服务自动分配） ----------
 if [ -n "$HUB" ]; then
+	# 已经开通过：问一下托管服务这个网址还在不在（被提供服务的人彻底删除了，就要用新邀请码重新开通）
+	if [ -s $D/hub.conf ] && grep -q '^PKEY=' $D/cloud.conf 2>/dev/null; then
+		SUB0=$(sed -n 's/^SUB=//p' $D/hub.conf); RK0=$(sed -n 's/^RKEY=//p' $D/cloud.conf)
+		R0=$(curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB0\",\"rkey\":\"$RK0\"}" "$HUB/api/dev/info" 2>/dev/null || true)
+		case "$R0" in
+			*钥匙不对*|*没有这台路由器*)
+				warn "这台路由器原来的托管网址（$SUB0）已经被删除了，要用新的邀请码重新开通（路由器上的设置都会保留，网址会换成新的）"
+				# 一键更新这类不问问题、又没给邀请码的：先什么都不动，免得删了开通信息又开通不了
+				if [ -n "$INV" ] || [ "$YES" != 1 ]; then rm -f $D/hub.conf
+				else warn "这次没有邀请码，先保留原来的设置。拿到新邀请码后在这个目录运行：sh install.sh --invite 新邀请码"; fi ;;
+		esac
+	fi
 	if [ -s $D/hub.conf ] && grep -q '^PKEY=' $D/cloud.conf 2>/dev/null; then
 		ok "已经开通过托管服务，保留现在的网址"
 	else

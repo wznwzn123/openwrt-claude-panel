@@ -1,0 +1,42 @@
+# 核对续期申请：审核通过的，到期时间有没有真的续上、续的天数跟申请人想要的对不对得上（只读，不改任何东西）
+# 仓库是公开的，运行结果谁都能看：邮箱、路由器编号都打码，不显示相关账号和备注原文
+name: 核对续期申请
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      HUB: ${{ vars.HUB_URL }}
+      AK: ${{ secrets.HUB_ADMIN_KEY }}
+    steps:
+      - name: 核对
+        run: |
+          [ -n "$HUB" ] && [ -n "$AK" ] || { echo "::error::没有设置 HUB_URL 或 HUB_ADMIN_KEY"; exit 1; }
+          curl -sS -m 30 -H "Authorization: Bearer $AK" "$HUB/api/admin/applications" > ap.json
+          curl -sS -m 30 -H "Authorization: Bearer $AK" "$HUB/api/admin/devices" > dv.json
+          node - <<'EOF'
+          const fs = require('fs');
+          const ap = JSON.parse(fs.readFileSync('ap.json', 'utf8')).list || [], dv = JSON.parse(fs.readFileSync('dv.json', 'utf8')).list || [];
+          const day = (t) => t ? new Date(t + 8 * 3600e3).toISOString().slice(0, 10) : '不限期';
+          const me = (e) => String(e || '').replace(/^(.{2})[^@]*/, '$1***');
+          const ms = (s) => String(s || '').slice(0, 3) + '***';
+          // 备注里想要多少天（只取这个数，不显示备注原文）
+          const want = (n) => { const t = String(n || '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); let m;
+            if ((m = /(\d+)\s*天/.exec(t))) return +m[1]; if ((m = /(\d+)\s*个?月/.exec(t))) return +m[1] * 30; if (/半年/.test(t)) return 180; if ((m = /(\d+)\s*年/.exec(t))) return +m[1] * 365; const x = /\d+/.exec(t); return x && +x[0] <= 3650 ? +x[0] : 0; };
+          const rows = ap.filter((a) => a.logged && a.status === 'ok').slice(0, 30);
+          const lines = [];
+          for (const a of rows) {
+            const d = dv.find((x) => x.sub === a.sub);
+            const w = want(a.note);
+            const got = d && a.newExp ? (d.exp >= a.newExp - 60e3 ? '已续上' : '没续上！') : d ? '（旧记录没有新到期时间）' : '路由器已经不在了';
+            const mismatch = w && a.days !== w ? `  ⚠️ 申请想要 ${w} 天，实际续了 ${a.days} 天` : '';
+            lines.push(`${day(a.decided)} 审核 · ${me(a.email)} · 路由器 ${ms(a.sub)} · 续了 ${a.days} 天 · 申请时到期 ${day(a.exp)} → 审核后到期 ${day(a.newExp)} · 现在到期 ${d ? day(d.exp) : '—'} · ${got}${mismatch}`);
+          }
+          const pend = ap.filter((a) => !a.logged && a.status === 'pending').length;
+          console.log(lines.length ? lines.join('\n') : '还没有审核通过的申请');
+          console.log(`待审核：${pend} 份`);
+          for (const l of lines) if (/没续上|⚠️/.test(l)) console.log('::warning::' + l);
+          EOF

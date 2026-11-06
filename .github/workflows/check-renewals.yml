@@ -34,7 +34,14 @@ jobs:
             const got = d && a.newExp ? (d.exp >= a.newExp - 60e3 ? '已续上' : '没续上！') : d ? '（旧记录没有新到期时间）' : '路由器已经不在了';
             const mismatch = w && a.days !== w ? `  ⚠️ 申请想要 ${w} 天，实际续了 ${a.days} 天` : '';
             lines.push(`${day(a.decided)} 审核 · ${me(a.email)} · 路由器 ${ms(a.sub)} · 续了 ${a.days} 天 · 申请时到期 ${day(a.exp)} → 审核后到期 ${day(a.newExp)} · 现在到期 ${d ? day(d.exp) : '—'} · ${got}${mismatch}`);
+            // 路由器不在了：看申请人账号现在绑着哪些路由器（可能重装换了新编号）
+            if (!d) {
+              const now = dv.filter((x) => (x.users || []).includes(a.uid));
+              lines.push(now.length ? now.map((x) => `    申请人现在的路由器 ${ms(x.sub)}：开通于 ${day(x.created)} · 到期 ${day(x.exp)}${x.off ? ' · 已停用(' + (x.offWhy || '管理员') + ')' : ''}`).join('\n') : '    申请人账号现在没有绑定任何路由器');
+            }
           }
+          const since = Date.now() - 7 * 864e5;
+          console.log('最近 7 天新开通的路由器：' + (dv.filter((x) => x.created > since).map((x) => `${ms(x.sub)}(${day(x.created)}，绑定 ${(x.users || []).length} 个账号，到期 ${day(x.exp)})`).join('、') || '没有'));
           const pend = ap.filter((a) => !a.logged && a.status === 'pending').length;
           console.log(lines.length ? lines.join('\n') : '还没有审核通过的申请');
           console.log(`待审核：${pend} 份`);

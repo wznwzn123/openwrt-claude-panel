@@ -23,8 +23,10 @@ for t in iptables ip6tables; do
 	while $t -t mangle -D PREROUTING -j CMCP_PAUSE 2>/dev/null; do :; done
 	$t -t mangle -F CMCP_PAUSE 2>/dev/null; $t -t mangle -X CMCP_PAUSE 2>/dev/null
 done
+# 隧道直连的设置（dnsmasq、OpenClash 局域网名单里加的那一行）删掉
+[ -x /usr/sbin/cmcp-tunbypass ] && /usr/sbin/cmcp-tunbypass remove
 sed -i '/\/usr\/sbin\/cmcp-/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
-rm -f /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog
+rm -f /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog
 rm -rf /usr/share/ucode/cmcp /www-claude-mcp
 rm -f /etc/hotplug.d/ntp/90-cmcp-synced
 sec=$(uci -q show rpcd | sed -n "s/^rpcd\.\(@login\[[0-9]*\]\)\.username='cmcp'$/\1/p" | head -n1)

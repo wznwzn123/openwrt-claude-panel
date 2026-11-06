@@ -97,6 +97,8 @@ memavail() { [ -n "$FAKE_MEM" ] && { echo "$FAKE_MEM"; return; }; awk '/MemAvail
 # 不想要自动重启 OpenClash：touch /etc/claude-mcp/memguard.off（还会清缓存和提醒）
 MEM_LOW=${MEM_LOW:-30}
 drop_caches() { [ "$DRYRUN" = 1 ] && return; sync; echo 3 > /proc/sys/vm/drop_caches 2>/dev/null; echo 1 > /proc/sys/vm/compact_memory 2>/dev/null; }
+tb_on() { [ -n "$FAKE_TB" ] && { [ "$FAKE_TB" = 1 ]; return; }; [ -x /usr/sbin/cmcp-tunbypass ] && [ "$(/usr/sbin/cmcp-tunbypass status)" = 已开启 ]; }
+tb_off() { [ -n "$FAKE_TB" ] && { FAKE_TB=0; return; }; [ "$DRYRUN" = 1 ] || /usr/sbin/cmcp-tunbypass off "自动：直连连不上" >/dev/null 2>&1; }
 memtop() { top -bn1 2>/dev/null | sed -n '5,10p' | cut -c1-110; }
 mem_guard() {
 	local m=$1 t=$2 m2 day
@@ -129,7 +131,7 @@ $(memtop)"
 # ---------- 状态 ----------
 load() {
 	WAN=ok; NET=ok; DNS=ok; TUN=ok; PANEL=ok; CLASH=ok; CLASH_PID=; TFAIL=0; PFAIL=0; DFAIL=0; CFAIL=0
-	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; RSN=0; TGONE=0; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0; MLOW=0; MD_T=0; MDL_T=0; MG_T=0; MG_D=; MGN=0
+	WAN_T=0; NET_T=0; DNS_T=0; TUN_T=0; CLASH_T=0; LAST_RS=0; RS_LIST=; RSN=0; TGONE=0; HB_T=0; BOOT_DONE=0; MEMW=0; TCAUSE=; BT0=; BEAT_T=0; OOMN=; ASW_T=0; KERRN=; CLUE_T=0; MLOW=0; MD_T=0; MDL_T=0; MG_T=0; MG_D=; MGN=0; TB_T=0
 	[ -f "$ST" ] && . "$ST"
 }
 save() {
@@ -138,7 +140,7 @@ WAN=$WAN; NET=$NET; DNS=$DNS; TUN=$TUN; PANEL=$PANEL; CLASH=$CLASH; CLASH_PID=$C
 TFAIL=$TFAIL; PFAIL=$PFAIL; DFAIL=$DFAIL; CFAIL=$CFAIL
 WAN_T=$WAN_T; NET_T=$NET_T; DNS_T=$DNS_T; TUN_T=$TUN_T; CLASH_T=$CLASH_T; LAST_RS=$LAST_RS; RSN=$RSN; TGONE=$TGONE; HB_T=$HB_T; BOOT_DONE=$BOOT_DONE; MEMW=$MEMW
 TCAUSE="$TCAUSE"; BT0=$BT0; BEAT_T=$BEAT_T; OOMN=$OOMN; ASW_T=$ASW_T; KERRN=$KERRN; CLUE_T=$CLUE_T
-MLOW=$MLOW; MD_T=$MD_T; MDL_T=$MDL_T; MG_T=$MG_T; MG_D=$MG_D; MGN=$MGN
+MLOW=$MLOW; MD_T=$MD_T; MDL_T=$MDL_T; MG_T=$MG_T; MG_D=$MG_D; MGN=$MGN; TB_T=$TB_T
 CHECK_T=$(now); READY=$RDY; TPID=$TP
 EOF
 	mv "$ST.tmp" "$ST"
@@ -296,6 +298,13 @@ check() {
 			ev err tunnel "隧道断开：$cause（这段时间面板和 Claude 都连不上路由器）" "$det"
 		fi
 		[ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TCAUSE" != "$cause" ] && TCAUSE="$TCAUSE → $cause"
+		# 直连 Cloudflare 断了 15 分钟还连不上（外网是通的、隧道也没被删）：可能直连被挡了，改回走 OpenClash 代理
+		if [ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TGONE" != 1 ] && [ $(( t - TUN_T )) -ge 900 ] && tb_on; then
+			tb_off
+			ev warn tunnel "隧道直连 Cloudflare 一直连不上，已改回走 OpenClash 代理" "直连断了 $(mins $TUN_T $t)，可能是网络屏蔽了直连。一天后会自动再试一次直连；想一直走代理：cmcp-tunbypass off
+$(tunlog)"
+			LAST_RS=0; RSN=0
+		fi
 		# 外网是通的才重启隧道，断网时重启没用
 		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && restart_tunnel
 	fi
@@ -356,6 +365,11 @@ check() {
 		[ "$NET" = ok ] && [ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-autosw ] && ( /usr/sbin/cmcp-autosw >/dev/null 2>&1 & )
 		# 每台设备的流量统计 + 新设备连上时提醒
 		[ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-traffic ] && ( /usr/sbin/cmcp-traffic >/dev/null 2>&1 & )
+	fi
+	# 隧道直连 Cloudflare（不经过 OpenClash）：路由器重启后 /tmp 里的设置没了就补回来；自动关掉的过一天再试
+	if [ $(( t - TB_T )) -ge 300 ] && [ "$DRYRUN" != 1 ] && [ -x /usr/sbin/cmcp-tunbypass ]; then
+		TB_T=$t
+		case "$(/usr/sbin/cmcp-tunbypass check 2>/dev/null)" in *retry*) ev info tunnel "重新试一次隧道直连 Cloudflare（不经过 OpenClash）" "" ;; esac
 	fi
 	# 暂停上网：规则被防火墙重载冲掉了就补回来、到期自动恢复、每天定时断网开始时断开现有连接（用过这个功能才检查）
 	[ "$DRYRUN" != 1 ] && [ -f "$D/pause.json" ] && [ -x /usr/sbin/cmcp-pause ] && /usr/sbin/cmcp-pause check >/dev/null 2>&1

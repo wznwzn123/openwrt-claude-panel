@@ -1,0 +1,79 @@
+#!/bin/sh
+# 隧道直连：cloudflared 连 Cloudflare 的流量不经过 OpenClash。
+# 不这样的话，隧道走的是 OpenClash 的假 IP（198.18.x），OpenClash 一重启、节点一卡，面板和 Claude 就跟着断。
+# 做法（都不用重启 OpenClash，不断网）：
+#   1. dnsmasq 把 argotunnel.com / cftunnel.com 交给国内 DNS 解析，拿到真实 IP（不再是假 IP），
+#      解析出来的 IP 顺手加进 OpenClash 的 localnetwork 名单（这个名单里的地址 OpenClash 不管，直接连）
+#   2. Cloudflare 隧道的地址段 198.41.192.0/20 写进 OpenClash 的「局域网地址」名单，OpenClash 重启后也照样直连
+# 用法：cmcp-tunbypass apply | check | off [原因] | on | status
+#   check：看门狗定时调用，路由器重启后 /tmp 里的设置没了就补回来
+#   off：关掉（看门狗发现直连连不上时自动关，改回走代理）；on：重新打开
+# 测试用环境变量：TB_OC（OpenClash 目录）、TB_DNSDIR（dnsmasq 配置目录）、TB_DRY=1（不重启 dnsmasq、不改 ipset）
+
+D=${WD_DIR:-/etc/claude-mcp}
+OC=${TB_OC:-/etc/openclash}
+LN=$OC/custom/openclash_custom_localnetwork_ipv4.list
+NET=198.41.192.0/20
+TAG='# [cmcp-tunnel] 面板隧道直连，卸载面板时自动删除'
+OFF=$D/tunbypass.off
+
+dnsdir() {
+	[ -n "$TB_DNSDIR" ] && { echo "$TB_DNSDIR"; return; }
+	local d
+	d=$(awk -F= '/^conf-dir=/{print $2; exit}' /var/etc/dnsmasq.conf.* /tmp/etc/dnsmasq.conf.* 2>/dev/null | head -n1)
+	echo "${d:-/tmp/dnsmasq.d}" | cut -d, -f1
+}
+conf() {
+	local s
+	for s in argotunnel.com cftunnel.com; do
+		echo "server=/$s/223.5.5.5"
+		echo "server=/$s/119.29.29.29"
+		echo "ipset=/$s/localnetwork"
+	done
+}
+has_oc() { [ -x /etc/init.d/openclash ] || [ -n "$TB_OC" ]; }
+
+apply() {
+	has_oc || return 0
+	[ -f "$OFF" ] && return 0
+	local f c=0
+	# 1 OpenClash 的局域网名单（永久，OpenClash 每次启动都会读）
+	if [ -d "$OC/custom" ] && ! grep -q "^$NET" "$LN" 2>/dev/null; then
+		printf '%s\n%s\n' "$TAG" "$NET" >> "$LN"; c=1
+	fi
+	[ "$TB_DRY" = 1 ] || ipset -q add localnetwork $NET 2>/dev/null
+	# 2 dnsmasq（在 /tmp 里，重启路由器就没了，看门狗会补）
+	f=$(dnsdir)/cmcp-tunnel.conf
+	mkdir -p "${f%/*}"
+	if [ "$(cat "$f" 2>/dev/null)" != "$(conf)" ]; then
+		conf > "$f"; c=1
+		[ "$TB_DRY" = 1 ] || /etc/init.d/dnsmasq restart >/dev/null 2>&1
+	fi
+	[ $c = 1 ] && echo changed
+	return 0
+}
+remove() {
+	local f
+	f=$(dnsdir)/cmcp-tunnel.conf
+	if [ -f "$f" ]; then rm -f "$f"; [ "$TB_DRY" = 1 ] || /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
+	[ -f "$LN" ] && sed -i "\#^$NET\$#d; \#^\# \[cmcp-tunnel\]#d" "$LN"
+	[ "$TB_DRY" = 1 ] || ipset -q del localnetwork $NET 2>/dev/null
+	return 0
+}
+
+case "$1" in
+	apply) apply ;;
+	check)
+		# 自动关掉的（直连连不上），过一天再试一次
+		if [ -f "$OFF" ] && grep -q '^自动' "$OFF" && [ $(( ${TB_NOW:-$(date +%s)} - $(cut -d' ' -f2 "$OFF") )) -gt 86400 ]; then rm -f "$OFF"; echo retry; fi
+		apply ;;
+	off) mkdir -p "$D"; echo "${2:-手动关闭} ${TB_NOW:-$(date +%s)}" > "$OFF"; remove ;;
+	on) rm -f "$OFF"; apply ;;
+	remove) remove ;;
+	status)
+		if ! has_oc; then echo "没装 OpenClash，不需要"
+		elif [ -f "$OFF" ]; then echo "已关闭：$(cut -d' ' -f1 "$OFF")"
+		elif [ -f "$(dnsdir)/cmcp-tunnel.conf" ] && grep -q "^$NET" "$LN" 2>/dev/null; then echo "已开启"
+		else echo "还没生效"; fi ;;
+	*) echo "用法：$0 apply | check | off [原因] | on | status"; exit 1 ;;
+esac

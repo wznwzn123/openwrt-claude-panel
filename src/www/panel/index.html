@@ -3220,6 +3220,42 @@ function renderDaily() {
 		${[...items].sort((a, b) => order[a.lvl] - order[b.lvl]).map((i) => `<div class="dyrow"><i class="wdot ${esc(i.lvl)}"></i><div>${esc(i.title)}${i.detail ? `<small>${esc(i.detail)}</small>` : ''}</div></div>`).join('')}
 		<p class="muted" style="font-size:12.5px;margin:8px 0 0">每天 9:00 自动体检，结果推送到手机。</p>${btn}`;
 }
+/* ---------- 自动处理的开关（看门狗自动做的事，可以关掉） ---------- */
+const AU = { d: null, at: 0 };
+try { AU.d = JSON.parse(store.get('rp_auto') || 'null'); } catch (e) {}
+function loadAuto(b) {
+	if (!b && AU.at && Date.now() - AU.at < 60000) return Promise.resolve();
+	AU.at = Date.now();
+	return P('auto', b || {}, 20000).then((d) => { AU.d = d; store.set('rp_auto', JSON.stringify(d)); renderAuto(); });
+}
+function renderAuto() {
+	const el = $('auCard'), pl = $('auPill'); if (!el) return;
+	const d = AU.d;
+	if (!d) { pl.textContent = '—'; pl.className = 'pill'; return; }
+	const row = (k, on, title, desc, dis) => `<label class="kv aswon" data-au="${k}"><span><b>${title}</b><span class="muted">${desc}</span></span><span class="sw"><input type="checkbox" ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}><i></i></span></label>`;
+	const day = (t) => { const x = new Date(t * 1000); return (x.getMonth() + 1) + ' 月 ' + x.getDate() + ' 日 ' + hm(t * 1000); };
+	let html = '';
+	if (!d.oc) html = '<div class="muted" style="font-size:13.5px;line-height:1.6">这台路由器没装 OpenClash，下面两项用不上。内存快不够时看门狗照样会自动清理缓存。</div>';
+	else {
+		html += row('memguard', d.memguard, '内存不够时自动重启 OpenClash', '内存快用完时先清理缓存；还不够就重启一次 OpenClash 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
+		html += row('tunbypass', d.tb.on, '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过 OpenClash，OpenClash 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理');
+		if (!d.tb.on && d.tb.auto) html += `<div class="notice w" style="margin-top:8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>`;
+		else if (!d.tb.on && d.tb.status === '还没生效') html += '<div class="notice w" style="margin-top:8px">隧道直连还没生效，打开开关试一次。</div>';
+	}
+	html += '<p class="muted" style="font-size:12.5px;margin:8px 0 0">隧道断了自动重启、面板服务卡住自动重启、面板线路自动选能打开的那条，这几项一直开着。节点挂了自动换在「OpenClash」页面里设置。</p>';
+	el.innerHTML = html;
+	const n = (d.oc ? [d.memguard, d.tb.on] : []).filter(Boolean).length;
+	pl.textContent = !d.oc ? '没装 OpenClash' : n === 2 ? '全部开启' : n ? '部分开启' : '已关闭';
+	pl.className = 'pill ' + (d.oc && n === 2 ? 'good' : '');
+}
+function setAuto(lb) {
+	const k = lb.dataset.au, inp = lb.querySelector('input'), on = inp.checked;
+	const names = { memguard: '内存不够时自动重启 OpenClash', tunbypass: '隧道直连 Cloudflare' };
+	busy(null, async () => {
+		try { await loadAuto({ set: true, [k]: on }); toast((on ? '已开启：' : '已关闭：') + names[k]); }
+		catch (e) { inp.checked = !on; throw e; }
+	});
+}
 function renderWd(err) {
 	const box = $('wdBody'), d = wdData, st = (d && d.state) || {};
 	const off = err instanceof OfflineError;
@@ -3270,6 +3306,7 @@ function renderWd(err) {
 		</section>`;
 	}
 	html += `<div class="sectitle"><b>每日体检</b><span class="pill" id="dyPill">—</span></div><section class="card" id="dyCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
+	html += `<div class="sectitle"><b>自动处理</b><span class="pill" id="auPill">—</span></div><section class="card" id="auCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
 	html += noCloud() ? `<div class="sectitle"><b>手机通知</b><span class="pill">未启用</span></div><section class="card"><div class="muted" style="font-size:13px">手机推送、微信推送、云端备份和断电/断网判断需要 Cloudflare 云端（完整版）。装好云端后在路由器上重新运行安装脚本选完整版即可。</div></section>`
 		: `<div class="sectitle"><b>手机通知</b><span class="pill" id="pushPill">—</span></div><section class="card" id="pushCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
 	html += `<div class="sectitle"><b>最近 7 天</b></div><div class="wdsum">${sum.map(([k, n]) => `<span class="pill ${n ? (k === '自动修复' ? 'blue' : 'red') : ''}">${k} ${n} 次</span>`).join('')}</div>`;
@@ -3283,7 +3320,10 @@ function renderWd(err) {
 	});
 	box.innerHTML = html;
 	renderDaily(); if (!off) loadDaily();
+	renderAuto(); if (!off) loadAuto();
 	box.onclick = async (ev) => {
+		const au = ev.target.closest('[data-au]');
+		if (au && ev.target.matches('input')) return setAuto(au);
 		const dr = ev.target.closest('[data-dyrun]');
 		if (dr) return busy(dr, async () => { DY.d = await P('daily', { run: 1 }, 90000); DY.at = Date.now(); store.set('rp_daily', JSON.stringify(DY.d)); renderDaily(); toast('体检完成：' + (DY.d.summary || '')); }, '体检中');
 		const c = ev.target.closest('[data-wdcheck]');

@@ -2648,6 +2648,26 @@ P.wd_clear = function() {
 	return { ok: true };
 };
 
+/* ---------- 自动处理的开关：内存不够时自动重启 OpenClash、隧道直连 Cloudflare ---------- */
+P.auto = function(a) {
+	let D = '/etc/claude-mcp', oc = !!stat('/etc/init.d/openclash'), mg = D + '/memguard.off';
+	if (a?.set) {
+		if (a.memguard != null) {
+			if (a.memguard) sh('rm -f ' + mg);
+			else writefile(mg, sprintf('%d 面板关闭\n', time()));
+		}
+		if (a.tunbypass != null && oc) {
+			let r = sh('/usr/sbin/cmcp-tunbypass ' + (a.tunbypass ? 'on' : 'off 面板关闭'));
+			if (r.code != 0) die('设置失败：' + trim(r.out));
+		}
+	}
+	let st = oc ? trim(sh('/usr/sbin/cmcp-tunbypass status').out) : '', off = trim(readfile(D + '/tunbypass.off') ?? '');
+	return {
+		oc, memguard: !stat(mg),
+		tb: { on: st == '已开启', auto: !!match(off, /^自动/), at: +(split(off, ' ')[1] ?? 0) || 0, status: st },
+	};
+};
+
 /* ---------- 面板：内嵌 Kwrt 原版页面 / 系统日志 / 进程 ---------- */
 P.luci_key = function() {
 	return { key: trim(readfile('/etc/claude-mcp/luci_key') ?? '') };

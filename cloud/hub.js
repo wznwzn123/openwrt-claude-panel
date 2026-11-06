@@ -24,6 +24,7 @@ const clean = (s, n) => String(s || '').replace(/[^\p{L}\p{N} ._()\-]/gu, '').sl
 const DAY = 86400e3;
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10); // 按北京 / 台北时间显示日期
 export const LIMITS = { perIpHour: 5, allHour: 60, idleDays: 90, pendingMs: 3600e3 };
+export const TRASH_DAYS = 30;  // 管理员删除的路由器在回收站里留多久
 
 /* ---------- Cloudflare API ---------- */
 async function cf(env, method, path, body) {
@@ -181,6 +182,82 @@ export class Hub extends DurableObject {
 		const d = await this.ctx.storage.get('d:' + sub);
 		if (d) { d.seen = t; await this.ctx.storage.put('d:' + sub, d); }
 	}
+	/* ---------- 删除先进回收站：30 天内只是停用（网址打不开），隧道和云端数据都留着，随时一键恢复；30 天后才彻底删除 ---------- */
+	// 受保护：手动标了「保护」，或者绑定在管理员邮箱（ADMIN_EMAIL）的账号上（管理员自己的路由器）
+	async isProtected(d) {
+		if (!d) return false;
+		if (d.protect) return true;
+		const ae = String(this.env.ADMIN_EMAIL || '').trim().toLowerCase();
+		if (!ae) return false;
+		const uid = await this.ctx.storage.get('e:' + ae);
+		return !!uid && (d.users || []).includes(uid);
+	}
+	trash(sub, confirm) { return this.lock(() => this._trash(sub, confirm)); }
+	async _trash(sub, confirm) {
+		const d = await this.ctx.storage.get('d:' + sub);
+		if (!d) return { st: 404, error: '没有这台路由器' };
+		if (String(confirm || '').trim().toLowerCase() !== sub) return { st: 400, error: '要输入这台路由器的编号 ' + sub + ' 才能删除' };
+		if (await this.isProtected(d)) return { st: 403, error: '这是受保护的路由器（你自己的，或者标了「保护」），不能删除。真要删，先取消保护' };
+		if (d.offWhy === 'deleted') return { st: 400, error: '已经在回收站里了' };
+		if (d.state !== 'ok') { await this._remove(sub); return { st: 200, ok: true, purged: true }; }  // 开通到一半的，直接删
+		await this._setOff(sub, true, 'deleted');
+		const d2 = await this.ctx.storage.get('d:' + sub); d2.delAt = Date.now(); await this.ctx.storage.put('d:' + sub, d2);
+		try { await this.watch(sub).push({ title: '托管服务已被停用', body: '专属网址暂时打不开了，家里上网和路由器上的设置都不受影响。' + ymd(d2.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复，恢复后什么都不用做。', tag: 'svc', lvl: 'err' }); } catch (e) {}
+		const mailed = await this.mailOwners(d2, 'trash');
+		return { st: 200, ok: true, purgeAt: d2.delAt + TRASH_DAYS * DAY, mailed };
+	}
+	restore(sub) { return this.lock(() => this._restore(sub)); }
+	async _restore(sub) {
+		const d = await this.ctx.storage.get('d:' + sub);
+		if (!d || d.offWhy !== 'deleted') return { st: 404, error: '回收站里没有这台路由器' };
+		delete d.delAt; await this.ctx.storage.put('d:' + sub, d);
+		// 还在有效期内：马上恢复；已经过期了：恢复成「到期暂停」，续期后自动恢复
+		if (d.exp && d.exp <= Date.now()) { d.offWhy = 'exp'; await this.ctx.storage.put('d:' + sub, d); }
+		else await this._setOff(sub, false);
+		try { await this.watch(sub).push({ title: '✅ 托管服务恢复了', body: '专属网址可以正常打开了，什么都不用做。', tag: 'svc', lvl: 'ok' }); } catch (e) {}
+		const mailed = await this.mailOwners(await this.ctx.storage.get('d:' + sub), 'restore');
+		return { st: 200, ok: true, mailed };
+	}
+	purge(sub, confirm) { return this.lock(() => this._purge(sub, confirm)); }
+	async _purge(sub, confirm) {
+		const d = await this.ctx.storage.get('d:' + sub);
+		if (!d || d.offWhy !== 'deleted') return { st: 400, error: '只能彻底删除回收站里的路由器（先删除，进回收站）' };
+		if (String(confirm || '').trim().toLowerCase() !== sub) return { st: 400, error: '要输入这台路由器的编号 ' + sub + ' 才能彻底删除' };
+		const mailed = await this.mailOwners(d, 'purge');
+		await this._remove(sub);
+		return { st: 200, ok: true, mailed };
+	}
+	async setProtect(sub, on) {
+		const d = await this.ctx.storage.get('d:' + sub);
+		if (!d) return false;
+		if (on) d.protect = true; else delete d.protect;
+		await this.ctx.storage.put('d:' + sub, d);
+		return true;
+	}
+	// 管理页的路由器列表：带上「受保护」「回收站到期时间」
+	async adminDevices() {
+		const list = await this.devices(), out = [];
+		for (const d of list) out.push({ ...d, prot: await this.isProtected(d), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		return out;
+	}
+	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
+	async mailOwners(d, kind) {
+		if (!d || !this.env.RESEND_API_KEY) return false;
+		const e = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+		const name = e(d.name || d.sub), site = 'https://' + this.env.BASE_DOMAIN;
+		const cmd = 'cd /tmp && wget -O p.tar.gz ' + site + '/dl/openwrt-claude-panel-hosted-ai.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh --invite 新邀请码';
+		const T = {
+			trash: ['路由器「' + (d.name || d.sub) + '」的托管服务已被停用', `<p>你好，</p><p>你的路由器「${name}」的托管服务已被提供服务的人停用：专属网址暂时打不开，推送和云端备份也暂停了。<b>家里上网和路由器上的设置都不受影响。</b></p><p><b>${ymd((d.delAt || Date.now()) + TRASH_DAYS * DAY)} 前</b>联系提供服务的人可以恢复，恢复以后什么都不用做，原来的网址、登录过的手机都照常能用。</p><p>超过这个日期没恢复的话会被彻底删除，到时候可以用新的邀请码重新开通（设置会保留）。</p>`],
+			restore: ['路由器「' + (d.name || d.sub) + '」的托管服务恢复了', `<p>你好，</p><p>你的路由器「${name}」的托管服务已经恢复${d.off ? '（不过它已经到期了，要续期以后才能用：在官网账号页这台路由器下面「申请续期」）' : '，专属网址可以正常打开了，什么都不用做'}。</p><p>官网：<a href="${site}/app">${site}/app</a></p>`],
+			purge: ['路由器「' + (d.name || d.sub) + '」的托管服务已被删除', `<p>你好，</p><p>你的路由器「${name}」的托管服务已被删除，原来的专属网址不能再用了。<b>家里上网和路由器上的设置都不受影响。</b></p><p><b>想继续用，这样重新开通（设置都会保留）：</b></p><ol><li>找提供服务的人要一个新的邀请码</li><li>手机连上家里 Wi-Fi，打开路由器后台「服务 → 终端」，用 root 登录</li><li>粘贴下面的命令，把最后的「新邀请码」换成你拿到的邀请码，回车：<br><code style="word-break:break-all">${e(cmd)}</code><br>（纯面板版把命令里的 hosted-ai 改成 hosted-noai）</li><li>装好会显示新的网址和配对码：在官网账号页「添加路由器」输入配对码，再用新网址打开面板</li></ol><p>详细步骤：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md">安装教程 · 托管网址被删除了怎么办</a></p>`],
+		}[kind];
+		let sent = false;
+		for (const uid of d.users || []) {
+			const u = await this.ctx.storage.get('u:' + uid);
+			if (u && u.email) { try { if (await sendMail(this.env, u.email, T[0], T[1])) sent = true; } catch (x) {} }
+		}
+		return sent;
+	}
 	// 封禁：删掉子域名（网址立刻打不开）、云端功能拒绝；解封：重新加回子域名
 	setOff(sub, off) { return this.lock(() => this._setOff(sub, off)); }
 	// why：'exp' = 到期自动暂停（续期后自动恢复）；不写 = 管理员封禁（续期也不会解封）
@@ -189,6 +266,7 @@ export class Hub extends DurableObject {
 		if (!d || d.state !== 'ok') return false;
 		if (off && !d.off) { await dnsDel(this.env, d.dns); d.dns = null; d.off = Date.now(); d.offWhy = why || 'admin'; }
 		else if (off && d.off && !why) d.offWhy = 'admin'; // 到期暂停的，管理员又封禁了：续期也不解封
+		else if (off && d.off && why === 'deleted') d.offWhy = 'deleted';
 		if (!off && d.off) { d.dns = await dnsAdd(this.env, sub, d.tunnel); delete d.off; delete d.offWhy; }
 		await this.watch(sub).setOff(!!off);
 		await this.ctx.storage.put('d:' + sub, d);
@@ -283,7 +361,7 @@ export class Hub extends DurableObject {
 			if (!d || d.state !== 'ok') continue;
 			let b = { last: 0, state: 'wait', ver: '' };
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
-			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), apply: await this.applyBrief(x.sub, uid) });
+			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY };
@@ -581,6 +659,11 @@ export class Hub extends DurableObject {
 				out.push(d.sub);
 			} catch (e) {}
 		}
+		// 回收站里满 30 天的：彻底删除（先发邮件告诉绑定的账号怎么重新开通）
+		for (const d of await this.devices()) {
+			if (d.offWhy !== 'deleted' || !d.delAt || now - d.delAt < TRASH_DAYS * DAY) continue;
+			try { await this.mailOwners(d, 'purge'); await this._remove(d.sub); out.push(d.sub); } catch (e) {}
+		}
 		// 试用 / 续期到期：提前 3 天提醒一次；到期暂停（网址打不开、云端功能停）；暂停超过 30 天删掉，腾出名额
 		for (const d of await this.devices()) {
 			if (d.state !== 'ok' || !d.exp) continue;
@@ -593,6 +676,7 @@ export class Hub extends DurableObject {
 					await this._setOff(d.sub, true, 'exp');
 					await w.push({ title: '⚠️ 托管服务已到期，已暂停', body: '专属网址打不开了，推送和云端备份也停了；家里上网不受影响，路由器上的设置都还在。找提供服务的人要续期码，在官网账号页这台路由器下面点「续期」，输入后马上恢复。', tag: 'svc', lvl: 'err', force: true });
 				} else if (d.off && d.offWhy === 'exp' && now - d.exp > 30 * DAY) {
+					await this.mailOwners(d, 'purge');
 					await this._remove(d.sub); out.push(d.sub);
 				}
 			} catch (e) {}
@@ -628,11 +712,15 @@ export async function hubFetch(req, env) {
 		const k = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
 		if (!env.ADMIN_KEY || env.ADMIN_KEY.length < 16 || !safeEq(k, env.ADMIN_KEY)) return J({ error: '需要管理员密钥' }, 401);
 		const a = p.slice('/api/admin/'.length).split('/');
-		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.devices(), ...(await H.stats()) });
+		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
 		if (a[0] === 'devices' && SUB_RE.test(a[1] || '') && req.method === 'POST') {
 			const op = a[2];
 			if (op === 'off' || op === 'on') return J({ ok: await H.setOff(a[1], op === 'off') });
-			if (op === 'delete') return J({ ok: await H.remove(a[1]) });
+			// 删除：先进回收站（要输入编号确认、受保护的不能删）；恢复；彻底删除（只能删回收站里的，也要输入编号）
+			if (op === 'delete') { const r = await H.trash(a[1], (await body()).confirm); return J(r.st === 200 ? r : { error: r.error }, r.st); }
+			if (op === 'restore') { const r = await H.restore(a[1]); return J(r.st === 200 ? r : { error: r.error }, r.st); }
+			if (op === 'purge') { const r = await H.purge(a[1], (await body()).confirm); return J(r.st === 200 ? r : { error: r.error }, r.st); }
+			if (op === 'protect' || op === 'unprotect') return J({ ok: await H.setProtect(a[1], op === 'protect') });
 		}
 		if (a[0] === 'invites' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.invites() });
 		if (a[0] === 'invites' && !a[1] && req.method === 'POST') return J({ ok: true, invite: await H.addInvite(await body()) });

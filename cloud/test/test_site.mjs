@@ -150,6 +150,22 @@ for (const dark of [false, true]) {
 	ok('管理页：封禁', /已封禁/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
 	await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="on"]'); await W(800);
 	ok('管理页：解封', !/已封禁/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
+	if (!dark) {
+		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="delete"]'); await W(400);
+		ok('管理页：点「删除」弹出确认框，说明先进回收站、30 天内能恢复；不输编号不能点', await page.isVisible('.dlg') && /回收站/.test(await page.textContent('.dlg')) && /30 天内可以一键恢复/.test(await page.textContent('.dlg')) && await page.isDisabled('.dlg [data-go]'));
+		await page.fill('.dlg [data-in]', 'wrongsub'); await W(100);
+		ok('管理页：编号输错，还是不能点', await page.isDisabled('.dlg [data-go]'));
+		await page.fill('.dlg [data-in]', R2.sub); await W(100);
+		await shot('admin-delete');
+		await page.click('.dlg [data-go]'); await W(1200);
+		ok('管理页：删除后进「回收站」，显示彻底删除日期，有「恢复」「彻底删除」', /回收站（1 台）/.test(await page.textContent('#devs')) && /彻底删除/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')) && !!(await page.$('#devs [data-sub="' + R2.sub + '"] [data-op="restore"]')));
+		await shot('admin-trash');
+		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="restore"]'); await W(1200);
+		ok('管理页：点「恢复」，回到正常列表', !/回收站/.test(await page.textContent('#devs')) && !!(await page.$('#devs [data-sub="' + R2.sub + '"] [data-op="delete"]')));
+		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="protect"]'); await W(1000);
+		ok('管理页：点「保护」后显示「受保护」，删除按钮没了', /受保护/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')) && !(await page.$('#devs [data-sub="' + R2.sub + '"] [data-op="delete"]')));
+		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="unprotect"]'); await W(1000);
+	}
 	await page.reload(); await W(800);
 	ok('管理页：刷新后还在（密钥存在这个标签页）', await page.isVisible('#vMain'));
 	if (!dark) {

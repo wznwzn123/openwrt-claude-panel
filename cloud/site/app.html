@@ -159,7 +159,7 @@ function render(me) {
 		const left = d.exp ? Math.ceil((d.exp - Date.now()) / 86400e3) : null;
 		const ap = d.apply, apTxt = !ap ? '' : ap.status === 'pending' ? `<br>📝 续期申请已提交（${esc(ymd(ap.at))}），等待审核`
 			: ap.status === 'no' ? `<br>续期申请没有通过（${esc(ymd(ap.decided))}）${ap.reason ? '：' + esc(ap.reason) : ''}，可以重新申请` : ap.decided && Date.now() - ap.decided < 7 * 86400e3 ? `<br>✅ 续期申请已通过，续了 ${ap.days} 天` : '';
-		const expTxt = !d.exp ? '' : d.expired ? `<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。点下面「申请续期」填表，审核通过后马上恢复；有续期码的点「续期」输入${apTxt}</div>`
+		const expTxt = d.trashed ? `<div class="expline bad">⚠️ 托管服务已被提供服务的人停用，专属网址暂时打不开（家里上网和路由器设置都不受影响）。<b>${esc(ymd(d.trashed))}</b> 前联系他可以恢复，恢复后什么都不用做。</div>` : !d.exp ? '' : d.expired ? `<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。点下面「申请续期」填表，审核通过后马上恢复；有续期码的点「续期」输入${apTxt}</div>`
 			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，可以点「申请续期」' : ''}${apTxt}</div>`;
 		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
 		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(d.ver) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>

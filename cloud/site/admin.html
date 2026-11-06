@@ -77,21 +77,55 @@ $('mailTest').onclick = async () => {
 };
 $('fKey').onsubmit = async (e) => { e.preventDefault(); KEY = e.target.k.value.trim(); try { await load(); try { sessionStorage.setItem('hubkey', KEY); } catch (x) {} } catch (x) { e.target.querySelector('[data-err]').textContent = x.message; } };
 let DEVS = [];
+let TRASH_DAYS = 30;
 function renderDevs() {
 	const q = $('q').value.trim().toLowerCase();
-	const list = DEVS.filter((d) => !q || [d.sub, d.name, d.model].join(' ').toLowerCase().includes(q)).sort((a, b) => (b.seen || 0) - (a.seen || 0));
-	$('devs').innerHTML = list.length ? list.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>${esc(d.name || d.sub)} <span>${esc(d.sub)}</span></b>
-		<span>${d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '⏸ 已到期暂停' : '⛔ 已封禁') : '最后上线 ' + ago(d.seen)}${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span></div>
-		<div class="acts">${d.off ? '<button class="btn sm" data-op="on">解封</button>' : '<button class="btn sm" data-op="off">封禁</button>'}<button class="btn sm danger" data-op="delete">删除</button></div></div>`).join('') : '<p class="muted" style="text-align:center">没有路由器</p>';
+	const hit = (d) => !q || [d.sub, d.name, d.model].join(' ').toLowerCase().includes(q);
+	const live = DEVS.filter((d) => d.offWhy !== 'deleted' && hit(d)).sort((a, b) => (b.seen || 0) - (a.seen || 0));
+	const bin = DEVS.filter((d) => d.offWhy === 'deleted' && hit(d)).sort((a, b) => (a.purgeAt || 0) - (b.purgeAt || 0));
+	const status = (d) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '⏸ 已到期暂停' : '⛔ 已封禁') : '最后上线 ' + ago(d.seen);
+	const prot = (d) => d.prot ? ' <span class="pill" style="background:rgba(52,199,89,.16);color:var(--ok)">🛡 受保护</span>' : '';
+	$('devs').innerHTML = (live.length ? live.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>${esc(d.name || d.sub)} <span>${esc(d.sub)}</span>${prot(d)}</b>
+		<span>${status(d)}${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span></div>
+		<div class="acts">${d.off ? '<button class="btn sm" data-op="on">解封</button>' : '<button class="btn sm" data-op="off">封禁</button>'}${d.protect ? '<button class="btn sm" data-op="unprotect">取消保护</button>' : d.prot ? '' : '<button class="btn sm" data-op="protect">保护</button>'}${d.prot ? '' : '<button class="btn sm danger" data-op="delete">删除</button>'}</div></div>`).join('') : '<p class="muted" style="text-align:center">没有路由器</p>')
+		+ (bin.length ? `<p class="muted" style="margin:16px 0 4px;font-size:13px">回收站（${bin.length} 台）：网址已停用，隧道和数据都还在，随时可以恢复；到期自动彻底删除</p>` + bin.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>🗑 ${esc(d.name || d.sub)} <span>${esc(d.sub)}</span></b>
+		<span>${day(d.delAt)} 删除 · <b style="display:inline;color:var(--danger)">${day(d.purgeAt)} 彻底删除</b>${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'} · ${(d.users || []).length} 个账号</span></div>
+		<div class="acts"><button class="btn sm primary" data-op="restore">恢复</button><button class="btn sm danger" data-op="purge">彻底删除</button></div></div>`).join('') : '');
 }
 $('q').oninput = renderDevs;
+// 删除这种动作：要把编号打一遍才能点
+function confirmType(title, desc, sub, goText) {
+	return new Promise((done) => {
+		const el = document.createElement('div'); el.className = 'dlg';
+		el.innerHTML = `<div class="card"><h3>${esc(title)}</h3><p style="margin:6px 0 10px;font-size:14px;line-height:1.6">${desc}</p>
+			<label class="f">输入编号 <code>${esc(sub)}</code> 确认</label><input class="input" data-in autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(sub)}">
+			<div class="g3" style="margin-top:12px"><button class="btn" data-x>取消</button><button class="btn" style="background:var(--danger);color:#fff" data-go disabled>${esc(goText)}</button></div></div>`;
+		document.body.appendChild(el);
+		const inp = el.querySelector('[data-in]'), go = el.querySelector('[data-go]');
+		inp.oninput = () => { go.disabled = inp.value.trim().toLowerCase() !== sub; };
+		const close = (v) => { el.remove(); done(v); };
+		el.querySelector('[data-x]').onclick = () => close(null);
+		el.onclick = (e) => { if (e.target === el) close(null); };
+		go.onclick = () => close(inp.value.trim().toLowerCase());
+		setTimeout(() => inp.focus(), 50);
+	});
+}
 $('devs').onclick = async (e) => {
 	const b = e.target.closest('[data-op]'); if (!b) return;
-	const sub = b.closest('[data-sub]').dataset.sub, op = b.dataset.op;
-	const msg = { off: '封禁后它的网址立刻打不开，推送和备份也停止。确定封禁 ' + sub + '？', on: '解封 ' + sub + '？', delete: '删除后隧道、网址、云端数据（含备份）全部删掉，不能恢复。确定删除 ' + sub + '？' }[op];
-	if (!confirm(msg)) return;
+	const sub = b.closest('[data-sub]').dataset.sub, op = b.dataset.op, d = DEVS.find((x) => x.sub === sub) || {};
+	let body;
+	if (op === 'delete') {
+		const c = await confirmType('删除「' + (d.name || sub) + '」', `先放进<b>回收站</b>：网址马上停用（家里上网不受影响），隧道和云端数据都留着，<b>${TRASH_DAYS} 天内可以一键恢复</b>，之后自动彻底删除。会发邮件通知绑定的 ${(d.users || []).length} 个账号。`, sub, '放进回收站');
+		if (!c) return; body = { confirm: c };
+	} else if (op === 'purge') {
+		const c = await confirmType('彻底删除「' + (d.name || sub) + '」', '隧道、网址、云端数据（含备份）全部删掉，<b>不能恢复</b>。用户要用新邀请码重新开通（会收到邮件，写着怎么做）。', sub, '彻底删除');
+		if (!c) return; body = { confirm: c };
+	} else {
+		const msg = { off: '封禁后它的网址立刻打不开，推送和备份也停止。确定封禁 ' + sub + '？', on: '解封 ' + sub + '？', restore: '恢复 ' + sub + '？网址马上能用，用户什么都不用做。', protect: '保护 ' + sub + '？受保护的路由器不能删除。', unprotect: '取消保护 ' + sub + '？' }[op];
+		if (!confirm(msg)) return;
+	}
 	b.disabled = true;
-	try { await api('POST', 'devices/' + sub + '/' + op); toast('已完成'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+	try { const r = await api('POST', 'devices/' + sub + '/' + op, body); toast(op === 'delete' ? '已放进回收站，' + day(r.purgeAt) + ' 前可以恢复' + (r.mailed ? '，已发邮件通知' : '') : op === 'restore' ? '已恢复' + (r.mailed ? '，已发邮件通知' : '') : op === 'purge' ? '已彻底删除' + (r.mailed ? '，已发邮件告诉用户怎么重新开通' : '') : '已完成'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
 };
 function renderInv(list) {
 	list.sort((a, b) => b.created - a.created);
@@ -190,7 +224,7 @@ $('cleanBtn').onclick = async () => { if (!confirm('删除所有 90 天没上线
 async function load() {
 	const [d, i, k, ap] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications')]);
 	APS = ap.list;
-	DEVS = d.list; $('sCount').textContent = d.count; $('sMax').textContent = d.max;
+	DEVS = d.list; TRASH_DAYS = d.trashDays || 30; $('sCount').textContent = d.count; $('sMax').textContent = d.max;
 	$('sOn').textContent = d.list.filter((x) => x.seen && Date.now() - x.seen < 6 * 3600e3 + 600e3).length;
 	renderDevs(); renderInv(i.list); renderRen(k.list); renderAps();
 	$('vKey').classList.add('hidden'); $('vMain').classList.remove('hidden'); $('outBtn').classList.remove('hidden');

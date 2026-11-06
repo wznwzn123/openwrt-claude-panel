@@ -80,6 +80,23 @@ delete rel.appver;
 k = await (await get('/api/app/version')).json();
 ok('[App 版本] 老的发布没有 app-version.json：照旧用发布的版本号', k.version === '2.0.3' && k.force === true && k.min === '2.0.0', JSON.stringify(k));
 
+/* ---------- 路由器的版本：跟 App 的版本分开 ---------- */
+rel = { tag_name: 'v2.0.4', published_at: '2026-11-07T00:00:00Z', body: '## 这个版本的更新\n\n- **隧道直连**\n\n## 下载哪个？', assets: [{ name: 'router-panel.apk' }, { name: 'x.tar.gz' }], appver: { version: '1.3.0', body: '## 这个版本的更新\n\n- App 首页', force: true } };
+const getUA = (p, ua) => mod.default.fetch(new Request('https://panel.example' + p, { headers: { 'user-agent': ua } }), env);
+k = await (await get('/api/router/version')).json();
+ok('[路由器版本] /api/router/version：报最新发布的版本 2.0.4（不是 App 的 1.3.0）', k.version === '2.0.4' && k.notes === '• 隧道直连' && k.force === false, JSON.stringify(k));
+k = await (await getUA('/api/app/version', 'curl/8.6.0')).json();
+ok('[路由器版本] 老路由器（curl）问 /api/app/version：回答路由器的版本 2.0.4，能看到更新', k.version === '2.0.4', JSON.stringify(k));
+k = await (await getUA('/api/app/version', 'Mozilla/5.0 (Linux; Android 14; wv) AppleWebKit/537.36')).json();
+ok('[路由器版本] App（安卓浏览器内核）问 /api/app/version：还是 App 的版本 1.3.0', k.version === '1.3.0', JSON.stringify(k));
+rel.body = '## 这个版本的更新\n\n- 安全修复【必须更新】\n\n最低版本：2.0.2';
+k = await (await get('/api/router/version')).json();
+ok('[路由器版本] 发布说明写了【必须更新】/最低版本：路由器版本带上', k.force === true && k.min === '2.0.2', JSON.stringify(k));
+allDown = true; apiDown = true;
+k = await (await get('/api/router/version')).json();
+ok('[路由器版本] GitHub 连不上：用上一次查到的', k.version === '2.0.4', JSON.stringify(k));
+allDown = false; apiDown = false;
+
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

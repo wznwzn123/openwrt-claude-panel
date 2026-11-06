@@ -234,7 +234,7 @@ function codeBox(code, d, fresh) {
 // 最新版本：用来提示「可更新」
 let latest = '';
 const newer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
-const verP = fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j && j.version) latest = j.version; }).catch(() => {});
+const verP = fetch('/api/router/version').then((r) => r.json()).then((j) => { if (j && j.version) latest = j.version; }).catch(() => {});
 async function load() {
 	try {
 		const me = await api('me');

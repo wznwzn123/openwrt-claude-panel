@@ -2579,7 +2579,9 @@ P.update_check = function(a) {
 	if (!c || a?.force || time() - (c.at ?? 0) > 3600) {
 		let hub = match(readfile('/etc/claude-mcp/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
 		let j = null;
-		try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/app/version'))).out); } catch (e) {}
+		try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/router/version'))).out); } catch (e) {}
+		// 自己搭的开通中心如果还是旧版，没有这个地址：退回老地址（curl 去问时回答的是路由器版本）
+		if (type(j) != 'object' || !j.version) { try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/app/version'))).out); } catch (e) {} }
 		if (type(j) == 'object' && j.version) { c = { at: time(), latest: j.version, notes: j.notes ?? '', force: !!j.force, min: j.min ?? '' }; writefile(cf, sprintf('%J', c)); }
 		else if (!c) die('查不到最新版本：连不上官网，稍后再试');
 	}

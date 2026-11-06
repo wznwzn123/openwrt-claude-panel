@@ -735,7 +735,10 @@ export async function hubFetch(req, env) {
 		return J({ error: 'not found' }, 404);
 	}
 	if (p.startsWith('/api/account/') || p === '/api/pair/start' || p.startsWith('/api/dev/')) return accountApi(req, env, H, p, body);
-	if (p === '/api/app/version') return appVersion(env);
+	// 路由器面板查新版本用 /api/router/version。v2.0.2–v2.0.4 的路由器问的还是 /api/app/version（用 curl），
+	// 那时它返回的是路由器的版本；后来 App 有了自己的版本号，这些路由器就再也看不到更新了。所以 curl 来问的照旧回答路由器的版本
+	if (p === '/api/router/version') return routerVersion(env);
+	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
 	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN }[p];
@@ -809,6 +812,21 @@ async function appVersion(env) {
 		});
 		return v ? out({ ok: true, ...v }, 200) : out({ ok: false, error: '还没有发布安卓 App' }, 404);
 	} catch (e) { return out({ ok: false, error: '检查更新失败' }, 502); }
+}
+// 路由器的最新版本：就是最新发布的版本号和更新说明
+async function routerVersion(env) {
+	try {
+		const v = await cached('router-version', 600, async () => {
+			const x = await latestRelease(env);
+			if (!x) { try { return (await hubObj(env).meta('rver')) || null; } catch (e) { return null; } }
+			if (x.none || !x.tag) return null;
+			const mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(x.body);
+			const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), at: x.at, force: x.body.includes('【必须更新】'), min: mv ? mv[1] : '' };
+			try { await hubObj(env).setMeta('rver', o); } catch (e) {}
+			return o;
+		});
+		return v ? J({ ok: true, ...v }) : J({ ok: false, error: '还没有发布' }, 404);
+	} catch (e) { return J({ ok: false, error: '检查更新失败' }, 502); }
 }
 async function appApk(env) {
 	const r = await fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/router-panel.apk', { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });

@@ -63,7 +63,7 @@ jobs:
           echo "$R" | grep -q '登录码不对' && echo "::notice::登录码：乱填的会被拒绝" || { echo "::error::核对登录码的接口不对：$R"; fail=1; }
           R=$(curl -sS -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"wrongwrongwrongwrongwrongwrong12\",\"code\":\"ZZZZZZZZ\"}" "$HUB/api/dev/logincode")
           echo "$R" | grep -q '钥匙不对' && echo "::notice::登录码：钥匙不对的拒绝" || { echo "::error::钥匙不对也没拒绝：$R"; fail=1; }
-          R=$(curl -sS -m 30 "$HUB/api/app/version")
+          R=$(curl -sS -m 30 "$HUB/api/router/version")
           V=$(echo "$R" | jq -r '.version // empty')
           [ -n "$V" ] && echo "::notice::最新版本：v$V" || { echo "::error::查不到最新版本：$R"; fail=1; }
           mkdir -p dl && cd dl

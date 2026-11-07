@@ -875,7 +875,38 @@ export class Hub extends DurableObject {
 	}
 	async fbLog(id) { return (await this.ctx.storage.get('fblog:' + id)) || null; }
 	async fbImgRm(x) { if (x.log) await this.ctx.storage.delete('fblog:' + x.id); const keys = []; (x.imgs || []).forEach((m, i) => { for (let k = 0; k < m.n; k++) keys.push('fbi:' + x.id + ':' + i + ':' + k); }); for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128)); }
-	fbSet(id, done) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; x.done = done ? Date.now() : 0; await this.ctx.storage.put('fbl', l); return true; }); }
+	// 反馈能发邮件给谁：路由器绑定的账号邮箱 + 联系方式里写的邮箱（官网报告只有后者），最多 3 个
+	fbMailTo(x) {
+		const to = [...(x.emails || [])], m = String(x.contact || '').match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+		if (m && !to.some((y) => y.toLowerCase() === m[0].toLowerCase())) to.push(m[0]);
+		return to.slice(0, 3);
+	}
+	async feedbacksAdmin() { return (await this.feedbacks()).map((x) => ({ ...x, mailTo: this.fbMailTo(x) })); }
+	// 标已修复 / 撤回成未修复；可以写补充说明、发邮件告诉对方（每次都记一条处理记录）
+	async fbSet(id, done, note = '', mail = false) {
+		note = String(note || '').trim().slice(0, 2000);
+		const x = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return null; x.done = done ? Date.now() : 0; await this.ctx.storage.put('fbl', l); return x; });
+		if (!x) return { ok: false };
+		let mailed = [], mailErr = '';
+		if (mail) {
+			const to = this.fbMailTo(x);
+			if (!to.length) mailErr = '对方没留邮箱';
+			else if (!this.env.RESEND_API_KEY) mailErr = '还没设置邮件服务 RESEND_API_KEY';
+			else {
+				const e = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+				const when = new Date(x.at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+				const quote = x.text.length > 500 ? x.text.slice(0, 500) + '……' : x.text;
+				const html = `<p>你好，</p><p>你在 ${e(when)} 反馈的问题${done ? '<b>已经修复了</b>。' : '<b>我们重新打开了，还在继续处理</b>，有进展会再告诉你。'}</p>`
+					+ (note ? `<p><b>补充说明：</b><br>${e(note).replace(/\n/g, '<br>')}</p>` : '')
+					+ `<p style="color:#666;margin-top:18px">你当时写的：</p><blockquote style="margin:0;padding:8px 12px;border-left:3px solid #ddd;color:#555">${e(quote).replace(/\n/g, '<br>')}</blockquote>`
+					+ (done ? '<p>如果还有问题，在面板里再反馈一次就行。</p>' : '') + `<p style="color:#999;font-size:13px">路由器面板 · <a href="https://${this.env.BASE_DOMAIN}">${this.env.BASE_DOMAIN}</a></p>`;
+				for (const t of to) if (await sendMail(this.env, t, done ? '你反馈的问题已修复' : '你反馈的问题还在处理中', html)) mailed.push(t);
+				if (!mailed.length) mailErr = '邮件服务没发出去，稍后再试';
+			}
+		}
+		await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], y = l.find((z) => z.id === id); if (!y) return; (y.acts = y.acts || []).push({ at: Date.now(), done: done ? 1 : 0, note, mailed }); y.acts = y.acts.slice(-20); await this.ctx.storage.put('fbl', l); });
+		return { ok: true, mailed, mailErr };
+	}
 	fbDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; await this.ctx.storage.put('fbl', l.filter((y) => y.id !== id)); await this.fbImgRm(x); return true; }); }
 	/* ---------- 新账号免费试用：每个账号能领一次（TRIAL_DAYS 天，默认 7；设成 0 就不发） ---------- */
 	trialDays() { const n = this.env.TRIAL_DAYS == null || this.env.TRIAL_DAYS === '' ? 7 : Math.round(+this.env.TRIAL_DAYS); return n > 0 && n <= 365 ? n : 0; }
@@ -1028,8 +1059,8 @@ export async function hubFetch(req, env) {
 			return J(r.st === 200 ? r : { error: r.error }, r.st);
 		}
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
-		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacks() });
-		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') return J({ ok: await H.fbSet(a[1], !!(await body()).done) });
+		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacksAdmin() });
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') { const b = await body(); return J(await H.fbSet(a[1], !!b.done, b.note, !!b.mail)); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'img' && /^[0-2]$/.test(a[3] || '') && req.method === 'GET') { const im = await H.fbImg(a[1], +a[3]); return im ? new Response(im.buf, { headers: { 'content-type': im.type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有这张图' }, 404); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'log' && req.method === 'GET') { const t = await H.fbLog(a[1]); return t ? new Response(t, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有日志' }, 404); }

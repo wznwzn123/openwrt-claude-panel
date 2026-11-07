@@ -94,6 +94,47 @@ ok('[反馈] 标成处理好了', r.ok && L.find((x) => x.id === id).done > 0);
 await adm('POST', '/feedback/' + id + '/done', { done: false });
 L = (await (await adm('GET', '/feedback')).json()).list;
 ok('[反馈] 再标回没处理', L.find((x) => x.id === id).done === 0);
+// 标已修复 / 撤回时发邮件给对方（可写补充说明），每次记一条处理记录
+{
+	const F0 = L.find((x) => x.id === id);
+	ok('[回复] 列表里算好了能发给谁：路由器绑定的账号邮箱', JSON.stringify(F0.mailTo) === JSON.stringify(['alice@x.com']), JSON.stringify(F0.mailTo));
+	let m0 = MAILS.length;
+	r = await (await adm('POST', '/feedback/' + id + '/done', { done: true, note: '已在 3.0.1 修好，\n到面板「一键更新」更新一下 <b>就行</b>', mail: true })).json();
+	let M = MAILS.slice(m0);
+	ok('[回复] 标为已修复 + 发邮件：发给 alice，标题「已修复」', r.ok && JSON.stringify(r.mailed) === '["alice@x.com"]' && M.length === 1 && M[0].to[0] === 'alice@x.com' && M[0].subject === '你反馈的问题已修复', JSON.stringify(r) + JSON.stringify(M.map((x) => [x.to, x.subject])));
+	ok('[回复] 邮件里有补充说明（换行保留、HTML 转义）和对方当时写的内容', /已在 3\.0\.1 修好，<br>到面板/.test(M[0].html) && /&lt;b&gt;就行&lt;\/b&gt;/.test(M[0].html) && !/<b>就行/.test(M[0].html) && /一键更新一直停在准备更新/.test(M[0].html) && /已经修复了/.test(M[0].html));
+	L = (await (await adm('GET', '/feedback')).json()).list;
+	let F1 = L.find((x) => x.id === id);
+	ok('[回复] 记下处理记录：已修复、说明、发给谁', F1.done > 0 && F1.acts.at(-1).done === 1 && /3\.0\.1/.test(F1.acts.at(-1).note) && F1.acts.at(-1).mailed[0] === 'alice@x.com', JSON.stringify(F1.acts));
+	const nActs = F1.acts.length;
+	m0 = MAILS.length;
+	r = await (await adm('POST', '/feedback/' + id + '/done', { done: false, note: '还有一种情况没修好', mail: true })).json();
+	M = MAILS.slice(m0);
+	ok('[回复] 撤回为未修复也能发邮件：标题「还在处理中」，有说明', r.ok && M.length === 1 && M[0].subject === '你反馈的问题还在处理中' && /还有一种情况没修好/.test(M[0].html) && /还在继续处理/.test(M[0].html));
+	m0 = MAILS.length;
+	r = await (await adm('POST', '/feedback/' + id + '/done', { done: true, note: '只记给自己看' })).json();
+	L = (await (await adm('GET', '/feedback')).json()).list; F1 = L.find((x) => x.id === id);
+	ok('[回复] 不勾发邮件：不发，只改状态、记录里写「没发」', r.ok && MAILS.length === m0 && F1.done > 0 && F1.acts.length === nActs + 2 && F1.acts.at(-1).mailed.length === 0 && F1.acts.at(-1).note === '只记给自己看');
+	await adm('POST', '/feedback/' + id + '/done', { done: false });
+	// 官网报告：联系方式里写了邮箱就能回；安装失败（没留联系方式）发不了
+	await api('POST', '/api/report', { kind: 'other', text: '官网的常见问题页打不开，一直转圈圈', contact: 'QQ 12345 / Me.Test@example.org' }, { 'cf-connecting-ip': '7.7.7.1' });
+	await api('POST', '/api/report', { kind: 'install', text: '安装失败：失败的步骤 下载', log: 'xxx' }, { 'cf-connecting-ip': '7.7.7.2' });
+	L = (await (await adm('GET', '/feedback')).json()).list;
+	const W1 = L.find((x) => /常见问题页/.test(x.text)), W2 = L.find((x) => x.kind === 'install');
+	ok('[回复] 官网报告：从联系方式里认出邮箱', W1 && JSON.stringify(W1.mailTo) === '["Me.Test@example.org"]', JSON.stringify(W1 && W1.mailTo));
+	m0 = MAILS.length;
+	r = await (await adm('POST', '/feedback/' + W1.id + '/done', { done: true, mail: true })).json();
+	ok('[回复] 官网报告标已修复：邮件发到联系方式里的邮箱（没写说明也行）', r.ok && MAILS.length === m0 + 1 && MAILS[m0].to[0] === 'Me.Test@example.org' && !/补充说明/.test(MAILS[m0].html));
+	m0 = MAILS.length;
+	r = await (await adm('POST', '/feedback/' + W2.id + '/done', { done: true, mail: true })).json();
+	ok('[回复] 没留邮箱的：照样标已修复，告诉管理员「对方没留邮箱」，不发', r.ok && MAILS.length === m0 && r.mailErr === '对方没留邮箱' && W2.mailTo.length === 0);
+	const RK2 = env.RESEND_API_KEY; delete env.RESEND_API_KEY;
+	r = await (await adm('POST', '/feedback/' + W1.id + '/done', { done: false, mail: true })).json();
+	ok('[回复] 邮件服务没设置：状态照改，说清楚原因', r.ok && /RESEND_API_KEY/.test(r.mailErr));
+	env.RESEND_API_KEY = RK2;
+	ok('[回复] 没有管理员密钥不能改', (await api('POST', '/api/admin/feedback/' + id + '/done', { done: true, mail: true })).status === 401);
+	L = (await (await adm('GET', '/feedback')).json()).list;
+}
 r = await (await adm('DELETE', '/feedback/' + id)).json();
 L = (await (await adm('GET', '/feedback')).json()).list;
 ok('[反馈] 删除', r.ok && !L.some((x) => x.id === id));

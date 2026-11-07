@@ -30,6 +30,8 @@ if (!FAKE && (arg == '--init' || !host || match(host, /trycloudflare\.com$/))) {
 	try { L.api('PUT', '/providers/rules/' + PROVIDER, null, 10); } catch (e) {}   // 规则集没启用时这一步什么也不做
 	exit(0);
 }
+// 自动处理里关掉了「面板线路自动选择」：保持现在的走法，不再测、不再换
+if (!FAKE && readfile(L.D + '/off.route') != null) exit(0);
 // 还没启用「拉黑名单」规则集的路由器：只更新文件，等用户在面板里启用（启用要重启一次 OpenClash）
 const ready = FAKE || index(readfile('/etc/openclash/custom/openclash_custom_rules.list') ?? '', '# [cmcp-blacklist]') >= 0;
 if (!ready) { L.bl_ruleset_write(); exit(0); }

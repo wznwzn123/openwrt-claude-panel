@@ -108,7 +108,8 @@ for (let ip in devs) {
 	} else if (d.name && !known[d.mac].name) known[d.mac].name = d.name;
 }
 if (first || length(fresh)) L.writej(KNOWN, known);
-for (let d in fresh)
+// 自动处理里关掉了「新设备连上提醒」：照样记下来（面板「设备」里能看到），只是不推送
+if (readfile(L.D + '/off.newdev') == null) for (let d in fresh)
 	L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备'), sprintf('IP %s · MAC %s\n不认识的话，可以在面板「设备」里把它暂停上网或拉黑', d.ip, d.mac), 'newdev-' + d.mac);
 
 L.sh('rmdir /tmp/cmcp_traf.lock');

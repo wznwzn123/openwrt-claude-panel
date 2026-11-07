@@ -3348,32 +3348,47 @@ function loadAuto(b) {
 	AU.at = Date.now();
 	return P('auto', b || {}, 20000).then((d) => { AU.d = d; store.set('rp_auto', JSON.stringify(d)); renderAuto(); });
 }
+// 每一项自动任务：key、标题、说明（关掉以后会怎样也写清楚）
+function autoItems(d) {
+	const pn = d.px || '代理插件', on = d.on || {}, L = [];
+	const add = (g, k, v, t, desc) => L.push({ g, k, v, t, desc });
+	add('出问题时自动修', 'tunrestart', on.tunrestart !== false, '隧道断了自动重启', '连不上 Cloudflare 时自动重启隧道（间隔逐渐拉长，不会一直重启）。关掉后只记录，要自己重启');
+	add('出问题时自动修', 'panelrestart', on.panelrestart !== false, '面板服务卡住自动重启', '面板没响应时自动重启面板服务。关掉后面板卡住只能自己重启路由器或服务');
+	add('出问题时自动修', 'cacheclean', on.cacheclean !== false, '内存快满时清理缓存', '内存快用完时先清理系统缓存，不影响上网');
+	if (d.oc) add('出问题时自动修', 'memguard', !!d.memguard, '内存不够时自动重启 ' + pn, '清理缓存后还不够，就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
+	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知（在「节点」页可以选看哪个策略组）');
+	if (d.oc) add('网络', 'tunbypass', !!(d.tb && d.tb.on), '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
+	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法');
+	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
+	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
+	if (d.cloud) add('提醒和备份', 'cloudbackup', on.cloudbackup !== false, '云端自动备份', '每天 4:07 把路由器设置备份到云端，保留最近 10 份。关掉后「立即备份」照样能用');
+	return L;
+}
 function renderAuto() {
 	const el = $('auCard'), pl = $('auPill'); if (!el) return;
 	const d = AU.d;
 	if (!d) { pl.textContent = '—'; pl.className = 'pill'; return; }
-	const row = (k, on, title, desc, dis) => `<label class="kv aswon" data-au="${k}"><span><b>${title}</b><span class="muted">${desc}</span></span><span class="sw"><input type="checkbox" ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}><i></i></span></label>`;
+	const row = (x) => `<label class="kv aswon" data-au="${x.k}"><span><b>${esc(x.t)}</b><span class="muted">${esc(x.desc)}</span></span><span class="sw"><input type="checkbox" ${x.v ? 'checked' : ''}><i></i></span></label>`;
 	const day = (t) => { const x = new Date(t * 1000); return (x.getMonth() + 1) + ' 月 ' + x.getDate() + ' 日 ' + hm(t * 1000); };
-	let html = '';
-	if (!d.oc) html = '<div class="muted" style="font-size:13.5px;line-height:1.6">这台路由器没装代理插件，下面两项用不上。内存快不够时看门狗照样会自动清理缓存。</div>';
-	else {
-		const pn = d.px || '代理插件';
-		html += row('memguard', d.memguard, '内存不够时自动重启 ' + pn, '内存快用完时先清理缓存；还不够就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
-		html += row('tunbypass', d.tb.on, '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
-		if (!d.tb.on && d.tb.auto) html += `<div class="notice w" style="margin-top:8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>`;
-		else if (!d.tb.on && d.tb.status === '还没生效') html += '<div class="notice w" style="margin-top:8px">隧道直连还没生效，打开开关试一次。</div>';
+	const items = autoItems(d);
+	let html = '', g = '';
+	for (const x of items) {
+		if (x.g !== g) { g = x.g; html += `<div class="subhd" style="border-top:0;padding-top:0;margin:${html ? '16px' : '0'} 0 2px;color:var(--muted)">${esc(g)}</div>`; }
+		html += row(x);
+		if (x.k === 'tunbypass' && !x.v && d.tb.auto) html += `<div class="notice w" style="margin-top:8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>`;
+		else if (x.k === 'tunbypass' && !x.v && d.tb.status === '还没生效') html += '<div class="notice w" style="margin-top:8px">隧道直连还没生效，打开开关试一次。</div>';
 	}
-	html += '<p class="muted" style="font-size:12.5px;margin:8px 0 0">隧道断了自动重启、面板服务卡住自动重启、面板线路自动选能打开的那条，这几项一直开着。节点挂了自动换在「节点」页面里设置（OpenClash、Nikki）。</p>';
+	if (!d.oc) html += '<p class="muted" style="font-size:12.5px;margin:8px 0 0">这台路由器没装代理插件，跟代理插件有关的几项不显示。</p>';
 	el.innerHTML = html;
-	const n = (d.oc ? [d.memguard, d.tb.on] : []).filter(Boolean).length;
-	pl.textContent = !d.oc ? '没装代理插件' : n === 2 ? '全部开启' : n ? '部分开启' : '已关闭';
-	pl.className = 'pill ' + (d.oc && n === 2 ? 'good' : '');
+	const n = items.filter((x) => x.v).length;
+	pl.textContent = n === items.length ? '全部开启' : n ? `开了 ${n} / ${items.length} 项` : '全部关闭';
+	pl.className = 'pill ' + (n === items.length ? 'good' : '');
 }
 function setAuto(lb) {
 	const k = lb.dataset.au, inp = lb.querySelector('input'), on = inp.checked;
-	const names = { memguard: '内存不够时自动重启' + (AU.d && AU.d.px ? ' ' + AU.d.px : '代理插件'), tunbypass: '隧道直连 Cloudflare' };
+	const it = AU.d ? autoItems(AU.d).find((x) => x.k === k) : null;
 	busy(null, async () => {
-		try { await loadAuto({ set: true, [k]: on }); toast((on ? '已开启：' : '已关闭：') + names[k]); }
+		try { await loadAuto({ set: true, [k]: on }); toast((on ? '已开启：' : '已关闭：') + (it ? it.t : '')); }
 		catch (e) { inp.checked = !on; throw e; }
 	});
 }

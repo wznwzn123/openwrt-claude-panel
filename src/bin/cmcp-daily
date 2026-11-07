@@ -6,6 +6,8 @@
 import * as L from 'cmcp.lib';
 import { readfile } from 'fs';
 
+// 自动处理里关掉了「每日体检」：每天 9:00 不再体检、不推送；面板里点「现在体检」照样能用
+if (ARGV[0] != 'local' && readfile(L.D + '/off.daily') != null) exit(0);
 const t = L.now(), since = t - 86400;
 let items = [];
 const add = (lvl, title, detail) => push(items, { lvl, title, detail: detail ?? '' });

@@ -6,6 +6,8 @@
 D=/etc/claude-mcp
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 [ -f "$D/cloud.conf" ] || { echo "没有配置云端"; exit 1; }
+# 自动处理里关掉了「云端自动备份」：每天 4:07 不再备份；面板里点「立即备份」照样能用
+[ "$1" = auto ] && [ -f "$D/off.cloudbackup" ] && { echo "自动备份已关掉"; exit 0; }
 . "$D/cloud.conf"
 mkdir /tmp/cmcp_bk.lock 2>/dev/null || { echo "已经在备份了"; exit 1; }
 trap 'rm -rf /tmp/cmcp_bk.lock /tmp/cmcp_bk.tgz /tmp/cmcp_bk.list' EXIT

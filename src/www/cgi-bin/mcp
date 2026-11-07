@@ -2782,6 +2782,7 @@ P.px_delay = function(a) {
 };
 
 /* ---------- 自动处理的开关：内存不够时自动重启代理插件、隧道直连 Cloudflare ---------- */
+const AUTO_KEYS = ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup'];
 P.auto = function(a) {
 	let D = '/etc/claude-mcp', px = px_detect(), oc = length(px.list ?? []) > 0, mg = D + '/memguard.off';
 	if (a?.set) {
@@ -2793,12 +2794,22 @@ P.auto = function(a) {
 			let r = sh('/usr/sbin/cmcp-tunbypass ' + (a.tunbypass ? 'on' : 'off 面板关闭'));
 			if (r.code != 0) die('设置失败：' + trim(r.out));
 		}
+		// 其他自动任务：关掉 = 放一个 off.名字 文件，打开 = 删掉它
+		for (let k in AUTO_KEYS) if (a[k] != null) {
+			if (a[k]) sh('rm -f ' + D + '/off.' + k);
+			else writefile(D + '/off.' + k, sprintf('%d 面板关闭\n', time()));
+		}
+		if (a.autosw != null) { let f = D + '/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' }); c.enabled = !!a.autosw; cmcp_writej(f, c); }
 	}
 	let st = oc ? trim(sh('/usr/sbin/cmcp-tunbypass status').out) : '', off = trim(readfile(D + '/tunbypass.off') ?? '');
 	let act = null; for (let x in px.list ?? []) if (x.id == px.active) act = x;
+	let on = {}; for (let k in AUTO_KEYS) on[k] = !stat(D + '/off.' + k);
 	return {
 		oc, px: act?.name ?? '', memguard: !stat(mg),
 		tb: { on: st == '已开启', auto: !!match(off, /^自动/), at: +(split(off, ' ')[1] ?? 0) || 0, status: st },
+		on, autosw: act?.kind == 'clash' ? !!cmcp_readj(D + '/autosw.json', { enabled: true }).enabled : null,
+		// 哪些用得上：云端备份要完整版或托管版；面板线路自动选择要 OpenClash
+		cloud: !!stat(D + '/cloud.conf'), route: !!stat('/etc/init.d/openclash'),
 	};
 };
 

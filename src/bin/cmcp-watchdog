@@ -124,8 +124,9 @@ mem_guard() {
 	[ "$MLOW" -lt 2 ] && return
 	# 清缓存：5 分钟最多一次
 	[ $(( t - MD_T )) -lt 300 ] && return
-	MD_T=$t; drop_caches
-	m2=${FAKE_MEM2:-$(memavail)}
+	MD_T=$t
+	# 自动处理里关掉了「内存快满时清理缓存」：不清缓存，直接看要不要重启代理插件
+	if [ -f "$D/off.cacheclean" ]; then m2=$m; else drop_caches; m2=${FAKE_MEM2:-$(memavail)}; fi
 	if [ "${m2:-0}" -ge "$MEM_LOW" ]; then
 		# 清缓存就够了：半小时最多记一条，不推送
 		[ $(( t - MDL_T )) -ge 1800 ] && { MDL_T=$t; ev info mem "内存只剩 ${m}MB，已自动清理缓存，现在可用 ${m2}MB" ""; }
@@ -324,7 +325,8 @@ $(tunlog)"
 			LAST_RS=0; RSN=0
 		fi
 		# 外网是通的才重启隧道，断网时重启没用
-		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && restart_tunnel
+		# 自动处理里关掉了「隧道断了自动重启」：只记录，不重启
+		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && [ ! -f "$D/off.tunrestart" ] && restart_tunnel
 	fi
 
 	# 面板服务
@@ -335,7 +337,8 @@ $(tunlog)"
 		PFAIL=$((PFAIL + 1))
 		if [ "$PFAIL" -ge 2 ] && [ "$PANEL" = ok ]; then
 			PANEL=down
-			if [ "$DRYRUN" = 1 ]; then ev err panel "面板服务没响应，已自动重启（测试模式，没有真的重启）" ""
+			if [ -f "$D/off.panelrestart" ]; then ev err panel "面板服务没响应（自动重启已关掉，没有重启）" ""
+			elif [ "$DRYRUN" = 1 ]; then ev err panel "面板服务没响应，已自动重启（测试模式，没有真的重启）" ""
 			else /etc/init.d/claude-mcp restart >/dev/null 2>&1; ev err panel "面板服务没响应，已自动重启" ""; fi
 		fi
 	fi

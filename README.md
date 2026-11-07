@@ -13,7 +13,7 @@ OpenWrt 路由器的**手机控制面板**（PWA，可添加到主屏幕），�
 
 ## 简洁版教程：5 分钟装好（托管版，只用手机）
 
-> 想看每一步的截图和说明：[📱 手机教程（详细版）](docs/install-phone.md)
+> 想看每一步的截图和说明：[📱 手机教程（详细版）](docs/install-phone.md)　·　[兼容性和已知问题](docs/compatibility.md)
 
 **你需要：** 一台 OpenWrt 22.03 以上的路由器（Kwrt、ImmortalWrt 都行）、一部手机、一个**邀请码**（找提供托管服务的人要）。
 

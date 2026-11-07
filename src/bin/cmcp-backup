@@ -1,13 +1,14 @@
 #!/bin/sh
 # 把路由器配置备份到 Cloudflare（每天凌晨 4:07 自动，云端只留最近 10 份；面板里也能点「立即备份」）
 # 内容 = 系统升级时会保留的全部文件（所有设置、OpenClash 配置和规则、面板），去掉能重新下载的大文件（内核、GEO 数据库）
-# 上传前在路由器上加密（AES-256-CBC + HMAC-SHA256，用 openssl），密钥只在路由器上（$D/bk.key），云端只存看不懂的密文；
-# 下载、还原时路由器先校验再解密，解出来和 LuCI「备份/升级」导出的格式一样
-# 路由器上没有 openssl、也装不上：不上传（不会再把没加密的备份存到云端）
+# 路由器上有 openssl：上传前先加密（AES-256-CBC + HMAC-SHA256），密钥只在路由器上（$D/bk.key），云端只存看不懂的密文；
+#   下载、还原时路由器先校验再解密，解出来和 LuCI「备份/升级」导出的格式一样
+# 没有 openssl：跟以前一样上传（不加密），不自动装任何东西；用户在面板云端备份页点「开启加密」才装 openssl-util
+# 以前没加密的旧备份不主动删，跟以前一样随着新备份轮换掉（最多留 10 份）
 # 用法：cmcp-backup [auto|manual]
 #       cmcp-backup decrypt 输入 输出    解密云端下载的备份（校验不过、不是加密格式都会失败）
 #       cmcp-backup encrypt 输入 输出    （测试用）
-# 测试用环境变量：BK_DIR（代替 /etc/claude-mcp）、BK_NOINSTALL=1（不自动装 openssl）、BK_PATH（放在 PATH 最前面的假命令目录）、
+# 测试用环境变量：BK_DIR（代替 /etc/claude-mcp）、BK_PATH（放在 PATH 最前面的假命令目录）、
 #                 BK_SSL（openssl 命令名，测「没有 openssl」用）、BK_NOTIFY（通知命令）
 D=${BK_DIR:-/etc/claude-mcp}
 KEY=$D/bk.key   # 两行：加密密钥、校验密钥（各 64 位十六进制），只在这台路由器上
@@ -17,18 +18,6 @@ SSL=${BK_SSL:-openssl}
 NOTIFY=${BK_NOTIFY:-/usr/sbin/cmcp-notify}
 
 have_ssl() { command -v "$SSL" >/dev/null 2>&1; }
-# 没有 openssl：装一下（每次开机最多试一次，装不上就不再试，免得每天都去连软件源）
-get_ssl() {
-	have_ssl && return 0
-	[ "$BK_NOINSTALL" = 1 ] && return 1
-	[ -f /tmp/cmcp_bk_sslinst ] && return 1
-	touch /tmp/cmcp_bk_sslinst
-	# 闪存剩下不到 4MB 就不装（没有 OpenSSL 库的系统要连库一起装，大约 2MB）
-	[ "$( { df -k /overlay 2>/dev/null || df -k /; } | awk 'NR==2{print $4}')" -ge 4096 ] 2>/dev/null || return 1
-	if command -v opkg >/dev/null 2>&1; then { opkg update && opkg install openssl-util; } >/dev/null 2>&1
-	elif command -v apk >/dev/null 2>&1; then { apk update && apk add openssl-util; } >/dev/null 2>&1; fi
-	have_ssl
-}
 hex() { echo "$1" | grep -qxE "[0-9a-f]{$2}"; }
 mkkey() {
 	[ -s "$KEY" ] && return 0
@@ -81,8 +70,6 @@ mkdir /tmp/cmcp_bk.lock 2>/dev/null || { echo "已经在备份了"; exit 1; }
 trap 'rm -rf /tmp/cmcp_bk.lock /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc /tmp/cmcp_bk.list' EXIT
 kind=${1:-manual}
 fail() { echo "$1"; [ "$kind" = auto ] && $NOTIFY warn backup "云端自动备份失败" "$1"; exit 1; }
-get_ssl || fail "这台路由器没有 openssl 加密工具，自动安装也没成功，为了不把没加密的设置存到云端，这次没有备份。可以在路由器后台「系统 → 软件包」里装 openssl-util，装好后就能备份了"
-mkkey || fail "生成备份密钥失败"
 { sysupgrade -l 2>/dev/null; find /www-claude-mcp -type f 2>/dev/null; } | \
 	grep -v -E '^/etc/openclash/(core|history|cache\.db|.*\.(dat|mmdb|metadb|db))' | \
 	grep -v -E '/etc/claude-mcp/(bak/|.*\.bak$|panel-index\.before-|traffic/)' | \
@@ -91,22 +78,12 @@ tar czf /tmp/cmcp_bk.tgz -T /tmp/cmcp_bk.list 2>/dev/null
 sz=$(wc -c < /tmp/cmcp_bk.tgz)
 [ "$sz" -gt 1000 ] || { echo "打包失败"; exit 1; }
 [ "$sz" -lt 20000000 ] || { echo "备份太大（$sz 字节）"; exit 1; }
-encrypt /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc || fail "加密备份失败"
+# 有 openssl 就加密（生成密钥或加密失败也照常上传不加密的，备份功能不受影响）
+up=/tmp/cmcp_bk.tgz ct=application/gzip enc=
+if have_ssl && mkkey && encrypt /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc; then up=/tmp/cmcp_bk.enc ct=application/octet-stream enc='&enc=1'; fi
 name="$(uci -q get system.@system[0].hostname || echo router)-$(date +%Y%m%d-%H%M)"
-r=$(curl -s -m 120 -X POST -H 'Content-Type: application/octet-stream' --data-binary @/tmp/cmcp_bk.enc "$URL/bk/$RKEY?name=$name&kind=$kind&enc=1&files=$(wc -l < /tmp/cmcp_bk.list)")
+r=$(curl -s -m 120 -X POST -H "Content-Type: $ct" --data-binary @$up "$URL/bk/$RKEY?name=$name&kind=$kind$enc&files=$(wc -l < /tmp/cmcp_bk.list)")
 case "$r" in
-	*'"ok":true'*)
-		date +%s > "$D/backup_last"
-		# 云端认得「加密」标记（新版 Worker 会在回复里带 "enc":true）：把以前没加密的旧备份删掉
-		case "$r" in *'"enc":true'*)
-			l=$(curl -s -m 20 "$URL/bk/$RKEY")
-			case "$l" in *'"ok":true'*)
-				for id in $(echo "$l" | sed 's/},{/}\
-{/g' | grep -v '"enc":true' | sed -n 's/.*"id":"\([a-z0-9]\{4,16\}\)".*/\1/p'); do
-					curl -s -m 20 -X DELETE "$URL/bk/$RKEY/$id" >/dev/null
-				done ;;
-			esac ;;
-		esac
-		echo "$r" ;;
+	*'"ok":true'*) date +%s > "$D/backup_last"; echo "$r" ;;
 	*) fail "上传失败：$r" ;;
 esac

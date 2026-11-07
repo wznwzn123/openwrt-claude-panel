@@ -240,9 +240,47 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
 	await page.goto(B + '/#faq-restore'); await W(500);
 	{ const body = await page.textContent('body');
-	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、新版加密上传、没升级的仍没加密，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /还没升级的路由器上传的仍然没有加密/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
+	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、可以开启加密、没开启的仍原样存着，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /没开启加密的备份仍然原样存在云端/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
 	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，从链接进来自动展开', await page.evaluate(() => document.getElementById('faq-restore').open) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
+	await ctx.close();
+}
+// 隐私政策、安全说明、报告表单
+{
+	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
+	const page = await ctx.newPage(); const e2 = []; page.on('pageerror', (e) => e2.push(e.message));
+	await page.goto(B + '/'); await W(300);
+	ok('[隐私/安全] 首页底部有隐私政策、安全说明、报告问题的链接', await page.locator('footer a[href="/privacy"]').count() === 1 && await page.locator('footer a[href="/security"]').count() === 1 && await page.locator('footer a[href="/security#report"]').count() === 1);
+	await page.goto(B + '/app'); await W(300);
+	ok('[隐私/安全] 账号页底部也有', await page.locator('a[href="/privacy"]').count() >= 1 && await page.locator('a[href="/security"]').count() >= 1);
+	let r = await page.goto(B + '/privacy'); await W(300);
+	let t = await page.textContent('body');
+	ok('[隐私] 打开 /privacy：写了存哪些数据、存多久、交给谁、怎么删', r.status() === 200 && /存了哪些数据、存多久/.test(t) && /交给了谁/.test(t) && /你能做什么/.test(t) && /Cloudflare/.test(t) && /PushPlus/.test(t) && /可能在中国大陆以外/.test(t) && /两天内自动删除/.test(t));
+	ok('[隐私] 如实写云端备份：开启加密后只存密文、没开启的原样存着', /开启加密后/.test(t) && /没开启加密的原样存着/.test(t));
+	ok('[隐私] 页面头：不能被嵌入、限制外部脚本', /frame-ancestors 'none'/.test(r.headers()['content-security-policy'] || '') && r.headers()['x-frame-options'] === 'DENY');
+	const pw = await page.evaluate(() => document.documentElement.scrollWidth);
+	ok('[隐私] 手机宽度不横向滚动（表格变成一条一条）', pw <= 390, pw);
+	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-privacy.png' });
+	r = await page.goto(B + '/security'); await W(300); t = await page.textContent('body');
+	ok('[安全] 打开 /security：做了哪些措施、没覆盖的风险、被入侵了怎么办', r.status() === 200 && /做了哪些措施/.test(t) && /没覆盖的风险/.test(t) && /没有签名/.test(t) && /Cloudflare 能看到流量/.test(t) && /换登录密钥/.test(t));
+	ok('[安全] 不写「所有安全问题都已解决」「进不了」这类绝对的话', !/所有安全问题|进不了|绝对安全|100%/.test(t));
+	// 报告表单
+	await page.fill('#rpForm [name=text]', '太短'); await page.click('#rpGo'); await W(300);
+	ok('[报告] 太短：页面上直接提示，不提交', await page.isVisible('#rpErr') && /至少 10 个字/.test(await page.textContent('#rpErr')));
+	await page.selectOption('#rpForm [name=kind]', 'privacy');
+	await page.fill('#rpForm [name=text]', '我想删除我账号的所有数据，谢谢处理');
+	await page.fill('#rpForm [name=contact]', 'me@x.com');
+	await page.click('#rpGo'); await W(800);
+	ok('[报告] 提交成功：显示已经收到', await page.isVisible('#rpOk') && !(await page.isVisible('#rpForm')));
+	const FL = await env.H.get('hub').feedbacks();
+	ok('[报告] 管理后台收到：类型、内容、联系方式', FL.some((x) => x.kind === 'privacy' && /删除我账号/.test(x.text) && x.contact === 'me@x.com'));
+	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-security.png', fullPage: true });
+	await page.goto(B + '/security#report'); await page.reload(); await W(300);
+	await page.evaluate(() => { document.querySelector('#rpForm [name=website]').value = 'http://spam'; });
+	await page.fill('#rpForm [name=text]', '机器人提交的垃圾内容垃圾内容'); const n1 = (await env.H.get('hub').feedbacks()).length;
+	await page.click('#rpGo'); await W(600);
+	ok('[报告] 陷阱字段被填（机器人）：页面显示成功，但不存', await page.isVisible('#rpOk') && (await env.H.get('hub').feedbacks()).length === n1);
+	ok('[隐私/安全] 页面没有报错', !e2.length, e2.join(' | '));
 	await ctx.close();
 }
 await browser.close(); server.close();

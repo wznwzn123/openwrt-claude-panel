@@ -291,11 +291,6 @@ say "启动服务"
 /etc/init.d/cmcp-watchdog restart
 # 换了网址（比如自建版换成托管版）后，OpenClash 规则集里的面板域名也要跟着更新
 /usr/sbin/cmcp-route --init >/dev/null 2>&1 || true
-# 云端备份改成先加密再上传：装好后在后台备份一次（需要的话先装 openssl），成功后云端以前没加密的旧备份自动删掉
-if [ "$ED" = full ] && [ -f $D/cloud.conf ] && [ ! -f $D/off.cloudbackup ] && [ -z "$CMCP_NOBK" ]; then
-	command -v openssl >/dev/null 2>&1 && ok "云端备份：上传前在路由器上加密（密钥只在这台路由器上）" || ok "云端备份：要先装 openssl 加密工具，稍后在后台自动安装"
-	( sleep 20; /usr/sbin/cmcp-backup auto ) </dev/null >/dev/null 2>&1 &
-fi
 sleep 3
 code=$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json || true)
 [ "$code" = 200 ] && ok "面板服务已运行" || warn "面板服务没响应（HTTP $code），看看 logread | grep uhttpd"

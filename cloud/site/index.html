@@ -109,17 +109,18 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 <h2 class="sec">安全</h2>
 <div class="card"><table>
 	<tr><th style="width:34%">登录密钥</th><td>在你的路由器上生成，保存在路由器和你自己的手机上。</td></tr>
-	<tr><th>云端备份</th><td>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。v2.0.8 起<b>在路由器上加密后才上传</b>，密钥只在你的路由器上，托管服务只存看不懂的密文；升级后第一次备份成功时，以前没加密的旧备份会自动删掉。<b>还没升级的路由器上传的仍然没有加密</b>，请在面板首页点「一键更新」。不想用云端备份，可以在「自动任务」里关掉。</td></tr>
+	<tr><th>云端备份</th><td>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。v2.0.8 起可以开启加密：路由器上有 openssl 的自动加密，没有的在面板「云端备份」页点「开启加密」装一下；开启后备份<b>在路由器上加密后才上传</b>，密钥只在你的路由器上，托管服务只存看不懂的密文。<b>没开启加密的备份仍然原样存在云端</b>。不想用云端备份，可以在「自动任务」里关掉。</td></tr>
 	<tr><th>新手机</th><td>新手机要有登录地址（或者用已经能用的手机「添加新手机」扫码），还要输一次<b>登录码</b>。登录码只有绑定了这台路由器的账号才能拿，10 分钟有效、用一次就作废。就算登录地址泄露了，没有登录码也打不开面板。</td></tr>
 	<tr><th>账号</th><td>账号记录「你有哪几台路由器」，用来拿登录码。账号里没有密钥，不能直接打开面板。</td></tr>
 	<tr><th>Claude 连接器</th><td>AI 版给 Claude 单独一把钥匙，只能给 Claude 用、打不开面板，泄露了可以单独换。</td></tr>
-	<tr><th>要说明的风险</th><td>面板的一键更新来自我们在 GitHub 发布的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节如果出了问题，理论上会影响到路由器。发现安全问题请用面板里的「问题反馈」告诉我们。</td></tr>
+	<tr><th>要说明的风险</th><td>面板的一键更新来自我们在 GitHub 发布的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节如果出了问题，理论上会影响到路由器。发现安全问题请用<a href="/security#report">报告表单</a>告诉我们。</td></tr>
+	<tr><th>更多</th><td>做了哪些措施、没覆盖的风险、觉得被入侵了怎么办，见<a href="/security">安全说明</a>；存了哪些数据、存多久、怎么删，见<a href="/privacy">隐私政策</a>。</td></tr>
 	<tr><th>不想用了</th><td>路由器上运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</td></tr>
 </table></div>
 
 <h2 class="sec">自己搭建</h2>
 <div class="card"><p style="margin:0">不想用托管服务？也可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本（AI 版 / 纯面板版 × 精简版 / 完整版）和教程都在 <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。开源，MIT 许可证。</p></div>
 
-<footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a></footer>
+<footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a></footer>
 </div><script>const faqOpen = () => { const d = location.hash.startsWith('#faq') && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView({ block: 'start' }); } }; faqOpen(); addEventListener('hashchange', faqOpen);</script>
 </body></html>

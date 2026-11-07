@@ -8,7 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY } from './site.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -761,6 +761,31 @@ export class Hub extends DurableObject {
 		await this.notifyAdmin('问题反馈：' + fb.name, `${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}${fb.imgs.length ? '\n\n附了 ' + fb.imgs.length + ' 张截图，在管理页看' : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 		return { st: 200, ok: true };
 	}
+	/* ---------- 官网公开的报告表单：安全问题、隐私和数据、滥用举报（不用登录；不记 IP，只按 IP 限次，限次记录一两天后自动清掉） ---------- */
+	async report({ kind, text, contact, ip }) {
+		const KIND = { security: '安全问题', privacy: '隐私和数据', abuse: '滥用举报', other: '其他' };
+		if (!KIND[kind]) kind = 'other';
+		text = String(text || '').trim().slice(0, 4000); contact = String(contact || '').trim().slice(0, 120);
+		if (text.length < 10) return { st: 400, error: '多写几句，说清楚是什么问题（至少 10 个字）' };
+		if (!(await this.hit('rp:' + (ip || '?'), 5, DAY))) return { st: 429, error: '今天提交太多次了，明天再试' };
+		if (!(await this.hit('rp:all', 100, DAY))) return { st: 429, error: '今天提交的人太多了，明天再试' };
+		const fb = { id: rnd(10), at: Date.now(), sub: '', name: '官网 · ' + KIND[kind], kind, web: 1, emails: [], text, contact, diag: '', done: 0, imgs: [] };
+		const drop = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); return l.slice(300); });
+		for (const x of drop) await this.fbImgRm(x);
+		await this.notifyAdmin('官网报告（' + KIND[kind] + '）', `${text}\n\n${contact ? '联系方式：' + contact : '没留联系方式'}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
+		return { st: 200, ok: true };
+	}
+	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
+	async gcRate(now) {
+		let n = 0;
+		const all = await this.ctx.storage.list({ prefix: 'r:', limit: 5000 }), del = [];
+		for (const [k, a] of all) if (!Array.isArray(a) || !a.some((t) => t > now - 2 * DAY)) del.push(k);
+		for (let i = 0; i < del.length; i += 128) { await this.ctx.storage.delete(del.slice(i, i + 128)); }
+		n += del.length;
+		const rl = await this.ctx.storage.get('rl');
+		if (rl) { const hr = now - 3600e3; for (const k in rl.ip) { rl.ip[k] = rl.ip[k].filter((t) => t > hr); if (!rl.ip[k].length) { delete rl.ip[k]; n++; } } rl.all = rl.all.filter((t) => t > hr); await this.ctx.storage.put('rl', rl); }
+		return n;
+	}
 	async feedbacks() { return (await this.ctx.storage.get('fbl')) || []; }
 	async fbImg(id, i) {
 		const x = ((await this.ctx.storage.get('fbl')) || []).find((y) => y.id === id), m = x && (x.imgs || [])[i];
@@ -875,6 +900,13 @@ export async function hubFetch(req, env) {
 		const { st, ...rest } = r;
 		return J(rest, st);
 	}
+	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
+	if (p === '/api/report' && req.method === 'POST') {
+		const b = await body();
+		if (b.website) return J({ ok: true });
+		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), ip: req.headers.get('cf-connecting-ip') || '' });
+		return J(rest, st);
+	}
 	if (p === '/api/unregister' && req.method === 'POST') {
 		const b = await body();
 		const { st, ...rest } = await H.unregister({ sub: String(b.sub || ''), rkey: String(b.rkey || '') });
@@ -931,7 +963,7 @@ export async function hubFetch(req, env) {
 	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN }[p];
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p];
 	if (pg && req.method === 'GET') return new Response(pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'" } });
 	return J({ error: 'not found' }, 404);
 }
@@ -1092,4 +1124,4 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	return J({ error: 'not found' }, 404);
 }
-export async function hubScheduled(env) { await hubObj(env).cleanup(); }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); await H.gcRate(Date.now()); }

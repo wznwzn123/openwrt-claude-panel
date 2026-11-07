@@ -763,7 +763,7 @@ section.page{display:none}section.page.on{display:block}
 <section class="page" id="p-cbk">
 	<div class="hero">
 		<div class="herohead"><h1>云端备份</h1><span class="pill" id="bkPill">—</span></div>
-		<p class="muted" style="margin:6px 0 0">把整台路由器的设置（网络、Wi‑Fi、OpenClash 配置和规则、这个面板）存到 Cloudflare。上传前在路由器上加密，密钥只在这台路由器上，云端看不到内容。每天凌晨 4:07 自动备份一次，最多留 10 份，最旧的会自动删掉。</p>
+		<p class="muted" style="margin:6px 0 0">把整台路由器的设置（网络、Wi‑Fi、OpenClash 配置和规则、这个面板）存到 Cloudflare。开启加密后，上传前先在路由器上加密，密钥只在这台路由器上，云端看不到内容。每天凌晨 4:07 自动备份一次，最多留 10 份，最旧的会自动删掉。</p>
 		<button class="btn primary" id="bkNow" style="width:100%;padding:12px;margin-top:12px">立即备份</button>
 	</div>
 	<div id="bkBody" style="margin-top:14px"><section class="card empty">读取中…</section></div>
@@ -3136,6 +3136,8 @@ async function loadBk() {
 	}
 	$('bkNow').disabled = false;
 	setStatus(true, '在线'); renderBk();
+	// 正在装加密工具：过几秒再看一次
+	clearTimeout(CBK.t); if (CBK.d && CBK.d.ssl_run) CBK.t = setTimeout(() => { if (page === 'cbk') loadBk().catch(() => {}); }, 4000);
 }
 const bkWhen = (ms) => { const d = new Date(ms); return `${d.getMonth() + 1} 月 ${d.getDate()} 日 ${hm(ms)}`; };
 function renderBk() {
@@ -3144,7 +3146,8 @@ function renderBk() {
 	$('bkPill').textContent = `${list.length} / ${d.max || 10} 份`;
 	const last = list[0];
 	const old = list.some((b) => !b.enc);
-	box.innerHTML = `${d.ssl === false ? '<div class="notice w" style="margin-bottom:12px">这台路由器没有 openssl 加密工具，为了不把没加密的设置存到云端，现在<b>不会上传新备份</b>。在路由器后台「系统 → 软件包」里装 <b>openssl-util</b>，装好后就能备份了。</div>' : ''}${old ? '<div class="notice w" style="margin-bottom:12px">标着「没加密」的是以前的旧备份，里面有 Wi‑Fi 密码、登录密钥这些设置。下一次备份成功后会<b>自动删掉</b>；也可以现在点「立即备份」，或者自己删。</div>' : ''}<div class="sectitle"><b>备份列表</b>${last ? `<span class="pill">最近 ${esc(ago(new Date(last.at).toISOString()))}</span>` : ''}</div>
+	const sslBox = d.ssl === false ? `<div class="notice w" style="margin-bottom:12px">${d.ssl_run ? '正在安装加密工具（openssl-util），一般要半分钟到一两分钟，装好后这里会自动更新。' : `现在的备份<b>没有加密</b>：里面有 Wi‑Fi 密码、登录密钥这些设置，原样存在云端。点「开启加密」会在路由器上装 openssl-util（需要几百 KB 到 2 MB 空间），以后的备份都先加密再上传，下载、还原跟现在一样用。${d.ssl_err ? '<br><span style="color:var(--danger,#d33)">上次没装成：' + esc(d.ssl_err) + '</span>' : ''}<button class="btn primary" id="bkSsl" style="width:100%;margin-top:10px">开启加密</button>`}</div>` : '';
+	box.innerHTML = `${sslBox}${d.ssl !== false && old ? '<div class="notice" style="margin-bottom:12px">标着「没加密」的是开启加密以前的备份，会随着新备份慢慢轮换掉（最多留 10 份），也可以自己删。</div>' : ''}<div class="sectitle"><b>备份列表</b>${last ? `<span class="pill">最近 ${esc(ago(new Date(last.at).toISOString()))}</span>` : ''}</div>
 	<section class="card">${list.length ? list.map((b) => `<div class="bkrow" data-bk="${esc(b.id)}">
 		<div><b>${bkWhen(b.at)}<span class="bktag ${b.kind === 'auto' ? '' : 'm'}">${b.kind === 'auto' ? '自动' : '手动'}</span>${b.enc ? '<span class="bktag e">已加密</span>' : '<span class="bktag o">没加密</span>'}</b><span class="muted">${B(b.size)} · ${b.files || '—'} 个文件</span></div>
 		<div class="actions"><button class="btn sm" data-bkdl>下载</button><button class="btn sm blue" data-bkrs>还原</button><button class="btn sm danger" data-bkrm>删除</button></div></div>`).join('') : '<div class="empty">云端还没有备份，点上面的「立即备份」存第一份。</div>'}</section>
@@ -3156,6 +3159,11 @@ $('bkNow').addEventListener('click', (e) => busy(e.currentTarget, async () => {
 	await loadBk();
 }, '备份中'));
 $('bkBody').addEventListener('click', async (e) => {
+	const ssl = e.target.closest('#bkSsl');
+	if (ssl) {
+		if (!(await confirmBox('开启备份加密', '在路由器上安装 openssl-util（需要几百 KB 到 2 MB 闪存空间，要连软件源，一般半分钟到一两分钟）。\n\n装好以后，新的备份先在路由器上加密再上传，密钥只在这台路由器上。下载、还原跟现在一样用；家里上网不受影响。', '开启加密'))) return;
+		return busy(ssl, async () => { const r = await P('bk_ssl', {}, 30000); toast(r.already ? '已经开启了' : '开始安装，装好后自动更新'); await loadBk(); }, '开始安装');
+	}
 	const row = e.target.closest('[data-bk]'); if (!row) return;
 	const id = row.dataset.bk, b = (CBK.d.list || []).find((x) => x.id === id); if (!b) return;
 	const when = bkWhen(b.at);

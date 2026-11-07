@@ -1,0 +1,64 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>隐私政策 · 路由器面板</title>
+<meta name="description" content="路由器面板托管服务存了哪些数据、存多久、交给了谁、怎么删除。">
+<style>/*COMMON_CSS*/
+.doc h1{font-size:28px;margin:18px 0 4px}.doc .sub{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+.doc h2{font-size:19px;margin:28px 0 10px}.doc p,.doc li{font-size:14.5px;line-height:1.8}.doc ul{padding-left:20px;margin:6px 0}
+table{width:100%;border-collapse:collapse;font-size:13.5px}td,th{padding:9px 6px;border-bottom:.5px solid var(--line);text-align:left;vertical-align:top;line-height:1.65}th{color:var(--muted);font-weight:600;white-space:nowrap}
+@media(max-width:600px){.tw table,.tw tbody,.tw tr,.tw td{display:block}.tw tr:first-child{display:none}.tw tr{padding:10px 0;border-bottom:.5px solid var(--line)}.tw tr:last-child{border-bottom:0}.tw td{border:0;padding:2px 4px}.tw td:first-child{font-weight:700;font-size:15px}.tw td:nth-child(3){color:var(--muted);font-size:12.5px}.tw td:nth-child(3)::before{content:"存多久："}}
+footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
+</style></head><body><div class="wrap doc">
+<div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm" href="/security">安全说明</a><a class="btn sm primary" href="/app">登录</a></div></div>
+
+<h1>隐私政策</h1>
+<p class="sub">适用于托管服务（本网站和它开通的专属网址）。最后更新：2026 年 11 月 7 日</p>
+
+<div class="card"><p style="margin:0">一句话：<b>路由器的设置和上网情况留在你的路由器上</b>；托管服务存的是让服务跑起来必需的东西（账号、路由器登记、运行状态、推送订阅），以及你主动开启或提交的东西（云端备份、问题反馈）。你的上网记录不会上传。自己搭建（用自己的 Cloudflare）的，数据都在你自己的账号里，这份政策不适用。</p></div>
+
+<h2>存了哪些数据、存多久</h2>
+<div class="card tw"><table>
+	<tr><th>数据</th><th>里面有什么、用来做什么</th><th>存多久</th></tr>
+	<tr><td>官网账号</td><td>邮箱、密码（加盐后用 PBKDF2 算的哈希，看不到原密码）、注册和最近登录时间、登录状态、绑定了哪几台路由器、试用领取记录。用来登录、拿登录码、续期。</td><td>到你注销账号为止；注销后 30 天内能恢复，之后彻底删除</td></tr>
+	<tr><td>路由器登记</td><td>专属网址编号、路由器名字（主机名）和型号、开通和最近上线时间、到期时间、用的哪个邀请码。用来开通网址、判断是否在线、到期提醒。</td><td>卸载时马上删除；90 天没上线放进回收站，30 天后彻底删除</td></tr>
+	<tr><td>运行状态</td><td>路由器每分钟报一次：宽带、外网、DNS、隧道、面板、代理插件是不是正常。用来判断断电断网、推送提醒。<b>不含上网记录、访问了哪些网站。</b></td><td>只留最近 300 条状态变化；删除路由器时一起删</td></tr>
+	<tr><td>推送</td><td>你在手机上打开推送时的订阅地址；开了微信推送的，还有 PushPlus 的 token。</td><td>到你关掉推送或删除路由器为止</td></tr>
+	<tr><td>云端备份</td><td>路由器全部设置的整包（包括 Wi-Fi 密码、宽带账号、面板登录密钥）。<b>开启加密后</b>（v2.0.8 起）只存路由器加密过的密文，托管服务看不到内容；<b>没开启加密的原样存着</b>。</td><td>最多留最近 10 份；你在面板里删、关掉云端备份或卸载时删除</td></tr>
+	<tr><td>问题反馈、报告</td><td>你写的内容、联系方式、截图；面板里发的还有你选择附上的路由器信息（面板版本、代理插件等，不含密钥和网址）和绑定账号的邮箱。用来回复和修问题。</td><td>只留最近 300 条，处理后可以删除</td></tr>
+	<tr><td>续期申请</td><td>申请表里填的内容和账号邮箱。用来审核续期。</td><td>审核记录留在管理后台</td></tr>
+	<tr><td>操作记录</td><td>管理员和系统做了什么（开通、续期、删除等），带路由器编号或账号邮箱。用来查问题。</td><td>只留最近 500 条</td></tr>
+	<tr><td>限次记录</td><td>为了防暴力破解和刷量，按 IP 或邮箱记次数。</td><td>两天内自动删除</td></tr>
+</table></div>
+
+<h2>不收集什么</h2>
+<ul>
+	<li>上网记录、访问的网站、流量统计：只在你的路由器上，不上传（流量统计也不在云端备份里）。</li>
+	<li>面板里的操作内容：面板的请求经 Cloudflare 隧道直接到你的路由器，托管服务的程序不经手、不记录。</li>
+	<li>没有广告、统计、跟踪代码。</li>
+</ul>
+
+<h2>交给了谁</h2>
+<p>托管服务没有出售或分享你的数据。下面这些服务商会经手一部分数据，它们按自己的隐私政策处理：</p>
+<ul>
+	<li><b>Cloudflare</b>：网站、隧道和上面所有数据的存储都在 Cloudflare 上。在外面打开面板的流量经 Cloudflare 加密转发，Cloudflare 技术上能看到内容。数据存放的服务器<b>可能在中国大陆以外</b>。</li>
+	<li><b>Resend</b>：发验证码邮件、给管理员的提醒邮件（会经手你的邮箱地址和邮件内容）。</li>
+	<li><b>手机和浏览器的推送服务</b>（如 Google、Apple、Mozilla）：推送内容是加密的，推送服务看不到。</li>
+	<li><b>PushPlus</b>：只在你开了微信推送时。推送内容（比如「新设备连上了」会带设备名、IP 和 MAC 地址）原样交给 PushPlus 发到微信。</li>
+	<li><b>GitHub</b>：安装包和更新从 GitHub 下载，下载时 GitHub 会看到路由器的 IP。</li>
+	<li><b>Anthropic（Claude）</b>：只在 AI 版、你把连接器加到 Claude 时。Claude 按你的对话读取和操作路由器，相关内容按 Anthropic 的政策处理。</li>
+</ul>
+
+<h2>你能做什么</h2>
+<ul>
+	<li><b>看</b>：<a href="/app">账号页</a>能看到绑定的路由器和到期时间；面板「云端备份」页能看到每一份备份。</li>
+	<li><b>导出</b>：云端备份可以在面板里下载到手机；其他数据要导出，用<a href="/security#report">报告表单</a>告诉我们。</li>
+	<li><b>删除</b>：<a href="/app">账号页</a>可以注销账号；面板里可以删备份、关推送、关云端备份；路由器上运行卸载脚本，这台路由器在云端的数据马上删除。其他的用<a href="/security#report">报告表单</a>要求删除。</li>
+</ul>
+
+<h2>家长控制</h2>
+<p>面板的「暂停上网」可能用在孩子的设备上。要不要用、对哪台设备用，由家长决定和设置；托管服务不收集被暂停设备的上网内容。</p>
+
+<h2>变更和联系</h2>
+<p>这份政策有变化时会更新本页和上面的日期。有问题请用<a href="/security#report">报告表单</a>（选「隐私和数据」）。</p>
+
+<footer><a href="/">首页</a> · <a href="/security">安全说明</a> · <a href="/app">账号</a> · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a></footer>
+</div></body></html>

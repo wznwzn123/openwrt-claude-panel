@@ -14,6 +14,14 @@
 .steps li::before{content:counter(s);flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:9px 6px;border-bottom:.5px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
 pre.cmd{margin:10px 0 8px;padding:12px 14px;border-radius:14px;background:var(--fill);font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;color:var(--text)}
+.shots{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 12px;margin:0 -2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.shots::-webkit-scrollbar{display:none}
+.shots figure{flex:none;width:min(46vw,210px);margin:0;scroll-snap-align:start;text-align:center}
+.shots img{display:block;width:100%;height:auto;aspect-ratio:1/2;object-fit:cover;object-position:top;border-radius:22px;border:5px solid #16181f;box-shadow:0 10px 26px rgba(20,30,60,.18);background:#eef1f8}
+.shots figcaption{margin-top:8px;font-size:13.5px;font-weight:600}.shots figcaption span{display:block;font-weight:400;color:var(--muted);font-size:12.5px;margin-top:2px}
+.hint{font-size:12.5px;color:var(--muted);text-align:center;margin:2px 0 0}
+pre.term{margin:10px 0 4px;padding:12px 14px;border-radius:14px;background:#14161c;color:#d8dde8;font:11.5px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
+pre.term b{color:#7cc4ff;font-weight:600}pre.term i{font-style:normal;color:#ffcf6b}pre.term u{text-decoration:none;color:#8a93a6}
+.demo{display:block;width:min(100%,260px);height:auto;margin:10px 0 2px;border-radius:18px;border:4px solid #16181f;box-shadow:0 8px 20px rgba(20,30,60,.16)}
 footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a><a class="btn sm primary" href="/app">登录</a></div></div>
@@ -33,6 +41,17 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 	<div class="card feat"><div class="ic">🤖</div><b>可选：接入 Claude</b><p>AI 版可以在 Claude 里用中文说「把奈飞切到新加坡节点」，它就直接帮你操作。</p></div>
 </div>
 
+<h2 class="sec">看看长什么样</h2>
+<div class="shots">
+	<figure><img src="/*IMG:home*/" alt="首页：实时网速、今日流量、在线设备" loading="lazy" width="390" height="780"><figcaption>首页<span>实时网速、今日流量、在线设备</span></figcaption></figure>
+	<figure><img src="/*IMG:dev*/" alt="设备：谁在线、在看什么" loading="lazy" width="390" height="780"><figcaption>设备<span>谁在线、走代理还是直连</span></figcaption></figure>
+	<figure><img src="/*IMG:pause*/" alt="暂停上网和定时断网" loading="lazy" width="390" height="780"><figcaption>暂停上网<span>给孩子的设备定时断网</span></figcaption></figure>
+	<figure><img src="/*IMG:traf*/" alt="流量统计" loading="lazy" width="390" height="780"><figcaption>流量统计<span>每台设备用了多少</span></figcaption></figure>
+	<figure><img src="/*IMG:wd*/" alt="断线记录" loading="lazy" width="390" height="780"><figcaption>断线记录<span>出问题自动修，记下原因</span></figcaption></figure>
+	<figure><img src="/*IMG:dark*/" alt="深色模式" loading="lazy" width="390" height="780"><figcaption>深色模式<span>跟着手机自动切换</span></figcaption></figure>
+</div>
+<p class="hint">← 左右滑动看更多（截图里是演示数据）</p>
+
 <h2 class="sec" id="start">怎么开始（只用手机，5 分钟）</h2>
 <div class="card">
 	<ol class="steps">
@@ -42,9 +61,19 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 			<pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
 cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh</pre>
 			<button class="btn sm" id="copyCmd" type="button">复制命令</button></div></li>
-		<li><div><b>输入邀请码</b><div class="muted">装完会显示你的专属网址、登录地址、自动登录链接、（AI 版）Claude 连接器地址，最下面是大字的<b>配对码</b>。这些地址带着密钥，存好别发给别人。</div></div></li>
-		<li><div><b>打开面板</b><div class="muted">手机打开「自动登录链接」。为了安全，托管版每台手机第一次要输一次<b>登录码</b>，先放着别关。</div></div></li>
-		<li><div><b>绑定账号，拿登录码</b><div class="muted">打开终端里的绑定链接，<a href="/app">登录或注册</a>后自动绑定，并自动显示登录码；点「打开面板」就自动填好了。之后「添加到主屏幕」，或者装下面的安卓 App。</div></div></li>
+		<li><div><b>输入邀请码</b><div class="muted">装完会显示<b>一个链接</b>，带着这台路由器的密钥：只在自己手机上打开，别发给别人。屏幕最后是这样的：</div>
+			<pre class="term"><u>================ 安装完成 ================</u>
+
+<b>👉 接下来用手机做（10 分钟内）：</b>
+
+  1. 手机打开这个链接：
+
+     <i>https://ab3cd4ef.yrlove520.com/panel/#login=…&amp;pair=…</i>
+
+  2. 页面上点「绑定官网账号」，登录或注册账号
+  3. 绑定好后官网会显示登录码，点「打开面板」</pre></div></li>
+		<li><div><b>手机打开链接</b><div class="muted">面板会提示输入<b>登录码</b>（为了安全，每台手机第一次要输一次），点上面的「绑定官网账号」。</div><img class="demo" src="/*IMG:pair*/" alt="输入登录码页：上面有「绑定官网账号」按钮" loading="lazy" width="390" height="633"></div></li>
+		<li><div><b>绑定账号，进面板</b><div class="muted"><a href="/app">登录或注册</a>官网账号，路由器自动绑定，并自动显示登录码；点「打开面板」就自动填好进去了。之后「添加到主屏幕」，或者装下面的安卓 App。</div></div></li>
 		<li><div><b>AI 版：连上 Claude</b><div class="muted">把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里。</div></div></li>
 	</ol>
 	<p class="muted" style="margin:14px 0 0;font-size:13.5px">每一步的详细说明：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">📱 手机教程</a> · 用电脑装：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>

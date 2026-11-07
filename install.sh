@@ -307,40 +307,66 @@ echo
 echo "================ 安装完成 ================"
 echo
 echo "已安装：$NAME"
-echo
-echo "手机面板：https://$H/panel/"
-echo
-echo "登录地址（第一次打开面板时粘贴）："
-echo "  https://$H/cgi-bin/mcp/$TOKEN"
-echo
-echo "或者在手机上直接打开这个链接，自动登录（同样不要发给别人）："
-echo "  https://$H/panel/#login=$TOKEN"
-echo "以后添加别的手机：面板里「系统操作 → 添加新手机」扫码就行。"
-if [ "$AI" = 1 ]; then
-	echo
-	echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）："
-	echo "  https://$H/cgi-bin/mcp/$CKEY"
-fi
-echo
-echo "⚠️  上面的地址里都带着密钥，谁拿到都能控制你的路由器：不要发给别人，也不要截图分享。"
 if [ -n "$HUB" ]; then
+	# 托管版：只给一个链接。手机打开后，面板会带着去官网绑定账号、拿登录码，不用再抄别的地址
+	PC=$(/usr/sbin/cmcp-pair --code 2>/dev/null)
+	HUBN=${HUB#https://}
 	echo
-	echo "托管版：推送、云端备份、断电断网判断都已经开通，不用再做别的设置。"
+	echo "👉 接下来用手机做（10 分钟内）："
+	echo
+	echo "  1. 手机打开这个链接（复制到手机浏览器，或者直接在手机上点）："
+	echo
+	echo "     https://$H/panel/#login=$TOKEN${PC:+&pair=$PC}"
+	echo
+	if [ -n "$PC" ]; then
+		echo "  2. 页面上点「绑定官网账号」，登录或注册 $HUBN 的账号"
+		echo "  3. 绑定好后官网会显示登录码，点「打开面板」就进去了"
+	else
+		echo "  2. 页面会提示输入登录码：打开 $HUB/app 登录账号，在「添加路由器」里输入配对码绑定"
+		echo "     （配对码在这个终端运行 cmcp-pair 拿）；绑定好点「获取登录码」→「打开面板」"
+	fi
+	echo
+	echo "  以后换手机、清了浏览器：打开 $HUBN 账号页，在这台路由器下面点「获取登录码」。"
+	echo "  面板里点浏览器菜单「添加到主屏幕」，以后就像 App 一样打开。"
+	echo
+	echo "⚠️  这个链接带着密钥：只在自己的手机上打开，不要发给别人，也不要截图分享。"
 	if [ -n "$SVC_END" ]; then
 		echo
-		echo "⏳ 这是试用：用到 $SVC_END。快到期时在官网账号页（$HUB/app）点「申请续期」填个表，审核通过就自动续上，不用重装。"
+		echo "⏳ 这是试用，用到 $SVC_END。快到期时在官网账号页点「申请续期」，审核通过自动续上，不用重装。"
 	fi
 	echo
-	if ! /usr/sbin/cmcp-pair --install; then
-		echo "绑定到官网账号：稍后在这个终端运行 cmcp-pair 拿配对码。"
-		echo "官网暂时连不上的话，先运行 cmcp-logincode 拿一个应急登录码打开面板。"
-	fi
-elif [ "$ED" = full ]; then
+	echo "托管版的推送、云端备份、断电断网判断都已经开通，不用另外设置。"
 	echo
-	echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"
-	echo "  PANEL_TOKEN = $TOKEN"
-	echo "  RKEY        = $RKEY"
-	echo "  TKEY        = $TKEY"
+	echo "---------- 备用信息（一般用不到） ----------"
+	echo "面板地址：https://$H/panel/"
+	echo "登录地址（面板要求粘贴时用）：https://$H/cgi-bin/mcp/$TOKEN"
+	[ "$AI" = 1 ] && echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填）：https://$H/cgi-bin/mcp/$CKEY"
+	[ -n "$PC" ] && echo "配对码：$PC（在官网「添加路由器」里手动输入也行；过期了运行 cmcp-pair 再拿）"
+	echo "官网打不开、急着用：运行 cmcp-logincode 拿一个应急登录码"
+else
+	echo
+	echo "手机面板：https://$H/panel/"
+	echo
+	echo "登录地址（第一次打开面板时粘贴）："
+	echo "  https://$H/cgi-bin/mcp/$TOKEN"
+	echo
+	echo "或者在手机上直接打开这个链接，自动登录（同样不要发给别人）："
+	echo "  https://$H/panel/#login=$TOKEN"
+	echo "以后添加别的手机：面板里「系统操作 → 添加新手机」扫码就行。"
+	if [ "$AI" = 1 ]; then
+		echo
+		echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）："
+		echo "  https://$H/cgi-bin/mcp/$CKEY"
+	fi
+	echo
+	echo "⚠️  上面的地址里都带着密钥，谁拿到都能控制你的路由器：不要发给别人，也不要截图分享。"
+	if [ "$ED" = full ]; then
+		echo
+		echo "---------- 完整版：把下面 3 个值设成 Worker 的密钥（见 cloud/README.md） ----------"
+		echo "  PANEL_TOKEN = $TOKEN"
+		echo "  RKEY        = $RKEY"
+		echo "  TKEY        = $TKEY"
+	fi
 fi
 echo
 echo "卸载：sh uninstall.sh"

@@ -2,6 +2,7 @@
 # 托管版：拿一个配对码，把这台路由器绑定到官网账号（换手机时好找）
 # 用法：cmcp-pair            在终端随时运行，配对码 10 分钟内有效
 #       cmcp-pair --install  安装脚本最后自动调用（措辞略有不同）
+#       cmcp-pair --code     只输出配对码（安装脚本拼进手机打开的链接里）；拿不到就什么都不输出、返回 1
 D=/etc/claude-mcp
 HUB=$(sed -n 's/^HUB=//p' $D/hub.conf 2>/dev/null)
 SUB=$(sed -n 's/^SUB=//p' $D/hub.conf 2>/dev/null)
@@ -13,10 +14,12 @@ fi
 R=$(curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RKEY\"}" "$HUB/api/pair/start" 2>/dev/null)
 CODE=$(jsonfilter -s "$R" -e '@.code' 2>/dev/null)
 if [ -z "$CODE" ]; then
+	[ "$1" = --code ] && exit 1
 	E=$(jsonfilter -s "$R" -e '@.error' 2>/dev/null)
 	echo "拿配对码失败：${E:-连不上托管服务 $HUB}。稍后运行 cmcp-pair 再试，或者在面板「系统操作 → 绑定到账号」里拿。" >&2
 	exit 1
 fi
+[ "$1" = --code ] && { echo "$CODE"; exit 0; }
 C1=$(echo "$CODE" | cut -c1-4); C2=$(echo "$CODE" | cut -c5-8)
 echo
 echo "==================== 配对码 ===================="

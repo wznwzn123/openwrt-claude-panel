@@ -410,6 +410,7 @@ pre.out.tall{max-height:none;min-height:40vh}
 .formerr{margin-top:9px;padding:10px 12px;border-radius:12px;background:rgba(255,59,48,.1);color:var(--danger);font-size:13px;line-height:1.55;white-space:pre-wrap}
 #needcode.lgwrap{position:fixed;inset:0;z-index:90;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:max(40px,env(safe-area-inset-top)) 16px 22px;background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
 :root.dark #needcode.lgwrap{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}
+.ncpair{margin:14px 0 4px;padding:14px;border-radius:16px;background:var(--soft);text-align:left}.ncpair>b{display:block;font-size:15.5px}.ncpair>span{display:block;font-size:13.5px;line-height:1.65;margin-top:4px;color:var(--muted)}.ncpair .lgmain{margin-top:12px;text-align:center;text-decoration:none}
 .ncsteps{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.75}
 .nccode{font:600 22px/1.2 var(--mono)!important;letter-spacing:3px;text-align:center;text-transform:uppercase}
 .nchub{display:block;width:100%;margin-top:10px;padding:13px;border-radius:14px;text-align:center;font-weight:600;font-size:15px;background:var(--fill);color:var(--text);text-decoration:none}
@@ -514,7 +515,8 @@ section.page{display:none}section.page.on{display:block}
 	<div class="logo lgbiglogo" aria-hidden="true" style="font-size:30px">🔐</div>
 	<h2 id="lcTitle">输入登录码</h2>
 	<div class="muted" style="font-size:14px;line-height:1.7">为了安全，托管版每台手机第一次打开面板要输一次登录码，输对以后这台手机就不用再输了。</div>
-	<ol class="ncsteps muted"><li>打开官网 <b id="lcHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
+	<div id="lcPair" class="ncpair hidden"><b>第一次用：先绑定官网账号</b><span>点下面的按钮，登录或注册官网账号，这台路由器会自动绑定；绑定好官网会显示登录码，点「打开面板」就自动填好回到这里。</span><a id="lcPairBtn" class="lgmain" href="#">绑定官网账号</a></div>
+	<ol class="ncsteps muted" id="lcSteps"><li>打开官网 <b id="lcHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
 	<label class="lglabel" for="lcInput">登录码</label>
 	<input id="lcInput" class="input nccode" placeholder="8 位登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false">
 	<div id="lcErr" class="formerr hidden"></div>
@@ -881,7 +883,8 @@ const store = {
 };
 
 // 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
-try { const m = /^#login=([A-Za-z0-9]{16,64})$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+// 托管版安装完终端里给的链接还带着配对码（#login=密钥&pair=配对码）：输登录码那一页会带着去官网绑定账号
+try { const m = /^#login=([A-Za-z0-9]{16,64})(?:&pair=([A-Za-z0-9]{8}))?$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); if (m[2]) localStorage.setItem('rp_pair', JSON.stringify({ code: m[2].toUpperCase(), exp: Date.now() + 10 * 60e3 })); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 // 官网「获取登录码 → 打开面板」：网址带 #code=登录码，自动填好
 let pendCode = '';
 try { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (m) { pendCode = m[1].toUpperCase(); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
@@ -4310,6 +4313,13 @@ function needCode(data) {
 	const hub = (data && /^https:\/\/[a-z0-9.-]+$/i.test(data.hub || '')) ? data.hub : 'https://yrlove520.com';
 	$('lcHub').href = hub + '/app';
 	$('lcHubName').textContent = hub.replace(/^https:\/\//, '');
+	// 刚装好（链接里带着配对码，10 分钟内）：先去官网绑定账号
+	let pr = null; try { pr = JSON.parse(localStorage.getItem('rp_pair') || 'null'); } catch (e) {}
+	const pairOk = pr && pr.code && pr.exp > Date.now();
+	if (pr && !pairOk) store.del('rp_pair');
+	$('lcPair').classList.toggle('hidden', !pairOk);
+	$('lcSteps').classList.toggle('hidden', !!pairOk);
+	if (pairOk) $('lcPairBtn').href = hub + '/app?pair=' + encodeURIComponent(pr.code);
 	if (!w.classList.contains('hidden')) return;
 	w.classList.remove('hidden');
 	lcErr('');
@@ -4323,7 +4333,7 @@ async function ncGo() {
 	const btn = $('lcBtn'); btn.disabled = true; btn.textContent = '核对中…';
 	try {
 		const r = await rpcOnce('panel/device_approve', { code, name: loginDevName() }, 30000);
-		store.set('rp_dev', r.dev);
+		store.set('rp_dev', r.dev); store.del('rp_pair');
 		btn.textContent = '✓ 登录成功';
 		setTimeout(() => location.reload(), 400);
 	} catch (e) {

@@ -58,6 +58,24 @@ await rp({ kind: 'abuse', text: '有人用这个服务转发违法内容，网�
 await rp({ kind: 'hack', text: '不认识的类型会归到「其他」去' });
 L = (await (await adm('GET', '/feedback')).json()).list;
 ok('[报告] 隐私、滥用、不认识的类型（归到其他）都能提交', L[0].name === '官网 · 其他' && L[1].name === '官网 · 滥用举报' && L[2].name === '官网 · 隐私和数据', L.map((x) => x.name).join(','));
+// 安装脚本失败时（用户输入 y）发来的
+MAILS.length = 0; r = await rp({ kind: 'install', text: '面板版本：3.0.0（hosted-ai）\n失败的步骤：安装依赖\n错误：依赖安装失败：cloudflared' }, '6.6.6.6');
+L = (await (await adm('GET', '/feedback')).json()).list;
+ok('[安装失败] 终端上报的：反馈列表里标着「安装失败（终端上报）」，内容完整', r.status === 200 && L[0].name === '安装失败（终端上报）' && L[0].kind === 'install' && /依赖安装失败/.test(L[0].text) && L[0].text.split('\n').length === 3);
+ok('[安装失败] 邮件标题「有人安装失败了」', MAILS.some((m) => m.subject === '有人安装失败了' && /cloudflared/.test(m.html)));
+// 安装日志：单独存；管理员能看；删除时一起删；别的类型带日志不收
+r = await rp({ kind: 'install', text: '面板版本：3.0.0\n错误：依赖安装失败', log: '==> 安装依赖\n ✗ 依赖安装失败：cloudflared\n' + 'x'.repeat(70000) }, '6.6.6.7');
+L = (await (await adm('GET', '/feedback')).json()).list;
+const lid = L[0].id;
+ok('[安装日志] 存下来了：列表里只记长度（最多 64000 字）', r.status === 200 && L[0].log === 64000 && !('logText' in L[0]) && JSON.stringify(L[0]).length < 2000);
+let lr = await adm('GET', '/feedback/' + lid + '/log'); let lt = await lr.text();
+ok('[安装日志] 管理员能看（纯文本，留的是最后那段）', lr.status === 200 && /text\/plain/.test(lr.headers.get('content-type')) && lt.length === 64000 && lt.endsWith('x'));
+ok('[安装日志] 没有管理员密钥看不了', (await api('GET', '/api/admin/feedback/' + lid + '/log')).status === 401);
+const H2 = env.H.get('hub');
+ok('[安装日志] 删除这条报告：日志也删掉', (await (await adm('DELETE', '/feedback/' + lid)).json()).ok === true && !(await H2.ctx.storage.get('fblog:' + lid)));
+r = await rp({ kind: 'security', text: '安全问题报告的内容在这里', log: '不该收的日志' }, '6.6.6.8');
+L = (await (await adm('GET', '/feedback')).json()).list;
+ok('[安装日志] 别的类型带日志：不收', !L[0].log && (await adm('GET', '/feedback/' + L[0].id + '/log')).status === 404);
 // 校验
 r = await rp({ kind: 'security', text: '太短了' }); ok('[报告] 太短的不收（至少 10 个字）', r.status === 400 && /至少 10 个字/.test((await r.json()).error));
 r = await rp({ kind: 'security', text: 'x'.repeat(5000) }); L = (await (await adm('GET', '/feedback')).json()).list;

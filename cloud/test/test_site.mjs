@@ -273,6 +273,21 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	ok('[登录设备] 页面没有报错', ![...X.e, ...Y.e, ...Z.e].length, [...X.e, ...Y.e, ...Z.e].join(' | '));
 	await X.c.close(); await Y.c.close(); await Z.c.close();
 }
+// 管理页：安装失败报告带的日志能打开看
+{
+	await realFetch(B + '/api/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'install', text: '面板版本：3.0.0\n错误：依赖安装失败', log: '==> 安装依赖\n ✗ 依赖安装失败：cloudflared 不在软件源里' }) });
+	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
+	const page = await ctx.newPage(); const e3 = []; page.on('pageerror', (x) => e3.push(x.message));
+	await page.goto(B + '/admin'); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(1200);
+	ok('[管理页] 安装失败报告：标着「安装失败（终端上报）」，有「查看安装日志」按钮', /安装失败（终端上报）/.test(await page.textContent('#fbs')) && await page.locator('#fbs [data-log]').count() >= 1);
+	await page.locator('#fbs [data-log]').first().click(); await W(800);
+	ok('[管理页] 点开：弹出完整的安装日志', await page.isVisible('.dlg pre') && /cloudflared 不在软件源里/.test(await page.textContent('.dlg pre')));
+	if (SHOTS) await page.screenshot({ path: SHOTS + '/admin-installlog.png' });
+	await page.click('.dlg [data-x]'); await W(300);
+	ok('[管理页] 关闭日志窗口', !(await page.isVisible('.dlg')));
+	ok('[管理页] 页面没有报错', !e3.length, e3.join(' | '));
+	await ctx.close();
+}
 // 隐私政策、安全说明、报告表单
 {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });

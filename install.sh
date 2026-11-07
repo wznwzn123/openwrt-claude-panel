@@ -22,15 +22,28 @@
 # 重复运行 = 升级：代码会覆盖，已有的密钥和设置会保留。
 set -e
 
+# 在终端里手动安装时：整个安装过程同时记到 /tmp/cmcp-install.log（失败时用户输入 y 同意上报，会一起发给开发者）
+# 带 --yes 的（一键更新就是这样调用的）不走这一步，跟以前完全一样
+LOG=/tmp/cmcp-install.log RCF=/tmp/cmcp-install.rc
+case " $* " in *" --yes "*) CMCP_LOGGING=1 ;; esac
+if [ -z "$CMCP_LOGGING" ] && [ -f "$0" ] && command -v tee >/dev/null 2>&1; then
+	export CMCP_LOGGING=1
+	rm -f "$RCF"
+	sh "$0" "$@" 2>&1 | tee "$LOG"
+	rc=$(cat "$RCF" 2>/dev/null); rm -f "$RCF"
+	exit "${rc:-1}"
+fi
+
 SRC=$(cd "$(dirname "$0")" && pwd)/src
 WWW=/www-claude-mcp
 D=/etc/claude-mcp
 ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0; HUB=""; INV=""
 
-say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
+STEP="开始安装"; ERR=""; ABORT=0
+say()  { STEP="$*"; printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m ✓\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m !\033[0m %s\n' "$*"; }
-die()  { printf '\033[1;31m ✗ %s\033[0m\n' "$*"; exit 1; }
+die()  { ERR="$*"; printf '\033[1;31m ✗ %s\033[0m\n' "$*"; exit 1; }
 ask()  { # ask 变量名 提示 默认值 [必填]
 	local v n=0
 	if [ "$YES" = 1 ]; then eval "$1=\"\$3\""; return; fi
@@ -47,6 +60,63 @@ ask()  { # ask 变量名 提示 默认值 [必填]
 	eval "$1=\"\$v\""
 }
 rnd() { tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c "${1:-40}"; }
+
+# ---------- 安装失败：问要不要把失败原因发给开发者（输入 y 才发，默认不发；--yes 或者没有终端时不问也不发） ----------
+# 发的内容先完整显示出来：版本、失败的步骤、错误信息、系统和空间情况；不含密码、密钥、邀请码、网址
+TTY=${CMCP_TTY:-/dev/tty}  # 测试用：CMCP_TTY 指向一个写好回答的文件
+jesc() { printf '%s' "$1" | tr -d '\000-\011\013-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'; }
+mask() { # 把邀请码、隧道令牌、域名、云端地址换成 ***，长串（像密钥的）也遮掉
+	printf '%s\n' "$1" | awk -v a="$INV" -v b="$TTOK" -v c="$DOMAIN" -v d="$CURL_" '
+		function rp(s, x,   i, o) { if (length(x) < 4) return s; o = ""; while ((i = index(s, x)) > 0) { o = o substr(s, 1, i - 1) "***"; s = substr(s, i + length(x)) } return o s }
+		{ $0 = rp(rp(rp(rp($0, a), b), c), d); print }' | sed -E 's/[A-Za-z0-9_-]{32,}/***/g'
+}
+fail_report() {
+	set +e
+	local rc=$1 url info yn r px logt bf
+	[ "$rc" = 0 ] && return 0
+	[ "$ABORT" = 1 ] && return 0
+	url=${PKG_REPORT:-${PKG_HUB:-$HUB}}
+	[ -z "$url" ] && url=$(sed -n 's/^PKG_REPORT=//p; s/^PKG_HUB=//p' "$SRC/../EDITION" 2>/dev/null | head -n1)
+	url=${url%/}
+	case "$url" in https://*) ;; *) echo; echo "安装没有成功。可以把上面的错误截图，发到 GitHub 的 Issues 或者联系提供安装包的人。"; return 0 ;; esac
+	if [ "$YES" = 1 ] || ! ( : <"$TTY" ) 2>/dev/null; then echo; echo "安装没有成功。需要帮忙的话，把上面的错误截图发给开发者（官网「安全说明」页底部有报告表单）。"; return 0; fi
+	px=$(for p in openclash nikki passwall passwall2 homeproxy shadowsocksr; do [ -x /etc/init.d/$p ] && printf '%s ' $p; done)
+	info="面板版本：${PKG_VER:-开发版}（${PKG_CODE:-源码}）
+失败的步骤：$STEP
+错误：${ERR:-命令出错退出（代码 $rc）}
+系统：$( (. /etc/openwrt_release 2>/dev/null; echo "${DISTRIB_DESCRIPTION:-不是 OpenWrt？}（${DISTRIB_ID:-?} ${DISTRIB_RELEASE:-?} ${DISTRIB_REVISION:-}）") )
+平台：$( (. /etc/openwrt_release 2>/dev/null; echo "${DISTRIB_TARGET:-?} · ${DISTRIB_ARCH:-?}") )
+型号：$( { ubus call system board 2>/dev/null | sed -n 's/.*"model": *"\([^"]*\)".*/\1/p'; cat /tmp/sysinfo/model 2>/dev/null; } | head -n1 )
+内核：$(uname -rm 2>/dev/null)
+闪存剩余：$( { df -k /overlay 2>/dev/null || df -k / 2>/dev/null; } | awk 'NR==2{print int($4/1024) " MB"}')
+内存：$(free 2>/dev/null | awk '/^Mem/{print "共 " int($2/1024) " MB，空闲 " int($4/1024) " MB"}')
+有没有：ucode $(command -v ucode >/dev/null && echo 有 || echo 没有) · cloudflared $(command -v cloudflared >/dev/null && echo 有 || echo 没有) · curl $(command -v curl >/dev/null && echo 有 || echo 没有) · $(command -v opkg >/dev/null && echo opkg || { command -v apk >/dev/null && echo apk || echo 没有软件包管理器; }) · 防火墙 $(command -v fw4 >/dev/null 2>&1 && echo fw4 || { command -v fw3 >/dev/null 2>&1 && echo fw3 || echo 不知道; })
+代理插件：${px:-没有}
+是不是升级：$( [ "${UPGRADE:-0}" = 1 ] && echo 是 || echo 不是（全新安装）)"
+	info=$(mask "$info")
+	# 安装日志：这次安装在屏幕上输出的全部内容（去掉颜色，遮住邀请码、令牌、域名，最多最后 60KB）
+	logt=""; if [ -s "$LOG" ]; then logt=$(mask "$(sed "s/$(printf '\033')\[[0-9;]*m//g" "$LOG" | tail -c 60000)"); fi
+	echo
+	echo "安装没有成功。可以把下面这些信息发给开发者，帮忙找原因（不含密码、密钥、邀请码和网址）："
+	echo "----------------------------------------"
+	printf '%s\n' "$info"
+	[ -n "$logt" ] && echo "（还有这次安装在上面显示的全部过程，共 $(printf '%s\n' "$logt" | wc -l) 行，同样遮住了邀请码、令牌和域名）"
+	echo "----------------------------------------"
+	[ -z "$CMCP_TTY" ] && while IFS= read -r -t 0.2 yn 2>/dev/null <"$TTY"; do :; done
+	printf '要上报吗？输入 y 上报，n 不上报 [n]：'
+	yn=""; read -r yn <"$TTY" || yn=""
+	case "$yn" in y|Y|yes|YES|是) ;; *) echo "没有上报。"; return 0 ;; esac
+	bf=/tmp/cmcp-install-report.json
+	printf '{"kind":"install","text":"%s","log":"%s","contact":""}' "$(jesc "$info")" "$(jesc "$logt")" > "$bf"
+	if command -v curl >/dev/null 2>&1; then r=$(curl -s -m 30 -X POST -H 'Content-Type: application/json' --data-binary "@$bf" "$url/api/report" 2>/dev/null)
+	elif command -v uclient-fetch >/dev/null 2>&1; then r=$(uclient-fetch -q -T 30 -O - --post-file="$bf" "$url/api/report" 2>/dev/null)
+	else r=$(wget -q -T 30 -O - --post-data="$(cat "$bf")" "$url/api/report" 2>/dev/null); fi
+	rm -f "$bf"
+	case "$r" in *'"ok":true'*) echo "已上报，谢谢！开发者会尽快看。" ;; *) echo "上报没成功（可能网络不通）。可以把上面的内容截图发给开发者。" ;; esac
+	return 0
+}
+trap 'rc=$?; echo $rc > "$RCF" 2>/dev/null; fail_report $rc' EXIT
+trap 'ABORT=1; exit 130' INT TERM
 
 while [ $# -gt 0 ]; do
 	case "$1" in

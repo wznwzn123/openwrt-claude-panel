@@ -836,17 +836,21 @@ export class Hub extends DurableObject {
 		return { st: 200, ok: true };
 	}
 	/* ---------- 官网公开的报告表单：安全问题、隐私和数据、滥用举报（不用登录；不记 IP，只按 IP 限次，限次记录一两天后自动清掉） ---------- */
-	async report({ kind, text, contact, ip }) {
-		const KIND = { security: '安全问题', privacy: '隐私和数据', abuse: '滥用举报', other: '其他' };
+	async report({ kind, text, contact, ip, log }) {
+		// install：安装脚本失败时，用户在终端里输入 y 同意后发来的（版本、失败步骤、错误、系统情况）
+		const KIND = { security: '安全问题', privacy: '隐私和数据', abuse: '滥用举报', install: '安装失败', other: '其他' };
 		if (!KIND[kind]) kind = 'other';
 		text = String(text || '').trim().slice(0, 4000); contact = String(contact || '').trim().slice(0, 120);
 		if (text.length < 10) return { st: 400, error: '多写几句，说清楚是什么问题（至少 10 个字）' };
 		if (!(await this.hit('rp:' + (ip || '?'), 5, DAY))) return { st: 429, error: '今天提交太多次了，明天再试' };
 		if (!(await this.hit('rp:all', 100, DAY))) return { st: 429, error: '今天提交的人太多了，明天再试' };
-		const fb = { id: rnd(10), at: Date.now(), sub: '', name: '官网 · ' + KIND[kind], kind, web: 1, emails: [], text, contact, diag: '', done: 0, imgs: [] };
+		const fb = { id: rnd(10), at: Date.now(), sub: '', name: kind === 'install' ? '安装失败（终端上报）' : '官网 · ' + KIND[kind], kind, web: 1, emails: [], text, contact, diag: '', done: 0, imgs: [] };
+		// 安装失败带的安装日志（用户同意后发来，已经在路由器上遮住了邀请码、令牌、域名）：单独存，列表里只记有多长
+		log = kind === 'install' ? String(log || '').slice(-64000) : '';
+		if (log) { await this.ctx.storage.put('fblog:' + fb.id, log); fb.log = log.length; }
 		const drop = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); return l.slice(300); });
 		for (const x of drop) await this.fbImgRm(x);
-		await this.notifyAdmin('官网报告（' + KIND[kind] + '）', `${text}\n\n${contact ? '联系方式：' + contact : '没留联系方式'}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
+		await this.notifyAdmin(kind === 'install' ? '有人安装失败了' : '官网报告（' + KIND[kind] + '）', `${text}\n\n${contact ? '联系方式：' + contact : '没留联系方式'}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 		return { st: 200, ok: true };
 	}
 	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
@@ -869,7 +873,8 @@ export class Hub extends DurableObject {
 		for (let k = 0; k < m.n; k++) { const c = got.get('fbi:' + id + ':' + i + ':' + k); if (!c) return null; out.set(c, off); off += c.length; }
 		return { type: m.type, buf: out };
 	}
-	async fbImgRm(x) { const keys = []; (x.imgs || []).forEach((m, i) => { for (let k = 0; k < m.n; k++) keys.push('fbi:' + x.id + ':' + i + ':' + k); }); for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128)); }
+	async fbLog(id) { return (await this.ctx.storage.get('fblog:' + id)) || null; }
+	async fbImgRm(x) { if (x.log) await this.ctx.storage.delete('fblog:' + x.id); const keys = []; (x.imgs || []).forEach((m, i) => { for (let k = 0; k < m.n; k++) keys.push('fbi:' + x.id + ':' + i + ':' + k); }); for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128)); }
 	fbSet(id, done) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; x.done = done ? Date.now() : 0; await this.ctx.storage.put('fbl', l); return true; }); }
 	fbDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; await this.ctx.storage.put('fbl', l.filter((y) => y.id !== id)); await this.fbImgRm(x); return true; }); }
 	/* ---------- 新账号免费试用：每个账号能领一次（TRIAL_DAYS 天，默认 7；设成 0 就不发） ---------- */
@@ -978,7 +983,7 @@ export async function hubFetch(req, env) {
 	if (p === '/api/report' && req.method === 'POST') {
 		const b = await body();
 		if (b.website) return J({ ok: true });
-		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), ip: req.headers.get('cf-connecting-ip') || '' });
+		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), ip: req.headers.get('cf-connecting-ip') || '' });
 		return J(rest, st);
 	}
 	if (p === '/api/unregister' && req.method === 'POST') {
@@ -1027,6 +1032,7 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') return J({ ok: await H.fbSet(a[1], !!(await body()).done) });
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'img' && /^[0-2]$/.test(a[3] || '') && req.method === 'GET') { const im = await H.fbImg(a[1], +a[3]); return im ? new Response(im.buf, { headers: { 'content-type': im.type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有这张图' }, 404); }
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'log' && req.method === 'GET') { const t = await H.fbLog(a[1]); return t ? new Response(t, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有日志' }, 404); }
 		if (a[0] === 'testmail' && req.method === 'POST') { const r = await H.testMail(); return J(r, r.ok ? 200 : 502); }
 		return J({ error: 'not found' }, 404);
 	}

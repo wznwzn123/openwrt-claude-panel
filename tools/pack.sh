@@ -26,6 +26,8 @@ for ai in ai noai; do
 		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
 		cp "docs/install-$k.md" "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$ed" "${V#v}" "$k" > "$d/EDITION"
+		# 安装失败时用户同意上报，发到这里（只在设置了 HUB_URL 时）
+		[ -n "$HUB_URL" ] && echo "PKG_REPORT=$HUB_URL" >> "$d/EDITION"
 		if [ "$ed" = lite ]; then
 			rm -f "$d/src/bin/cmcp-backup"
 		else

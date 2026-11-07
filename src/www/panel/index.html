@@ -798,6 +798,14 @@ section.page{display:none}section.page.on{display:block}
 
 <!-- 断线记录 -->
 <section class="page" id="p-wd"><div id="wdBody"></div></section>
+<!-- 自动任务 -->
+<section class="page" id="p-auto">
+	<div class="hero">
+		<div class="herohead"><h1>自动任务</h1><span class="pill" id="auPill">—</span></div>
+		<p class="muted" style="margin-bottom:0">路由器自己会做的事：出了问题自动修、选网络线路、定时提醒和备份。每一项都能单独开关，关掉以后会怎样写在下面。</p>
+	</div>
+	<section class="card" id="auCard"><div class="muted" style="font-size:13px">读取中…</div></section>
+</section>
 
 <!-- 系统 -->
 <!-- 内嵌 Kwrt 原版页面 -->
@@ -1135,7 +1143,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程' };
+const TITLES = { main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -1146,6 +1154,7 @@ const NAV = [
 		{ p: 'traf', i: '▥', t: '流量统计' },
 		{ p: 'speed', i: '⏱', t: '网速测试' },
 		{ p: 'wd', i: '♥', t: '断线记录' },
+		{ p: 'auto', i: '⟳', t: '自动任务' },
 		{ p: 'slog', i: '≣', t: '系统日志' },
 		{ p: 'proc', i: '▦', t: '进程' },
 		{ t: '实时监控', i: '∿', kids: [['admin/status/realtime/bandwidth', '实时流量'], ['admin/status/realtime/load', '系统负载'], ['admin/status/realtime/connections', '连接统计'], ['admin/status/realtime/wireless', '无线信号']] },
@@ -3384,6 +3393,7 @@ function renderAuto() {
 	pl.textContent = n === items.length ? '全部开启' : n ? `开了 ${n} / ${items.length} 项` : '全部关闭';
 	pl.className = 'pill ' + (n === items.length ? 'good' : '');
 }
+$('auCard').addEventListener('click', (ev) => { const au = ev.target.closest('[data-au]'); if (au && ev.target.matches('input')) setAuto(au); });
 function setAuto(lb) {
 	const k = lb.dataset.au, inp = lb.querySelector('input'), on = inp.checked;
 	const it = AU.d ? autoItems(AU.d).find((x) => x.k === k) : null;
@@ -3442,7 +3452,7 @@ function renderWd(err) {
 		</section>`;
 	}
 	html += `<div class="sectitle"><b>每日体检</b><span class="pill" id="dyPill">—</span></div><section class="card" id="dyCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
-	html += `<div class="sectitle"><b>自动处理</b><span class="pill" id="auPill">—</span></div><section class="card" id="auCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
+	html += `<section class="card list" style="margin-top:12px"><button class="file" data-goauto><div><b>自动任务</b><span class="muted">出了问题自动修、定时提醒和备份，每一项都能开关</span></div><span class="muted">›</span></button></section>`;
 	html += noCloud() ? `<div class="sectitle"><b>手机通知</b><span class="pill">未启用</span></div><section class="card"><div class="muted" style="font-size:13px">手机推送、微信推送、云端备份和断电/断网判断需要 Cloudflare 云端（完整版）。装好云端后在路由器上重新运行安装脚本选完整版即可。</div></section>`
 		: `<div class="sectitle"><b>手机通知</b><span class="pill" id="pushPill">—</span></div><section class="card" id="pushCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
 	html += `<div class="sectitle"><b>最近 7 天</b></div><div class="wdsum">${sum.map(([k, n]) => `<span class="pill ${n ? (k === '自动修复' ? 'blue' : 'red') : ''}">${k} ${n} 次</span>`).join('')}</div>`;
@@ -3456,10 +3466,8 @@ function renderWd(err) {
 	});
 	box.innerHTML = html;
 	renderDaily(); if (!off) loadDaily();
-	renderAuto(); if (!off) loadAuto();
 	box.onclick = async (ev) => {
-		const au = ev.target.closest('[data-au]');
-		if (au && ev.target.matches('input')) return setAuto(au);
+		if (ev.target.closest('[data-goauto]')) return go('auto');
 		const dr = ev.target.closest('[data-dyrun]');
 		if (dr) return busy(dr, async () => { DY.d = await P('daily', { run: 1 }, 90000); DY.at = Date.now(); store.set('rp_daily', JSON.stringify(DY.d)); renderDaily(); toast('体检完成：' + (DY.d.summary || '')); }, '体检中');
 		const c = ev.target.closest('[data-wdcheck]');
@@ -4379,7 +4387,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

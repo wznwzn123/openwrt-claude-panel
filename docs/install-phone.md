@@ -217,7 +217,7 @@ sh install.sh --invite 邀请码
 连家里 Wi-Fi 时，打开面板的流量会经过 OpenClash 的代理节点，节点卡了就打不开。面板每 3 分钟自动检查，代理打不开会自动改走直连（需要先在面板「拉黑名单」里启用过一次规则集）。急的话先用手机流量打开。
 
 **OpenClash 重启、节点卡住时，面板和 Claude 会跟着断吗？**
-v2.0.4 起不会了：安装时会把路由器连 Cloudflare 的隧道改成直连，不经过 OpenClash（不用重启 OpenClash，也不影响家里其他设备）。v2.0.6 起 Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 也一样（Nikki 要等它下次重启才生效）。如果你那里直连 Cloudflare 连不上，路由器会在 15 分钟后自动改回走代理，一天后再试一次。想一直走代理：在面板「断线记录 → 自动处理」里关掉「隧道直连 Cloudflare」（v2.0.5 起；也可以在路由器后台终端运行 `cmcp-tunbypass off`）。
+v2.0.4 起不会了：安装时会把路由器连 Cloudflare 的隧道改成直连，不经过 OpenClash（不用重启 OpenClash，也不影响家里其他设备）。v2.0.6 起 Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 也一样（Nikki 要等它下次重启才生效）。如果你那里直连 Cloudflare 连不上，路由器会在 15 分钟后自动改回走代理，一天后再试一次。想一直走代理：在面板「自动任务」页里关掉「隧道直连 Cloudflare」（v2.0.5 起；也可以在路由器后台终端运行 `cmcp-tunbypass off`）。
 
 **托管网址打不开，或者收到「托管网址已被删除 / 已停用 / 已到期」的提醒？**
 家里上网和路由器上的设置都不受影响，只是专属网址、推送、云端备份停了。先打开官网账号页看这台路由器显示的是哪种情况：

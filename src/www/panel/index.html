@@ -3146,8 +3146,13 @@ function renderBk() {
 	$('bkPill').textContent = `${list.length} / ${d.max || 10} 份`;
 	const last = list[0];
 	const old = list.some((b) => !b.enc);
-	const sslBox = d.ssl === false ? `<div class="notice w" style="margin-bottom:12px">${d.ssl_run ? '正在安装加密工具（openssl-util），一般要半分钟到一两分钟，装好后这里会自动更新。' : `现在的备份<b>没有加密</b>：里面有 Wi‑Fi 密码、登录密钥这些设置，原样存在云端。点「开启加密」会在路由器上装 openssl-util（需要几百 KB 到 2 MB 空间），以后的备份都先加密再上传，下载、还原跟现在一样用。${d.ssl_err ? '<br><span style="color:var(--danger,#d33)">上次没装成：' + esc(d.ssl_err) + '</span>' : ''}<button class="btn primary" id="bkSsl" style="width:100%;margin-top:10px">开启加密</button>`}</div>` : '';
-	box.innerHTML = `${sslBox}${d.ssl !== false && old ? '<div class="notice" style="margin-bottom:12px">标着「没加密」的是开启加密以前的备份，会随着新备份慢慢轮换掉（最多留 10 份），也可以自己删。</div>' : ''}<div class="sectitle"><b>备份列表</b>${last ? `<span class="pill">最近 ${esc(ago(new Date(last.at).toISOString()))}</span>` : ''}</div>
+	// 「加密上传」开关：开着 = 有 openssl 且没关；没装 openssl 时打开会先装
+	const encOn = !!d.ssl && !d.noenc, encDesc = d.ssl_run ? '正在安装加密工具（openssl-util），一般要半分钟到一两分钟，装好后这里会自动更新。'
+		: encOn ? '新备份先在路由器上加密再上传，密钥只在这台路由器上，云端看不到内容。'
+		: d.ssl ? '已关闭：新备份不加密，直接上传（里面有 Wi‑Fi 密码这些设置）。以前加密的备份照样能下载、还原。'
+		: '没有开启：备份里的 Wi‑Fi 密码、登录密钥这些设置原样存在云端。打开会在路由器上装 openssl-util（需要几百 KB 到 2 MB 空间）。';
+	const sslBox = `<section class="card" style="margin-bottom:12px;padding-top:8px;padding-bottom:8px"><label class="kv aswon"><span><b>加密上传</b><span class="muted">${encDesc}${!d.ssl && d.ssl_err ? '<br><span style="color:var(--danger,#d33)">上次没装成：' + esc(d.ssl_err) + '</span>' : ''}</span></span><span class="sw"><input type="checkbox" id="bkEnc"${encOn || d.ssl_run ? ' checked' : ''}${d.ssl_run ? ' disabled' : ''}><i></i></span></label></section>`;
+	box.innerHTML = `${sslBox}${encOn && old ? '<div class="notice" style="margin-bottom:12px">标着「没加密」的是没开加密时存的备份，会随着新备份慢慢轮换掉（最多留 10 份），也可以自己删。</div>' : ''}<div class="sectitle"><b>备份列表</b>${last ? `<span class="pill">最近 ${esc(ago(new Date(last.at).toISOString()))}</span>` : ''}</div>
 	<section class="card">${list.length ? list.map((b) => `<div class="bkrow" data-bk="${esc(b.id)}">
 		<div><b>${bkWhen(b.at)}<span class="bktag ${b.kind === 'auto' ? '' : 'm'}">${b.kind === 'auto' ? '自动' : '手动'}</span>${b.enc ? '<span class="bktag e">已加密</span>' : '<span class="bktag o">没加密</span>'}</b><span class="muted">${B(b.size)} · ${b.files || '—'} 个文件</span></div>
 		<div class="actions"><button class="btn sm" data-bkdl>下载</button><button class="btn sm blue" data-bkrs>还原</button><button class="btn sm danger" data-bkrm>删除</button></div></div>`).join('') : '<div class="empty">云端还没有备份，点上面的「立即备份」存第一份。</div>'}</section>
@@ -3158,12 +3163,20 @@ $('bkNow').addEventListener('click', (e) => busy(e.currentTarget, async () => {
 	toast(`已备份到云端（${B(r.size)}）`);
 	await loadBk();
 }, '备份中'));
+$('bkBody').addEventListener('change', async (e) => {
+	const sw = e.target.closest('#bkEnc'); if (!sw) return;
+	const on = sw.checked, d = CBK.d || {};
+	const ok = on ? (d.ssl ? true : await confirmBox('开启备份加密', '在路由器上安装 openssl-util（需要几百 KB 到 2 MB 闪存空间，要连软件源，一般半分钟到一两分钟）。\n\n装好以后，新的备份先在路由器上加密再上传，密钥只在这台路由器上。下载、还原跟现在一样用；家里上网不受影响。', '开启加密'))
+		: await confirmBox('关闭备份加密', '以后的备份不加密，直接上传到云端（里面有 Wi‑Fi 密码、登录密钥这些设置）。\n\n已经加密的备份不受影响，照样能下载、还原。随时可以再打开。', '关闭加密', true);
+	if (!ok) { sw.checked = !on; return; }
+	sw.disabled = true;
+	try {
+		const r = await P('bk_enc', { on }, 30000);
+		toast(!on ? '已关闭加密，下次备份起不加密' : r.running ? '开始安装加密工具，装好后自动更新' : '已开启加密，下次备份起先加密再上传');
+	} catch (x) { sw.checked = !on; handleErr(x); }
+	await loadBk().catch(() => {});
+});
 $('bkBody').addEventListener('click', async (e) => {
-	const ssl = e.target.closest('#bkSsl');
-	if (ssl) {
-		if (!(await confirmBox('开启备份加密', '在路由器上安装 openssl-util（需要几百 KB 到 2 MB 闪存空间，要连软件源，一般半分钟到一两分钟）。\n\n装好以后，新的备份先在路由器上加密再上传，密钥只在这台路由器上。下载、还原跟现在一样用；家里上网不受影响。', '开启加密'))) return;
-		return busy(ssl, async () => { const r = await P('bk_ssl', {}, 30000); toast(r.already ? '已经开启了' : '开始安装，装好后自动更新'); await loadBk(); }, '开始安装');
-	}
 	const row = e.target.closest('[data-bk]'); if (!row) return;
 	const id = row.dataset.bk, b = (CBK.d.list || []).find((x) => x.id === id); if (!b) return;
 	const when = bkWhen(b.at);

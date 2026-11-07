@@ -2347,7 +2347,7 @@ P.speed_last = function() {
 
 
 /* ---------- 云端备份（存在 Cloudflare，经路由器转发，面板拿不到云端密钥） ---------- */
-const SSL_RUN = '/tmp/cmcp_sslinst.run', SSL_LOG = '/tmp/cmcp_sslinst.log';
+const SSL_RUN = '/tmp/cmcp_sslinst.run', SSL_LOG = '/tmp/cmcp_sslinst.log', BK_NOENC = '/etc/claude-mcp/bk.noenc';
 function bk_cloud() {
 	let c = {};
 	for (let l in split(readfile('/etc/claude-mcp/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
@@ -2378,7 +2378,7 @@ P.bk_list = function() {
 	if (!j?.ok) die('连不上云端备份' + (j?.error ? '：' + j.error : ''));
 	let cron = sh("grep -q cmcp-backup /etc/crontabs/root 2>/dev/null").code == 0;
 	let ssl = sh('command -v openssl >/dev/null 2>&1').code == 0, srun = !!stat(SSL_RUN);
-	return { list: j.list, max: j.max, auto: cron, running: !!stat('/tmp/cmcp_bk.lock'), ssl, ssl_run: srun, ssl_err: !ssl && !srun && stat(SSL_LOG) ? substr(trim(readfile(SSL_LOG) ?? ''), -200) : null };
+	return { list: j.list, max: j.max, auto: cron, running: !!stat('/tmp/cmcp_bk.lock'), ssl, noenc: !!stat(BK_NOENC), ssl_run: srun, ssl_err: !ssl && !srun && stat(SSL_LOG) ? substr(trim(readfile(SSL_LOG) ?? ''), -200) : null };
 };
 // 开启备份加密：用户在云端备份页点了才装 openssl-util（不会自己装）；闪存剩不到 4MB 不装
 // 在后台装（软件源慢的话超过一分多钟，经 Cloudflare 的请求会被断开），面板隔几秒看一次 bk_list 的 ssl / ssl_run / ssl_err
@@ -2389,6 +2389,16 @@ P.bk_ssl = function() {
 	if (free > 0 && free < 4096) die(sprintf('闪存只剩 %d KB，装加密工具至少要 4 MB，先清理一下空间', free));
 	sh(sprintf("( touch %s; if command -v opkg >/dev/null 2>&1; then opkg update >/dev/null 2>&1; opkg install openssl-util; elif command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1; apk add openssl-util; else echo 没有软件包管理器; fi; rm -f %s ) >%s 2>&1 </dev/null &", SSL_RUN, SSL_RUN, SSL_LOG));
 	return { ok: true, running: true };
+};
+// 「加密上传」开关：关 = 留一个标记文件，备份时不加密（密钥不删，以前加密的照样能还原）；
+// 开 = 删掉标记；没有 openssl 的话顺便开始装（跟以前的「开启加密」按钮一样）
+P.bk_enc = function(a) {
+	if (a?.on) {
+		if (stat(BK_NOENC)) sh('rm -f ' + BK_NOENC);
+		return P.bk_ssl();
+	}
+	writefile(BK_NOENC, sprintf('%d\n', time()));
+	return { ok: true, off: true };
 };
 P.bk_now = function() {
 	let r = sh('/usr/sbin/cmcp-backup manual 2>&1');

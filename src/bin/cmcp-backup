@@ -4,6 +4,7 @@
 # 路由器上有 openssl：上传前先加密（AES-256-CBC + HMAC-SHA256），密钥只在路由器上（$D/bk.key），云端只存看不懂的密文；
 #   下载、还原时路由器先校验再解密，解出来和 LuCI「备份/升级」导出的格式一样
 # 没有 openssl：跟以前一样上传（不加密），不自动装任何东西；用户在面板云端备份页点「开启加密」才装 openssl-util
+# 面板里关掉「加密上传」（$D/bk.noenc）：有 openssl 也不加密，直接上传；密钥留着，以前加密的备份照样能下载、还原
 # 以前没加密的旧备份不主动删，跟以前一样随着新备份轮换掉（最多留 10 份）
 # 用法：cmcp-backup [auto|manual]
 #       cmcp-backup decrypt 输入 输出    解密云端下载的备份（校验不过、不是加密格式都会失败）
@@ -78,9 +79,9 @@ tar czf /tmp/cmcp_bk.tgz -T /tmp/cmcp_bk.list 2>/dev/null
 sz=$(wc -c < /tmp/cmcp_bk.tgz)
 [ "$sz" -gt 1000 ] || { echo "打包失败"; exit 1; }
 [ "$sz" -lt 20000000 ] || { echo "备份太大（$sz 字节）"; exit 1; }
-# 有 openssl 就加密（生成密钥或加密失败也照常上传不加密的，备份功能不受影响）
+# 有 openssl、而且没在面板里关掉加密，就加密（生成密钥或加密失败也照常上传不加密的，备份功能不受影响）
 up=/tmp/cmcp_bk.tgz ct=application/gzip enc=
-if have_ssl && mkkey && encrypt /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc; then up=/tmp/cmcp_bk.enc ct=application/octet-stream enc='&enc=1'; fi
+if [ ! -f "$D/bk.noenc" ] && have_ssl && mkkey && encrypt /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc; then up=/tmp/cmcp_bk.enc ct=application/octet-stream enc='&enc=1'; fi
 name="$(uci -q get system.@system[0].hostname || echo router)-$(date +%Y%m%d-%H%M)"
 r=$(curl -s -m 120 -X POST -H "Content-Type: $ct" --data-binary @$up "$URL/bk/$RKEY?name=$name&kind=$kind$enc&files=$(wc -l < /tmp/cmcp_bk.list)")
 case "$r" in

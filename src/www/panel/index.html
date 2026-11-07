@@ -55,6 +55,9 @@ h1,h2,h3{letter-spacing:-.02em}
 .scrim.open{opacity:1;pointer-events:auto}
 .sidehead{display:flex;align-items:center;gap:10px;padding:18px 16px 12px}.sidehead b{font-size:16px}
 .sidenav{flex:1;overflow-y:auto;contain:content;-webkit-overflow-scrolling:touch;padding:0 10px 10px;overscroll-behavior:contain}
+.fbims{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.fbims:empty{display:none}.fbim{position:relative;width:76px;height:76px;border-radius:12px;overflow:hidden;border:.5px solid var(--line)}.fbim img{width:100%;height:100%;object-fit:cover;display:block}.fbim button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:15px;line-height:22px;padding:0}
+.fbadd{position:relative;display:flex;justify-content:center;width:100%;margin-top:8px;cursor:pointer}
+.pxpick{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 12px;padding:10px 12px;border-radius:14px;border:0;background:var(--fill);font:inherit;font-size:13.5px;color:var(--text);text-align:left}.pxpick>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pxpk{color:var(--blue,#0a84ff);font-weight:600;flex:none}
 .mfb{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin-top:12px;padding:14px 16px;font:inherit;color:var(--text)}.mfb>span:nth-child(2){flex:1;min-width:0}.mfb b{display:block;font-size:15px}.mfb .muted{font-size:13px}.mfbic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--soft);color:var(--blue,#0a84ff);flex:none}.mfbic svg{width:19px;height:19px}
 .sidefoot{display:flex;gap:6px;margin:0 10px max(12px,env(safe-area-inset-bottom));padding-top:6px;border-top:.5px solid var(--line)}.sidefoot>button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 10px;border-radius:14px;background:transparent;font-size:15px;font-weight:600}.sidefoot svg{width:20px;height:20px;flex:none}.sidefb{color:var(--blue,#0a84ff)}.sidefb:active{background:var(--fill)}
 .sideout{color:var(--danger)}.sideout:active{background:var(--fill)}
@@ -588,6 +591,7 @@ section.page{display:none}section.page.on{display:block}
 			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
 			<p class="muted" id="hDesc">&nbsp;</p>
 			<label class="pxrow" id="pxRow"><span class="pxtxt"><b id="pxTitle">代理</b><span class="muted" id="pxSub">读取中…</span></span><span class="sw"><input type="checkbox" id="pxSw" disabled aria-label="代理开关"><i></i></span><span class="pxlog" id="pxLog"></span></label>
+			<button class="pxpick hidden" id="pxPick"></button>
 			<div id="modeBox"><div class="muted" style="font-weight:600">代理模式</div>
 			<div class="chips" id="modeChips" style="margin-top:6px">
 				<button class="chip" data-mode="rule">规则</button>
@@ -1770,6 +1774,18 @@ async function pxRestart() {
 	else await P('px_ctl', { id: a.id, op: 'restart' });
 	toast(a.name + ' 正在重启'); setStatus(false, '重启中');
 }
+// 换用另一个代理插件（装了两个以上时）
+async function pxSwitchSheet() {
+	const pl = (PXS && PXS.list) || [], a = pxAct();
+	const v = await modal(`<div class="sheethead"><h3>用哪个代理插件</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<p class="muted" style="margin:0 0 8px;font-size:12.5px;line-height:1.6">同一时间只开一个，两个一起开会抢流量。换的时候会先关掉正在用的，再打开选的那个，全家断网十几秒。</p>
+		${pl.map((x) => `<button class="file ${a && x.id === a.id ? 'cur' : ''}" data-v="p:${esc(x.id)}"><div><b>${esc(x.name)}</b><span class="muted">${x.running ? '运行中' : x.enabled ? '开着，没在运行' : '关着'}${x.kind === 'clash' ? ' · 节点、测速、连接、代理模式都能在面板里管' : ' · 面板里能开关、换节点、测延迟'}</span></div>${a && x.id === a.id ? '<span class="pill blue">正在用</span>' : '<span class="muted">›</span>'}</button>`).join('')}`);
+	const id = typeof v === 'string' && v.startsWith('p:') ? v.slice(2) : null, x = pl.find((y) => y.id === id);
+	if (!x || (a && x.id === a.id && x.running)) return;
+	if (!(await confirmBox('换成 ' + x.name, (a && a.id !== x.id ? '先关掉 ' + a.name + '，' : '') + '再打开 ' + x.name + '。全家断网十几秒，这个面板也可能暂时连不上。', '换'))) return;
+	busy(null, async () => { await P('px_switch', { id: x.id }); toast('正在换成 ' + x.name + '，稍等十几秒'); setStatus(false, '切换中'); setTimeout(() => loadHome(true).catch(() => {}), 15000); });
+}
+$('pxPick').onclick = () => pxSwitchSheet();
 $('pgNode').onclick = () => pxNodeSheet();
 $('pgNodes').onclick = () => pxNodeSheet();
 $('pgRestart').onclick = () => busy(null, pxRestart);
@@ -1890,6 +1906,9 @@ function renderOv(o, cached) {
 	$('pgHead').classList.toggle('hidden', kind !== 'other'); $('pgCard').classList.toggle('hidden', kind !== 'other');
 	$('qHead').classList.toggle('hidden', !isOC); $('qCard').classList.toggle('hidden', !isOC);
 	if (a) $('ocName').textContent = a.name;
+	const pl = (PXS && PXS.list) || [];
+	$('pxPick').classList.toggle('hidden', pl.length < 2);
+	if (pl.length >= 2) $('pxPick').innerHTML = `<span>代理插件：<b>${esc(a ? a.name : '没在用')}</b><span class="muted"> · 还装了 ${esc(pl.filter((x) => !a || x.id !== a.id).map((x) => x.name).join('、'))}</span></span><span class="pxpk">切换 ›</span>`;
 	if (kind === 'other') {
 		pxRenderOther(a, o.px || PXS || {}, !cached);
 		$('hHead').textContent = !a.running ? a.name + (a.enabled === false ? ' 已关闭' : ' 没在运行') : !wanOk ? '宽带未连接' : '网络一切正常';
@@ -3821,23 +3840,58 @@ const T = {
 };
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
 // 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
+// 截图压缩成 JPEG（最长边 1600，太大再降画质），手机、电脑的浏览器和安卓 App 都能用
+function shrinkImg(file) {
+	return new Promise((ok, no) => {
+		if (!file || !/^image\//.test(file.type || 'image/')) return no(new Error('只能选图片'));
+		const url = URL.createObjectURL(file), img = new Image();
+		img.onload = () => {
+			try {
+				const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+				const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+				const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+				URL.revokeObjectURL(url);
+				let q = 0.82, d = c.toDataURL('image/jpeg', q);
+				while (d.length > 1.3e6 && q > 0.4) { q -= 0.12; d = c.toDataURL('image/jpeg', q); }
+				if (d.length > 2e6) return no(new Error('图片太大了，换一张试试'));
+				ok(d);
+			} catch (e) { URL.revokeObjectURL(url); no(new Error('这张图片处理不了，换一张试试')); }
+		};
+		img.onerror = () => { URL.revokeObjectURL(url); no(new Error('这种图片格式打不开，换成 JPG 或 PNG 截图试试')); };
+		img.src = url;
+	});
+}
+// 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
 async function feedbackSheet() {
-	let dg = '';
-	try { dg = (await P('feedback_diag', {}, 15000)).text || ''; } catch (e) {}
+	let dg = '', hosted = true;
+	try { const r = await P('feedback_diag', {}, 15000); dg = r.text || ''; hosted = r.hosted !== false; } catch (e) {}
+	const IM = [];
 	modal(`<div class="sheethead"><h3>问题反馈 / 建议</h3><button class="btn sm" data-v="close">关闭</button></div>
-		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。截图可以发到联系方式里。</p>
+		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。</p>
 		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px"></textarea>
+		<div class="fbims" data-ims></div>
+		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
 		<input class="input" data-ct maxlength="80" placeholder="联系方式（可以不填）：微信、QQ、邮箱" style="margin-top:8px" autocapitalize="off" spellcheck="false">
 		<label class="kv aswon" style="margin-top:6px"><span><b>附上路由器信息</b><span class="muted">方便查问题，只有下面这些，不含密钥和网址</span></span><span class="sw"><input type="checkbox" data-dg checked><i></i></span></label>
 		${dg ? `<pre class="out" style="font-size:11.5px;max-height:120px;overflow:auto;margin:6px 0 0">${esc(dg)}</pre>` : ''}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn primary" data-go>发送</button></div>`, (m, close) => {
-		const go = m.querySelector('[data-go]'), tx = m.querySelector('[data-tx]');
+		const go = m.querySelector('[data-go]'), tx = m.querySelector('[data-tx]'), box = m.querySelector('[data-ims]'), fi = m.querySelector('[data-file]'), aw = m.querySelector('[data-addw]');
+		const draw = () => {
+			box.innerHTML = IM.map((d, i) => `<div class="fbim"><img src="${d}" alt="截图 ${i + 1}"><button type="button" data-rm="${i}" aria-label="删掉这张">×</button></div>`).join('');
+			if (aw) aw.classList.toggle('hidden', IM.length >= 3);
+		};
+		box.onclick = (e) => { const r = e.target.closest('[data-rm]'); if (r) { IM.splice(+r.dataset.rm, 1); draw(); } };
+		if (fi) fi.onchange = async () => {
+			const files = [...(fi.files || [])].slice(0, 3 - IM.length); fi.value = '';
+			for (const f of files) { try { IM.push(await shrinkImg(f)); draw(); } catch (e) { toast(e.message, true); } }
+			if ((fi.files || []).length > files.length) toast('最多 3 张');
+		};
 		setTimeout(() => tx.focus(), 80);
 		go.onclick = () => busy(go, async () => {
-			const r = await P('feedback', { text: tx.value, contact: m.querySelector('[data-ct]').value, diag: m.querySelector('[data-dg]').checked }, 30000);
+			const r = await P('feedback', { text: tx.value, contact: m.querySelector('[data-ct]').value, diag: m.querySelector('[data-dg]').checked, images: hosted ? IM : [] }, 90000);
 			close(true);
 			if (r.sent === 'github') { window.open(r.url, '_blank', 'noopener'); toast('已打开 GitHub，登录后点「Submit」就发出去了'); }
-			else toast('已发送，谢谢！开发者会尽快看');
+			else toast('已发送' + (r.images ? '（带 ' + r.images + ' 张截图）' : '') + '，谢谢！开发者会尽快看');
 		}, '发送中');
 	});
 }

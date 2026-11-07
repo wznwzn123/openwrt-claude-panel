@@ -23,6 +23,7 @@ pre.term{margin:10px 0 4px;padding:12px 14px;border-radius:14px;background:#1416
 pre.term b{color:#7cc4ff;font-weight:600}pre.term i{font-style:normal;color:#ffcf6b}pre.term u{text-decoration:none;color:#8a93a6}
 .demo{display:block;width:min(100%,260px);height:auto;margin:10px 0 2px;border-radius:18px;border:4px solid #16181f;box-shadow:0 8px 20px rgba(20,30,60,.16)}
 footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
+.faq details{border-bottom:.5px solid var(--line);padding:12px 2px}.faq details:last-child{border-bottom:0}.faq summary{cursor:pointer;font-weight:650;font-size:15px;list-style-position:outside}.faq p,.faq ul{margin:8px 0 0;font-size:14px;line-height:1.75;color:var(--text)}.faq ul{padding-left:20px}.faq li{margin:4px 0}.faq .muted{color:var(--muted);font-size:13px}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a><a class="btn sm primary" href="/app">登录</a></div></div>
 
@@ -55,7 +56,7 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 <h2 class="sec" id="start">怎么开始（只用手机，5 分钟）</h2>
 <div class="card">
 	<ol class="steps">
-		<li><div><b>拿到邀请码</b><div class="muted">托管服务需要邀请码，找提供服务的人要。</div></div></li>
+		<li><div><b>拿到试用码或邀请码</b><div class="muted"><a href="/app">注册账号</a>就能领 7 天免费试用码（装好后自动加到你的账号里）；也可以找提供服务的人要邀请码。</div></div></li>
 		<li><div><b>打开路由器后台的终端</b><div class="muted">手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（不是装好以后面板里的那个终端。）</div></div></li>
 		<li><div><b>粘贴这条命令，回车</b><div class="muted">装纯面板版就把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>，其他地方别动：</div>
 			<pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
@@ -87,6 +88,24 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 </div><p class="muted" style="font-size:12.5px;margin:12px 0 0" id="apkVer">安装时如果提示「未知来源」，允许一次就行。苹果手机直接用浏览器打开面板，「添加到主屏幕」即可。</p></div>
 <script>fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j.version) document.getElementById('apkBtn').textContent = '下载安卓 App（' + j.version + '）'; }).catch(() => {});</script>
 
+<h2 class="sec" id="faq">常见问题</h2>
+<div class="card faq">
+	<details id="faq-restore"><summary>托管网址打不开了，提示被停用、到期或者删除了，怎么恢复？</summary>
+		<p>家里上网和路由器上的设置都不受影响，只是专属网址、推送、云端备份停了。先打开<a href="/app">账号页</a>看这台路由器显示的是哪种情况：</p>
+		<ul>
+			<li><b>已到期暂停</b>：点「续期」输入续期码，或者点「申请续期」填表等审核。续上马上恢复，什么都不用做。暂停超过 30 天会被彻底删除。</li>
+			<li><b>已被停用，某日前可恢复</b>：被提供服务的人停用了（可能是误删）。在显示的日期前联系他，他在管理页一键就能恢复，恢复后原来的网址、登录过的手机都照常能用。</li>
+			<li><b>账号里已经没有这台路由器</b>（或者收到了「已被彻底删除」的邮件）：要一个新的邀请码，手机连家里 Wi-Fi，打开路由器后台「服务 → 终端」，把安装命令再运行一次，最后的 <code>sh install.sh</code> 改成 <code>sh install.sh --invite 新邀请码</code>。路由器上的设置都保留，网址会换成新的；装完照着屏幕上的链接重新绑定账号就行。</li>
+		</ul>
+		<p class="muted">详细步骤：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">📱 手机教程 · 常见问题</a></p>
+	</details>
+	<details><summary>试用快到期了怎么办？</summary><p>到期前 3 天会推送提醒。在<a href="/app">账号页</a>这台路由器下面点「申请续期」填个表，审核通过就自动续上；有续期码的点「续期」输入。不用重装。</p></details>
+	<details><summary>换了手机、清了浏览器数据，怎么再登录面板？</summary><p>打开<a href="/app">账号页</a>，在这台路由器下面点「获取登录码」，再点「打开面板」就自动填好了。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></details>
+	<details><summary>连着家里 Wi-Fi 时面板打不开，换成手机流量就好？</summary><p>多半是代理插件正在重启或者节点卡了。面板会自动改走直连，稍等一两分钟再刷新；急的话先用手机流量打开。路由器上的「自动任务」里可以看到这些自动处理开没开。</p></details>
+	<details><summary>装的不是 OpenClash，能用吗？</summary><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。没装代理插件也能用设备、流量、测速、断线记录这些功能。</p></details>
+	<details><summary>遇到问题、想要新功能？</summary><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。</p></details>
+</div>
+
 <h2 class="sec">安全</h2>
 <div class="card"><table>
 	<tr><th style="width:34%">登录密钥</th><td>只在你的路由器和你自己的手机上生成、保存。托管服务<b>拿不到</b>，所以也<b>进不了</b>你的路由器。</td></tr>
@@ -100,4 +119,5 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 <div class="card"><p style="margin:0">不想用托管服务？也可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本（AI 版 / 纯面板版 × 精简版 / 完整版）和教程都在 <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。开源，MIT 许可证。</p></div>
 
 <footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a></footer>
-</div></body></html>
+</div><script>const faqOpen = () => { const d = location.hash.startsWith('#faq') && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView({ block: 'start' }); } }; faqOpen(); addEventListener('hashchange', faqOpen);</script>
+</body></html>

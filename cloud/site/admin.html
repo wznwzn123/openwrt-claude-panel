@@ -18,6 +18,7 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 .dlg{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding:12px}
 .dlg .card{width:min(460px,100%);margin:0 0 env(safe-area-inset-bottom);background:var(--bg);box-shadow:0 12px 40px rgba(0,0,0,.25)}.dlg h3{margin:0 0 4px;font-size:18px}
 .dchips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 8px}.dchips .btn.on{background:var(--brand,#007aff);color:#fff}
+.fbimgs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}.fbimg{width:86px;height:86px;border-radius:12px;border:.5px solid var(--line);background:var(--fill);padding:0;overflow:hidden;display:grid;place-items:center;font-size:12px}.fbimg img{width:100%;height:100%;object-fit:cover;display:block}
 .dprev{margin:10px 0 2px;font-size:14px;line-height:1.6}.dprev b{color:var(--brand,#007aff)}.dprev .bad{color:var(--danger,#ff3b30)}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>托管服务管理</a><button class="btn sm hidden" id="outBtn">退出</button></div>
@@ -156,7 +157,7 @@ function renderInv(list) {
 	list.sort((a, b) => b.created - a.created);
 	$('invs').innerHTML = list.length ? list.map((i) => { const dead = (i.exp && i.exp < Date.now()) || i.used >= i.max;
 		const by = DEVS.filter((d) => d.invite === i.code);
-		return `<div class="item" data-code="${esc(i.code)}"><div class="l"><b><code>${esc(i.code)}</code>${dead ? ' <span>（已失效）</span>' : ''}</b><span>已用 ${i.used} / ${i.max} · ${i.exp ? day(i.exp) + ' 过期' : '不过期'} · ${i.svc ? '开通后试用 ' + i.svc + ' 天' : '开通后不限期'}${i.note ? ' · ' + esc(i.note) : ''}</span>${by.length ? `<span style="display:block">开通的：${by.map((d) => esc(d.name || d.sub) + '（' + esc(d.sub) + (d.offWhy === 'deleted' ? '，回收站' : '') + '）').join('、')}</span>` : ''}</div>
+		return `<div class="item" data-code="${esc(i.code)}"><div class="l"><b><code>${esc(i.code)}</code>${i.trial ? ' <span class="pill" style="background:rgba(0,122,255,.12);color:var(--brand,#007aff)">官网自助试用</span>' : ''}${dead ? ' <span>（已失效）</span>' : ''}</b><span>已用 ${i.used} / ${i.max} · ${i.exp ? day(i.exp) + ' 过期' : '不过期'} · ${i.svc ? '开通后试用 ' + i.svc + ' 天' : '开通后不限期'}${i.note ? ' · ' + esc(i.note) : ''}</span>${by.length ? `<span style="display:block">开通的：${by.map((d) => esc(d.name || d.sub) + '（' + esc(d.sub) + (d.offWhy === 'deleted' ? '，回收站' : '') + '）').join('、')}</span>` : ''}</div>
 		<div class="acts"><button class="btn sm" data-copy>复制</button><button class="btn sm danger" data-del>作废</button></div></div>`; }).join('') : '<p class="muted">还没有邀请码</p>';
 }
 $('invs').onclick = async (e) => {
@@ -321,12 +322,25 @@ function renderFbs() {
 	$('fbs').innerHTML = (list.length ? list.slice(0, 50).map((f) => `<div class="item" data-fb="${esc(f.id)}" style="align-items:flex-start"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${f.done ? '✅ ' : ''}${esc(f.name)} <span>${esc(f.sub)}</span></b>
 		<span style="display:block;white-space:pre-wrap;color:var(--text);font-size:14px;margin:4px 0">${esc(f.text)}</span>
 		<span>${new Date(f.at).toLocaleString('zh-CN', { hour12: false })}${f.contact ? ' · 联系方式：' + esc(f.contact) : ''}${(f.emails || []).length ? ' · 账号：' + esc(f.emails.join('、')) : ''}</span>
+		${(f.imgs || []).length ? `<div class="fbimgs">${f.imgs.map((m, i) => `<button class="fbimg" data-img="${esc(f.id)}:${i}" title="点开看大图"><span class="muted">截图 ${i + 1}</span></button>`).join('')}</div>` : ''}
 		${f.diag ? `<details style="margin-top:4px"><summary style="font-size:12.5px;color:var(--muted)">路由器信息</summary><pre style="white-space:pre-wrap;font-size:12px;margin:4px 0 0">${esc(f.diag)}</pre></details>` : ''}</div>
 		<div class="acts"><button class="btn sm" data-done="${f.done ? 0 : 1}">${f.done ? '标成没处理' : '处理好了'}</button><button class="btn sm danger" data-fdel>删除</button></div></div>`).join('') : `<p class="muted">${FBS.length ? '都处理好了' : '还没有人反馈'}</p>`)
 		+ (FBS.length > todo.length ? `<p style="margin:10px 0 0"><button class="btn sm" id="fbAll">${FB_ALL ? '只看没处理的' : '也看处理好的（' + (FBS.length - todo.length) + ' 条）'}</button></p>` : '');
+	fbImgs();
+}
+// 截图要带管理员密钥才能拿，拿到后在页面里显示；点开看大图
+const IMG = {};
+async function fbImgs() {
+	for (const b of document.querySelectorAll('[data-img]')) {
+		const k = b.dataset.img;
+		if (!IMG[k]) { try { const r = await fetch('/api/admin/feedback/' + k.replace(':', '/img/'), { headers: { authorization: 'Bearer ' + KEY } }); if (!r.ok) throw 0; IMG[k] = URL.createObjectURL(await r.blob()); } catch (x) { b.innerHTML = '<span class="muted">截图读不出来</span>'; continue; } }
+		b.innerHTML = `<img src="${IMG[k]}" alt="截图">`;
+	}
 }
 $('fbs').onclick = async (e) => {
 	if (e.target.id === 'fbAll') { FB_ALL = !FB_ALL; return renderFbs(); }
+	const im = e.target.closest('[data-img]');
+	if (im && IMG[im.dataset.img]) { const w = document.createElement('div'); w.className = 'dlg'; w.style.alignItems = 'center'; w.innerHTML = `<img src="${IMG[im.dataset.img]}" style="max-width:100%;max-height:92vh;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.4)">`; w.onclick = () => w.remove(); document.body.appendChild(w); return; }
 	const row = e.target.closest('[data-fb]'); if (!row) return;
 	const id = row.dataset.fb, dn = e.target.closest('[data-done]');
 	try {

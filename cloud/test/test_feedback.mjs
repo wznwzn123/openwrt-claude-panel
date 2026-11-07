@@ -99,6 +99,26 @@ L = (await (await adm('GET', '/feedback')).json()).list;
 ok('[反馈] 删除', r.ok && !L.some((x) => x.id === id));
 ok('[反馈] 没有管理员密钥看不了', (await api('GET', '/api/admin/feedback')).status === 401);
 
+/* ---------- 截图 ---------- */
+const jpg = (n) => { const u = new Uint8Array(n); u[0] = 0xff; u[1] = 0xd8; for (let i = 2; i < n; i++) u[i] = (i * 7) & 255; return u; };
+const b64 = (u) => Buffer.from(u).toString('base64');
+const big = jpg(300 * 1024), small = jpg(5000);
+const cfgB = await env.W.get('dev:' + B.sub).getCfg();
+r = await fb({ sub: B.sub, rkey: cfgB.rkey, text: '截图里这个按钮点不动', images: ['data:image/jpeg;base64,' + b64(big), 'data:image/png;base64,' + b64(small), 'data:text/html;base64,PHNjcmlwdD4=', 'data:image/jpeg;base64,' + b64(small)] });
+L = (await (await adm('GET', '/feedback')).json()).list;
+const F = L.find((x) => /按钮点不动/.test(x.text));
+ok('[截图] 只看前 3 个，不是图片的不要：收到 2 张', r.status === 200 && F && F.imgs.length === 2 && F.imgs[0].type === 'image/jpeg' && F.imgs[1].type === 'image/png', JSON.stringify(F && F.imgs));
+let ir = await adm('GET', '/feedback/' + F.id + '/img/0'), got = new Uint8Array(await ir.arrayBuffer());
+ok('[截图] 300KB 的大图切块存，取回来一模一样，类型对', ir.status === 200 && ir.headers.get('content-type') === 'image/jpeg' && got.length === big.length && got.every((v, i) => v === big[i]));
+ok('[截图] 没有管理员密钥拿不到', (await api('GET', '/api/admin/feedback/' + F.id + '/img/0')).status === 401);
+ok('[截图] 第二张也能取，不存在的第三张 404', (await adm('GET', '/feedback/' + F.id + '/img/1')).status === 200 && (await adm('GET', '/feedback/' + F.id + '/img/2')).status === 404);
+ok('[截图] 邮件里写着附了几张截图', MAILS.some((m) => /附了 2 张截图/.test(m.html)));
+const keysBefore = [...(await hub().ctx.storage.list({ prefix: 'fbi:' + F.id })).keys()].length;
+await adm('DELETE', '/feedback/' + F.id);
+const keysAfter = [...(await hub().ctx.storage.list({ prefix: 'fbi:' + F.id })).keys()].length;
+ok('[截图] 删反馈时截图一起删掉', keysBefore >= 4 && keysAfter === 0, keysBefore + ' → ' + keysAfter);
+ok('[截图] 太大的图（超过 1.5MB）不收', (await fb({ sub: C.sub, rkey: (await env.W.get('dev:' + C.sub).getCfg()).rkey, text: '大图测试一下', images: ['data:image/jpeg;base64,' + b64(jpg(1600 * 1024))] })).status === 200 && (await (await adm('GET', '/feedback')).json()).list[0].imgs.length === 0);
+
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

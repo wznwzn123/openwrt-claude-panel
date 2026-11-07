@@ -25,6 +25,7 @@ const DAY = 86400e3;
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10); // 按北京 / 台北时间显示日期
 export const LIMITS = { perIpHour: 5, allHour: 60, idleDays: 90, pendingMs: 3600e3 };
 export const TRASH_DAYS = 30;
+const FB_CHUNK = 120 * 1024;   // 反馈截图切块存（每个值 128KB 上限）
 const noteText = (s, n) => String(s || '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);  // 管理员删除的路由器在回收站里留多久
 
 /* ---------- Cloudflare API ---------- */
@@ -153,8 +154,17 @@ export class Hub extends DurableObject {
 		await this.watch(sub).setup({ sub, ...keys, probe: 'https://' + h + '/panel/manifest.json' });
 		// 试用码：开通后只能用 svc 天，到期前找提供服务的人要续期码；普通邀请码不限期
 		const exp = +inv.svc > 0 ? now + inv.svc * DAY : 0;
-		await this.ctx.storage.put('d:' + sub, { sub, state: 'ok', created: now, seen: now, invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp });
-		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, ...keys };
+		const dv = { sub, state: 'ok', created: now, seen: now, invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp };
+		// 官网账号领的试用码：开通后直接加到这个账号里，不用再配对
+		let bound = false;
+		if (inv.uid) {
+			const u = await this.ctx.storage.get('u:' + inv.uid);
+			if (u && !(u.devs || []).some((x) => x.sub === sub)) { u.devs = [...(u.devs || []), { sub, at: now }]; dv.users = [inv.uid]; await this.ctx.storage.put('u:' + inv.uid, u); bound = true; }
+			if (u) { u.trial = { ...(u.trial || {}), used: now, sub }; await this.ctx.storage.put('u:' + inv.uid, u); }
+		}
+		await this.ctx.storage.put('d:' + sub, dv);
+		if (inv.uid) await this.alog('trial-used', sub, '用官网领的试用码开通' + (bound ? '，已自动加到账号里' : ''), 'router');
+		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, bound, ...keys };
 	}
 	// 删除一台：删子域名和隧道、清空它的云端数据、腾出名额
 	remove(sub) { return this.lock(() => this._remove(sub)); }
@@ -452,7 +462,8 @@ export class Hub extends DurableObject {
 			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
-		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY };
+		const td = this.trialDays();
+		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: td ? { days: td, code: (u.trial && !u.trial.used && u.trial.code) || '', used: (u.trial && u.trial.used) || 0, got: !!(u.trial && u.trial.code) } : null };
 	}
 	// 路由器那边（凭 RKEY）要一个配对码，用户在官网输入配对码，就把这台路由器加到自己账号里
 	async pairStart({ sub, rkey }) {
@@ -726,21 +737,64 @@ export class Hub extends DurableObject {
 	}
 	// 路由器那边（凭 RKEY）看自己的到期时间
 	/* ---------- 问题反馈：路由器面板里发来（凭 RKEY），管理页看，发邮件提醒管理员 ---------- */
-	async feedback({ sub, rkey, text, contact, diag }) {
+	async feedback({ sub, rkey, text, contact, diag, images }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		text = String(text || '').trim().slice(0, 2000); contact = String(contact || '').trim().slice(0, 80); diag = String(diag || '').trim().slice(0, 1500);
 		if (text.length < 4) return { st: 400, error: '写几句遇到的问题或者建议吧' };
 		if (!(await this.hit('fb:' + sub, 5, DAY))) return { st: 429, error: '今天发了很多条了，明天再发' };
 		const d = await this.ctx.storage.get('d:' + sub), emails = [];
 		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u && u.email) emails.push(u.email); }
-		const fb = { id: rnd(10), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0 };
-		await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); });
-		await this.notifyAdmin('问题反馈：' + fb.name, `${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
+		const fb = { id: rnd(10), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
+		// 截图：最多 3 张，每张 1.5MB 以内的 JPEG / PNG / WebP（手机上已经压缩过）
+		for (const im of (Array.isArray(images) ? images : []).slice(0, 3)) {
+			const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(im || ''));
+			if (!m) continue;
+			let u8; try { u8 = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)); } catch (e) { continue; }
+			if (!u8.length || u8.length > 1536 * 1024) continue;
+			const i = fb.imgs.length, n = Math.ceil(u8.length / FB_CHUNK), put = {};
+			for (let k = 0; k < n; k++) put['fbi:' + fb.id + ':' + i + ':' + k] = u8.slice(k * FB_CHUNK, (k + 1) * FB_CHUNK);
+			await this.ctx.storage.put(put);
+			fb.imgs.push({ type: m[1], size: u8.length, n });
+		}
+		const drop = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); return l.slice(300); });
+		for (const x of drop) await this.fbImgRm(x);
+		await this.notifyAdmin('问题反馈：' + fb.name, `${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}${fb.imgs.length ? '\n\n附了 ' + fb.imgs.length + ' 张截图，在管理页看' : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 		return { st: 200, ok: true };
 	}
 	async feedbacks() { return (await this.ctx.storage.get('fbl')) || []; }
+	async fbImg(id, i) {
+		const x = ((await this.ctx.storage.get('fbl')) || []).find((y) => y.id === id), m = x && (x.imgs || [])[i];
+		if (!m) return null;
+		const got = await this.ctx.storage.get([...Array(m.n)].map((_, k) => 'fbi:' + id + ':' + i + ':' + k)), out = new Uint8Array(m.size);
+		let off = 0;
+		for (let k = 0; k < m.n; k++) { const c = got.get('fbi:' + id + ':' + i + ':' + k); if (!c) return null; out.set(c, off); off += c.length; }
+		return { type: m.type, buf: out };
+	}
+	async fbImgRm(x) { const keys = []; (x.imgs || []).forEach((m, i) => { for (let k = 0; k < m.n; k++) keys.push('fbi:' + x.id + ':' + i + ':' + k); }); for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128)); }
 	fbSet(id, done) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; x.done = done ? Date.now() : 0; await this.ctx.storage.put('fbl', l); return true; }); }
-	fbDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; const n = l.filter((y) => y.id !== id); if (n.length === l.length) return false; await this.ctx.storage.put('fbl', n); return true; }); }
+	fbDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; await this.ctx.storage.put('fbl', l.filter((y) => y.id !== id)); await this.fbImgRm(x); return true; }); }
+	/* ---------- 新账号免费试用：每个账号能领一次（TRIAL_DAYS 天，默认 7；设成 0 就不发） ---------- */
+	trialDays() { const n = this.env.TRIAL_DAYS == null || this.env.TRIAL_DAYS === '' ? 7 : Math.round(+this.env.TRIAL_DAYS); return n > 0 && n <= 365 ? n : 0; }
+	trial(uid, ip) { return this.lock(() => this._trial(uid, ip)); }
+	async _trial(uid, ip) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		const days = this.trialDays();
+		if (!days) return { st: 403, error: '现在没有开放免费试用，找提供服务的人要邀请码' };
+		if (this.env.RESEND_API_KEY && !u.verified) return { st: 403, error: '先验证邮箱才能领试用' };
+		if (u.trial && u.trial.code) {
+			const inv = await this.ctx.storage.get('i:' + u.trial.code);
+			return { st: 200, ok: true, days, code: u.trial.code, exp: inv ? inv.exp : 0, used: u.trial.used || 0 };
+		}
+		if (!(await this.hit('tr:' + (ip || '?'), 5, DAY))) return { st: 429, error: '领得太频繁了，明天再试' };
+		let code;
+		do { code = rnd(10).toUpperCase(); } while ((await this.ctx.storage.get('i:' + code)) || (await this.ctx.storage.get('k:' + code)));
+		const now = Date.now(), inv = { max: 1, used: 0, created: now, exp: now + 7 * DAY, note: ('试用：' + u.email).slice(0, 60), svc: days, uid, trial: 1 };
+		u.trial = { code, at: now };
+		await this.ctx.storage.put({ ['i:' + code]: inv, ['u:' + uid]: u });
+		await this.alog('trial', u.email, `领了 ${days} 天免费试用（试用码 7 天内有效）`, 'user');
+		return { st: 200, ok: true, days, code, exp: inv.exp, used: 0 };
+	}
 	async devInfo({ sub, rkey }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		const d = await this.ctx.storage.get('d:' + sub);
@@ -866,6 +920,7 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacks() });
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') return J({ ok: await H.fbSet(a[1], !!(await body()).done) });
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'img' && /^[0-2]$/.test(a[3] || '') && req.method === 'GET') { const im = await H.fbImg(a[1], +a[3]); return im ? new Response(im.buf, { headers: { 'content-type': im.type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有这张图' }, 404); }
 		if (a[0] === 'testmail' && req.method === 'POST') { const r = await H.testMail(); return J(r, r.ok ? 200 : 502); }
 		return J({ error: 'not found' }, 404);
 	}
@@ -1012,7 +1067,7 @@ async function accountApi(req, env, H, p, body) {
 	if (p === '/api/dev/unbind') return out(await H.devUnbind({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
 	if (p === '/api/dev/logincode') return out(await H.devLoginCode({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	if (p === '/api/dev/info') return out(await H.devInfo({ sub: s(b.sub), rkey: s(b.rkey) }));
-	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), text: s(b.text), contact: s(b.contact), diag: s(b.diag) }));
+	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [] }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	const a = p.slice('/api/account/'.length);
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
@@ -1029,6 +1084,7 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
 	if (a === 'logincode') return out(await H.loginCode(me.uid, s(b.sub)));
 	if (a === 'renew') return out(await H.accountRenew(me.uid, me.email, s(b.sub), s(b.code)));
+	if (a === 'trial') return out(await H.trial(me.uid, ip));
 	if (a === 'apply') return out(await H.apply(me.uid, me.email, { sub: s(b.sub), source: s(b.source), contact: s(b.contact), note: s(b.note) }));
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));

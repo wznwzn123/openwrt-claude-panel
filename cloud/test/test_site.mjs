@@ -225,6 +225,24 @@ for (const dark of [false, true]) {
 	await ctx.close();
 }
 ok('页面没有报错', !errs.length, errs.join(' | '));
+// 新账号免费试用卡片、首页常见问题（被删后怎么恢复）
+{
+	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
+	const page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
+	await page.goto(B + '/app'); await W(500);
+	await page.click('[data-tab="reg"]');
+	await page.fill('#fReg [name=email]', 'newbie@x.com'); await page.fill('#fReg [name=password]', 'newbie-pass-1'); await page.click('#fReg button.primary'); await W(900);
+	ok('[试用] 新注册的账号：最上面显示「免费试用 7 天」和领取按钮', await page.isVisible('#trialCard') && /免费试用 7 天/.test(await page.textContent('#trialCard')) && await page.isVisible('#trialGo'));
+	await page.click('#trialGo'); await W(900);
+	const tc = await page.textContent('#trialCard');
+	const m = /试用码：([A-Z2-9]{10})/.exec(tc);
+	ok('[试用] 点领取：显示试用码和带着这个码的安装命令，可以复制', !!m && (await page.textContent('#trialCmd')).includes('--invite ' + m[1]) && await page.isVisible('#trialCopy'), tc.slice(0, 120));
+	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
+	await page.goto(B + '/#faq-restore'); await W(500);
+	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，从链接进来自动展开', await page.evaluate(() => document.getElementById('faq-restore').open) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
+	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
+	await ctx.close();
+}
 await browser.close(); server.close();
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

@@ -2414,11 +2414,15 @@ function hub_conf(quiet) {
 	if (!c.HUB || !c.SUB || !c.RKEY) { if (quiet) return null; die('这台路由器没有用托管服务'); }
 	return c;
 }
-function hub_call(path, extra) {
+function hub_call(path, extra, tmo) {
 	let c = hub_conf();
 	let b = { sub: c.SUB, rkey: c.RKEY };
 	for (let k in extra ?? {}) b[k] = extra[k];
-	let r = sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary %s %s", shq(sprintf('%J', b)), shq(c.HUB + path)));
+	// 内容先写进临时文件再发（带截图时很大，放在命令行里会超长）
+	let tf = trim(sh('mktemp /tmp/cmcp_hub.XXXXXX').out);
+	if (!match(tf, /^\/tmp\/cmcp_hub\.[A-Za-z0-9]+$/)) die('路由器上建不了临时文件');
+	writefile(tf, sprintf('%J', b));
+	let r = sh(sprintf("curl -s -m %d -X POST -H 'Content-Type: application/json' --data-binary @%s %s; rm -f %s", tmo ?? 20, tf, shq(c.HUB + path), tf));
 	let o = null;
 	try { o = json(r.out); } catch (e) {}
 	if (type(o) != 'object') die('连不上托管服务，稍后再试');
@@ -2444,12 +2448,17 @@ P.feedback = function(a) {
 	if (length(text) < 4) die('写几句遇到的问题或者建议吧');
 	if (length(text) > 2000) die('写得太长了，2000 字以内');
 	let diag = a?.diag ? fb_diag() : '';
-	if (hub_conf(true)?.HUB) { hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag }); return { ok: true, sent: 'hub' }; }
+	// 截图：手机上已经压缩成 JPEG，最多 3 张、每张 1.5MB 以内
+	let imgs = [];
+	for (let im in (type(a?.images) == 'array' ? slice(a.images, 0, 3) : [])) {
+		if (type(im) == 'string' && length(im) < 2100000 && match(im, /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/)) push(imgs, im);
+	}
+	if (hub_conf(true)?.HUB) { hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs }, 60); return { ok: true, sent: 'hub', images: length(imgs) }; }
 	// 自建版：没有开通中心，带着内容去 GitHub 提
 	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');
 	return { ok: true, sent: 'github', url: 'https://github.com/wznwzn123/openwrt-claude-panel/issues/new?title=' + CL.enc('[反馈] ' + substr(replace(text, /\s+/g, ' '), 0, 40)) + '&body=' + CL.enc(body) };
 };
-P.feedback_diag = function() { return { text: fb_diag() }; };
+P.feedback_diag = function() { return { text: fb_diag(), hosted: !!hub_conf(true)?.HUB }; };
 P.hub_pair = function() {
 	let o = hub_call('/api/pair/start');
 	return { code: o.code, exp: o.exp, url: hub_conf().HUB + '/app?pair=' + o.code };
@@ -2759,6 +2768,26 @@ P.px_ctl = function(a) {
 	sh('( sleep 1; /etc/init.d/' + a.id + ' ' + op + ' ) >/dev/null 2>&1 </dev/null &');
 	sh('rm -f /tmp/cmcp_px.json');
 	return { ok: true };
+};
+// 换用另一个代理插件：先停掉、关掉正在用的（两个同时开会打架），再打开、启动选的那个。后台做，断网十几秒
+const PX_EN = { openclash: 'openclash.config.enable', nikki: 'nikki.config.enabled', passwall: 'passwall.@global[0].enabled', passwall2: 'passwall2.@global[0].enabled' };
+P.px_switch = function(a) {
+	px_check(a?.id);
+	let id = a.id, j = px_detect(true), cmds = [];
+	if (id == 'passwall' || id == 'passwall2') { let v = uci_get(id + '.@global[0].' + (id == 'passwall' ? 'tcp_node' : 'node')); if (!v || v == 'nil') die(px_name(id) + ' 还没选节点：先在它的原版页面里添加并选好节点，再来切换'); }
+	if (id == 'homeproxy') { let v = uci_get('homeproxy.config.main_node'); if (!v || v == 'nil') die('HomeProxy 还没选节点：先在它的原版页面里选一个主节点，再来切换'); }
+	if (id == 'shadowsocksr') { let v = uci_get('shadowsocksr.@global[0].global_server'); if (!v || v == 'nil') die('SSR Plus+ 还没选节点：先在它的原版页面里选一个服务器，再来切换'); }
+	for (let x in j.list ?? []) {
+		if (x.id == id || !(x.running || x.enabled)) continue;
+		if (PX_EN[x.id]) push(cmds, sprintf('uci set %s=0; uci commit %s', PX_EN[x.id], split(PX_EN[x.id], '.')[0]));
+		push(cmds, sprintf('/etc/init.d/%s stop; /etc/init.d/%s disable', x.id, x.id));
+	}
+	if (PX_EN[id]) push(cmds, sprintf('uci set %s=1; uci commit %s', PX_EN[id], split(PX_EN[id], '.')[0]));
+	push(cmds, sprintf('/etc/init.d/%s enable; /etc/init.d/%s restart', id, id));
+	push(cmds, '/usr/sbin/cmcp-tunbypass apply');
+	sh('( sleep 1; ' + join('; ', cmds) + '; rm -f /tmp/cmcp_px.json ) >/tmp/cmcp_pxswitch.log 2>&1 </dev/null &');
+	sh('rm -f /tmp/cmcp_px.json');
+	return { ok: true, name: px_name(id) };
 };
 // 测节点延迟：TCP 连到节点的地址和端口要多久（不经过代理，只看节点服务器通不通、远不远）
 P.px_delay = function(a) {

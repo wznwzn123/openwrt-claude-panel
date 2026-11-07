@@ -216,6 +216,7 @@ if [ -n "$HUB" ]; then
 		 printf 'HUB=%s\nSUB=%s\n' "$HUB" "$SUB" > $D/hub.conf)
 		printf '%s\n' "$HOST" > $D/hostname
 		ok "开通成功：https://$HOST"
+		[ "$(jf bound)" = true ] && ok "这个试用码是官网账号领的：路由器已经自动加到你的账号里"
 		EXP=$(jf exp); [ "${EXP:-0}" -gt 0 ] 2>/dev/null && SVC_END=$(date -d "@$((EXP / 1000))" '+%Y-%m-%d' 2>/dev/null || echo "")
 	fi
 fi

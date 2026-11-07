@@ -3892,7 +3892,7 @@ async function feedbackSheet() {
 		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。</p>
 		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px"></textarea>
 		<div class="fbims" data-ims></div>
-		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
+		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
 		<input class="input" data-ct maxlength="80" placeholder="联系方式（可以不填）：微信、QQ、邮箱" style="margin-top:8px" autocapitalize="off" spellcheck="false">
 		<label class="kv aswon" style="margin-top:6px"><span><b>附上路由器信息</b><span class="muted">方便查问题，只有下面这些，不含密钥和网址</span></span><span class="sw"><input type="checkbox" data-dg checked><i></i></span></label>
 		${dg ? `<pre class="out" style="font-size:11.5px;max-height:120px;overflow:auto;margin:6px 0 0">${esc(dg)}</pre>` : ''}
@@ -3900,13 +3900,17 @@ async function feedbackSheet() {
 		const go = m.querySelector('[data-go]'), tx = m.querySelector('[data-tx]'), box = m.querySelector('[data-ims]'), fi = m.querySelector('[data-file]'), aw = m.querySelector('[data-addw]');
 		const draw = () => {
 			box.innerHTML = IM.map((d, i) => `<div class="fbim"><img src="${d}" alt="截图 ${i + 1}"><button type="button" data-rm="${i}" aria-label="删掉这张">×</button></div>`).join('');
-			if (aw) aw.classList.toggle('hidden', IM.length >= 3);
+			if (aw) { aw.classList.toggle('hidden', IM.length >= 3); aw.querySelector('[data-addt]').textContent = IM.length ? `＋ 再加一张（已添加 ${IM.length} / 3 张）` : '＋ 添加截图（最多 3 张）'; }
 		};
 		box.onclick = (e) => { const r = e.target.closest('[data-rm]'); if (r) { IM.splice(+r.dataset.rm, 1); draw(); } };
 		if (fi) fi.onchange = async () => {
-			const files = [...(fi.files || [])].slice(0, 3 - IM.length); fi.value = '';
-			for (const f of files) { try { IM.push(await shrinkImg(f)); draw(); } catch (e) { toast(e.message, true); } }
-			if ((fi.files || []).length > files.length) toast('最多 3 张');
+			const all = [...(fi.files || [])], files = all.slice(0, 3 - IM.length); fi.value = '';
+			if (!all.length) return toast('没有选到图片，换一个相册再试试', true);
+			const at = aw && aw.querySelector('[data-addt]'); if (at) at.textContent = '正在处理图片…';
+			let n = 0;
+			for (const f of files) { try { IM.push(await shrinkImg(f)); n++; draw(); } catch (e) { toast(e.message, true); } }
+			draw();
+			if (n) toast(`已添加 ${n} 张截图` + (all.length > files.length ? '（最多 3 张，多的没加）' : ''));
 		};
 		setTimeout(() => tx.focus(), 80);
 		go.onclick = () => busy(go, async () => {

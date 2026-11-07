@@ -2460,36 +2460,6 @@ function hub_call(path, extra, tmo) {
 	if (o.error) die(o.error);
 	return o;
 }
-/* ---------- 问题反馈 / 建议：托管版发到开通中心（管理员在管理页看、有邮件提醒）；自建版去 GitHub 提 ---------- */
-function fb_diag() {
-	let v = {}, px = px_detect(), mem = readfile('/proc/meminfo') ?? '';
-	for (let l in split(readfile('/etc/claude-mcp/version') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) v[m[1]] = m[2]; }
-	let pl = []; for (let x in px.list ?? []) push(pl, x.name + (x.id == px.active ? '（正在用）' : '') + (x.running ? '' : x.enabled ? '·没在跑' : '·关着'));
-	return join('\n', [
-		'面板版本：' + (v.VER ?? '未知') + ' · ' + (v.CODE ?? ''),
-		'型号：' + trim(readfile('/tmp/sysinfo/model') ?? readfile('/proc/device-tree/model') ?? '未知'),
-		'固件：' + (match(readfile('/etc/openwrt_release') ?? '', /DISTRIB_DESCRIPTION='([^']*)'/)?.[1] ?? '未知'),
-		'代理插件：' + (length(pl) ? join('、', pl) : '没装'),
-		'可用内存：' + int(+(match(mem, /MemAvailable:\s+(\d+)/)?.[1] ?? 0) / 1024) + ' MB',
-		'已运行：' + int(+split(readfile('/proc/uptime') ?? '0', ' ')[0] / 3600) + ' 小时',
-	]);
-}
-P.feedback = function(a) {
-	let text = trim('' + (a?.text ?? '')), contact = trim('' + (a?.contact ?? ''));
-	if (length(text) < 4) die('写几句遇到的问题或者建议吧');
-	if (length(text) > 2000) die('写得太长了，2000 字以内');
-	let diag = a?.diag ? fb_diag() : '';
-	// 截图：手机上已经压缩成 JPEG，最多 3 张、每张 1.5MB 以内
-	let imgs = [];
-	for (let im in (type(a?.images) == 'array' ? slice(a.images, 0, 3) : [])) {
-		if (type(im) == 'string' && length(im) < 2100000 && match(im, /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/)) push(imgs, im);
-	}
-	if (hub_conf(true)?.HUB) { hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs }, 60); return { ok: true, sent: 'hub', images: length(imgs) }; }
-	// 自建版：没有开通中心，带着内容去 GitHub 提
-	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');
-	return { ok: true, sent: 'github', url: 'https://github.com/wznwzn123/openwrt-claude-panel/issues/new?title=' + CL.enc('[反馈] ' + substr(replace(text, /\s+/g, ' '), 0, 40)) + '&body=' + CL.enc(body) };
-};
-P.feedback_diag = function() { return { text: fb_diag(), hosted: !!hub_conf(true)?.HUB }; };
 P.hub_pair = function() {
 	let o = hub_call('/api/pair/start');
 	return { code: o.code, exp: o.exp, url: hub_conf().HUB + '/app?pair=' + o.code };
@@ -2735,6 +2705,37 @@ function px_detect(fresh) {
 	writefile(cf, sprintf('%J', { at: time(), px: j }));
 	return j;
 }
+// （问题反馈要用到上面的 px_detect：ucode 里函数要先声明后用，所以放在它后面）
+/* ---------- 问题反馈 / 建议：托管版发到开通中心（管理员在管理页看、有邮件提醒）；自建版去 GitHub 提 ---------- */
+function fb_diag() {
+	let v = {}, px = px_detect(), mem = readfile('/proc/meminfo') ?? '';
+	for (let l in split(readfile('/etc/claude-mcp/version') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) v[m[1]] = m[2]; }
+	let pl = []; for (let x in px.list ?? []) push(pl, x.name + (x.id == px.active ? '（正在用）' : '') + (x.running ? '' : x.enabled ? '·没在跑' : '·关着'));
+	return join('\n', [
+		'面板版本：' + (v.VER ?? '未知') + ' · ' + (v.CODE ?? ''),
+		'型号：' + trim(readfile('/tmp/sysinfo/model') ?? readfile('/proc/device-tree/model') ?? '未知'),
+		'固件：' + (match(readfile('/etc/openwrt_release') ?? '', /DISTRIB_DESCRIPTION='([^']*)'/)?.[1] ?? '未知'),
+		'代理插件：' + (length(pl) ? join('、', pl) : '没装'),
+		'可用内存：' + int(+(match(mem, /MemAvailable:\s+(\d+)/)?.[1] ?? 0) / 1024) + ' MB',
+		'已运行：' + int(+split(readfile('/proc/uptime') ?? '0', ' ')[0] / 3600) + ' 小时',
+	]);
+}
+P.feedback = function(a) {
+	let text = trim('' + (a?.text ?? '')), contact = trim('' + (a?.contact ?? ''));
+	if (length(text) < 4) die('写几句遇到的问题或者建议吧');
+	if (length(text) > 2000) die('写得太长了，2000 字以内');
+	let diag = a?.diag ? fb_diag() : '';
+	// 截图：手机上已经压缩成 JPEG，最多 3 张、每张 1.5MB 以内
+	let imgs = [];
+	for (let im in (type(a?.images) == 'array' ? slice(a.images, 0, 3) : [])) {
+		if (type(im) == 'string' && length(im) < 2100000 && match(im, /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/)) push(imgs, im);
+	}
+	if (hub_conf(true)?.HUB) { hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs }, 60); return { ok: true, sent: 'hub', images: length(imgs) }; }
+	// 自建版：没有开通中心，带着内容去 GitHub 提
+	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');
+	return { ok: true, sent: 'github', url: 'https://github.com/wznwzn123/openwrt-claude-panel/issues/new?title=' + CL.enc('[反馈] ' + substr(replace(text, /\s+/g, ' '), 0, 40)) + '&body=' + CL.enc(body) };
+};
+P.feedback_diag = function() { return { text: fb_diag(), hosted: !!hub_conf(true)?.HUB }; };
 // 「@global[0]」这种匿名节：换成真正的节名
 function px_sec(c, cfg, s) {
 	let m = match(s, /^@([a-z_]+)\[([0-9]+)\]$/);

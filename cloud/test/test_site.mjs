@@ -289,6 +289,15 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await realFetch(B + '/api/report', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '8.8.4.4' }, body: JSON.stringify({ kind: 'other', text: '常见问题页在手机上打不开，一直在转圈', contact: '邮箱 fix.me@example.org' }) });
 	env.RESEND_API_KEY = 're_test';
 	await page.reload(); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890').catch(() => {}); await page.click('#fKey button').catch(() => {}); await W(1200);
+	{ // 带截图的反馈：管理页要能真的显示出来（页面安全设置要允许 blob: 图片）
+		const HB = env.H.get('hub'), png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+		await HB.ctx.storage.put('fbi:imgtest234:0:0', png);
+		const l = (await HB.ctx.storage.get('fbl')) || []; l.unshift({ id: 'imgtest234', at: Date.now(), sub: 'x', name: '截图测试', emails: [], text: '带一张截图的反馈', contact: '', diag: '面板版本：3.0.0', done: 0, imgs: [{ type: 'image/png', size: png.length, n: 1 }] }); await HB.ctx.storage.put('fbl', l);
+		await page.reload(); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890').catch(() => {}); await page.click('#fKey button').catch(() => {}); await W(1500);
+		const nw = await page.evaluate(() => { const i = document.querySelector('#fbs [data-img="imgtest234:0"] img'); return i ? i.naturalWidth : -1; });
+		ok('[截图] 管理页里截图真的显示出来了（没被页面安全设置拦掉）', nw === 1, nw);
+		ok('[截图] 路由器信息能展开看', /面板版本：3\.0\.0/.test(await page.textContent('#fbs')));
+	}
 	const it = page.locator('#fbs [data-fb]', { hasText: '常见问题页在手机上打不开' });
 	ok('[回复] 反馈上的按钮叫「标为已修复」', /标为已修复/.test(await it.locator('[data-done]').textContent()));
 	await it.locator('[data-done]').click(); await W(400);

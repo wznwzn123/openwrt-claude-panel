@@ -83,7 +83,15 @@ public class MainActivity extends AppCompatActivity {
     });
     private final ActivityResultLauncher<Intent> picker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
         if (fileCb == null) return;
-        fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(r.getResultCode(), r.getData()));
+        Uri[] res = WebChromeClient.FileChooserParams.parseResult(r.getResultCode(), r.getData());
+        // 多选（或者有的相册只选一张也按多选返回）：图片在 ClipData 里，parseResult 读不到，要自己取出来
+        Intent d = r.getData();
+        if (r.getResultCode() == RESULT_OK && d != null && d.getClipData() != null && d.getClipData().getItemCount() > 0) {
+            android.content.ClipData c = d.getClipData();
+            res = new Uri[c.getItemCount()];
+            for (int i = 0; i < c.getItemCount(); i++) res[i] = c.getItemAt(i).getUri();
+        }
+        fileCb.onReceiveValue(res);
         fileCb = null;
     });
 

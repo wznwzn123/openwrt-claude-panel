@@ -20,7 +20,7 @@ let longest = 0;
 for (let e in evs) if (e.lvl == 'ok' && e.kind in NET && e.from && e.to && e.to - e.from > longest) longest = e.to - e.from;
 if (length(outs)) {
 	let kinds = {}; for (let e in outs) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
-	const KN = { wan: '宽带断开', net: '外网不通', tunnel: '隧道断开', boot: '意外重启', dns: 'DNS 故障', clash: 'OpenClash 停止', panel: '面板服务' };
+	const KN = { wan: '宽带断开', net: '外网不通', tunnel: '隧道断开', boot: '意外重启', dns: 'DNS 故障', clash: '代理插件停止', panel: '面板服务' };
 	add(length(outs) >= 3 ? 'err' : 'warn', '过去 24 小时出问题 ' + length(outs) + ' 次' + (longest ? '，最长 ' + mins(longest) : ''),
 		join('、', map(keys(kinds), (k) => (KN[k] ?? k) + ' ' + kinds[k] + ' 次')));
 } else add('ok', '过去 24 小时没有断线');
@@ -32,20 +32,27 @@ if (length(ooms)) add('err', '内存耗尽 ' + length(ooms) + ' 次，系统强�
 else if (av < 30) add('warn', '可用内存偏少：' + av + ' MB', '在「进程」页可以看是谁占的');
 else add('ok', '内存正常（可用 ' + av + ' MB）');
 
-// 3) 节点
+// 3) 节点：OpenClash / Nikki 测当前节点；别的代理插件看在不在跑；没装就不提
+let px = null; try { px = json(L.sh('/usr/sbin/cmcp-proxy json')); } catch (e) {}
+let pa = null; for (let x in px?.list ?? []) if (x.id == px.active) pa = x;
 let ac = L.readj(L.D + '/autosw.json', { enabled: true, group: 'Zou' });
-let g = L.api('GET', '/proxies/' + L.enc(ac.group), null, 6).json;
-if (g?.now) {
+let g = pa && pa.kind == 'clash' ? L.api('GET', '/proxies/' + L.enc(ac.group), null, 6).json : null;
+if (!pa) {}
+else if (pa.kind != 'clash') {
+	if (pa.running) add('ok', pa.name + ' 正在运行');
+	else if (pa.enabled) add('err', pa.name + ' 开着，但没在运行', '要走代理的网站会打不开，可以在面板概览里重启插件');
+}
+else if (g?.now) {
 	let d = +(L.api('GET', '/proxies/' + L.enc(g.now) + '/delay?timeout=5000&url=' + L.enc('https://www.gstatic.com/generate_204'), null, 8).json?.delay ?? 0);
 	let sw = filter(evs, (e) => e.kind == 'node');
 	if (d <= 0) add('err', '当前节点「' + g.now + '」测不通', ac.enabled ? '自动切换会处理' : '自动切换没开，需要手动换节点');
 	else add(length(sw) >= 3 ? 'warn' : 'ok', '节点「' + g.now + '」正常（' + d + ' ms）' + (length(sw) ? '，24 小时内自动切换了 ' + length(sw) + ' 次' : ''), length(sw) >= 3 ? '切换太频繁，可能这个地区的节点都不太稳' : '');
-} else add('warn', 'OpenClash 没在运行，测不了节点');
+} else add('warn', pa.name + ' 没在运行，测不了节点');
 
 // 4) 订阅流量 / 到期（用面板自己的接口拿）
 const tok = trim(readfile(L.D + '/token') ?? '');
 const P = (m, a) => { let o = L.sh(sprintf("curl -s -m 40 -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {}, client: 'panel', dev: 'local.' + L.local_key() })), tok)); try { return json(o).result; } catch (e) { return null; } };
-let stt = P('oc_state');
+let stt = pa?.id == 'openclash' ? P('oc_state') : null;
 let act = filter(stt?.files ?? [], (f) => f.active)[0];
 let sub = act?.sub ? filter(stt?.subs ?? [], (x) => x.name == act.sub)[0] : null;
 if (sub) {

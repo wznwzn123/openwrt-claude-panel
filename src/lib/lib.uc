@@ -18,10 +18,21 @@ function writej(f, o) { writefile(f + '.tmp', sprintf('%J', o)); rename(f + '.tm
 function now() { return time(); }
 function uci(k) { return trim(sh('uci -q get ' + shq(k))); }
 
-// OpenClash（mihomo）控制接口
+// Clash 控制接口：OpenClash 或 Nikki（都是 mihomo 内核）。OpenClash 在跑或开着就用它，否则用 Nikki
+function clash_ctl() {
+	let oc = !!stat('/etc/init.d/openclash'), nk = !!stat('/etc/init.d/nikki');
+	let ocOn = oc && (length(sh('pidof clash')) > 0 || uci('openclash.config.enable') == '1');
+	let nkOn = nk && (length(sh('pidof mihomo')) > 0 || uci('nikki.config.enabled') == '1');
+	if (nk && (nkOn && !ocOn || !oc)) {
+		let l = uci('nikki.mixin.api_listen') || '[::]:9090', m = match(l, /:([0-9]+)$/);
+		return { id: 'nikki', name: 'Nikki', port: m ? m[1] : '9090', secret: uci('nikki.mixin.api_secret') };
+	}
+	if (oc) return { id: 'openclash', name: 'OpenClash', port: uci('openclash.config.cn_port') || '9090', secret: uci('openclash.config.dashboard_password') };
+	return null;
+}
 let _ctl = null;
 function ctl() {
-	if (!_ctl) _ctl = { secret: uci('openclash.config.dashboard_password'), port: uci('openclash.config.cn_port') || '9090' };
+	if (!_ctl) _ctl = clash_ctl() ?? { id: '', port: '9090', secret: '' };
 	return _ctl;
 }
 function enc(s) {
@@ -106,4 +117,4 @@ function local_key() {
 	return k;
 }
 
-export { D, shq, sh, readj, writej, now, uci, enc, api, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key };
+export { D, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key };

@@ -584,18 +584,19 @@ section.page{display:none}section.page.on{display:block}
 			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
 			<p class="muted" id="hDesc">&nbsp;</p>
 			<label class="pxrow" id="pxRow"><span class="pxtxt"><b id="pxTitle">代理</b><span class="muted" id="pxSub">读取中…</span></span><span class="sw"><input type="checkbox" id="pxSw" disabled aria-label="代理开关"><i></i></span><span class="pxlog" id="pxLog"></span></label>
-			<div class="muted" style="font-weight:600">代理模式</div>
+			<div id="modeBox"><div class="muted" style="font-weight:600">代理模式</div>
 			<div class="chips" id="modeChips" style="margin-top:6px">
 				<button class="chip" data-mode="rule">规则</button>
 				<button class="chip" data-mode="global">全局</button>
 				<button class="chip" data-mode="direct">直连</button>
-			</div>
-			<div class="muted" style="font-weight:600;margin-top:12px">运行模式</div>
+			</div></div>
+			<div id="runBox"><div class="muted" style="font-weight:600;margin-top:12px">运行模式</div>
 			<div class="chips" id="runChips" style="margin-top:6px">
 				<button class="chip" data-run="fake-ip">Fake-IP 增强</button>
 				<button class="chip" data-run="fake-ip-tun">TUN</button>
 				<button class="chip" data-run="fake-ip-mix">TUN 混合</button>
-			</div>
+			</div></div>
+			<div id="pxNone" class="notice hidden" style="margin-top:4px;line-height:1.65">这台路由器没装代理插件。设备、网速、流量、断线记录、定时断网这些照常能用。<br><span class="muted">以后装了 OpenClash、Nikki、PassWall、PassWall2、HomeProxy 或 SSR Plus+，这里会自动显示它的开关和节点。</span></div>
 		</div>
 		<div class="card urgent">
 			<div><div class="muted">实时下载</div><b id="hRx">—</b></div>
@@ -608,17 +609,24 @@ section.page{display:none}section.page.on{display:block}
 		<div class="card"><b id="sMem">—</b><div class="bar" id="sMemBar"><i style="width:0"></i></div><div class="muted" style="margin-top:5px">内存</div></div>
 		<div class="card"><b id="sTemp">—</b><div class="muted">温度</div></div>
 	</section>
-	<div class="sectitle"><b>OpenClash</b><button class="btn sm blue" id="oDash">打开控制面板</button></div>
-	<section class="card list">
-		<div class="kv"><span>配置文件</span><span><button class="btn sm" id="oCfgBtn"><span id="oCfg">—</span> ›</button></span></div>
-		<div class="kv"><span>订阅流量</span><span id="oSub">—</span></div>
+	<div class="sectitle hidden" id="pgHead"><b id="pgName">代理插件</b><button class="btn sm blue" id="pgLuci">插件原版页面 ›</button></div>
+	<section class="card list hidden" id="pgCard">
+		<div class="kv"><span>当前节点</span><span><button class="btn sm" id="pgNode"><span id="pgCur">—</span> ›</button></span></div>
+		<div class="kv"><span>状态</span><span id="pgSt">—</span></div>
+		<div class="kv"><span>节点数</span><span id="pgCnt">—</span></div>
+		<div class="btngrid" style="margin:10px 0 2px"><button class="btn" id="pgNodes">换节点 / 测延迟</button><button class="btn" id="pgRestart">重启插件</button></div>
+	</section>
+	<div class="sectitle" id="ocHead"><b id="ocName">OpenClash</b><button class="btn sm blue" id="oDash">打开控制面板</button></div>
+	<section class="card list" id="ocCard">
+		<div class="kv oconly"><span>配置文件</span><span><button class="btn sm" id="oCfgBtn"><span id="oCfg">—</span> ›</button></span></div>
+		<div class="kv oconly"><span>订阅流量</span><span id="oSub">—</span></div>
 		<div class="kv"><span>内核版本</span><span id="oVer">—</span></div>
-		<div class="kv"><span>插件版本</span><span id="oPlug">—</span></div>
-		<div class="kv"><span>内核内存</span><span id="oRss">—</span></div>
+		<div class="kv oconly"><span>插件版本</span><span id="oPlug">—</span></div>
+		<div class="kv oconly"><span>内核内存</span><span id="oRss">—</span></div>
 		<div class="kv"><span>累计流量</span><span id="oTotal">—</span></div>
 	</section>
-	<div class="sectitle"><b>快捷操作</b></div>
-	<section class="card"><div class="qgrid" id="qGrid"></div></section>
+	<div class="sectitle" id="qHead"><b>快捷操作</b></div>
+	<section class="card" id="qCard"><div class="qgrid" id="qGrid"></div></section>
 	<div class="sectitle"><b>网络检测</b><span class="actions" style="flex-wrap:nowrap"><span class="live off" id="ncLive"><i></i><span id="ncAgo">实时</span></span><button class="btn sm" id="ncBtn" aria-label="重新检测">↻</button></span></div>
 	<section class="card nc" id="ncIp"><div class="nch"><span>出口 IP</span><a class="ipfull" href="https://ipcheck.ing/" target="_blank" rel="noopener">完整检测 ↗</a></div><div class="ipl" id="ipList"></div></section>
 	<section class="card nc" id="ncSite"><div class="nch"><span>网站访问</span></div><div class="tiles" id="siteTiles"></div></section>
@@ -850,6 +858,7 @@ section.page{display:none}section.page.on{display:block}
 		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="hubbind" id="hubBindBtn"><div><b>绑定到账号</b><span class="muted">把这台路由器加到官网账号里，换手机时好找</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="feedback"><div><b>问题反馈 / 建议</b><span class="muted">遇到问题、想要什么功能，直接告诉开发者</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="logout"><div><b>退出登录</b><span class="muted">这台手机退出面板，下次要重新登录</span></div><span class="muted">›</span></button>
 	</section>
 	<div class="dangerzone"><button class="btn danger" data-t="reboot" style="padding:12px 22px">重启路由器</button></div>
@@ -882,6 +891,20 @@ const store = {
 	del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
 
+/* 代理插件（OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+）：正在用哪个，侧边栏和概览按它显示 */
+let PXS = null; try { PXS = JSON.parse(store.get('rp_px') || 'null'); } catch (e) {}
+const PX_LUCI = { openclash: 'admin/services/openclash', nikki: 'admin/services/nikki', passwall: 'admin/services/passwall', passwall2: 'admin/services/passwall2', homeproxy: 'admin/services/homeproxy', shadowsocksr: 'admin/services/shadowsocksr' };
+// 正在用的插件；还没读到（老版本路由器）当成 OpenClash
+const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', enabled: true, running: true } : (PXS.list || []).find((x) => x.id === PXS.active) || null;
+const pxOC = () => pxAct()?.id === 'openclash';
+// 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
+function pxShow(it) {
+	if (!it || !it.px || !PXS) return true;
+	const a = pxAct();
+	if (it.px === 'oc') return (PXS.list || []).some((x) => x.id === 'openclash');
+	if (it.px === 'clash') return !!a && a.kind === 'clash';
+	return true;
+}
 // 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
 // 托管版安装完终端里给的链接还带着配对码（#login=密钥&pair=配对码）：输登录码那一页会带着去官网绑定账号
 try { const m = /^#login=([A-Za-z0-9]{16,64})(?:&pair=([A-Za-z0-9]{8}))?$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); if (m[2]) localStorage.setItem('rp_pair', JSON.stringify({ code: m[2].toUpperCase(), exp: Date.now() + 10 * 60e3 })); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
@@ -1119,7 +1142,7 @@ const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
 const NAV = [
 	{ g: '状态', items: [
 		{ p: 'home', i: '◉', t: '概览' },
-		{ p: 'conn', i: '⇄', t: '连接' },
+		{ p: 'conn', i: '⇄', t: '连接', px: 'clash' },
 		{ p: 'traf', i: '▥', t: '流量统计' },
 		{ p: 'speed', i: '⏱', t: '网速测试' },
 		{ p: 'wd', i: '♥', t: '断线记录' },
@@ -1129,14 +1152,14 @@ const NAV = [
 		{ t: '更多状态', i: '…', kids: [['admin/status/overview', '状态总览'], ['admin/status/routesj', '路由表'], ['admin/status/iptables', '防火墙状态'], ['admin/status/wifihistory', '无线连接历史'], ['admin/status/channel_analysis', '信道分析']] },
 	] },
 	{ g: '代理', items: [
-		{ p: 'proxy', i: '⇢', t: '节点' },
-		{ p: 'subs', i: '⇣', t: '订阅' },
-		{ p: 'cfg', i: '▤', t: '配置文件' },
-		{ p: 'ow', i: '✎', t: '覆写设置' },
-		{ p: 'rules', i: '☰', t: '规则' },
-		{ p: 'black', i: '⊘', t: '拉黑名单' },
-		{ p: 'set', i: '⚙', t: '插件设置' },
-		{ p: 'log', i: '≡', t: 'OpenClash 日志' },
+		{ p: 'proxy', i: '⇢', t: '节点', px: 'clash' },
+		{ p: 'subs', i: '⇣', t: '订阅', px: 'oc' },
+		{ p: 'cfg', i: '▤', t: '配置文件', px: 'oc' },
+		{ p: 'ow', i: '✎', t: '覆写设置', px: 'oc' },
+		{ p: 'rules', i: '☰', t: '规则', px: 'oc' },
+		{ p: 'black', i: '⊘', t: '拉黑名单', px: 'oc' },
+		{ p: 'set', i: '⚙', t: '插件设置', px: 'oc' },
+		{ p: 'log', i: '≡', t: 'OpenClash 日志', px: 'oc' },
 		{ t: 'OpenClash 原版', i: 'C', kids: [['admin/services/openclash/client', '运行状态'], ['admin/services/openclash/settings', '插件设置'], ['admin/services/openclash/config-overwrite', '覆写设置'], ['admin/services/openclash/config-subscribe', '配置订阅'], ['admin/services/openclash/config', '配置管理'], ['admin/services/openclash/log', '运行日志']] },
 		{ t: 'PassWall', i: 'P', kids: [['admin/services/passwall/settings', '基本设置'], ['admin/services/passwall/node_list', '节点列表'], ['admin/services/passwall/node_subscribe', '节点订阅'], ['admin/services/passwall/rule', '规则管理'], ['admin/services/passwall/acl', '访问控制'], ['admin/services/passwall/haproxy', '负载均衡'], ['admin/services/passwall/other', '其他设置'], ['admin/services/passwall/app_update', '组件更新'], ['admin/services/passwall/server', '服务端'], ['admin/services/passwall/log', '运行日志']] },
 	] },
@@ -1294,7 +1317,7 @@ function renderNav() {
 				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : '')).toLowerCase().includes(q))
 					hits.push(`<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`);
 			};
-			if (it.link) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到
+			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
 		if ('首页 主页 home'.includes(q)) hits.unshift(navBtn(NAV_TOP, false, false));
@@ -1302,7 +1325,7 @@ function renderNav() {
 	} else {
 		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
 			!g.items.length && g.empty ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:${PKG_PAGE}">去安装 ›</button></div>` :
-			g.items.map((it) => {
+			g.items.filter(pxShow).map((it) => {
 				if (!it.kids) return navBtn(it, false, g.noic);
 				const id = g.g + '/' + it.t;
 				return `<div class="ng${navOpen[id] ? ' open' : ''}" data-g="${esc(id)}"><button class="nsub${g.noic ? ' noic' : ''}" data-ng="${esc(id)}" aria-expanded="${!!navOpen[id]}">${g.noic ? '' : navIc(id, it.i)}<span>${esc(it.t)}</span><s class="chev">›</s></button><div class="ngb kids"><div>${it.kids.map((k) => navBtn(k, true)).join('')}</div></div></div>`;
@@ -1414,12 +1437,12 @@ async function refresh(quiet) {
 				} else if (netErr && c.s.state === 'ok' && c.r && cNow(c) - c.r.last < 300e3 && !c.probe?.fail) {
 					// 云端说路由器好好的，那就是手机到路由器这段网络的问题
 					setStatus(false, '手机网络问题');
-					if (homeOff()) offText(`Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 OpenClash 正在重启。稍后下拉刷新就好。下面是上次的数据。`);
+					if (homeOff()) offText(`Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 ${pxAct()?.name || '代理插件'} 正在重启。稍后下拉刷新就好。下面是上次的数据。`);
 				}
 			}).catch(() => {
 				if (!netErr) return;
 				setStatus(false, '手机网络问题');
-				if (homeOff()) offText('路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳。如果手机连着家里这台路由器的 Wi-Fi，也可能是 OpenClash 正在重启，或者代理节点出了问题（面板会在几分钟内自动改走直连）；急的话先换成手机流量打开。下面是上次的数据。');
+				if (homeOff()) offText(`路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳。${pxAct() ? '如果手机连着家里这台路由器的 Wi-Fi，也可能是 ' + pxAct().name + ' 正在重启，或者代理节点出了问题（面板会在几分钟内自动改走直连）；' : ''}急的话先换成手机流量打开。下面是上次的数据。`);
 			});
 		} else if (/连不上|超时/.test(e.message)) setStatus(false, '离线');
 		if (!quiet) toast(e.message, true);
@@ -1696,10 +1719,53 @@ async function sectionSheet({ title, opts, values, type, sid, filter, special, o
    ===================================================================== */
 const PROTO = { pppoe: 'PPPoE 拨号', dhcp: 'DHCP 自动获取', static: '静态 IP' };
 let homeTick = 0;
-function renderSub(o) {
-	const c = o.clash || {}, s = o.system || {};
-	$('topSub').textContent = (s.model || 'OpenWrt') + (c.running ? ' · OpenClash 运行中' : ' · OpenClash 未运行');
+/* ---------- 代理插件：OpenClash、Nikki（Clash 内核）和 PassWall、PassWall2、HomeProxy、SSR Plus+ ---------- */
+function pxSet(px) {
+	if (!px || typeof px !== 'object') return;
+	const k = JSON.stringify(px), old = PXS;
+	PXS = px; store.set('rp_px', k);
+	if (!old || old.active !== px.active || JSON.stringify((old.list || []).map((x) => x.id)) !== JSON.stringify((px.list || []).map((x) => x.id))) { try { renderNav(); } catch (e) {} }
 }
+function renderSub(o) {
+	if (o.px) pxSet(o.px);
+	const s = o.system || {}, a = pxAct(), run = a && (a.kind === 'clash' ? (o.clash || {}).running : a.running);
+	$('topSub').textContent = (s.model || 'OpenWrt') + (a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件');
+}
+// 不是 Clash 内核的插件：节点列表、测延迟、切换（切换要重启插件，断网十几秒）
+async function pxNodeSheet() {
+	const a = pxAct();
+	if (!a || a.kind !== 'other') return;
+	let r; try { r = await P('px_nodes', { id: a.id }, 20000); } catch (e) { return handleErr(e); }
+	const D = {};
+	const row = (n) => `<button class="file ${n.id === r.cur ? 'cur' : ''}" data-v="n:${esc(n.id)}"><div><b>${esc(n.name)}</b><span class="muted">${esc([n.group || n.kind, n.addr ? n.addr + (n.port ? ':' + n.port : '') : ''].filter(Boolean).join(' · '))}</span></div>${n.id === r.cur ? '<span class="pill blue">正在用</span>' : D[n.id] != null ? `<span class="pill ${D[n.id] ? (D[n.id] < 200 ? 'good' : 'warnc') : 'red'}">${D[n.id] ? D[n.id] + ' ms' : '不通'}</span>` : '<span class="muted">›</span>'}</button>`;
+	const v = await modal(`<div class="sheethead"><h3>${esc(a.name)} 的节点</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-t>测延迟</button><button class="btn sm" data-v="close">关闭</button></div></div>
+		<p class="muted" style="margin:0 0 8px;font-size:12.5px">延迟是路由器直接连到节点服务器要多久，只看通不通、远不远。点节点切换，会重启 ${esc(a.name)}，断网十几秒。</p>
+		<div data-l>${r.list.map(row).join('') || '<div class="empty">还没有节点，到插件原版页面里添加或订阅</div>'}</div>`, (m) => {
+		const t = m.querySelector('[data-t]');
+		t.onclick = () => busy(t, async () => { const d = await P('px_delay', { id: a.id }, 60000); Object.assign(D, d.list || {}); for (const n of r.list) if (D[n.id] == null && n.addr) D[n.id] = 0; m.querySelector('[data-l]').innerHTML = r.list.map(row).join(''); }, '测速中');
+	});
+	const id = typeof v === 'string' && v.startsWith('n:') ? v.slice(2) : null, n = r.list.find((x) => x.id === id);
+	if (!n || n.id === r.cur) return;
+	if (!(await confirmBox('切换到「' + n.name + '」', '要重启 ' + a.name + '，全家网络中断十几秒，这个面板也可能暂时连不上。', '切换'))) return;
+	busy(null, async () => { await P('px_set', { id: a.id, node: n.id }); toast('已切换，' + a.name + ' 正在重启'); setTimeout(() => loadHome(true).catch(() => {}), 15000); });
+}
+async function pxRestart() {
+	const a = pxAct();
+	if (!a) return toast('这台路由器没装代理插件');
+	if (!(await confirmBox('重启 ' + a.name, '全家网络会中断十几秒，这个面板也可能暂时连不上。', '重启'))) return;
+	if (a.id === 'openclash') { await P('quick', { action: 'restart' }); S.state = null; watchJobs(); }
+	else await P('px_ctl', { id: a.id, op: 'restart' });
+	toast(a.name + ' 正在重启'); setStatus(false, '重启中');
+}
+$('pgNode').onclick = () => pxNodeSheet();
+$('pgNodes').onclick = () => pxNodeSheet();
+$('pgRestart').onclick = () => busy(null, pxRestart);
+$('pgLuci').onclick = () => {
+	const a = pxAct(); if (!a || !PX_LUCI[a.id]) return;
+	// 侧边栏里有这个插件的原版页面就打开第一页，没有就打开插件的入口
+	const k = Object.keys(NAVK).find((x) => x.startsWith('k:' + PX_LUCI[a.id] + '/'));
+	go(k || 'k:' + PX_LUCI[a.id]);
+};
 /* 首页代理开关：开 = OpenClash 在运行且不是直连模式 */
 const PX = { running: false, mode: null, live: false, busy: false, line: null, note: null };
 // 刚做完的操作先显示几秒（比如「正在切换到直连…」），之后显示 OpenClash 日志最后一行
@@ -1729,13 +1795,14 @@ function pxRender(running, mode, live) {
 	$('pxTitle').textContent = !live ? '代理（状态未知）' : on ? '代理已开启' : '代理已关闭';
 	pxLogRender();
 	$('pxSub').textContent = !live ? '连不上路由器，暂时不能切换'
-		: !running ? 'OpenClash 没有运行 · 所有流量直连'
+		: !running ? (pxAct()?.name || 'OpenClash') + ' 没有运行 · 所有流量直连'
 		: mode === 'rule' ? '规则模式 · 国内直连，海外走代理'
 		: mode === 'global' ? '全局模式 · 所有流量走代理'
 		: '直连模式 · 所有流量都不走代理';
 }
 $('pxSw').onchange = async () => {
-	const want = $('pxSw').checked;
+	const want = $('pxSw').checked, a = pxAct();
+	if (a && a.kind === 'other') return pxToggleOther(a, want);
 	pxRender(PX.running, PX.mode, PX.live); // 先恢复原样，成功后再更新
 	const row = $('pxRow');
 	row.classList.add('busy');
@@ -1746,13 +1813,14 @@ $('pxSw').onchange = async () => {
 			applyMode('direct');
 			toast('代理已关闭：所有流量直连');
 		} else if (!PX.running) {
-			if (!(await confirmBox('开启代理', 'OpenClash 现在没有运行，开启需要启动它，全家网络会中断 10–30 秒。', '启动'))) return;
+			const nm = a ? a.name : 'OpenClash';
+			if (!(await confirmBox('开启代理', nm + ' 现在没有运行，开启需要启动它，全家网络会中断 10–30 秒。', '启动'))) return;
 			const m = PX.mode === 'rule' || PX.mode === 'global' ? PX.mode : store.get('rp_lastmode') || 'rule';
-			pxNote('正在启动 OpenClash…', 20000, true);
+			pxNote('正在启动 ' + nm + '…', 20000, true);
 			await P('set_mode', { mode: m });
-			await P('quick', { action: 'start' });
+			if (!a || a.id === 'openclash') await P('quick', { action: 'start' }); else await P('px_ctl', { id: a.id, op: 'enable' });
 			PX.busy = true; pxLogRender();
-			toast('OpenClash 正在启动，稍等十几秒');
+			toast(nm + ' 正在启动，稍等十几秒');
 			setStatus(false, '启动中'); S.state = null; watchJobs();
 		} else {
 			const m = store.get('rp_lastmode') || 'rule';
@@ -1764,32 +1832,78 @@ $('pxSw').onchange = async () => {
 	} catch (e) { PX.note = null; pxLogRender(); handleErr(e); }
 	finally { row.classList.remove('busy'); }
 };
+// PassWall、PassWall2 有总开关；HomeProxy、SSR Plus+ 没有，只能停 / 启动（路由器重启后会自己打开）
+async function pxToggleOther(a, want) {
+	$('pxSw').checked = !want;
+	const sw = a.id === 'passwall' || a.id === 'passwall2';
+	if (!(await confirmBox(want ? '开启 ' + a.name : '关闭 ' + a.name, (want ? '启动 ' : '停止 ') + a.name + '，全家网络中断十几秒。' + (!want && !sw ? '\n' + a.name + ' 没有总开关，这里只是暂时停下，路由器重启后会自己打开；要一直关着，到它的原版页面里把节点改成「不使用」。' : !want ? '\n关掉以后所有流量直连，要走代理的网站会打不开。' : ''), want ? '开启' : '关闭', !want))) return;
+	busy(null, async () => {
+		await P('px_ctl', { id: a.id, op: sw ? (want ? 'enable' : 'disable') : (want ? 'start' : 'stop') });
+		a.running = want; if (sw) a.enabled = want;
+		pxRenderOther(a, PXS, true);
+		toast(a.name + (want ? ' 正在启动' : ' 已关闭'));
+		setTimeout(() => loadHome(true).catch(() => {}), 12000);
+	});
+}
+function pxRenderOther(a, px, live) {
+	const on = !!a.running;
+	$('pxSw').checked = on; $('pxSw').disabled = !live;
+	$('pxRow').className = 'pxrow ' + (live ? (on ? 'on' : 'off') : '');
+	$('pxTitle').textContent = !live ? '代理（状态未知）' : on ? a.name + ' 已开启' : a.name + (a.enabled === false ? ' 已关闭' : ' 没在运行');
+	$('pxSub').textContent = !live ? '连不上路由器，暂时不能切换' : on ? '当前节点：' + (px.curName || '没选') : a.enabled === false ? '所有流量直连' : '开着但没在运行，可以试试重启插件';
+	$('pxLog').innerHTML = '';
+	$('pgName').textContent = a.name;
+	$('pgCur').textContent = px.curName || '没选';
+	$('pgCnt').textContent = px.count != null ? px.count + ' 个' : '—';
+	$('pgSt').innerHTML = on ? '<span class="okc">运行中</span>' : a.enabled === false ? '已关闭' : '<span class="badc">没在运行</span>';
+}
 function renderOv(o, cached) {
 	const c = o.clash || {}, w = o.wan, s = o.system || {};
 	PX.line = c.line || PX.line; PX.busy = !!c.busy;
 	// 「正在启动…」：一旦 OpenClash 开始输出启动步骤，就改显示真实的步骤；启动完了也不再显示
 	if (PX.note && PX.note.wait && (c.busy || Date.now() - PX.note.at > 3000)) PX.note = null;
-	pxRender(c.running, c.mode, !cached);
-	setStatus(!!c.running, c.running ? '在线' : 'Clash 未运行');
+	// 路由器连得上就是在线：代理插件没在跑不等于路由器连不上
+	if (!cached) setStatus(true, '在线');
 	renderSub(o);
+	const a = pxAct(), kind = a ? a.kind : 'none', isOC = !!a && a.id === 'openclash';
 	const wanOk = !w || w.up;
-	$('hHead').textContent = !c.running ? 'OpenClash 没有运行' : !wanOk ? '宽带未连接' : '网络一切正常';
-	$('hDesc').textContent = c.running
-		? `${MODE[c.mode] || c.mode || ''}模式 · ${c.connections ?? 0} 个连接${c.custom_rules ? ' · 自定义规则已开启' : ''}`
-		: (c.error ? '代理内核未响应，可以试试重启 OpenClash' : '');
+	$('pxRow').classList.toggle('hidden', kind === 'none');
+	$('modeBox').classList.toggle('hidden', kind !== 'clash');
+	$('runBox').classList.toggle('hidden', !isOC);
+	$('pxNone').classList.toggle('hidden', kind !== 'none');
+	$('ocHead').classList.toggle('hidden', kind !== 'clash'); $('ocCard').classList.toggle('hidden', kind !== 'clash');
+	$('oDash').classList.toggle('hidden', !isOC);
+	$$('#ocCard .oconly').forEach((x) => x.classList.toggle('hidden', !isOC));
+	$('pgHead').classList.toggle('hidden', kind !== 'other'); $('pgCard').classList.toggle('hidden', kind !== 'other');
+	$('qHead').classList.toggle('hidden', !isOC); $('qCard').classList.toggle('hidden', !isOC);
+	if (a) $('ocName').textContent = a.name;
+	if (kind === 'other') {
+		pxRenderOther(a, o.px || PXS || {}, !cached);
+		$('hHead').textContent = !a.running ? a.name + (a.enabled === false ? ' 已关闭' : ' 没在运行') : !wanOk ? '宽带未连接' : '网络一切正常';
+		$('hDesc').textContent = a.running ? '当前节点：' + ((o.px || PXS || {}).curName || '没选') : '';
+	} else if (kind === 'none') {
+		$('hHead').textContent = !wanOk ? '宽带未连接' : '网络一切正常';
+		$('hDesc').textContent = '';
+	} else {
+		pxRender(c.running, c.mode, !cached);
+		$('hHead').textContent = !c.running ? a.name + ' 没有运行' : !wanOk ? '宽带未连接' : '网络一切正常';
+		$('hDesc').textContent = c.running
+			? `${MODE[c.mode] || c.mode || ''}模式 · ${c.connections ?? 0} 个连接${c.custom_rules && isOC ? ' · 自定义规则已开启' : ''}`
+			: (c.error ? '代理内核未响应，可以试试重启 ' + a.name : '');
+	}
 	$$('#modeChips .chip').forEach((b) => b.classList.toggle('on', b.dataset.mode === c.mode));
 	S.mode = c.mode;
-	$('dockMode').textContent = MODE[c.mode] ? MODE[c.mode] + '模式' : '模式';
-	const op = $('ocPill');
-	op.textContent = c.running ? '运行中' : '未运行';
-	op.className = 'pill ' + (c.running ? 'good' : 'red');
+	$('dockMode').textContent = kind === 'other' ? '节点' : kind === 'clash' && MODE[c.mode] ? MODE[c.mode] + '模式' : '模式';
+	const op = $('ocPill'), prun = kind === 'other' ? !!a.running : !!c.running;
+	op.textContent = kind === 'none' ? '没装代理插件' : prun ? a.name + ' 运行中' : a.name + ' 未运行';
+	op.className = 'pill ' + (kind === 'none' ? '' : prun ? 'good' : 'red');
 	if (o.speed) {
 		$('hRx').innerHTML = rate(o.speed.rx);
 		$('hTx').textContent = B(o.speed.tx) + '/s';
 		$('hTotal').textContent = `↓${B(o.speed.rx_total)} ↑${B(o.speed.tx_total)}`;
 		$('hDev').textContent = o.speed.dev;
 	}
-	$('sConn').textContent = c.connections ?? '—';
+	$('sConn').textContent = kind === 'clash' ? c.connections ?? '—' : '—';
 	// 新接口给真实 CPU 使用率；旧接口只有负载，用负载 ÷ 核数估算
 	const cpu = s.cpu != null ? Math.min(100, Math.round(s.cpu)) : Math.min(100, Math.round((+s.load || 0) / (s.cpus || 1) * 100));
 	$('sCpu').innerHTML = `${cpu}<small>%</small>`; bar('sCpuBar', cpu);
@@ -1811,13 +1925,13 @@ function renderOv(o, cached) {
 }
 async function loadHome(quiet) {
 	// 概览和 OpenClash 状态同时请求，不再一个等一个
-	const doSt = !quiet || homeTick++ % 6 === 0;
+	const doSt = (!quiet || homeTick++ % 6 === 0) && pxOC();
 	const stP = doSt ? state(!quiet).catch((e) => e) : null;
 	const o = await P('overview');
 	store.set('rp_ov', JSON.stringify(o));
 	renderOv(o);
 	netCheck(false);
-	if (doSt) {
+	if (doSt && pxOC()) {
 		const st = await stP;
 		if (st instanceof Error) throw st;
 		$('oPlug').textContent = st.plugin || '—';
@@ -2084,19 +2198,22 @@ async function diagSheet(type) {
 $('dock').onclick = async (e) => {
 	const b = e.target.closest('[data-d]'); if (!b) return;
 	const d = b.dataset.d;
+	const a = pxAct();
 	if (d === 'restart') {
+		if (!a) return toast('这台路由器没装代理插件');
+		if (!pxOC()) return busy(null, pxRestart);
 		if (!(await confirmBox('重启 OpenClash', '全家网络会中断 10–30 秒，这个面板也会暂时连不上。', '重启'))) return;
 		b.classList.add('run');
 		try { await P('quick', { action: 'restart' }); toast('OpenClash 正在重启'); setStatus(false, '重启中'); S.state = null; watchJobs(); } catch (x) { handleErr(x); }
 		setTimeout(() => b.classList.remove('run'), 20000);
 	}
-	if (d === 'subs') updateSubs(null);
-	if (d === 'mode') modeSheet();
+	if (d === 'subs') { if (pxOC()) updateSubs(null); else toast(a ? a.name + ' 的订阅在它的原版页面里更新' : '这台路由器没装代理插件'); }
+	if (d === 'mode') { if (a && a.kind === 'other') pxNodeSheet(); else if (a) modeSheet(); else toast('这台路由器没装代理插件'); }
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });
-	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><button class="btn sm" data-v="close">关闭</button></div><div class="qgrid" data-g></div>
+	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><button class="btn sm" data-v="close">关闭</button></div>${pxOC() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
 		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>`,
-		(m, close) => { renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); });
+		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); });
 };
 
 /* =====================================================================
@@ -3150,7 +3267,7 @@ async function loadBlack() {
 }
 
 /* ---------- 断线记录 ---------- */
-const WDK = { sub: '订阅', node: '节点', tunnel: '隧道', wan: '宽带', net: '外网', dns: 'DNS', panel: '面板服务', clash: 'OpenClash', boot: '开机', reboot: '关机', watchdog: '看门狗', mem: '内存', cloud: '云端', tablet: '平板' };
+const WDK = { sub: '订阅', node: '节点', tunnel: '隧道', wan: '宽带', net: '外网', dns: 'DNS', panel: '面板服务', clash: '代理插件', boot: '开机', reboot: '关机', watchdog: '看门狗', mem: '内存', cloud: '云端', tablet: '平板' };
 let wdData = null;
 /* 云端监测（Cloudflare）：路由器断线时也能读到，因为 /cloud/ 在隧道之前就被 Cloudflare 接住了 */
 let cloud = null, cloudAt = 0, cloudErr = null, cinfo = null;
@@ -3238,22 +3355,23 @@ function renderAuto() {
 	const row = (k, on, title, desc, dis) => `<label class="kv aswon" data-au="${k}"><span><b>${title}</b><span class="muted">${desc}</span></span><span class="sw"><input type="checkbox" ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}><i></i></span></label>`;
 	const day = (t) => { const x = new Date(t * 1000); return (x.getMonth() + 1) + ' 月 ' + x.getDate() + ' 日 ' + hm(t * 1000); };
 	let html = '';
-	if (!d.oc) html = '<div class="muted" style="font-size:13.5px;line-height:1.6">这台路由器没装 OpenClash，下面两项用不上。内存快不够时看门狗照样会自动清理缓存。</div>';
+	if (!d.oc) html = '<div class="muted" style="font-size:13.5px;line-height:1.6">这台路由器没装代理插件，下面两项用不上。内存快不够时看门狗照样会自动清理缓存。</div>';
 	else {
-		html += row('memguard', d.memguard, '内存不够时自动重启 OpenClash', '内存快用完时先清理缓存；还不够就重启一次 OpenClash 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
-		html += row('tunbypass', d.tb.on, '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过 OpenClash，OpenClash 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理');
+		const pn = d.px || '代理插件';
+		html += row('memguard', d.memguard, '内存不够时自动重启 ' + pn, '内存快用完时先清理缓存；还不够就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
+		html += row('tunbypass', d.tb.on, '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
 		if (!d.tb.on && d.tb.auto) html += `<div class="notice w" style="margin-top:8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>`;
 		else if (!d.tb.on && d.tb.status === '还没生效') html += '<div class="notice w" style="margin-top:8px">隧道直连还没生效，打开开关试一次。</div>';
 	}
-	html += '<p class="muted" style="font-size:12.5px;margin:8px 0 0">隧道断了自动重启、面板服务卡住自动重启、面板线路自动选能打开的那条，这几项一直开着。节点挂了自动换在「OpenClash」页面里设置。</p>';
+	html += '<p class="muted" style="font-size:12.5px;margin:8px 0 0">隧道断了自动重启、面板服务卡住自动重启、面板线路自动选能打开的那条，这几项一直开着。节点挂了自动换在「节点」页面里设置（OpenClash、Nikki）。</p>';
 	el.innerHTML = html;
 	const n = (d.oc ? [d.memguard, d.tb.on] : []).filter(Boolean).length;
-	pl.textContent = !d.oc ? '没装 OpenClash' : n === 2 ? '全部开启' : n ? '部分开启' : '已关闭';
+	pl.textContent = !d.oc ? '没装代理插件' : n === 2 ? '全部开启' : n ? '部分开启' : '已关闭';
 	pl.className = 'pill ' + (d.oc && n === 2 ? 'good' : '');
 }
 function setAuto(lb) {
 	const k = lb.dataset.au, inp = lb.querySelector('input'), on = inp.checked;
-	const names = { memguard: '内存不够时自动重启 OpenClash', tunbypass: '隧道直连 Cloudflare' };
+	const names = { memguard: '内存不够时自动重启' + (AU.d && AU.d.px ? ' ' + AU.d.px : '代理插件'), tunbypass: '隧道直连 Cloudflare' };
 	busy(null, async () => {
 		try { await loadAuto({ set: true, [k]: on }); toast((on ? '已开启：' : '已关闭：') + names[k]); }
 		catch (e) { inp.checked = !on; throw e; }
@@ -3284,9 +3402,9 @@ function renderWd(err) {
 	const opened = new Set($$('details[open]', box).map((x) => x.dataset.k));
 	let html = `<div class="hero"><div class="herohead"><h1>断线记录</h1><span class="pill ${pill[0]}">${pill[1]}</span></div>
 		<p class="muted" style="margin-bottom:0">看门狗每 30 秒检查一次宽带、外网、DNS、隧道、面板和 OpenClash，断了会自动修复并记下原因。记录存在路由器闪存里，断电重启也不会丢。</p>
-		${off ? `<div class="notice w" style="margin-top:12px">现在连不上路由器：${esc(err.message)}。${c && cloudLine(c) ? `<br><b>Cloudflare 实时判断：</b>${esc(cloudLine(c))}` : cloudErr && ['离线', '超时', '手机没网'].includes(err.short) ? '<br><b>Cloudflare 也连不上</b>：多半是你的手机现在没网或网络不稳；如果手机连着家里这台路由器的 Wi-Fi，也可能是 OpenClash 正在重启。' : c && ['离线', '超时', '手机没网'].includes(err.short) && c.s.state === 'ok' && c.r && cNow(c) - c.r.last < 150e3 ? `<br><b>Cloudflare 显示路由器一切正常</b>（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通（手机网络不稳，或者手机连着家里这台路由器而 OpenClash 正在重启），稍后下拉刷新就好。` : ''}<br>${d ? `下面路由器自己的记录是${ago(d.synced)}同步的，路由器连上后会自动更新。` : '这台手机还没有同步过路由器的记录。'}</div>` : ''}
+		${off ? `<div class="notice w" style="margin-top:12px">现在连不上路由器：${esc(err.message)}。${c && cloudLine(c) ? `<br><b>Cloudflare 实时判断：</b>${esc(cloudLine(c))}` : cloudErr && ['离线', '超时', '手机没网'].includes(err.short) ? '<br><b>Cloudflare 也连不上</b>：多半是你的手机现在没网或网络不稳；如果手机连着家里这台路由器的 Wi-Fi，也可能是 ' + (pxAct()?.name || '代理插件') + ' 正在重启。' : c && ['离线', '超时', '手机没网'].includes(err.short) && c.s.state === 'ok' && c.r && cNow(c) - c.r.last < 150e3 ? `<br><b>Cloudflare 显示路由器一切正常</b>（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通（手机网络不稳，或者手机连着家里这台路由器而 ${esc(pxAct()?.name || '代理插件')} 正在重启），稍后下拉刷新就好。` : ''}<br>${d ? `下面路由器自己的记录是${ago(d.synced)}同步的，路由器连上后会自动更新。` : '这台手机还没有同步过路由器的记录。'}</div>` : ''}
 		${d && !d.running && !off ? '<div class="notice w" style="margin-top:12px">看门狗没在运行，断线不会被自动修复和记录。</div>' : ''}
-		<div class="wdst">${item('宽带', st.WAN)}${item('外网', st.NET)}${item('DNS', st.DNS)}${item('隧道', st.TUN, true)}${item('面板', st.PANEL)}${item('Clash', st.CLASH)}</div>
+		<div class="wdst">${item('宽带', st.WAN)}${item('外网', st.NET)}${item('DNS', st.DNS)}${item('隧道', st.TUN, true)}${item('面板', st.PANEL)}${item('代理', st.CLASH)}</div>
 		${d && st.CHECK_T ? `<div class="muted" style="font-size:12px;margin-top:8px">上次检查 ${hms(+st.CHECK_T)}${st.READY ? ` · 隧道 ${esc(st.READY)} 条连接` : ''} · 路由器已运行 ${dur(d.uptime)}</div>` : ''}
 		<div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-wdcheck ${off ? 'disabled' : ''}>立即检查</button><button class="btn" data-wdclear ${off || !d ? 'disabled' : ''}>清空记录</button></div></div>`;
 	// 云端监测卡片
@@ -3673,8 +3791,30 @@ const T = {
 	update() { updSheet(); },
 	hubbind() { hubBind(); },
 	logout() { signOut(); },
+	feedback() { feedbackSheet(); },
 };
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
+// 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
+async function feedbackSheet() {
+	let dg = '';
+	try { dg = (await P('feedback_diag', {}, 15000)).text || ''; } catch (e) {}
+	modal(`<div class="sheethead"><h3>问题反馈 / 建议</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。截图可以发到联系方式里。</p>
+		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px"></textarea>
+		<input class="input" data-ct maxlength="80" placeholder="联系方式（可以不填）：微信、QQ、邮箱" style="margin-top:8px" autocapitalize="off" spellcheck="false">
+		<label class="kv aswon" style="margin-top:6px"><span><b>附上路由器信息</b><span class="muted">方便查问题，只有下面这些，不含密钥和网址</span></span><span class="sw"><input type="checkbox" data-dg checked><i></i></span></label>
+		${dg ? `<pre class="out" style="font-size:11.5px;max-height:120px;overflow:auto;margin:6px 0 0">${esc(dg)}</pre>` : ''}
+		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn primary" data-go>发送</button></div>`, (m, close) => {
+		const go = m.querySelector('[data-go]'), tx = m.querySelector('[data-tx]');
+		setTimeout(() => tx.focus(), 80);
+		go.onclick = () => busy(go, async () => {
+			const r = await P('feedback', { text: tx.value, contact: m.querySelector('[data-ct]').value, diag: m.querySelector('[data-dg]').checked }, 30000);
+			close(true);
+			if (r.sent === 'github') { window.open(r.url, '_blank', 'noopener'); toast('已打开 GitHub，登录后点「Submit」就发出去了'); }
+			else toast('已发送，谢谢！开发者会尽快看');
+		}, '发送中');
+	});
+}
 // 退出登录：清掉这台手机上的密钥；托管版顺便让路由器忘掉这台手机（下次要重新输登录码）
 async function signOut() {
 	const dev = !!store.get('rp_dev');

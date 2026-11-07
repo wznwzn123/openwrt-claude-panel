@@ -1,21 +1,31 @@
 #!/bin/sh
-# 隧道直连：cloudflared 连 Cloudflare 的流量不经过 OpenClash。
-# 不这样的话，隧道走的是 OpenClash 的假 IP（198.18.x），OpenClash 一重启、节点一卡，面板和 Claude 就跟着断。
-# 做法（都不用重启 OpenClash，不断网）：
-#   1. dnsmasq 把 argotunnel.com / cftunnel.com 交给国内 DNS 解析，拿到真实 IP（不再是假 IP），
-#      解析出来的 IP 顺手加进 OpenClash 的 localnetwork 名单（这个名单里的地址 OpenClash 不管，直接连）
-#   2. Cloudflare 隧道的地址段 198.41.192.0/20 写进 OpenClash 的「局域网地址」名单，OpenClash 重启后也照样直连
-# 用法：cmcp-tunbypass apply | check | off [原因] | on | status
-#   check：看门狗定时调用，路由器重启后 /tmp 里的设置没了就补回来
+# 隧道直连：cloudflared 连 Cloudflare 的流量不经过代理插件。
+# 不这样的话，隧道会走代理插件（OpenClash 还会给假 IP 198.18.x），插件一重启、节点一卡，面板和 Claude 就跟着断。
+# 做法（都不用重启代理插件，不断网）：
+#   1. dnsmasq 把 argotunnel.com / cftunnel.com 交给国内 DNS 解析，拿到真实 IP（不经过插件的 DNS）
+#   2. 把 Cloudflare 隧道的地址段 198.41.192.0/20 写进每个装了的代理插件自己的「直连名单」：
+#      OpenClash：局域网地址名单（custom/openclash_custom_localnetwork_ipv4.list）
+#      Nikki：本机访问控制里「不代理」的那一条，加上面板服务（cgroup services/claude-mcp）
+#      PassWall：直连列表（/etc/passwall/rules/direct_host、direct_ip）
+#      PassWall2：直连地址（/usr/share/passwall2/direct_ip）
+#      HomeProxy：WAN 直连地址（homeproxy.control.wan_direct_ipv4_ips）
+#      SSR Plus+：不走代理的域名（/etc/ssrplus/white.list）和地址（access_control.wan_bp_ips）
+#      能马上生效的顺便加进插件正在用的地址集合；Nikki 要等它下次重启才生效
+# 用法：cmcp-tunbypass apply | check | off [原因] | on | remove | status
+#   check：看门狗每 5 分钟调用，路由器重启、插件升级后被冲掉的设置补回来
 #   off：关掉（看门狗发现直连连不上时自动关，改回走代理）；on：重新打开
-# 测试用环境变量：TB_OC（OpenClash 目录）、TB_DNSDIR（dnsmasq 配置目录）、TB_DRY=1（不重启 dnsmasq、不改 ipset）
+# 测试用环境变量：TB_ROOT（假根目录）、TB_DNSDIR（dnsmasq 配置目录）、TB_DRY=1（不重启 dnsmasq、不改正在用的地址集合）、
+#                 TB_NOW（当前时间）、FAKE_PX（见 cmcp-proxy）
 
 D=${WD_DIR:-/etc/claude-mcp}
-OC=${TB_OC:-/etc/openclash}
-LN=$OC/custom/openclash_custom_localnetwork_ipv4.list
+R=${TB_ROOT:-}
+PX=${TB_PX:-/usr/sbin/cmcp-proxy}
 NET=198.41.192.0/20
+DOMS="argotunnel.com cftunnel.com"
 TAG='# [cmcp-tunnel] 面板隧道直连，卸载面板时自动删除'
+CG=services/claude-mcp
 OFF=$D/tunbypass.off
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 
 dnsdir() {
 	[ -n "$TB_DNSDIR" ] && { echo "$TB_DNSDIR"; return; }
@@ -25,40 +35,126 @@ dnsdir() {
 }
 conf() {
 	local s
-	for s in argotunnel.com cftunnel.com; do
+	for s in $DOMS; do
 		echo "server=/$s/223.5.5.5"
 		echo "server=/$s/119.29.29.29"
-		echo "ipset=/$s/localnetwork"
 	done
 }
-has_oc() { [ -x /etc/init.d/openclash ] || [ -n "$TB_OC" ]; }
+plugins() { sh $PX list 2>/dev/null | cut -d' ' -f1; }
+live() { [ "$TB_DRY" = 1 ] || "$@" >/dev/null 2>&1; }
+
+# ---------- 文件里的名单：一行一个，带标记行，卸载时整段删掉 ----------
+# fadd 文件 内容...（已经有的不重复加）；frm 文件 内容...
+fadd() {
+	local f=$R$1 x c=0; shift
+	[ -d "${f%/*}" ] || return 1
+	for x in "$@"; do grep -qxF "$x" "$f" 2>/dev/null && continue; [ $c = 0 ] && [ "$TB_TAG" != 0 ] && ! grep -qF '[cmcp-tunnel]' "$f" 2>/dev/null && echo "$TAG" >> "$f"; echo "$x" >> "$f"; c=1; done
+	[ $c = 1 ]
+}
+frm() {
+	local f=$R$1 x; shift
+	[ -f "$f" ] || return 0
+	for x in "$@"; do grep -vxF "$x" "$f" > "$f.cmcp" ; cat "$f.cmcp" > "$f"; rm -f "$f.cmcp"; done
+	grep -vF '[cmcp-tunnel]' "$f" > "$f.cmcp"; cat "$f.cmcp" > "$f"; rm -f "$f.cmcp"
+}
+fhas() { grep -qxF "$2" "$R$1" 2>/dev/null; }
+# uci 列表：ulist_add 键 值（已经有的不重复）；ulist_rm 键 值
+uhas() { uci -q get "$1" 2>/dev/null | tr ' ' '\n' | grep -qxF "$2"; }
+ulist_add() { uhas "$1" "$2" && return 1; uci -q add_list "$1=$2" && uci -q commit "${1%%.*}"; }
+ulist_rm() { uhas "$1" "$2" || return 0; uci -q del_list "$1=$2" && uci -q commit "${1%%.*}"; }
+# Nikki：本机访问控制里「不改 DNS、不代理」的那一条（默认第一条：dnsmasq、nobody、adguardhome 这些）
+nikki_sec() {
+	local i=0
+	[ -f "$R/etc/config/nikki" ] || return 0
+	while [ $i -lt 20 ] && uci -q get nikki.@router_access_control[$i] >/dev/null 2>&1; do
+		[ "$(uci -q get nikki.@router_access_control[$i].dns)" = 0 ] && [ "$(uci -q get nikki.@router_access_control[$i].proxy)" = 0 ] && { echo "nikki.@router_access_control[$i]"; return; }
+		i=$((i + 1))
+	done
+}
+
+# ---------- 每个插件：加 / 删 / 有没有 ----------
+p_add() {
+	local c=1 s
+	case "$1" in
+		openclash)
+			fadd /etc/openclash/custom/openclash_custom_localnetwork_ipv4.list $NET && c=0
+			live ipset -q add localnetwork $NET ;;
+		nikki)
+			s=$(nikki_sec); [ -n "$s" ] && ulist_add $s.cgroup $CG && c=0 ;;
+		passwall)
+			fadd /etc/passwall/rules/direct_host $DOMS && c=0
+			fadd /etc/passwall/rules/direct_ip $NET && c=0
+			live ipset -q add psw_white $NET timeout 0; live nft add element inet passwall psw_white_static "{ $NET }" ;;
+		passwall2)
+			fadd /usr/share/passwall2/direct_ip $NET && c=0
+			live ipset -q add psw2_direct $NET; live nft add element inet passwall2 psw2_direct "{ $NET }" ;;
+		homeproxy)
+			ulist_add homeproxy.control.wan_direct_ipv4_ips $NET && c=0
+			live nft add element inet fw4 homeproxy_wan_direct_addr_v4 "{ $NET }" ;;
+		shadowsocksr)
+			TB_TAG=0 fadd /etc/ssrplus/white.list $DOMS && c=0
+			uci -q get shadowsocksr.@access_control[0] >/dev/null 2>&1 && ulist_add shadowsocksr.@access_control[0].wan_bp_ips $NET && c=0
+			live ipset -q add whitelist $NET; live nft add element inet ss_spec whitelist "{ $NET }" ;;
+	esac
+	return $c
+}
+p_rm() {
+	local s
+	case "$1" in
+		openclash) frm /etc/openclash/custom/openclash_custom_localnetwork_ipv4.list $NET; live ipset -q del localnetwork $NET ;;
+		nikki) s=$(nikki_sec); [ -n "$s" ] && ulist_rm $s.cgroup $CG ;;
+		passwall) frm /etc/passwall/rules/direct_host $DOMS; frm /etc/passwall/rules/direct_ip $NET ;;
+		passwall2) frm /usr/share/passwall2/direct_ip $NET ;;
+		homeproxy) ulist_rm homeproxy.control.wan_direct_ipv4_ips $NET ;;
+		shadowsocksr) frm /etc/ssrplus/white.list $DOMS; ulist_rm shadowsocksr.@access_control[0].wan_bp_ips $NET ;;
+	esac
+	return 0
+}
+p_has() {
+	local s
+	case "$1" in
+		openclash) fhas /etc/openclash/custom/openclash_custom_localnetwork_ipv4.list $NET ;;
+		nikki) s=$(nikki_sec); [ -n "$s" ] && uhas $s.cgroup $CG ;;
+		passwall) fhas /etc/passwall/rules/direct_ip $NET ;;
+		passwall2) fhas /usr/share/passwall2/direct_ip $NET ;;
+		homeproxy) uhas homeproxy.control.wan_direct_ipv4_ips $NET ;;
+		shadowsocksr) fhas /etc/ssrplus/white.list argotunnel.com ;;
+		*) return 1 ;;
+	esac
+}
 
 apply() {
-	has_oc || return 0
+	local ps f c=0 p
+	ps=$(plugins)
+	[ -n "$ps" ] || return 0
 	[ -f "$OFF" ] && return 0
-	local f c=0
-	# 1 OpenClash 的局域网名单（永久，OpenClash 每次启动都会读）
-	if [ -d "$OC/custom" ] && ! grep -q "^$NET" "$LN" 2>/dev/null; then
-		printf '%s\n%s\n' "$TAG" "$NET" >> "$LN"; c=1
-	fi
-	[ "$TB_DRY" = 1 ] || ipset -q add localnetwork $NET 2>/dev/null
-	# 2 dnsmasq（在 /tmp 里，重启路由器就没了，看门狗会补）
+	for p in $ps; do p_add $p && c=1; done
+	# dnsmasq（在 /tmp 里，重启路由器就没了，看门狗会补）
 	f=$(dnsdir)/cmcp-tunnel.conf
 	mkdir -p "${f%/*}"
 	if [ "$(cat "$f" 2>/dev/null)" != "$(conf)" ]; then
 		conf > "$f"; c=1
-		[ "$TB_DRY" = 1 ] || /etc/init.d/dnsmasq restart >/dev/null 2>&1
+		live /etc/init.d/dnsmasq restart
 	fi
 	[ $c = 1 ] && echo changed
 	return 0
 }
 remove() {
-	local f
+	local f p
 	f=$(dnsdir)/cmcp-tunnel.conf
-	if [ -f "$f" ]; then rm -f "$f"; [ "$TB_DRY" = 1 ] || /etc/init.d/dnsmasq restart >/dev/null 2>&1; fi
-	[ -f "$LN" ] && sed -i "\#^$NET\$#d; \#^\# \[cmcp-tunnel\]#d" "$LN"
-	[ "$TB_DRY" = 1 ] || ipset -q del localnetwork $NET 2>/dev/null
+	if [ -f "$f" ]; then rm -f "$f"; live /etc/init.d/dnsmasq restart; fi
+	# 卸载、关掉时：所有插件都删（装过又卸了的也删干净）
+	for p in openclash nikki passwall passwall2 homeproxy shadowsocksr; do p_rm $p; done
 	return 0
+}
+status() {
+	local ps p ok=1
+	ps=$(plugins)
+	if [ -z "$ps" ]; then echo "没装代理插件，不需要"; return; fi
+	if [ -f "$OFF" ]; then echo "已关闭：$(cut -d' ' -f1 "$OFF")"; return; fi
+	[ -f "$(dnsdir)/cmcp-tunnel.conf" ] || ok=0
+	for p in $ps; do p_has $p || ok=0; done
+	[ $ok = 1 ] && echo "已开启" || echo "还没生效"
 }
 
 case "$1" in
@@ -70,10 +166,6 @@ case "$1" in
 	off) mkdir -p "$D"; echo "${2:-手动关闭} ${TB_NOW:-$(date +%s)}" > "$OFF"; remove ;;
 	on) rm -f "$OFF"; apply ;;
 	remove) remove ;;
-	status)
-		if ! has_oc; then echo "没装 OpenClash，不需要"
-		elif [ -f "$OFF" ]; then echo "已关闭：$(cut -d' ' -f1 "$OFF")"
-		elif [ -f "$(dnsdir)/cmcp-tunnel.conf" ] && grep -q "^$NET" "$LN" 2>/dev/null; then echo "已开启"
-		else echo "还没生效"; fi ;;
-	*) echo "用法：$0 apply | check | off [原因] | on | status"; exit 1 ;;
+	status) status ;;
+	*) echo "用法：$0 apply | check | off [原因] | on | remove | status"; exit 1 ;;
 esac

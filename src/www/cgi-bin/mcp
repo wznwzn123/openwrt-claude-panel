@@ -77,16 +77,16 @@ function uci_get(key) {
 
 /* ---------------- Clash / mihomo 控制接口 ---------------- */
 
+let _ctlc = null;
 function controller() {
+	if (_ctlc) return _ctlc;
 	let c = conf();
 	let base = c.api_base, secret = c.api_secret;
-	if (!base) {
-		let port = uci_get('openclash.config.cn_port') || '9090';
-		base = 'http://127.0.0.1:' + port;
-	}
-	if (secret == null)
-		secret = uci_get('openclash.config.dashboard_password') ?? '';
-	return { base, secret };
+	// OpenClash 或 Nikki（都是 mihomo 内核，接口一样）
+	let k = (!base || secret == null) ? CL.clash_ctl() : null;
+	if (!base) base = 'http://127.0.0.1:' + (k?.port ?? '9090');
+	if (secret == null) secret = k?.secret ?? '';
+	return (_ctlc = { base, secret });
 }
 
 function api(method, path, body, timeout) {
@@ -976,6 +976,8 @@ P.overview = function() {
 	} catch (e) {
 		o.clash.error = '' + e;
 	}
+	// 装了哪些代理插件、正在用哪个（OpenClash 以外的插件也认）
+	try { o.px = P.px(); } catch (e) {}
 	o.clash.config = uci_get('openclash.config.config_path');
 	o.clash.line = oc_line();
 	// OpenClash 是否正在启动/停止（只查这一个进程，比查全部后台任务快）
@@ -1693,9 +1695,10 @@ P.set_mode = function(a) {
 	if (index(['rule', 'global', 'direct'], a.mode) < 0) die('模式只能是 rule / global / direct');
 	let live = false;
 	try { api('PATCH', '/configs', { mode: a.mode }, 5); live = true; } catch (e) {}
-	let c = ucur();
-	c.set('openclash', 'config', 'proxy_mode', a.mode);
-	c.commit('openclash');
+	// 记进设置，下次启动还是这个模式（Nikki 记在 mixin.mode）
+	let c = require('uci').cursor();
+	if (CL.clash_ctl()?.id == 'nikki') { c.load('nikki'); c.set('nikki', 'mixin', 'mode', a.mode); c.commit('nikki'); }
+	else { c.load('openclash'); c.set('openclash', 'config', 'proxy_mode', a.mode); c.commit('openclash'); }
 	return { ok: true, live };
 };
 
@@ -2422,6 +2425,31 @@ function hub_call(path, extra) {
 	if (o.error) die(o.error);
 	return o;
 }
+/* ---------- 问题反馈 / 建议：托管版发到开通中心（管理员在管理页看、有邮件提醒）；自建版去 GitHub 提 ---------- */
+function fb_diag() {
+	let v = {}, px = px_detect(), mem = readfile('/proc/meminfo') ?? '';
+	for (let l in split(readfile('/etc/claude-mcp/version') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) v[m[1]] = m[2]; }
+	let pl = []; for (let x in px.list ?? []) push(pl, x.name + (x.id == px.active ? '（正在用）' : '') + (x.running ? '' : x.enabled ? '·没在跑' : '·关着'));
+	return join('\n', [
+		'面板版本：' + (v.VER ?? '未知') + ' · ' + (v.CODE ?? ''),
+		'型号：' + trim(readfile('/tmp/sysinfo/model') ?? readfile('/proc/device-tree/model') ?? '未知'),
+		'固件：' + (match(readfile('/etc/openwrt_release') ?? '', /DISTRIB_DESCRIPTION='([^']*)'/)?.[1] ?? '未知'),
+		'代理插件：' + (length(pl) ? join('、', pl) : '没装'),
+		'可用内存：' + int(+(match(mem, /MemAvailable:\s+(\d+)/)?.[1] ?? 0) / 1024) + ' MB',
+		'已运行：' + int(+split(readfile('/proc/uptime') ?? '0', ' ')[0] / 3600) + ' 小时',
+	]);
+}
+P.feedback = function(a) {
+	let text = trim('' + (a?.text ?? '')), contact = trim('' + (a?.contact ?? ''));
+	if (length(text) < 4) die('写几句遇到的问题或者建议吧');
+	if (length(text) > 2000) die('写得太长了，2000 字以内');
+	let diag = a?.diag ? fb_diag() : '';
+	if (hub_conf(true)?.HUB) { hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag }); return { ok: true, sent: 'hub' }; }
+	// 自建版：没有开通中心，带着内容去 GitHub 提
+	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');
+	return { ok: true, sent: 'github', url: 'https://github.com/wznwzn123/openwrt-claude-panel/issues/new?title=' + CL.enc('[反馈] ' + substr(replace(text, /\s+/g, ' '), 0, 40)) + '&body=' + CL.enc(body) };
+};
+P.feedback_diag = function() { return { text: fb_diag() }; };
 P.hub_pair = function() {
 	let o = hub_call('/api/pair/start');
 	return { code: o.code, exp: o.exp, url: hub_conf().HUB + '/app?pair=' + o.code };
@@ -2648,9 +2676,109 @@ P.wd_clear = function() {
 	return { ok: true };
 };
 
-/* ---------- 自动处理的开关：内存不够时自动重启 OpenClash、隧道直连 Cloudflare ---------- */
+/* ---------- 代理插件：OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ ---------- */
+// 每个插件的节点放在哪：uci 配置名、节点的类型、显示名字段、地址字段、端口字段、「当前节点」存在哪
+const PXN = {
+	passwall: { cfg: 'passwall', type: 'nodes', name: 'remarks', addr: 'address', port: 'port', cur: ['@global[0]', 'tcp_node'], en: ['@global[0]', 'enabled'] },
+	passwall2: { cfg: 'passwall2', type: 'nodes', name: 'remarks', addr: 'address', port: 'port', cur: ['@global[0]', 'node'], en: ['@global[0]', 'enabled'] },
+	homeproxy: { cfg: 'homeproxy', type: 'node', name: 'label', addr: 'address', port: 'port', cur: ['config', 'main_node'] },
+	shadowsocksr: { cfg: 'shadowsocksr', type: 'servers', name: 'alias', addr: 'server', port: 'server_port', cur: ['@global[0]', 'global_server'] },
+	openclash: { en: ['config', 'enable'], cfg: 'openclash' },
+	nikki: { en: ['config', 'enabled'], cfg: 'nikki' },
+};
+function px_detect() {
+	let j = null;
+	try { j = json(sh('/usr/sbin/cmcp-proxy json').out); } catch (e) {}
+	return type(j) == 'object' ? j : { active: '', list: [] };
+}
+// 「@global[0]」这种匿名节：换成真正的节名
+function px_sec(c, cfg, s) {
+	let m = match(s, /^@([a-z_]+)\[([0-9]+)\]$/);
+	if (!m) return s;
+	let i = 0, out = null;
+	c.foreach(cfg, m[1], (x) => { if (i++ == +m[2]) { out = x['.name']; return false; } });
+	return out;
+}
+function px_nodes(id) {
+	let d = PXN[id];
+	if (!d?.type) return null;
+	let c = require('uci').cursor(); c.load(d.cfg);
+	let cs = px_sec(c, d.cfg, d.cur[0]), cur = cs ? c.get(d.cfg, cs, d.cur[1]) : null, list = [];
+	c.foreach(d.cfg, d.type, (x) => {
+		let p = x.protocol ?? '';
+		push(list, { id: x['.name'], name: x[d.name] || x['.name'], kind: x.type ?? '', proto: p, addr: x[d.addr] ?? '', port: x[d.port] ?? '',
+			group: p == '_shunt' ? '分流' : p == '_balancing' ? '负载均衡' : p == '_urltest' ? '自动选择' : p == '_iface' ? '接口' : '' });
+	});
+	return { cur: cur && cur != 'nil' ? cur : '', list };
+}
+function px_name(id) { return { openclash: 'OpenClash', nikki: 'Nikki', passwall: 'PassWall', passwall2: 'PassWall2', homeproxy: 'HomeProxy', shadowsocksr: 'SSR Plus+' }[id] ?? id; }
+function px_check(id) { if (!PXN[id] || !stat('/etc/init.d/' + id)) die('路由器上没有装 ' + px_name(id)); }
+// 状态：装了哪些、正在用哪个；不是 Clash 内核的插件顺便带上当前节点
+P.px = function() {
+	let j = px_detect(), a = j.active;
+	if (a && PXN[a]?.type) {
+		let n = px_nodes(a);
+		j.cur = n?.cur ?? '';
+		for (let x in n?.list ?? []) if (x.id == j.cur) j.curName = x.name;
+		j.count = length(n?.list ?? []);
+	}
+	return j;
+};
+P.px_nodes = function(a) { px_check(a?.id); let n = px_nodes(a.id); if (!n) die(px_name(a.id) + ' 的节点在它自己的控制面板里管理'); return n; };
+// 切换节点：改设置、重启插件（后台重启，马上返回；断网十几秒）
+P.px_set = function(a) {
+	px_check(a?.id);
+	let d = PXN[a.id], n = px_nodes(a.id);
+	if (!n) die('这个插件不能在这里切换节点');
+	let ok = false; for (let x in n.list) if (x.id == a.node) ok = true;
+	if (!ok) die('没有这个节点');
+	let c = require('uci').cursor(); c.load(d.cfg);
+	let cs = px_sec(c, d.cfg, d.cur[0]);
+	if (!cs) die('读不到 ' + px_name(a.id) + ' 的设置');
+	c.set(d.cfg, cs, d.cur[1], a.node); c.commit(d.cfg);
+	sh('( sleep 1; /etc/init.d/' + a.id + ' restart ) >/dev/null 2>&1 </dev/null &');
+	return { ok: true };
+};
+// 开 / 关 / 重启插件
+P.px_ctl = function(a) {
+	px_check(a?.id);
+	let d = PXN[a.id], op = a.op;
+	if (op == 'enable' || op == 'disable') {
+		if (!d.en) die(px_name(a.id) + ' 没有总开关：选好节点就开着，在它自己的页面里停用');
+		let c = require('uci').cursor(); c.load(d.cfg);
+		let cs = px_sec(c, d.cfg, d.en[0]);
+		if (!cs) die('读不到 ' + px_name(a.id) + ' 的设置');
+		c.set(d.cfg, cs, d.en[1], op == 'enable' ? '1' : '0'); c.commit(d.cfg);
+		op = op == 'enable' ? 'restart' : 'stop';
+	}
+	if (!(op in ['start', 'stop', 'restart'])) die('不支持的操作：' + op);
+	sh('( sleep 1; /etc/init.d/' + a.id + ' ' + op + ' ) >/dev/null 2>&1 </dev/null &');
+	return { ok: true };
+};
+// 测节点延迟：TCP 连到节点的地址和端口要多久（不经过代理，只看节点服务器通不通、远不远）
+P.px_delay = function(a) {
+	px_check(a?.id);
+	let n = px_nodes(a.id);
+	if (!n) die('这个插件不能在这里测速');
+	let want = type(a.nodes) == 'array' ? a.nodes : null, cmd = '', k = 0;
+	for (let x in n.list) {
+		if (want && !(x.id in want)) continue;
+		if (!match(x.addr, /^[A-Za-z0-9.:_\[\]-]+$/) || !match('' + x.port, /^[0-9]+$/) || k >= 40) continue;
+		k++;
+		cmd += sprintf('( t=$(curl -s -o /dev/null -m 3 --connect-timeout 2 -w "%%{time_connect}" %s </dev/null); echo %s "$t" ) & ', shq('telnet://' + x.addr + ':' + x.port), shq(x.id));
+	}
+	if (!k) return { list: {} };
+	let out = sh(cmd + 'wait').out, r = {};
+	for (let l in split(out, '\n')) {
+		let m = match(trim(l), /^(\S+) ([0-9.]+)$/);
+		if (m) r[m[1]] = +m[2] > 0 ? int(+m[2] * 1000 + 0.5) : 0;
+	}
+	return { list: r };
+};
+
+/* ---------- 自动处理的开关：内存不够时自动重启代理插件、隧道直连 Cloudflare ---------- */
 P.auto = function(a) {
-	let D = '/etc/claude-mcp', oc = !!stat('/etc/init.d/openclash'), mg = D + '/memguard.off';
+	let D = '/etc/claude-mcp', px = px_detect(), oc = length(px.list ?? []) > 0, mg = D + '/memguard.off';
 	if (a?.set) {
 		if (a.memguard != null) {
 			if (a.memguard) sh('rm -f ' + mg);
@@ -2662,8 +2790,9 @@ P.auto = function(a) {
 		}
 	}
 	let st = oc ? trim(sh('/usr/sbin/cmcp-tunbypass status').out) : '', off = trim(readfile(D + '/tunbypass.off') ?? '');
+	let act = null; for (let x in px.list ?? []) if (x.id == px.active) act = x;
 	return {
-		oc, memguard: !stat(mg),
+		oc, px: act?.name ?? '', memguard: !stat(mg),
 		tb: { on: st == '已开启', auto: !!match(off, /^自动/), at: +(split(off, ' ')[1] ?? 0) || 0, status: st },
 	};
 };

@@ -30,6 +30,8 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 	<div class="stat" id="stats"></div>
 	<div class="sech" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2>续期申请 <span class="pill" id="apN" style="font-size:13px;vertical-align:middle"></span></h2><button class="btn sm" id="mailTest" type="button" title="有新申请时会发邮件提醒你；点这里发一封试试">发测试邮件</button></div>
 	<div class="card"><div id="aps"></div></div>
+	<div class="sech"><h2>问题反馈 <span class="pill" id="fbN" style="font-size:13px;vertical-align:middle"></span></h2></div>
+	<div class="card"><div id="fbs"></div></div>
 	<div class="sech"><h2>邀请码</h2></div>
 	<div class="card">
 		<form id="fInv" class="g3">
@@ -312,11 +314,33 @@ function renderLogs() {
 		+ (LOGS.length > LOGN ? '<button class="btn sm" id="logMore" style="margin-top:8px;width:100%">再看 ' + Math.min(50, LOGS.length - LOGN) + ' 条</button>' : '') : '<p class="muted">还没有记录（从这个版本开始记）</p>';
 	const m = $('logMore'); if (m) m.onclick = () => { LOGN += 50; renderLogs(); };
 }
+let FBS = [], FB_ALL = false;
+function renderFbs() {
+	const todo = FBS.filter((f) => !f.done), list = FB_ALL ? FBS : todo;
+	$('fbN').textContent = todo.length ? todo.length + ' 条没处理' : '';
+	$('fbs').innerHTML = (list.length ? list.slice(0, 50).map((f) => `<div class="item" data-fb="${esc(f.id)}" style="align-items:flex-start"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${f.done ? '✅ ' : ''}${esc(f.name)} <span>${esc(f.sub)}</span></b>
+		<span style="display:block;white-space:pre-wrap;color:var(--text);font-size:14px;margin:4px 0">${esc(f.text)}</span>
+		<span>${new Date(f.at).toLocaleString('zh-CN', { hour12: false })}${f.contact ? ' · 联系方式：' + esc(f.contact) : ''}${(f.emails || []).length ? ' · 账号：' + esc(f.emails.join('、')) : ''}</span>
+		${f.diag ? `<details style="margin-top:4px"><summary style="font-size:12.5px;color:var(--muted)">路由器信息</summary><pre style="white-space:pre-wrap;font-size:12px;margin:4px 0 0">${esc(f.diag)}</pre></details>` : ''}</div>
+		<div class="acts"><button class="btn sm" data-done="${f.done ? 0 : 1}">${f.done ? '标成没处理' : '处理好了'}</button><button class="btn sm danger" data-fdel>删除</button></div></div>`).join('') : `<p class="muted">${FBS.length ? '都处理好了' : '还没有人反馈'}</p>`)
+		+ (FBS.length > todo.length ? `<p style="margin:10px 0 0"><button class="btn sm" id="fbAll">${FB_ALL ? '只看没处理的' : '也看处理好的（' + (FBS.length - todo.length) + ' 条）'}</button></p>` : '');
+}
+$('fbs').onclick = async (e) => {
+	if (e.target.id === 'fbAll') { FB_ALL = !FB_ALL; return renderFbs(); }
+	const row = e.target.closest('[data-fb]'); if (!row) return;
+	const id = row.dataset.fb, dn = e.target.closest('[data-done]');
+	try {
+		if (dn) { await api('POST', 'feedback/' + id + '/done', { done: dn.dataset.done === '1' }); }
+		else if (e.target.closest('[data-fdel]')) { if (!confirm('删除这条反馈？')) return; await api('DELETE', 'feedback/' + id); }
+		else return;
+		FBS = (await api('GET', 'feedback')).list; renderFbs();
+	} catch (x) { toast(x.message); }
+};
 async function load() {
-	const [d, i, k, ap, us, lg] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications'), api('GET', 'users').catch(() => ({ list: [] })), api('GET', 'log').catch(() => ({ list: [] }))]);
-	APS = ap.list; USERS = us.list; LOGS = lg.list;
+	const [d, i, k, ap, us, lg, fb] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications'), api('GET', 'users').catch(() => ({ list: [] })), api('GET', 'log').catch(() => ({ list: [] })), api('GET', 'feedback').catch(() => ({ list: [] }))]);
+	APS = ap.list; USERS = us.list; LOGS = lg.list; FBS = fb.list;
 	DEVS = d.list; TRASH_DAYS = d.trashDays || 30; STATS = { count: d.count, max: d.max };
-	renderStats(); renderDevs(); renderInv(i.list); renderRen(k.list); renderAps(); renderUsers(); renderLogs();
+	renderStats(); renderDevs(); renderInv(i.list); renderRen(k.list); renderAps(); renderUsers(); renderLogs(); renderFbs();
 	$('vKey').classList.add('hidden'); $('vMain').classList.remove('hidden'); $('outBtn').classList.remove('hidden');
 }
 if (KEY) load().catch(() => logout()); else logout();

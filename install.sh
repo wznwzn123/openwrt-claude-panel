@@ -265,7 +265,7 @@ echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 
 # ---------- 升级系统时保留 ----------
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
+	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -277,7 +277,10 @@ if [ -n "$HUB" ]; then CODE=hosted-$CODE; else CODE=$CODE-$ED; fi
 printf 'VER=%s\nCODE=%s\nAT=%s\n' "${PKG_VER:-dev}" "$CODE" "$(date +%s)" > $D/version
 
 # ---------- 隧道直连 Cloudflare（不经过 OpenClash，OpenClash 重启、节点卡住时面板不跟着断）----------
-[ "$(/usr/sbin/cmcp-tunbypass apply 2>/dev/null)" = changed ] && ok "隧道改成直连 Cloudflare：OpenClash 重启或节点卡住时，面板和 Claude 不会再跟着断"
+# 认出装了哪些代理插件（OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+），面板按它显示
+PXL=$(/usr/sbin/cmcp-proxy list 2>/dev/null | cut -d' ' -f4- | tr '\n' '、' | sed 's/、$//')
+[ -n "$PXL" ] && ok "认出代理插件：$PXL" || ok "没装代理插件（以后装了 OpenClash、PassWall 等，面板会自动认出来）"
+[ "$(/usr/sbin/cmcp-tunbypass apply 2>/dev/null)" = changed ] && ok "隧道改成直连 Cloudflare：代理插件重启或节点卡住时，面板和 Claude 不会再跟着断"
 
 # ---------- 启动 ----------
 say "启动服务"

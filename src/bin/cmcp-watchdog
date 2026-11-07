@@ -76,6 +76,23 @@ ready() {
 }
 p_panel() { [ -n "$FAKE_PANEL" ] && { [ "$FAKE_PANEL" = 1 ]; return; }; [ "$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json)" = 200 ]; }
 cpid() { [ -n "$FAKE_CLASH" ] && { [ "$FAKE_CLASH" = 0 ] || echo "$FAKE_CLASH"; return; }; pidof clash mihomo 2>/dev/null | awk '{print $1}'; }
+# 正在用的代理插件（OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都认）：
+# PXID（编号）、PXNAME（名字）、PXEN（开着）、PXRUN（在跑）。在跑的优先，其次开着的
+PXCMD=${PXCMD:-/usr/sbin/cmcp-proxy}
+px_now() {
+	PXID=; PXNAME=; PXEN=0; PXRUN=0
+	local l id en run nm pick=
+	l=$(sh "$PXCMD" list 2>/dev/null)
+	[ -n "$l" ] || return 0
+	pick=$(echo "$l" | awk '$3 == 1 { print; exit }'); [ -n "$pick" ] || pick=$(echo "$l" | awk '$2 == 1 { print; exit }'); [ -n "$pick" ] || pick=$(echo "$l" | head -n1)
+	set -- $pick; PXID=$1; PXEN=$2; PXRUN=$3; shift 3; PXNAME="$*"
+}
+# 代理内核的进程号（OpenClash 是 clash，Nikki 是 mihomo）；别的插件没有单独的内核，在跑就记成 run
+px_pid() {
+	[ "$PXRUN" = 1 ] || return 0
+	case "$PXID" in openclash|nikki) cpid ;; *) echo run ;; esac
+}
+pxlog() { [ "$PXID" = openclash ] && oclog "$1" || logread 2>/dev/null | grep -i "$PXID" | grep -v -E 'luci|uhttpd' | tail -n "${1:-6}" | cut -c1-200; }
 
 # 隧道在 Cloudflare 上已经不存在了（被删除）/ 钥匙作废：重启隧道也没用。只看这次启动以后的日志，免得被以前的旧记录误判
 tun_gone() {
@@ -115,16 +132,17 @@ mem_guard() {
 		MLOW=0; return
 	fi
 	day=$(( (t + 28800) / 86400 )); [ "$MG_D" != "$day" ] && { MG_D=$day; MGN=0; }
-	if [ -f "$D/memguard.off" ] || [ "$(uci -q get openclash.config.enable)" != 1 ] || [ -z "$(cpid)" ] || [ $(( t - MG_T )) -lt 1800 ] || [ "$MGN" -ge 6 ]; then return; fi
-	MG_T=$t; MGN=$((MGN + 1)); clue "内存只剩 ${m2}MB，自动重启 OpenClash 释放内存"
-	if [ "$DRYRUN" = 1 ]; then ev warn mem "内存只剩 ${m2}MB（清理缓存后还是不够），已自动重启 OpenClash 释放内存（测试模式，没有真的重启）" "$(memtop)"
+	[ -n "$PXID" ] || px_now
+	if [ -f "$D/memguard.off" ] || [ -z "$PXID" ] || [ "$PXEN" != 1 ] || [ "$PXRUN" != 1 ] || [ $(( t - MG_T )) -lt 1800 ] || [ "$MGN" -ge 6 ]; then return; fi
+	MG_T=$t; MGN=$((MGN + 1)); clue "内存只剩 ${m2}MB，自动重启 $PXNAME 释放内存"
+	if [ "$DRYRUN" = 1 ]; then ev warn mem "内存只剩 ${m2}MB（清理缓存后还是不够），已自动重启 $PXNAME 释放内存（测试模式，没有真的重启）" "$(memtop)"
 	else
-		ev warn mem "内存只剩 ${m2}MB（清理缓存后还是不够），已自动重启 OpenClash 释放内存，会断网十几秒" "避免内存耗尽导致路由器死机重启。今天第 ${MGN} 次。
+		ev warn mem "内存只剩 ${m2}MB（清理缓存后还是不够），已自动重启 $PXNAME 释放内存，会断网十几秒" "避免内存耗尽导致路由器死机重启。今天第 ${MGN} 次。
 当时占内存最多的程序：
 $(memtop)"
-		( /etc/init.d/openclash restart >/dev/null 2>&1 & )
+		( sh "$PXCMD" restart "$PXID" >/dev/null 2>&1 & )
 	fi
-	# 这次重启是自己做的，下一轮不再当成「OpenClash 重启了」另记一条
+	# 这次重启是自己做的，下一轮不再当成「代理插件重启了」另记一条
 	CLASH_PID=; MLOW=0
 }
 
@@ -274,7 +292,7 @@ check() {
 			if [ "$DNS" != ok ]; then ev ok dns "DNS 恢复正常（坏了 $(mins $DNS_T $t)）" "" "$DNS_T" "$t"; DNS=ok; fi; DFAIL=0
 		else
 			DFAIL=$((DFAIL + 1))
-			if [ "$DNS" = ok ] && [ "$DFAIL" -ge 2 ]; then DNS=down; DNS_T=$t; ev err dns "DNS 解析失败：外网是通的，但域名解析不出来（OpenClash 或 dnsmasq 出了问题）" "$(logread 2>/dev/null | grep -E 'dnsmasq|openclash' | grep -v -E 'luci|dispatcher|uhttpd' | tail -n 5 | cut -c1-200)"; fi
+			if [ "$DNS" = ok ] && [ "$DFAIL" -ge 2 ]; then DNS=down; DNS_T=$t; ev err dns "DNS 解析失败：外网是通的，但域名解析不出来（代理插件或 dnsmasq 出了问题）" "$(logread 2>/dev/null | grep -E 'dnsmasq|openclash' | grep -v -E 'luci|dispatcher|uhttpd' | tail -n 5 | cut -c1-200)"; fi
 		fi
 	fi
 
@@ -322,16 +340,17 @@ $(tunlog)"
 		fi
 	fi
 
-	# OpenClash
-	if [ "$(uci -q get openclash.config.enable)" = 1 ]; then
-		local cp; cp=$(cpid)
+	# 代理插件（OpenClash、Nikki、PassWall……正在用的那个）：开着却没在跑就记下来；内核进程号变了说明重启过
+	px_now
+	if [ -n "$PXID" ] && [ "$PXEN" = 1 ]; then
+		local cp; cp=$(px_pid)
 		if [ -n "$cp" ]; then
-			if [ "$CLASH" != ok ]; then ev ok clash "OpenClash 内核恢复运行（停了 $(mins $CLASH_T $t)）" "" "$CLASH_T" "$t"; CLASH=ok
-			elif [ -n "$CLASH_PID" ] && [ "$cp" != "$CLASH_PID" ]; then ev info clash "OpenClash 重启了（期间会断网十几秒）" "$(oclog 6)"; fi
-			CLASH_PID=$cp; CFAIL=0
+			if [ "$CLASH" != ok ]; then ev ok clash "$PXNAME 恢复运行（停了 $(mins $CLASH_T $t)）" "" "$CLASH_T" "$t"; CLASH=ok
+			elif [ -n "$CLASH_PID" ] && [ "${CLASH_PID%%:*}" = "$PXID" ] && [ "$cp" != run ] && [ "$PXID:$cp" != "$CLASH_PID" ]; then ev info clash "$PXNAME 重启了（期间会断网十几秒）" "$(pxlog 6)"; fi
+			CLASH_PID=$PXID:$cp; CFAIL=0
 		else
 			CFAIL=$((CFAIL + 1))
-			if [ "$CLASH" = ok ] && [ "$CFAIL" -ge 3 ]; then CLASH=down; CLASH_T=$((t - 2 * INTERVAL)); ev err clash "OpenClash 开着，但代理内核没在运行（海外网站会打不开）" "$(oclog 8)"; fi
+			if [ "$CLASH" = ok ] && [ "$CFAIL" -ge 3 ]; then CLASH=down; CLASH_T=$((t - 2 * INTERVAL)); ev err clash "$PXNAME 开着，但没在运行（要走代理的网站会打不开）" "$(pxlog 8)"; fi
 		fi
 	else
 		CLASH=ok; CLASH_PID=

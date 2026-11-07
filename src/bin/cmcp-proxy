@@ -1,0 +1,78 @@
+#!/bin/sh
+# 认出路由器上装的代理插件：OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+
+# 用法：cmcp-proxy list            每行一个装了的插件：id 装了 开着 在跑 名称（1/0）
+#       cmcp-proxy json            同上，JSON 数组；再加 active（正在用的那个）
+#       cmcp-proxy active          正在用的那个的 id（在跑的优先，其次开着的，再其次装了的）；一个都没装输出空
+#       cmcp-proxy name [id]       中文显示名
+#       cmcp-proxy restart|start|stop [id]   默认对正在用的那个
+#       cmcp-proxy kind [id]       clash（OpenClash / Nikki，有 Clash 控制接口）或 other
+# 测试用：FAKE_PX="openclash:111 nikki:100"（id:装了开着在跑），DRYRUN=1 不真的重启
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+IDS="openclash nikki passwall passwall2 homeproxy shadowsocksr"
+
+name() {
+	case "$1" in
+		openclash) echo OpenClash ;; nikki) echo Nikki ;; passwall) echo PassWall ;; passwall2) echo PassWall2 ;;
+		homeproxy) echo HomeProxy ;; shadowsocksr) echo 'SSR Plus+' ;; *) echo "$1" ;;
+	esac
+}
+kind() { case "$1" in openclash|nikki) echo clash ;; *) echo other ;; esac; }
+fake() { echo " $FAKE_PX " | sed -n "s/.* $1:\([01]\)\([01]\)\([01]\) .*/\1 \2 \3/p"; }
+u() { uci -q get "$1" 2>/dev/null; }
+installed() {
+	[ -n "$FAKE_PX" ] && { [ "$(fake $1 | cut -d' ' -f1)" = 1 ]; return; }
+	[ -x /etc/init.d/$1 ]
+}
+enabled() {
+	[ -n "$FAKE_PX" ] && { [ "$(fake $1 | cut -d' ' -f2)" = 1 ]; return; }
+	local v
+	case "$1" in
+		openclash) [ "$(u openclash.config.enable)" = 1 ] ;;
+		nikki) [ "$(u nikki.config.enabled)" = 1 ] ;;
+		passwall|passwall2) [ "$(u $1.@global[0].enabled)" = 1 ] ;;
+		homeproxy) v=$(u homeproxy.config.main_node); [ -n "$v" ] && [ "$v" != nil ] ;;
+		shadowsocksr) v=$(u shadowsocksr.@global[0].global_server); [ -n "$v" ] && [ "$v" != nil ] ;;
+		*) return 1 ;;
+	esac
+}
+running() {
+	[ -n "$FAKE_PX" ] && { [ "$(fake $1 | cut -d' ' -f3)" = 1 ]; return; }
+	case "$1" in
+		openclash) pidof clash >/dev/null ;;
+		nikki) pidof mihomo >/dev/null ;;
+		passwall) ps w | grep -v grep | grep -q '/tmp/etc/passwall/' ;;
+		passwall2) ps w | grep -v grep | grep -q '/tmp/etc/passwall2/' ;;
+		homeproxy) ps w | grep -v grep | grep -q 'sing-box.*homeproxy' ;;
+		shadowsocksr) ps w | grep -v grep | grep -q '/var/etc/ssrplus' ;;
+		*) return 1 ;;
+	esac
+}
+b() { "$@" && echo 1 || echo 0; }
+active() {
+	local id
+	for id in $IDS; do installed $id && running $id && { echo $id; return; }; done
+	for id in $IDS; do installed $id && enabled $id && { echo $id; return; }; done
+	for id in $IDS; do installed $id && { echo $id; return; }; done
+}
+svc() {
+	local id=${2:-$(active)}
+	[ -n "$id" ] || { echo "没有装代理插件" >&2; return 1; }
+	[ "$DRYRUN" = 1 ] && { echo "$1 $id"; return 0; }
+	/etc/init.d/$id "$1"
+}
+
+case "$1" in
+	list) for id in $IDS; do installed $id && echo "$id $(b enabled $id) $(b running $id) $(name $id)"; done ;;
+	json)
+		a=$(active); s=
+		for id in $IDS; do
+			installed $id || continue
+			s="$s${s:+,}{\"id\":\"$id\",\"name\":\"$(name $id)\",\"kind\":\"$(kind $id)\",\"enabled\":$( enabled $id && echo true || echo false ),\"running\":$( running $id && echo true || echo false )}"
+		done
+		echo "{\"active\":\"$a\",\"list\":[$s]}" ;;
+	active) active ;;
+	name) name "${2:-$(active)}" ;;
+	kind) kind "${2:-$(active)}" ;;
+	restart|start|stop) svc "$1" "$2" ;;
+	*) echo "用法：$0 list | json | active | name [id] | kind [id] | restart|start|stop [id]"; exit 1 ;;
+esac

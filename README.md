@@ -4,7 +4,7 @@ OpenWrt 路由器的**手机控制面板**（PWA，可添加到主屏幕），�
 
 🌐 **官网：[yrlove520.com](https://yrlove520.com)** · 托管版（输邀请码就有专属网址）、账号登录、安卓 App 下载都在这里。
 
-- 手机面板覆盖日常要用的一切：OpenClash 节点和订阅、设备管理、流量统计、测速、断线记录、文件管理、终端……不用再在手机上缩放 LuCI。
+- 手机面板覆盖日常要用的一切：代理插件（OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 自动认出）、设备管理、流量统计、测速、断线记录、文件管理、终端……不用再在手机上缩放 LuCI。
 - AI 版：在 Claude 里说一句「把奈飞切到新加坡节点」「看看谁在占网速」「给这台设备晚上 11 点断网」，它就能直接在路由器上操作。不想用 AI 就装纯面板版。
 - 全部跑在路由器自带的 `ucode` + `uhttpd` 上，**不需要 Python / Node / Docker**，占用很小。
 - 通过 Cloudflare 隧道访问：**不用公网 IP、不用开端口**。
@@ -56,7 +56,7 @@ OpenWrt 路由器的**手机控制面板**（PWA，可添加到主屏幕），�
 | 功能 | 纯面板版 | AI 版 |
 |---|:---:|:---:|
 | 手机控制面板（OpenClash / 设备 / 流量 / 测速 / 文件 / 终端…） | ✅ | ✅ |
-| 本地看门狗：宽带、DNS、隧道、OpenClash 自动修复，断线记录 | ✅ | ✅ |
+| 本地看门狗：宽带、DNS、隧道、代理插件自动修复，断线记录 | ✅ | ✅ |
 | 设备暂停上网（定时断网）、节点挂了自动切换、每日体检、面板锁 | ✅ | ✅ |
 | 磨砂玻璃主题，自定义背景（预设或相册图片） | ✅ | ✅ |
 | 在 Claude 里用对话管理路由器（30+ 个工具） | — | ✅ |
@@ -86,7 +86,7 @@ App 只是面板的外壳，面板的新功能更新路由器上的安装包就�
 
 - OpenWrt 22.03 或更新（需要 `ucode`；Kwrt、ImmortalWrt 等衍生版本同样可用）
 - 约 2 MB 闪存空间；`cloudflared` 本身约 30 MB，空间不够请先扩容 overlay
-- [OpenClash](https://github.com/vernesong/OpenClash)：可选，但节点、订阅、规则、测速分流等功能依赖它
+- 代理插件：可选。OpenClash 功能最全（节点、订阅、配置文件、覆写、规则、测速分流）；Nikki 能用节点切换、测速、连接、代理模式；PassWall、PassWall2、HomeProxy、SSR Plus+ 能在面板里开关、换节点、测延迟，其他设置点「插件原版页面」
 - 「设备暂停上网」目前使用 `iptables`（fw3 或装了 `iptables-nft` 的 fw4）
 
 安装脚本会自动补装缺少的依赖：`ucode ucode-mod-fs ucode-mod-uci uhttpd curl cloudflared`。
@@ -203,11 +203,13 @@ sh uninstall.sh --purge
 
 ## 常见问题
 
+**遇到问题、想要新功能？** 面板「系统操作 → 问题反馈 / 建议」直接写给开发者（托管版直接发送；自建版会打开 GitHub 提问题页）。
+
 **Claude 提示连接器连不上？** 先在手机浏览器打开面板地址确认隧道是通的；临时隧道重启后地址会变，需要到 Claude 里更新地址（运行 `grep trycloudflare /tmp/claude-mcp-tunnel.log` 查看新地址）。
 
 **面板显示「连不上路由器」？** 看看 `/etc/init.d/claude-mcp status`，以及 `logread | grep -E 'uhttpd|cloudflared'`。看门狗也会自动重启没响应的面板服务和隧道。
 
-**没装 OpenClash 能用吗？** 能。系统、设备、流量、文件、终端、看门狗等功能不依赖 OpenClash；节点、订阅、规则、分流测速这些 OpenClash 相关功能就用不了。
+**没装 OpenClash 能用吗？** 能。系统、设备、文件、终端、看门狗、定时断网等功能不依赖代理插件；装的是 Nikki、PassWall、PassWall2、HomeProxy 或 SSR Plus+ 的，面板会自动认出来，概览里能开关、换节点、测延迟，侧边栏只显示用得上的页面。每台设备的流量统计目前要 OpenClash 或 Nikki。
 
 **侧边栏和 LuCI 后台的菜单不一样？** 侧边栏按用途重新分了组：OpenClash、PassWall 在「代理」里，终端用面板自己的（「工具」里），「服务」里也有这几个的入口。侧边栏会读路由器的真实菜单：没装的插件不显示，新装的插件自动出现在对应的组里。
 

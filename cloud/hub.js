@@ -725,6 +725,22 @@ export class Hub extends DurableObject {
 		return this.renew(sub, code, maskEmail(email));
 	}
 	// 路由器那边（凭 RKEY）看自己的到期时间
+	/* ---------- 问题反馈：路由器面板里发来（凭 RKEY），管理页看，发邮件提醒管理员 ---------- */
+	async feedback({ sub, rkey, text, contact, diag }) {
+		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		text = String(text || '').trim().slice(0, 2000); contact = String(contact || '').trim().slice(0, 80); diag = String(diag || '').trim().slice(0, 1500);
+		if (text.length < 4) return { st: 400, error: '写几句遇到的问题或者建议吧' };
+		if (!(await this.hit('fb:' + sub, 5, DAY))) return { st: 429, error: '今天发了很多条了，明天再发' };
+		const d = await this.ctx.storage.get('d:' + sub), emails = [];
+		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u && u.email) emails.push(u.email); }
+		const fb = { id: rnd(10), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0 };
+		await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); });
+		await this.notifyAdmin('问题反馈：' + fb.name, `${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
+		return { st: 200, ok: true };
+	}
+	async feedbacks() { return (await this.ctx.storage.get('fbl')) || []; }
+	fbSet(id, done) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; x.done = done ? Date.now() : 0; await this.ctx.storage.put('fbl', l); return true; }); }
+	fbDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; const n = l.filter((y) => y.id !== id); if (n.length === l.length) return false; await this.ctx.storage.put('fbl', n); return true; }); }
 	async devInfo({ sub, rkey }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		const d = await this.ctx.storage.get('d:' + sub);
@@ -847,6 +863,9 @@ export async function hubFetch(req, env) {
 			return J(r.st === 200 ? r : { error: r.error }, r.st);
 		}
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
+		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacks() });
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') return J({ ok: await H.fbSet(a[1], !!(await body()).done) });
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
 		if (a[0] === 'testmail' && req.method === 'POST') { const r = await H.testMail(); return J(r, r.ok ? 200 : 502); }
 		return J({ error: 'not found' }, 404);
 	}
@@ -993,6 +1012,7 @@ async function accountApi(req, env, H, p, body) {
 	if (p === '/api/dev/unbind') return out(await H.devUnbind({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
 	if (p === '/api/dev/logincode') return out(await H.devLoginCode({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	if (p === '/api/dev/info') return out(await H.devInfo({ sub: s(b.sub), rkey: s(b.rkey) }));
+	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), text: s(b.text), contact: s(b.contact), diag: s(b.diag) }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	const a = p.slice('/api/account/'.length);
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));

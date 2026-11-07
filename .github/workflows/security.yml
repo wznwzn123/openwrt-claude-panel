@@ -1,0 +1,56 @@
+# 安全检查（只检查、只报告，不影响发布和部署）：
+#   1. 代码里有没有不小心提交的密钥、令牌（gitleaks）
+#   2. 用到的第三方组件有没有已知漏洞（grype）
+#   3. 生成依赖清单（SBOM），放在这次运行的附件里（发布时也会生成一份放进 Release）
+# 每次推送到 main、每周一自动跑；也可以在 Actions 里手动运行。结果在这次运行的摘要里看
+name: 安全检查
+on:
+  push:
+    branches: [main, 'test-*']
+  schedule:
+    - cron: '23 2 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  secrets:
+    name: 密钥扫描
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 扫描提交记录里的密钥
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+  deps:
+    name: 依赖漏洞扫描
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 扫描已知漏洞
+        id: scan
+        uses: anchore/scan-action@v6
+        with:
+          path: .
+          fail-build: false
+          output-format: table
+      - name: 写进摘要
+        if: always()
+        run: |
+          echo '### 依赖漏洞扫描' >> "$GITHUB_STEP_SUMMARY"
+          f='${{ steps.scan.outputs.report }}'
+          if [ -n "$f" ] && [ -s "$f" ]; then echo '```' >> "$GITHUB_STEP_SUMMARY"; head -c 60000 "$f" >> "$GITHUB_STEP_SUMMARY"; echo '```' >> "$GITHUB_STEP_SUMMARY"; else echo '没有发现已知漏洞（或者没有可扫描的依赖）' >> "$GITHUB_STEP_SUMMARY"; fi
+  sbom:
+    name: 依赖清单（SBOM）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 生成依赖清单
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: sbom.spdx.json

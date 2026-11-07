@@ -35,6 +35,22 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$VERSION：托管版 + 四个自建版 + 安卓 App" \
             --notes-file tools/release-notes.md
+      # 依赖清单（SBOM）：列出用到的所有第三方组件，跟安装包一起放进 Release；出错也不影响发布
+      - name: 生成依赖清单（SBOM）
+        continue-on-error: true
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: 上传依赖清单
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: '[ -s sbom.spdx.json ] && gh release upload "$VERSION" sbom.spdx.json --clobber || echo "没有生成依赖清单，跳过"'
   android:
     needs: release
     uses: ./.github/workflows/android.yml

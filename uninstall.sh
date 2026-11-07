@@ -35,3 +35,20 @@ sed -i '\#^/etc/claude-mcp/$#d; \#^/www-claude-mcp/$#d; \#^/usr/share/ucode/cmcp
 if [ "$1" = --purge ]; then rm -rf /etc/claude-mcp; echo "已卸载（包括所有设置和记录）"
 else echo "已卸载。设置和记录还在 /etc/claude-mcp，彻底删除请运行：sh uninstall.sh --purge"; fi
 echo "提示：OpenClash 覆写/自定义规则里如果加过面板的规则，请在 OpenClash 里自行检查。"
+
+# ---------- 卸载检查：确认没留下面板的东西（只检查、只输出，不再改动任何东西），结果另存一份 ----------
+CK=/tmp/cmcp-uninstall-check.txt; bad=0
+chk() { if eval "$2"; then r="✓"; else r="✗"; bad=1; fi; echo "  $r $1"; echo "$r $1" >> $CK; }
+echo "卸载检查（$(date '+%Y-%m-%d %H:%M')）" > $CK
+echo "卸载检查："
+chk "面板和看门狗服务已删除" '[ ! -e /etc/init.d/claude-mcp ] && [ ! -e /etc/init.d/cmcp-watchdog ]'
+chk "面板网页服务、面板隧道已停止" '! ps w 2>/dev/null | grep -v grep | grep -q "uhttpd.*18765\|claude-mcp-tunnel"'
+chk "程序文件已删除" '! ls /usr/sbin/cmcp-* >/dev/null 2>&1 && [ ! -e /www-claude-mcp ] && [ ! -e /usr/share/ucode/cmcp ] && [ ! -e /etc/hotplug.d/ntp/90-cmcp-synced ]'
+chk "定时任务已删除" '! grep -q "/usr/sbin/cmcp-" /etc/crontabs/root 2>/dev/null'
+chk "防火墙规则（设备暂停）已删除" '! { iptables -t mangle -S 2>/dev/null; ip6tables -t mangle -S 2>/dev/null; } | grep -q CMCP_PAUSE'
+chk "隧道直连设置已删除（dnsmasq、各代理插件的直连名单）" '! find /tmp /var/etc -maxdepth 3 -name cmcp-tunnel.conf 2>/dev/null | grep -q . && ! grep -rqs "\[cmcp-tunnel\]" /etc/openclash/custom /etc/passwall /usr/share/passwall /usr/share/passwall2 /etc/ssrplus'
+chk "路由器登录账号（rpcd 里的 cmcp）已删除" '! uci -q show rpcd 2>/dev/null | grep -q "username=.cmcp."'
+chk "系统升级保留列表已清理" '! grep -q "cmcp\|claude-mcp" /etc/sysupgrade.conf 2>/dev/null'
+[ "$1" = --purge ] && chk "设置和记录（/etc/claude-mcp）已删除" '[ ! -e /etc/claude-mcp ]'
+if [ $bad = 0 ]; then echo "检查通过：面板的东西都清理干净了。" | tee -a $CK; else echo "有没清理干净的（上面打 ✗ 的），可以把 $CK 的内容发给开发者。" | tee -a $CK; fi
+echo "检查记录存在 $CK（重启后会清空）。cloudflared 软件包保留着（别的程序可能也在用），不需要的话：opkg remove cloudflared"

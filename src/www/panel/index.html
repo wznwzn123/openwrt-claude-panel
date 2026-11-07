@@ -1436,7 +1436,16 @@ async function refresh(quiet) {
 		if (my !== loadSeq) return; // 已经有更新的一次加载了，这次的错误不用管
 		if (e instanceof NeedCodeError) return;
 		if (e instanceof AuthError) return logout('密钥已失效，请重新粘贴连接地址');
-		if (e instanceof OfflineError) {
+		if (e instanceof OfflineError && svcExpired()) {
+			// 托管服务到期暂停了：专属网址停了，所以连不上。直接说清楚，不要说成手机网络的问题
+			setStatus(false, '已到期暂停');
+			if ($('topSub').textContent === '正在连接…') $('topSub').textContent = '托管服务已到期';
+			pxRender(PX.running, PX.mode, false);
+			if (page === 'home') { $('hHead').textContent = '托管服务已到期'; $('hDesc').textContent = SVC_EXP_MSG() + '下面是上次的数据。'; }
+			if (page === 'main') mOff('');   // 首页上面的「托管服务已到期」卡片已经写清楚了
+			svcRender();
+			if (!quiet) toast('托管服务已到期，专属网址暂停了', true);
+		} else if (e instanceof OfflineError) {
 			setStatus(false, e.short);
 			if ($('topSub').textContent === '正在连接…') $('topSub').textContent = '连不上路由器';
 			pxRender(PX.running, PX.mode, false);
@@ -4160,6 +4169,9 @@ async function rotateKey() {
 // 托管服务的到期时间：系统操作里显示；还剩 3 天以内首页提示去申请续期
 const ymd = (ms) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
 let SVC = null;
+// 按上次记下的到期时间判断：托管服务是不是已经到期（到期后专属网址暂停，面板连不上路由器）
+const svcExpired = () => !!(SVC && SVC.hosted && SVC.exp && SVC.exp <= Date.now());
+const SVC_EXP_MSG = () => '托管服务 ' + ymd(SVC.exp) + ' 到期，专属网址暂停了，所以连不上路由器；家里上网和路由器上的设置都不受影响。去官网账号页点「申请续期」填个表，审核通过后马上恢复，不用重装（刚续过的话，等一两分钟再刷新）。';
 function svcRender() {
 	const s = SVC;
 	$('svcBtn').classList.toggle('hidden', !s || !s.hosted);
@@ -4168,7 +4180,7 @@ function svcRender() {
 	$('svcState').textContent = s.exp == null ? '查不到到期时间' : !s.exp ? '不限期' : left <= 0 ? '已到期' : '到期 ' + ymd(s.exp) + '（还剩 ' + left + ' 天）';
 	const warn = s.exp && left <= 3;
 	$('mSvc').classList.toggle('hidden', !warn);
-	if (warn) { $('mSvcT').textContent = left <= 0 ? '托管服务已到期' : '托管服务还剩 ' + left + ' 天到期'; $('mSvcD').textContent = '到期时间 ' + ymd(s.exp) + '。去官网账号页点「申请续期」填个表，审核通过自动续上，不用重装'; }
+	if (warn) { $('mSvcT').textContent = left <= 0 ? '托管服务已到期' : '托管服务还剩 ' + left + ' 天到期'; $('mSvcD').textContent = left <= 0 ? SVC_EXP_MSG() : '到期时间 ' + ymd(s.exp) + '。去官网账号页点「申请续期」填个表，审核通过自动续上，不用重装'; }
 }
 async function svcLoad(force) {
 	try { SVC = await P('svc_info', { force: !!force }); store.set('rp_svc', JSON.stringify(SVC)); } catch (e) {}

@@ -42,6 +42,15 @@ ok('删除一份', (await (await call('DELETE', '/cloud/bk/rk/' + del)).json()).
 l = await (await call('GET', '/cloud/bk/rk')).json();
 ok('删除后列表和数据块都没了', l.list.length === 9 && !bkKeys().some((k) => k.startsWith('bk:' + del + ':')));
 ok('删除不存在的返回 false', (await (await call('DELETE', '/cloud/bk/rk/nope')).json()).ok === false);
+// 路由器加密过的（enc=1）：列表里标出来，回复里带 enc 让路由器知道可以清旧备份；没带的不标
+{ const e = nc.randomBytes(5000); const ru = await (await call('POST', '/cloud/bk/rk?name=enc1&kind=auto&enc=1&files=3', e)).json();
+ok('[加密] 上传带 enc=1：回复里有 "enc":true', ru.ok === true && ru.enc === true);
+const L = (await (await call('GET', '/cloud/bk/rk')).json()).list;
+ok('[加密] 列表里这份标着 enc，旧的没有这个字段', L[0].name === 'enc1' && L[0].enc === true && L.slice(1).every((x) => !('enc' in x)));
+const gg = await call('GET', '/cloud/bk/rk/' + L[0].id);
+ok('[加密] 下载加密的：原样返回，类型是 octet-stream、文件名 .enc', gg.headers.get('content-type') === 'application/octet-stream' && /enc1\.enc/.test(gg.headers.get('content-disposition')) && Buffer.from(await gg.arrayBuffer()).equals(e));
+const rp = await (await call('POST', '/cloud/bk/rk?name=p1&kind=manual', nc.randomBytes(3000))).json();
+ok('[加密] 没带 enc 的（老版本路由器）：照样收，回复 enc=false', rp.ok === true && rp.enc === false); }
 ok('其他接口照常（心跳）', (await (await call('POST', '/cloud/beat/t/tk')).json()).ok === true);
 
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[1] ? '' : '（' + x[2] + '）')).join('\n'));

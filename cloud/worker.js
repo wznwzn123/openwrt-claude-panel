@@ -314,7 +314,7 @@ export class Watch extends DurableObject {
 		const keys = Object.keys(put);
 		for (let i = 0; i < keys.length; i += 16) await this.ctx.storage.put(Object.fromEntries(keys.slice(i, i + 16).map((k) => [k, put[k]])));
 		let list = await this.bkList();
-		list.unshift({ id, n, size: u8.length, at: Date.now(), name: meta.name, kind: meta.kind, files: meta.files });
+		list.unshift({ id, n, size: u8.length, at: Date.now(), name: meta.name, kind: meta.kind, files: meta.files, ...(meta.enc ? { enc: true } : {}) });
 		const drop = list.slice(BK_MAX);
 		list = list.slice(0, BK_MAX);
 		await this.ctx.storage.put('bkl', list);
@@ -442,14 +442,16 @@ async function handle(req, env) {
 				const buf = await req.arrayBuffer();
 				if (buf.byteLength < 100 || buf.byteLength > BK_LIMIT) return J({ error: '备份大小不对（' + buf.byteLength + ' 字节）' }, 400);
 				const q = u.searchParams;
-				const r = await w.bkPut({ name: String(q.get('name') || 'router').slice(0, 60), kind: q.get('kind') === 'auto' ? 'auto' : 'manual', files: +q.get('files') || 0 }, buf);
-				return J({ ok: true, ...r });
+				// enc=1：路由器上已经加密过（新版面板），云端只存密文；回复里带 enc 让路由器知道这边认得这个标记，可以清掉以前没加密的旧备份
+				const enc = q.get('enc') === '1';
+				const r = await w.bkPut({ name: String(q.get('name') || 'router').slice(0, 60), kind: q.get('kind') === 'auto' ? 'auto' : 'manual', files: +q.get('files') || 0, enc }, buf);
+				return J({ ok: true, ...r, enc });
 			}
 			if (!id && req.method === 'GET') return J({ ok: true, list: await w.bkList(), max: BK_MAX });
 			if (id && req.method === 'GET') {
 				const r = await w.bkGet(id);
 				if (!r) return J({ error: '没有这份备份' }, 404);
-				return new Response(r.buf, { headers: { 'content-type': 'application/gzip', 'content-disposition': 'attachment; filename="' + encodeURIComponent(r.meta.name) + '.tar.gz"', 'cache-control': 'no-store' } });
+				return new Response(r.buf, { headers: { 'content-type': r.meta.enc ? 'application/octet-stream' : 'application/gzip', 'content-disposition': 'attachment; filename="' + encodeURIComponent(r.meta.name) + (r.meta.enc ? '.enc' : '.tar.gz') + '"', 'cache-control': 'no-store' } });
 			}
 			if (id && req.method === 'DELETE') return J({ ok: await w.bkDel(id) });
 			return J({ error: 'bad request' }, 400);

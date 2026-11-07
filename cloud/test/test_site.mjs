@@ -240,7 +240,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
 	await page.goto(B + '/#faq-restore'); await W(500);
 	{ const body = await page.textContent('body');
-	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥且目前没加密，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /目前没有加密/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
+	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、新版加密上传、没升级的仍没加密，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /还没升级的路由器上传的仍然没有加密/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
 	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，从链接进来自动展开', await page.evaluate(() => document.getElementById('faq-restore').open) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();

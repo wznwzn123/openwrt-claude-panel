@@ -39,7 +39,7 @@ async function cf(env, method, path, body) {
 	try { j = await r.json(); } catch (e) {}
 	if (!j || !j.success) {
 		const e = new Error('Cloudflare 接口出错：' + ((j && j.errors || []).map((x) => x.message).join('；') || 'HTTP ' + r.status));
-		e.status = r.status;
+		e.status = r.status; e.codes = ((j && j.errors) || []).map((x) => x.code);
 		throw e;
 	}
 	return j.result;
@@ -62,7 +62,7 @@ export async function provision(env, sub) {
 		await cf(env, 'PUT', `/accounts/${acc}/cfd_tunnel/${t.id}/configurations`, {
 			config: { ingress: [{ hostname: host(env, sub), service: 'http://127.0.0.1:18765' }, { service: 'http_status:404' }] },
 		});
-		made.dns = await dnsAdd(env, sub, t.id);
+		try { made.dns = await dnsAdd(env, sub, t.id); } catch (e) { e.dnsStep = true; throw e; }
 		made.token = t.token || (await cf(env, 'GET', `/accounts/${acc}/cfd_tunnel/${t.id}/token`));
 		return made;
 	} catch (e) {
@@ -70,6 +70,8 @@ export async function provision(env, sub) {
 		throw e;
 	}
 }
+// 子域名名额满了（Cloudflare 免费版每个域名的 DNS 记录有上限：2024-09 以后加的域名 200 条，以前的 1000 条）
+export const dnsFull = (e) => !!(e && e.dnsStep && ((e.codes || []).includes(81045) || /quota|limit|exceed/i.test(e.message || '')));
 export async function deprovision(env, { tunnel, dns }) {
 	await dnsDel(env, dns);
 	if (tunnel) {
@@ -132,6 +134,9 @@ export class Hub extends DurableObject {
 		if (inv.exp && now > inv.exp) return { st: 403, error: '邀请码已经过期' };
 		if (inv.used >= inv.max) return { st: 403, error: '邀请码已经用完了' };
 		if ((await this.count()) >= this.max()) return { st: 403, error: '名额已满，暂时不能开通' };
+		// 上次开通时 Cloudflare 的子域名名额满了：一天内、路由器数量没减少之前直接说名额已满，不再去建隧道（过一天再试一次，升级了套餐也能自己恢复）
+		const full = await this.ctx.storage.get('dnsfull');
+		if (full && now - full.at < DAY && (await this.count()) >= full.count) return { st: 403, error: '名额已满，暂时不能开通' };
 		if (!(await this.rate(ip || '?', now))) return { st: 429, error: '开通太频繁了，请一小时后再试' };
 		let sub;
 		do { sub = rnd(8); } while (await this.ctx.storage.get('d:' + sub));
@@ -147,8 +152,16 @@ export class Hub extends DurableObject {
 			if (cur) { cur.used = Math.max(0, cur.used - 1); await this.ctx.storage.put('i:' + code, cur); }
 			await this.ctx.storage.delete('d:' + sub);
 			await this.addCount(-1);
+			if (dnsFull(e)) {
+				const n = await this.count();
+				await this.ctx.storage.put('dnsfull', { count: n, at: now });
+				await this.alog('dnsfull', '', `Cloudflare 子域名名额满了（现在 ${n} 台路由器），新的开通会提示名额已满`, 'system');
+				await this.notifyAdmin('托管名额满了', `开通新路由器时 Cloudflare 提示子域名（DNS 记录）名额用完了，现在有 ${n} 台路由器。\n\n新用户会看到「名额已满，暂时不能开通」。删掉不用的路由器、或者升级 Cloudflare 套餐后就能继续开通。\n\nCloudflare 原话：${e.message}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
+				return { st: 403, error: '名额已满，暂时不能开通' };
+			}
 			return { st: 502, error: '开通失败：' + e.message };
 		}
+		if (full) await this.ctx.storage.delete('dnsfull');
 		const keys = { rkey: rnd(32), tkey: rnd(32), pkey: rnd(32) };
 		const h = host(this.env, sub);
 		await this.watch(sub).setup({ sub, ...keys, probe: 'https://' + h + '/panel/manifest.json' });
@@ -829,7 +842,7 @@ export class Hub extends DurableObject {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		return this.renew(sub, code, '路由器');
 	}
-	async stats() { return { count: await this.count(), max: this.max() }; }
+	async stats() { const f = await this.ctx.storage.get('dnsfull'); return { count: await this.count(), max: this.max(), ...(f ? { dnsFull: f } : {}) }; }
 	// 每天清理：90 天没上线的回收；开通到一半卡住超过 1 小时的也清掉
 	cleanup(now) { return this.lock(() => this._cleanup(now || Date.now())); }
 	async _cleanup(now) {

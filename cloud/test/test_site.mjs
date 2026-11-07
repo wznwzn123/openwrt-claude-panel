@@ -239,6 +239,8 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	ok('[试用] 点领取：显示试用码和带着这个码的安装命令，可以复制', !!m && (await page.textContent('#trialCmd')).includes('--invite ' + m[1]) && await page.isVisible('#trialCopy'), tc.slice(0, 120));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
 	await page.goto(B + '/#faq-restore'); await W(500);
+	{ const body = await page.textContent('body');
+	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，写明密钥不保存在服务端、并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && /托管服务不保存密钥/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
 	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，从链接进来自动展开', await page.evaluate(() => document.getElementById('faq-restore').open) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();

@@ -2686,10 +2686,14 @@ const PXN = {
 	openclash: { en: ['config', 'enable'], cfg: 'openclash' },
 	nikki: { en: ['config', 'enabled'], cfg: 'nikki' },
 };
-function px_detect() {
-	let j = null;
+// 概览每几秒刷新一次：8 秒内的结果直接用，不每次都去查
+function px_detect(fresh) {
+	let cf = '/tmp/cmcp_px.json', j = null;
+	if (!fresh) { try { let c = json(readfile(cf) ?? 'null'); if (c && time() - c.at < 8) return c.px; } catch (e) {} }
 	try { j = json(sh('/usr/sbin/cmcp-proxy json').out); } catch (e) {}
-	return type(j) == 'object' ? j : { active: '', list: [] };
+	if (type(j) != 'object') return { active: '', list: [] };
+	writefile(cf, sprintf('%J', { at: time(), px: j }));
+	return j;
 }
 // 「@global[0]」这种匿名节：换成真正的节名
 function px_sec(c, cfg, s) {
@@ -2753,6 +2757,7 @@ P.px_ctl = function(a) {
 	}
 	if (!(op in ['start', 'stop', 'restart'])) die('不支持的操作：' + op);
 	sh('( sleep 1; /etc/init.d/' + a.id + ' ' + op + ' ) >/dev/null 2>&1 </dev/null &');
+	sh('rm -f /tmp/cmcp_px.json');
 	return { ok: true };
 };
 // 测节点延迟：TCP 连到节点的地址和端口要多久（不经过代理，只看节点服务器通不通、远不远）

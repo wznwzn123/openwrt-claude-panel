@@ -2806,7 +2806,7 @@ P.auto = function(a) {
 	let on = {}; for (let k in AUTO_KEYS) on[k] = !stat(D + '/off.' + k);
 	return {
 		oc, px: act?.name ?? '', memguard: !stat(mg),
-		tb: { on: st == '已开启', auto: !!match(off, /^自动/), at: +(split(off, ' ')[1] ?? 0) || 0, status: st },
+		tb: { on: st == '已开启', want: oc && !stat(D + '/tunbypass.off'), auto: !!match(off, /^自动/), at: +(split(off, ' ')[1] ?? 0) || 0, status: st },
 		on, autosw: act?.kind == 'clash' ? !!cmcp_readj(D + '/autosw.json', { enabled: true }).enabled : null,
 		// 哪些用得上：云端备份要完整版或托管版；面板线路自动选择要 OpenClash
 		cloud: !!stat(D + '/cloud.conf'), route: !!stat('/etc/init.d/openclash'),

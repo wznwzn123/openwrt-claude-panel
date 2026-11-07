@@ -25,6 +25,8 @@ DOMS="argotunnel.com cftunnel.com"
 TAG='# [cmcp-tunnel] 面板隧道直连，卸载面板时自动删除'
 CG=services/claude-mcp
 OFF=$D/tunbypass.off
+# PassWall 的直连名单：新版在 /etc/passwall/rules，老版在 /usr/share/passwall/rules
+pwr() { [ -d "$R/etc/passwall/rules" ] && echo /etc/passwall/rules || echo /usr/share/passwall/rules; }
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 
 dnsdir() {
@@ -82,8 +84,8 @@ p_add() {
 		nikki)
 			s=$(nikki_sec); [ -n "$s" ] && ulist_add $s.cgroup $CG && c=0 ;;
 		passwall)
-			fadd /etc/passwall/rules/direct_host $DOMS && c=0
-			fadd /etc/passwall/rules/direct_ip $NET && c=0
+			fadd $(pwr)/direct_host $DOMS && c=0
+			fadd $(pwr)/direct_ip $NET && c=0
 			live ipset -q add psw_white $NET timeout 0; live nft add element inet passwall psw_white_static "{ $NET }" ;;
 		passwall2)
 			fadd /usr/share/passwall2/direct_ip $NET && c=0
@@ -103,7 +105,7 @@ p_rm() {
 	case "$1" in
 		openclash) frm /etc/openclash/custom/openclash_custom_localnetwork_ipv4.list $NET; live ipset -q del localnetwork $NET ;;
 		nikki) s=$(nikki_sec); [ -n "$s" ] && ulist_rm $s.cgroup $CG ;;
-		passwall) frm /etc/passwall/rules/direct_host $DOMS; frm /etc/passwall/rules/direct_ip $NET ;;
+		passwall) for x in /etc/passwall/rules /usr/share/passwall/rules; do frm $x/direct_host $DOMS; frm $x/direct_ip $NET; done ;;
 		passwall2) frm /usr/share/passwall2/direct_ip $NET ;;
 		homeproxy) ulist_rm homeproxy.control.wan_direct_ipv4_ips $NET ;;
 		shadowsocksr) frm /etc/ssrplus/white.list $DOMS; ulist_rm shadowsocksr.@access_control[0].wan_bp_ips $NET ;;
@@ -115,7 +117,7 @@ p_has() {
 	case "$1" in
 		openclash) fhas /etc/openclash/custom/openclash_custom_localnetwork_ipv4.list $NET ;;
 		nikki) s=$(nikki_sec); [ -n "$s" ] && uhas $s.cgroup $CG ;;
-		passwall) fhas /etc/passwall/rules/direct_ip $NET ;;
+		passwall) fhas $(pwr)/direct_ip $NET ;;
 		passwall2) fhas /usr/share/passwall2/direct_ip $NET ;;
 		homeproxy) uhas homeproxy.control.wan_direct_ipv4_ips $NET ;;
 		shadowsocksr) fhas /etc/ssrplus/white.list argotunnel.com ;;
@@ -123,6 +125,18 @@ p_has() {
 	esac
 }
 
+# 这个插件的直连名单在不在（不认识的版本、名单位置变了的，不算在「生效没生效」里）
+p_can() {
+	case "$1" in
+		openclash) [ -d "$R/etc/openclash/custom" ] ;;
+		nikki) [ -f "$R/etc/config/nikki" ] && [ -n "$(nikki_sec)" ] ;;
+		passwall) [ -d "$R$(pwr)" ] ;;
+		passwall2) [ -f "$R/usr/share/passwall2/direct_ip" ] ;;
+		homeproxy) uci -q get homeproxy.control >/dev/null 2>&1 ;;
+		shadowsocksr) [ -d "$R/etc/ssrplus" ] ;;
+		*) return 1 ;;
+	esac
+}
 apply() {
 	local ps f c=0 p
 	ps=$(plugins)
@@ -153,7 +167,7 @@ status() {
 	if [ -z "$ps" ]; then echo "没装代理插件，不需要"; return; fi
 	if [ -f "$OFF" ]; then echo "已关闭：$(cut -d' ' -f1 "$OFF")"; return; fi
 	[ -f "$(dnsdir)/cmcp-tunnel.conf" ] || ok=0
-	for p in $ps; do p_has $p || ok=0; done
+	for p in $ps; do p_can $p || continue; p_has $p || ok=0; done
 	[ $ok = 1 ] && echo "已开启" || echo "还没生效"
 }
 

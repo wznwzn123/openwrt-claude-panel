@@ -24,7 +24,8 @@ const clean = (s, n) => String(s || '').replace(/[^\p{L}\p{N} ._()\-]/gu, '').sl
 const DAY = 86400e3;
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10); // 按北京 / 台北时间显示日期
 export const LIMITS = { perIpHour: 5, allHour: 60, idleDays: 90, pendingMs: 3600e3 };
-export const TRASH_DAYS = 30;  // 管理员删除的路由器在回收站里留多久
+export const TRASH_DAYS = 30;
+const noteText = (s, n) => String(s || '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);  // 管理员删除的路由器在回收站里留多久
 
 /* ---------- Cloudflare API ---------- */
 async function cf(env, method, path, body) {
@@ -175,7 +176,9 @@ export class Hub extends DurableObject {
 		if (!SUB_RE.test(sub || '')) return { st: 404, error: '没有这台路由器' };
 		const c = await this.watch(sub).getCfg();
 		if (!c || !safeEq(rkey, c.rkey)) return { st: 403, error: '钥匙不对' };
+		const d0 = await this.ctx.storage.get('d:' + sub);
 		await this._remove(sub);
+		await this.alog('unregister', sub, '路由器上运行了卸载，网址自动交还' + (d0 && d0.name ? '（' + d0.name + '）' : ''), 'router');
 		return { st: 200, ok: true };
 	}
 	async seen(sub, t) {
@@ -234,10 +237,94 @@ export class Hub extends DurableObject {
 		await this.ctx.storage.put('d:' + sub, d);
 		return true;
 	}
+	/* ---------- 操作记录：管理员做了什么、系统自动删了什么、路由器自己注销了，都记一笔（最近 500 条） ---------- */
+	async alog(op, target, detail, by) {
+		const l = (await this.ctx.storage.get('alog')) || [];
+		l.unshift({ t: Date.now(), op, target: String(target || ''), detail: noteText(detail, 300), by: by || 'admin' });
+		await this.ctx.storage.put('alog', l.slice(0, 500));
+	}
+	async adminLog() { return (await this.ctx.storage.get('alog')) || []; }
+	// 管理员给路由器加天数（不用续期码）
+	extend(sub, days) { return this.lock(() => this._extend(sub, days)); }
+	async _extend(sub, days) {
+		const d = await this.ctx.storage.get('d:' + sub), n = parseDays(days);
+		if (!d || d.state !== 'ok') return { st: 404, error: '没有这台路由器' };
+		if (!n) return { st: 400, error: '天数不对：填 1 到 3650 之间的数字' };
+		if (!d.exp) return { st: 400, error: '这台路由器不限期，不用加天数' };
+		if (d.offWhy === 'deleted') return { st: 400, error: '在回收站里，先恢复再加天数' };
+		const old = d.exp, exp = await this._grant(d, n, '提供服务的人给你加了天数');
+		await this.alog('extend', sub, `加 ${n} 天：${ymd(old)} → ${ymd(exp)}`);
+		return { st: 200, ok: true, exp };
+	}
+	async setNote(sub, note) {
+		const d = await this.ctx.storage.get('d:' + sub);
+		if (!d) return false;
+		d.anote = noteText(note, 100); if (!d.anote) delete d.anote;
+		await this.ctx.storage.put('d:' + sub, d);
+		return true;
+	}
+	/* ---------- 账号管理：列表、删除先进回收站（30 天内能恢复）、彻底删除 ---------- */
+	async adminUsers() {
+		const devs = new Map((await this.devices()).map((d) => [d.sub, d])), out = [];
+		const ae = String(this.env.ADMIN_EMAIL || '').trim().toLowerCase();
+		for (const [k, u] of await this.ctx.storage.list({ prefix: 'u:' })) {
+			out.push({ uid: u.uid, email: u.email, created: u.created, verified: !!u.verified, lastAt: u.lastAt || 0, admin: !!ae && u.email === ae,
+				devs: (u.devs || []).map((x) => ({ sub: x.sub, name: x.alias || devs.get(x.sub)?.name || x.sub, gone: !devs.has(x.sub) })), links: (u.links || []).length });
+		}
+		for (const [k, u] of await this.ctx.storage.list({ prefix: 'xu:' }))
+			out.push({ uid: u.uid, email: u.email, created: u.created, lastAt: u.lastAt || 0, delAt: u.delAt, delWhy: u.delWhy || 'admin', purgeAt: u.delAt + TRASH_DAYS * DAY, deleted: true,
+				devs: (u.devs || []).map((x) => ({ sub: x.sub, name: x.alias || devs.get(x.sub)?.name || x.sub, gone: !devs.has(x.sub) })) });
+		return out;
+	}
+	// 把账号放进回收站：登录不了、解除跟路由器的绑定（路由器本身不动），30 天内能恢复
+	async _trashUserRec(u, why) {
+		for (const x of u.devs || []) { const d = await this.ctx.storage.get('d:' + x.sub); if (d) { d.users = (d.users || []).filter((y) => y !== u.uid); await this.ctx.storage.put('d:' + x.sub, d); } }
+		await this.dropSessions(u, null);
+		u.delAt = Date.now(); u.delWhy = why;
+		await this.ctx.storage.put({ ['xu:' + u.uid]: u, ['xe:' + u.email]: u.uid });
+		await this.ctx.storage.delete(['u:' + u.uid, 'e:' + u.email]);
+	}
+	trashUser(uid, confirm) { return this.lock(() => this._trashUser(uid, confirm)); }
+	async _trashUser(uid, confirm) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 404, error: '没有这个账号' };
+		if (String(confirm || '').trim().toLowerCase() !== u.email) return { st: 400, error: '要输入这个账号的邮箱 ' + u.email + ' 才能删除' };
+		const ae = String(this.env.ADMIN_EMAIL || '').trim().toLowerCase();
+		if (ae && u.email === ae) return { st: 403, error: '这是管理员自己的账号，不能删除' };
+		await this._trashUserRec(u, 'admin');
+		await this.alog('user-delete', u.email, '放进回收站，绑定的 ' + (u.devs || []).length + ' 台路由器已解除绑定（路由器本身不动）');
+		return { st: 200, ok: true, purgeAt: u.delAt + TRASH_DAYS * DAY };
+	}
+	restoreUser(uid) { return this.lock(() => this._restoreUser(uid)); }
+	async _restoreUser(uid) {
+		const u = await this.ctx.storage.get('xu:' + uid);
+		if (!u) return { st: 404, error: '回收站里没有这个账号' };
+		if (await this.ctx.storage.get('e:' + u.email)) return { st: 409, error: '这个邮箱已经重新注册了新账号，恢复不了（可以让他把路由器重新绑定到新账号）' };
+		const back = [];
+		for (const x of u.devs || []) { const d = await this.ctx.storage.get('d:' + x.sub); if (d) { d.users = [...new Set([...(d.users || []), uid])]; await this.ctx.storage.put('d:' + x.sub, d); back.push(x); } }
+		u.devs = back; delete u.delAt; delete u.delWhy; u.sids = [];
+		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + u.email]: uid });
+		await this.ctx.storage.delete(['xu:' + uid, 'xe:' + u.email]);
+		await this.alog('user-restore', u.email, '恢复了，重新绑定 ' + back.length + ' 台路由器');
+		return { st: 200, ok: true, devs: back.length };
+	}
+	purgeUser(uid, confirm) { return this.lock(() => this._purgeUser(uid, confirm)); }
+	async _purgeUser(uid, confirm) {
+		const u = await this.ctx.storage.get('xu:' + uid);
+		if (!u) return { st: 400, error: '只能彻底删除回收站里的账号（先删除，进回收站）' };
+		if (String(confirm || '').trim().toLowerCase() !== u.email) return { st: 400, error: '要输入这个账号的邮箱 ' + u.email + ' 才能彻底删除' };
+		await this.ctx.storage.delete(['xu:' + uid, 'xe:' + u.email]);
+		await this.alog('user-purge', u.email, '彻底删除');
+		return { st: 200, ok: true };
+	}
 	// 管理页的路由器列表：带上「受保护」「回收站到期时间」
 	async adminDevices() {
 		const list = await this.devices(), out = [];
-		for (const d of list) out.push({ ...d, prot: await this.isProtected(d), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		// 续过期的：用过续期码、续期申请通过过、管理员加过天数
+		const rs = new Set();
+		for (const k of await this.renewals()) if (k.used && k.sub) rs.add(k.sub);
+		for (const a of (await this.ctx.storage.get('aplog')) || []) if (a.status === 'ok') rs.add(a.sub);
+		for (const d of list) out.push({ ...d, prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
@@ -284,7 +371,7 @@ export class Hub extends DurableObject {
 	async newSession(u) {
 		const sid = rnd(32), now = Date.now();
 		await this.ctx.storage.put('s:' + sid, { uid: u.uid, exp: now + SESSION_DAYS * DAY });
-		u.sids = [...(u.sids || []), sid].slice(-20);
+		u.sids = [...(u.sids || []), sid].slice(-20); u.lastAt = now;
 		await this.ctx.storage.put('u:' + u.uid, u);
 		return sid;
 	}
@@ -347,6 +434,7 @@ export class Hub extends DurableObject {
 		const fk = 'lf:' + email, f = ((await this.ctx.storage.get('r:' + fk)) || []).filter((t) => t > Date.now() - 900e3);
 		if (f.length >= 10) return { st: 429, error: '这个账号密码错了太多次，15 分钟后再试' };
 		const uid = await this.ctx.storage.get('e:' + email), u = uid && (await this.ctx.storage.get('u:' + uid));
+		if (!u) { const xu = await this.ctx.storage.get('xe:' + email).then((x) => x && this.ctx.storage.get('xu:' + x)); if (xu) { const h0 = await pwHash(password, xu.salt); if (safeEq(h0, xu.pw)) return { st: 403, error: '这个账号已经' + (xu.delWhy === 'self' ? '注销' : '被停用') + '，' + ymd(xu.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复' }; } }
 		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
 		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); return { st: 401, error: '邮箱或密码不对' }; }
 		return { st: 200, sid: await this.newSession(u) };
@@ -459,9 +547,9 @@ export class Hub extends DurableObject {
 		const u = await this.ctx.storage.get('u:' + uid);
 		if (!u) return { st: 401, error: '请先登录' };
 		if (!safeEq(await pwHash(String(password || ''), u.salt), u.pw)) return { st: 403, error: '密码不对' };
-		for (const x of u.devs || []) { const d = await this.ctx.storage.get('d:' + x.sub); if (d) { d.users = (d.users || []).filter((y) => y !== uid); await this.ctx.storage.put('d:' + x.sub, d); } }
-		await this.dropSessions(u, null);
-		await this.ctx.storage.delete(['u:' + uid, 'e:' + u.email]);
+		// 也先放进回收站：30 天内提供服务的人能帮忙恢复，之后自动彻底删除
+		await this._trashUserRec(u, 'self');
+		await this.alog('user-delete', u.email, '用户自己注销了账号（30 天内能恢复）', 'user');
 		return { st: 200, ok: true };
 	}
 	// 路由器面板里看「哪些账号绑定了我」、移除某个账号（凭 RKEY）
@@ -543,6 +631,7 @@ export class Hub extends DurableObject {
 	async _grant(d, days, why) {
 		const now = Date.now();
 		d.exp = Math.max(now, d.exp || now) + days * DAY;
+		d.grants = (d.grants || 0) + 1;
 		delete d.warn3;
 		await this.ctx.storage.put('d:' + d.sub, d);
 		if (d.off && d.offWhy === 'exp') await this._setOff(d.sub, false);
@@ -654,15 +743,21 @@ export class Hub extends DurableObject {
 			const stale = d.state === 'ok' ? now - (d.seen || d.created) > LIMITS.idleDays * DAY : now - d.created > LIMITS.pendingMs;
 			if (!stale) continue;
 			try {
-				if (d.state === 'ok') await this._remove(d.sub);
-				else { await this.ctx.storage.delete('d:' + d.sub); await this.addCount(-1); }
+				if (d.state === 'ok') {
+					// 90 天没上线：先放进回收站（受保护的不动），30 天内上线了或者管理员恢复都还来得及
+					if (d.offWhy === 'deleted' || (await this.isProtected(d))) continue;
+					await this._setOff(d.sub, true, 'deleted');
+					const d2 = await this.ctx.storage.get('d:' + d.sub); d2.delAt = now; d2.delWhy = 'idle'; await this.ctx.storage.put('d:' + d.sub, d2);
+					await this.mailOwners(d2, 'trash');
+					await this.alog('idle', d.sub, (d.name || '') + ' ' + LIMITS.idleDays + ' 天没上线，放进回收站', 'system');
+				} else { await this.ctx.storage.delete('d:' + d.sub); await this.addCount(-1); }
 				out.push(d.sub);
 			} catch (e) {}
 		}
 		// 回收站里满 30 天的：彻底删除（先发邮件告诉绑定的账号怎么重新开通）
 		for (const d of await this.devices()) {
 			if (d.offWhy !== 'deleted' || !d.delAt || now - d.delAt < TRASH_DAYS * DAY) continue;
-			try { await this.mailOwners(d, 'purge'); await this._remove(d.sub); out.push(d.sub); } catch (e) {}
+			try { await this.mailOwners(d, 'purge'); await this._remove(d.sub); out.push(d.sub); await this.alog('purge', d.sub, (d.name || '') + ' 在回收站满 ' + TRASH_DAYS + ' 天，自动彻底删除', 'system'); } catch (e) {}
 		}
 		// 试用 / 续期到期：提前 3 天提醒一次；到期暂停（网址打不开、云端功能停）；暂停超过 30 天删掉，腾出名额
 		for (const d of await this.devices()) {
@@ -678,8 +773,15 @@ export class Hub extends DurableObject {
 				} else if (d.off && d.offWhy === 'exp' && now - d.exp > 30 * DAY) {
 					await this.mailOwners(d, 'purge');
 					await this._remove(d.sub); out.push(d.sub);
+					await this.alog('purge', d.sub, (d.name || '') + ' 到期暂停超过 30 天，自动彻底删除', 'system');
 				}
 			} catch (e) {}
+		}
+		// 回收站里满 30 天的账号：彻底删除
+		for (const [k, u] of await this.ctx.storage.list({ prefix: 'xu:' })) {
+			if (now - (u.delAt || 0) < TRASH_DAYS * DAY) continue;
+			await this.ctx.storage.delete([k, 'xe:' + u.email]);
+			await this.alog('user-purge', u.email, '在回收站满 ' + TRASH_DAYS + ' 天，自动彻底删除', 'system');
 		}
 		// 过期没用的登录码、配对码
 		for (const pre of ['l:', 'p:']) {
@@ -714,22 +816,36 @@ export async function hubFetch(req, env) {
 		const a = p.slice('/api/admin/'.length).split('/');
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
 		if (a[0] === 'devices' && SUB_RE.test(a[1] || '') && req.method === 'POST') {
-			const op = a[2];
-			if (op === 'off' || op === 'on') return J({ ok: await H.setOff(a[1], op === 'off') });
+			const op = a[2], sub = a[1], b = await body();
+			const done = async (r, what) => { if (r.st === 200 || r.ok === true) await H.alog(op, sub, what || ''); return r.st ? J(r.st === 200 ? r : { error: r.error }, r.st) : J(r); };
+			if (op === 'off' || op === 'on') return done({ ok: await H.setOff(sub, op === 'off') }, op === 'off' ? '封禁' : '解封');
 			// 删除：先进回收站（要输入编号确认、受保护的不能删）；恢复；彻底删除（只能删回收站里的，也要输入编号）
-			if (op === 'delete') { const r = await H.trash(a[1], (await body()).confirm); return J(r.st === 200 ? r : { error: r.error }, r.st); }
-			if (op === 'restore') { const r = await H.restore(a[1]); return J(r.st === 200 ? r : { error: r.error }, r.st); }
-			if (op === 'purge') { const r = await H.purge(a[1], (await body()).confirm); return J(r.st === 200 ? r : { error: r.error }, r.st); }
-			if (op === 'protect' || op === 'unprotect') return J({ ok: await H.setProtect(a[1], op === 'protect') });
+			if (op === 'delete') return done(await H.trash(sub, b.confirm), '放进回收站');
+			if (op === 'restore') return done(await H.restore(sub), '从回收站恢复');
+			if (op === 'purge') return done(await H.purge(sub, b.confirm), '彻底删除');
+			if (op === 'protect' || op === 'unprotect') return done({ ok: await H.setProtect(sub, op === 'protect') }, op === 'protect' ? '标为受保护' : '取消保护');
+			if (op === 'extend') { const r = await H.extend(sub, b.days); return J(r.st === 200 ? r : { error: r.error }, r.st); }
+			if (op === 'note') return done({ ok: await H.setNote(sub, b.note) }, '备注：' + noteText(b.note, 100));
 		}
+		if (a[0] === 'users' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminUsers(), trashDays: TRASH_DAYS });
+		if (a[0] === 'users' && /^[a-z2-9]{12}$/.test(a[1] || '') && req.method === 'POST') {
+			const b = await body();
+			const r = a[2] === 'delete' ? await H.trashUser(a[1], b.confirm) : a[2] === 'restore' ? await H.restoreUser(a[1]) : a[2] === 'purge' ? await H.purgeUser(a[1], b.confirm) : { st: 404, error: 'not found' };
+			return J(r.st === 200 ? r : { error: r.error }, r.st);
+		}
+		if (a[0] === 'log' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminLog() });
 		if (a[0] === 'invites' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.invites() });
-		if (a[0] === 'invites' && !a[1] && req.method === 'POST') return J({ ok: true, invite: await H.addInvite(await body()) });
-		if (a[0] === 'invites' && a[1] && req.method === 'DELETE') return J({ ok: await H.delInvite(a[1]) });
+		if (a[0] === 'invites' && !a[1] && req.method === 'POST') { const inv = await H.addInvite(await body()); await H.alog('invite', inv.code, `能开通 ${inv.max} 台 · ${inv.svc ? '试用 ' + inv.svc + ' 天' : '不限期'}${inv.note ? ' · ' + inv.note : ''}`); return J({ ok: true, invite: inv }); }
+		if (a[0] === 'invites' && a[1] && req.method === 'DELETE') { const ok = await H.delInvite(a[1]); if (ok) await H.alog('invite-del', String(a[1]).toUpperCase(), '作废'); return J({ ok }); }
 		if (a[0] === 'renewals' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.renewals() });
-		if (a[0] === 'renewals' && !a[1] && req.method === 'POST') return J({ ok: true, list: await H.addRenewals(await body()) });
-		if (a[0] === 'renewals' && a[1] && req.method === 'DELETE') return J({ ok: await H.delRenewal(a[1]) });
+		if (a[0] === 'renewals' && !a[1] && req.method === 'POST') { const list = await H.addRenewals(await body()); await H.alog('renewal', list.map((x) => x.code).join('、'), `续 ${list[0]?.days} 天 × ${list.length} 个${list[0]?.note ? ' · ' + list[0].note : ''}`); return J({ ok: true, list }); }
+		if (a[0] === 'renewals' && a[1] && req.method === 'DELETE') { const ok = await H.delRenewal(a[1]); if (ok) await H.alog('renewal-del', String(a[1]).toUpperCase(), '作废'); return J({ ok }); }
 		if (a[0] === 'applications' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.applications() });
-		if (a[0] === 'applications' && SUB_RE.test(a[1] || '') && (a[2] === 'approve' || a[2] === 'reject') && req.method === 'POST') { const r = await H.decide(a[1], a[2] === 'approve', await body()); return J(r.st === 200 ? r : { error: r.error }, r.st); }
+		if (a[0] === 'applications' && SUB_RE.test(a[1] || '') && (a[2] === 'approve' || a[2] === 'reject') && req.method === 'POST') {
+			const b = await body(), r = await H.decide(a[1], a[2] === 'approve', b);
+			if (r.st === 200) await H.alog(a[2] === 'approve' ? 'approve' : 'reject', a[1], a[2] === 'approve' ? '续期申请通过，续 ' + parseDays(b.days) + ' 天，到期 ' + ymd(r.exp) : '续期申请拒绝' + (b.reason ? '：' + b.reason : ''));
+			return J(r.st === 200 ? r : { error: r.error }, r.st);
+		}
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
 		if (a[0] === 'testmail' && req.method === 'POST') { const r = await H.testMail(); return J(r, r.ok ? 200 : 502); }
 		return J({ error: 'not found' }, 404);

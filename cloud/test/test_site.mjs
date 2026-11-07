@@ -41,7 +41,7 @@ const errs = [];
 for (const dark of [false, true]) {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
-	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : d.message().includes('续期码') ? 'rnwcode234' : d.message().includes('续几天') ? '90' : 'alice-pass-1') : undefined));
+	page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (d.message().includes('名字') ? '客厅路由器' : d.message().includes('续期码') ? 'rnwcode234' : d.message().includes('续几天') ? '90' : d.message().includes('备注（给谁的') ? '阿明家，微信 ming' : 'alice-pass-1') : undefined));
 	const shot = async (n) => { if (SHOTS) await page.screenshot({ path: SHOTS + '/site-' + n + (dark ? '-dark' : '') + '.png', fullPage: n === 'home' }); };
 	const T = dark ? '（深色）' : '';
 	await page.goto(B + '/'); await W(300);
@@ -142,7 +142,7 @@ for (const dark of [false, true]) {
 	await page.fill('#fKey [name=k]', 'wrong-key-1234567890'); await page.click('#fKey button'); await W(500);
 	ok('管理页：密钥不对进不去', /密钥不对/.test(await page.textContent('#vKey')));
 	await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(800);
-	ok('管理页：显示已开通数量和名额', (await page.textContent('#sCount')) === '2' && (await page.textContent('#sMax')) === '50');
+	ok('管理页：统计（已开通 / 名额、在线、试用中、续过期、不限期、快到期、已停用、本周新开通）', /^2 \/ 50/.test(await page.textContent('#stats .card:first-child b')) && (await page.$$('#stats .card')).length === 8 && /试用中/.test(await page.textContent('#stats')) && /本周新开通/.test(await page.textContent('#stats')), await page.textContent('#stats'));
 	ok('管理页：列出路由器和绑定的账号数', /Kwrt/.test(await page.textContent('#devs')) && /1 个账号/.test(await page.textContent('#devs')));
 	await page.fill('#fInv [name=note]', '给朋友'); await page.click('#fInv button'); await W(800);
 	ok('管理页：生成邀请码', /给朋友/.test(await page.textContent('#invs')));
@@ -165,6 +165,31 @@ for (const dark of [false, true]) {
 		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="protect"]'); await W(1000);
 		ok('管理页：点「保护」后显示「受保护」，删除按钮没了', /受保护/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')) && !(await page.$('#devs [data-sub="' + R2.sub + '"] [data-op="delete"]')));
 		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="unprotect"]'); await W(1000);
+		// 筛选
+		await page.click('#fchips [data-f="bin"]'); await W(300);
+		ok('管理页：筛选「回收站」：没有就不显示正常列表的路由器', !/Kwrt/.test(await page.textContent('#devs')) || !(await page.$('#devs [data-op="delete"]')));
+		await page.click('#fchips [data-f="all"]'); await W(300);
+		ok('管理页：筛选按钮带数量', /全部 2/.test(await page.textContent('#fchips')), await page.textContent('#fchips'));
+		// 备注
+		await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="note"]'); await W(1000);
+		ok('管理页：写备注，显示在路由器下面，也能搜', /阿明家/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
+		await page.fill('#q', '阿明'); await W(200);
+		ok('管理页：按备注搜索', (await page.$$('#devs [data-sub]')).length === 1); await page.fill('#q', ''); await W(200);
+		// 加天数（不限期的没有这个按钮）
+		const hasExt = !!(await page.$('#devs [data-sub="' + R2.sub + '"] [data-op="extend"]'));
+		const dv2 = await env.H.get('hub').ctx.storage.get('d:' + R2.sub);
+		ok('管理页：有到期时间的才有「加天数」按钮', hasExt === !!dv2.exp);
+		if (hasExt) {
+			await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="extend"]'); await W(400);
+			ok('管理页：「加天数」弹出选天数，默认 30 天，显示新的到期时间', await page.isVisible('.dlg') && (await page.inputValue('.dlg [data-in]')) === '30' && /加 30 天/.test(await page.textContent('.dlg [data-prev]')));
+			await page.click('.dlg [data-d="90"]'); await W(100); await page.click('.dlg [data-go]'); await W(1200);
+			ok('管理页：加了 90 天', Math.abs((await env.H.get('hub').ctx.storage.get('d:' + R2.sub)).exp - (dv2.exp + 90 * 86400e3)) < 5 && /已加 90 天/.test(await page.textContent('#toast')));
+		}
+		// 账号
+		ok('管理页：账号列表（邮箱、注册时间、最近登录、绑定的路由器）', /alice@x\.com/.test(await page.textContent('#users')) && /最近登录/.test(await page.textContent('#users')) && /路由器：/.test(await page.textContent('#users')));
+		// 操作记录
+		ok('管理页：操作记录里有刚才的删除、恢复、备注', /删除路由器/.test(await page.textContent('#logs')) && /恢复路由器/.test(await page.textContent('#logs')) && /改备注/.test(await page.textContent('#logs')), await page.textContent('#logs'));
+		await shot('admin-users');
 	}
 	await page.reload(); await W(800);
 	ok('管理页：刷新后还在（密钥存在这个标签页）', await page.isVisible('#vMain'));

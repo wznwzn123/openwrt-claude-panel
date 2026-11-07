@@ -138,7 +138,10 @@ const old = await dev(A.sub);
 old.seen = Date.now() - 91 * 86400e3;
 await hub().ctx.storage.put('d:' + A.sub, old);
 r = await (await adm('POST', '/cleanup')).json();
-ok('90 天没上线的自动回收（隧道、子域名、数据都删）', r.removed.includes(A.sub) && !(await dev(A.sub)) && ![...CF.dns.values()].some((d) => d.name === A.host) && !(await dev(B.sub)) === false, JSON.stringify(r));
+ok('90 天没上线：先放进回收站（网址停用，隧道和数据还在，能恢复），记进操作记录', r.removed.includes(A.sub) && (await dev(A.sub))?.offWhy === 'deleted' && (await dev(A.sub)).delWhy === 'idle' && ![...CF.dns.values()].some((d) => d.name === A.host) && !!(await dev(B.sub)) && (await (await adm('GET', '/log')).json()).list.some((x) => x.op === 'idle' && x.target === A.sub), JSON.stringify(r));
+{ const a2 = await dev(A.sub); a2.delAt = Date.now() - 31 * 86400e3; await hub().ctx.storage.put('d:' + A.sub, a2); }
+r = await (await adm('POST', '/cleanup')).json();
+ok('在回收站满 30 天：彻底删除（隧道、子域名、数据都删）', r.removed.includes(A.sub) && !(await dev(A.sub)) && ![...CF.dns.values()].some((d) => d.name === A.host) && !!(await dev(B.sub)), JSON.stringify(r));
 // 心跳会刷新「最后上线」
 const bd = await dev(B.sub); bd.seen = 1; await hub().ctx.storage.put('d:' + B.sub, bd);
 const wcfg = await env.W.get('dev:' + B.sub).getCfg(); delete wcfg.seenAt; await env.W.st.get('dev:' + B.sub).put('cfg', wcfg);

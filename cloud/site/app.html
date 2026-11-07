@@ -144,7 +144,7 @@ document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () =>
 }));
 $('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); show('auth'); tab('login'); };
 $('delBtn').onclick = async () => {
-	const pw = prompt('注销后账号和绑定记录都会删除（路由器本身不受影响）。输入密码确认：');
+	const pw = prompt('注销后马上登录不了，绑定的路由器也会解除（路由器本身不受影响）。30 天内反悔可以联系提供服务的人恢复，之后彻底删除。输入密码确认：');
 	if (!pw) return;
 	try { await api('delete', { password: pw }); toast('账号已注销'); show('auth'); tab('login'); } catch (x) { toast(x.message); }
 };

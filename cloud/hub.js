@@ -83,6 +83,22 @@ export async function deprovision(env, { tunnel, dns }) {
 
 /* ---------- 账号用的小工具 ---------- */
 const SESSION_DAYS = 30;
+// 登录过的设备：只从浏览器信息里认出「什么设备 · 什么浏览器」，不存原始字符串，也不存 IP
+export function uaLabel(ua) {
+	ua = String(ua || '');
+	if (!ua) return '';
+	const os = /HarmonyOS|OpenHarmony/i.test(ua) ? '鸿蒙' : /iPad/.test(ua) ? 'iPad' : /iPhone|iPod/.test(ua) ? 'iPhone' : /Android/.test(ua) ? '安卓手机' : /Windows/.test(ua) ? 'Windows 电脑' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux 电脑' : '其他设备';
+	const br = /RouterPanelApp/.test(ua) ? '路由器面板 App' : /MicroMessenger/.test(ua) ? '微信' : /QQBrowser|MQQBrowser/.test(ua) ? 'QQ 浏览器' : /UCBrowser/.test(ua) ? 'UC 浏览器' : /HuaweiBrowser/.test(ua) ? '华为浏览器' : /MiuiBrowser|XiaoMi/.test(ua) ? '小米浏览器' : /SamsungBrowser/.test(ua) ? '三星浏览器' : /EdgA?\/|EdgiOS|Edg\//.test(ua) ? 'Edge' : /Firefox|FxiOS/.test(ua) ? 'Firefox' : /OPR\/|Opera/.test(ua) ? 'Opera' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /curl|wget|python|node/i.test(ua) ? '程序' : '浏览器';
+	return os + ' · ' + br;
+}
+// 大概在哪：Cloudflare 自带的城市 / 国家（不存 IP）
+export function placeOf(cf) {
+	if (!cf) return '';
+	const c = String(cf.city || '').slice(0, 40), n = String(cf.country || '').slice(0, 2);
+	const CN = { CN: '中国大陆', TW: '台湾', HK: '香港', MO: '澳门', US: '美国', JP: '日本', SG: '新加坡', KR: '韩国', GB: '英国', DE: '德国', CA: '加拿大', AU: '澳大利亚', MY: '马来西亚', TH: '泰国', VN: '越南', FR: '法国', NL: '荷兰', RU: '俄罗斯', IN: '印度' };
+	const nn = CN[n] || n;
+	return c && nn ? nn + ' · ' + c : c || nn;
+}
 const te = new TextEncoder();
 export function normEmail(e) { e = String(e || '').trim().toLowerCase(); return e.length <= 120 && /^[^\s@]+@[^\s@]+\.[a-z0-9-]{2,}$/.test(e) ? e : ''; }
 export function pwError(p) { if (typeof p !== 'string' || p.length < 8) return '密码至少 8 位'; if (p.length > 128) return '密码太长了'; if (/^\d+$/.test(p) || /^(.)\1+$/.test(p)) return '密码太简单了，加点字母或符号'; return ''; }
@@ -389,14 +405,55 @@ export class Hub extends DurableObject {
 		const ss = await this.ctx.storage.get('s:' + sid);
 		if (!ss || ss.exp < Date.now()) { if (ss) await this.ctx.storage.delete('s:' + sid); return null; }
 		const u = await this.ctx.storage.get('u:' + ss.uid);
+		if (u && Date.now() - (ss.last || 0) > 600e3) { ss.last = Date.now(); await this.ctx.storage.put('s:' + sid, ss); }
 		return u ? { uid: u.uid, email: u.email } : null;
 	}
-	async newSession(u) {
+	async newSession(u, dev) {
 		const sid = rnd(32), now = Date.now();
-		await this.ctx.storage.put('s:' + sid, { uid: u.uid, exp: now + SESSION_DAYS * DAY });
+		await this.ctx.storage.put('s:' + sid, { uid: u.uid, exp: now + SESSION_DAYS * DAY, kid: rnd(10), at: now, last: now, ua: String((dev && dev.ua) || '').slice(0, 60), place: String((dev && dev.place) || '').slice(0, 60) });
 		u.sids = [...(u.sids || []), sid].slice(-20); u.lastAt = now;
 		await this.ctx.storage.put('u:' + u.uid, u);
 		return sid;
+	}
+	// 登录过的设备：还有效的才列出来；过期的顺手清掉；以前登录的没有设备信息，补一个编号
+	async sessionList(u, mine) {
+		const out = [], keep = [];
+		for (const sid of u.sids || []) {
+			const ss = await this.ctx.storage.get('s:' + sid);
+			if (!ss || ss.exp < Date.now()) { if (ss) await this.ctx.storage.delete('s:' + sid); continue; }
+			if (!ss.kid) { ss.kid = rnd(10); await this.ctx.storage.put('s:' + sid, ss); }
+			keep.push(sid);
+			out.push({ id: ss.kid, ua: ss.ua || '', place: ss.place || '', at: ss.at || 0, last: ss.last || ss.at || 0, cur: sid === mine });
+		}
+		if (keep.length !== (u.sids || []).length) { u.sids = keep; await this.ctx.storage.put('u:' + u.uid, u); }
+		return out.sort((a, b) => (b.cur - a.cur) || (b.last - a.last));
+	}
+	async sessions(uid, mine) { const u = await this.ctx.storage.get('u:' + uid); return u ? { st: 200, ok: true, list: await this.sessionList(u, mine) } : { st: 401, error: '请先登录' }; }
+	async sessionOut(uid, mine, id) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		for (const sid of u.sids || []) {
+			const ss = await this.ctx.storage.get('s:' + sid);
+			if (!ss || ss.kid !== id) continue;
+			if (sid === mine) return { st: 400, error: '这是你正在用的这台，要退出请点「退出登录」' };
+			await this.ctx.storage.delete('s:' + sid);
+			u.sids = u.sids.filter((x) => x !== sid); await this.ctx.storage.put('u:' + uid, u);
+			return { st: 200, ok: true };
+		}
+		return { st: 404, error: '这台设备已经退出了' };
+	}
+	async sessionsOutOthers(uid, mine) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		const n = (u.sids || []).filter((x) => x !== mine).length;
+		await this.dropSessions(u, mine); await this.ctx.storage.put('u:' + uid, u);
+		return { st: 200, ok: true, n };
+	}
+	async loginAlert(u, dev) {
+		if (!this.env.RESEND_API_KEY || this.env.LOGIN_ALERT === '0') return;
+		const t = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+		const e = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+		try { await sendMail(this.env, u.email, '新设备登录了你的路由器面板账号', `<p>你好，</p><p>你的账号刚刚在一台新设备上登录了：</p><p><b>${e(dev.ua)}</b>${dev.place ? '<br>大概位置：' + e(dev.place) : ''}<br>时间：${t}（北京时间）</p><p>是你自己就不用管。<b>不是你的话</b>：打开 <a href="https://${this.env.BASE_DOMAIN}/app">账号页</a>，在「登录过的设备」里把它退出，再改一下密码。</p>`); } catch (x) {}
 	}
 	async dropSessions(u, keep) {
 		const del = (u.sids || []).filter((x) => x !== keep);
@@ -438,7 +495,7 @@ export class Hub extends DurableObject {
 		return true;
 	}
 	userRegister(a) { return this.lock(() => this._registerUser(a)); }
-	async _registerUser({ email, password, code, ip }) {
+	async _registerUser({ email, password, code, ip, dev }) {
 		email = normEmail(email);
 		if (!email) return { st: 400, error: '邮箱格式不对' };
 		const pe = pwError(password); if (pe) return { st: 400, error: pe };
@@ -448,9 +505,9 @@ export class Hub extends DurableObject {
 		const uid = rnd(12), salt = rnd(16);
 		const u = { uid, email, salt, pw: await pwHash(password, salt), created: Date.now(), devs: [], sids: [], verified: !!this.env.RESEND_API_KEY };
 		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + email]: uid });
-		return { st: 200, sid: await this.newSession(u) };
+		return { st: 200, sid: await this.newSession(u, dev) };
 	}
-	async userLogin({ email, password, ip }) {
+	async userLogin({ email, password, ip, dev }) {
 		email = normEmail(email);
 		if (!email || typeof password !== 'string') return { st: 400, error: '邮箱或密码不对' };
 		if (!(await this.hit('li:' + ip, 30, 900e3))) return { st: 429, error: '尝试太多次了，15 分钟后再试' };
@@ -460,7 +517,11 @@ export class Hub extends DurableObject {
 		if (!u) { const xu = await this.ctx.storage.get('xe:' + email).then((x) => x && this.ctx.storage.get('xu:' + x)); if (xu) { const h0 = await pwHash(password, xu.salt); if (safeEq(h0, xu.pw)) return { st: 403, error: '这个账号已经' + (xu.delWhy === 'self' ? '注销' : '被停用') + '，' + ymd(xu.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复' }; } }
 		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
 		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); return { st: 401, error: '邮箱或密码不对' }; }
-		return { st: 200, sid: await this.newSession(u) };
+		// 新设备登录提醒：账号里别的还在登录的设备都不是这种设备，就发邮件告诉本人
+		const seen = (await this.sessionList(u, '')).map((x) => x.ua);
+		const sid = await this.newSession(u, dev);
+		if (dev && dev.ua && seen.length && !seen.includes(dev.ua)) await this.loginAlert(u, dev);
+		return { st: 200, sid };
 	}
 	async userLogout(sid) { const ss = sid && (await this.ctx.storage.get('s:' + sid)); if (!ss) return; await this.ctx.storage.delete('s:' + sid); const u = await this.ctx.storage.get('u:' + ss.uid); if (u) { u.sids = (u.sids || []).filter((x) => x !== sid); await this.ctx.storage.put('u:' + u.uid, u); } }
 	async me(uid) {
@@ -556,7 +617,7 @@ export class Hub extends DurableObject {
 		await this.ctx.storage.put('u:' + uid, u);
 		return { st: 200, ok: true };
 	}
-	async userReset({ email, code, password }) {
+	async userReset({ email, code, password, dev }) {
 		email = normEmail(email);
 		const uid = email && (await this.ctx.storage.get('e:' + email)), u = uid && (await this.ctx.storage.get('u:' + uid));
 		if (!u || !(await this.useCode(email, 'reset', code))) return { st: 400, error: '验证码不对或已过期' };
@@ -564,7 +625,7 @@ export class Hub extends DurableObject {
 		u.salt = rnd(16); u.pw = await pwHash(password, u.salt); u.verified = true;
 		await this.dropSessions(u, null);
 		await this.ctx.storage.put('u:' + uid, u);
-		return { st: 200, sid: await this.newSession(u) };
+		return { st: 200, sid: await this.newSession(u, dev) };
 	}
 	delAccount(uid, password) { return this.lock(() => this._delAccount(uid, password)); }
 	async _delAccount(uid, password) {
@@ -1116,14 +1177,18 @@ async function accountApi(req, env, H, p, body) {
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	const a = p.slice('/api/account/'.length);
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
-	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip }));
-	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip }));
-	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password) }));
+	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
+	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev }));
+	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip, dev }));
+	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev }));
 	const sid = getSid(req);
 	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	const me = await H.who(sid);
 	if (!me) return J({ error: '请先登录', login: true }, 401);
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
+	if (a === 'sessions') return out(await H.sessions(me.uid, sid));
+	if (a === 'session_out') return out(await H.sessionOut(me.uid, sid, s(b.id)));
+	if (a === 'sessions_out_others') return out(await H.sessionsOutOthers(me.uid, sid));
 	if (a === 'bind') return out(await H.bind(me.uid, s(b.code), ip));
 	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub)));
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));

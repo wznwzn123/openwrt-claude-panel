@@ -245,6 +245,34 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();
 }
+// 账号页：登录过的设备（两台手机各登录一次，在其中一台上把另一台退出）
+{
+	const mk = async (ua) => { const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: ua, deviceScaleFactor: SHOTS ? 2 : 1 }); const p = await c.newPage(); const e = []; p.on('pageerror', (x) => e.push(x.message)); p.on('dialog', (d) => d.accept()); return { c, p, e }; };
+	const login = async (p) => { await p.goto(B + '/app'); await W(500); await p.fill('#fLogin [name=email]', 'sess@x.com'); await p.fill('#fLogin [name=password]', 'sess-pass-1'); await p.click('#fLogin button.primary'); await W(900); };
+	const X = await mk('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0');
+	await X.p.goto(B + '/app'); await W(500);
+	await X.p.click('[data-tab="reg"]').catch(() => {}); await W(200);
+	await X.p.fill('#fReg [name=email]', 'sess@x.com'); await X.p.fill('#fReg [name=password]', 'sess-pass-1'); await X.p.click('#fReg button.primary'); await W(1200);
+	const Y = await mk('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36');
+	await login(Y.p);
+	await X.p.reload(); await W(1200);
+	let t = await X.p.textContent('#sessList');
+	ok('[登录设备] 账号页列出两台：安卓手机 · Edge（这台设备）、Windows 电脑 · Chrome（有「退出」）', /安卓手机 · Edge/.test(t) && /这台设备/.test(t) && /Windows 电脑 · Chrome/.test(t) && await X.p.locator('#sessList [data-out]').count() === 1, t);
+	ok('[登录设备] 有别的设备时显示「退出其他所有设备」', await X.p.isVisible('#sessAll'));
+	if (SHOTS) { await X.p.locator('#sessList').scrollIntoViewIfNeeded(); await X.p.screenshot({ path: SHOTS + '/site-sessions.png' }); }
+	await X.p.click('#sessList [data-out]'); await W(900);
+	ok('[登录设备] 点「退出」（确认后）：列表只剩这台，按钮藏起来', (await X.p.locator('#sessList [data-sess]').count()) === 1 && !(await X.p.isVisible('#sessAll')));
+	await Y.p.reload(); await W(900);
+	ok('[登录设备] 被退出的那台：回到登录页', await Y.p.isVisible('#fLogin') && !(await Y.p.isVisible('#vDash')));
+	await login(Y.p); const Z = await mk('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'); await login(Z.p);
+	await X.p.reload(); await W(1200);
+	await X.p.click('#sessAll'); await W(900);
+	ok('[登录设备] 「退出其他所有设备」：只剩这台，提示退出了 2 台', (await X.p.locator('#sessList [data-sess]').count()) === 1 && /已退出 2 台设备/.test(await X.p.textContent('body')));
+	await Z.p.reload(); await W(900);
+	ok('[登录设备] 其他设备都回到登录页', await Z.p.isVisible('#fLogin'));
+	ok('[登录设备] 页面没有报错', ![...X.e, ...Y.e, ...Z.e].length, [...X.e, ...Y.e, ...Z.e].join(' | '));
+	await X.c.close(); await Y.c.close(); await Z.c.close();
+}
 // 隐私政策、安全说明、报告表单
 {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });

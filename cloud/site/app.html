@@ -24,6 +24,7 @@
 .mask .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
 .trialcard{margin-bottom:6px;border:1px solid rgba(0,122,255,.25);background:linear-gradient(135deg,rgba(0,122,255,.08),rgba(175,82,222,.06))}.trialcard .trow{display:flex;align-items:center;gap:12px}.trialcard .trow>div{flex:1;min-width:0}.trialcard b{display:block;font-size:16px}.trialcard .muted{display:block;font-size:13.5px;margin-top:4px;line-height:1.6}
 .trialcard pre.cmd{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--fill);font:12px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
+.sess{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line)}.sess:last-child{border-bottom:0}.sess .l{flex:1;min-width:0}.sess .l b{display:block;font-size:14.5px}.sess .l span{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}.sess .l b .pill{display:inline-block;margin:0 0 0 6px;vertical-align:2px;color:var(--brand,#007aff);background:rgba(0,122,255,.12)}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><span class="muted hidden" id="who" style="font-size:13px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="btn sm hidden" id="outBtn">退出</button></div></div>
 
@@ -82,6 +83,8 @@
 	</div>
 	<div class="sech"><h2>换手机怎么办</h2></div>
 	<div class="card"><p class="muted" style="margin:0;font-size:14px;line-height:1.7">账号里没有路由器的登录密钥，所以第一次在新手机上打开某台路由器时，要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。<br><b>托管版</b>为了安全，每台手机第一次打开面板还要输一次<b>登录码</b>：在上面这台路由器下面点「获取登录码」，填到新手机上就行，以后这台手机就不用再输了。</p></div>
+	<div class="sech" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2>登录过的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
+	<div class="card"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div><p class="muted" style="margin:12px 0 0;font-size:12.5px;line-height:1.6">这里是登录着这个账号的设备（只记设备类型和大概城市，不记 IP）。看到不认识的，点「退出」，再改一下密码。有新设备登录时会给你发邮件提醒。</p></div>
 	<div class="sech"><h2>账号</h2></div>
 	<div class="card">
 		<form id="fPw">
@@ -257,9 +260,31 @@ function codeBox(code, d, fresh) {
 let latest = '';
 const newer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
 const verP = fetch('/api/router/version').then((r) => r.json()).then((j) => { if (j && j.version) latest = j.version; }).catch(() => {});
+// 登录过的设备
+const when = (t) => { if (!t) return '—'; const d = new Date(t); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+async function loadSess() {
+	let r; try { r = await api('sessions', {}); } catch (e) { $('sessList').innerHTML = '<p class="muted" style="margin:0">' + esc(e.message) + '</p>'; return; }
+	const L = r.list || [], others = L.filter((x) => !x.cur).length;
+	$('sessAll').classList.toggle('hidden', !others);
+	$('sessList').innerHTML = L.map((x) => `<div class="sess" data-sess="${esc(x.id)}"><div class="l"><b>${esc(x.ua || '以前登录的（没有记录设备信息）')}${x.cur ? ' <span class="pill">这台设备</span>' : ''}</b><span>${x.place ? esc(x.place) + ' · ' : ''}${x.at ? when(x.at) + ' 登录' : ''}${x.cur ? '' : ' · 最近使用 ' + ago(x.last)}</span></div>${x.cur ? '' : '<button class="btn sm danger" data-out>退出</button>'}</div>`).join('') || '<p class="muted" style="margin:0">没有别的设备</p>';
+}
+$('sessList').onclick = async (e) => {
+	const b = e.target.closest('[data-out]'); if (!b) return;
+	const row = b.closest('[data-sess]'), name = row.querySelector('b').textContent;
+	if (!confirm('让「' + name + '」退出这个账号？那台设备要重新输密码才能登录。')) return;
+	b.disabled = true;
+	try { await api('session_out', { id: row.dataset.sess }); toast('已退出'); } catch (x) { toast(x.message); }
+	loadSess();
+};
+$('sessAll').onclick = async () => {
+	if (!confirm('除了你手上这台，其他设备全部退出这个账号？')) return;
+	try { const r = await api('sessions_out_others', {}); toast('已退出 ' + r.n + ' 台设备'); } catch (x) { toast(x.message); }
+	loadSess();
+};
 async function load() {
 	try {
 		const me = await api('me');
+		loadSess();
 		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
 		render(me); show('dash');
 		if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }

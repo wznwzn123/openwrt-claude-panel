@@ -49,7 +49,7 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 <h2 id="report">报告问题</h2>
 <div class="card">
 	<p style="margin:0 0 10px">发现安全漏洞、想查询或删除自己的数据、发现有人滥用这个服务，都可以在这里告诉我们。不用登录。<b>请不要写密码、登录地址这些密钥</b>。这个项目是一个人维护的，收到后会尽快回复；确认的问题修好后会写在更新说明里。</p>
-	<form id="rpForm" autocomplete="off">
+	<form id="rpForm" autocomplete="off" novalidate>
 		<label class="f">类型<select class="input" name="kind">
 			<option value="security">安全问题（漏洞、可能被入侵）</option>
 			<option value="privacy">隐私和数据（查询、导出、删除）</option>
@@ -57,7 +57,9 @@ footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
 			<option value="other">其他</option>
 		</select></label>
 		<label class="f">内容<textarea class="input" name="text" maxlength="4000" placeholder="发生了什么、在哪个页面或功能、怎么能重现……" required></textarea></label>
-		<label class="f">联系方式（可以不填）<input class="input" name="contact" maxlength="120" placeholder="邮箱、微信或 QQ，方便回复你"></label>
+		<label class="f">邮箱（建议填，处理进度会发邮件告诉你）<input class="input" name="email" type="email" maxlength="120" placeholder="you@example.com" autocomplete="email" inputmode="email"></label>
+		<p class="muted hidden" id="rpMe" style="margin:-4px 0 10px;font-size:12.5px"></p>
+		<label class="f">其他联系方式（可以不填）<input class="input" name="contact" maxlength="120" placeholder="微信或 QQ"></label>
 		<div class="hp" aria-hidden="true"><label>网址<input name="website" tabindex="-1" autocomplete="off"></label></div>
 		<button class="btn primary" type="submit" id="rpGo" style="width:100%;margin-top:6px">提交</button>
 		<p class="err hidden" id="rpErr" style="margin:8px 0 0"></p>
@@ -75,6 +77,8 @@ F.addEventListener('submit', async (e) => {
 	const d = Object.fromEntries(new FormData(F));
 	er.classList.add('hidden');
 	if ((d.text || '').trim().length < 10) { er.textContent = '多写几句，说清楚是什么问题（至少 10 个字）'; er.classList.remove('hidden'); return; }
+	d.email = (d.email || '').trim();
+	if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) { er.textContent = '邮箱格式不对'; er.classList.remove('hidden'); return; }
 	go.disabled = true; go.textContent = '提交中…';
 	try {
 		const r = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
@@ -82,9 +86,15 @@ F.addEventListener('submit', async (e) => {
 		if (!r.ok) throw new Error(j.error || '提交失败（' + r.status + '）');
 		F.classList.add('hidden'); document.getElementById('rpOk').classList.remove('hidden');
 		// 有编号：显示编号和进度页，不用留联系方式也能看到回复
-		if (/^[a-z2-9]{8}$/.test(j.code || '')) { const c = j.code.toUpperCase(); document.getElementById('rpCode').innerHTML = `报告编号 <b>${c}</b>，处理进度和回复在 <a href="/r/${c}">这个网址</a> 能看到，建议收藏。`; }
+		if (/^[a-z2-9]{8}$/.test(j.code || '')) { const c = j.code.toUpperCase(); document.getElementById('rpCode').innerHTML = `受理编号 <b>${c}</b>，处理进度和回复在 <a href="/r/${c}">这个网址</a> 能看到，建议收藏。` + (j.mailed ? '确认邮件已经发到你的邮箱，有进展也会发邮件告诉你。' : ''); }
 		else document.getElementById('rpCode').textContent = '留了联系方式的会尽快回复你。';
 	} catch (x) { er.textContent = x.message; er.classList.remove('hidden'); go.disabled = false; go.textContent = '提交'; }
 });
+// 登录了官网账号：邮箱自动填账号邮箱（可以改），这条报告也会出现在账号页「我的反馈」里
+fetch('/api/account/me').then((r) => (r.ok ? r.json() : null)).then((j) => {
+	if (!j || !j.email) return;
+	if (!F.email.value) F.email.value = j.email;
+	const m = document.getElementById('rpMe'); m.textContent = '你已经登录，邮箱用的是账号邮箱；这条报告也会显示在账号页「我的反馈」里'; m.classList.remove('hidden');
+}).catch(() => {});
 </script>
 </body></html>

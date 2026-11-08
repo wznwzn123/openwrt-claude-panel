@@ -68,7 +68,7 @@ ok('[查询] 不返回原文和日志（编号泄露也看不到内容）', !('t
 	ok('[进度] 刚提交：第 1 段（反馈成功），state=open', k.stage === 1 && k.state === 'open' && k.ackAt === 0 && k.history.length === 0, JSON.stringify(k));
 	await adm('POST', '/feedback/' + id2 + '/ack', { on: true }); k = await (await st(c2)).json();
 	ok('[进度] 管理员点「标为已收到」：第 2 段，有收到时间', k.stage === 2 && k.ackAt > 0 && k.state === 'open', JSON.stringify(k));
-	ok('[进度] 标已收到不算「有新回复」（面板不会为这个弹窗）', k.updated === 0 && k.reply === '');
+	ok('[进度] 标已收到也算新进展（updated 变了，面板会提示），但没有说明', k.updated === k.ackAt && k.reply === '');
 	await adm('POST', '/feedback/' + id2 + '/ack', { on: false }); k = await (await st(c2)).json();
 	ok('[进度] 撤回已收到：回到第 1 段', k.stage === 1 && k.ackAt === 0);
 	r2 = await adm('POST', '/feedback/' + id2 + '/done', { state: 'nofix', note: '', mail: false });
@@ -97,8 +97,8 @@ ok('[查询] 不返回原文和日志（编号泄露也看不到内容）', !('t
 	await adm('POST', '/feedback/' + id3 + '/done', { state: 'nofix', note: '这个功能路由器不支持', mail: true });
 	await adm('POST', '/feedback/' + id3 + '/done', { state: 'note', note: '补充一句', mail: true });
 	globalThis.fetch = of; delete env.RESEND_API_KEY; sent.splice(0, sent.length, ...sent.filter((m) => m.to[0] === 'u@x.com'));
-	ok('[邮件] 无法修复：标题「暂时没法修复」，内容写原因', sent[0] && sent[0].subject === '你反馈的问题暂时没法修复' && /暂时没法修复/.test(sent[0].html) && /原因/.test(sent[0].html) && /路由器不支持/.test(sent[0].html), JSON.stringify(sent[0] || {}).slice(0, 200));
-	ok('[邮件] 补充说明：标题「有新的说明」', sent[1] && sent[1].subject === '你反馈的问题有新的说明' && /补充一句/.test(sent[1].html), JSON.stringify(sent[1] || {}).slice(0, 200));
+	ok('[邮件] 无法修复：标题「暂时没法修复」，内容写原因', sent[0] && sent[0].subject === '你反馈的问题暂时没法修复（受理编号 ' + c3.toUpperCase() + '）' && sent[0].html.includes('受理编号：<b style="letter-spacing:.06em">' + c3.toUpperCase()) && sent[0].html.includes('/r/' + c3.toUpperCase()) && /暂时没法修复/.test(sent[0].html) && /原因/.test(sent[0].html) && /路由器不支持/.test(sent[0].html), JSON.stringify(sent[0] || {}).slice(0, 200));
+	ok('[邮件] 补充说明：标题「有新的说明」', sent[1] && sent[1].subject === '你反馈的问题有新的说明（受理编号 ' + c3.toUpperCase() + '）' && /补充一句/.test(sent[1].html), JSON.stringify(sent[1] || {}).slice(0, 200));
 }
 
 // 管理员标已修复、写说明 → 查到回复
@@ -135,6 +135,57 @@ j = await (await st(pc)).json();
 ok('[面板反馈] 查到的类型是「问题反馈」', j.ok && j.kind === '问题反馈', JSON.stringify(j));
 r = await api('POST', '/api/dev/feedback', { sub: A.sub, rkey: 'x'.repeat(32), text: '钥匙不对的反馈' });
 ok('[面板反馈] 钥匙不对：403，不给编号', r.status === 403);
+
+// 面板「我的反馈」：路由器凭钥匙一次拿到自己发过的反馈（带自己写的内容、进度、完整记录）
+{
+	const pushed = []; const H0 = hub(); const ow = H0.watch.bind(H0);
+	H0.watch = (sub) => { const w = ow(sub); return new Proxy(w, { get: (t, k) => (k === 'push' ? async (m) => { pushed.push({ sub, ...m }); return 1; } : typeof t[k] === 'function' ? t[k].bind(t) : t[k]) }); };
+	r = await api('POST', '/api/dev/fb', { sub: A.sub, rkey: A.rkey }); j = await r.json();
+	ok('[我的反馈] 路由器拿到自己发的反馈：带内容、编号、进度第 1 段', r.status === 200 && j.list.length === 1 && j.list[0].code === pc.toUpperCase() && j.list[0].text === '面板里反馈的问题：首页打不开' && j.list[0].stage === 1, JSON.stringify(j).slice(0, 300));
+	r = await api('POST', '/api/dev/fb', { sub: A.sub, rkey: 'y'.repeat(32) }); ok('[我的反馈] 钥匙不对：403', r.status === 403);
+	ok('[我的反馈] 不会拿到别人的（官网报告、终端上报都不在里面）', !j.list.some((x) => x.kind !== '问题反馈'));
+	const fid = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === pc).id;
+	await adm('POST', '/feedback/' + fid + '/ack', { on: true });
+	ok('[推送] 标为已收到：马上推送到这台路由器绑定的手机，点开到「我的反馈」', pushed.length === 1 && pushed[0].sub === A.sub && /已收到/.test(pushed[0].title) && pushed[0].body.includes(pc.toUpperCase()) && pushed[0].url === './?p=myfb', JSON.stringify(pushed));
+	await adm('POST', '/feedback/' + fid + '/ack', { on: true });
+	ok('[推送] 已经是已收到再点：不重复推送', pushed.length === 1);
+	await adm('POST', '/feedback/' + fid + '/done', { state: 'fixed', note: '修好了', mail: false });
+	ok('[推送] 标为已修复：推送「修好了」', pushed.length === 2 && /修好了/.test(pushed[1].title));
+	j = await (await api('POST', '/api/dev/fb', { sub: A.sub, rkey: A.rkey })).json();
+	ok('[我的反馈] 处理后：第 3 段、说明、完整记录、有新进展的时间', j.list[0].stage === 3 && j.list[0].reply === '修好了' && j.list[0].history.length === 1 && j.list[0].updated > 0);
+	const rep = await (await rp({ kind: 'other', text: '官网报告的不推送官网报告的不推送' }, '5.5.6.1')).json();
+	const rid = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === rep.code).id;
+	await adm('POST', '/feedback/' + rid + '/ack', { on: true });
+	ok('[推送] 官网报告（没有路由器）：不推送', pushed.length === 2);
+	H0.watch = ow;
+}
+
+// 官网报告：填邮箱 / 登录了用账号邮箱；发「收到了」邮件，带受理编号
+{
+	env.RESEND_API_KEY = 're_x'; const sent = []; const of = globalThis.fetch;
+	globalThis.fetch = async (u, i) => { if (String(u).includes('resend')) { sent.push(JSON.parse(i.body)); return new Response('{"id":"1"}', { status: 200 }); } return of(u, i); };
+	r = await rp({ kind: 'other', text: '官网报告带邮箱官网报告带邮箱', email: 'bad-mail' }, '5.5.6.2');
+	ok('[邮箱] 格式不对：400', r.status === 400 && /邮箱格式不对/.test((await r.json()).error));
+	r = await rp({ kind: 'other', text: '官网报告带邮箱官网报告带邮箱', email: 'me@x.com' }, '5.5.6.2'); j = await r.json();
+	const mine = sent.filter((m) => m.to[0] === 'me@x.com'), other = j.code.toUpperCase();
+	ok('[邮箱] 填了邮箱：马上发「收到了」邮件，标题和内容都有受理编号和查进度网址', j.ok && j.mailed === 1 && mine.length === 1 && mine[0].subject === '我们收到了你的报告（受理编号 ' + j.code.toUpperCase() + '）' && mine[0].html.includes('/r/' + j.code.toUpperCase()), JSON.stringify(mine[0] || {}).slice(0, 200));
+	const L3 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);
+	ok('[邮箱] 管理页里能发邮件给他', JSON.stringify(L3.mailTo) === '["me@x.com"]');
+	// 登录了官网账号：不填邮箱也会用账号邮箱
+	const uid = 'u' + 'a'.repeat(9), sid = 'b'.repeat(32);
+	await hub().ctx.storage.put('u:' + uid, { uid, email: 'acc@x.com', devs: [{ sub: A.sub, at: Date.now(), alias: '客厅' }] });
+	await hub().ctx.storage.put('s:' + sid, { uid, exp: Date.now() + DAY, kid: 'k', at: Date.now(), last: Date.now() });
+	r = await api('POST', '/api/report', { kind: 'privacy', text: '登录了账号再报告的问题，不填邮箱' }, { 'cf-connecting-ip': '5.5.6.3', cookie: 'sid=' + sid }); j = await r.json();
+	const L4 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);
+	ok('[邮箱] 登录了官网账号、没填邮箱：自动用账号邮箱', JSON.stringify(L4.mailTo) === '["acc@x.com"]' && L4.uid === uid && sent.some((m) => m.to[0] === 'acc@x.com'));
+	globalThis.fetch = of; delete env.RESEND_API_KEY;
+	// 官网账号页「我的反馈」：账号里路由器发的 + 用这个账号报告的
+	r = await api('POST', '/api/account/fb', {}, { cookie: 'sid=' + sid, origin: 'https://panel.example' }); j = await r.json();
+	const codes = j.list.map((x) => x.code);
+	ok('[账号页] 我的反馈：有账号里路由器在面板发的、有登录后在官网报告的，带内容和路由器名', r.status === 200 && codes.includes(pc.toUpperCase()) && codes.includes(L4.code.toUpperCase()) && j.list.find((x) => x.code === pc.toUpperCase()).name === '客厅' && j.list.every((x) => typeof x.text === 'string'), JSON.stringify(j).slice(0, 300));
+	ok('[账号页] 别人的不会出现（没登录时填别的邮箱报告的）', !codes.includes(other));
+	r = await api('POST', '/api/account/fb', {}, { origin: 'https://panel.example' }); ok('[账号页] 没登录：401', r.status === 401);
+}
 
 // 限次：同一个 IP 一天最多查 120 次
 let last = 0; for (let i = 0; i < 121; i++) last = (await st(code, '9.9.9.9')).status;

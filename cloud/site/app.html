@@ -13,6 +13,15 @@
 .dev .acts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .sech{display:flex;justify-content:space-between;align-items:center;margin:22px 4px 10px}
 .sech h2{font-size:20px}
+/* 我的反馈 */
+.fbq{display:flex;gap:8px;margin-top:10px}.fbq input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.1em}.fbq button{flex:none}
+.fbrow{display:block;color:inherit;font-weight:400;padding:12px 0;border-bottom:.5px solid var(--line)}.fbrow:last-child{border-bottom:0;padding-bottom:2px}
+.fbrow .h{display:flex;justify-content:space-between;align-items:center;gap:10px}.fbrow .h time{flex:none;font-size:12.5px;color:var(--muted)}
+.fbrow .st{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(0,122,255,.12);color:var(--brand)}
+.fbrow .st.ok{background:rgba(52,199,89,.15);color:var(--ok)}.fbrow .st.bad{background:rgba(255,59,48,.13);color:var(--danger)}.fbrow .st.wait{background:rgba(255,149,0,.15);color:var(--warn)}
+.fbrow .t{margin:6px 0 0;font-size:14px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.fbrow .m{display:block;margin-top:2px;font-size:12.5px;color:var(--muted)}.fbrow .m b{letter-spacing:.05em;color:var(--text)}
+.fbrow .fsteps{margin:10px 0 0;padding:10px 0 8px;border-radius:12px;background:var(--fill)}
 .empty{text-align:center;padding:26px 16px}
 .empty .big{font-size:40px}
 .expline{grid-column:1/-1;margin-top:6px;padding:8px 11px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--muted);line-height:1.6}.expline.warn{background:rgba(255,149,0,.14);color:var(--warn)}.expline.bad{background:rgba(255,59,48,.12);color:var(--danger)}
@@ -64,6 +73,15 @@
 	<div class="card trialcard hidden" id="trialCard"></div>
 	<div class="sech"><h2>我的路由器</h2><span class="muted" id="cnt" style="font-size:13px"></span></div>
 	<div id="devs"></div>
+	<div class="sech" id="fbSec"><h2>我的反馈</h2><span class="muted" id="fbCnt" style="font-size:13px"></span></div>
+	<div class="card">
+		<div id="fbList"><p class="muted" style="margin:0">读取中…</p></div>
+		<div style="margin-top:14px;padding-top:12px;border-top:.5px solid var(--line)">
+			<b style="font-size:14.5px">输入受理编号查进度</b>
+			<form class="fbq" id="fFbq" autocomplete="off"><input class="input" name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false"><button class="btn primary">查询</button></form>
+			<div class="err" id="fbqErr"></div>
+		</div>
+	</div>
 	<div class="sech"><h2>添加路由器</h2></div>
 	<div class="card">
 		<p class="muted" style="margin:0 0 8px;font-size:14px">输入 8 位配对码（10 分钟内有效）。配对码从哪来：</p>
@@ -281,10 +299,29 @@ $('sessAll').onclick = async () => {
 	try { const r = await api('sessions_out_others', {}); toast('已退出 ' + r.n + ' 台设备'); } catch (x) { toast(x.message); }
 	loadSess();
 };
+// 我的反馈：账号里路由器在面板发的、登录后在官网报告的；进度条只有三段，说明在详情页
+async function loadFb() {
+	let r; try { r = await api('fb', {}); } catch (e) { $('fbList').innerHTML = '<p class="muted" style="margin:0">' + esc(e.message) + '</p>'; return; }
+	const L = r.list || [];
+	$('fbCnt').textContent = L.length ? L.length + ' 条' : '';
+	$('fbList').innerHTML = L.length ? L.map((x) => {
+		const st = x.state || 'open', stage = Math.max(x.stage || 1, x.reply ? 2 : 1);
+		const pill = st === 'fixed' ? '<span class="st ok">已修复</span>' : st === 'nofix' ? '<span class="st bad">无法修复</span>' : stage >= 2 ? '<span class="st">开发人员已收到</span>' : '<span class="st wait">等开发人员查看</span>';
+		const steps = ['反馈成功', '开发人员已收到', '已修复'].map((t, i) => { const on = i < stage, bad = on && i === 2 && st === 'nofix'; return `<div class="${on ? (bad ? 'on bad' : 'on') : 'off'}${i === stage - 1 ? ' cur' : ''}"><i>${bad ? '✕' : on ? '✓' : i + 1}</i><b>${bad ? '无法修复' : t}</b></div>`; }).join('');
+		return `<a class="fbrow" href="/r/${esc(x.code)}"><div class="h">${pill}<time>${when(x.at)}</time></div>
+			<p class="t">${esc(x.text || '')}</p><span class="m">${esc(x.name ? x.name + ' · ' : '')}${esc(x.kind)} · 编号 <b>${esc(x.code)}</b> · 查看详情 ›</span>
+			<div class="fsteps">${steps}</div></a>`;
+	}).join('') : '<p class="muted" style="margin:0;font-size:14px;line-height:1.6">还没有反馈。在路由器面板里点「问题反馈」，或者在官网<a href="/security#report">报告问题</a>，发过的都会显示在这里。</p>';
+}
+$('fFbq').onsubmit = (e) => {
+	e.preventDefault(); const v = e.target.c.value.trim().toUpperCase().replace(/\s+/g, ''), er = $('fbqErr');
+	if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { er.textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }
+	er.textContent = ''; location.href = '/r/' + v;
+};
 async function load() {
 	try {
 		const me = await api('me');
-		loadSess();
+		loadSess(); loadFb();
 		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
 		render(me); show('dash');
 		if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }

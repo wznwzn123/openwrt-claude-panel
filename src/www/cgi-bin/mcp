@@ -2740,7 +2740,8 @@ P.feedback = function(a) {
 		// 托管服务给的编号存在路由器上：开发者回复以后，打开面板时能看到（不用邮箱）
 		if (match(o.code ?? '', /^[a-z2-9]{8}$/)) {
 			let l = fb_codes(); push(l, { code: o.code, at: time() });
-			writefile(FB_CODES, sprintf('%J', slice(l, -10)));
+			writefile(FB_CODES, sprintf('%J', slice(l, -30)));
+			sh('rm -f ' + FB_CACHE);   // 「我的反馈」马上能看到这条
 		}
 		let ok = match(o.code ?? '', /^[a-z2-9]{8}$/);
 		return { ok: true, sent: 'hub', images: length(imgs), code: ok ? uc(o.code) : null, track: ok ? fb_track(o.code) : null };
@@ -2749,32 +2750,35 @@ P.feedback = function(a) {
 	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');
 	return { ok: true, sent: 'github', url: 'https://github.com/wznwzn123/openwrt-claude-panel/issues/new?title=' + CL.enc('[反馈] ' + substr(replace(text, /\s+/g, ' '), 0, 40)) + '&body=' + CL.enc(body) };
 };
-/* 反馈的回复：用编号问托管服务，处理好了 / 写了回复的，打开面板时提示一次（看过的不再提示；结果缓存 20 分钟） */
+/* 我的反馈：一次问托管服务这台路由器发过的反馈（最近 90 天、最多 10 条），带进度、说明、完整记录。
+   结果缓存 45 秒（面板开着时每分钟问一次、切回来时问一次）；看到哪一次记在 fb.codes 里，看过的不再弹窗 */
 P.fb_replies = function(a) {
-	let c = hub_conf(true), l = fb_codes();
-	if (!c?.HUB || !length(l)) return { list: [] };
+	let c = hub_conf(true);
+	if (!c?.HUB) return { list: [], hosted: false };
 	let cc = null; try { cc = json(readfile(FB_CACHE) ?? 'null'); } catch (e) {}
-	if (!a?.force && type(cc) == 'object' && time() - (cc.at ?? 0) < 1200) return { list: cc.list ?? [] };
-	let out = [];
-	for (let x in l) {
-		if (time() - (x.at ?? 0) > 90 * 86400) continue;
+	let list = null;
+	if (!a?.force && type(cc) == 'object' && time() - (cc.at ?? 0) < 45 && type(cc.list) == 'array') list = cc.list;
+	if (list == null) {
 		let o = null;
-		try { o = json(sh(sprintf('curl -s -m 8 %s', shq(c.HUB + '/api/fb/' + x.code))).out); } catch (e) {}
-		if (type(o) != 'object' || !o.ok) continue;
-		push(out, { code: uc(x.code), track: fb_track(x.code), at: o.at, done: o.done, nofix: o.nofix ?? 0, stage: o.stage ?? (o.done ? 3 : 1), ackAt: o.ackAt ?? 0, doneAt: o.doneAt ?? 0, reply: o.reply ?? '', replyAt: o.replyAt ?? 0, updated: o.updated ?? 0, seen: x.seen ?? 0 });
+		try { o = hub_call('/api/dev/fb', {}, 10); } catch (e) {}
+		if (type(o?.list) != 'array') return { list: type(cc?.list) == 'array' ? cc.list : [], hosted: true, stale: true };
+		list = [];
+		for (let x in o.list) if (type(x) == 'object' && match(x.code ?? '', /^[A-Z2-9]{8}$/)) push(list, { code: x.code, track: fb_track(x.code), kind: x.kind ?? '', text: x.text ?? '', at: x.at ?? 0,
+			state: x.state ?? 'open', stage: x.stage ?? 1, ackAt: x.ackAt ?? 0, done: x.done ?? 0, nofix: x.nofix ?? 0, doneAt: x.doneAt ?? 0,
+			reply: x.reply ?? '', replyAt: x.replyAt ?? 0, updated: x.updated ?? 0, history: type(x.history) == 'array' ? x.history : [] });
+		writefile(FB_CACHE, sprintf('%J', { at: time(), list }));
 	}
-	writefile(FB_CACHE, sprintf('%J', { at: time(), list: out }));
-	return { list: out };
+	let seen = {};
+	for (let x in fb_codes()) seen[uc(x.code)] = x.seen ?? 0;
+	return { list: map(list, (x) => { let y = {}; for (let k in x) y[k] = x[k]; y.seen = seen[x.code] ?? 0; return y; }), hosted: true };
 };
-// 看过了：记下看到哪一次更新；已经处理完（修好了或者没法修）、看过的编号不再去问
+// 看过了：记下看到哪一次更新（看过的不再弹窗；列表里还在）
 P.fb_seen = function(a) {
-	let code = lc('' + (a?.code ?? '')), upd = +(a?.updated ?? 0), l = fb_codes(), keep = [];
-	for (let x in l) {
-		if (x.code == code) { x.seen = upd; if (a?.done) continue; }
-		push(keep, x);
-	}
-	writefile(FB_CODES, sprintf('%J', keep));
-	sh('rm -f ' + FB_CACHE);
+	let code = lc('' + (a?.code ?? '')), upd = +(a?.updated ?? 0), l = fb_codes(), hit = false;
+	if (!match(code, /^[a-z2-9]{8}$/)) die('编号不对');
+	for (let x in l) if (x.code == code) { x.seen = upd; hit = true; }
+	if (!hit) push(l, { code, at: time(), seen: upd });
+	writefile(FB_CODES, sprintf('%J', slice(l, -30)));
 	return { ok: true };
 };
 P.feedback_diag = function() { return { text: fb_diag(), hosted: !!hub_conf(true)?.HUB }; };

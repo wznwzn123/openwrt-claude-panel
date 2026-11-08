@@ -404,6 +404,67 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	ok('[隐私/安全] 页面没有报错', !e2.length, e2.join(' | '));
 	await ctx.close();
 }
+// 反馈进度：首页显眼的查询框、账号页「我的反馈」、报告表单的邮箱
+{
+	// 页面里的块互相不重叠、不超出屏幕
+	const lay = (page, sel) => page.evaluate((sel) => {
+		const bad = [], els = [...document.querySelectorAll(sel)].filter((e) => e.getBoundingClientRect().height);
+		for (const e of els) { const r = e.getBoundingClientRect(); if (r.right > innerWidth + 1 || r.left < -1) bad.push('超出 ' + e.textContent.trim().slice(0, 10)); }
+		for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) { if (els[i].contains(els[j]) || els[j].contains(els[i])) continue; const a = els[i].getBoundingClientRect(), c = els[j].getBoundingClientRect(); if (a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1) bad.push(els[i].textContent.trim().slice(0, 8) + '×' + els[j].textContent.trim().slice(0, 8)); }
+		if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('页面横向超出');
+		return bad.join('；');
+	}, sel);
+	for (const dark of [false, true]) {
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
+		const page = await ctx.newPage(); const e5 = []; page.on('pageerror', (x) => e5.push(x.message)); const T = dark ? '（深色）' : '';
+		await page.goto(B + '/'); await W(400);
+		ok('[查进度] 首页顶栏有「查进度」，首页有显眼的查询框' + T, await page.isVisible('.top a[href="/r"]') && await page.isVisible('#fbq') && /反馈过问题？查处理进度/.test(await page.textContent('#fbq')));
+		ok('[查进度] 手机宽度：顶栏和查询框不重叠、不横向超出' + T, (await lay(page, '.top .logo, .top .row > *:not(.ghbtn), .fbqt > *, .fbqr > *')) === '', await lay(page, '.top .logo, .top .row > *:not(.ghbtn), .fbqt > *, .fbqr > *'));
+		if (SHOTS) { await page.locator('#fbq').scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, -200)); await page.screenshot({ path: SHOTS + '/site-fbq' + (dark ? '-dark' : '') + '.png' }); }
+		if (dark) { ok('[查进度] 页面没有报错' + T, !e5.length, e5.join('|')); await ctx.close(); continue; }
+		await page.fill('#fbq [name=c]', 'k7f2q90b'); await page.click('#fbq button'); await W(300);
+		ok('[查进度] 首页输了 0：提示，不跳转', /0、1、O、L/.test(await page.textContent('#fbqErr')) && new URL(page.url()).pathname === '/');
+		await page.fill('#fbq [name=c]', ' abcd 2345 '); await page.click('#fbq button'); await W(600);
+		ok('[查进度] 首页输编号：跳到 /r/编号', new URL(page.url()).pathname === '/r/ABCD2345');
+		// 没登录：报告表单的邮箱是空的；填了邮箱，管理页能发邮件给他
+		await page.goto(B + '/security#report'); await W(500);
+		ok('[报告邮箱] 没登录：邮箱是空的，没有「已经登录」的提示', (await page.inputValue('#rpForm [name=email]')) === '' && !(await page.isVisible('#rpMe')));
+		await page.fill('#rpForm [name=text]', '官网报告：手机上安全说明页字太小了'); await page.fill('#rpForm [name=email]', 'bad-mail'); await page.click('#rpGo'); await W(300);
+		ok('[报告邮箱] 邮箱格式不对：页面上直接提示', /邮箱格式不对/.test(await page.textContent('#rpErr')));
+		await page.fill('#rpForm [name=email]', 'guest@x.com'); await page.click('#rpGo'); await W(800);
+		const g = (await env.H.get('hub').feedbacks()).find((x) => /字太小了/.test(x.text));
+		ok('[报告邮箱] 填了邮箱：存下来，管理页能给他发邮件；显示受理编号', g && JSON.stringify(g.emails) === '["guest@x.com"]' && !g.uid && /受理编号 [A-Z2-9]{8}/.test(await page.textContent('#rpOk')));
+		// 登录：注册账号、绑定路由器；面板里发一条反馈；登录后在官网报告一条
+		await page.goto(B + '/app'); await W(500); await page.click('[data-tab="reg"]');
+		await page.fill('#fReg [name=email]', 'fbuser@x.com'); await page.fill('#fReg [name=password]', 'fbuser-pass-1'); await page.click('#fReg button.primary'); await W(900);
+		await page.fill('#fBind [name=code]', await pairOf(R2)); await page.click('#fBind button'); await W(900); await page.click('.mask [data-x]').catch(() => {}); await W(300);
+		const pf = await api('/api/dev/feedback', { sub: R2.sub, rkey: R2.rkey, text: '面板里发的：首页流量一直是 0' });
+		await page.goto(B + '/security#report'); await W(700);
+		ok('[报告邮箱] 登录了：邮箱自动填账号邮箱，写着会显示在账号页', (await page.inputValue('#rpForm [name=email]')) === 'fbuser@x.com' && /账号页「我的反馈」/.test(await page.textContent('#rpMe')));
+		if (SHOTS) { await page.locator('#rpForm').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-rpmail.png' }); }
+		ok('[报告邮箱] 表单排版不重叠', (await lay(page, '#rpForm > *:not(.hp)')) === '', await lay(page, '#rpForm > *:not(.hp)'));
+		await page.fill('#rpForm [name=text]', '登录后报告：账号页的设备列表不显示城市'); await page.click('#rpGo'); await W(800);
+		const lg = (await env.H.get('hub').feedbacks()).find((x) => /不显示城市/.test(x.text));
+		ok('[报告邮箱] 登录后报告：用账号邮箱，记在这个账号下', lg && JSON.stringify(lg.emails) === '["fbuser@x.com"]' && !!lg.uid);
+		// 标一下进度，看账号页
+		const ADMIN_LIST = (await api('/api/admin/feedback', null, ADM)).list, pid = ADMIN_LIST.find((x) => x.code === pf.code).id, lid = ADMIN_LIST.find((x) => x.id === lg.id).id;
+		await api('/api/admin/feedback/' + pid + '/ack', { on: true }, ADM);
+		await api('/api/admin/feedback/' + lid + '/done', { state: 'nofix', note: '城市是按 IP 粗略判断的，有时候判断不出来', mail: false }, ADM);
+		await page.goto(B + '/app'); await W(1200);
+		const rows = await page.$$eval('#fbList .fbrow', (e) => e.map((x) => ({ st: x.querySelector('.st').textContent, href: x.getAttribute('href'), stage: x.querySelector('.fsteps').dataset.stage || x.querySelectorAll('.fsteps .on').length, t: x.querySelector('.t').textContent })));
+		ok('[账号页] 我的反馈：有面板发的（开发人员已收到）、登录后报告的（无法修复），没有别人的', rows.length === 2 && rows.some((x) => x.st === '开发人员已收到' && /首页流量/.test(x.t)) && rows.some((x) => x.st === '无法修复' && /不显示城市/.test(x.t)) && !rows.some((x) => /字太小了/.test(x.t)), JSON.stringify(rows));
+		ok('[账号页] 点一条：到这条的处理进度页 /r/编号', rows.every((x) => /^\/r\/[A-Z2-9]{8}$/.test(x.href)));
+		ok('[账号页] 进度条只有三段的名字', (await page.$$eval('#fbList .fsteps', (e) => e.map((x) => x.textContent.replace(/[✓✕\d\s]/g, '')))).every((t) => t === '反馈成功开发人员已收到已修复' || t === '反馈成功开发人员已收到无法修复'));
+		ok('[账号页] 反馈区排版不重叠、不横向超出', (await lay(page, '#fbList .fbrow .h > *, #fbList .fbrow > *, #fbList .fsteps > div, #fFbq > *')) === '', await lay(page, '#fbList .fbrow .h > *, #fbList .fbrow > *, #fbList .fsteps > div, #fFbq > *'));
+		if (SHOTS) { await page.locator('#fbSec').scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, -20)); await page.screenshot({ path: SHOTS + '/site-acctfb.png' }); }
+		await page.fill('#fFbq [name=c]', 'abc'); await page.click('#fFbq button'); await W(200);
+		ok('[账号页] 输编号查：格式不对提示', /8 位/.test(await page.textContent('#fbqErr')));
+		await page.fill('#fFbq [name=c]', pf.code); await page.click('#fFbq button'); await W(800);
+		ok('[账号页] 输编号查：跳到处理进度页', new URL(page.url()).pathname === '/r/' + pf.code.toUpperCase() && /开发人员已收到，正在处理/.test(await page.textContent('#box')));
+		ok('[查进度] 页面没有报错', !e5.length, e5.join('|'));
+		await ctx.close();
+	}
+}
 await browser.close(); server.close();
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

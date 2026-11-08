@@ -23,15 +23,25 @@ pre.term{margin:10px 0 4px;padding:12px 14px;border-radius:14px;background:#1416
 pre.term b{color:#7cc4ff;font-weight:600}pre.term i{font-style:normal;color:#ffcf6b}pre.term u{text-decoration:none;color:#8a93a6}
 .demo{display:block;width:min(100%,260px);height:auto;margin:10px 0 2px;border-radius:18px;border:4px solid #16181f;box-shadow:0 8px 20px rgba(20,30,60,.16)}
 footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
+@media(max-width:480px){.ghbtn{display:none}}
+.fbq{margin:14px 0 12px}.fbqt{display:flex;gap:12px;align-items:flex-start}.fbqt>span{flex:none;font-size:26px;line-height:1.2}.fbqt b{font-size:16.5px}.fbqt p{margin:4px 0 0;color:var(--muted);font-size:13.5px;line-height:1.6}
+.fbqr{display:flex;gap:8px;margin-top:12px}.fbqr input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.1em;font-size:16px}.fbqr button{flex:none}
 .faq details{border-bottom:.5px solid var(--line);padding:12px 2px}.faq details:last-child{border-bottom:0}.faq summary{cursor:pointer;font-weight:650;font-size:15px;list-style-position:outside}.faq p,.faq ul{margin:8px 0 0;font-size:14px;line-height:1.75;color:var(--text)}.faq ul{padding-left:20px}.faq li{margin:4px 0}.faq .muted{color:var(--muted);font-size:13px}
 </style></head><body><div class="wrap">
-<div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a><a class="btn sm primary" href="/app">登录</a></div></div>
+<div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm ghbtn" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a><a class="btn sm" href="/r">查进度</a><a class="btn sm primary" href="/app">登录</a></div></div>
 
 <section class="hero">
 	<h1>用手机管好家里的<br>OpenWrt 路由器</h1>
 	<p>OpenClash 节点、设备、流量、测速、断线记录、定时断网……全在一个好看的手机面板里。出门在外也能用，不用公网 IP、不用开端口。</p>
 	<div class="row" style="justify-content:center"><a class="btn primary" href="#start">开始使用</a><a class="btn" href="/app">登录账号</a></div>
 </section>
+
+<!-- 查反馈处理进度：显眼一点，有编号就能查，不用登录 -->
+<form class="card fbq" id="fbq" action="/r" autocomplete="off">
+	<div class="fbqt"><span>📮</span><div><b>反馈过问题？查处理进度</b><p>输入上报时拿到的 8 位受理编号，不用登录。登录账号后，在账号页也能看到自己的全部反馈。</p></div></div>
+	<div class="fbqr"><input class="input" name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false" aria-label="受理编号"><button class="btn primary">查询</button></div>
+	<div class="err" id="fbqErr" style="min-height:0"></div>
+</form>
 
 <div class="grid">
 	<div class="card feat"><div class="ic">🌐</div><b>代理插件都能管</b><p>自动认出 OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+：开关、换节点、测延迟；OpenClash 还能管订阅、配置文件、覆写和规则，节点挂了自动换。没装也能用。</p></div>
@@ -103,7 +113,7 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 	<details><summary>换了手机、清了浏览器数据，怎么再登录面板？</summary><p>打开<a href="/app">账号页</a>，在这台路由器下面点「获取登录码」，再点「打开面板」就自动填好了。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></details>
 	<details><summary>连着家里 Wi-Fi 时面板打不开，换成手机流量就好？</summary><p>多半是代理插件正在重启或者节点卡了。面板会自动改走直连，稍等一两分钟再刷新；急的话先用手机流量打开。路由器上的「自动任务」里可以看到这些自动处理开没开。</p></details>
 	<details><summary>装的不是 OpenClash，能用吗？</summary><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。没装代理插件也能用设备、流量、测速、断线记录这些功能。</p></details>
-	<details><summary>遇到问题、想要新功能？</summary><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。</p></details>
+	<details><summary>遇到问题、想要新功能？</summary><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。发完会给一个受理编号，开发者处理到哪一步，在面板侧边栏「帮助 → 我的反馈」、官网账号页，或者这一页上面输入编号都能看到。</p></details>
 </div>
 
 <h2 class="sec">安全</h2>
@@ -122,5 +132,9 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 <div class="card"><p style="margin:0">不想用托管服务？也可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本（AI 版 / 纯面板版 × 精简版 / 完整版）和教程都在 <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。开源，MIT 许可证。</p></div>
 
 <footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a> · <a href="/r">查处理进度</a></footer>
-</div><script>const faqOpen = () => { const d = location.hash.startsWith('#faq') && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView({ block: 'start' }); } }; faqOpen(); addEventListener('hashchange', faqOpen);</script>
+</div><script>document.getElementById('fbq').onsubmit = (e) => {
+	e.preventDefault(); const v = e.target.c.value.trim().toUpperCase().replace(/\s+/g, ''), er = document.getElementById('fbqErr');
+	if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { er.style.minHeight = '20px'; er.textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }
+	location.href = '/r/' + v;
+};</script><script>const faqOpen = () => { const d = location.hash.startsWith('#faq') && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView({ block: 'start' }); } }; faqOpen(); addEventListener('hashchange', faqOpen);</script>
 </body></html>

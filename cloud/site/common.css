@@ -32,3 +32,13 @@ h1,h2,h3{letter-spacing:-.02em;margin:0}
 /* 顶栏上面那一条：往上滚的内容在这里淡出，不会从顶栏上方露出来 */
 body::after{content:"";position:fixed;left:0;right:0;top:0;height:calc(env(safe-area-inset-top) + 34px);z-index:9;pointer-events:none;background:linear-gradient(var(--bg) 45%,color-mix(in srgb,var(--bg) 0%,transparent))}
 h2,.sech{scroll-margin-top:90px}
+/* 反馈进度条：反馈成功 → 开发人员已收到 → 已修复 / 无法修复（只显示这三段，补充说明写在下面） */
+.fsteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:6px 0 4px}
+.fsteps>div{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}
+.fsteps>div+div::before{content:'';position:absolute;top:10px;right:calc(50% + 15px);width:calc(100% - 30px);height:3px;border-radius:2px;background:var(--line)}
+.fsteps>div.on::before{background:var(--ok)}.fsteps>div.bad::before{background:var(--danger)}
+.fsteps i{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;background:var(--fill);color:var(--muted)}
+.fsteps .on i{background:var(--ok);color:#fff}.fsteps .bad i{background:var(--danger);color:#fff}
+.fsteps .cur i{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent)}.fsteps .bad.cur i{box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 22%,transparent)}
+.fsteps b{display:block;font-size:12.5px;font-weight:600;margin-top:7px;line-height:1.3;word-break:keep-all}
+.fsteps .off b{color:var(--muted);font-weight:500}.fsteps .bad b{color:var(--danger)}

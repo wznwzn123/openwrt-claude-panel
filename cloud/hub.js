@@ -8,10 +8,12 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY } from './site.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
+// 反馈现在的状态：已修复 / 无法修复 / 还没处理完
+const fbState = (x) => (x.done ? 'fixed' : x.nofix ? 'nofix' : 'open');
 export const rnd = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((x) => ABC[x & 31]).join('');
 export const safeEq = (a, b) => {
 	if (typeof a !== 'string' || typeof b !== 'string' || !a || a.length !== b.length) return false;
@@ -820,7 +822,7 @@ export class Hub extends DurableObject {
 		if (!(await this.hit('fb:' + sub, 5, DAY))) return { st: 429, error: '今天发了很多条了，明天再发' };
 		const d = await this.ctx.storage.get('d:' + sub), emails = [];
 		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u && u.email) emails.push(u.email); }
-		const fb = { id: rnd(10), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
+		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
 		// 截图：最多 3 张，每张 1.5MB 以内的 JPEG / PNG / WebP（手机上已经压缩过）
 		for (const im of (Array.isArray(images) ? images : []).slice(0, 3)) {
 			const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(im || ''));
@@ -835,7 +837,7 @@ export class Hub extends DurableObject {
 		const drop = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); return l.slice(300); });
 		for (const x of drop) await this.fbImgRm(x);
 		await this.notifyAdmin('问题反馈：' + fb.name, `${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}${fb.imgs.length ? '\n\n附了 ' + fb.imgs.length + ' 张截图，在管理页看' : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
-		return { st: 200, ok: true };
+		return { st: 200, ok: true, code: fb.code };
 	}
 	/* ---------- 官网公开的报告表单：安全问题、隐私和数据、滥用举报（不用登录；不记 IP，只按 IP 限次，限次记录一两天后自动清掉） ---------- */
 	async report({ kind, text, contact, ip, log }) {
@@ -846,14 +848,14 @@ export class Hub extends DurableObject {
 		if (text.length < 10) return { st: 400, error: '多写几句，说清楚是什么问题（至少 10 个字）' };
 		if (!(await this.hit('rp:' + (ip || '?'), 5, DAY))) return { st: 429, error: '今天提交太多次了，明天再试' };
 		if (!(await this.hit('rp:all', 100, DAY))) return { st: 429, error: '今天提交的人太多了，明天再试' };
-		const fb = { id: rnd(10), at: Date.now(), sub: '', name: kind === 'install' ? '安装失败（终端上报）' : '官网 · ' + KIND[kind], kind, web: 1, emails: [], text, contact, diag: '', done: 0, imgs: [] };
+		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub: '', name: kind === 'install' ? '安装失败（终端上报）' : '官网 · ' + KIND[kind], kind, web: 1, emails: [], text, contact, diag: '', done: 0, imgs: [] };
 		// 安装失败带的安装日志（用户同意后发来，已经在路由器上遮住了邀请码、令牌、域名）：单独存，列表里只记有多长
 		log = kind === 'install' ? String(log || '').slice(-64000) : '';
 		if (log) { await this.ctx.storage.put('fblog:' + fb.id, log); fb.log = log.length; }
 		const drop = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); return l.slice(300); });
 		for (const x of drop) await this.fbImgRm(x);
 		await this.notifyAdmin(kind === 'install' ? '有人安装失败了' : '官网报告（' + KIND[kind] + '）', `${text}\n\n${contact ? '联系方式：' + contact : '没留联系方式'}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
-		return { st: 200, ok: true };
+		return { st: 200, ok: true, code: fb.code };
 	}
 	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
 	async gcRate(now) {
@@ -867,6 +869,19 @@ export class Hub extends DurableObject {
 		return n;
 	}
 	async feedbacks() { return (await this.ctx.storage.get('fbl')) || []; }
+	async fbStatus(code, ip) {
+		code = String(code || '').toLowerCase();
+		if (!/^[a-z2-9]{8}$/.test(code)) return { st: 404, error: '没有这个编号' };
+		if (!(await this.hit('fq:' + (ip || '?'), 120, DAY))) return { st: 429, error: '查得太频繁了，过一会儿再查' };
+		const x = ((await this.ctx.storage.get('fbl')) || []).find((y) => y.code === code);
+		if (!x) return { st: 404, error: '没有这个编号（编号不对，或者这条已经被删除了）' };
+		const acts = x.acts || [], last = acts[acts.length - 1], said = [...acts].reverse().find((a) => a.note), state = fbState(x);
+		// 进度三段：反馈成功 → 开发人员已收到 → 已修复 / 无法修复
+		return { st: 200, ok: true, code: code.toUpperCase(), kind: x.kind === 'install' ? '安装失败' : x.web ? '官网报告' : '问题反馈', at: x.at, state, stage: state !== 'open' ? 3 : x.ack ? 2 : 1, ackAt: x.ack || 0,
+			done: state === 'fixed' ? 1 : 0, doneAt: x.done || x.nofix || 0, nofix: state === 'nofix' ? 1 : 0, reply: said ? said.note : '', replyAt: said ? said.at : 0, updated: last ? last.at : 0,
+			// 完整记录（新的在前）：每次改状态、发补充说明都在这里；不含发邮件给谁这些
+			history: acts.map((a) => ({ at: a.at, st: a.st || (a.done ? 'fixed' : 'open'), note: a.note || '' })).reverse().slice(0, 20) };
+	}
 	async fbImg(id, i) {
 		const x = ((await this.ctx.storage.get('fbl')) || []).find((y) => y.id === id), m = x && (x.imgs || [])[i];
 		if (!m) return null;
@@ -884,11 +899,22 @@ export class Hub extends DurableObject {
 		return to.slice(0, 3);
 	}
 	async feedbacksAdmin() { return (await this.feedbacks()).map((x) => ({ ...x, mailTo: this.fbMailTo(x) })); }
-	// 标已修复 / 撤回成未修复；可以写补充说明、发邮件告诉对方（每次都记一条处理记录）
-	async fbSet(id, done, note = '', mail = false) {
+	// 标为已收到 / 撤回（对方查进度时，第二段「开发人员已收到」亮起来）
+	fbAck(id, on) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; x.ack = on ? x.ack || Date.now() : 0; await this.ctx.storage.put('fbl', l); return true; }); }
+	// 标已修复 / 无法修复 / 撤回成没处理；可以写补充说明、发邮件告诉对方（每次都记一条处理记录）
+	// 无法修复必须写原因：如实告诉对方为什么修不了
+	async fbSet(id, state, note = '', mail = false) {
 		note = String(note || '').trim().slice(0, 2000);
-		const x = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return null; x.done = done ? Date.now() : 0; await this.ctx.storage.put('fbl', l); return x; });
+		if (!['fixed', 'nofix', 'open', 'note'].includes(state)) return { ok: false, error: '状态不对' };
+		if (state === 'nofix' && !note) return { ok: false, error: '写一下为什么没法修复，对方会看到' };
+		if (state === 'note' && !note) return { ok: false, error: '补充说明不能是空的' };
+		const x = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return null;
+			if (state === 'note') { if (!x.ack) { x.ack = Date.now(); await this.ctx.storage.put('fbl', l); } return x; }   // 只发补充说明：状态不变（写了说明当然也算收到了）
+			const now = Date.now(); x.done = state === 'fixed' ? now : 0; x.nofix = state === 'nofix' ? now : 0; if (state !== 'open' && !x.ack) x.ack = now;   // 处理完了当然也算收到了
+			await this.ctx.storage.put('fbl', l); return x; });
 		if (!x) return { ok: false };
+		if (state === 'note') state = 'note:' + fbState(x);
+		const st0 = state.replace('note:', ''), isNote = state !== st0, done = st0 === 'fixed';
 		let mailed = [], mailErr = '';
 		if (mail) {
 			const to = this.fbMailTo(x);
@@ -898,15 +924,16 @@ export class Hub extends DurableObject {
 				const e = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 				const when = new Date(x.at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 				const quote = x.text.length > 500 ? x.text.slice(0, 500) + '……' : x.text;
-				const html = `<p>你好，</p><p>你在 ${e(when)} 反馈的问题${done ? '<b>已经修复了</b>。' : '<b>我们重新打开了，还在继续处理</b>，有进展会再告诉你。'}</p>`
-					+ (note ? `<p><b>补充说明：</b><br>${e(note).replace(/\n/g, '<br>')}</p>` : '')
+				const head = isNote ? '有新的说明：' : { fixed: '<b>已经修复了</b>。', nofix: '<b>暂时没法修复</b>，原因写在下面，抱歉。', open: '<b>我们重新打开了，还在继续处理</b>，有进展会再告诉你。' }[st0];
+				const html = `<p>你好，</p><p>你在 ${e(when)} 反馈的问题${head}</p>`
+					+ (note ? `<p><b>${st0 === 'nofix' && !isNote ? '原因' : '补充说明'}：</b><br>${e(note).replace(/\n/g, '<br>')}</p>` : '')
 					+ `<p style="color:#666;margin-top:18px">你当时写的：</p><blockquote style="margin:0;padding:8px 12px;border-left:3px solid #ddd;color:#555">${e(quote).replace(/\n/g, '<br>')}</blockquote>`
-					+ (done ? '<p>如果还有问题，在面板里再反馈一次就行。</p>' : '') + `<p style="color:#999;font-size:13px">路由器面板 · <a href="https://${this.env.BASE_DOMAIN}">${this.env.BASE_DOMAIN}</a></p>`;
-				for (const t of to) if (await sendMail(this.env, t, done ? '你反馈的问题已修复' : '你反馈的问题还在处理中', html)) mailed.push(t);
+					+ (st0 !== 'open' && !isNote ? '<p>如果还有问题，在面板里再反馈一次就行。</p>' : '') + `<p style="color:#999;font-size:13px">路由器面板 · <a href="https://${this.env.BASE_DOMAIN}">${this.env.BASE_DOMAIN}</a></p>`;
+				for (const t of to) if (await sendMail(this.env, t, isNote ? '你反馈的问题有新的说明' : { fixed: '你反馈的问题已修复', nofix: '你反馈的问题暂时没法修复', open: '你反馈的问题还在处理中' }[st0], html)) mailed.push(t);
 				if (!mailed.length) mailErr = '邮件服务没发出去，稍后再试';
 			}
 		}
-		await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], y = l.find((z) => z.id === id); if (!y) return; (y.acts = y.acts || []).push({ at: Date.now(), done: done ? 1 : 0, note, mailed }); y.acts = y.acts.slice(-20); await this.ctx.storage.put('fbl', l); });
+		await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], y = l.find((z) => z.id === id); if (!y) return; (y.acts = y.acts || []).push({ at: Date.now(), done: done ? 1 : 0, st: isNote ? 'note' : st0, note, mailed }); y.acts = y.acts.slice(-20); await this.ctx.storage.put('fbl', l); });
 		return { ok: true, mailed, mailErr };
 	}
 	fbDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return false; await this.ctx.storage.put('fbl', l.filter((y) => y.id !== id)); await this.fbImgRm(x); return true; }); }
@@ -1013,6 +1040,10 @@ export async function hubFetch(req, env) {
 		return J(rest, st);
 	}
 	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
+	if (p.startsWith('/api/fb/') && req.method === 'GET') {
+		const { st, ...rest } = await H.fbStatus(p.slice(8), req.headers.get('cf-connecting-ip') || '');
+		return J(rest, st);
+	}
 	if (p === '/api/report' && req.method === 'POST') {
 		const b = await body();
 		if (b.website) return J({ ok: true });
@@ -1062,7 +1093,8 @@ export async function hubFetch(req, env) {
 		}
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
 		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacksAdmin() });
-		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') { const b = await body(); return J(await H.fbSet(a[1], !!b.done, b.note, !!b.mail)); }
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') { const b = await body(); const r = await H.fbSet(a[1], b.state || (b.done ? 'fixed' : 'open'), b.note, !!b.mail); return J(r, r.error ? 400 : 200); }
+		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'ack' && req.method === 'POST') { const b = await body(); return J({ ok: await H.fbAck(a[1], b.on !== false) }); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'img' && /^[0-2]$/.test(a[3] || '') && req.method === 'GET') { const im = await H.fbImg(a[1], +a[3]); return im ? new Response(im.buf, { headers: { 'content-type': im.type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有这张图' }, 404); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'log' && req.method === 'GET') { const t = await H.fbLog(a[1]); return t ? new Response(t, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } }) : J({ error: '没有日志' }, 404); }
@@ -1075,8 +1107,9 @@ export async function hubFetch(req, env) {
 	if (p === '/api/router/version') return routerVersion(env);
 	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
+	if (p.startsWith('/dl/cfd/') && (req.method === 'GET' || req.method === 'HEAD')) return dlCfd(p.slice(8));
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p];
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	if (pg && req.method === 'GET') return new Response(pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" + (pg === ADMIN ? ' blob:' : '') + "; connect-src 'self'; frame-ancestors 'none'" } });
 	return J({ error: 'not found' }, 404);
 }
@@ -1177,6 +1210,20 @@ async function dlFile(env, name) {
 	if (!r.ok) return J({ error: '还没有发布这个安装包' }, 404);
 	const gz = name.endsWith('.gz');
 	return new Response(r.body, { headers: { 'content-type': gz ? 'application/gzip' : 'text/plain; charset=utf-8', 'content-disposition': 'attachment; filename="' + name + '"', 'cache-control': 'public, max-age=600' } });
+}
+
+// 小闪存模式：路由器开机时从这里下载官方 cloudflared 到内存里运行（国内直连 GitHub 常常很慢）。
+// 只转发 Cloudflare 官方 GitHub 发布里的 Linux 程序；路由器下载后会用安装包里写好的 SHA256 校验，这里转发错了也跑不起来
+export const CFD_RE = /^(20\d\d\.\d{1,2}\.\d{1,3})\/cloudflared-linux-(arm64|arm|amd64|386)$/;
+async function dlCfd(rest) {
+	const m = CFD_RE.exec(rest);
+	if (!m) return J({ error: '没有这个文件' }, 404);
+	const url = 'https://github.com/cloudflare/cloudflared/releases/download/' + m[1] + '/cloudflared-linux-' + m[2];
+	const r = await fetch(url, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' }, cf: { cacheEverything: true, cacheTtl: 30 * 86400 } });
+	if (!r.ok) return J({ error: '下载 cloudflared 失败' }, 502);
+	const h = { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="cloudflared-linux-' + m[2] + '"', 'cache-control': 'public, max-age=2592000, immutable' };
+	const len = r.headers.get('content-length'); if (len) h['content-length'] = len;
+	return new Response(r.body, { headers: h });
 }
 
 /* ---------- 账号接口（官网）和路由器配对接口 ---------- */

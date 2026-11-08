@@ -307,6 +307,7 @@ check() {
 		local cause det
 		if [ "$WAN" != ok ]; then cause="宽带断开"
 		elif [ "$NET" != ok ]; then cause="外网不通"
+		elif [ -z "$TP" ] && [ -f /tmp/cmcp-cfd/fetching ]; then cause="正在把隧道程序下载到内存（小闪存模式，开机后要先下载）"
 		elif [ -z "$TP" ]; then cause="隧道程序没在运行"
 		else cause="隧道程序在运行，但连不上 Cloudflare"
 		fi

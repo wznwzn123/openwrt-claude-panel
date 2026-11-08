@@ -90,7 +90,7 @@ fail_report() {
 内核：$(uname -rm 2>/dev/null)
 闪存剩余：$( { df -k /overlay 2>/dev/null || df -k / 2>/dev/null; } | awk 'NR==2{print int($4/1024) " MB"}')
 内存：$(free 2>/dev/null | awk '/^Mem/{print "共 " int($2/1024) " MB，空闲 " int($4/1024) " MB"}')
-有没有：ucode $(command -v ucode >/dev/null && echo 有 || echo 没有) · cloudflared $(command -v cloudflared >/dev/null && echo 有 || echo 没有) · curl $(command -v curl >/dev/null && echo 有 || echo 没有) · $(command -v opkg >/dev/null && echo opkg || { command -v apk >/dev/null && echo apk || echo 没有软件包管理器; }) · 防火墙 $(command -v fw4 >/dev/null 2>&1 && echo fw4 || { command -v fw3 >/dev/null 2>&1 && echo fw3 || echo 不知道; })
+有没有：ucode $(command -v ucode >/dev/null && echo 有 || echo 没有) · cloudflared $(command -v cloudflared >/dev/null && echo 有 || { [ "${CFD_RAM:-0}" = 1 ] && echo '没有（小闪存模式，下载到内存）' || echo 没有; }) · curl $(command -v curl >/dev/null && echo 有 || echo 没有) · $(command -v opkg >/dev/null && echo opkg || { command -v apk >/dev/null && echo apk || echo 没有软件包管理器; }) · 防火墙 $(command -v fw4 >/dev/null 2>&1 && echo fw4 || { command -v fw3 >/dev/null 2>&1 && echo fw3 || echo 不知道; })
 代理插件：${px:-没有}
 是不是升级：$( [ "${UPGRADE:-0}" = 1 ] && echo 是 || echo 不是（全新安装）)"
 	info=$(mask "$info")
@@ -112,7 +112,19 @@ fail_report() {
 	elif command -v uclient-fetch >/dev/null 2>&1; then r=$(uclient-fetch -q -T 30 -O - --post-file="$bf" "$url/api/report" 2>/dev/null)
 	else r=$(wget -q -T 30 -O - --post-data="$(cat "$bf")" "$url/api/report" 2>/dev/null); fi
 	rm -f "$bf"
-	case "$r" in *'"ok":true'*) echo "已上报，谢谢！开发者会尽快看。" ;; *) echo "上报没成功（可能网络不通）。可以把上面的内容截图发给开发者。" ;; esac
+	case "$r" in
+		*'"ok":true'*)
+			code=$(printf '%s' "$r" | sed -n 's/.*"code":"\([a-z2-9]\{8\}\)".*/\1/p' | tr 'a-z' 'A-Z')
+			if [ -n "$code" ]; then
+				# 编号存在路由器上：下次运行安装命令时，先告诉他开发者回复了什么（不用账号、不用邮箱）
+				printf '%s %s\n' "$code" "$url" > /etc/cmcp-report 2>/dev/null
+				echo "已上报，谢谢！上报编号：$code"
+				echo "过一阵子打开 $url/r/$code 看处理结果（建议截图或收藏这个网址），"
+				echo "也可以在官网底部「查处理进度」输入编号查；"
+				echo "以后重新运行安装命令时，最上面也会显示开发者的回复。"
+			else echo "已上报，谢谢！开发者会尽快看。"; fi ;;
+		*) echo "上报没成功（可能网络不通）。可以把上面的内容截图发给开发者。" ;;
+	esac
 	return 0
 }
 trap 'rc=$?; echo $rc > "$RCF" 2>/dev/null; fail_report $rc' EXIT
@@ -136,6 +148,40 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
+# 上次安装失败上报过（编号存在 /etc/cmcp-report）：先看看开发者回复了没有。查不到、断网都不影响安装
+fb_reply() {
+	local code url r st rep stage s3 m1 m2 m3
+	code=""; url=""; read -r code url < /etc/cmcp-report 2>/dev/null || true
+	case "$code" in [A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9][A-Z2-9]) ;; *) rm -f /etc/cmcp-report; return 0 ;; esac
+	case "$url" in https://*) ;; *) return 0 ;; esac
+	if command -v curl >/dev/null 2>&1; then r=$(curl -s -m 8 "$url/api/fb/$code" 2>/dev/null || true)
+	elif command -v uclient-fetch >/dev/null 2>&1; then r=$(uclient-fetch -q -T 8 -O - "$url/api/fb/$code" 2>/dev/null || true)
+	else r=$(wget -q -T 8 -O - "$url/api/fb/$code" 2>/dev/null || true); fi
+	case "$r" in
+		*'"ok":true'*) ;;
+		*'没有这个编号'*) rm -f /etc/cmcp-report; return 0 ;;
+		*) return 0 ;;
+	esac
+	st=$(jsonfilter -s "$r" -e '@.state' 2>/dev/null || true); rep=$(jsonfilter -s "$r" -e '@.reply' 2>/dev/null || true)
+	stage=$(jsonfilter -s "$r" -e '@.stage' 2>/dev/null || true)
+	[ -n "$st" ] || { [ "$(jsonfilter -s "$r" -e '@.done' 2>/dev/null || true)" = 1 ] && st=fixed || st=open; }
+	case "$stage" in 1|2|3) ;; *) [ "$st" = open ] && stage=1 || stage=3 ;; esac
+	echo
+	case "$st" in
+		fixed) printf '\033[1;32m==> 你上次上报的安装问题（编号 %s），开发者已经修好了\033[0m\n' "$code" ;;
+		nofix) printf '\033[1;31m==> 你上次上报的安装问题（编号 %s），开发者说暂时没法修复\033[0m\n' "$code" ;;
+		*) if [ "$stage" = 2 ]; then printf '\033[1;33m==> 你上次上报的安装问题（编号 %s），开发者已收到，正在处理\033[0m\n' "$code"
+			else printf '\033[1;33m==> 你上次上报的安装问题（编号 %s），已提交，等开发者查看\033[0m\n' "$code"; fi ;;
+	esac
+	# 进度：反馈成功 → 开发人员已收到 → 已修复（没法修的是「无法修复」）
+	s3="已修复"; [ "$st" = nofix ] && s3="无法修复"
+	m1="✓"; m2="○"; m3="○"; [ "$stage" -ge 2 ] && m2="✓"; [ "$stage" -ge 3 ] && { m3="✓"; [ "$st" = nofix ] && m3="✕"; }
+	echo "    进度：$m1 反馈成功 ── $m2 开发人员已收到 ── $m3 $s3"
+	[ -n "$rep" ] && { echo "    开发者的说明："; printf '%s\n' "$rep" | sed 's/^/      /'; }
+	echo "    详情：$url/r/$code"
+	echo
+}
+[ -s /etc/cmcp-report ] && fb_reply
 [ "$(id -u)" = 0 ] || die "请用 root 运行"
 [ -f /etc/openwrt_release ] || die "这不是 OpenWrt 系统"
 [ -f "$SRC/www/cgi-bin/mcp" ] || die "找不到 $SRC，请在解压后的目录里运行 install.sh"
@@ -179,17 +225,91 @@ say "安装 $NAME${PKG_VER:+（v$PKG_VER）}$( [ $UPGRADE = 1 ] && echo '，升�
 # ---------- 依赖 ----------
 need=""
 have_pkg() { [ -n "$(command -v "$1")" ]; }
+free_mb() { { df -k /overlay 2>/dev/null || df -k / 2>/dev/null; } | awk 'NR==2{print int($4/1024)}'; }
+mem_mb() { awk -v k="$1:" '$1 == k { print int($2 / 1024) }' "${CMCP_MEMINFO:-/proc/meminfo}" 2>/dev/null; }
+# 装软件包。opkg / apk 自己崩溃（Segmentation fault 这类，退出码 ≥ 128）时，清掉软件源列表重试一次
+PKGERR=""
+pkg_add() {
+	local rc=0
+	PKGERR=""
+	if have_pkg apk; then
+		apk update >/dev/null 2>&1 || PKGERR=net
+		apk add "$@" || rc=$?
+		if [ $rc -gt 128 ] && [ $rc -lt 160 ]; then
+			warn "apk 崩溃了（退出码 $rc），清掉缓存重试一次"; rc=0
+			rm -rf /var/cache/apk/* 2>/dev/null || true; apk update >/dev/null 2>&1 || true
+			apk add "$@" || rc=$?
+		fi
+	elif have_pkg opkg; then
+		opkg update >/dev/null 2>&1 || PKGERR=net
+		opkg install "$@" || rc=$?
+		if [ $rc -gt 128 ] && [ $rc -lt 160 ]; then
+			warn "opkg 崩溃了（退出码 $rc），清掉软件源列表重试一次"; rc=0
+			rm -rf /var/opkg-lists 2>/dev/null || true; opkg update >/dev/null 2>&1 || true
+			opkg install "$@" || rc=$?
+		fi
+	else PKGERR=nopm; return 1; fi
+	[ $rc -eq 0 ] && return 0
+	[ $rc -gt 128 ] && [ $rc -lt 160 ] && PKGERR=crash
+	return 1
+}
+pkg_die() {
+	local pm; pm=$(have_pkg apk && echo apk || echo opkg)
+	case "$PKGERR" in
+		crash) die "路由器的软件包管理器（$pm）自己崩溃了（Segmentation fault），清掉软件源列表重试也一样。这是路由器固件的问题，不是面板的问题：先重启路由器再装一次；还不行，建议换这个固件的稳定版（SNAPSHOT 测试版容易这样）。没装上的：$1" ;;
+		nopm) die "没有找到 opkg / apk，请手动安装：$1" ;;
+		net) die "依赖安装失败：$1。更新软件源列表时出错了，可能是路由器连不上软件源：检查路由器能不能上网、软件源地址对不对，再装一次" ;;
+		*) die "依赖安装失败：$1（在路由器后台「系统 → 软件包」里搜一下这几个包，看看能不能手动装上）" ;;
+	esac
+}
+# 小闪存模式能不能用：要官方有这个架构的 cloudflared、内存够、能校验
+cfd_ram_check() {
+	local m why=""
+	case "$(uname -m)" in aarch64|arm64|armv7*|armv8l|x86_64|i386|i486|i586|i686) ;; *) why="这台路由器的架构（$(uname -m)）没有官方的 cloudflared" ;; esac
+	m=$(mem_mb MemAvailable); m=${m:-0}
+	[ -z "$why" ] && [ "$m" -lt 120 ] && why="可用内存只有 $m MB，小闪存模式要 120 MB 以上"
+	[ -z "$why" ] && ! have_pkg sha256sum && why="系统里没有 sha256sum，没法校验下载的程序"
+	[ -z "$why" ] && [ ! -s "$SRC/etc/cfd.sums" ] && why="这个安装包里没有 cloudflared 的校验值"
+	[ -n "$why" ] && die "$1，小闪存模式也用不了：$why。可以先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），让闪存剩 40 MB 以上再装一次"
+	return 0
+}
 [ -x /usr/bin/ucode ] || need="$need ucode"
 [ -f /usr/lib/ucode/fs.so ] || need="$need ucode-mod-fs"
 [ -f /usr/lib/ucode/uci.so ] || need="$need ucode-mod-uci"
 [ -x /usr/sbin/uhttpd ] || need="$need uhttpd"
 have_pkg curl || need="$need curl"
-have_pkg cloudflared || need="$need cloudflared"
+FREE=$(free_mb); FREE=${FREE:-0}
+# 面板本身加上面这几个小依赖，大约要 5 MB
+[ "$FREE" -lt 6 ] && die "闪存只剩 $FREE MB，装面板至少要 6 MB。先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），再装一次"
 if [ -n "$need" ]; then
 	say "安装依赖：$need"
-	if have_pkg apk; then apk update >/dev/null && apk add $need || die "依赖安装失败：$need"
-	elif have_pkg opkg; then opkg update >/dev/null && opkg install $need || die "依赖安装失败：$need（cloudflared 不在软件源里的话，请先手动安装）"
-	else die "没有找到 opkg / apk，请手动安装：$need"; fi
+	pkg_add $need || pkg_die "$need"
+fi
+# cloudflared（远程访问必需，约 30 MB）：闪存放得下就装进闪存（跟以前一样）；
+# 放不下、或者软件源里没有，但内存够的，用小闪存模式：不装进闪存，开机时下载到内存里运行
+CFD_RAM=0
+if ! have_pkg cloudflared; then
+	FREE=$(free_mb); FREE=${FREE:-0}
+	if [ "$FREE" -ge 40 ]; then
+		say "安装 cloudflared（远程访问用，约 30 MB）"
+		if ! pkg_add cloudflared; then
+			[ "$PKGERR" = crash ] && pkg_die cloudflared
+			[ "$PKGERR" = nopm ] && pkg_die cloudflared
+			warn "cloudflared 没装上（软件源里可能没有），改用小闪存模式"
+			cfd_ram_check "cloudflared 装不上"
+			CFD_RAM=1
+		fi
+	else
+		cfd_ram_check "闪存只剩 $FREE MB，放不下远程访问要用的 cloudflared（约 30 MB）"
+		CFD_RAM=1
+	fi
+	if [ $CFD_RAM = 1 ]; then
+		say "小闪存模式：闪存只剩 $FREE MB，cloudflared 不装进闪存，每次开机下载到内存里运行（约 35 MB，网速慢的话要一两分钟）"
+		cfh=$HUB; [ -z "$cfh" ] && [ -s "$D/hub.conf" ] && cfh=$(sed -n 's/^HUB=//p' "$D/hub.conf")
+		CFD_SUMS="$SRC/etc/cfd.sums" CFD_HUB="$cfh" sh "$SRC/bin/cmcp-cfd" fetch \
+			|| die "下载 cloudflared 失败：官网和 GitHub 都没下成，或者下载的文件校验不对。检查路由器能不能上网，过一会儿再装一次"
+		ok "cloudflared 已下载到内存，校验通过（不占闪存；路由器重启后会自动重新下载）"
+	fi
 fi
 ok "依赖齐全"
 
@@ -204,6 +324,9 @@ for f in "$SRC"/bin/cmcp-*; do cp -f "$f" /usr/sbin/; chmod 755 "/usr/sbin/${f##
 cp -f "$SRC/init.d/claude-mcp" "$SRC/init.d/cmcp-watchdog" /etc/init.d/
 chmod 755 /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog
 cp -f "$SRC/hotplug/90-cmcp-synced" /etc/hotplug.d/ntp/
+# 小闪存模式：校验值跟着安装包走；cfd.ram 是记号（升级、体检、卸载时看）
+[ -s "$SRC/etc/cfd.sums" ] && cp -f "$SRC/etc/cfd.sums" $D/cfd.sums
+if [ "$CFD_RAM" = 1 ]; then : > $D/cfd.ram; else rm -f $D/cfd.ram; fi
 cp -f "$SRC/etc/luci-gate" "$SRC/etc/oc_cbi.lua" "$SRC/etc/oc_line.lua" $D/
 chmod 755 $D/luci-gate
 for n in cgi-backup cgi-download cgi-exec cgi-upload luci; do ln -sf $D/luci-gate $WWW/cgi-bin/$n; done
@@ -442,5 +565,6 @@ else
 		echo "  TKEY        = $TKEY"
 	fi
 fi
+rm -f /etc/cmcp-report
 echo
 echo "卸载：sh uninstall.sh"

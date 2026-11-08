@@ -2720,6 +2720,11 @@ function fb_diag() {
 		'已运行：' + int(+split(readfile('/proc/uptime') ?? '0', ' ')[0] / 3600) + ' 小时',
 	]);
 }
+/* 反馈的编号（托管服务给的）：存在路由器上，用来查开发者的回复 */
+const FB_CODES = '/etc/claude-mcp/fb.codes', FB_CACHE = '/tmp/cmcp_fbr.json';
+// 查处理进度的网页（官网 /r/编号），不用登录，跟终端安装失败时给的是同一个页面
+function fb_track(code) { let h = hub_conf(true)?.HUB ?? ''; return match(h, /^https:\/\/[A-Za-z0-9.-]+(:[0-9]+)?\/?$/) ? replace(h, /\/+$/, '') + '/r/' + uc(code) : null; }
+function fb_codes() { let l = null; try { l = json(readfile(FB_CODES) ?? '[]'); } catch (e) {} return type(l) == 'array' ? filter(l, (x) => type(x) == 'object' && match(x.code ?? '', /^[a-z2-9]{8}$/)) : []; }
 P.feedback = function(a) {
 	let text = trim('' + (a?.text ?? '')), contact = trim('' + (a?.contact ?? ''));
 	if (length(text) < 4) die('写几句遇到的问题或者建议吧');
@@ -2730,10 +2735,47 @@ P.feedback = function(a) {
 	for (let im in (type(a?.images) == 'array' ? slice(a.images, 0, 3) : [])) {
 		if (type(im) == 'string' && length(im) < 2100000 && match(im, /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/)) push(imgs, im);
 	}
-	if (hub_conf(true)?.HUB) { hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs }, 60); return { ok: true, sent: 'hub', images: length(imgs) }; }
+	if (hub_conf(true)?.HUB) {
+		let o = hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs }, 60);
+		// 托管服务给的编号存在路由器上：开发者回复以后，打开面板时能看到（不用邮箱）
+		if (match(o.code ?? '', /^[a-z2-9]{8}$/)) {
+			let l = fb_codes(); push(l, { code: o.code, at: time() });
+			writefile(FB_CODES, sprintf('%J', slice(l, -10)));
+		}
+		let ok = match(o.code ?? '', /^[a-z2-9]{8}$/);
+		return { ok: true, sent: 'hub', images: length(imgs), code: ok ? uc(o.code) : null, track: ok ? fb_track(o.code) : null };
+	}
 	// 自建版：没有开通中心，带着内容去 GitHub 提
 	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');
 	return { ok: true, sent: 'github', url: 'https://github.com/wznwzn123/openwrt-claude-panel/issues/new?title=' + CL.enc('[反馈] ' + substr(replace(text, /\s+/g, ' '), 0, 40)) + '&body=' + CL.enc(body) };
+};
+/* 反馈的回复：用编号问托管服务，处理好了 / 写了回复的，打开面板时提示一次（看过的不再提示；结果缓存 20 分钟） */
+P.fb_replies = function(a) {
+	let c = hub_conf(true), l = fb_codes();
+	if (!c?.HUB || !length(l)) return { list: [] };
+	let cc = null; try { cc = json(readfile(FB_CACHE) ?? 'null'); } catch (e) {}
+	if (!a?.force && type(cc) == 'object' && time() - (cc.at ?? 0) < 1200) return { list: cc.list ?? [] };
+	let out = [];
+	for (let x in l) {
+		if (time() - (x.at ?? 0) > 90 * 86400) continue;
+		let o = null;
+		try { o = json(sh(sprintf('curl -s -m 8 %s', shq(c.HUB + '/api/fb/' + x.code))).out); } catch (e) {}
+		if (type(o) != 'object' || !o.ok) continue;
+		push(out, { code: uc(x.code), track: fb_track(x.code), at: o.at, done: o.done, nofix: o.nofix ?? 0, stage: o.stage ?? (o.done ? 3 : 1), ackAt: o.ackAt ?? 0, doneAt: o.doneAt ?? 0, reply: o.reply ?? '', replyAt: o.replyAt ?? 0, updated: o.updated ?? 0, seen: x.seen ?? 0 });
+	}
+	writefile(FB_CACHE, sprintf('%J', { at: time(), list: out }));
+	return { list: out };
+};
+// 看过了：记下看到哪一次更新；已经处理完（修好了或者没法修）、看过的编号不再去问
+P.fb_seen = function(a) {
+	let code = lc('' + (a?.code ?? '')), upd = +(a?.updated ?? 0), l = fb_codes(), keep = [];
+	for (let x in l) {
+		if (x.code == code) { x.seen = upd; if (a?.done) continue; }
+		push(keep, x);
+	}
+	writefile(FB_CODES, sprintf('%J', keep));
+	sh('rm -f ' + FB_CACHE);
+	return { ok: true };
 };
 P.feedback_diag = function() { return { text: fb_diag(), hosted: !!hub_conf(true)?.HUB }; };
 // 「@global[0]」这种匿名节：换成真正的节名

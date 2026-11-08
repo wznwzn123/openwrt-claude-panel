@@ -238,6 +238,15 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .dock button:active{transform:scale(.9);background:var(--fill)}
 .dock button.run svg{animation:spin .9s linear infinite}
 .notice{padding:11px 12px;border-radius:14px;background:var(--fill);color:var(--muted);font-size:13px;line-height:1.55}
+.fsteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:6px 0 4px}
+.fsteps>div{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}
+.fsteps>div+div::before{content:'';position:absolute;top:10px;right:calc(50% + 15px);width:calc(100% - 30px);height:3px;border-radius:2px;background:var(--line)}
+.fsteps>div.on::before{background:var(--ok)}.fsteps>div.bad::before{background:var(--danger)}
+.fsteps i{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;background:var(--fill);color:var(--muted)}
+.fsteps .on i{background:var(--ok);color:#fff}.fsteps .bad i{background:var(--danger);color:#fff}
+.fsteps .cur i{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent)}.fsteps .bad.cur i{box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 22%,transparent)}
+.fsteps b{display:block;font-size:12.5px;font-weight:600;margin-top:7px;line-height:1.3;word-break:keep-all}
+.fsteps .off b{color:var(--muted);font-weight:500}.fsteps .bad b{color:var(--danger)}
 .notice.w{background:var(--wsoft);color:var(--warn)}
 /* 断线记录 */
 .wdst{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
@@ -3931,6 +3940,7 @@ async function feedbackSheet() {
 			const r = await P('feedback', { text: tx.value, contact: m.querySelector('[data-ct]').value, diag: m.querySelector('[data-dg]').checked, images: hosted ? IM : [] }, 90000);
 			close(true);
 			if (r.sent === 'github') { window.open(r.url, '_blank', 'noopener'); toast('已打开 GitHub，登录后点「Submit」就发出去了'); }
+			else if (r.code) fbSent(r);
 			else toast('已发送' + (r.images ? '（带 ' + r.images + ' 张截图）' : '') + '，谢谢！开发者会尽快看');
 		}, '发送中');
 	});
@@ -4130,6 +4140,53 @@ async function updSheet(forced) {
 	<div class="btngrid" style="margin:12px 0 0">${u.force ? '' : '<button class="btn" data-v="close">以后再说</button>'}<button class="btn primary" data-go>一键更新</button></div>`
 	: '<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>'}`,
 	(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; const g = m.querySelector('[data-go]'); if (g) g.onclick = () => { close(null); updStart(true); }; });
+}
+// 反馈编号：一行显示编号 + 复制按钮（发送成功、收到回复时都用）
+const fbCodeRow = (code) => `<div data-fbcode style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fill);padding:10px 12px;border-radius:12px;margin-top:12px">
+	<div style="min-width:0"><span class="muted" style="display:block;font-size:12.5px">反馈编号</span><b class="mono" style="font-size:17px;letter-spacing:.06em">${esc(code)}</b></div>
+	<button class="btn sm" data-cc style="flex:none">复制</button></div>`;
+const fbCodeBind = (m, code, track) => {
+	const c = m.querySelector('[data-cc]'); if (c) c.onclick = () => copyText(code);
+	const t = m.querySelector('[data-track]'); if (t && track) t.onclick = () => window.open(track, '_blank', 'noopener');
+};
+// 进度条：只有三段（反馈成功 → 开发人员已收到 → 已修复；没法修的第三段是「无法修复」），补充说明写在下面
+const fbSteps = (stage, nofix) => `<div class="fsteps" data-stage="${stage}" style="margin:12px 0 0;padding:12px 2px 10px;border-radius:14px;background:var(--fill)">${['反馈成功', '开发人员已收到', '已修复'].map((x, i) => { const on = i < stage, bad = on && i === 2 && nofix;
+	return `<div class="${on ? (bad ? 'on bad' : 'on') : 'off'}${i === stage - 1 ? ' cur' : ''}"><i>${bad ? '✕' : on ? '✓' : i + 1}</i><b>${bad ? '无法修复' : x}</b></div>`; }).join('')}</div>`;
+// 发送成功：编号能复制，能直接打开处理进度页（不用登录）
+function fbSent(r) {
+	modal(`<div class="sheethead"><h3>反馈已发送</h3></div>
+	${fbSteps(1, false)}
+	<p class="muted" style="margin:12px 0 0;line-height:1.6">谢谢！${r.images ? r.images + ' 张截图也一起发过去了。' : ''}开发者回复以后，你打开面板时会自动弹出来，不用自己去查。</p>
+	${fbCodeRow(r.code)}
+	<p class="muted" style="font-size:13px;margin:10px 0 0;line-height:1.6">想随时看处理到哪一步，点「查看处理进度」，或者把编号记下来。</p>
+	<div class="btngrid" style="margin:14px 0 0">${r.track ? '<button class="btn" data-track>查看处理进度</button>' : ''}<button class="btn primary" data-v="close"${r.track ? '' : ' style="grid-column:1/-1"'}>好的</button></div>`,
+	(m) => { m.dataset.fbsent = 1; fbCodeBind(m, r.code, r.track); });
+}
+// 问题反馈有回复了：开发者在管理页标了已修复、或者写了回复，打开面板时提示一次（托管版；看过的不再提示）
+async function fbCheck() {
+	if (!token || LK.on || document.querySelector('.modal')) return;
+	let r; try { r = await P('fb_replies', {}, 30000); } catch (e) { return; }
+	const x = (r?.list || []).filter((y) => (y.reply || y.done || y.nofix) && y.updated > (y.seen || 0)).sort((a, b) => b.updated - a.updated)[0];
+	if (!x || document.querySelector('.modal')) return;
+	const when = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+	const stage = Math.max(x.stage || (x.done || x.nofix ? 3 : 1), x.reply ? 2 : 1);
+	modal(`<div class="sheethead"><h3>${x.done ? '你反馈的问题修好了' : x.nofix ? '你反馈的问题暂时没法修复' : '你的反馈有新的说明'}</h3></div>
+	<p class="muted" style="font-size:13px;margin:0">${esc(when(x.at))} 发的反馈</p>
+	${fbSteps(stage, !!x.nofix)}
+	${x.reply ? `<p class="muted" style="font-size:13px;margin:12px 0 6px">${x.nofix ? '开发者说明的原因' : '开发者的说明'}</p><div class="notice"><div data-txt style="white-space:pre-wrap;line-height:1.65;max-height:9.9em;overflow:hidden">${esc(x.reply)}</div></div><button class="btn sm hidden" data-more style="margin-top:8px">查看全部</button>` : ''}
+	${fbCodeRow(x.code)}
+	${x.done ? '<p class="muted" style="font-size:13px;margin:10px 0 0">如果还有问题，在「系统操作 → 问题反馈」里再发一次就行。</p>' : x.nofix ? '<p class="muted" style="font-size:13px;margin:10px 0 0">以后情况有变化，可以在「系统操作 → 问题反馈」里再发一次。</p>' : ''}
+	<div class="btngrid" style="margin:14px 0 0">${x.track ? '<button class="btn" data-track>查看处理进度</button>' : ''}<button class="btn primary" data-v="close"${x.track ? '' : ' style="grid-column:1/-1"'}>知道了</button></div>`,
+	(m) => {
+		m.dataset.fbr = 1; fbCodeBind(m, x.code, x.track);
+		// 回复太长（超过 6 行）：先折叠，点「查看全部」展开，再点收起
+		const t = m.querySelector('[data-txt]'), b = m.querySelector('[data-more]');
+		if (!t || !b) return;
+		const fold = (on) => { t.style.maxHeight = on ? '9.9em' : 'none'; t.style.webkitMaskImage = t.style.maskImage = on ? 'linear-gradient(180deg,#000 70%,transparent)' : 'none'; b.textContent = on ? '查看全部' : '收起'; };
+		if (t.scrollHeight > t.clientHeight + 4) { b.classList.remove('hidden'); fold(true); b.onclick = () => fold(t.style.maxHeight === 'none'); }
+		else t.style.maxHeight = 'none';
+	});
+	P('fb_seen', { code: x.code, updated: x.updated, done: x.done || x.nofix ? 1 : 0 }).catch(() => {});
 }
 const UPD_STEPS = [['downloading', '下载新版安装包'], ['installing', '安装（保留所有设置）'], ['check', '重新启动面板服务'], ['done', '完成']];
 async function updStart(noConfirm) {
@@ -4672,6 +4729,7 @@ function start() {
 		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器面板 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
 	watchJobs();
 	updAt = Date.now(); setTimeout(() => updCheck(false), 4000);
+	setTimeout(fbCheck, 9000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); updMaybe(); } });
 

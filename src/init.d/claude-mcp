@@ -10,11 +10,14 @@ start_service() {
 	procd_close_instance
 
 	rm -f /tmp/claude-mcp-tunnel.log
+	# 闪存里有 cloudflared 就直接用；小闪存模式（没装进闪存）由 cmcp-cfd 下载到内存后再启动，参数完全一样
+	local CFD=/usr/bin/cloudflared
+	[ -x $CFD ] || CFD=/usr/sbin/cmcp-cfd
 	procd_open_instance tunnel
 	if [ -s /etc/claude-mcp/tunnel_token ]; then
-		procd_set_param command /usr/bin/cloudflared tunnel --no-autoupdate --protocol http2 --logfile /tmp/claude-mcp-tunnel.log run --token "$(cat /etc/claude-mcp/tunnel_token)"
+		procd_set_param command $CFD tunnel --no-autoupdate --protocol http2 --logfile /tmp/claude-mcp-tunnel.log run --token "$(cat /etc/claude-mcp/tunnel_token)"
 	else
-		procd_set_param command /usr/bin/cloudflared tunnel --no-autoupdate --protocol http2 --logfile /tmp/claude-mcp-tunnel.log --url http://127.0.0.1:18765
+		procd_set_param command $CFD tunnel --no-autoupdate --protocol http2 --logfile /tmp/claude-mcp-tunnel.log --url http://127.0.0.1:18765
 	fi
 	procd_set_param respawn 3600 10 0
 	procd_close_instance

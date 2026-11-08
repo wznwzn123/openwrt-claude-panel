@@ -310,8 +310,26 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		ok('[截图] 路由器信息能展开看', /面板版本：3\.0\.0/.test(await page.textContent('#fbs')));
 	}
 	const it = page.locator('#fbs [data-fb]', { hasText: '常见问题页在手机上打不开' });
-	ok('[回复] 反馈上的按钮叫「标为已修复」', /标为已修复/.test(await it.locator('[data-done]').textContent()));
-	await it.locator('[data-done]').click(); await W(400);
+	// 一条反馈里：文字、进度条、按钮这些互相不重叠，也不超出卡片
+	const fbOverlap = (sel) => page.evaluate((sel) => {
+		const row = document.querySelector(sel); if (!row) return 'no row'; const R = row.getBoundingClientRect(), bad = [];
+		const groups = [[...row.querySelector('.l').children], [...row.querySelectorAll('.fbacts > *')], [...row.querySelectorAll('.fsteps > div')], ...[...row.querySelectorAll('.fsteps > div')].map((d) => [...d.children])];
+		for (const g of groups) { const v = g.filter((e) => e.getBoundingClientRect().height);
+			for (const e of v) { const r = e.getBoundingClientRect(); if (r.left < R.left - 1 || r.right > R.right + 1) bad.push('超出 ' + e.textContent.trim().slice(0, 8)); }
+			for (let i = 0; i < v.length; i++) for (let j = i + 1; j < v.length; j++) { const a = v[i].getBoundingClientRect(), b = v[j].getBoundingClientRect(); if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) bad.push(v[i].textContent.trim().slice(0, 8) + '×' + v[j].textContent.trim().slice(0, 8)); } }
+		return bad.join('；');
+	}, sel);
+	const sel = (t) => `#fbs [data-fb="${FL.find((x) => x.text.includes(t))?.id}"]`;
+	const FL = await env.H.get('hub').feedbacks();
+	ok('[进度] 新反馈：进度条在第 1 段，只有三段的名字', (await it.locator('.fsteps').getAttribute('data-stage')) === '1' && (await it.locator('.fsteps').textContent()).replace(/[✓✕\d\s]/g, '') === '反馈成功开发人员已收到已修复');
+	ok('[按钮] 没处理的反馈有：标为已收到、标为已修复、标为无法修复、发补充说明、删除', (await it.locator('.fbacts button').allTextContents()).join('|') === '标为已收到|标为已修复|标为无法修复|发补充说明|删除', (await it.locator('.fbacts button').allTextContents()).join('|'));
+	ok('[排版] 反馈卡片里不重叠、不超出', (await fbOverlap(sel('常见问题页'))) === '', await fbOverlap(sel('常见问题页')));
+	if (SHOTS) { await it.scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, -60)); await page.screenshot({ path: SHOTS + '/admin-fblist.png' }); }
+	// 标为已收到
+	await it.locator('[data-ack="1"]').click(); await W(800);
+	ok('[已收到] 点了以后：提示、进度到第 2 段、按钮变成「撤回已收到」', /已标为已收到/.test(await page.textContent('#toast')) && (await it.locator('.fsteps').getAttribute('data-stage')) === '2' && /撤回已收到/.test(await it.locator('[data-ack]').textContent()));
+	// 标为已修复
+	await it.locator('[data-fs="fixed"]').click(); await W(400);
 	const dt = await page.textContent('.dlg');
 	ok('[回复] 弹窗：有补充说明框，默认勾着「发邮件告诉对方：fix.me@example.org」', await page.isVisible('.dlg [data-note]') && /发邮件告诉对方：fix\.me@example\.org/.test(dt) && await page.isChecked('.dlg [data-mail]'), dt);
 	await page.fill('.dlg [data-note]', '已经修好了，刷新一下就行'); if (SHOTS) await page.screenshot({ path: SHOTS + '/admin-fbdone.png' });
@@ -319,16 +337,31 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	ok('[回复] 确定后：提示已标为已修复、邮件发给了谁', /已标为已修复，邮件已发给 fix\.me@example\.org/.test(await page.textContent('#toast')), await page.textContent('#toast'));
 	await page.click('#fbAll').catch(() => {}); await W(300);
 	const it2 = page.locator('#fbs [data-fb]', { hasText: '常见问题页在手机上打不开' });
-	ok('[回复] 列表里：按钮变成「撤回为未修复」，有处理记录（说明 + 发给谁）', /撤回为未修复/.test(await it2.locator('[data-done]').textContent()) && /处理记录（1）/.test(await it2.textContent()) && /已经修好了，刷新一下就行/.test(await it2.textContent()) && /已发邮件给 fix\.me@example\.org/.test(await it2.textContent()));
-	await it2.locator('[data-done]').click(); await W(400);
-	ok('[回复] 撤回也弹窗、也能发邮件', /撤回为未修复/.test(await page.textContent('.dlg h3')) && await page.isChecked('.dlg [data-mail]'));
+	ok('[回复] 列表里：只剩「撤回为未处理、发补充说明、删除」，进度第 3 段，有处理记录', (await it2.locator('.fbacts button').allTextContents()).join('|') === '撤回为未处理|发补充说明|删除' && (await it2.locator('.fsteps').getAttribute('data-stage')) === '3' && /处理记录（1）/.test(await it2.textContent()) && /标为已修复/.test(await it2.textContent()) && /已经修好了，刷新一下就行/.test(await it2.textContent()) && /已发邮件给 fix\.me@example\.org/.test(await it2.textContent()));
+	await it2.locator('[data-fs="open"]').click(); await W(400);
+	ok('[回复] 撤回也弹窗、也能发邮件', /撤回为未处理/.test(await page.textContent('.dlg h3')) && await page.isChecked('.dlg [data-mail]'));
 	await page.click('.dlg [data-x]'); await W(300);
-	ok('[回复] 取消：什么都不改', !(await page.isVisible('.dlg')) && /撤回为未修复/.test(await it2.locator('[data-done]').textContent()));
+	ok('[回复] 取消：什么都不改', !(await page.isVisible('.dlg')) && /撤回为未处理/.test(await it2.locator('.fbacts').textContent()));
+	// 发补充说明：进度不变，必须写内容
+	await it2.locator('[data-fs="note"]').click(); await W(400);
+	await page.click('.dlg [data-go]'); await W(300);
+	ok('[补充说明] 空的不让发，提示「不能是空的」', await page.isVisible('.dlg') && await page.isVisible('.dlg [data-err]') && /不能是空的/.test(await page.textContent('.dlg [data-err]')));
+	await page.fill('.dlg [data-note]', '顺便说一下：安卓 Edge 也测过了'); await page.uncheck('.dlg [data-mail]'); await page.click('.dlg [data-go]'); await W(1000);
+	ok('[补充说明] 发了以后：提示、进度还是第 3 段（已修复）、记录里有「发了补充说明」', /补充说明已发布/.test(await page.textContent('#toast')) && (await it2.locator('.fsteps').getAttribute('data-stage')) === '3' && /发了补充说明/.test(await it2.textContent()) && /安卓 Edge 也测过了/.test(await it2.textContent()));
+	// 标为无法修复：必须写原因；没邮箱也能标
 	const it3 = page.locator('#fbs [data-fb]', { hasText: '依赖安装失败' }).first();
-	await it3.locator('[data-done]').click(); await W(400);
-	ok('[回复] 没留邮箱的：勾选框不能点，写着「对方没留邮箱」', /对方没留邮箱/.test(await page.textContent('.dlg')) && await page.isDisabled('.dlg [data-mail]'));
+	await it3.locator('[data-fs="nofix"]').click(); await W(400);
+	ok('[无法修复] 弹窗：标题「标为无法修复」，要写原因；没留邮箱的勾选框不能点', /标为无法修复/.test(await page.textContent('.dlg h3')) && /没法修复的原因/.test(await page.textContent('.dlg')) && /对方没留邮箱/.test(await page.textContent('.dlg')) && await page.isDisabled('.dlg [data-mail]'));
+	await page.click('.dlg [data-go]'); await W(300);
+	ok('[无法修复] 不写原因不让标', await page.isVisible('.dlg') && /为什么没法修复/.test(await page.textContent('.dlg [data-err]')));
+	await page.fill('.dlg [data-note]', '这是固件自带的 opkg 的问题，面板这边改不了。'); if (SHOTS) await page.screenshot({ path: SHOTS + '/admin-nofix.png' });
 	await page.click('.dlg [data-go]'); await W(1000);
-	ok('[回复] 没邮箱照样能标已修复，不提邮件', /^已标为已修复$/.test((await page.textContent('#toast')).trim()), await page.textContent('#toast'));
+	ok('[无法修复] 标好了，不提邮件', /^已标为无法修复$/.test((await page.textContent('#toast')).trim()), await page.textContent('#toast'));
+	const it4 = page.locator('#fbs [data-fb]', { hasText: '依赖安装失败' }).first();
+	ok('[无法修复] 列表里：标 ⛔，进度第三段是「✕ 无法修复」，记录里有原因', /⛔/.test(await it4.locator('b').first().textContent()) && (await it4.locator('.fsteps .bad').textContent()) === '✕无法修复' && /标为无法修复/.test(await it4.textContent()) && /opkg 的问题/.test(await it4.textContent()));
+	const id4 = FL.find((x) => x.text.includes('依赖安装失败'))?.id;
+	ok('[排版] 无法修复的卡片：不重叠、不超出', (await fbOverlap(`#fbs [data-fb="${id4}"]`)) === '', await fbOverlap(`#fbs [data-fb="${id4}"]`));
+	if (SHOTS) { await it4.scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, -60)); await page.screenshot({ path: SHOTS + '/admin-fbnofix-item.png' }); }
 	delete env.RESEND_API_KEY;
 	ok('[管理页] 页面没有报错', !e3.length, e3.join(' | '));
 	await ctx.close();

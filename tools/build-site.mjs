@@ -3,7 +3,7 @@
 import fs from 'fs';
 const dir = new URL('../cloud/site/', import.meta.url);
 const css = fs.readFileSync(new URL('common.css', dir), 'utf8');
-const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVACY: 'privacy.html', SECURITY: 'security.html' };
+const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVACY: 'privacy.html', SECURITY: 'security.html', REPLY: 'reply.html' };
 let out = '// 自动生成，不要直接改：改 cloud/site/ 里的文件后运行 node tools/build-site.mjs\n';
 for (const [k, f] of Object.entries(pages)) {
 	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 cloud/site/img/名字.webp 的内容（页面只允许加载自己和 data: 图片）

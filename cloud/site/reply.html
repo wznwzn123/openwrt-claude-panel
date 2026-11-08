@@ -1,0 +1,81 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>处理进度 · 路由器面板</title>
+<meta name="robots" content="noindex">
+<style>/*COMMON_CSS*/
+.doc h1{font-size:26px;margin:18px 0 4px}.doc .sub{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+.st{display:flex;align-items:center;gap:12px;margin:0 0 4px}
+.st i{flex:none;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-style:normal;font-size:22px;color:#fff}
+.st b{font-size:19px}.st span{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.ok .st i{background:linear-gradient(135deg,#3fd38a,#18a874)}.wait .st i{background:linear-gradient(135deg,#ffb36b,#ff8a3d)}.bad .st i{background:linear-gradient(135deg,#ff7a6b,#e5484d)}
+.bar{margin-top:16px;padding:14px 4px 12px;border-radius:14px;background:var(--fill)}
+.lg h2{font-size:16px;margin:0 0 4px}
+.ev{position:relative;padding:12px 0 12px 20px;border-bottom:.5px solid var(--line)}.ev:last-child{border-bottom:0;padding-bottom:2px}
+.ev::before{content:'';position:absolute;left:2px;top:19px;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.ev.fixed::before{background:var(--ok)}.ev.nofix::before{background:var(--danger)}.ev.note::before,.ev.ack::before{background:var(--brand)}
+.ev b{font-size:14.5px}.ev time{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+.ev p{margin:8px 0 0;padding:11px 13px;border-radius:12px;background:var(--fill);font-size:15px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.q{display:flex;gap:10px;margin-top:12px}.q input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.12em;font-size:17px}.q button{flex:none}
+.kv{display:flex;justify-content:space-between;font-size:14px;padding:8px 0;border-bottom:.5px solid var(--line)}.kv:last-child{border-bottom:0}.kv span{color:var(--muted)}
+footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
+</style></head><body><div class="wrap doc">
+<div class="top"><a class="logo" href="/"><i>⌂</i>路由器面板</a><div class="row"><a class="btn sm primary" href="/app">登录</a></div></div>
+<h1>处理进度</h1>
+<p class="sub">你上报的问题，开发者处理到哪一步了、说了什么，都在这里。不用登录，有编号就能查。</p>
+<div class="card" id="box"><p style="margin:0;color:var(--muted)">正在查……</p></div>
+<form class="card" id="ask" hidden style="margin-top:12px" autocomplete="off">
+	<b style="font-size:16px">输入编号查进度</b>
+	<p style="margin:6px 0 0;color:var(--muted);font-size:13.5px;line-height:1.6">编号是 8 位字母和数字，上报成功时会显示。终端安装失败上报的，在路由器上运行 <code style="white-space:nowrap">cat /etc/cmcp-report</code> 也能看到。</p>
+	<div class="q"><input class="input" id="qc" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false" inputmode="latin"><button class="btn primary" type="submit">查询</button></div>
+	<p class="err" id="qe" hidden style="margin:8px 0 0"></p>
+</form>
+<div class="card lg" id="log" hidden style="margin-top:12px"><h2>完整记录</h2><div id="evs"></div></div>
+<div class="card" id="more" hidden style="margin-top:12px">
+	<div class="kv" style="align-items:center"><span>编号</span><span style="display:flex;align-items:center;gap:10px;color:inherit"><b id="code" style="letter-spacing:.06em"></b><button class="btn sm" id="cp" type="button">复制</button></span></div>
+	<div class="kv"><span>类型</span><b id="kind"></b></div>
+	<div class="kv"><span>上报时间</span><b id="at"></b></div>
+</div>
+<p class="sub" id="tip" hidden style="margin-top:14px"></p>
+<footer><a href="/r">查别的编号</a> · <a href="/">首页</a> · <a href="/security">安全说明</a> · <a href="/app">账号</a></footer>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const when = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// 进度条：反馈成功 → 开发人员已收到 → 已修复（没法修的，第三段变成「无法修复」）
+const steps = (stage, nofix) => `<div class="fsteps" data-stage="${stage}">${['反馈成功', '开发人员已收到', '已修复'].map((x, i) => { const on = i < stage, bad = on && i === 2 && nofix;
+	return `<div class="${on ? (bad ? 'on bad' : 'on') : 'off'}${i === stage - 1 ? ' cur' : ''}"><i>${bad ? '✕' : on ? '✓' : i + 1}</i><b>${bad ? '无法修复' : x}</b></div>`; }).join('')}</div>`;
+const code = (location.pathname.split('/')[2] || '').toUpperCase();
+// 输入编号：0、1、O、L 这几个容易看错的字不会出现在编号里，输错了就提示
+$('ask').onsubmit = (e) => {
+	e.preventDefault(); const v = $('qc').value.trim().toUpperCase().replace(/\s+/g, '');
+	if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { $('qe').hidden = false; $('qe').textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }
+	location.href = '/r/' + v;
+};
+const ask = (msg) => { $('box').hidden = !msg; if (msg) $('box').innerHTML = `<p style="margin:0">${esc(msg)}</p>`; $('ask').hidden = false; if (!msg) $('ask').style.marginTop = '0'; };
+if (!/^[A-Z2-9]{8}$/.test(code)) ask('');
+else fetch('/api/fb/' + encodeURIComponent(code)).then((r) => r.json()).then((d) => {
+	if (!d.ok) { ask(d.error || '没查到'); $('qc').value = code; return; }
+	const state = d.state || (d.done ? 'fixed' : 'open'), stage = d.stage || (d.done ? 3 : 1);
+	const head = state === 'fixed' ? ['ok', '✓', '已经修复了', '修复时间：' + when(d.doneAt)]
+		: state === 'nofix' ? ['bad', '✕', '暂时没法修复', '原因写在下面的记录里']
+		: stage >= 2 ? ['wait', '…', '开发人员已收到，正在处理', '有进展会更新在这里'] : ['wait', '…', '已经提交，等开发人员查看', '有进展会更新在这里'];
+	$('box').className = 'card ' + head[0];
+	// 进度条只显示三段；补充说明这些都写在下面的「完整记录」里
+	$('box').innerHTML = `<div class="st"><i>${head[1]}</i><div><b>${head[2]}</b><span>${esc(head[3])}</span></div></div>
+		<div class="bar">${steps(stage, state === 'nofix')}</div>`;
+	// 完整记录：新的在前；最下面是「反馈成功」
+	const NAME = { fixed: '已修复', nofix: '无法修复', open: '重新打开，继续处理', note: '补充说明' };
+	const evs = (d.history || (d.reply ? [{ at: d.replyAt, st: state, note: d.reply }] : [])).map((x) => ({ ...x, n: NAME[x.st] || '更新' }));
+	if (d.ackAt) evs.push({ at: d.ackAt, st: 'ack', n: '开发人员已收到' });
+	evs.sort((a, b) => b.at - a.at); evs.push({ at: d.at, st: 'sent', n: '反馈成功' });
+	$('evs').innerHTML = evs.map((x) => `<div class="ev ${x.st}"><b>${esc(x.n)}</b><time>${when(x.at)}</time>${x.note ? `<p>${esc(x.note)}</p>` : ''}</div>`).join('');
+	$('log').hidden = false;
+	$('code').textContent = d.code; $('kind').textContent = d.kind; $('at').textContent = when(d.at); $('more').hidden = false;
+	if (d.kind === '安装失败') { $('tip').hidden = false; $('tip').textContent = state === 'nofix' ? '如果以后情况有变化（比如换了固件），可以重新运行安装命令再试，失败了再上报一次。' : d.done ? '处理好以后，在路由器上重新运行一次安装命令就行。重新运行时，终端里也会显示这里的回复。' : '重新运行安装命令时，终端最上面也会显示这里的处理结果。'; }
+	$('cp').onclick = async () => {
+		try { await navigator.clipboard.writeText(d.code); } catch (e) { const a = document.createElement('textarea'); a.value = d.code; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (x) {} a.remove(); }
+		$('cp').textContent = '已复制'; setTimeout(() => { $('cp').textContent = '复制'; }, 1500);
+	};
+}).catch(() => { $('box').innerHTML = '<p style="margin:0">网络不太好，刷新一下再试。</p>'; });
+</script>
+</body></html>

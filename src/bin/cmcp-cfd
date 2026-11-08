@@ -1,0 +1,90 @@
+#!/bin/sh
+# 小闪存模式：路由器闪存放不下 cloudflared（约 30 MB）时，不把它装进闪存，
+# 而是每次开机（第一次启动隧道时）从官网下载到内存（/tmp）里运行。
+# 下载后先核对 SHA256（校验值写在安装包里，跟着面板版本走），对不上就删掉不用，所以下载的地方被人动了手脚也跑不起来。
+#
+# 用法：
+#   cmcp-cfd tunnel ...   /etc/init.d/claude-mcp 用：找到程序后 exec，进程名还是 cloudflared（看门狗、隧道直连都照常认）
+#   cmcp-cfd fetch        只下载并校验，不运行（安装时先试一次）
+#   cmcp-cfd status       现在的状态（给面板和体检看）
+#
+# 测试用环境变量：CFD_SUMS（校验值文件）、CFD_DIR（下载到哪）、CFD_HUB（官网地址）、CFD_ARCH（假装的架构）、CFD_NOSLEEP=1、CFD_KEEP_PATH=1
+D=/etc/claude-mcp
+SUMS=${CFD_SUMS:-$D/cfd.sums}
+DIR=${CFD_DIR:-/tmp/cmcp-cfd}
+BIN=$DIR/cloudflared
+LOG=$DIR/fetch.log
+[ "$CFD_KEEP_PATH" = 1 ] || export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+
+log() { mkdir -p "$DIR"; printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" >> "$LOG"; tail -n 50 "$LOG" > "$LOG.t" 2>/dev/null && mv -f "$LOG.t" "$LOG"; }
+# 官方 cloudflared 发布的架构名
+arch() {
+	[ -n "$CFD_ARCH" ] && { echo "$CFD_ARCH"; return; }
+	case "$(uname -m)" in
+		aarch64|arm64) echo arm64 ;;
+		armv7*|armv8l) echo arm ;;
+		x86_64) echo amd64 ;;
+		i386|i486|i586|i686) echo 386 ;;
+		*) return 1 ;;
+	esac
+}
+ver() { sed -n 's/^VER=//p' "$SUMS" 2>/dev/null | head -n1; }
+want() { awk -v n="cloudflared-linux-$1" '$2 == n { print $1; exit }' "$SUMS" 2>/dev/null; }
+sum() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
+tmpfree() { df -k "$(dirname "$DIR")" 2>/dev/null | awk 'NR==2{print int($4/1024)}'; }
+
+# 下载并校验；已经下好而且校验对得上就直接用
+fetch() {
+	local a v s hub u
+	a=$(arch) || { log "不支持这个架构：$(uname -m)"; echo "不支持这个架构：$(uname -m)"; return 2; }
+	v=$(ver); s=$(want "$a")
+	[ -n "$v" ] && [ ${#s} -eq 64 ] || { log "安装包里没有 cloudflared 的校验值"; echo "安装包里没有 cloudflared 的校验值"; return 2; }
+	command -v sha256sum >/dev/null || { echo "没有 sha256sum，没法校验下载的程序"; return 2; }
+	[ -x "$BIN" ] && [ "$(sum "$BIN")" = "$s" ] && return 0
+	mkdir -p "$DIR"
+	[ "$(tmpfree)" -ge 60 ] 2>/dev/null || { log "内存里空间不够（/tmp 剩 $(tmpfree) MB，要 60 MB）"; echo "内存里空间不够（/tmp 剩 $(tmpfree) MB，要 60 MB）"; return 1; }
+	hub=${CFD_HUB:-$(sed -n 's/^HUB=//p' $D/hub.conf 2>/dev/null)}; hub=${hub:-https://yrlove520.com}; hub=${hub%/}
+	: > "$DIR/fetching"
+	# 先从官网下（国内连 GitHub 常常很慢），不行再直接从 GitHub 官方发布下
+	for u in "$hub/dl/cfd/$v/cloudflared-linux-$a" "https://github.com/cloudflare/cloudflared/releases/download/$v/cloudflared-linux-$a"; do
+		rm -f "$BIN.part"
+		if curl -fsSL --connect-timeout 15 -m 900 -o "$BIN.part" "$u" 2>>"$LOG"; then
+			if [ "$(sum "$BIN.part")" = "$s" ]; then
+				chmod 755 "$BIN.part" && mv -f "$BIN.part" "$BIN"
+				rm -f "$DIR/fetching"; log "下载好了 cloudflared $v（$a，$(du -m "$BIN" | cut -f1) MB）来源：${u%%/dl/*}"
+				return 0
+			fi
+			log "下载的文件校验不对，已删掉：$u"
+		else
+			log "下载失败：$u"
+		fi
+	done
+	rm -f "$BIN.part" "$DIR/fetching"
+	echo "下载 cloudflared 失败（官网和 GitHub 都没下成，详情：$LOG）"
+	return 1
+}
+
+case "$1" in
+	fetch) fetch; exit $? ;;
+	status)
+		if [ -x /usr/bin/cloudflared ]; then echo "mode=flash"
+		elif [ -f "$DIR/fetching" ]; then echo "mode=ram state=fetching"
+		elif [ -x "$BIN" ]; then echo "mode=ram state=ready ver=$(ver)"
+		else echo "mode=ram state=missing"; fi
+		exit 0 ;;
+esac
+
+# 启动隧道：闪存里有 cloudflared 就直接用（跟以前一样）；没有就用内存里的，没下好就一直重试（断网开机时等网络恢复）
+[ -x /usr/bin/cloudflared ] && exec /usr/bin/cloudflared "$@"
+n=0
+while :; do
+	fetch >/dev/null; rc=$?
+	[ $rc -eq 0 ] && break
+	[ $rc -eq 2 ] && exit 1   # 不支持的架构、没有校验值：重试也没用
+	n=$((n + 1))
+	[ "$CFD_NOSLEEP" = 1 ] && exit 1
+	# 10、20、30… 秒，最多隔 2 分钟再试
+	w=$((n * 10)); [ $w -gt 120 ] && w=120
+	sleep $w
+done
+exec "$BIN" "$@"

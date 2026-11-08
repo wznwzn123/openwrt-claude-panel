@@ -13,6 +13,8 @@
 .item:last-child{border-bottom:0}
 .item .l{min-width:0}.item .l b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.item .l span{font-size:12.5px;color:var(--muted)}
 .item .acts{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+.item .l .fsteps b{white-space:normal;overflow:visible}.fbacts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.fbbar{margin:10px 0 2px;padding:10px 6px 8px;border-radius:12px;background:var(--fill)}
 code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 .g3{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g3 .full{grid-column:1/-1}
 .dlg{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding:12px}
@@ -110,19 +112,43 @@ function renderDevs() {
 }
 $('q').oninput = renderDevs;
 // 标已修复 / 撤回：可以写补充说明，选择要不要发邮件告诉对方
-function fbDoneDialog(f, done) {
+// 对方怎么收到回复：邮件；面板里发的，打开面板时看到；终端上报和官网报告，用编号查、重新安装时看到
+function fbReach(f) {
+	const r = [], c = f.code ? String(f.code).toUpperCase() : '';
+	if ((f.mailTo || []).length) r.push('邮件');
+	if (c && f.sub) r.push('对方打开面板时看到');
+	else if (c && f.kind === 'install') r.push('对方重新运行安装命令、或打开查询网址时看到');
+	else if (c) r.push('对方打开查询网址时看到');
+	return { c, txt: r.length ? r.join('，') : '这条是旧版本发来的，没有编号也没有邮箱，对方收不到回复' };
+}
+// 进度条：只有三段（反馈成功 → 开发人员已收到 → 已修复 / 无法修复）；补充说明写在下面的处理记录里
+const FB_ST = { fixed: '标为已修复', nofix: '标为无法修复', open: '撤回为未处理', note: '发了补充说明' };
+const fbStage = (f) => (f.done || f.nofix ? 3 : f.ack ? 2 : 1);
+function fbSteps(stage, nofix) {
+	return `<div class="fsteps" data-stage="${stage}">${['反馈成功', '开发人员已收到', '已修复'].map((x, i) => { const on = i < stage, bad = on && i === 2 && nofix;
+		return `<div class="${on ? (bad ? 'on bad' : 'on') : 'off'}${i === stage - 1 ? ' cur' : ''}"><i>${bad ? '✕' : on ? '✓' : i + 1}</i><b>${bad ? '无法修复' : x}</b></div>`; }).join('')}</div>`;
+}
+const FB_DLG = {
+	fixed: { t: '标为已修复', l: '补充说明（可以不写）', ph: '比如：已在 3.0.1 修好，到面板「一键更新」更新一下就行' },
+	nofix: { t: '标为无法修复', l: '没法修复的原因（必须写，如实告诉对方）', ph: '比如：这是路由器固件自带的问题，面板这边改不了。可以换成 Kwrt 稳定版再试', need: 1 },
+	open: { t: '撤回为未处理', l: '补充说明（可以不写）', ph: '比如：还有一种情况没修好，正在继续查' },
+	note: { t: '发补充说明', l: '补充说明（进度不变，对方会看到）', ph: '比如：已经找到原因了，下个版本修', need: 1 },
+};
+function fbDoneDialog(f, kind) {
 	return new Promise((ok) => {
-		const to = f.mailTo || [], el = document.createElement('div'); el.className = 'dlg';
-		el.innerHTML = `<div class="card"><h3>${done ? '标为已修复' : '撤回为未修复'}</h3>
+		const to = f.mailTo || [], d = FB_DLG[kind], el = document.createElement('div'); el.className = 'dlg';
+		el.innerHTML = `<div class="card"><h3>${d.t}</h3>
 			<p class="muted" style="margin:4px 0 10px;font-size:13px;line-height:1.55;white-space:pre-wrap;max-height:84px;overflow:auto">${esc((f.text || '').slice(0, 300))}</p>
-			<label class="f">补充说明（可以不写，会写进邮件）</label><textarea class="input" data-note rows="4" maxlength="2000" placeholder="${done ? '比如：已在 3.0.1 修好，到面板「一键更新」更新一下就行' : '比如：还有一种情况没修好，正在继续查'}" style="resize:vertical"></textarea>
+			<label class="f">${d.l}<span class="muted" style="display:block;font-size:12.5px;font-weight:400;margin-top:2px">对方怎么看到：${esc(fbReach(f).txt)}</span></label><textarea class="input" data-note rows="4" maxlength="2000" placeholder="${esc(d.ph)}" style="resize:vertical"></textarea>
+			<p class="err hidden" data-err style="margin:6px 0 0">${kind === 'nofix' ? '写一下为什么没法修复' : '补充说明不能是空的'}</p>
 			<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:14px;line-height:1.5"><input type="checkbox" data-mail ${to.length ? 'checked' : 'disabled'} style="margin-top:3px"><span>${to.length ? '发邮件告诉对方：' + esc(to.join('、')) : '对方没留邮箱，发不了邮件'}</span></label>
-			<div class="g3" style="margin-top:12px"><button class="btn" data-x>取消</button><button class="btn primary" data-go>${done ? '标为已修复' : '撤回'}</button></div></div>`;
+			<div class="g3" style="margin-top:12px"><button class="btn" data-x>取消</button><button class="btn ${kind === 'nofix' ? 'danger' : 'primary'}" data-go>${d.t}</button></div></div>`;
 		document.body.appendChild(el);
 		const close = (v) => { el.remove(); ok(v); };
 		el.querySelector('[data-x]').onclick = () => close(null);
 		el.onclick = (e) => { if (e.target === el) close(null); };
-		el.querySelector('[data-go]').onclick = () => close({ note: el.querySelector('[data-note]').value.trim(), mail: el.querySelector('[data-mail]').checked });
+		el.querySelector('[data-go]').onclick = () => { const note = el.querySelector('[data-note]').value.trim(); if (d.need && !note) { el.querySelector('[data-err]').classList.remove('hidden'); return; } close({ note, mail: el.querySelector('[data-mail]').checked }); };
+		el.querySelector('[data-note]').oninput = () => el.querySelector('[data-err]').classList.add('hidden');
 		setTimeout(() => el.querySelector('[data-note]').focus(), 50);
 	});
 }
@@ -349,16 +375,19 @@ function renderLogs() {
 }
 let FBS = [], FB_ALL = false;
 function renderFbs() {
-	const todo = FBS.filter((f) => !f.done), list = FB_ALL ? FBS : todo;
+	const todo = FBS.filter((f) => !f.done && !f.nofix), list = FB_ALL ? FBS : todo;
 	$('fbN').textContent = todo.length ? todo.length + ' 条没处理' : '';
-	$('fbs').innerHTML = (list.length ? list.slice(0, 50).map((f) => `<div class="item" data-fb="${esc(f.id)}" style="align-items:flex-start"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${f.done ? '✅ ' : ''}${esc(f.name)} <span>${esc(f.sub)}</span></b>
+	$('fbs').innerHTML = (list.length ? list.slice(0, 50).map((f) => `<div class="item" data-fb="${esc(f.id)}" style="align-items:flex-start"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${f.done ? '✅ ' : f.nofix ? '⛔ ' : ''}${esc(f.name)} <span>${esc(f.sub)}</span></b>
 		<span style="display:block;white-space:pre-wrap;color:var(--text);font-size:14px;margin:4px 0">${esc(f.text)}</span>
-		<span>${new Date(f.at).toLocaleString('zh-CN', { hour12: false })}${f.contact ? ' · 联系方式：' + esc(f.contact) : ''}${(f.emails || []).length ? ' · 账号：' + esc(f.emails.join('、')) : ''}</span>
+		<span>${new Date(f.at).toLocaleString('zh-CN', { hour12: false })}${fbReach(f).c ? ' · 编号 ' + esc(fbReach(f).c) : ''}${f.contact ? ' · 联系方式：' + esc(f.contact) : ''}${(f.emails || []).length ? ' · 账号：' + esc(f.emails.join('、')) : ''}</span>
+		<span style="display:block;font-size:12.5px;margin-top:2px">回复怎么送到对方：${esc(fbReach(f).txt)}</span>
+		<div class="fbbar">${fbSteps(fbStage(f), !!f.nofix)}</div>
 		${f.log ? `<p style="margin:6px 0 0"><button class="btn sm" data-log="${esc(f.id)}">查看安装日志（${Math.ceil(f.log / 1024)} KB）</button></p>` : ''}
 		${(f.imgs || []).length ? `<div class="fbimgs">${f.imgs.map((m, i) => `<button class="fbimg" data-img="${esc(f.id)}:${i}" title="点开看大图"><span class="muted">截图 ${i + 1}</span></button>`).join('')}</div>` : ''}
 		${f.diag ? `<details style="margin-top:4px"><summary style="font-size:12.5px;color:var(--muted)">路由器信息</summary><pre style="white-space:pre-wrap;font-size:12px;margin:4px 0 0">${esc(f.diag)}</pre></details>` : ''}
-		${(f.acts || []).length ? `<details style="margin-top:4px"><summary style="font-size:12.5px;color:var(--muted)">处理记录（${f.acts.length}）</summary>${f.acts.map((x) => `<div style="font-size:12.5px;margin:4px 0 0;line-height:1.55"><b>${new Date(x.at).toLocaleString('zh-CN', { hour12: false })}</b> ${x.done ? '标为已修复' : '撤回为未修复'}${(x.mailed || []).length ? ' · 已发邮件给 ' + esc(x.mailed.join('、')) : ' · 没发邮件'}${x.note ? '<br><span style="white-space:pre-wrap">' + esc(x.note) + '</span>' : ''}</div>`).join('')}</details>` : ''}</div>
-		<div class="acts"><button class="btn sm" data-done="${f.done ? 0 : 1}">${f.done ? '撤回为未修复' : '标为已修复'}</button><button class="btn sm danger" data-fdel>删除</button></div></div>`).join('') : `<p class="muted">${FBS.length ? '都处理好了' : '还没有人反馈'}</p>`)
+		${(f.acts || []).length ? `<details style="margin-top:4px"><summary style="font-size:12.5px;color:var(--muted)">处理记录（${f.acts.length}）</summary>${f.acts.map((x) => `<div style="font-size:12.5px;margin:4px 0 0;line-height:1.55"><b>${new Date(x.at).toLocaleString('zh-CN', { hour12: false })}</b> ${FB_ST[x.st || (x.done ? 'fixed' : 'open')]}${(x.mailed || []).length ? ' · 已发邮件给 ' + esc(x.mailed.join('、')) : ' · 没发邮件'}${x.note ? '<br><span style="white-space:pre-wrap">' + esc(x.note) + '</span>' : ''}</div>`).join('')}</details>` : ''}
+		<div class="fbacts">${f.done || f.nofix ? '<button class="btn sm" data-fs="open">撤回为未处理</button>'
+			: `<button class="btn sm" data-ack="${f.ack ? 0 : 1}">${f.ack ? '撤回已收到' : '标为已收到'}</button><button class="btn sm primary" data-fs="fixed">标为已修复</button><button class="btn sm" data-fs="nofix">标为无法修复</button>`}<button class="btn sm" data-fs="note">发补充说明</button><button class="btn sm danger" data-fdel>删除</button></div></div></div>`).join('') : `<p class="muted">${FBS.length ? '都处理好了' : '还没有人反馈'}</p>`)
 		+ (FBS.length > todo.length ? `<p style="margin:10px 0 0"><button class="btn sm" id="fbAll">${FB_ALL ? '只看没处理的' : '也看处理好的（' + (FBS.length - todo.length) + ' 条）'}</button></p>` : '');
 	fbImgs();
 }
@@ -389,15 +418,16 @@ $('fbs').onclick = async (e) => {
 		lg.disabled = false; return;
 	}
 	const row = e.target.closest('[data-fb]'); if (!row) return;
-	const id = row.dataset.fb, dn = e.target.closest('[data-done]');
+	const id = row.dataset.fb, dn = e.target.closest('[data-fs]'), ak = e.target.closest('[data-ack]');
 	try {
 		if (dn) {
-			const f = FBS.find((x) => x.id === id) || {}, done = dn.dataset.done === '1';
-			const v = await fbDoneDialog(f, done); if (!v) return;
+			const f = FBS.find((x) => x.id === id) || {}, kind = dn.dataset.fs;
+			const v = await fbDoneDialog(f, kind); if (!v) return;
 			dn.disabled = true;
-			const r = await api('POST', 'feedback/' + id + '/done', { done, note: v.note, mail: v.mail });
-			toast((done ? '已标为已修复' : '已撤回为未修复') + ((r.mailed || []).length ? '，邮件已发给 ' + r.mailed.join('、') : v.mail ? '，邮件没发出去：' + (r.mailErr || '不知道原因') : ''));
+			const r = await api('POST', 'feedback/' + id + '/done', { state: kind, note: v.note, mail: v.mail });
+			toast({ fixed: '已标为已修复', nofix: '已标为无法修复', open: '已撤回为未处理', note: '补充说明已发布' }[kind] + ((r.mailed || []).length ? '，邮件已发给 ' + r.mailed.join('、') : v.mail ? '，邮件没发出去：' + (r.mailErr || '不知道原因') : ''));
 		}
+		else if (ak) { ak.disabled = true; const on = ak.dataset.ack === '1'; await api('POST', 'feedback/' + id + '/ack', { on }); toast(on ? '已标为已收到，对方查进度时能看到' : '已撤回「已收到」'); }
 		else if (e.target.closest('[data-fdel]')) { if (!confirm('删除这条反馈？')) return; await api('DELETE', 'feedback/' + id); }
 		else return;
 		FBS = (await api('GET', 'feedback')).list; renderFbs();

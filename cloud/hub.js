@@ -363,7 +363,9 @@ export class Hub extends DurableObject {
 		const rs = new Set();
 		for (const k of await this.renewals()) if (k.used && k.sub) rs.add(k.sub);
 		for (const a of (await this.ctx.storage.get('aplog')) || []) if (a.status === 'ok') rs.add(a.sub);
-		for (const d of list) out.push({ ...d, prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		// 路由器上的面板版本（路由器心跳报上来的）：管理页看谁还是旧版
+		const vers = await Promise.all(list.map(async (d) => { if (d.state !== 'ok') return ''; try { return String((await this.watch(d.sub).brief()).ver || '').replace(/^v/, ''); } catch (e) { return ''; } }));
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）

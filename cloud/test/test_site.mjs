@@ -142,7 +142,7 @@ for (const dark of [false, true]) {
 	await page.fill('#fKey [name=k]', 'wrong-key-1234567890'); await page.click('#fKey button'); await W(500);
 	ok('管理页：密钥不对进不去', /密钥不对/.test(await page.textContent('#vKey')));
 	await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(800);
-	ok('管理页：统计（已开通 / 名额、在线、试用中、续过期、不限期、快到期、已停用、本周新开通）', /^2 \/ 50/.test(await page.textContent('#stats .card:first-child b')) && (await page.$$('#stats .card')).length === 8 && /试用中/.test(await page.textContent('#stats')) && /本周新开通/.test(await page.textContent('#stats')), await page.textContent('#stats'));
+	ok('管理页：统计（已开通 / 名额、在线、试用中、续过期、不限期、快到期、已停用、本周新开通、旧版本）', /^2 \/ 50/.test(await page.textContent('#stats .card:first-child b')) && (await page.$$('#stats .card')).length === 9 && /旧版本/.test(await page.textContent('#stats')) && /试用中/.test(await page.textContent('#stats')) && /本周新开通/.test(await page.textContent('#stats')), await page.textContent('#stats'));
 	ok('管理页：列出路由器和绑定的账号数', /Kwrt/.test(await page.textContent('#devs')) && /1 个账号/.test(await page.textContent('#devs')));
 	await page.fill('#fInv [name=note]', '给朋友'); await page.click('#fInv button'); await W(800);
 	ok('管理页：生成邀请码', /给朋友/.test(await page.textContent('#invs')));
@@ -279,6 +279,17 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
 	const page = await ctx.newPage(); const e3 = []; page.on('pageerror', (x) => e3.push(x.message));
 	await page.goto(B + '/admin'); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(1200);
+	{ // 版本号：路由器心跳报上来的面板版本，最新版（v1.3.2）以前的标「旧版」
+		for (const [R, v] of [[R1, '1.3.1'], [R2, 'v1.3.2']]) { const w = env.W.get('dev:' + R.sub); const r = (await w.ctx.storage.get('r')) || {}; r.last = Date.now(); r.rep = { ...(r.rep || {}), ver: v }; await w.ctx.storage.put('r', r); }
+		await page.reload(); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890').catch(() => {}); await page.click('#fKey button').catch(() => {}); await W(1500);
+		const row1 = await page.textContent(`#devs [data-sub="${R1.sub}"]`).catch(() => ''), row2 = await page.textContent(`#devs [data-sub="${R2.sub}"]`).catch(() => '');
+		ok('[版本] 每台路由器显示面板版本；比最新版旧的标「旧版」', /v1\.3\.1 · 旧版/.test(row1) && /v1\.3\.2/.test(row2) && !/旧版/.test(row2), row1.slice(0, 80) + ' | ' + row2.slice(0, 80));
+		ok('[版本] 统计里有「旧版本（最新 v1.3.2）」1 台，下面列出各版本几台', /旧版本（最新 v1\.3\.2）/.test(await page.textContent('#stats')) && /v1\.3\.2 1 台/.test(await page.textContent('#vdist')) && /v1\.3\.1 1 台/.test(await page.textContent('#vdist')), await page.textContent('#vdist'));
+		await page.click('#fchips [data-f="old"]'); await W(300);
+		ok('[版本] 筛「旧版本」：只剩旧版的那台', (await page.locator('#devs .item').count()) === 1 && /v1\.3\.1/.test(await page.textContent('#devs')));
+		if (SHOTS) await page.screenshot({ path: SHOTS + '/admin-versions.png', fullPage: false });
+		await page.click('#fchips [data-f="all"]'); await W(200);
+	}
 	ok('[管理页] 安装失败报告：标着「安装失败（终端上报）」，有「查看安装日志」按钮', /安装失败（终端上报）/.test(await page.textContent('#fbs')) && await page.locator('#fbs [data-log]').count() >= 1);
 	await page.locator('#fbs [data-log]').first().click(); await W(800);
 	ok('[管理页] 点开：弹出完整的安装日志', await page.isVisible('.dlg pre') && /cloudflared 不在软件源里/.test(await page.textContent('.dlg pre')));

@@ -20,6 +20,7 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 .dchips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 8px}.dchips .btn.on{background:var(--brand,#007aff);color:#fff}
 .fbimgs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 2px}.fbimg{width:86px;height:86px;border-radius:12px;border:.5px solid var(--line);background:var(--fill);padding:0;overflow:hidden;display:grid;place-items:center;font-size:12px}.fbimg img{width:100%;height:100%;object-fit:cover;display:block}
 .dprev{margin:10px 0 2px;font-size:14px;line-height:1.6}.dprev b{color:var(--brand,#007aff)}.dprev .bad{color:var(--danger,#ff3b30)}
+.vtag{display:inline-block;font-size:12px;font-weight:700;padding:1px 7px;border-radius:99px;background:rgba(52,199,89,.16);color:var(--ok);margin-right:2px}.vtag.old{background:rgba(255,59,48,.14);color:var(--danger)}.vtag.none{background:var(--fill);color:var(--muted);font-weight:600}
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i>⌂</i>托管服务管理</a><button class="btn sm hidden" id="outBtn">退出</button></div>
 <section id="vKey" class="card hidden" style="max-width:420px;margin:8vh auto 0">
@@ -29,6 +30,7 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 </section>
 <section id="vMain" class="hidden">
 	<div class="stat" id="stats"></div>
+	<p class="muted" id="vdist" style="font-size:13px;margin:8px 2px 0;line-height:1.7"></p>
 	<div class="notice w hidden" id="dnsFull" style="margin:10px 0 0"></div>
 	<div class="sech" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2>续期申请 <span class="pill" id="apN" style="font-size:13px;vertical-align:middle"></span></h2><button class="btn sm" id="mailTest" type="button" title="有新申请时会发邮件提醒你；点这里发一封试试">发测试邮件</button></div>
 	<div class="card"><div id="aps"></div></div>
@@ -100,7 +102,7 @@ function renderDevs() {
 	const status = (d) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '⏸ 已到期暂停' : '⛔ 已封禁') : '最后上线 ' + ago(d.seen);
 	const prot = (d) => d.prot ? ' <span class="pill" style="background:rgba(52,199,89,.16);color:var(--ok)">🛡 受保护</span>' : '';
 	$('devs').innerHTML = (live.length ? live.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>${esc(d.name || d.sub)} <span>${esc(d.sub)}</span>${prot(d)}</b>
-		<span>${status(d)}${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'}${d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : ''} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span>${d.anote ? `<span class="anote">📝 ${esc(d.anote)}</span>` : ''}</div>
+		<span>${verTag(d)} ${status(d)}${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'}${d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : ''} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span>${d.anote ? `<span class="anote">📝 ${esc(d.anote)}</span>` : ''}</div>
 		<div class="acts">${d.exp && d.state === 'ok' ? '<button class="btn sm primary" data-op="extend">加天数</button>' : ''}<button class="btn sm" data-op="note">备注</button>${d.off ? '<button class="btn sm" data-op="on">解封</button>' : '<button class="btn sm" data-op="off">封禁</button>'}${d.protect ? '<button class="btn sm" data-op="unprotect">取消保护</button>' : d.prot ? '' : '<button class="btn sm" data-op="protect">保护</button>'}${d.prot ? '' : '<button class="btn sm danger" data-op="delete">删除</button>'}</div></div>`).join('') : '<p class="muted" style="text-align:center">没有路由器</p>')
 		+ (bin.length ? `<p class="muted" style="margin:16px 0 4px;font-size:13px">回收站（${bin.length} 台）：网址已停用，隧道和数据都还在，随时可以恢复；到期自动彻底删除</p>` + bin.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>🗑 ${esc(d.name || d.sub)} <span>${esc(d.sub)}</span></b>
 		<span>${day(d.delAt)} ${d.delWhy === 'idle' ? '因为 90 天没上线被放进回收站' : '删除'} · <b style="display:inline;color:var(--danger)">${day(d.purgeAt)} 彻底删除</b>${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'} · ${(d.users || []).length} 个账号</span></div>
@@ -281,8 +283,13 @@ const FS = {
 	soon: { n: '7 天内到期', f: (d) => live(d) && d.exp && !d.off && d.exp - Date.now() < 7 * 86400e3 },
 	off: { n: '已停用', f: (d) => live(d) && d.off },
 	idle: { n: '7 天没上线', f: (d) => live(d) && !d.off && Date.now() - (d.seen || d.created) > 7 * 86400e3 },
+	old: { n: '旧版本', f: (d) => live(d) && !!d.ver && !!LATEST && vNewer(LATEST, d.ver) },
 	bin: { n: '回收站', f: (d) => d.offWhy === 'deleted' },
 };
+// 路由器上的面板版本：最新版从官网的版本接口拿；比它旧的标出来
+let LATEST = '';
+const vNewer = (a, b) => { const p = (x) => String(x).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0); const x = p(a), y = p(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+const verTag = (d) => !d.ver ? '<span class="vtag none">版本未知</span>' : `<span class="vtag${LATEST && vNewer(LATEST, d.ver) ? ' old' : ''}">v${esc(d.ver)}${LATEST && vNewer(LATEST, d.ver) ? ' · 旧版' : ''}</span>`;
 function renderStats() {
 	const on = DEVS.filter((x) => live(x) && x.seen && Date.now() - x.seen < 6 * 3600e3 + 600e3).length;
 	const wk = DEVS.filter((x) => x.created > Date.now() - 7 * 86400e3).length;
@@ -290,7 +297,12 @@ function renderStats() {
 	if (df) $('dnsFull').innerHTML = `<b>Cloudflare 子域名名额满了</b>（${new Date(df.at).toLocaleString('zh-CN', { hour12: false })}，当时 ${df.count} 台路由器）。新用户开通会提示「名额已满」；删掉不用的路由器（彻底删除后腾出名额）或者升级 Cloudflare 套餐后就能继续开通。`;
 	const card = (v, n, f) => `<div class="card" ${f ? `data-f="${f}"` : ''}><b>${v}</b><span>${n}</span></div>`;
 	$('stats').innerHTML = card(STATS.count + '<small style="font-size:13px;color:var(--muted)"> / ' + STATS.max + '</small>', '已开通 / 名额', 'all') + card(on, '在线（6 小时内）') + card(DEVS.filter(FS.trial.f).length, '试用中', 'trial') + card(DEVS.filter(FS.paid.f).length, '续过期', 'paid')
-		+ card(DEVS.filter(FS.forever.f).length, '不限期', 'forever') + card(DEVS.filter(FS.soon.f).length, '7 天内到期', 'soon') + card(DEVS.filter(FS.off.f).length, '已停用 / 到期', 'off') + card(wk, '本周新开通');
+		+ card(DEVS.filter(FS.forever.f).length, '不限期', 'forever') + card(DEVS.filter(FS.soon.f).length, '7 天内到期', 'soon') + card(DEVS.filter(FS.off.f).length, '已停用 / 到期', 'off') + card(wk, '本周新开通')
+		+ card(DEVS.filter(FS.old.f).length, LATEST ? '旧版本（最新 v' + esc(LATEST) + '）' : '旧版本', 'old');
+	// 各版本有几台（不算回收站里的）
+	const cnt = {}; for (const d of DEVS.filter((x) => live(x) && x.state === 'ok')) { const k = d.ver || '?'; cnt[k] = (cnt[k] || 0) + 1; }
+	const ks = Object.keys(cnt).sort((a, b) => (a === '?' ? 1 : b === '?' ? -1 : vNewer(a, b) ? -1 : 1));
+	$('vdist').innerHTML = ks.length ? '各版本：' + ks.map((k) => (k === '?' ? '版本未知' : `<b style="color:${LATEST && vNewer(LATEST, k) ? 'var(--danger)' : 'inherit'}">v${esc(k)}</b>`) + ' ' + cnt[k] + ' 台').join(' · ') : '';
 }
 $('stats').onclick = (e) => { const c = e.target.closest('[data-f]'); if (!c) return; FILTER = FILTER === c.dataset.f ? 'all' : c.dataset.f; renderDevs(); $('devs').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 $('fchips').onclick = (e) => { const c = e.target.closest('[data-f]'); if (!c) return; FILTER = c.dataset.f; renderDevs(); };
@@ -392,6 +404,7 @@ $('fbs').onclick = async (e) => {
 	} catch (x) { toast(x.message); }
 };
 async function load() {
+	try { LATEST = String((await (await fetch('/api/router/version', { cache: 'no-store' })).json()).version || ''); } catch (e) {}
 	const [d, i, k, ap, us, lg, fb] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications'), api('GET', 'users').catch(() => ({ list: [] })), api('GET', 'log').catch(() => ({ list: [] })), api('GET', 'feedback').catch(() => ({ list: [] }))]);
 	APS = ap.list; USERS = us.list; LOGS = lg.list; FBS = fb.list;
 	DEVS = d.list; TRASH_DAYS = d.trashDays || 30; STATS = { count: d.count, max: d.max, dnsFull: d.dnsFull || null };

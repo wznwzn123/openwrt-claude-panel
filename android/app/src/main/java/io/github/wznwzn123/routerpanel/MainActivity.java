@@ -42,6 +42,11 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import android.os.Handler;
+import android.os.Looper;
+import org.json.JSONTokener;
 
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
@@ -70,6 +75,13 @@ import org.json.JSONObject;
  */
 public class MainActivity extends AppCompatActivity {
     private WebView home, site;
+    private FrameLayout root;
+    // 状态栏：App 画到状态栏下面（状态栏透明）。面板页面声明了支持（RP_EDGE）就让背景一直铺到顶上；
+    // 别的页面往下让开状态栏的高度，状态栏那一条涂成页面给的颜色（meta theme-color）
+    private int sbh = 0;                 // 状态栏高度（像素）
+    private boolean edge = false;        // 现在显示的网页支持铺到状态栏下面
+    private int barColor = 0;            // 网页给的顶部颜色（0 = 没给）
+    private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
     private ValueCallback<Uri[]> fileCb;
     private long apkId = -1;
@@ -115,13 +127,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs = getSharedPreferences("app", MODE_PRIVATE);
-        FrameLayout root = new FrameLayout(this);
+        root = new FrameLayout(this);
         home = new WebView(this);
         site = new WebView(this);
         // 首页一直在下面显示着，网页窗口盖在上面、需要时拿开（来回隐藏首页会导致它重绘不全）
         root.addView(home, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.addView(site, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        // 内容画到状态栏下面，状态栏本身透明；状态栏多高由系统告诉我们
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, ins) -> { sbh = ins.getInsets(WindowInsetsCompat.Type.statusBars()).top; layoutBars(); return ins; });
         setupHome();
         setupSite();
         ContextCompat.registerReceiver(this, onDownload, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED);
@@ -134,6 +149,7 @@ public class MainActivity extends AppCompatActivity {
         });
         applyBars();
         showHome();
+        ui.post(barPoll);
         // 只在调试包里：自动化测试用 am start --es open 网址 / --ez scan true
         if (BuildConfig.DEBUG) {
             String o = getIntent().getStringExtra("open");
@@ -142,6 +158,9 @@ public class MainActivity extends AppCompatActivity {
             // --es homejs 代码：首页加载好后执行（测弹窗、手动添加）
             String hj = getIntent().getStringExtra("homejs");
             if (hj != null) home.postDelayed(() -> js(home, hj), 2500);
+            // --es sitejs 代码：网页窗口加载好后执行（测状态栏：模拟一个铺到顶上的面板页面）
+            String sj = getIntent().getStringExtra("sitejs");
+            if (sj != null) site.postDelayed(() -> site.evaluateJavascript(sj, null), 6000);
             // --ez qrtest true：识别调试包里自带的二维码图片（assets/qr-test.png，内容是 https://example.com/panel/）
             if (getIntent().getBooleanExtra("qrtest", false)) home.postDelayed(() -> new Thread(() -> decodeQr(() -> getAssets().open("qr-test.png"))).start(), 2500);
         }
@@ -152,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
     private void applyBars() {
         boolean d = isDark();
         int c = d ? Color.parseColor("#0B1024") : Color.parseColor("#EEF1F8");
-        getWindow().setStatusBarColor(c);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(c);
         getWindow().getDecorView().setBackgroundColor(c);
         if (site != null) site.setBackgroundColor(c);  // 网页还没加载出来时的底色，深色时不闪白
@@ -161,6 +180,48 @@ public class MainActivity extends AppCompatActivity {
         f = d ? (f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         if (Build.VERSION.SDK_INT >= 26) f = d ? (f & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (f | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         dv.setSystemUiVisibility(f);
+        layoutBars();
+    }
+    // 状态栏那一条：首页 → 首页的底色；网页 → 网页给的颜色（支持铺到顶上的面板，背景本身就在状态栏下面）
+    // 图标颜色跟着底色：浅底黑字、深底白字
+    private void layoutBars() {
+        if (root == null || home == null || site == null) return;
+        boolean onSite = site.getVisibility() == View.VISIBLE;
+        int def = isDark() ? Color.parseColor("#0B1024") : Color.parseColor("#EEF1F8");
+        int c = onSite && barColor != 0 ? barColor : def;
+        root.setBackgroundColor(c);
+        setTop(home, sbh);
+        setTop(site, onSite && edge ? 0 : sbh);
+        double lum = (0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)) / 255;
+        View dv = getWindow().getDecorView();
+        int f = dv.getSystemUiVisibility() | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+        f = lum > 0.6 ? (f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        if (f != dv.getSystemUiVisibility()) dv.setSystemUiVisibility(f);
+    }
+    private void setTop(View v, int top) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
+        if (lp != null && lp.topMargin != top) { lp.topMargin = top; v.setLayoutParams(lp); }
+    }
+    // 每 0.7 秒看一次网页：顶部颜色、支不支持铺到状态栏下面；支持的话告诉它状态栏多高（CSS 变量 --sat）
+    private static final String BAR_JS = "(function(){try{var m=[].slice.call(document.querySelectorAll('meta[name=theme-color]')).filter(function(x){return !x.media||matchMedia(x.media).matches});return JSON.stringify({c:m.length?m[m.length-1].getAttribute('content'):'',e:!!window.RP_EDGE})}catch(e){return ''}})()";
+    private final Runnable barPoll = new Runnable() {
+        @Override public void run() { pollBar(); ui.postDelayed(this, 700); }
+    };
+    private void pollBar() {
+            if (site != null && site.getVisibility() == View.VISIBLE) {
+                site.evaluateJavascript(BAR_JS, v -> {
+                    try {
+                        Object o = new JSONTokener(v).nextValue();
+                        if (!(o instanceof String) || ((String) o).isEmpty()) return;
+                        JSONObject j = new JSONObject((String) o);
+                        boolean e = j.optBoolean("e");
+                        int c = 0; String cs = j.optString("c");
+                        if (cs.matches("#[0-9a-fA-F]{6}")) c = Color.parseColor(cs);
+                        if (e) site.evaluateJavascript("document.documentElement.style.setProperty('--sat','" + Math.round(sbh / getResources().getDisplayMetrics().density) + "px')", null);
+                        if (e != edge || c != barColor) { edge = e; barColor = c; layoutBars(); }
+                    } catch (Exception ex) {}
+                });
+            }
     }
     // 切换深色/浅色时不重建页面（不然面板会重新加载），只更新颜色
     @Override public void onConfigurationChanged(Configuration c) {
@@ -169,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
         if (home != null) js(home, "window.setDark && setDark(" + isDark() + ")");
     }
 
-    @Override protected void onDestroy() { try { unregisterReceiver(onDownload); } catch (Exception e) {} super.onDestroy(); }
+    @Override protected void onDestroy() { ui.removeCallbacks(barPoll); try { unregisterReceiver(onDownload); } catch (Exception e) {} super.onDestroy(); }
 
     /* ---------- App 首页 ---------- */
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -240,7 +301,8 @@ public class MainActivity extends AppCompatActivity {
                 external(u.toString());
                 return true;
             }
-            @Override public void onPageFinished(WebView v, String url) { remember(url); }
+            @Override public void onPageFinished(WebView v, String url) { remember(url); pollBar(); }
+            @Override public void onPageStarted(WebView v, String url, Bitmap fav) { if (edge) { edge = false; barColor = 0; layoutBars(); } }
         });
         site.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
@@ -307,8 +369,8 @@ public class MainActivity extends AppCompatActivity {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e) { toast("没有可以打开这个链接的应用"); }
     }
     // 用 INVISIBLE 不用 GONE：隐藏时网页照常排版，切回来不会空白
-    private void showHome() { site.setVisibility(View.INVISIBLE); js(home, "window.refresh && refresh()"); }
-    private void showSite() { site.setVisibility(View.VISIBLE); site.invalidate(); }
+    private void showHome() { site.setVisibility(View.INVISIBLE); layoutBars(); js(home, "window.refresh && refresh()"); }
+    private void showSite() { site.setVisibility(View.VISIBLE); site.invalidate(); layoutBars(); }
     // 识别图片里的二维码：大图先缩小，再用两种方式各试一次
     private interface Src { InputStream open() throws Exception; }
     private void decodeQr(Uri uri) { decodeQr(() -> getContentResolver().openInputStream(uri)); }

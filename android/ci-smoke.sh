@@ -65,6 +65,20 @@ adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity
 sleep 6
 adb exec-out screencap -p > $OUT/10-home-new.png
+# 状态栏：面板这种铺到顶上的页面（深色渐变背景）→ 状态栏透明、背景铺到时间后面、白色图标；顶栏让开状态栏
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es open https://example.com/panel/ --es sitejs 'var m=document.createElement(\"meta\");m.name=\"theme-color\";m.content=\"#20406a\";document.head.appendChild(m);window.RP_EDGE=1;document.body.innerHTML=\"<div style=position:fixed;inset:0;background:linear-gradient(160deg,#20406a,#1f6b6b,#3a2c8f)></div><div id=t style=position:fixed;left:10px;right:10px;top:var(--sat,0px);margin-top:8px;height:56px;border-radius:22px;background:rgba(255,255,255,.18);color:#fff;font-size:20px;line-height:56px;font-weight:600;padding-left:18px>顶栏（应该在状态栏下面）</div>\"'"
+sleep 12
+adb exec-out screencap -p > $OUT/12-edge-dark.png
+# 浅色、不支持铺到顶上的网页 → 往下让开状态栏，状态栏涂成网页给的颜色，黑色图标
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es open https://example.com/panel/ --es sitejs 'var m=document.createElement(\"meta\");m.name=\"theme-color\";m.content=\"#f4dff2\";document.head.appendChild(m);document.body.style.background=\"#f4dff2\"'"
+sleep 12
+adb exec-out screencap -p > $OUT/13-plain-light.png
+# 回到首页：状态栏用首页的颜色
+adb shell input keyevent KEYCODE_BACK
+sleep 3
+adb exec-out screencap -p > $OUT/14-back-home.png
 adb logcat -d > $OUT/logcat.txt
 grep -A3 "识别二维码失败" $OUT/logcat.txt | head -8 | sed 's/^/::warning::/'
 if grep -E "FATAL EXCEPTION" $OUT/logcat.txt; then echo "::error::App 崩溃了"; grep -A30 "FATAL EXCEPTION" $OUT/logcat.txt | head -60; exit 1; fi

@@ -4091,7 +4091,11 @@ function panelVerCheck(cur) {
 	return true;
 }
 const updLaterKey = () => (UPD ? UPD.latest : '') + '@' + new Date().toDateString();
+let updAt = 0;
+// 面板一直开着（App 放后台再切回来、或者一直亮着）时，隔一会儿再查一次，这样发布了必须更新的版本也能弹出来
+const updMaybe = () => { if (token && !LK.on && Date.now() - updAt > 600e3) updCheck(false); };
 async function updCheck(force) {
+	updAt = Date.now();
 	let r;
 	try { r = await P('update_check', { force: !!force }, 25000); } catch (e) { if (force) toast(e.message, true); return null; }
 	if (r && typeof r === 'object' && panelVerCheck(r.cur)) return null;
@@ -4662,13 +4666,14 @@ function start() {
 		if (page === 'home') ncAgo();
 		if (page === 'proc' && ++wdTick % 2 === 0) refresh(true);
 		if (page === 'traf' && ++wdTick % 15 === 0) refresh(true);
+		updMaybe();
 	}, 4000);
 	if (!$('about').textContent) setTimeout(() =>
 		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器面板 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
 	watchJobs();
-	setTimeout(() => updCheck(false), 4000);
+	updAt = Date.now(); setTimeout(() => updCheck(false), 4000);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); updMaybe(); } });
 
 // 安卓：返回键要连续按两次才退出（第一次先关弹窗 / 侧边栏，或提示「再按一次返回键退出」）
 // 做法：在历史记录里多垫一层；按返回时先「吃掉」这一层。用户点过页面才垫（安卓 Chrome 不认没有点击过的历史记录）

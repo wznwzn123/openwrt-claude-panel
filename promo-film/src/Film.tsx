@@ -40,7 +40,7 @@ const ENERGY: [number, number][] = [
 ];
 
 // 三次大冲击时，极光里荡开一圈光波（FS_AURORA 的 uRipple），圆心在当时画面的主角上
-const RIPPLE_C: [number, number][] = [[1480, 760], [550, 540], [960, 440]];
+const RIPPLE_C: [number, number][] = [[1480, 760], [550, 540], [960, 540]];
 const rippleAt = (f: number): Ripple => {
   for (let i = BIG_HITS.length - 1; i >= 0; i--) {
     const k = (f - BIG_HITS[i]) / (1.95 * 30);

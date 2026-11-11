@@ -19,10 +19,16 @@ const rowY: number[] = [];
 { let y = 0; for (let i = 0; i < ROWS.length; i++) { rowY.push(y); y += rowH(i) + GAP; } }
 const COL_X = 120, COL_W = 860;
 // s1 = 54 = 第 20 小节第 4 拍（整片第 1494 帧），急刹落在拍上
-export const BRAKE_T = { s0: 4, s1: 54, lift0: 54, lift1: 66, card: 62, trace0: 80, trace1: 108, cap: 68, out: 134 };
+export const BRAKE_T = { s0: 4, s1: 54, lift0: 54, lift1: 62, card: 62, trace0: 80, trace1: 108, cap: 68, out: 134 };
 const T = BRAKE_T;
 const START = 160, END = 540 - (rowY[TARGET] + rowH(TARGET) / 2);
-const scrollAt = (f: number) => mix(START, END, ramp(f, T.s0, T.s1 - T.s0, EASE.brake));
+// v3：v2 用的 bezier(.45,0,.06,1) 长尾太长，第 1486 帧左右看着就停了，急刹没落在拍上（评审 S3 / A3）。
+// 现在：快起步、减速一直持续到第 s1 帧（第 1494 帧还有可见速度），冲过头 10px，再 6 帧弹回——方向反转的那一帧就是「哐」。
+const outPow = (t: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 1.9);
+const scrollAt = (f: number) => {
+  if (f <= T.s1) return mix(START, END - 10, outPow((f - T.s0) / (T.s1 - T.s0)));
+  return mix(END - 10, END, ramp(f, T.s1, 6, EASE.out));
+};
 
 // v2：改用手机版「我的反馈」卡（3x 截图，358×544 CSS px），只取上半段（状态、内容、三段进度、编号），放大 2.1 倍，
 // 三段进度的字高约 27px（v1 用电脑版整卡缩小，字只有 9px，评审 F3 / Q11）。坐标按截图里量到的位置。
@@ -35,6 +41,7 @@ export const Brake: React.FC = () => {
   const y = scrollAt(f);
   const vy = velocity(scrollAt, f);
   const lift = ramp(f, T.lift0, T.lift1 - T.lift0, EASE.out);
+  const flash = f >= T.s1 && f < T.s1 + 3 ? 1 : 0; // 停点那一行同帧白色描边闪 3 帧
   const hit = Math.max(0, 1 - Math.abs(f - T.s1) / 7);
   const cardP = ramp(f, T.card, 22, EASE.panel);
   // 三段进度在卡片里的位置 → 画面坐标，线沿它描一圈
@@ -54,7 +61,7 @@ export const Brake: React.FC = () => {
               return (
                 <div key={r.n} style={{ position: 'absolute', left: 0, top: rowY[i], width: COL_W, height: rowH(i), boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 22, padding: '0 26px', borderRadius: 16,
                   ...glass({ radius: 16, fill: tgt ? 0.06 + 0.1 * lf : 0.05, blur: 0, edge: tgt ? 0.2 + 0.5 * lf : 0.14 }),
-                  boxShadow: tgt ? `inset 0 0 0 ${(1 + 1.5 * lf).toFixed(2)}px rgba(160,190,255,${(0.3 + 0.6 * lf).toFixed(2)}), 0 ${(30 * lf).toFixed(0)}px 70px -20px rgba(0,0,0,0.7)` : 'inset 0 0 0 1px rgba(255,255,255,0.1)',
+                  boxShadow: tgt ? (flash ? 'inset 0 0 0 3px #ffffff, 0 0 40px rgba(255,255,255,0.55)' : `inset 0 0 0 ${(1 + 1.5 * lf).toFixed(2)}px rgba(160,190,255,${(0.3 + 0.6 * lf).toFixed(2)}), 0 ${(30 * lf).toFixed(0)}px 70px -20px rgba(0,0,0,0.7)`) : 'inset 0 0 0 1px rgba(255,255,255,0.1)',
                   transform: `scale(${(1 + 0.04 * lf).toFixed(4)})`, opacity: tgt ? 1 : 1 - 0.62 * lift }}>
                   <span style={{ width: 66, fontFamily: F.mono, fontSize: tgt ? 26 : 20, color: tgt ? C.text : C.faint }}>#{r.n}</span>
                   <span style={{ width: tgt ? 200 : 150, whiteSpace: 'nowrap', fontFamily: F.mono, fontSize: tgt ? 24 : 19, color: r.t.slice(6, 8) < '06' ? '#ffd28a' : C.faint }}>{r.t}</span>

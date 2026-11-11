@@ -26,10 +26,11 @@ const MOCK = {
     { name: '书房电脑', ip: '192.168.1.31', online: true, stats: { conns: 38, dl: 4.6 * GB, ul: 0.9 * GB } },
     { name: '孩子的平板', ip: '192.168.1.45', online: true, stats: { conns: 6, dl: 1.2 * GB, ul: 0.1 * GB } }] },
   'panel/pause_list': { devs: {} },
+  // 演示反馈：跟真实时间线对得上——反馈编号 v3.1.0（11.08 23:14）上线后提交，v3.1.1（11.09 01:29）解决
   'panel/fb_replies': { hosted: true, list: [
-    { code: 'K7Q2M9XA', at: NOW - 3 * 86400e3, text: '闪存只剩 20 MB 左右，装不下，能不能想想办法？', stage: 3, state: 'fixed', done: true,
-      ackAt: NOW - 3 * 86400e3 + 40 * 60e3, updated: NOW - 86400e3, seen: NOW,
-      history: [{ at: NOW - 86400e3, st: 'fixed', note: 'v3.1.0 加了「小闪存模式」：需要的程序开机后下载到内存里运行，核对校验值后才用。' }] }] },
+    { code: 'K7Q2M9XA', at: Date.parse('2026-11-09T00:12:00+08:00'), text: '开发者回复以后，能不能早点提醒我？', stage: 3, state: 'fixed', done: true,
+      ackAt: Date.parse('2026-11-09T00:35:00+08:00'), updated: Date.parse('2026-11-09T01:29:00+08:00'), seen: NOW,
+      history: [{ at: Date.parse('2026-11-09T01:29:00+08:00'), st: 'fixed', note: 'v3.1.1：面板开着时，开发者有新进展一分钟内就会提示。' }] }] },
   'panel/svc_info': {}, 'panel/jobs': { jobs: {} }, // 一台没装任何代理类插件的普通 OpenWrt 的菜单（侧边栏按真实菜单显示，没装的不出现）
   'panel/luci_menu': { items: [{ p: 'admin/status/overview', t: '' },{ p: 'admin/status/realtime/bandwidth', t: '' },{ p: 'admin/status/realtime/load', t: '' },{ p: 'admin/status/realtime/connections', t: '' },{ p: 'admin/network/network', t: '' },{ p: 'admin/network/wireless', t: '' },{ p: 'admin/network/dhcp', t: '' },{ p: 'admin/network/dns', t: '' },{ p: 'admin/network/diagnostics', t: '' },{ p: 'admin/network/firewall/zones', t: '' },{ p: 'admin/network/firewall/forwards', t: '' },{ p: 'admin/network/firewall/rules', t: '' },{ p: 'admin/services/upnp', t: '' },{ p: 'admin/system/system', t: '' },{ p: 'admin/system/admin', t: '' },{ p: 'admin/system/package-manager', t: '' },{ p: 'admin/system/startup', t: '' },{ p: 'admin/system/crontab', t: '' },{ p: 'admin/system/flash', t: '' },{ p: 'admin/system/reboot', t: '' }] }, 'panel/cloud_info': {}, 'panel/ckey_info': { ai: true },
 };
@@ -68,6 +69,11 @@ async function boot(b, opts = {}) {
     ":root{--mono:'JetBrains Mono Variable',monospace!important} html,body,button,input,textarea,select{font-family:'Inter Variable','Noto Sans SC Variable',sans-serif!important} .mono,code,pre{font-family:'JetBrains Mono Variable','Noto Sans SC Variable',monospace!important}" +
     '.dock{display:none!important} .toast{display:none!important}' });
   await page.evaluate(() => document.fonts.ready);
+  // 大陆发布口径（v2 评审）：面板顶栏副标题写着「没装代理插件」、自动任务页脚注也提到代理插件，截图时隐藏；
+  // 更新卡里「设置都保留，不会断网」一句可能被认为是绝对化用语，只保留版本号那一行。界面本身不变，只是这几处不上画面。
+  await page.addStyleTag({ content: '#topSub{visibility:hidden!important} #auCard > p.muted{display:none!important}' });
+  await page.evaluate(() => { const e = document.getElementById('rUpdCur'); if (e) e.textContent = e.textContent.split('\n')[0]; });
+  await page.waitForTimeout(300);
   await page.waitForTimeout(1500);
   return { ctx, page };
 }

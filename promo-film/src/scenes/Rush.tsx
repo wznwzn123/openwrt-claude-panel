@@ -14,8 +14,8 @@ const GAPX = 1320;
 const X = (i: number) => 960 + i * GAPX;
 export const RUSH: Mile[] = [
   { v: 'v2.0.4', date: '11.07', time: '02:14', n: 61, night: true, title: '内存保护', desc: '内存快满先清缓存，避免整台路由器死机' },
-  { v: 'v2.0.6', date: '11.07', time: '09:29', n: 66, title: '自动任务都能开关', desc: '每一项都写清楚关掉以后会怎样', img: { page: 'desk-auto', rect: L['desk-auto'].auto[0], pad: 8, w: 660, dx: -40, dy: -20 } },
-  { v: 'v2.0.7', date: '11.07', time: '10:56', n: 72, title: '新注册送 7 天试用', desc: '问题反馈也能附截图了' },
+  { v: 'v2.0.6', date: '11.07', time: '09:29', n: 66, title: '自动任务都能开关', desc: '每一项都写清楚关掉以后会怎样', img: { page: 'desk-auto', rect: L['desk-auto'].auto[1], pad: 8, w: 660, dx: -40, dy: -20 } },
+  { v: 'v2.0.7', date: '11.07', time: '10:56', n: 72, title: '问题反馈能附截图', desc: '最多 3 张，大图自动压缩' },
   { v: 'v2.0.8', date: '11.07', time: '15:32', n: 76, title: '云端备份可以加密', desc: '先在路由器上加密再上传，密钥只在路由器上' },
   { v: 'v3.0', date: '11.07', time: '16:35', n: 79, title: '登录过的设备', desc: '官网账号页能看到、能退出，新设备登录发邮件提醒' },
   { v: 'v3.0.2', date: '11.08', time: '09:52', n: 89, title: '状态栏跟着面板走', desc: '深色模式、背景图，手机最上面那一条也跟着变' },
@@ -54,7 +54,7 @@ export const Rush: React.FC = () => {
           {Array.from({ length: 90 }, (_, i) => 100 + i * 110).filter((x) => x < cam + nib - 10).map((x) => (
             <div key={x} style={{ position: 'absolute', left: x - 2, top: AXIS_Y + 14, width: 4, height: 4, borderRadius: 2, background: 'rgba(238,242,255,0.28)' }} />
           ))}
-          {RUSH.map((m, i) => <MileCard key={i} m={m} x={X(i)} f={f} pop={RUSH_POPS[i]} cam={cam} compact />)}
+          {RUSH.map((m, i) => <MileCard key={i} m={m} x={X(i)} f={f} pop={RUSH_POPS[i]} cam={cam} compact below={i % 2 === 1 && !m.img} />)}
         </div>
       </SpeedBlur>
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>

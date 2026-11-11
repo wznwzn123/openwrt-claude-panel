@@ -12,13 +12,14 @@ import { Led, LedDefs } from './Open';
 export const FIN_T = { stats: 6, statsOut: 78, lens0: 84, lens1: 128, draw0: 100, draw1: 144, bloom: 144, park0: 168, park1: 200, word: 188, tag: 206, url: 222, end: 274 };
 const T = FIN_T;
 // 图标 32 网格 × 16 = 512px，居中在 (960, 440)；透镜比图标大一圈（540px），露出一圈玻璃斜面
-const S = 16, OX = 704, OY = 184, CX = 960, CY = 440;
+// v3：整组改到画面垂直居中（y=540），透镜放大到 680px、色散加倍，让折射看得出来（v2 评审）
+const S = 16, OX = 704, OY = 284, CX = 960, CY = 540;
 const ICON = iconStrokes(OX, OY, S);
 // 定版：图标缩到 0.6（≈307px），图标 + 64px 间距 + 字标整组以 x=960 居中
 const PARK_S = 0.6, ICON_X = 488, TEXT_X = 705;
 
 export const lensAt = (f: number) => {
-  const on = ramp(f, T.lens0, 10, EASE.out) * (1 - ramp(f, T.end, 14, EASE.swift));
+  const on = ramp(f, T.lens0, 10, EASE.out); // 定版画面一直停到最后一帧，不淡出
   if (on <= 0) return null;
   const glide = ramp(f, T.lens0, T.lens1 - T.lens0, EASE.panel);
   const park = ramp(f, T.park0, T.park1 - T.park0, EASE.panel);
@@ -27,8 +28,8 @@ export const lensAt = (f: number) => {
   const wave = k > 0 && k < 1 ? [60 + 1300 * Math.sin((k * Math.PI) / 2), 0.1 * (1 - k), 3 * (1 - k)] : [0, 0, 0];
   const flash = Math.max(0, 1 - Math.abs(f - T.bloom) / 9);
   return {
-    on, cx: mix(2300, CX, glide) + mix(0, ICON_X - CX, park), cy: mix(620, CY, glide),
-    hx: 270 * sc, hy: 270 * sc, r: 150 * sc, bezel: 64 * sc, mag: 1.2, lift: 0.7, disp: 0.45,
+    on, cx: mix(2300, CX, glide) + mix(0, ICON_X - CX, park), cy: mix(720, CY, glide),
+    hx: 340 * sc, hy: 340 * sc, r: 175 * sc, bezel: 92 * sc, mag: 1.25, lift: 0.7, disp: 0.9,
     glint: mix(-1.8, 1.8, ramp(f, 120, 46, EASE.smooth)), ring: 0.25 + 0.9 * flash, rimGlow: 1.8,
     wave: wave as [number, number, number],
   };
@@ -38,7 +39,7 @@ const STATS = [
   { v: '94', l: '次提交' },
   { v: '20', l: '个版本' },
   { v: '28', l: '次在凌晨提交' },
-  { v: '24,236', l: '行新增（代码和文档）' },
+  { v: '24,236', l: '行新增（含文档）' },
 ];
 
 // 数字滚动：每一位从 0 直接滚到目标值（不整圈转，避免滚动中闪出「94,000」这类没意义的数），位与位错开 2 帧
@@ -73,11 +74,10 @@ export const Finale: React.FC = () => {
   const lineFade = 1 - ramp(f, T.bloom + 4, 16, EASE.swift);
   // 品牌蓝加色闪：强拍上 2 帧 0.6，之后 8 帧指数衰减
   const add = f < T.bloom ? 0 : f < T.bloom + 2 ? 0.6 : 0.6 * Math.exp(-(f - T.bloom - 2) / 8);
-  const end = ramp(f, T.end, 14, EASE.swift);
   return (
-    <AbsoluteFill style={{ opacity: 1 - end }}>
+    <AbsoluteFill>
       {/* 数字 */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 290, opacity: statsO, filter: statsO < 0.999 ? `blur(${((1 - statsO) * 14).toFixed(1)}px)` : undefined }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 330, opacity: statsO, filter: statsO < 0.999 ? `blur(${((1 - statsO) * 14).toFixed(1)}px)` : undefined }}>
         <Rise text="10.31 — 11.09" start={T.stats} per={0.8} dur={16} style={{ textAlign: 'center', fontFamily: F.mono, fontSize: 32, color: C.dim, letterSpacing: '0.1em' }} />
         <div style={{ marginTop: 50, display: 'flex', justifyContent: 'center', gap: 28 }}>
           {STATS.map((s, i) => {
@@ -107,12 +107,12 @@ export const Finale: React.FC = () => {
       </AbsoluteFill>
       {add > 0.002 && <AbsoluteFill style={{ background: '#9fb4ff', opacity: add * 0.5, mixBlendMode: 'screen' }} />}
       {/* 字标 + 一句话 + 网址（整组和图标一起以画面中线居中） */}
-      <div style={{ position: 'absolute', left: TEXT_X, top: 268 }}>
+      <div style={{ position: 'absolute', left: TEXT_X, top: 372 }}>
         <Rise text="OpenWrt Claude Panel" by="char" start={T.word} per={0.9} dur={20} dy={14} blur={12} style={{ fontSize: 84, fontWeight: 700, letterSpacing: '-0.02em', color: C.text }} />
         <Rise text="线还在，接着写。" start={T.tag} per={2.2} dur={22} dy={12} blur={12} style={{ marginTop: 22, fontFamily: F.serif, fontSize: 54, fontWeight: 600, color: C.text, letterSpacing: '0.06em' }} />
         <div style={{ marginTop: 40, fontFamily: F.mono, fontSize: 36, lineHeight: 1.6, color: C.text, opacity: ramp(f, T.url, 16, EASE.out) }}>
           <div>yrlove520.com</div>
-          <div style={{ color: C.dim, fontSize: 30 }}>github.com/wznwzn123/openwrt-claude-panel</div>
+          <div style={{ color: 'rgba(228,232,255,0.72)', fontSize: 30 }}>github.com/wznwzn123/openwrt-claude-panel</div>
         </div>
       </div>
     </AbsoluteFill>

@@ -92,7 +92,8 @@ export const iconStrokes = (ox: number, oy: number, s: number): Poly[] => {
   body.push(...A(7.5 + R, 23.5 - R, 90, 180), p(7.5, 16 + R));
   body.push(...A(7.5 + R, 16 + R, 180, 270), p(16, 16));
   const inner = arc(16, 17.42, 6.8, -135 * deg, -45 * deg, 36).map(([x, y]) => p(x, y));
-  const outer = arc(16, 17.47, 10.8, -135 * deg, -45 * deg, 48).map(([x, y]) => p(x, y));
+  // 外弧从右往左画：内弧右端沿半径一小步就接到外弧右端，连笔很短
+  const outer = arc(16, 17.47, 10.8, -45 * deg, -135 * deg, 48).map(([x, y]) => p(x, y));
   return [new Poly(body), new Poly(inner), new Poly(outer)];
 };
 
@@ -110,7 +111,10 @@ export const MultiStroke: React.FC<{ polys: Poly[]; p: number; width?: number; g
     if (left < q.len) { if (take > 0 || i === 0) nib = q.at(take); break; }
     left -= q.len;
     if (i < hops.length) {
-      if (left < hops[i]) { const a = q.at(q.len), b = polys[i + 1].at(0), k = left / hops[i]; nib = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k - Math.sin(k * Math.PI) * 24]; break; }
+      // 笔与笔之间留一道很淡的连笔（不抬笔，读作一笔画；v2 评审）
+      const a = q.at(q.len), b = polys[i + 1].at(0), k = Math.min(1, left / hops[i]);
+      out.push(<line key={'h' + i} x1={a[0]} y1={a[1]} x2={a[0] + (b[0] - a[0]) * k} y2={a[1] + (b[1] - a[1]) * k} stroke={C.line} strokeWidth={width * 0.45} strokeLinecap="round" opacity={0.28} />);
+      if (left < hops[i]) { nib = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]; break; }
       left -= hops[i];
     }
   }

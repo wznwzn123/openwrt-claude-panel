@@ -6,7 +6,8 @@ import { C, F, Rise } from '../lib/look';
 import { EASE, mix, ramp } from '../lib/ease';
 import { MultiStroke, Nib, NibDefs, iconStrokes } from '../lib/thread';
 
-const S = 16, OX = 704, OY = 179;
+// v3：图标放大到约 520px 宽（v2 评审）
+const S = 24, OX = 576, OY = 68;
 const ICON = iconStrokes(OX, OY, S);
 export const LED: [number, number] = [OX + 11.4 * S, OY + 19.75 * S];
 const START: [number, number] = [OX + 16 * S, OY + 16 * S];
@@ -51,7 +52,7 @@ export const Open: React.FC = () => {
   const drawn = ramp(f, T.draw0, T.draw1 - T.draw0, EASE.smooth);
   const dotsP = ramp(f, T.draw1 - 4, 14, EASE.overshoot);
   const out = ramp(f, T.out, 12, EASE.swift);
-  const push = 1 + 0.035 * ramp(f, 0, 288, EASE.sine);
+  const push = 1 + 0.06 * ramp(f, 0, 288, EASE.sine);
   const p = (x: number, y: number) => [OX + x * S, OY + y * S];
   const [d2x, d2y] = p(14.6, 19.75), [dsx, dsy] = p(18, 19.75), [dex] = p(21.4, 19.75);
   return (
@@ -69,10 +70,11 @@ export const Open: React.FC = () => {
         {f >= T.nibOut && f < T.draw0 + 2 && <Nib x={hopX} y={hopY} k={0.4 + 0.6 * hop} />}
       </svg>
       {/* 第一次提交的时间（64px，第 3 帧开始打字） */}
-      <div style={{ position: 'absolute', left: LED[0] - 330, top: LED[1] + 60, width: 660, textAlign: 'center', opacity: stampO, filter: stampO < 0.999 ? `blur(${((1 - stampO) * 10).toFixed(1)}px)` : undefined }}>
+      <div style={{ position: 'absolute', left: 960 - 360, top: LED[1] + 70, width: 720, textAlign: 'center', opacity: stampO, filter: stampO < 0.999 ? `blur(${((1 - stampO) * 10).toFixed(1)}px)` : undefined }}>
         <div style={{ fontFamily: F.mono, fontSize: 64, fontWeight: 500, color: C.text, letterSpacing: '0.02em', whiteSpace: 'pre' }}>
-          {STAMP.slice(0, typed)}
-          <span style={{ opacity: f % 16 < 9 ? 1 : 0, color: C.green }}>▍</span>
+          {/* 没打出来的字先占位（透明），整行宽度不变，打字时不会左右跳 */}
+          {Array.from(STAMP).map((ch, i) => <span key={i} style={{ opacity: i < typed ? 1 : 0 }}>{ch}</span>)}
+          <span style={{ opacity: f % 16 < 9 && typed < STAMP.length ? 1 : 0, color: C.green, position: 'absolute', marginLeft: `${(typed - STAMP.length) * 0.62}em` }}>▍</span>
         </div>
         <div style={{ marginTop: 12, fontSize: 32, color: C.dim, opacity: ramp(f, T.type0 + 18, 12, EASE.out), letterSpacing: '0.1em' }}>第一次提交</div>
       </div>

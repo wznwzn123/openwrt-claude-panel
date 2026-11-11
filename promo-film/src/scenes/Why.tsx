@@ -12,12 +12,13 @@ import { CamKey, PageCam } from '../lib/PageCam';
 // 窗口是 16:9，里面放一个完整的 1920×1080 PageCam 画面，整体缩到窗口大小
 const WX = 320, WY = 160, WW = 1280, WH = 720, WR = 30;
 const live = L['desk-home'].live;
-// PageCam 机位（帧号是本段内的帧）：先正视整页，再带一点 3D 倾斜推近实时流量卡，之后极慢地继续漂
+// PageCam 机位（帧号是本段内的帧）：先正视整页，再带一点 3D 倾斜推近实时流量卡，之后极慢地继续漂。
+// v3：倾斜压到 rotY ≤ 4°、rotX ≤ 3°（v2 评审 S5 / Q6：窗框是平的、里面倾斜太多会对不上；信息密集镜头要接近正视）
 const CAM: CamKey[] = [
   { frame: 40, cx: 960, cy: 540, zoom: 1, rotX: 0, rotY: 0 },
   { frame: 76, cx: 960, cy: 560, zoom: 1.02, rotX: 0, rotY: 0 },
-  { frame: 150, cx: live.x + live.w / 2, cy: live.y + live.h / 2 + 10, zoom: 1.6, rotX: 9, rotY: -11, persp: 1700 },
-  { frame: 288, cx: live.x + live.w / 2 + 60, cy: live.y + live.h / 2 + 40, zoom: 1.68, rotX: 6, rotY: -17, persp: 1700 },
+  { frame: 150, cx: live.x + live.w / 2, cy: live.y + live.h / 2 + 10, zoom: 1.6, rotX: 3, rotY: -4, persp: 1700 },
+  { frame: 288, cx: live.x + live.w / 2 + 40, cy: live.y + live.h / 2 + 30, zoom: 1.66, rotX: 2, rotY: -4, persp: 1700 },
 ];
 const FRAME = new Poly([[-60, 520], [WX, 520], ...roundRect(WX, WY, WW, WH, WR, 12).slice(1)]);
 
@@ -77,7 +78,7 @@ export const Why: React.FC = () => {
       </AbsoluteFill>
       {/* 窗下的说明（窗还在中间时） */}
       <div style={{ position: 'absolute', left: 0, right: 0, top: WY + WH + 40, textAlign: 'center' }}>
-        <Rise text="OpenWrt Claude Panel　路由器的控制面板，手机和电脑都能打开" start={T.cap} per={0.6} dur={20} dy={10} out={T.park0 - 14} style={{ fontSize: 34, color: C.dim, letterSpacing: '0.04em' }} />
+        <Rise text="路由器的控制面板，手机和电脑都能打开" start={T.cap} per={0.6} dur={20} dy={10} out={T.park0 - 14} style={{ fontSize: 44, color: C.text, letterSpacing: '0.02em' }} />
       </div>
       {/* 左边：词槽 + 两条说明 */}
       <div style={{ position: 'absolute', left: 130, top: 360, width: 760 }}>

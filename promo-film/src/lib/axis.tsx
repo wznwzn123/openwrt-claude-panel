@@ -21,11 +21,12 @@ const PhoneShot: React.FC<{ src: string; w: number; h: number }> = ({ src, w, h 
   </div>
 );
 
-export const MileCard: React.FC<{ m: Mile; x: number; f: number; pop: number; cam: number; hero?: boolean; compact?: boolean }> = ({ m, x, f, pop, cam, hero, compact }) => {
+// below：卡片挂在轴下面（快段上下交替，v2 评审：13 张同一种版式太单调）
+export const MileCard: React.FC<{ m: Mile; x: number; f: number; pop: number; cam: number; hero?: boolean; compact?: boolean; below?: boolean }> = ({ m, x, f, pop, cam, hero, compact, below }) => {
   const s = springAt(f, pop, { damping: 11, stiffness: 160, mass: 0.9 });
   const lit = ramp(f, pop, 6, EASE.out);
   const W = compact ? 640 : 720;
-  const H = compact ? 220 : 300;
+  const H = compact ? 220 : 320;
   const imgP = m.img ? springAt(f, pop + 8, { damping: 15, stiffness: 120 }) : 0;
   const img = m.img;
   const ih = !img ? 0 : img.phone ? (img.phoneH ?? img.w * 2.05) : (((img.rect!.h + (img.pad ?? 0) * 2) / (img.rect!.w + (img.pad ?? 0) * 2)) * img.w);
@@ -39,21 +40,21 @@ export const MileCard: React.FC<{ m: Mile; x: number; f: number; pop: number; ca
       <div style={{ position: 'absolute', left: -22, top: AXIS_Y - 22, width: 44, height: 44, borderRadius: 22, background: `rgba(140,170,255,${(0.22 * lit).toFixed(3)})`, transform: `scale(${(0.5 + 0.5 * lit).toFixed(3)})` }} />
       <div style={{ position: 'absolute', left: -9, top: AXIS_Y - 9, width: 18, height: 18, borderRadius: 9, background: lit > 0.5 ? '#fff' : 'transparent', boxShadow: `0 0 0 2.5px ${C.line}, 0 0 ${(24 * lit).toFixed(1)}px rgba(160,190,255,0.9)` }} />
       {/* 轴下：日期 + 时间 */}
-      <div style={{ position: 'absolute', left: -200, width: 400, top: AXIS_Y + 30, textAlign: 'center', fontFamily: F.mono, fontSize: 28, color: C.dim, opacity: lit, letterSpacing: '0.04em' }}>
+      <div style={{ position: 'absolute', left: -200, width: 400, top: below ? AXIS_Y - 64 : AXIS_Y + 30, textAlign: 'center', fontFamily: F.mono, fontSize: 28, color: C.dim, opacity: lit, letterSpacing: '0.04em' }}>
         {m.date}　<span style={{ color: m.night ? '#ffd28a' : C.dim }}>{m.time}</span>
       </div>
       {/* 连杆 */}
-      <div style={{ position: 'absolute', left: -1, top: AXIS_Y - 70 * s, width: 2, height: Math.max(0, 70 * s - 12), background: 'rgba(238,242,255,0.5)' }} />
+      <div style={{ position: 'absolute', left: -1, top: below ? AXIS_Y + 12 : AXIS_Y - 70 * s, width: 2, height: Math.max(0, 70 * s - 12), background: 'rgba(238,242,255,0.5)' }} />
       {/* 卡片：底边为轴立起 */}
-      <div style={{ position: 'absolute', left: -W / 2, top: AXIS_Y - 70 - H, width: W, height: H, transformOrigin: '50% 100%', transform: `scaleY(${Math.max(0, s).toFixed(4)})`, opacity: Math.min(1, s * 1.4) }}>
+      <div style={{ position: 'absolute', left: -W / 2, top: below ? AXIS_Y + 70 : AXIS_Y - 70 - H, width: W, height: H, transformOrigin: below ? '50% 0%' : '50% 100%', transform: `scaleY(${Math.max(0, s).toFixed(4)})`, opacity: Math.min(1, s * 1.4) }}>
         <div style={{ ...glass({ radius: 30, fill: hero ? 0.12 : 0.08 }), position: 'absolute', inset: 0, padding: '32px 40px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <Chip color={hero ? 'linear-gradient(120deg,#6a4dff,#2f6bff)' : undefined}>{m.v}</Chip>
             {m.night && <Chip style={{ color: '#ffd28a', background: 'rgba(255,190,90,0.12)' }}>凌晨</Chip>}
             <span style={{ marginLeft: 'auto', fontFamily: F.mono, fontSize: 24, color: C.dim }}>第 {m.n} 次提交</span>
           </div>
-          <div style={{ marginTop: compact ? 30 : 26, fontSize: compact ? 60 : 54, fontWeight: 700, letterSpacing: '-0.01em', color: C.text, whiteSpace: 'nowrap' }}>{m.title}</div>
-          {!compact && <div style={{ marginTop: 14, fontSize: 30, lineHeight: 1.45, color: C.dim, whiteSpace: 'pre-line' }}>{m.desc}</div>}
+          <div style={{ marginTop: compact ? 30 : 26, fontSize: compact ? 60 : 56, fontWeight: 700, letterSpacing: '-0.01em', color: C.text, whiteSpace: 'nowrap' }}>{m.title}</div>
+          {!compact && <div style={{ marginTop: 14, fontSize: 34, lineHeight: 1.4, color: C.dim, whiteSpace: 'pre-line' }}>{m.desc}</div>}
         </div>
       </div>
       {/* 配图：真实面板截图（演示数据），浮在卡片右上方；说明文字放在截图上方，不压住卡片 */}

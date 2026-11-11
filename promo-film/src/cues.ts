@@ -54,7 +54,7 @@ for (let i = 0; i < 4; i++) {
   add(b + VALUES_T.ev + 6, 'swoosh_reveal', {}, '证据出现');
   if (i !== 2 && i !== 3) add(b + VALUES_T.trace0, 'pen', { dur: VALUES_T.trace1 - VALUES_T.trace0 }, '线框住证据');
   if (i === 1) { add(b + 46, 'typing', { dur: 40 }, '终端里打出那句问话'); add(b + 100, 'confirm', {}, '没有上报。'); }
-  if (i === 2) { add(b + 48, 'pen', { dur: 22 }, '划掉做不到的说法'); add(b + 72, 'ding', {}, '如实写出'); add(b + 92, 'confirm', {}, '加密上线'); }
+  if (i === 2) { add(b + 48, 'pen', { dur: 22 }, '划掉以前笼统的报错'); add(b + 72, 'ding', {}, '换上真正的原因'); }
   if (i === 3) for (let k = 0; k < 5; k++) add(b + 34 + k * 10, 'tick', { i: k }, '更新说明一行行出现');
   add(b + VALUES_T.out + 2, 'whoosh_out', {}, '换下一条');
 }

@@ -164,9 +164,14 @@ def compose(m):
 PENTA = [74, 76, 78, 81, 83, 86, 88, 90]          # D 大调五声（D E F# A B）
 
 
+# 输出偏移补偿（video-shotcraft sound-design §4.6）：v1 成片实测，三次大冲击的音频起音比画面晚 +41/+43/+53 ms
+# （AAC 编码器延迟 + 冲击音的起音爬升）。所有音效统一提前 45 ms；测法见 tools/qa.py 的 big hit 一节。
+OUT_OFFSET = 0.045
+
+
 def sound_design(m):
     for c in CUE['cues']:
-        t, k, i = sec(c['f']), c['kind'], c.get('i', 0) or 0
+        t, k, i = sec(c['f']) - OUT_OFFSET, c['kind'], c.get('i', 0) or 0
         d = sec(c.get('dur') or 0)
         if k == 'led_on':
             m.sfx(sfx.blip('A6', 'sine', 0.09), t, gain=-8, verb=-14)
@@ -244,10 +249,11 @@ if __name__ == '__main__':
     out = os.path.join(HERE, '..', 'public', 'audio')
     os.makedirs(out, exist_ok=True)
     full = build(True)
-    r1 = full.export(os.path.join(out, 'film.wav'), lufs=-14, tp=-1.0, spectrogram=os.path.join(HERE, '..', 'out', 'film-spec.png'))
+    # 真峰值留到 -1.8：AAC 编码后实测会抬高约 0.6 dB（v1：母带 -1.19 → 成片 -0.6 dBFS）
+    r1 = full.export(os.path.join(out, 'film.wav'), lufs=-14, tp=-1.8, spectrogram=os.path.join(HERE, '..', 'out', 'film-spec.png'))
     full.report()
     nomusic = build(False)
-    r2 = nomusic.export(os.path.join(out, 'film-nomusic.wav'), lufs=-18, tp=-1.0)
+    r2 = nomusic.export(os.path.join(out, 'film-nomusic.wav'), lufs=-18, tp=-1.8)
     json.dump({'full': {k: v for k, v in r1.items() if k in ('duration', 'lufs', 'true_peak', 'warnings', 'stereo_corr')},
                'nomusic': {k: v for k, v in r2.items() if k in ('duration', 'lufs', 'true_peak', 'warnings')}},
               open(os.path.join(HERE, '..', 'out', 'audio-qc.json'), 'w'), ensure_ascii=False, indent=1, default=float)

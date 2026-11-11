@@ -41,7 +41,7 @@ export const Rush: React.FC = () => {
   const hit = Math.max(0, 1 - f / 10);
   return (
     <AbsoluteFill style={{ opacity: 1 - out, filter: out > 0.001 ? `blur(${(out * 16).toFixed(1)}px)` : undefined, transform: `scale(${(1 + 0.025 * hit).toFixed(4)})` }}>
-      <AbsoluteFill style={{ background: `rgba(190,210,255,${(0.22 * hit).toFixed(3)})` }} />
+      <AbsoluteFill style={{ background: `radial-gradient(circle at 1480px 760px, rgba(200,215,255,${(0.28 * hit).toFixed(3)}) 0%, rgba(200,215,255,0) 60%)` }} />
       <SpeedBlur vx={v} amount={0.3} max={32}>
         <div style={{ position: 'absolute', inset: 0, transform: `translateX(${(-cam).toFixed(2)}px)` }}>
           {Array.from({ length: 90 }, (_, i) => 100 + i * 110).filter((x) => x < cam + nib - 10).map((x) => (

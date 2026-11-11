@@ -35,7 +35,7 @@ const FontGate: React.FC = () => {
 // 极光底的能量曲线（随叙事起伏）
 const ENERGY: [number, number][] = [
   [0, 0.0], [20, 0.06], [70, 0.2], [SHOTS.open.from + 200, 0.5], [SHOTS.why.from, 0.6], [SHOTS.travel.from, 0.66],
-  [SHOTS.gap.from + 20, 0.62], [SHOTS.gap.from + 70, 0.22], [SHOTS.rush.from - 4, 0.28], [SHOTS.rush.from, 1.0], [SHOTS.brake.from + 60, 0.85],
+  [SHOTS.gap.from + 20, 0.62], [SHOTS.gap.from + 70, 0.22], [SHOTS.rush.from - 4, 0.3], [SHOTS.rush.from + 8, 0.95], [SHOTS.brake.from + 60, 0.85],
   [SHOTS.values.from + 20, 0.55], [SHOTS.finale.from, 0.6], [SHOTS.finale.from + 150, 0.9], [SHOTS.finale.from + 288, 0.7],
 ];
 

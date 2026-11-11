@@ -18,7 +18,7 @@ print('format', probe['format'], [ {k: v for k, v in s.items()} for s in probe['
 # 黑帧 / 白闪
 bd = run('ffmpeg', '-v', 'info', '-i', src, '-vf', 'blackdetect=d=0.1:pix_th=0.06', '-an', '-f', 'null', '-').stderr
 print('blackdetect:', [l.split('black_')[1:] for l in bd.splitlines() if 'black_start' in l] or 'none')
-lum = run('ffmpeg', '-v', 'error', '-i', src, '-vf', 'signalstats,metadata=print:key=lavfi.signalstats.YAVG', '-an', '-f', 'null', '-').stderr
+lum = run('ffmpeg', '-v', 'info', '-i', src, '-vf', 'scale=480:-1,signalstats,metadata=print:key=lavfi.signalstats.YAVG', '-an', '-f', 'null', '-').stderr
 ys = [float(l.split('=')[1]) for l in lum.splitlines() if 'YAVG' in l]
 jumps = [(i, round(ys[i - 1], 1), round(ys[i], 1)) for i in range(1, len(ys)) if abs(ys[i] - ys[i - 1]) > 25]
 print('frames', len(ys), 'max YAVG', round(max(ys), 1), 'luma jumps >25:', jumps or 'none')

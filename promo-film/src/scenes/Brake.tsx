@@ -3,12 +3,11 @@
 // 镜头卡：changelog-scroll-brake（bezier .45,0,.06,1 快起步长尾急刹，纵向运动模糊由速度差分驱动，停点抬升 + 其余退暗 0.38）。
 // 数据：tools/commits.py 从 git 历史生成；含代理一类字眼的提交不上画面。
 import React from 'react';
-import { AbsoluteFill, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion';
 import { C, DemoNote, F, Rise, glass } from '../lib/look';
 import { EASE, mix, ramp, velocity } from '../lib/ease';
 import { SpeedBlur } from '../lib/speedblur';
 import { NibDefs, Poly, Stroke, roundRect } from '../lib/thread';
-import { L, Region } from '../lib/shot';
 import commits from '../data/commits.json';
 
 type Cm = { n: number; t: string; h: string; s: string; ok: boolean };
@@ -20,14 +19,16 @@ const rowY: number[] = [];
 { let y = 0; for (let i = 0; i < ROWS.length; i++) { rowY.push(y); y += rowH(i) + GAP; } }
 const COL_X = 120, COL_W = 860;
 // s1 = 54 = 第 20 小节第 4 拍（整片第 1494 帧），急刹落在拍上
-export const BRAKE_T = { s0: 4, s1: 54, lift0: 54, lift1: 66, card: 62, trace0: 80, trace1: 108, cap: 68, out: 128 };
+export const BRAKE_T = { s0: 4, s1: 54, lift0: 54, lift1: 66, card: 62, trace0: 80, trace1: 108, cap: 68, out: 134 };
 const T = BRAKE_T;
 const START = 160, END = 540 - (rowY[TARGET] + rowH(TARGET) / 2);
 const scrollAt = (f: number) => mix(START, END, ramp(f, T.s0, T.s1 - T.s0, EASE.brake));
 
-const FB = L['desk-myfb'].fb, ST = L['desk-myfb'].fsteps;
-const CW = 780, CX = 1060, CY = 330;
-const KF = CW / (FB.w + 16);
+// v2：改用手机版「我的反馈」卡（3x 截图，358×544 CSS px），只取上半段（状态、内容、三段进度、编号），放大 2.1 倍，
+// 三段进度的字高约 27px（v1 用电脑版整卡缩小，字只有 9px，评审 F3 / Q11）。坐标按截图里量到的位置。
+const CARD = { w: 358, h: 222 }, STEPS = { x: 14, y: 80, w: 330, h: 70 };
+const CW = 752, CX = 1060, CY = 330;
+const KF = CW / CARD.w;
 
 export const Brake: React.FC = () => {
   const f = useCurrentFrame();
@@ -37,10 +38,10 @@ export const Brake: React.FC = () => {
   const hit = Math.max(0, 1 - Math.abs(f - T.s1) / 7);
   const cardP = ramp(f, T.card, 22, EASE.panel);
   // 三段进度在卡片里的位置 → 画面坐标，线沿它描一圈
-  const sx = CX + (ST.x - FB.x + 8) * KF, sy = CY + (ST.y - FB.y + 8) * KF, sw = ST.w * KF, sh = ST.h * KF;
-  const ring = new Poly(roundRect(sx - 10, sy - 10, sw + 20, sh + 20, 18, 8));
+  const sx = CX + STEPS.x * KF, sy = CY + STEPS.y * KF, sw = STEPS.w * KF, sh = STEPS.h * KF;
+  const ring = new Poly(roundRect(sx - 8, sy - 8, sw + 16, sh + 16, 26, 8));
   const traced = ramp(f, T.trace0, T.trace1 - T.trace0, EASE.smooth) * ring.len;
-  const out = ramp(f, T.out, 16, EASE.swift);
+  const out = ramp(f, T.out, 10, EASE.swift);
   return (
     <AbsoluteFill style={{ opacity: 1 - out, filter: out > 0.001 ? `blur(${(out * 14).toFixed(1)}px)` : undefined, transform: `scale(${(1 + 0.02 * hit).toFixed(4)})` }}>
       {/* 长卷 */}
@@ -66,7 +67,9 @@ export const Brake: React.FC = () => {
       </div>
       {/* 右边：真实的「我的反馈」页 */}
       <div style={{ position: 'absolute', left: CX, top: CY, opacity: cardP, transform: `translateX(${((1 - cardP) * 80).toFixed(1)}px)` }}>
-        <Region page="desk-myfb" rect={FB} pad={8} width={CW} radius={26} style={{ boxShadow: '0 40px 100px -24px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.25)' }} />
+        <div style={{ width: CW, height: CARD.h * KF, borderRadius: 30, overflow: 'hidden', boxShadow: '0 40px 100px -24px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.25)' }}>
+          <Img src={staticFile('ui/myfb-card.png')} style={{ width: CW, display: 'block' }} />
+        </div>
       </div>
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}>
         <NibDefs />
@@ -76,8 +79,8 @@ export const Brake: React.FC = () => {
         <Rise text="每一条反馈都有编号，" start={T.cap} per={1.2} dur={20} style={{ fontSize: 46, fontWeight: 600, color: C.text }} />
         <Rise text="处理到哪一步，都看得到。" start={T.cap + 10} per={1.2} dur={20} style={{ marginTop: 10, fontSize: 46, fontWeight: 600, color: C.text }} />
       </div>
-      <div style={{ position: 'absolute', left: CX, top: CY + (FB.h + 16) * KF + 26, fontFamily: F.mono, fontSize: 22, color: C.faint, opacity: cardP }}>
-        11.09 01:29　·　第 94 次提交
+      <div style={{ position: 'absolute', left: CX, top: CY + CARD.h * KF + 24, fontFamily: F.mono, fontSize: 26, color: C.dim, opacity: cardP }}>
+        手机上的「我的反馈」　·　v3.1.1，第 94 次提交
       </div>
       <DemoNote opacity={cardP} />
     </AbsoluteFill>

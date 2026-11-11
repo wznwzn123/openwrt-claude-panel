@@ -79,6 +79,49 @@ export const iconPath = (ox: number, oy: number, s: number): Pt[] => {
   return out;
 };
 
+// 产品图标的真实几何（src/www/panel/icon.svg，32 网格）拆成三笔：机身圆角矩形一圈 → 内弧 → 外弧（外弧原图是 55% 透明）。
+// 内弧：(11.2,12.6)→(20.8,12.6)，r=6.8；外弧：(8.4,9.8)→(23.6,9.8)，r=10.8；圆心都在 x=16、y≈17.45，角度 -135°→-45°。
+// 线画的就是图标本身的形状，所以真实图标亮起时读作「线变成了图标」，而不是换了一张图。
+export const iconStrokes = (ox: number, oy: number, s: number): Poly[] => {
+  const p = (x: number, y: number): Pt => [ox + x * s, oy + y * s];
+  const R = 2.4, deg = Math.PI / 180;
+  const A = (x: number, y: number, a0: number, a1: number) => arc(x, y, R, a0 * deg, a1 * deg, 8).map(([u, v]) => p(u, v));
+  const body: Pt[] = [p(16, 16), p(24.5 - R, 16)];
+  body.push(...A(24.5 - R, 16 + R, -90, 0), p(24.5, 23.5 - R));
+  body.push(...A(24.5 - R, 23.5 - R, 0, 90), p(7.5 + R, 23.5));
+  body.push(...A(7.5 + R, 23.5 - R, 90, 180), p(7.5, 16 + R));
+  body.push(...A(7.5 + R, 16 + R, 180, 270), p(16, 16));
+  const inner = arc(16, 17.42, 6.8, -135 * deg, -45 * deg, 36).map(([x, y]) => p(x, y));
+  const outer = arc(16, 17.47, 10.8, -135 * deg, -45 * deg, 48).map(([x, y]) => p(x, y));
+  return [new Poly(body), new Poly(inner), new Poly(outer)];
+};
+
+// 多笔：按总进度依次画每一笔，笔与笔之间笔头抬起、沿直线跳过去（跳的距离也算进进度，速度连续）
+export const MultiStroke: React.FC<{ polys: Poly[]; p: number; width?: number; glow?: number; opacity?: number; dim?: number[] }> = ({ polys, p, width = 4, glow = 1, opacity = 1, dim = [] }) => {
+  const hops = polys.slice(1).map((q, i) => { const a = polys[i].at(polys[i].len), b = q.at(0); return Math.hypot(b[0] - a[0], b[1] - a[1]); });
+  const total = polys.reduce((s, q) => s + q.len, 0) + hops.reduce((s, h) => s + h, 0);
+  let left = Math.max(0, Math.min(1, p)) * total;
+  const out: React.ReactNode[] = [];
+  let nib: Pt | null = null;
+  for (let i = 0; i < polys.length; i++) {
+    const q = polys[i];
+    const take = Math.min(q.len, left);
+    if (take > 0) out.push(<Stroke key={i} poly={q} s1={take} width={width} glow={glow} nib={0} opacity={dim[i] ?? 1} />);
+    if (left < q.len) { if (take > 0 || i === 0) nib = q.at(take); break; }
+    left -= q.len;
+    if (i < hops.length) {
+      if (left < hops[i]) { const a = q.at(q.len), b = polys[i + 1].at(0), k = left / hops[i]; nib = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k - Math.sin(k * Math.PI) * 24]; break; }
+      left -= hops[i];
+    }
+  }
+  return (
+    <g opacity={opacity}>
+      {out}
+      {nib && p < 1 && <Nib x={nib[0]} y={nib[1]} />}
+    </g>
+  );
+};
+
 // 画一段线：glow 双层（宽而淡的光晕 + 细芯），笔头在 tip
 export const Stroke: React.FC<{
   poly: Poly; s0?: number; s1: number; width?: number; color?: string; glow?: number; nib?: number; dash?: string; opacity?: number;

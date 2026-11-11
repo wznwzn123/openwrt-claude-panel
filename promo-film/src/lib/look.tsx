@@ -67,8 +67,8 @@ export const glass = (o: { radius?: number; fill?: number; blur?: number; edge?:
   borderRadius: o.radius ?? 28,
   background: `linear-gradient(160deg, rgba(255,255,255,${((o.fill ?? 0.08) + 0.04).toFixed(3)}) 0%, rgba(255,255,255,${(o.fill ?? 0.08).toFixed(3)}) 45%, rgba(255,255,255,${((o.fill ?? 0.08) * 0.6).toFixed(3)}) 100%)`,
   boxShadow: `inset 0 0 0 1px rgba(255,255,255,${(o.edge ?? 0.28).toFixed(2)}), inset 0 1px 0 rgba(255,255,255,0.35), 0 30px 80px -20px rgba(0,0,0,0.55)`,
-  backdropFilter: o.blur === 0 ? undefined : `blur(${o.blur ?? 28}px) saturate(150%)`,
-  WebkitBackdropFilter: o.blur === 0 ? undefined : `blur(${o.blur ?? 28}px) saturate(150%)`,
+  backdropFilter: o.blur === 0 ? undefined : `blur(${o.blur ?? 30}px)`,
+  WebkitBackdropFilter: o.blur === 0 ? undefined : `blur(${o.blur ?? 30}px)`,
 });
 
 // 逐词（逐字）浮现：opacity + y + blur 三通道共用一个进度（video-shotcraft blur-slide）
@@ -104,7 +104,7 @@ export const Chip: React.FC<{ children: React.ReactNode; color?: string; style?:
 
 // 演示数据声明（凡是出现面板界面的镜头都带）
 export const DemoNote: React.FC<{ opacity?: number }> = ({ opacity = 1 }) => (
-  <div style={{ position: 'absolute', left: 64, bottom: 40, fontFamily: F.sans, fontSize: 20, color: C.faint, opacity, letterSpacing: '0.04em' }}>
+  <div style={{ position: 'absolute', left: 64, bottom: 40, fontFamily: F.sans, fontSize: 26, color: 'rgba(228,232,255,0.6)', opacity, letterSpacing: '0.04em' }}>
     界面为真实面板 · 数据为演示数据
   </div>
 );

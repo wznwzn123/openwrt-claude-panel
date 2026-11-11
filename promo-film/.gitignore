@@ -5,6 +5,7 @@ public/audio/*.wav
 public/ui/*-full.png
 public/ui/*-cards.png
 public/ui/card-*.png
-public/ui/myfb-card.png
 public/ui/update-sheet.png
 public/ui/home-chart-svg.png
+# 片中用到的两张手机截图
+!public/ui/home-dark-full.png

@@ -60,7 +60,7 @@ export const Why: React.FC = () => {
   const park = ramp(f, T.park0, T.park1 - T.park0, EASE.panel);
   const s = mix(1, 0.6, park);
   const tx = mix(0, 1330 - 960, park), ty = mix(0, 540 - (WY + WH / 2), park);
-  const out = ramp(f, 270, 18, EASE.swift);
+  const out = ramp(f, 276, 12, EASE.swift);
   return (
     <AbsoluteFill style={{ opacity: 1 - out, filter: out > 0.001 ? `blur(${(out * 14).toFixed(1)}px)` : undefined }}>
       <AbsoluteFill style={{ transform: `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${s.toFixed(4)})`, transformOrigin: `960px ${WY + WH / 2}px` }}>
@@ -84,8 +84,7 @@ export const Why: React.FC = () => {
         {f >= T.slot0 - 10 && <SlotLine f={f} />}
         <Rise text="面板跑在路由器自带的 ucode + uhttpd 上，" start={T.cap1} per={0.5} dur={18} dy={10} style={{ marginTop: 48, fontSize: 30, color: C.dim }} />
         <Rise text="本身只有约 2 MB。" start={T.cap1 + 8} per={0.5} dur={18} dy={10} style={{ marginTop: 6, fontSize: 30, color: C.dim }} />
-        <Rise text="远程打开走 Cloudflare 隧道，" start={T.cap2} per={0.5} dur={18} dy={10} style={{ marginTop: 22, fontSize: 30, color: C.dim }} />
-        <Rise text="不用公网 IP，也不用开端口。" start={T.cap2 + 8} per={0.5} dur={18} dy={10} style={{ marginTop: 6, fontSize: 30, color: C.dim }} />
+        <Rise text="出门在外，也能打开家里的面板。" start={T.cap2} per={0.5} dur={18} dy={10} style={{ marginTop: 22, fontSize: 30, color: C.dim }} />
       </div>
       <DemoNote opacity={reveal} />
     </AbsoluteFill>

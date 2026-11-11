@@ -11,15 +11,15 @@ import { L, Region, Rect } from '../lib/shot';
 import { CamKey, PageCam } from '../lib/PageCam';
 
 export const VALUE_LEN = 144;
-export const VALUES_T = { say: 4, under0: 24, under1: 44, ev: 30, trace0: 56, trace1: 84, out: 128 };
+export const VALUES_T = { say: 4, under0: 24, under1: 44, ev: 30, trace0: 56, trace1: 84, out: 134 };
 const T = VALUES_T;
 
 type V = { k: string; big: string; sub: string[]; src: string[] };
 const VS: V[] = [
-  { k: '01', big: '能关掉', sub: ['每一项自动任务都有开关，', '也写清楚关掉以后会怎样。'], src: ['v2.0.6', '11.07 09:29'] },
-  { k: '02', big: '不强迫', sub: ['v3.0.2 之后的新版本，想更新再更新；', '安装失败的报告，你输入 y 才发。'], src: ['11.08 10:23', 'v3.0.0'] },
-  { k: '03', big: '说实话', sub: ['做不到的，从说明里删掉；', '修不了的问题，写「无法修复」。'], src: ['11.07 15:24', 'v3.1.0'] },
-  { k: '04', big: '说人话', sub: ['每一版更新说明，', '都用大白话写。'], src: ['release-notes.md'] },
+  { k: '01', big: '能关掉', sub: ['每一项自动任务都有开关，', '也写清楚关掉以后会怎样。'], src: ['自动任务页　v2.0.6 · 11.07'] },
+  { k: '02', big: '不强迫', sub: ['v3.0.2 之后的新版本，想更新再更新；', '安装失败的报告，你输入 y 才发。'], src: ['不强制更新　11.08 10:23', '失败上报　v3.0.0'] },
+  { k: '03', big: '说实话', sub: ['做不到的承诺，不写进说明；', '修不了的问题，写「无法修复」。'], src: ['安全说明　11.07 15:08', '无法修复　v3.1.0'] },
+  { k: '04', big: '说人话', sub: ['每一版更新说明，', '都用大白话写。'], src: ['tools/release-notes.md'] },
 ];
 
 // 证据区：右半边
@@ -85,29 +85,30 @@ const Ev2: React.FC<{ f: number }> = ({ f }) => {
   );
 };
 
-// 证据 3：安全说明的改动（文字来自 15576d6 / 726ace6 / dfb01ad 三次提交）
+// 证据 3：安全说明的改法（提交 15576d6「安全说明改成准确的说法：不再写『进不了你的路由器』……说明一键更新和 Cloudflare 转发
+// 这两个环节的风险」）+ 反馈的第三段可以是「无法修复」（v3.1.0）。v2 换了例子：v1 的例子读起来像在推广片里自曝问题（评审 P3）。
 const Ev3: React.FC<{ f: number }> = ({ f }) => {
-  const top = 220, P = 44;
-  const strike = new Poly([[-6, 22], [306, 22]]); // 「托管服务不保存密钥。」一行，线从左到右划掉
+  const top = 230, P = 46;
+  const strike = new Poly([[-6, 24], [342, 24]]); // 「别人进不了你的路由器。」一行，线从左到右划掉
   const s = ramp(f, 48, 22, EASE.smooth) * strike.len;
-  const newP = ramp(f, 72, 18, EASE.out);
-  const encP = ramp(f, 92, 18, EASE.out);
+  const newP = ramp(f, 70, 18, EASE.out);
+  const nfP = ramp(f, 92, 18, EASE.out);
   return (
-    <>
-      <div style={{ position: 'absolute', left: EX, top, width: EW, height: 470, ...glass({ radius: 26, fill: 0.08 }), padding: P, boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 34, fontWeight: 700, color: C.text }}>安全说明</span>
-          <span style={{ marginLeft: 'auto', fontFamily: F.mono, fontSize: 20, color: C.faint }}>11.07 15:24 改</span>
-        </div>
-        <div style={{ marginTop: 26, fontSize: 28, lineHeight: 1.6, color: C.dim }}>登录地址里带着密钥，拿到它就等于拿到路由器的 root 权限。</div>
-        <div style={{ position: 'relative', marginTop: 18, fontSize: 30, lineHeight: '44px', color: f > 60 ? C.faint : C.text }}>
-          托管服务不保存密钥。
-          <svg width={340} height={44} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}><NibDefs />{f >= 48 && <Stroke poly={strike} s1={s} width={4} />}</svg>
-        </div>
-        <div style={{ marginTop: 14, fontSize: 28, lineHeight: 1.6, color: '#ffe2a8', opacity: newP, transform: `translateY(${((1 - newP) * 12).toFixed(1)}px)` }}>如实写出：云端备份里有登录密钥、Wi-Fi 密码等全部设置，目前没加密。</div>
-        <div style={{ marginTop: 18, opacity: encP }}><Chip color="rgba(52,199,89,0.22)" style={{ color: '#b8f5c8' }}>11.07 15:32　v2.0.8：备份先在路由器上加密再上传</Chip></div>
+    <div style={{ position: 'absolute', left: EX, top, width: EW, height: 430, ...glass({ radius: 26, fill: 0.08 }), padding: P, boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <span style={{ fontSize: 36, fontWeight: 700, color: C.text }}>安全说明</span>
+        <span style={{ marginLeft: 'auto', fontFamily: F.mono, fontSize: 24, color: C.dim }}>11.07 15:08 改</span>
       </div>
-    </>
+      <div style={{ position: 'relative', marginTop: 34, fontSize: 32, lineHeight: '48px', color: f > 60 ? C.faint : C.text }}>
+        别人进不了你的路由器。
+        <svg width={360} height={48} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}><NibDefs />{f >= 48 && <Stroke poly={strike} s1={s} width={4} />}</svg>
+      </div>
+      <div style={{ marginTop: 18, fontSize: 30, lineHeight: 1.6, color: '#ffe2a8', opacity: newP, transform: `translateY(${((1 - newP) * 12).toFixed(1)}px)`, whiteSpace: 'pre-line' }}>{'改成如实写出：一键更新、远程转发\n这两个环节，各有哪些风险。'}</div>
+      <div style={{ marginTop: 30, opacity: nfP, display: 'flex', alignItems: 'center', gap: 16 }}>
+        <Chip color="rgba(255,69,58,0.2)" style={{ color: '#ffc2bd', fontSize: 24, height: 44 }}>✕　无法修复</Chip>
+        <span style={{ fontSize: 28, color: C.dim }}>修不了的反馈，如实标出来，并写明原因</span>
+      </div>
+    </div>
   );
 };
 
@@ -130,7 +131,7 @@ export const Values: React.FC = () => {
   const v = VS[i];
   const Ev = EVS[i];
   const enter = ramp(f, 0, 18, EASE.panel);
-  const out = ramp(f, T.out, 16, EASE.swift);
+  const out = ramp(f, T.out, 10, EASE.swift);
   const evP = ramp(f, T.ev, 22, EASE.panel);
   return (
     <AbsoluteFill style={{ opacity: Math.min(enter, 1 - out), filter: out > 0.001 ? `blur(${(out * 14).toFixed(1)}px)` : undefined, transform: `translateY(${((1 - enter) * 30 - out * 30).toFixed(1)}px)` }}>
@@ -142,12 +143,12 @@ export const Values: React.FC = () => {
         </div>
         <div style={{ marginTop: 30, display: 'flex', gap: 12, opacity: ramp(f, 40, 14) }}>{v.src.map((s) => <Chip key={s}>{s}</Chip>)}</div>
       </div>
-      <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}><NibDefs /><Underline f={f} y={474} /></svg>
+      <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}><NibDefs /><Underline f={f} y={490} /></svg>
       <div style={{ position: 'absolute', inset: 0, opacity: evP, transform: `translateX(${((1 - evP) * 60).toFixed(1)}px)` }}>
         <Ev f={f} />
       </div>
       {i < 2 && <DemoNote opacity={evP} />}
-      {i >= 2 && <div style={{ position: 'absolute', left: 64, bottom: 40, fontSize: 20, color: C.faint, opacity: evP, letterSpacing: '0.04em' }}>{i === 2 ? '内容摘自仓库提交记录' : '原文摘自 tools/release-notes.md'}</div>}
+      {i >= 2 && <div style={{ position: 'absolute', left: 64, bottom: 40, fontSize: 26, color: 'rgba(228,232,255,0.6)', opacity: evP, letterSpacing: '0.04em' }}>{i === 2 ? '内容摘自仓库提交记录' : '原文摘自 tools/release-notes.md'}</div>}
       <div style={{ position: 'absolute', right: 72, top: 64, fontFamily: F.mono, fontSize: 22, color: C.faint, opacity: 0.8 }}>{mix(1, 4, i / 3).toFixed(0)} / 4</div>
     </AbsoluteFill>
   );

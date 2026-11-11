@@ -7,7 +7,7 @@ import { FS_AURORA, FS_BLUR, FS_DOWN, FS_FINAL, FS_LENS, VS } from './shaders';
 
 export type Lens = {
   on: number; cx: number; cy: number; hx: number; hy: number; r: number; bezel: number; mag: number; lift: number;
-  glint: number; ring: number; rimGlow: number; wave: [number, number, number];
+  glint: number; ring: number; rimGlow: number; wave: [number, number, number]; disp?: number;
 };
 export type Ripple = [number, number, number, number]; // x, y, 半径, 强度
 
@@ -133,7 +133,7 @@ function render(S: GLState, frame: number, energy: number, ripple: Ripple, lens:
     gl.uniformMatrix2fv(L.uLM, false, new Float32Array([1, 0, 0, 1]));
     gl.uniform3f(L.uBead, 0, 0, 0); gl.uniform1f(L.uBeadK, 0); gl.uniform1f(L.uBeadA, 1);
     gl.uniform1f(L.uBezel, lens.bezel); gl.uniform1f(L.uDepth, lens.bezel * 0.9);
-    gl.uniform1f(L.uIor, 1.5); gl.uniform1f(L.uDisp, 0.25); gl.uniform1f(L.uMag, lens.mag);
+    gl.uniform1f(L.uIor, 1.5); gl.uniform1f(L.uDisp, lens.disp ?? 0.25); gl.uniform1f(L.uMag, lens.mag);
     gl.uniform1f(L.uRefrSign, -1); gl.uniform1f(L.uMaxDisp, lens.bezel * 0.85); gl.uniform1f(L.uRimGlow, lens.rimGlow); gl.uniform1f(L.uRing, lens.ring);
     if (L.uHide) gl.uniform1f(L.uHide, 0);
     gl.uniform1f(L.uRingW, 0); gl.uniform1f(L.uWarm, 0); gl.uniform1f(L.uCW, 0);

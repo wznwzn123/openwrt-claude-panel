@@ -1,4 +1,5 @@
-// 来源：video-shotcraft assets/lib/PageCam.tsx（原样拷入，按库的要求 copy 进项目后使用）——2.5D 页面相机，一切「真实页面」镜头的地基
+// 来源：video-shotcraft assets/lib/PageCam.tsx（原样拷入，按库的要求 copy 进项目后使用）——2.5D 页面相机，一切「真实页面」镜头的地基。
+// 唯一改动：底色 #faf7f2 → #0b0e1c（3D 倾斜时露出的边角跟面板的深色背景一致，v1 评审 S5）
 import { AbsoluteFill, Img, interpolate, staticFile, useCurrentFrame, Easing } from 'remotion';
 
 export type CamKey = {
@@ -63,7 +64,7 @@ export const PageCam: React.FC<{
 
   if (!has3D) {
     return (
-      <AbsoluteFill style={{ overflow: 'hidden', backgroundColor: '#faf7f2' }}>
+      <AbsoluteFill style={{ overflow: 'hidden', backgroundColor: '#0b0e1c' }}>
         <div
           style={{
             position: 'absolute', width: 1920, height: pageH,
@@ -88,7 +89,7 @@ export const PageCam: React.FC<{
   const persp = lerp(a.persp ?? 1400, b.persp ?? 1400, t);
 
   return (
-    <AbsoluteFill style={{ overflow: 'hidden', backgroundColor: '#faf7f2' }}>
+    <AbsoluteFill style={{ overflow: 'hidden', backgroundColor: '#0b0e1c' }}>
       <div
         style={{
           position: 'absolute', inset: 0,

@@ -12,12 +12,13 @@ import { L } from '../lib/shot';
 export const GAP_X = 1500;
 const X = (i: number) => 960 + i * GAP_X;
 export const MILES: Mile[] = [
-  { v: 'v1.0', date: '10.31', time: '11:01', n: 1, title: '第一次发布', desc: '手机控制面板，也可以接入 Claude，用中文对话管理路由器' },
-  { v: 'v1.1', date: '10.31', time: '16:08', n: 4, title: '磨砂玻璃主题', desc: '自定义背景、悬浮的圆角顶栏', img: { page: 'desk-home', rect: { x: 0, y: 0, w: 1600, h: 1000 }, w: 560, dx: 20, note: '现在的样子' } },
-  { v: 'v1.2', date: '10.31', time: '21:26', n: 19, title: '托管版 · 官网 · 安卓 App', desc: '有邀请码就有专属网址，不用自己买域名' },
-  { v: 'v1.3', date: '11.01', time: '02:42', n: 24, night: true, title: '一键更新', desc: '路由器自己下载、校验、装好，设置都保留', img: { page: 'desk-home', rect: L['desk-home'].update, pad: 8, w: 640, dx: -40, dy: -10, note: '现在的样子' } },
+  { v: 'v1.0', date: '10.31', time: '11:01', n: 1, title: '第一次发布', desc: '路由器的手机控制面板，\n也能用中文对话来管理' },
+  // v1.1 配手机界面（深色 + 背景图的磨砂玻璃主题），放进手机外框，摆在卡片右边
+  { v: 'v1.1', date: '10.31', time: '16:08', n: 4, title: '磨砂玻璃主题', desc: '自定义背景，悬浮的圆角顶栏', img: { phone: 'ui/home-dark-full.png', w: 240, phoneH: 470, dx: 140, dy: 250, note: '手机上，现在的样子' } },
+  { v: 'v1.2', date: '10.31', time: '21:26', n: 19, title: '托管版 · 官网 · 安卓 App', desc: '有邀请码就有专属网址，\n不用自己买域名' },
+  { v: 'v1.3', date: '11.01', time: '02:42', n: 24, night: true, title: '一键更新', desc: '路由器自己下载、校验、装好，\n设置都保留' },
   { v: 'v2.0', date: '11.01', time: '11:41', n: 33, title: '新首页', desc: '实时流量曲线，每 2 秒刷新一次', img: { page: 'desk-home', rect: L['desk-home'].live, pad: 8, w: 680, dx: -60, dy: -10 } },
-  { v: 'v2.0.3', date: '11.01', time: '17:17', n: 48, title: '升级后自动换新面板', desc: '手机上的旧页面会自己刷新成新版本' },
+  { v: 'v2.0.3', date: '11.01', time: '17:17', n: 48, title: '升级后自动换新面板', desc: '升级以后，手机上的旧页面\n会自己刷新成新版本' },
 ];
 export const ARRIVE = MILES.map((_, i) => 24 + 72 * i); // 相机到达每个刻度的帧（每小节一个）
 const MOVE = 30;
@@ -62,7 +63,7 @@ export const Travel: React.FC = () => {
             <div key={x} style={{ position: 'absolute', left: x - 2, top: AXIS_Y + 14, width: 4, height: 4, borderRadius: 2, background: 'rgba(238,242,255,0.28)' }} />
           ))}
           {MILES.map((m, i) => (
-            <MileCard key={i} m={m} x={X(i)} f={f} pop={TRAVEL_POPS[i]} hero={i === 4} />
+            <MileCard key={i} m={m} x={X(i)} f={f} pop={TRAVEL_POPS[i]} cam={cam} hero={i === 4} />
           ))}
         </div>
       </SpeedBlur>

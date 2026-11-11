@@ -163,6 +163,21 @@ def compose(m):
 # ── 音效：按中央音效表逐条钉帧 ──
 PENTA = [74, 76, 78, 81, 83, 86, 88, 90]          # D 大调五声（D E F# A B）
 
+# v2：提示类音效改用真实乐器采样（VCSL，CC0）而不是合成的 bleep（v1 评审 A7：ding / tick / pop 读作廉价提示音）
+_INST = {}
+def inst(name):
+    if name not in _INST:
+        _INST[name] = samples.inst(name)
+    return _INST[name]
+def glock(note, vel=0.6):
+    return inst('glock').play(note, None, vel).loud(-20)
+def marimba(note, vel=0.6):
+    return inst('marimba').play(note, None, vel).loud(-20)
+def kalimba(note, vel=0.6):
+    return inst('kalimba').play(note, None, vel).loud(-20)
+def woodblock(vel=0.5):
+    return samples.hit('woodblock', vel=vel).loud(-22)
+
 
 # 输出偏移补偿（video-shotcraft sound-design §4.6）：v1 成片实测，三次大冲击的音频起音比画面晚 +41/+43/+53 ms
 # （AAC 编码器延迟 + 冲击音的起音爬升）。所有音效统一提前 45 ms；测法见 tools/qa.py 的 big hit 一节。
@@ -190,21 +205,20 @@ def sound_design(m):
         elif k == 'whoosh_soft':
             m.sfx(sfx.whoosh(max(0.5, d), 'soft'), t, gain=-12)
         elif k == 'ding':
-            m.sfx(sfx.ding('A6', 'bell', 1.2), t, gain=-13, verb=-12)
+            m.sfx(glock(93, 0.5), t, gain=-10, verb=-12)
         elif k == 'swoosh_reveal':
             m.sfx(sfx.whoosh(0.7, 'air'), t, gain=-13)
         elif k == 'slot':
-            m.sfx(sfx.click('soft'), t, gain=-9)
-            m.sfx(sfx.blip(PENTA[i % len(PENTA)] - 12 + 12, 'sine', 0.05), t, gain=-15)
+            m.sfx(sfx.click('soft'), t, gain=-10)
+            m.sfx(marimba(PENTA[i % len(PENTA)], 0.5), t, gain=-12)
         elif k == 'pop':
-            m.sfx(sfx.blip(PENTA[i % len(PENTA)], 'tri', 0.07), t, gain=-11, verb=-14)
-            m.sfx(sfx.pop('soft', 1.0), t, gain=-12)
+            m.sfx(marimba(PENTA[i % len(PENTA)], 0.6), t, gain=-8, verb=-14)
         elif k == 'move':
             m.sfx(sfx.whoosh(0.6, 'air'), t, gain=-17)
         elif k == 'day_tick':
-            m.sfx(sfx.tick('clock'), t, gain=-14 - i)
+            m.sfx(woodblock(0.4), t, gain=-12 - i)
         elif k == 'spark':
-            m.sfx(sfx.blip(PENTA[2 + i], 'fm', 0.05), t, gain=-12)
+            m.sfx(glock(PENTA[2 + i] + 12, 0.45), t, gain=-12)
             m.sfx(sfx.glitch(0.08, 'digital'), t, gain=-20)
         elif k == 'relit_riser':
             m.sfx(sfx.riser(max(1.0, d), 'hybrid', 'A3', intensity=0.9), t, gain=-6)
@@ -212,7 +226,7 @@ def sound_design(m):
             m.sfx(sfx.impact('cinematic', 1.0), t, gain=-2, verb=-8)
             m.sfx(sfx.shimmer_hit('D6'), t, gain=-9)
         elif k == 'pop_fast':
-            m.sfx(sfx.blip(PENTA[(i + 2) % len(PENTA)], 'tri', 0.06), t, gain=-12, verb=-16)
+            m.sfx(marimba(PENTA[(i + 2) % len(PENTA)], 0.55), t, gain=-10, verb=-16)
         elif k == 'move_fast':
             m.sfx(sfx.swish(0.3), t, gain=-16)
         elif k == 'scroll_riser':
@@ -225,9 +239,10 @@ def sound_design(m):
         elif k == 'statement':
             m.sfx(sfx.impact('soft', 0.5), t, gain=-14, verb=-12)
         elif k == 'confirm':
-            m.sfx(sfx.ui('confirm'), t, gain=-12)
+            m.sfx(kalimba(81, 0.5), t, gain=-10)
+            m.sfx(kalimba(86, 0.45), t + 0.09, gain=-12)
         elif k == 'tick':
-            m.sfx(sfx.tick('hi'), t, gain=-18)
+            m.sfx(woodblock(0.3), t, gain=-16)
         elif k == 'whoosh_out':
             m.sfx(sfx.whoosh(0.45, 'soft', direction=-1), t, gain=-17)
         elif k == 'roll':
@@ -250,10 +265,10 @@ if __name__ == '__main__':
     os.makedirs(out, exist_ok=True)
     full = build(True)
     # 真峰值留到 -1.8：AAC 编码后实测会抬高约 0.6 dB（v1：母带 -1.19 → 成片 -0.6 dBFS）
-    r1 = full.export(os.path.join(out, 'film.wav'), lufs=-14, tp=-1.8, spectrogram=os.path.join(HERE, '..', 'out', 'film-spec.png'))
+    r1 = full.export(os.path.join(out, 'film.wav'), lufs=-14, tp=-2.0, spectrogram=os.path.join(HERE, '..', 'out', 'film-spec.png'))
     full.report()
     nomusic = build(False)
-    r2 = nomusic.export(os.path.join(out, 'film-nomusic.wav'), lufs=-18, tp=-1.8)
+    r2 = nomusic.export(os.path.join(out, 'film-nomusic.wav'), lufs=-18, tp=-2.0)
     json.dump({'full': {k: v for k, v in r1.items() if k in ('duration', 'lufs', 'true_peak', 'warnings', 'stereo_corr')},
                'nomusic': {k: v for k, v in r2.items() if k in ('duration', 'lufs', 'true_peak', 'warnings')}},
               open(os.path.join(HERE, '..', 'out', 'audio-qc.json'), 'w'), ensure_ascii=False, indent=1, default=float)

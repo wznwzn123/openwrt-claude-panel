@@ -27,9 +27,9 @@ const MOCK = {
     { name: '孩子的平板', ip: '192.168.1.45', online: true, stats: { conns: 6, dl: 1.2 * GB, ul: 0.1 * GB } }] },
   'panel/pause_list': { devs: {} },
   'panel/fb_replies': { hosted: true, list: [
-    { code: 'K7Q2M9XA', at: NOW - 3 * 86400e3, text: '闪存只剩 20 MB 左右，装不下 cloudflared，能不能想想办法？', stage: 3, state: 'fixed', done: true,
+    { code: 'K7Q2M9XA', at: NOW - 3 * 86400e3, text: '闪存只剩 20 MB 左右，装不下，能不能想想办法？', stage: 3, state: 'fixed', done: true,
       ackAt: NOW - 3 * 86400e3 + 40 * 60e3, updated: NOW - 86400e3, seen: NOW,
-      history: [{ at: NOW - 86400e3, st: 'fixed', note: 'v3.1.0 加了「小闪存模式」：cloudflared 开机后下载到内存里运行，核对校验值后才用。' }] }] },
+      history: [{ at: NOW - 86400e3, st: 'fixed', note: 'v3.1.0 加了「小闪存模式」：需要的程序开机后下载到内存里运行，核对校验值后才用。' }] }] },
   'panel/svc_info': {}, 'panel/jobs': { jobs: {} }, // 一台没装任何代理类插件的普通 OpenWrt 的菜单（侧边栏按真实菜单显示，没装的不出现）
   'panel/luci_menu': { items: [{ p: 'admin/status/overview', t: '' },{ p: 'admin/status/realtime/bandwidth', t: '' },{ p: 'admin/status/realtime/load', t: '' },{ p: 'admin/status/realtime/connections', t: '' },{ p: 'admin/network/network', t: '' },{ p: 'admin/network/wireless', t: '' },{ p: 'admin/network/dhcp', t: '' },{ p: 'admin/network/dns', t: '' },{ p: 'admin/network/diagnostics', t: '' },{ p: 'admin/network/firewall/zones', t: '' },{ p: 'admin/network/firewall/forwards', t: '' },{ p: 'admin/network/firewall/rules', t: '' },{ p: 'admin/services/upnp', t: '' },{ p: 'admin/system/system', t: '' },{ p: 'admin/system/admin', t: '' },{ p: 'admin/system/package-manager', t: '' },{ p: 'admin/system/startup', t: '' },{ p: 'admin/system/crontab', t: '' },{ p: 'admin/system/flash', t: '' },{ p: 'admin/system/reboot', t: '' }] }, 'panel/cloud_info': {}, 'panel/ckey_info': { ai: true },
 };

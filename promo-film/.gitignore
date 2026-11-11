@@ -1,0 +1,10 @@
+node_modules/
+out/
+public/audio/*.wav
+# 手机版采集（早期方案，片中没用到；tools/capture.cjs 会重新生成）
+public/ui/*-full.png
+public/ui/*-cards.png
+public/ui/card-*.png
+public/ui/myfb-card.png
+public/ui/update-sheet.png
+public/ui/home-chart-svg.png

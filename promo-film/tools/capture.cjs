@@ -120,7 +120,7 @@ async function el(page, sel, name, pad = 0) {
   await ctx.close();
   if (process.env.DESK) {
     for (const [p, name] of [['main', 'desk-home'], ['auto', 'desk-auto'], ['myfb', 'desk-myfb']]) {
-      ({ ctx, page } = await boot(b, { p, w: 1600, h: 1000, dpr: 2 }));
+      ({ ctx, page } = await boot(b, { p, w: 1920, h: 1200, dpr: 2 }));
       await page.screenshot({ path: path.join(OUT, name + '.png') });
       // layout.json：每个关键元素在页面坐标系（CSS px）里的位置，镜头推拉和高亮框直接用
       LAYOUT[name] = await page.evaluate(() => {

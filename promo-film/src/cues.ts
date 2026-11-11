@@ -60,6 +60,7 @@ for (let i = 0; i < 4; i++) {
 }
 // 收尾
 for (let i = 0; i < 4; i++) add(S.finale.from + FIN_T.stats + 10 + i * 6, 'roll', { i }, '数字滚动');
+add(S.finale.from + 108, 'lens_glide', { dur: 44 }, '液态玻璃透镜从右边滑进来（经过画面中点时最响）');
 add(BIG_HITS[2], 'draw_riser', { dur: FIN_T.draw1 - FIN_T.draw0 }, '再画一次图标');
 add(BIG_HITS[2], 'logo_hit', {}, '大冲击 3：真实图标亮起');
 add(S.finale.from + FIN_T.park0 + 8, 'whoosh_soft', { dur: 30 }, '图标左移');

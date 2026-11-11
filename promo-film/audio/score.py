@@ -231,6 +231,9 @@ def sound_design(m):
             m.sfx(sfx.impact('cinematic', 0.8), t, gain=-3, verb=-8)
             m.sfx(sfx.shimmer_hit('D6'), t, gain=-7)
             m.sfx(sfx.sparkle(1.6, 22, 'D', 'major_pentatonic'), t, gain=-12)
+        elif k == 'lens_glide':
+            m.sfx(sfx.whoosh(max(0.8, d), 'sci', direction=-1, peak=0.55), t, gain=-9, verb=-12)
+            m.sfx(sfx.sparkle(1.0, 14, 'D', 'major_pentatonic'), t, gain=-16)
         elif k == 'word':
             m.sfx(sfx.swish(0.3), t, gain=-15)
         else:

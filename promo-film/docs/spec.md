@@ -24,7 +24,7 @@
 
 | 来源 | 用了什么 | 怎么改的 |
 |---|---|---|
-| mg-styles-15 · 12 弥散渐变 / 玻璃拟态 | 大色斑慢速漂移作底、磨砂玻璃卡（5–10% 白填充 + 1px 内描边 + 大圆角 + 背景模糊）、3–5% 颗粒防 banding、慢速呼吸节奏 | 色斑颜色直接取产品图标（`src/www/panel/icon.svg`）的紫 #6a4dff、蓝 #2f6bff、青 #00c2d8，粉 #ff5fb4 只做余光；面板本身就是磨砂玻璃主题，片子和产品是一套视觉 |
+| mg-styles-15 · 12 弥散渐变 / 玻璃拟态 | **原片的 WebGL 着色器原文照搬**（`src/gl/shaders.ts`）：极光 FS_AURORA（simplex 噪声扭曲、7 个色斑沿贝塞尔闭环漂移、极光帘纹、光点）、FS_LENS 液态玻璃透镜（SDF 斜面、7 波段色散折射、菲涅尔、高光）、FS_FINAL（泛光、颗粒、暗角、抖动防色带）；渲染管线照 `main.js`（`src/gl/AuroraGL.tsx`）。另有 DOM 磨砂玻璃卡（5–10% 白填充 + 1px 内描边 + 大圆角 + 背景模糊） | 7 个色斑的结构和路径不变，颜色换成产品图标（`src/www/panel/icon.svg`）的紫 #6a4dff、蓝 #2f6bff、青 #00c2d8；三次大冲击时极光里荡开一圈光波（uRipple）；液态玻璃透镜只在收尾出现一次，成为图标的玻璃底座。面板本身就是磨砂玻璃主题，片子和产品是一套视觉 |
 | mg-styles-15 · 02 线条动画 | 一笔画、领先的发光笔头（观众只追这一个点） | 线是全片的叙事主线，而不是装饰 |
 | mg-styles-15 · assets | `textures/grain/grain_fine_2048.png` 颗粒；`lib/audio`（mgaudio）合成器和 VCSL 乐器采样 | 配乐按本片 34 小节结构重写，不用它的 10 秒成片配方 |
 
@@ -37,13 +37,14 @@
 | 段落 | 内容 | 镜头卡 / 组件 | 参考实现 |
 |---|---|---|---|
 | 开场 | 绿灯、第一次提交的时间、一笔画图标、片名 | letterspace-materialize、blur-slide | demos/opening/letterspace-materialize、demos/typography/blur-slide |
-| 为什么做 | 线围出窗口，真实面板显影并推近 | line-carry-transition、PageCam 式推近 | demos/transition/line-carry-transition、assets/lib/PageCam.tsx |
+| 为什么做 | 线围出窗口，真实面板显影，带 3D 倾斜推近实时流量 | line-carry-transition、**PageCam（原样拷入 `src/lib/PageCam.tsx`）** | demos/transition/line-carry-transition、assets/lib/PageCam.tsx |
+| 原则 01 | 自动任务页在小窗里缓推，线框住第一项 | PageCam（平面机位，框按同一缓动换算到画面坐标） | assets/lib/PageCam.tsx |
 | 为什么做 | 不需要 Python / Node.js / Docker / 公网 IP / 开端口 | pill-slot-cycle | demos/typography/pill-slot-cycle |
 | 10.31–11.01 | 六个版本 | timeline-travel（变速横移、到达前 6f 弹立、damping 11 过冲、次刻度点做速度参照、横向 SpeedBlur） | demos/data/timeline-travel |
 | 11.07–11.08 | 七个版本 | timeline-travel 高速版 | 同上 |
 | 第 94 次提交 | 提交长卷急刹 | changelog-scroll-brake（bezier .45,0,.06,1；速度差分驱动纵向模糊；停点抬升，其余退暗到 0.38） | demos/data/scroll-brake-moves/ChangelogScrollBrake.tsx |
 | 四条原则 | 下划线、框住证据、划掉一句话 | draw-svg-trace、marker-underline-title | demos/ui-entrance/draw-svg-trace |
-| 收尾 | 四个数字、图标、字标 | DigitRoll、ui-to-brand-morph | assets/lib/DigitRoll.tsx、demos/outro/ui-to-brand-morph |
+| 收尾 | 四个数字；液态玻璃透镜滑进来，线在玻璃上画出图标，真实图标在玻璃里亮起；字标 | DigitRoll、ui-to-brand-morph、mg-styles FS_LENS | assets/lib/DigitRoll.tsx、demos/outro/ui-to-brand-morph、mg-styles-15 demos/12-aurora-glass |
 
 整画面级冲击全片只有三处（aesthetic-rules R4）：重新接上（第 1152 帧）、长卷急刹（第 1494 帧）、图标亮起（第 2304 帧），都落在拍点上。
 

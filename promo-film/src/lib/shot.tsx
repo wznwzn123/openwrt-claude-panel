@@ -6,7 +6,7 @@ import LAYOUT from '../../public/ui/layout.json';
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export const L = LAYOUT as unknown as Record<string, Record<string, any>>;
-export const PAGE = { w: 1600, h: 1000 };
+export const PAGE = { w: 1920, h: 1200 };
 
 // 页面 page（desk-home / desk-auto / desk-myfb）里的 rect 区域，显示成宽 width 的一块
 export const Region: React.FC<{

@@ -1,7 +1,8 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { AbsoluteFill, Audio, Sequence, continueRender, delayRender, interpolate, staticFile, useCurrentFrame } from 'remotion';
-import { SHOTS } from './timeline';
-import { Aurora, Grain, F } from './lib/look';
+import { SHOTS, BIG_HITS } from './timeline';
+import { Grain, F } from './lib/look';
+import { AuroraGL, Ripple } from './gl/AuroraGL';
 import glyphs from './data/glyphs.json';
 import { Open } from './scenes/Open';
 import { Why } from './scenes/Why';
@@ -10,7 +11,7 @@ import { Gap } from './scenes/Gap';
 import { Rush } from './scenes/Rush';
 import { Brake } from './scenes/Brake';
 import { Values } from './scenes/Values';
-import { Finale } from './scenes/Finale';
+import { Finale, lensAt } from './scenes/Finale';
 
 // 字体：fontsource 按字符子集懒加载。每帧等 document.fonts.ready，开头先把全片用到的字全部预加载一遍。
 const FontGate: React.FC = () => {
@@ -33,10 +34,23 @@ const FontGate: React.FC = () => {
 
 // 极光底的能量曲线（随叙事起伏）
 const ENERGY: [number, number][] = [
-  [0, 0.18], [40, 0.32], [SHOTS.open.from + 200, 0.55], [SHOTS.why.from, 0.6], [SHOTS.travel.from, 0.66],
+  [0, 0.0], [20, 0.06], [70, 0.2], [SHOTS.open.from + 200, 0.5], [SHOTS.why.from, 0.6], [SHOTS.travel.from, 0.66],
   [SHOTS.gap.from + 20, 0.62], [SHOTS.gap.from + 70, 0.22], [SHOTS.rush.from - 4, 0.28], [SHOTS.rush.from, 1.0], [SHOTS.brake.from + 60, 0.85],
   [SHOTS.values.from + 20, 0.55], [SHOTS.finale.from, 0.6], [SHOTS.finale.from + 150, 0.9], [SHOTS.finale.from + 288, 0.7],
 ];
+
+// 三次大冲击时，极光里荡开一圈光波（FS_AURORA 的 uRipple），圆心在当时画面的主角上
+const RIPPLE_C: [number, number][] = [[1480, 760], [550, 540], [960, 440]];
+const rippleAt = (f: number): Ripple => {
+  for (let i = BIG_HITS.length - 1; i >= 0; i--) {
+    const k = (f - BIG_HITS[i]) / (1.95 * 30);
+    if (k >= 0 && k <= 1) {
+      const seg = Math.min(1, k / 0.035);
+      return [RIPPLE_C[i][0], RIPPLE_C[i][1], 60 + 1500 * Math.sin((k * Math.PI) / 2), 1.6 * Math.pow(1 - k, 1.5) * seg];
+    }
+  }
+  return [960, 540, 0, 0];
+};
 
 export const Film: React.FC<{ music?: boolean }> = ({ music = true }) => {
   const f = useCurrentFrame();
@@ -45,7 +59,7 @@ export const Film: React.FC<{ music?: boolean }> = ({ music = true }) => {
   return (
     <AbsoluteFill style={{ background: '#05060d', fontFamily: F.sans, color: '#f4f6ff' }}>
       <FontGate />
-      <Aurora energy={energy} />
+      <AuroraGL energy={energy} ripple={rippleAt(f)} lens={f >= S.finale.from ? lensAt(f - S.finale.from) : null} />
       <Sequence from={S.open.from} durationInFrames={S.open.dur}><Open /></Sequence>
       <Sequence from={S.why.from} durationInFrames={S.why.dur}><Why /></Sequence>
       <Sequence from={S.travel.from} durationInFrames={S.travel.dur}><Travel /></Sequence>
@@ -54,7 +68,8 @@ export const Film: React.FC<{ music?: boolean }> = ({ music = true }) => {
       <Sequence from={S.brake.from} durationInFrames={S.brake.dur}><Brake /></Sequence>
       <Sequence from={S.values.from} durationInFrames={S.values.dur}><Values /></Sequence>
       <Sequence from={S.finale.from} durationInFrames={S.finale.dur}><Finale /></Sequence>
-      <Grain opacity={0.08} />
+      {/* 着色器里已经有颗粒（只作用在底上）；这里再给整画面一层很淡的，让界面和字也在同一层胶片里 */}
+      <Grain opacity={0.045} />
       <Audio src={staticFile(music ? 'audio/film.wav' : 'audio/film-nomusic.wav')} />
     </AbsoluteFill>
   );

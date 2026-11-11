@@ -8,6 +8,7 @@ import { C, Chip, DemoNote, F, Rise, glass } from '../lib/look';
 import { EASE, mix, ramp } from '../lib/ease';
 import { NibDefs, Poly, Stroke, roundRect } from '../lib/thread';
 import { L, Region, Rect } from '../lib/shot';
+import { CamKey, PageCam } from '../lib/PageCam';
 
 export const VALUE_LEN = 144;
 export const VALUES_T = { say: 4, under0: 24, under1: 44, ev: 30, trace0: 56, trace1: 84, out: 128 };
@@ -36,16 +37,27 @@ const Trace: React.FC<{ f: number; r: Rect; rad?: number }> = ({ f, r, rad = 16 
   return f >= T.trace0 ? <Stroke poly={poly} s1={d} width={3} /> : null;
 };
 
-// 证据 1：自动任务页（两组卡片），线框住第一项
+// 证据 1：自动任务页。一扇 16:9 小窗里放 PageCam（正视、极慢推近），线框住第一项；
+// 机位是平面的，所以框的位置可以按 PageCam 同一条缓动精确换算到画面坐标。
+const A = L['desk-auto'];
+const EV1_CAM: CamKey[] = [
+  { frame: 0, cx: 1096, cy: (A.auto[0].y + A.auto[1].y + A.auto[1].h) / 2 - 10, zoom: 1.5 },
+  { frame: 144, cx: 1096, cy: (A.auto[0].y + A.auto[1].y + A.auto[1].h) / 2 + 10, zoom: 1.62 },
+];
+const EV1_W = EW, EV1_H = (EW * 9) / 16, EV1_K = EV1_W / 1920, EV1_TOP = 250;
 const Ev1: React.FC<{ f: number }> = ({ f }) => {
-  const a = L['desk-auto'];
-  const rect = { x: a.auto[0].x, y: a.auto[0].y - 40, w: a.auto[0].w, h: a.auto[1].y + a.auto[1].h - a.auto[0].y + 40 };
-  const k = EW / (rect.w + 16), top = 250;
-  const row = a.autoRows[0];
-  const rr = { x: EX + (row.x - rect.x + 8) * k - 8, y: top + (row.y - rect.y + 8) * k - 6, w: row.w * k + 16, h: row.h * k + 12 };
+  const t = EASE.smooth(Math.max(0, Math.min(1, f / 144)));
+  const cx = mix(EV1_CAM[0].cx, EV1_CAM[1].cx, t), cy = mix(EV1_CAM[0].cy, EV1_CAM[1].cy, t), z = mix(EV1_CAM[0].zoom, EV1_CAM[1].zoom, t);
+  const row = A.autoRows[0];
+  const sx = (x: number) => EX + (960 + (x - cx) * z) * EV1_K, sy = (y: number) => EV1_TOP + (540 + (y - cy) * z) * EV1_K;
+  const rr = { x: sx(row.x) - 8, y: sy(row.y) - 6, w: row.w * z * EV1_K + 16, h: row.h * z * EV1_K + 12 };
   return (
     <>
-      <div style={{ position: 'absolute', left: EX, top }}><Region page="desk-auto" rect={rect} pad={8} width={EW} radius={24} style={{ boxShadow: '0 40px 100px -24px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.25)' }} /></div>
+      <div style={{ position: 'absolute', left: EX, top: EV1_TOP, width: EV1_W, height: EV1_H, borderRadius: 24, overflow: 'hidden', boxShadow: '0 40px 100px -24px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.25)' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, width: 1920, height: 1080, transformOrigin: '0 0', transform: `scale(${EV1_K.toFixed(5)})` }}>
+          <PageCam src="ui/desk-auto.png" pageH={1200} keys={EV1_CAM} ease={EASE.smooth} frame={f} />
+        </div>
+      </div>
       <svg width={1920} height={1080} style={{ position: 'absolute', inset: 0 }}><NibDefs /><Trace f={f} r={rr} /></svg>
     </>
   );

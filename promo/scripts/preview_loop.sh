@@ -13,5 +13,5 @@ off=$(python3 -c "print(3.6+4.4-2*$X)"); fc+="[x1][v2]xfade=transition=fade:dura
 off=$(python3 -c "print(3.6+4.4+3.8-3*$X)"); fc+="[x2][v3]xfade=transition=fade:duration=$X:offset=$off[x3];"
 off=$(python3 -c "print(3.6+4.4+3.8+5.2-4*$X)"); fc+="[x3][v4]xfade=transition=fade:duration=$X:offset=$off[x4];"
 fc+="[x4]trim=start=$X:duration=15,setpts=PTS-STARTPTS[o]"
-ffmpeg -v error -y "${in[@]}" -filter_complex "$fc" -map "[o]" -an -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 20 -preset slow -movflags +faststart "$O"
+ffmpeg -v error -y "${in[@]}" -filter_complex "$fc" -map "[o]" -an -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 20 -preset slow -x264-params "colorprim=bt709:transfer=bt709:colormatrix=bt709" -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 -movflags +faststart "$O"
 ffprobe -v error -count_frames -show_entries stream=width,height,r_frame_rate,nb_read_frames -show_entries format=duration -of default=nw=1 "$O"

@@ -12,6 +12,6 @@ for i in 1 2 3 4 5; do
   I=$(ffmpeg -hide_banner -nostats -i "$OUT" -af ebur128 -f null - 2>&1 | grep -E "^\s+I:" | tail -1 | awk '{print $2}')
   D=$(python3 -c "print(round(-14.0-($I),2))")
   python3 -c "import sys; sys.exit(0 if abs($D)>0.05 else 1)" || break
-  ffmpeg -hide_banner -v error -y -i "$OUT" -af "volume=${D}dB,aresample=192000,alimiter=limit=0.86:attack=1:release=50:level=disabled,aresample=48000" -ar 48000 -c:a pcm_s16le "$OUT.tmp.wav" && mv "$OUT.tmp.wav" "$OUT"
+  ffmpeg -hide_banner -v error -y -i "$OUT" -af "volume=${D}dB,aresample=192000,alimiter=limit=0.80:attack=1:release=50:level=disabled,aresample=48000" -ar 48000 -c:a pcm_s16le "$OUT.tmp.wav" && mv "$OUT.tmp.wav" "$OUT"
 done
 ffmpeg -hide_banner -nostats -i "$OUT" -af ebur128=peak=true -f null - 2>&1 | grep -E "^\s+(I:|Peak:)" | tr -s ' '

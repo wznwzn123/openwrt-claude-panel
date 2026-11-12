@@ -8,7 +8,7 @@ ffmpeg -v error -y -pattern_type glob -i "$P/frames/f0[0-4]*.png" -filter_comple
 ffmpeg -v error -y -pattern_type glob -i "$P/frames/f0[5-9]*.png" -filter_complex "tile=10x5:padding=4" $P/contact_50-90s.png
 for t in 1.5 9 15 24 32 41 50 64 77 88; do ffmpeg -v error -y -ss $t -i "$F" -frames:v 1 $P/keys/key_${t}s.png; done
 for t in 5.75 11.9 16.655 19.759 29.069 40.448 42.0 46.138 57.517 58.034 81.828 84.414 85.448; do
-  ffmpeg -v error -y -ss $(python3 -c "print($t-0.1)") -i "$F" -frames:v 6 -vf "fps=30,scale=640:-1,tile=6x1:padding=2" $P/bursts/burst_${t}s.png; done
+  ffmpeg -v error -y -ss $(python3 -c "print($t-0.1)") -i "$F" -vf "fps=30,scale=640:-1,tile=6x1:padding=2" -frames:v 1 -update 1 $P/bursts/burst_${t}s.png; done
 {
   echo "# 规格量测"; ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=codec_name,profile,width,height,r_frame_rate,nb_read_frames,pix_fmt -show_entries format=duration,bit_rate -of default=nw=1 "$F"
   ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,sample_rate,channels -of default=nw=1 "$F"

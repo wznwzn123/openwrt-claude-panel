@@ -15,6 +15,7 @@
 | 字体 | Noto Sans SC、Noto Serif SC、Inter、JetBrains Mono（npm @fontsource-variable） | SIL OFL 1.1 | 片中全部文字 |
 | 面板界面 | 本仓库 `src/www/panel/index.html`，用 Playwright 加载、后端接口换成演示数据后截图（`tools/capture.cjs`、`tools/capture-v4.cjs`） | 本仓库 MIT | `public/ui/`；截图时没有真实路由器、没有真实 IP / MAC / 域名 / 密钥 |
 | 产品图标 | 本仓库 `src/www/panel/icon.svg` | 本仓库 MIT | 收尾的图标 |
+| 3D | [three.js](https://github.com/mrdoob/three.js) 0.179、@react-three/fiber 9、@react-three/drei 10、@react-three/postprocessing 3、@remotion/three | MIT | 3D 路由器、设备、界面空间、时间轴；泛光和暗角 |
 | 渲染 | [Remotion](https://github.com/remotion-dev/remotion) 4.0.484 | Remotion License（个人和小团队免费，公司可能需要买授权） | 合成与渲染 |
 
 没有用：video-talkcraft（口播流程，许可证 PolyForm Noncommercial 1.0.0，这支片没有旁白）；Freesound 音效（这个环境访问 freesound.org 返回 403）。

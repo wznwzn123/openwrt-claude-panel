@@ -1,17 +1,18 @@
-# OpenWrt Claude Panel 宣传动画（v4）
+# OpenWrt Claude Panel 宣传动画（v5）
 
-16:9 · 1920×1080 · 30fps · 78 秒。配乐是 Mixkit tech-house（124 BPM），全片切点都钉在它的节拍上。
+16:9 · 1920×1080 · 30fps · 78 秒。3D 产品片（three.js）。配乐是 Mixkit tech-house（124 BPM），全片切点都钉在它的节拍上。
 - 讲四件事：插件能干什么、用中文对话管路由器、装起来简单占用小、更新快。
 - 画面上的字只留关键词，主要靠真实界面说话。
 
-设计说明见 [docs/spec-v4.md](docs/spec-v4.md)，修改记录见 [docs/revision-log.md](docs/revision-log.md)，素材和许可见 [CREDITS.md](CREDITS.md)。
+设计说明见 [docs/spec-v5.md](docs/spec-v5.md)（内容结构见 [docs/spec-v4.md](docs/spec-v4.md)），修改记录见 [docs/revision-log.md](docs/revision-log.md)，素材和许可见 [CREDITS.md](CREDITS.md)。
 
 ## 目录
 
 | 路径 | 内容 |
 |---|---|
+| `src/v5/` | 3D：`three/` 是路由器、设备、舞台、预加载；`OpenWorld` / `FeatWorld` / `ChatWorld` / `UpdWorld` 是各段 3D 场景；`Film5.tsx` 是成片；`cues5.ts` 是音效表 |
 | `src/v4/beat.ts` | 时间线：所有帧号都从配乐的节拍网格换算（`analysis/bgm-grid.json`） |
-| `src/v4/` | 六段：前奏、功能、对话、安装、更新、定版；`cues.ts` 是中央音效表 |
+| `src/v4/` | v4 的平面版各段；v5 复用其中的对话框、终端、定版和节拍网格 |
 | `src/gl/` | mg-styles-15 的极光和液态玻璃着色器（原文照搬）及渲染管线 |
 | `src/lib/` | PageCam（video-shotcraft 原样拷入）、线、玻璃卡、缓动、运动模糊 |
 | `audio/score4.py` | 配乐 + 音效（Mixkit 录音音效 + mgaudio 合成） |
@@ -32,7 +33,7 @@ git clone --depth 1 https://github.com/Vincentwei1021/mg-styles-15 ../../vincent
 pip install numpy scipy soundfile numba pedalboard pyloudnorm matplotlib librosa
 
 node tools/capture-v4.cjs     # 功能页截图（可选，已生成；需要 Playwright + Chromium）
-sh tools/render-all.sh v4     # → out/v4/master*.mp4 和压好的 *-delivery.mp4
+sh tools/render-all.sh v5     # → out/v5/master*.mp4 和压好的 *-delivery.mp4
 ```
 
 `remotion.config.ts` 里指定了本机的 Chromium headless shell 路径。换机器时改成自己的，或者删掉那一行让 Remotion 自己下载。

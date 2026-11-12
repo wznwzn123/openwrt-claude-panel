@@ -3,7 +3,8 @@ const { MOCK, NOW, MB, GB } = require('./capture.cjs');
 const { mac, S } = require('./capture-v4.cjs.mocks.cjs');
 
 // 实时网速：每 2 秒取一次（面板本身的节奏），数值按虚拟时间平滑起伏
-const liveAt = (vt) => { const t = vt / 1000; return { rx: Math.round((3.4 + 1.5 * Math.sin(t * 0.9) + 0.6 * Math.sin(t * 2.3 + 1)) * MB), tx: Math.round((0.45 + 0.18 * Math.sin(t * 1.3 + 2)) * MB) }; };
+// 起伏要比 2 秒一次的采样慢得多，曲线才是平滑的波浪（不然采样出来是锯齿）
+const liveAt = (vt) => { const t = vt / 1000; return { rx: Math.round((3.4 + 1.4 * Math.sin(t * 0.11) + 0.6 * Math.sin(t * 0.29 + 1)) * MB), tx: Math.round((0.45 + 0.16 * Math.sin(t * 0.17 + 2)) * MB) }; };
 const live = (k, p, st) => (k === 'panel/live' ? { res: liveAt(st.vt + 120000) } : null);
 // 前一分钟的历史：和之后的实时数值是同一条曲线
 const seed = () => { const a = Array.from({ length: 30 }, (_, i) => liveAt(120000 - (30 - i) * 2000)); return { rx: a.map((x) => x.rx), tx: a.map((x) => x.tx) }; };

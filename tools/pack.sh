@@ -25,6 +25,21 @@ elif [ "$CFD_SKIP" != 1 ]; then
 	done
 	rm -f dist/tmp/cfd
 fi
+# ucode 补装用的校验值：固件的软件源装不上 ucode 时（软件源失效、没有这个包），安装脚本从 OpenWrt 官方
+# 下载 23.05 的这几个包，用这里的 SHA256 核对。本地测试可以用 UC_SUMS_FILE 指定现成的；UC_SKIP=1 不带
+UCV=23.05.5
+if [ -n "$UC_SUMS_FILE" ]; then cp "$UC_SUMS_FILE" dist/ucode.sums
+elif [ "$UC_SKIP" != 1 ]; then
+	echo "VER=$UCV" > dist/ucode.sums
+	for a in $(curl -fsSL --retry 3 "https://downloads.openwrt.org/releases/$UCV/packages/" | grep -o 'href="[a-z0-9_-]*/"' | sed 's/href="//; s#/"##'); do
+		curl -fsSL --retry 3 "https://downloads.openwrt.org/releases/$UCV/packages/$a/base/Packages.gz" | gunzip | awk -v a="$a" 'BEGIN { RS = ""; FS = "\n" } {
+			p = f = h = ""
+			for (i = 1; i <= NF; i++) { if ($i ~ /^Package: /) p = substr($i, 10); if ($i ~ /^Filename: /) f = substr($i, 11); if ($i ~ /^SHA256sum: /) h = substr($i, 12) }
+			if (p ~ /^(libucode20230711|ucode|ucode-mod-fs|ucode-mod-uci|libjson-c5|libuci20130104|libubox20230523)$/ && f != "" && h != "") print a, p, f, h }' >> dist/ucode.sums
+	done
+	echo "ucode 校验值：$(grep -c ' ucode ' dist/ucode.sums) 个架构"
+	[ "$(grep -c ' ucode ' dist/ucode.sums)" -ge 20 ] || { echo "ucode 校验值太少，OpenWrt 官网可能出问题了"; exit 1; }
+fi
 for ai in ai noai; do
 	for ed in lite full; do
 		k=$ai-$ed
@@ -38,6 +53,7 @@ for ai in ai noai; do
 		mkdir -p "$d"
 		cp -r src docs install.sh uninstall.sh README.md LICENSE "$d/"
 		[ -s dist/cfd.sums ] && cp dist/cfd.sums "$d/src/etc/cfd.sums"
+		[ -s dist/ucode.sums ] && cp dist/ucode.sums "$d/src/etc/ucode.sums"
 		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
 		cp "docs/install-$k.md" "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$ed" "${V#v}" "$k" > "$d/EDITION"
@@ -60,12 +76,13 @@ if [ -n "$HUB_URL" ]; then
 		mkdir -p "$d"
 		cp -r src docs install.sh uninstall.sh README.md LICENSE "$d/"
 		[ -s dist/cfd.sums ] && cp dist/cfd.sums "$d/src/etc/cfd.sums"
+		[ -s dist/ucode.sums ] && cp dist/ucode.sums "$d/src/etc/ucode.sums"
 		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
 		cp docs/install-hosted.md "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=full\nPKG_HUB=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$HUB_URL" "${V#v}" "$k" > "$d/EDITION"
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done
 fi
-rm -rf dist/tmp dist/cfd.sums
+rm -rf dist/tmp dist/cfd.sums dist/ucode.sums
 (cd dist && sha256sum *.tar.gz > SHA256SUMS)
 ls -la dist

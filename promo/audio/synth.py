@@ -235,6 +235,18 @@ place(bgm, pad([mtof(n) for n in (45, 57, 60, 64, 71)], 6.0, att=0.3, rel=2.5, b
 place(bgm, sub_drop(), 5.75, 0.5)
 place(bgm, sub_drop(2.4, 100, 24), 11.8, 0.6)
 
+# 能量曲线：54s Claude 登场 +3 dB，82.4s 终幕起再 +1 dB；58.03 双屏落定、85.45 字标成形各一记 impact
+tt_ = np.arange(N) / SR
+env = 1 + (10 ** (3 / 20) - 1) * np.clip((tt_ - 53.6) / 0.6, 0, 1) + (10 ** (4 / 20) - 10 ** (3 / 20)) * np.clip((tt_ - 82.4) / 1.5, 0, 1)
+env -= (env - 1) * np.clip((tt_ - 88.0) / 1.5, 0, 1)
+bgm *= env[:, None]
+place(bgm, sub_drop(1.4, 110, 40), 58.034, 0.35)
+place(bgm, kick(0.5, 140, 45, 2.2), 58.034, 0.5)
+place(bgm, sub_drop(1.8, 110, 34), 85.448, 0.35)
+place(bgm, kick(0.5, 140, 45, 2.2), 85.448, 0.45)
+t_sh = t_(1.6)
+shimmer = sum(np.sin(2 * np.pi * f * t_sh + i) * np.exp(-t_sh * 2.2) for i, f in enumerate((2637, 3136, 3520, 4186))) * 0.05
+place(bgm, pan(shimmer, 0.2), 85.448, 1.0)
 bgm = reverb(bgm, 0.22)
 fade = np.ones(N)
 fade[-int(SR * 1.2):] = np.linspace(1, 0, int(SR * 1.2)) ** 1.5
@@ -321,10 +333,10 @@ cue('monitor-cut', 3.0, click(), 0.8)
 cue('rgb-glitch', 3.4, glitch(2.35), 0.6)
 cue('collapse-whoosh', 5.05, whoosh(0.7, 200, 3000), 0.8)
 cue('word-reveal', 6.0, whoosh(0.9, 150, 1500), 0.5)
-cue('rush-whoosh', 10.45, whoosh(1.5, 300, 7000), 0.9)
+cue('rush-whoosh', 10.3, whoosh(1.5, 300, 7000), 0.9)
 # 第二幕
-cue('spotlight-sweep', 12.0, whoosh(1.6, 500, 6000), 0.55)
-cue('phone-land', 12.55, glass_tap(1800), 0.5)
+cue('spotlight-sweep', 11.8, whoosh(1.6, 500, 6000), 0.55)
+cue('phone-land', 12.2, glass_tap(1800), 0.5)
 cue('ripple-crt', 16.435, click(), 0.6)
 cue('ripple', 16.655, whoosh(0.7, 800, 9000), 0.45)
 cue('ripple-crt', 18.504, click(), 0.6)
@@ -386,7 +398,7 @@ for i in range(int(1.25 / 0.03)):
 cues.append({'t': 82.35, 'name': 'terminal-typing', 'gain': 0.45})
 cue('enter', 84.414, key(True) * 2.0, 1.0)
 cue('morph', 84.614, whoosh(0.8, 200, 2500), 0.5)
-for i, at in enumerate((85.448, 85.707, 85.966)):
+for i, at in enumerate((85.448 + 0.083, 85.707 + 0.083, 85.966 + 0.083)):  # 弹簧落定比起跳晚约 5 帧
     cue('assemble-drop', at, glass_tap(1400 + i * 350), 0.6)
 cue('brand-sparkle', 86.224, chime(1760, 2637), 0.35)
 sfx = reverb(sfx, 0.12)

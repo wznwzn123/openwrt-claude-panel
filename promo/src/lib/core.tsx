@@ -1,4 +1,8 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
+
+/** 国内短视频平台合规版：插件名泛称化（竖屏 抖音/小红书/视频号 用） */
+export const SafeCtx = createContext(false);
+export const useSafe = () => useContext(SafeCtx);
 import {
   cancelRender,
   continueRender,

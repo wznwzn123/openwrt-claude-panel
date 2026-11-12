@@ -16,10 +16,10 @@ const TOOLS: Array<[string, string]> = [
   ['节点智能调度', 'switch_proxy'], ['UCI 配置读写与回滚', 'uci_set'], ['系统日志智能诊断', 'system_log'], ['OAF 应用过滤', 'oaf_uci'],
   ['实时网速排行', 'net_speed'], ['系统服务控制', 'service_control'], ['设备列表', 'device_list'], ['连接追踪', 'list_connections'],
   ['防火墙总览', 'firewall_overview'], ['分流规则管理', 'list_rules'], ['节点延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
-  ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['插件日志', 'openclash_log'],
+  ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['插件日志', 'plugin_log'],
   ['分流模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
   ['应用识别', 'oaf_find_app'], ['关闭异常连接', 'close_connections'], ['策略组总览', 'list_proxy_groups'], ['系统信息', 'system_info'],
-  ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['插件重启', 'restart_openclash'],
+  ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['插件重启', 'restart_plugin'],
   ['UCI 配置查看', 'uci_show'], ['应用过滤详情', 'oaf_show'], ['安全命令执行', 'run_command'], ['计划重启', 'reboot_router'],
 ];
 
@@ -27,7 +27,17 @@ const TOOLS: Array<[string, string]> = [
 const Tunnel: React.FC<{ t: number }> = ({ t }) => {
   const { W, H } = useV();
   const P = 4400;
-  const conv = ramp(t, CONVERGE, 0.55, EASE.swift);
+  const conv = ramp(t, CONVERGE, CONSOLE - CONVERGE + 0.05, EASE.exit); // 越飞越快，被吸进槽位
+  const { vertical } = useV();
+  const L = layout(W, H, vertical);
+  const slot = (i: number): [number, number] => {
+    const r = i % 2 ? { x: L.rx, y: L.ry } : { x: L.lx, y: L.ly };
+    const p = ((Math.floor(i / 2) + 0.5) / Math.ceil(TOOLS.length / 2)) * 2 * (L.pw + L.ph);
+    if (p < L.pw) return [r.x + p, r.y];
+    if (p < L.pw + L.ph) return [r.x + L.pw, r.y + p - L.pw];
+    if (p < 2 * L.pw + L.ph) return [r.x + L.pw - (p - L.pw - L.ph), r.y + L.ph];
+    return [r.x, r.y + L.ph - (p - 2 * L.pw - L.ph)];
+  };
   const items = TOOLS.map(([zh, en], i) => {
     const golden = i * 2.39996;
     const rad = 260 + (i % 5) * 120 + hash(i) * 80;
@@ -40,12 +50,14 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
     const fog = Math.min(1, s * 1.4);
     // 汇聚：飞向左右双屏
     const side = Math.cos(golden) < 0 ? -1 : 1;
-    const tx = mix(x, W / 2 + side * W * 0.24, conv);
-    const ty = mix(y, H * 0.5 + (hash(i * 9) - 0.5) * H * 0.5, conv);
+    void side;
+    const [sx, sy] = slot(i);
+    const tx = mix(x, sx, conv);
+    const ty = mix(y, sy, conv);
     const accent = i % 6 === 0;
     const dc = Math.hypot((x - W / 2) / 640, (y - H / 2) / 220);
     const titleDim = t < CONVERGE ? mix(0.08, 1, Math.min(1, Math.max(0, dc - 0.7) * 1.5)) : 1;
-    return { zh, en, x: tx, y: ty, s: mix(s, 0.5, conv), o: life * fog * titleDim * (1 - conv) * ramp(t, A, 0.3, EASE.linear), accent, z };
+    return { zh, en, x: tx, y: ty, s: mix(s, 0.3, conv), o: mix(life * fog * titleDim, 1, conv) * (1 - ramp(t, CONSOLE, 0.25, EASE.linear)) * ramp(t, A, 0.3, EASE.linear), accent, z };
   });
   items.sort((a, b) => a.z - b.z);
   // 隧道壁发丝环
@@ -61,19 +73,25 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
       {items.map((w, i) => (
         <div key={i} style={{ position: 'absolute', left: w.x, top: w.y, transform: `translate(-50%,-50%) scale(${w.s})`, opacity: w.o, whiteSpace: 'nowrap', textAlign: 'center' }}>
           <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 40, color: w.accent ? '#FFD2BF' : C.text, textShadow: w.accent ? '0 0 24px rgba(217,119,87,0.9)' : '0 0 12px rgba(120,160,255,0.35)' }}>{w.zh}</div>
-          <div style={{ fontFamily: FONT.mono, fontSize: 18, color: 'rgba(160,190,255,0.55)', marginTop: 2 }}>{w.en}</div>
         </div>
       ))}
     </Abs>
   );
 };
 
+/* 双屏版式（飞字槽位与面板同源） */
+const layout = (W: number, H: number, vertical: boolean) => {
+  const pw = vertical ? W - 80 : 860;
+  const ph = vertical ? 760 : 740;
+  return { pw, ph, lx: vertical ? 40 : W / 2 - pw - 22, rx: vertical ? 40 : W / 2 + 22, ly: vertical ? 170 : 110, ry: vertical ? 170 + ph + 30 : 110 };
+};
+
 /* —— 对话脚本 —— */
 type Cmd = { text: string; t0: number; send: number; tool: string; toolAt: number; reply: string; replyAt: number };
 const CMDS: Cmd[] = [
-  { text: '把超清影音专线切到新加坡低延迟节点', t0: 58.75, send: 60.05, tool: 'switch_proxy · test_delay', toolAt: 60.3, reply: '已将「超清影音专线」切换至 新加坡 01 · 28 ms', replyAt: 60.75 },
-  { text: '看看现在哪台设备在占满网速', t0: 62.35, send: 63.3, tool: 'net_speed · device_list', toolAt: 63.55, reply: '书房台式机正以 86.4 MB/s 下载，占用约 92% 带宽', replyAt: 63.95 },
-  { text: '给儿童平板设置每晚11点自动断网', t0: 65.55, send: 66.8, tool: 'uci_set · firewall', toolAt: 67.05, reply: '已写入定时规则：儿童平板 每晚 23:00 断网，次日 07:00 恢复', replyAt: 67.45 },
+  { text: '把超清影音专线切到新加坡低延迟节点', t0: 58.75, send: 60.05, tool: '节点切换 · 延迟测试', toolAt: 60.3, reply: '已将「超清影音专线」切换至 新加坡 01 · 28 ms', replyAt: 60.75 },
+  { text: '看看现在哪台设备在占满网速', t0: 62.35, send: 63.3, tool: '实时网速 · 设备列表', toolAt: 63.55, reply: '书房台式机正以 86.4 MB/s 下载，占用约 92% 带宽', replyAt: 63.95 },
+  { text: '给儿童平板设置每晚11点自动断网', t0: 65.55, send: 66.8, tool: 'UCI 写入 · 防火墙', toolAt: 67.05, reply: '已写入定时规则：儿童平板 每晚 23:00 断网，次日 07:00 恢复', replyAt: 67.45 },
 ];
 const CHAR = 0.072;
 
@@ -125,7 +143,7 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
     h: 130,
     node: (k) => (
       <Bubble k={k}>
-        变更前已自动备份 UCI 配置，可随时 <span style={{ fontFamily: FONT.mono, color: '#FFD2BF' }}>uci_revert</span> 一键回滚
+        变更前已自动备份 UCI 配置，可随时 <span style={{ color: '#FFD2BF' }}>一键回滚</span>
       </Bubble>
     ),
   });
@@ -253,7 +271,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
         <div style={{ marginTop: 14, opacity: bk, transform: `translateY(${(1 - bk) * 10}px)` }}>
           {row(
             <>
-              <span style={{ fontFamily: FONT.mono, fontSize: 20, color: C.text2 }}>uci_backups</span>
+              <span style={{ fontSize: 20, color: C.text2 }}>UCI 备份</span>
               <span style={{ marginLeft: 16 }}>备份 #12 · 变更前快照</span>
               <span style={{ marginLeft: 'auto', fontSize: 18, padding: '4px 12px', borderRadius: 8, background: 'rgba(217,119,87,0.25)', color: '#FFD2BF' }}>↺ 一键回滚</span>
             </>,
@@ -294,12 +312,9 @@ export const Act4: React.FC = () => {
   const fL = 1 - 0.35 * Math.min(1, focusR);
   const fR = 1 - 0.35 * (1 - Math.min(1, focusR)) * ramp(t, CONSOLE + 0.4, 0.4, EASE.linear);
   const breath = 1 + 0.03 * ramp(t, CONSOLE, END - CONSOLE, EASE.linear);
-  const pw = vertical ? W - 80 : 860;
-  const ph = vertical ? 760 : 740;
-  const lx = vertical ? 40 : W / 2 - pw - 22;
-  const rx = vertical ? 40 : W / 2 + 22;
-  const ly = vertical ? 170 : 110;
-  const ry = vertical ? 170 + ph + 30 : 110;
+  const { pw, ph, lx, rx, ly, ry } = layout(W, H, vertical);
+  const sway = vertical ? 0 : 4 * Math.sin((2 * Math.PI * (t - CONSOLE)) / 9);
+  const rim = ramp(t, CONSOLE, 0.12, EASE.out) * (1 - ramp(t, CONSOLE + 0.12, 0.6, EASE.linear));
   const barText = t < 58.55 ? '接入 Claude 自定义连接器 · 双钥匙安全隔离' : '内置 30+ 项路由底层工具 · 中文对话言出法随';
   const barK = ramp(t, t < 58.55 ? 54.55 : 58.55, 0.45, EASE.out);
   // 开幕：一束琥珀金光注入
@@ -317,14 +332,34 @@ export const Act4: React.FC = () => {
       )}
       {t >= CONSOLE - 0.2 && (
         <Abs style={{ inset: 0, transform: `scale(${breath * (1 - endOut * 0.04)})`, opacity: 1 - endOut }}>
-          <div style={{ position: 'absolute', left: lx + (vertical ? 0 : (1 - panelK) * -200), top: ly, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fL), filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5}deg) scale(${0.97 + 0.03 * fL})` }}>
+          <div style={{ position: 'absolute', left: lx + (vertical ? 0 : (1 - panelK) * -200), top: ly, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fL), filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5 + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
             <ChatCabin t={t} w={pw} h={ph} />
           </div>
-          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fR), filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5}deg) scale(${0.97 + 0.03 * fR})` }}>
+          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fR), filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5 + sway}deg) scale(${0.97 + 0.03 * fR})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
             <StatePanel t={t} w={pw} h={ph} />
           </div>
         </Abs>
       )}
+      {t >= CONSOLE && CMDS.map((c, i) => {
+        const k = ramp(t, c.toolAt - 0.05, 0.4, EASE.swift);
+        const o = Math.sin(Math.PI * Math.min(1, Math.max(0, (t - c.toolAt + 0.05) / 0.55)));
+        if (o <= 0) return null;
+        const x0 = vertical ? W / 2 : lx + pw - 30, y0 = vertical ? ly + ph - 20 : ly + ph * 0.62;
+        const x1 = vertical ? W / 2 : rx + 30, y1 = vertical ? ry + 20 : ry + ph * 0.3;
+        const hx = mix(x0, x1, k), hy = mix(y0, y1, k);
+        return (
+          <svg key={i} width={W} height={H} style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }}>
+            <defs>
+              <linearGradient id={`trail${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={hx} y2={hy}>
+                <stop offset="0" stopColor="#D97757" stopOpacity="0" />
+                <stop offset="1" stopColor="#FFD2BF" stopOpacity={0.95} />
+              </linearGradient>
+            </defs>
+            <line x1={x0} y1={y0} x2={hx} y2={hy} stroke={`url(#trail${i})`} strokeWidth={4} strokeLinecap="round" opacity={o} />
+            <circle cx={hx} cy={hy} r={9} fill="#FFE2D6" opacity={o} style={{ filter: 'drop-shadow(0 0 14px #D97757)' }} />
+          </svg>
+        );
+      })}
       {/* 底部通栏毛玻璃字幕条（屏幕大字） */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 98, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) }}>
         <Glass radius={20} fill={0.08} style={{ position: 'relative', padding: '14px 40px' }}>

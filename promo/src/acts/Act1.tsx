@@ -14,8 +14,8 @@ const COLLAPSE0 = 5.2;
 const COLLAPSE1 = 5.75;
 const WORD0 = 6.0;
 const PORTAL0 = 9.7;
-const RUSH0 = 10.5;
-const RUSH1 = 11.95;
+const RUSH0 = 10.35;
+const RUSH1 = 11.8;
 
 /** 白闪包络：峰值即刻，指数衰减（快门余韵） */
 const flashEnv = (t: number, at: number, len = 0.16) => (t < at ? 0 : Math.exp(-((t - at) / len) * 3.2));
@@ -33,10 +33,10 @@ const Viewfinder: React.FC<{ t: number; shot: number; focus?: { x: number; y: nu
       {corner(W - m, m, -1, 1)}
       {corner(m, H - m, 1, -1)}
       {corner(W - m, H - m, -1, -1)}
-      <Abs style={{ left: m + 10, bottom: m + 14, fontFamily: FONT.mono, fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.12em' }}>
+      <Abs style={{ left: m + 60, top: m + 8, fontFamily: FONT.mono, fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.12em' }}>
         ISO 3200 · 1/250 · ƒ1.8 · <span style={{ color: '#ff4d4d' }}>●</span> REC
       </Abs>
-      <Abs style={{ right: m + 10, bottom: m + 14, fontFamily: FONT.mono, fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.12em' }}>
+      <Abs style={{ right: m + 60, top: m + 8, fontFamily: FONT.mono, fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.12em' }}>
         SHOT {String(shot).padStart(2, '0')}/03 · {t < FLASH2 ? '⚡ CHARGING' : '⚡ READY'}
       </Abs>
       {focus && focus.lock >= 0 && (
@@ -84,7 +84,7 @@ const ShotA: React.FC<{ t: number }> = ({ t }) => {
       {t > 0.18 && t < 0.98 && (
         <>
           {[-1, 1].map((s) => (
-            <div key={s} style={{ position: 'absolute', left: finger(s).x - 34, top: finger(s).y - 34, width: 68, height: 68, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 55%, rgba(255,255,255,0) 72%)', border: '2px solid rgba(255,255,255,0.5)' }} />
+            <div key={s} style={{ position: 'absolute', left: finger(s).x - 48, top: finger(s).y - 48, width: 96, height: 96, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.3) 55%, rgba(255,255,255,0) 72%)', border: '3px solid rgba(255,255,255,0.85)', boxShadow: '0 6px 24px rgba(0,0,0,0.45)' }} />
           ))}
         </>
       )}

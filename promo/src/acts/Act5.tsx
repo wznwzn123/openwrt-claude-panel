@@ -27,14 +27,14 @@ const TARGETS = [
   { x0: 36, y0: 196, x1: 132, y1: 224, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
   { x0: 255, y0: 196, x1: 352, y1: 224, label: 'DNS 解析', note: '异常自愈 ×2 · 正常' },
   { x0: 36, y0: 240, x1: 132, y1: 268, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
-  { x0: 255, y0: 240, x1: 352, y1: 268, label: '网络插件进程', note: 'OpenClash · 守护中' },
+  { x0: 255, y0: 240, x1: 352, y1: 268, label: '网络插件进程', note: '进程守护中 · 正常' },
 ];
 
 const Notice: React.FC<{ t: number; at: number; title: string; body: string; slot: number }> = ({ t, at, title, body, slot }) => {
   const { fps } = useVideoConfig();
   const k = springAt(t, at, fps);
   return (
-    <div style={{ position: 'absolute', right: 70 + (1 - k) * -520, top: 690 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
+    <div style={{ position: 'absolute', right: 70 + (1 - k) * -520, top: 150 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
       <Glass radius={22} fill={0.1} style={{ position: 'relative', padding: '18px 22px', display: 'flex', gap: 16 }}>
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, flex: 'none', boxShadow: '0 0 20px rgba(34,197,94,0.45)' }}>✉</div>
         <div>
@@ -56,7 +56,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
   const px = vertical ? W / 2 : W * 0.29;
   const py = vertical ? H * 0.42 : H * 0.53;
   const left = px - pw / 2 + sw * 0.04;
-  const top = py - ph / 2 + sw * 0.04;
+  const top = py - ph / 2 + sw * 0.04 + sw * 0.115; // 状态栏下移
   const scanY = mix(-20, 800, ramp(t, SCAN0, SCAN1 - SCAN0, EASE.linear)); // 机器视线：严格匀速
   const scanO = ramp(t, SCAN0, 0.15, EASE.linear) * (1 - ramp(t, SCAN1, 0.25, EASE.linear));
   const push = 1 + 0.035 * ramp(t, A, HUD_OUT - A, EASE.linear);
@@ -87,7 +87,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           );
           const lk = ramp(t, ft + 0.12, 0.3, EASE.out);
           const labelX = vertical ? 60 + (i % 2) * (W / 2 - 40) : W * 0.47;
-          const labelY = vertical ? py + ph / 2 + 30 + Math.floor(i / 2) * 110 : 236 + i * 112;
+          const labelY = vertical ? py + ph / 2 + 30 + Math.floor(i / 2) * 110 : 470 + i * 112;
           const n = Math.floor(lk * (g.label.length + g.note.length + 3));
           const txt = `${g.label} · ${g.note}`.slice(0, n);
           return (
@@ -114,7 +114,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           );
         })}
         {/* 状态行 + 30 秒巡检环 */}
-        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.47, top: vertical ? 300 : 168, fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.16em', color: t > SCAN1 ? '#86efac' : C.cyan }}>
+        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.47, top: vertical ? 300 : 410, fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.16em', color: t > SCAN1 ? '#86efac' : C.cyan }}>
           {t > SCAN1 ? 'WATCHDOG · 4/4 SIGNALS HEALTHY' : 'WATCHDOG · SCANNING…'} · INTERVAL 30s
         </div>
       </Abs>
@@ -186,7 +186,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
               {['#ff5f57', '#febc2e', '#28c840'].map((c) => <div key={c} style={{ width: 14, height: 14, borderRadius: 7, background: c }} />)}
               <span style={{ marginLeft: 14, fontFamily: FONT.mono, fontSize: 17, color: C.text3 }}>root@OpenWrt: ~</span>
             </div>
-            <div style={{ position: 'absolute', left: 28, right: 28, top: 58, fontFamily: FONT.mono, fontSize: vertical ? 22 : 23, lineHeight: 1.55, color: '#e2e8f0', wordBreak: 'break-all', opacity: 1 - textFly, transform: `translate(${textFly * 300}px, ${-textFly * 120}px) rotate(${-textFly * 6}deg)`, filter: textFly > 0 ? `blur(${textFly * 4}px)` : undefined }}>
+            <div style={{ position: 'absolute', left: 28, right: 28, top: 58, fontFamily: FONT.mono, fontSize: vertical ? 21 : 21, lineHeight: 1.6, color: '#e2e8f0', wordBreak: 'normal', overflowWrap: 'normal', opacity: 1 - textFly, transform: `translate(${textFly * 300}px, ${-textFly * 120}px) rotate(${-textFly * 6}deg)`, filter: textFly > 0 ? `blur(${textFly * 4}px)` : undefined }}>
               <span style={{ color: '#86efac' }}>root@OpenWrt:~# </span>
               {CMD.slice(0, n)}
               {t < ENTER && Math.floor(t * 2.5) % 2 === 0 && <span style={{ display: 'inline-block', width: 12, height: 26, background: '#e2e8f0', verticalAlign: 'middle' }} />}
@@ -196,7 +196,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
         )}
         {/* 流光粒子：代码化作光粒向中心聚拢 */}
         {t > ENTER && t < MORPH + 0.9 &&
-          Array.from({ length: 70 }, (_, i) => {
+          Array.from({ length: 170 }, (_, i) => {
             const sx = W / 2 + (hash(i * 3) - 0.5) * tw;
             const sy = (vertical ? H * 0.5 : H * 0.53) + (hash(i * 5) - 0.3) * th * 0.6;
             const k = ramp(t, ENTER + hash(i * 7) * 0.25, 0.6, EASE.inQuad);

@@ -263,8 +263,19 @@ export const Phone: React.FC<{
           background: '#0b0c10',
         }}
       >
-        {src && <Img src={staticFile(src)} style={{ width: w, height: h, display: 'block' }} />}
-        {children}
+        <div style={{ position: 'absolute', left: 0, top: w * 0.115, width: w, height: h, overflow: 'hidden' }}>
+          {src && <Img src={staticFile(src)} style={{ width: w, height: h, display: 'block' }} />}
+          {children}
+        </div>
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: w * 0.115, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 ${w * 0.085}px`, boxSizing: 'border-box', fontFamily: FONT.sans, fontWeight: 600, fontSize: w * 0.04, color: '#fff' }}>
+          <span>9:41</span>
+          <span style={{ display: 'flex', gap: w * 0.015, alignItems: 'center' }}>
+            <span style={{ letterSpacing: -1 }}>▂▄▆█</span>
+            <span style={{ display: 'inline-block', width: w * 0.06, height: w * 0.028, borderRadius: 3, border: '1.5px solid #fff', position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 1.5, top: 1.5, bottom: 1.5, width: '70%', background: '#fff', borderRadius: 1 }} />
+            </span>
+          </span>
+        </div>
         {/* 屏幕玻璃反光 */}
         <div
           style={{

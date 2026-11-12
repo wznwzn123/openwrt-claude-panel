@@ -1,6 +1,6 @@
 import React from 'react';
 import { Img, staticFile } from 'remotion';
-import { C, EASE, FONT, mix, ramp } from './core';
+import { C, EASE, FONT, mix, ramp, useSafe } from './core';
 import { BrandMark, Dot, Tap } from './visual';
 import { Card, OkBadge, ScreenShell, Toggle, rollNum } from './screens';
 
@@ -17,6 +17,7 @@ const PLUGINS: Array<[string, string, number]> = [
 
 export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   const k = w / 360;
+  const safe = useSafe();
   const sweep = ramp(t, 37.15, 1.0, EASE.linear);
   const fail = ramp(t, 38.7, 0.25, EASE.out);
   const switched = ramp(t, 39.35, 0.35, EASE.out);
@@ -29,11 +30,12 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
     <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
       <ScreenShell title="网络插件" sub="自动识别已安装插件 · 一次只开一个" badge={<OkBadge text="6 个已识别" />}>
         <Card style={{ padding: '6px 12px' }}>
-          {PLUGINS.map(([n, col, at], i) => {
+          {PLUGINS.map(([n0, col, at], i) => {
+            const n = safe ? `主流网络插件 ${String(i + 1).padStart(2, '0')}` : n0;
             const on = ramp(t, at, 0.3, EASE.out);
             return (
               <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 37, borderTop: i ? '1px solid rgba(60,60,67,.1)' : undefined }}>
-                <div style={{ width: 24, height: 24, borderRadius: 7, background: col, color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: mix(0.3, 1, on) }}>{n[0]}</div>
+                <div style={{ width: 24, height: 24, borderRadius: 7, background: col, color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: mix(0.3, 1, on) }}>{safe ? i + 1 : n[0]}</div>
                 <div style={{ fontSize: 15, fontWeight: 650, opacity: mix(0.35, 1, on) }}>{n}</div>
                 <div style={{ marginLeft: 'auto', opacity: on, transform: `scale(${mix(0.6, 1, on)})` }}>
                   {i === 0 ? <OkBadge text="运行中" /> : <OkBadge text="已识别" color="#2f6bff" />}
@@ -166,7 +168,8 @@ export const PwaFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a
             const y = 90 + Math.floor(i / 4) * 96;
             return (
               <div key={i} style={{ position: 'absolute', left: x, top: y, width: 60, textAlign: 'center' }}>
-                <div style={{ width: 60, height: 60, borderRadius: 15, background: isNew ? 'transparent' : 'rgba(255,255,255,0.18)', transform: isNew ? `scale(${iconPop})` : undefined }}>
+                <div style={{ width: 60, height: 60, borderRadius: 15, background: isNew ? 'transparent' : `linear-gradient(135deg, hsl(${(i * 47) % 360},70%,62%), hsl(${(i * 47 + 40) % 360},75%,48%))`, transform: isNew ? `scale(${iconPop})` : undefined, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, fontWeight: 800 }}>
+                  {!isNew && ['✉', '☼', '♪', '⌖', '✎', '◷', '☁', '⚙', '', '✆', '♥', '⌂', '✈', '☰', '◎', '▶'][i]}
                   {isNew && <BrandMark size={60} id="pwa" />}
                 </div>
                 <div style={{ fontSize: 11, color: '#fff', marginTop: 5, opacity: isNew ? iconPop : 0.6 }}>{isNew ? '路由器面板' : ''}</div>
@@ -222,7 +225,17 @@ export const AndroidFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, 
       </div>
       {!scanned && (
         <div style={{ position: 'absolute', left: 50, top: 170, width: 260, height: 260 }}>
-          <div style={{ position: 'absolute', inset: 30, background: 'repeating-conic-gradient(#e2e8f0 0% 25%, #0b1220 0% 50%) 0 0/24px 24px', opacity: 0.85, borderRadius: 6 }} />
+          <svg viewBox="0 0 25 25" style={{ position: 'absolute', inset: 30, width: 200, height: 200, background: '#f8fafc', borderRadius: 6, padding: 8, boxSizing: 'border-box' }} shapeRendering="crispEdges">
+            {Array.from({ length: 625 }, (_, i) => {
+              const x = i % 25, y = Math.floor(i / 25);
+              const inFinder = (fx: number, fy: number) => x >= fx && x < fx + 7 && y >= fy && y < fy + 7;
+              const f = [[0, 0], [18, 0], [0, 18]].find(([fx, fy]) => inFinder(fx, fy));
+              let on: boolean;
+              if (f) { const dx = x - f[0], dy = y - f[1]; on = dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4); }
+              else on = Math.abs(Math.sin(i * 12.9898 + 78.233) * 43758.5453) % 1 > 0.52;
+              return on ? <rect key={i} x={x} y={y} width={1} height={1} fill="#0b1220" /> : null;
+            })}
+          </svg>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} style={{ position: 'absolute', width: 40, height: 40, left: i % 2 ? undefined : 0, right: i % 2 ? 0 : undefined, top: i < 2 ? 0 : undefined, bottom: i < 2 ? undefined : 0, borderLeft: i % 2 ? undefined : '4px solid #22d3ee', borderRight: i % 2 ? '4px solid #22d3ee' : undefined, borderTop: i < 2 ? '4px solid #22d3ee' : undefined, borderBottom: i < 2 ? undefined : '4px solid #22d3ee' }} />
           ))}

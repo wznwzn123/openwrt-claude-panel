@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
-import { ensureFonts, useT } from './lib/core';
+import { SafeCtx, ensureFonts, useT } from './lib/core';
 import { Act1 } from './acts/Act1';
 import { Act2 } from './acts/Act2';
 import { Act3 } from './acts/Act3';
@@ -18,16 +18,18 @@ export const ACTS = [
   { id: 'a5', start: 74, end: 90 },
 ];
 
-export const Main: React.FC<{ subtitles?: boolean }> = ({ subtitles = true }) => {
+export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtitles = true, safe = false }) => {
   const t = useT();
   return (
+    <SafeCtx.Provider value={safe}>
     <AbsoluteFill style={{ background: '#07090E', overflow: 'hidden' }}>
-      {t < 12 && <Act1 />}
-      {t >= 12 && t < 28 && <Act2 />}
+      {t < 11.8 && <Act1 />}
+      {t >= 11.8 && t < 28 && <Act2 />}
       {t >= 28 && t < 54 && <Act3 />}
       {t >= 54 && t < 74 && <Act4 />}
       {t >= 74 && <Act5 />}
       {subtitles && <Subtitles />}
     </AbsoluteFill>
+    </SafeCtx.Provider>
   );
 };

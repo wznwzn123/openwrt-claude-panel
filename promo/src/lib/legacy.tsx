@@ -16,7 +16,7 @@ export const LegacyAdmin: React.FC<{ errorOn?: number; dialogOn?: number }> = ({
   <div style={{ width: 1024, height: 2048, background: '#fff', fontFamily: 'Arial, "Noto Sans SC", sans-serif', fontSize: 12, color: '#333', position: 'relative' }}>
     <div style={{ height: 44, background: '#2b2b2b', display: 'flex', alignItems: 'center', padding: '0 16px', gap: 22, color: '#ddd' }}>
       <b style={{ color: '#fff', fontSize: 18 }}>OpenWrt</b>
-      {['Status', 'System', 'Services', 'Network', 'VPN', 'Statistics', 'Logout'].map((n) => (
+      {['Status', 'System', 'Services', 'Network', 'Firewall', 'Statistics', 'Logout'].map((n) => (
         <span key={n} style={{ fontSize: 13 }}>{n} ▾</span>
       ))}
       <span style={{ marginLeft: 'auto', background: '#c00', color: '#fff', borderRadius: 3, padding: '2px 6px', fontSize: 11 }}>Unsaved Changes: 3</span>

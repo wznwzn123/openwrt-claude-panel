@@ -7,8 +7,8 @@ import { HomeLive, HomePhotoTheme } from '../lib/screens';
 /* 第二幕 · 12–28s · 10 Aurora & Glassmorphism
  * 配方卡：spotlight-sweep → palette-theme-ripple → exploded-view */
 
-const A = 12;
-const PHONE_IN = 12.25;
+const A = 11.8;
+const PHONE_IN = 11.8;
 const RIP1 = 16.655; // 涟漪①：浅 → 深
 const RIP2 = 18.724; // 涟漪②：深 → 相册磨砂玻璃
 const SLIDE = 19.759; // 手机滑向右侧 + 文字对穿到左侧
@@ -130,8 +130,10 @@ export const Act2: React.FC = () => {
   const slideK = springAt(t, SLIDE, fps, { damping: 30, stiffness: 120, mass: 1 });
   const px0 = vertical ? W / 2 : W * 0.28;
   const px1 = vertical ? W / 2 : W * 0.72;
-  const px = mix(-0.25 * W, px0, inK) + (px1 - px0) * slideK;
+  // 自 O 的门洞（画面中心纵深）飞出，落到左黄金分割
+  const px = mix(W / 2, px0, inK) + (px1 - px0) * slideK;
   const py = vertical ? H * 0.29 : H * 0.5 + 10;
+  const depthS = mix(0.35, 1, inK);
   const ry = mix(14, -16, slideK) + 2 * Math.sin(t * 0.7); // ±2° 呼吸游走
   const outK = ramp(t, OUT, 0.45, EASE.exit);
   const breath = 1 + 0.038 * ramp(t, A, 16, EASE.linear);
@@ -155,14 +157,21 @@ export const Act2: React.FC = () => {
     <Abs style={{ inset: 0, overflow: 'hidden' }}>
       <AuroraBG intensity={mix(0.6, 1, ramp(t, A, 1.2, EASE.out))} />
       <SpotlightSweep t={t} />
+      {/* 穿出 O：11.8s 边缘闪光（与 Sub Drop 同拍），环从门洞扩散出画 */}
+      {t < 12.5 && (
+        <>
+          <Abs style={{ left: W / 2, top: H / 2, width: 40 + 2400 * ramp(t, A, 0.55, EASE.out), height: 40 + 2400 * ramp(t, A, 0.55, EASE.out), transform: 'translate(-50%,-50%)', borderRadius: '50%', border: '3px solid rgba(200,230,255,0.95)', boxShadow: '0 0 40px rgba(124,58,237,0.8), inset 0 0 40px rgba(37,99,235,0.6)', opacity: 1 - ramp(t, A, 0.55, EASE.linear) }} />
+          <Abs style={{ inset: 0, background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9), rgba(160,200,255,0.2) 40%, rgba(255,255,255,0) 70%)', opacity: Math.exp(-((t - A) / 0.09) * 3.2) }} />
+        </>
+      )}
       <Abs style={{ inset: 0, transform: `scale(${breath}) translateY(${-outK * 40}px)`, opacity: 1 - outK, transformOrigin: '50% 50%' }}>
         {/* 2.5D 真机 + 层级爆炸 */}
         <div style={{ position: 'absolute', left: px - pw / 2, top: py - ph / 2, width: pw, height: ph, perspective: 1600 }}>
-          <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `rotateY(${ry}deg) rotateX(${4 + 4 * ex}deg)` }}>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-330 * ex}px, ${-30 * ex}px, ${-260 * ex}px)`, opacity: ex }}>
+          <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `scale(${depthS}) rotateY(${ry}deg) rotateX(${4 + 4 * ex}deg)`, opacity: Math.min(1, inK * 2.5) }}>
+            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-330 * ex}px, ${-110 * ex}px, ${-260 * ex}px)`, opacity: ex }}>
               <DaemonLayer w={sw} />
             </div>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-165 * ex}px, ${-15 * ex}px, ${-130 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-165 * ex}px, ${-55 * ex}px, ${-130 * ex}px)`, opacity: ex }}>
               <TunnelLayer t={t} w={sw} />
             </div>
             <div style={{ position: 'absolute', inset: 0, transform: `translateZ(${60 * ex}px)` }}>
@@ -174,7 +183,7 @@ export const Act2: React.FC = () => {
             {['玻璃交互层 · PWA', '加密隧道层 · Cloudflare', '守护进程层 · ucode'].map((s, i) => {
               const k = ramp(t, EXPLODE + 0.5 + i * 0.25, 0.4, EASE.out);
               return (
-                <div key={s} style={{ position: 'absolute', left: [sw * 0.5, sw * 0.04 - 20, sw * 0.04 - 20][i], top: [-56, sw * 0.04 - 56, sw * 2.04 + 16][i], transform: `translate3d(${[0, -165, -330][i] * ex}px, ${[0, -15, -30][i] * ex}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
+                <div key={s} style={{ position: 'absolute', left: [sw * 0.5, sw * 0.04 - 20, sw * 0.04 - 20][i], top: [-56, sw * 0.04 - 52, sw * 0.04 - 52][i], transform: `translate3d(${[0, -165, -330][i] * ex}px, ${[0, -55, -110][i] * ex}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
                   <Pill bg="rgba(15,23,42,0.6)" style={{ fontSize: 18, padding: '6px 14px' }}>
                     <Dot color={[C.blue, C.cyan, C.violet][i]} size={8} /> {s}
                   </Pill>
@@ -185,7 +194,7 @@ export const Act2: React.FC = () => {
         </div>
 
         {/* 标题块 */}
-        <div style={{ position: 'absolute', left: titleX, top: titleY, transform: `scale(${titleScale})`, transformOrigin: '0 0' }}>
+        <div style={{ position: 'absolute', left: titleX, top: titleY, transform: `scale(${titleScale})`, transformOrigin: '0 0', opacity: vertical ? 1 : 1 - ramp(t, SLIDE - 0.3, 0.22, EASE.exit) + ramp(t, SLIDE + 0.32, 0.4, EASE.out) }}>
           <div style={{ opacity: ramp(t, 12.6, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 12.6, 0.6, EASE.out)) * 12}px)` }}>
             <Pill style={{ fontSize: 20 }}>
               <Dot color={C.ok} size={8} /> 开源项目 · MIT · <span style={{ fontFamily: FONT.mono }}>v3.1.1</span>

@@ -25,7 +25,8 @@ const NavCapsule: React.FC<{ t: number }> = ({ t }) => {
   const { W, vertical } = useV();
   const idx = t < SEG_B ? 0 : t < SEG_C ? 1 : 2;
   const k = ramp(t, NAV[idx].at + 0.1, 0.45, EASE.out);
-  const inK = ramp(t, A + 0.2, 0.5, EASE.out);
+  const yieldK = (ramp(t, 36.75, 0.3, EASE.smooth) - ramp(t, 40.05, 0.3, EASE.smooth)) + (ramp(t, 43.95, 0.3, EASE.smooth) - ramp(t, 45.4, 0.3, EASE.smooth));
+  const inK = ramp(t, A + 0.2, 0.5, EASE.out) * (1 - Math.min(1, Math.max(0, yieldK)));
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 120 : 52, display: 'flex', justifyContent: 'center', opacity: inK }}>
       <Glass radius={999} fill={0.08} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, padding: vertical ? '16px 28px' : '16px 34px', maxWidth: W - 80 }}>
@@ -192,9 +193,9 @@ export const Act3: React.FC = () => {
       {t >= SEG_B - 0.1 && t < SEG_C + 0.5 && (
         <Abs style={{ inset: 0, transform: `scale(${pushB})`, transformOrigin: `${togX}px ${togY}px` }}>
         <Abs style={{ inset: 0, opacity: 1 - bOut, transform: `scale(${(1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)) * (1 - 0.03 * bOut)})` }}>
-          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 300} y={vertical ? H * 0.55 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={Math.min(1, panelK * 1.5)} />
+          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 300} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={Math.min(1, panelK * 1.5)} />
           {/* 定时断网锁定提示 */}
-          <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.55 - 74 : 920, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out) }}>
+          <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.52 - 74 : 920, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out) }}>
             <Pill bg="rgba(255,149,0,0.22)" color="#ffd8a8" style={{ fontSize: 24 }}>
               🔒 儿童平板 · 每晚 23:00 自动断网 · 已锁定
             </Pill>

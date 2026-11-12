@@ -67,7 +67,9 @@ async function boot(b, opts = {}) {
   // 手机上用的是系统字体（苹方 / 鸿蒙黑体等）；采集机没有这些字体，换成同类的开源字体 Noto Sans SC + Inter
   await page.addStyleTag({ content: "@import url('/__fonts/noto-sans-sc/index.css');@import url('/__fonts/inter/index.css');@import url('/__fonts/jetbrains-mono/index.css');" +
     ":root{--mono:'JetBrains Mono Variable',monospace!important} html,body,button,input,textarea,select{font-family:'Inter Variable','Noto Sans SC Variable',sans-serif!important} .mono,code,pre{font-family:'JetBrains Mono Variable','Noto Sans SC Variable',monospace!important}" +
-    '.dock{display:none!important} .toast{display:none!important}' });
+    '.dock{display:none!important} .toast{display:none!important}' +
+    // 大陆发布口径：侧边栏里折叠着的「代理」分组不上画面（界面本身不改）
+    '#sidenav .ng[data-g="代理"]{display:none!important}' });
   await page.evaluate(() => document.fonts.ready);
   // 大陆发布口径（v2 评审）：面板顶栏副标题写着「没装代理插件」、自动任务页脚注也提到代理插件，截图时隐藏；
   // 更新卡里「设置都保留，不会断网」一句可能被认为是绝对化用语，只保留版本号那一行。界面本身不变，只是这几处不上画面。

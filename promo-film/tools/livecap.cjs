@@ -66,6 +66,8 @@ async function boot(b, clip) {
   await page.addStyleTag({ content: "@import url('/__fonts/noto-sans-sc/index.css');@import url('/__fonts/inter/index.css');@import url('/__fonts/jetbrains-mono/index.css');" +
     ":root{--mono:'JetBrains Mono Variable',monospace!important} html,body,button,input,textarea,select{font-family:'Inter Variable','Noto Sans SC Variable',sans-serif!important} .mono,code,pre{font-family:'JetBrains Mono Variable','Noto Sans SC Variable',monospace!important}" +
     '.dock{display:none!important} #topSub{visibility:hidden!important} #auCard > p.muted{display:none!important}' +
+    '#sidenav .ng[data-g="代理"]{display:none!important}' + // 大陆发布口径：侧边栏「代理」分组不上画面
+
     '.page .hero > p.muted{display:none!important} #termQuick{display:none!important} #stBody > p.muted, #stBody section.card:first-child{display:none!important} .modal .pzadd{display:none!important}' +
     '#__cur{position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35))} #__rip{position:fixed;z-index:2147483646;pointer-events:none;border-radius:50%;border:3px solid rgba(255,255,255,.95);box-shadow:0 0 18px rgba(127,178,255,.9)}' });
   await page.evaluate(() => document.fonts.ready);

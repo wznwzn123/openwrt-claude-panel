@@ -14,12 +14,12 @@ const END = 74;
 
 /* 30+ 项底层能力（来自仓库 cgi-bin/mcp 的真实工具清单，中文化） */
 const TOOLS: Array<[string, string]> = [
-  ['节点智能调度', 'switch_proxy'], ['UCI 配置读写与回滚', 'uci_set'], ['系统日志智能诊断', 'system_log'], ['OAF 应用过滤', 'oaf_uci'],
+  ['线路智能调度', 'switch_proxy'], ['UCI 配置读写与回滚', 'uci_set'], ['系统日志智能诊断', 'system_log'], ['OAF 应用过滤', 'oaf_uci'],
   ['实时网速排行', 'net_speed'], ['系统服务控制', 'service_control'], ['设备列表', 'device_list'], ['连接追踪', 'list_connections'],
-  ['防火墙总览', 'firewall_overview'], ['分流规则管理', 'list_rules'], ['节点延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
+  ['防火墙总览', 'firewall_overview'], ['调度规则管理', 'list_rules'], ['线路延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
   ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['套件日志', 'suite_log'],
-  ['分流模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
-  ['应用识别', 'oaf_find_app'], ['关闭异常连接', 'close_connections'], ['策略组总览', 'list_proxy_groups'], ['系统信息', 'system_info'],
+  ['调度模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
+  ['应用识别', 'oaf_find_app'], ['关闭异常连接', 'close_connections'], ['加速通道总览', 'list_proxy_groups'], ['系统信息', 'system_info'],
   ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['套件重启', 'restart_suite'],
   ['UCI 配置查看', 'uci_show'], ['应用过滤详情', 'oaf_show'], ['安全命令执行', 'run_command'], ['计划重启', 'reboot_router'],
 ];
@@ -42,7 +42,8 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
   const items = TOOLS.map(([zh, en], i) => {
     const golden = i * 2.39996;
     const rad = 260 + (i % 5) * 120 + hash(i) * 80;
-    const u = ((t - A) * 0.42 + i / TOOLS.length) % 1.0;
+    const layer = i % 3; // 三层纵深，速度错开
+    const u = ((t - A) * [0.34, 0.42, 0.52][layer] + i / TOOLS.length) % 1.0;
     const z = mix(-7000, 3000, u);
     const s = P / (P - z);
     const x = W / 2 + Math.cos(golden) * rad * s;
@@ -58,7 +59,8 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
     const accent = i % 6 === 0;
     const dc = Math.hypot((x - W / 2) / 640, (y - H / 2) / 220);
     const titleDim = t < CONVERGE ? mix(0.08, 1, Math.min(1, Math.max(0, dc - 0.7) * 1.5)) : 1;
-    return { zh, en, x: tx, y: ty, s: mix(s, 0.3, conv), o: mix(life * fog * titleDim, 1, conv) * (1 - ramp(t, CONSOLE, 0.25, EASE.linear)) * ramp(t, A, 0.3, EASE.linear), accent, z };
+    const blur = conv > 0.5 ? 0 : s < 0.55 ? (0.55 - s) * 7 : s > 1.6 ? Math.min(6, (s - 1.6) * 3) : 0; // 远景失焦 / 擦身而过失焦
+    return { zh, en, x: tx, y: ty, s: mix(s, 0.3, conv), o: mix(life * fog * titleDim, 1, conv) * (1 - ramp(t, CONSOLE + 0.05, 0.15, EASE.linear)) * ramp(t, A, 0.3, EASE.linear), accent, z, blur };
   });
   items.sort((a, b) => a.z - b.z);
   // 隧道壁发丝环
@@ -72,7 +74,7 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
       <Abs style={{ left: W / 2 - 400, top: H / 2 - 400, width: 800, height: 800, borderRadius: '50%', background: `radial-gradient(circle, rgba(217,119,87,${0.5 + 0.15 * Math.sin(t * 3)}) 0%, rgba(37,99,235,0.18) 40%, rgba(0,0,0,0) 70%)`, opacity: 1 - conv }} />
       {rings}
       {items.map((w, i) => (
-        <div key={i} style={{ position: 'absolute', left: w.x, top: w.y, transform: `translate(-50%,-50%) scale(${w.s})`, opacity: w.o, whiteSpace: 'nowrap', textAlign: 'center' }}>
+        <div key={i} style={{ position: 'absolute', left: w.x, top: w.y, transform: `translate(-50%,-50%) scale(${w.s})`, opacity: w.o, whiteSpace: 'nowrap', textAlign: 'center', filter: w.blur > 0.3 ? `blur(${w.blur.toFixed(1)}px)` : undefined }}>
           <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 40, color: w.accent ? '#FFD2BF' : C.text, textShadow: w.accent ? '0 0 24px rgba(217,119,87,0.9)' : '0 0 12px rgba(120,160,255,0.35)' }}>{w.zh}</div>
         </div>
       ))}
@@ -200,10 +202,10 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
   let body: React.ReactNode = null;
   if (state <= 1) {
     const sel = state === 1 ? ramp(t, s1 + 0.1, 0.35, EASE.snappy) : 0;
-    const nodes: Array<[string, string]> = [['备用线路 05', '超时'], ['企业多线内网节点', '35 ms'], ['跨区域办公加速组', '42 ms'], ['低延迟电竞专线', '28 ms']];
+    const nodes: Array<[string, string]> = [['备用线路 05', '超时'], ['企业多线内网线路', '35 ms'], ['跨区域办公线路', '42 ms'], ['低延迟线路 01', '28 ms']];
     body = (
       <>
-        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>策略组 · 4K 超清本地影音加速</div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>加速通道 · 超清影音通道</div>
         <div style={{ position: 'relative' }}>
           {nodes.map(([n, ms], i) => row(
             <>
@@ -216,7 +218,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
             n,
           ))}
         </div>
-        {state === 1 && <div style={{ marginTop: 10, opacity: sel }}><Pill bg="rgba(52,199,89,0.2)" color="#bbf7d0">✓ 已切换至低延迟电竞专线 · 28 ms</Pill></div>}
+        {state === 1 && <div style={{ marginTop: 10, opacity: sel }}><Pill bg="rgba(52,199,89,0.2)" color="#bbf7d0">✓ 已切换至低延迟线路 01 · 28 ms</Pill></div>}
       </>
     );
   } else if (state === 2) {
@@ -231,7 +233,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
             const y = mix(i, sorted.indexOf(i), sortK) * 74;
             const top = i === 2;
             return (
-              <div key={n} style={{ position: 'absolute', left: 0, right: 0, top: y }}>
+              <div key={n} style={{ position: 'absolute', left: 0, right: 0, top: y, transform: `perspective(900px) rotateX(${(1 - ramp(t, s2 + 0.05 + i * 0.06, 0.35, EASE.snappy)) * 88}deg)`, transformOrigin: '50% 50%' }}>
                 {row(
                   <>
                     <span style={{ width: 200 }}>{n}</span>
@@ -242,7 +244,14 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
                   </>,
                   false,
                 )}
-                {top && sortK > 0.9 && <div style={{ position: 'absolute', left: -6, right: -6, top: -6, height: 76, borderRadius: 20, boxShadow: '0 0 0 2px #f59e0b, 0 0 30px rgba(245,158,11,0.4)' }} />}
+                {top && sortK > 0.9 && (
+                  <>
+                    <div style={{ position: 'absolute', left: -6, right: -6, top: -6, height: 76, borderRadius: 20, boxShadow: '0 0 0 2px #f59e0b, 0 0 30px rgba(245,158,11,0.45)' }} />
+                    {[[0, 0], [1, 0], [0, 1], [1, 1]].map(([bx, by], j) => (
+                      <div key={j} style={{ position: 'absolute', [bx ? 'right' : 'left']: -14, top: by ? 58 : -14, width: 20, height: 20, borderLeft: bx ? undefined : '3px solid #fbbf24', borderRight: bx ? '3px solid #fbbf24' : undefined, borderTop: by ? undefined : '3px solid #fbbf24', borderBottom: by ? '3px solid #fbbf24' : undefined, filter: 'drop-shadow(0 0 6px #f59e0b)' }} />
+                    ))}
+                  </>
+                )}
               </div>
             );
           })}
@@ -258,7 +267,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
         <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>防火墙 · 定时策略</div>
         {row(
           <>
-            <span>儿童平板 · 每晚 23:00 → 次日 07:00</span>
+            <span>儿童平板 · 每晚 23:00 自动休眠 → 次日 07:00</span>
             <span style={{ marginLeft: 'auto', fontSize: 20, color: '#bbf7d0' }}>✓ 已写入生效</span>
           </>,
           wk > 0.5,
@@ -338,10 +347,10 @@ export const Act4: React.FC = () => {
       )}
       {t >= CONSOLE - 0.2 && (
         <Abs style={{ inset: 0, transform: `scale(${breath * (1 - endOut * 0.04)})`, opacity: 1 - endOut }}>
-          <div style={{ position: 'absolute', left: lx + (vertical ? 0 : (1 - panelK) * -200), top: ly, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fL), filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5 + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
+          <div style={{ position: 'absolute', left: lx, top: ly, width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fL, filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5 + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
             <ChatCabin t={t} w={pw} h={ph} />
           </div>
-          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fR), filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5 + sway}deg) scale(${(0.97 + 0.03 * fR) * (1 + impact)})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim}), 0 0 ${80 * greenFlash}px rgba(52,199,89,${0.85 * greenFlash})`, borderRadius: 34 }}>
+          <div style={{ position: 'absolute', left: rx, top: ry, width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fR, filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5 + sway}deg) scale(${(0.97 + 0.03 * fR) * (1 + impact)})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim}), 0 0 ${80 * greenFlash}px rgba(52,199,89,${0.85 * greenFlash})`, borderRadius: 34 }}>
             <StatePanel t={t} w={pw} h={ph} />
             <div style={{ position: 'absolute', inset: 0, borderRadius: 34, background: `radial-gradient(ellipse at 20% 30%, rgba(74,222,128,${0.35 * greenFlash}), rgba(52,199,89,${0.12 * greenFlash}) 60%, rgba(52,199,89,0) 100%)`, boxShadow: `inset 0 0 0 ${2 + 2 * greenFlash}px rgba(134,239,172,${0.9 * greenFlash})`, pointerEvents: 'none' }} />
           </div>
@@ -367,6 +376,29 @@ export const Act4: React.FC = () => {
           </svg>
         );
       })}
+      {(() => {
+        const s1 = CMDS[0].toolAt + 0.15;
+        const s3 = CMDS[2].toolAt + 0.15;
+        const cxr = vertical ? W / 2 : rx + pw * 0.5;
+        const cyr = vertical ? ry + ph * 0.35 : ry + ph * 0.42;
+        const R = Math.hypot(W, H);
+        const p1 = ramp(t, s1, 0.9, EASE.out);
+        const p3 = ramp(t, s3, 0.8, EASE.swift);
+        return (
+          <>
+            {t >= s1 && t < s1 + 0.95 && [0, 0.12, 0.24].map((d, j) => {
+              const q = ramp(t, s1 + d, 0.8, EASE.out);
+              return <div key={j} style={{ position: 'absolute', left: cxr, top: cyr, width: 2 * R * q, height: 2 * R * q, transform: 'translate(-50%,-50%)', borderRadius: '50%', border: `${3 - j}px solid rgba(255,214,170,${0.9 * (1 - q)})`, boxShadow: `0 0 40px rgba(217,119,87,${0.6 * (1 - q)}), inset 0 0 60px rgba(96,165,250,${0.35 * (1 - q)})`, pointerEvents: 'none' }} />;
+            })}
+            {t >= s1 - 0.05 && t < s1 + 1.6 && (
+              <div style={{ position: 'absolute', left: cxr - 120, top: cyr - 120, width: 240, height: 240, borderRadius: '50%', background: `radial-gradient(circle, rgba(255,240,220,${0.95 * (1 - ramp(t, s1 + 0.2, 1.3, EASE.out))}) 0%, rgba(217,119,87,${0.5 * (1 - p1)}) 35%, rgba(0,0,0,0) 70%)`, pointerEvents: 'none', mixBlendMode: 'screen' }} />
+            )}
+            {t >= s3 && t < s3 + 0.85 && (
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, rgba(52,199,89,0) ${p3 * 130 - 40}%, rgba(134,239,172,0.55) ${p3 * 130 - 15}%, rgba(52,199,89,0) ${p3 * 130}%)`, mixBlendMode: 'screen', pointerEvents: 'none' }} />
+            )}
+          </>
+        );
+      })()}
       {/* 底部通栏毛玻璃字幕条（屏幕大字） */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 160, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) }}>
         <Glass radius={20} fill={0.08} style={{ position: 'relative', padding: '14px 40px' }}>

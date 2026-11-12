@@ -145,107 +145,122 @@
   "gain": 0.35
  },
  {
-  "t": 37.15,
+  "t": 34.822,
   "name": "tap",
   "gain": 0.8
  },
  {
-  "t": 36.8,
+  "t": 34.472,
   "name": "push-in",
   "gain": 0.35
  },
  {
-  "t": 37.85,
+  "t": 35.522,
   "name": "latency-lock",
   "gain": 0.3
  },
  {
-  "t": 37.97,
+  "t": 35.642,
   "name": "latency-lock",
   "gain": 0.3
  },
  {
-  "t": 38.09,
+  "t": 35.762,
   "name": "latency-lock",
   "gain": 0.3
  },
  {
-  "t": 38.7,
+  "t": 36.372,
   "name": "node-fail",
   "gain": 0.45
  },
  {
-  "t": 39.35,
+  "t": 37.022,
   "name": "auto-switch",
   "gain": 0.6
  },
  {
-  "t": 40.098,
+  "t": 37.77,
   "name": "seg-b",
   "gain": 0.5
  },
  {
-  "t": 41.58,
+  "t": 39.252,
   "name": "bar-shoot",
   "gain": 0.6
  },
  {
-  "t": 42.0,
+  "t": 39.672,
   "name": "ceiling-crack",
   "gain": 0.55
  },
  {
-  "t": 42.26,
+  "t": 39.932,
   "name": "axis-rescale",
   "gain": 0.5
  },
  {
-  "t": 44.586,
+  "t": 42.258,
   "name": "toggle",
   "gain": 0.85
  },
  {
-  "t": 44.78,
+  "t": 42.452,
   "name": "lock",
   "gain": 0.45
  },
  {
-  "t": 45.788,
+  "t": 43.46,
   "name": "seg-c",
   "gain": 0.5
  },
  {
-  "t": 47.188,
+  "t": 44.86,
   "name": "share-tap",
   "gain": 0.7
  },
  {
-  "t": 47.838,
+  "t": 45.51,
   "name": "icon-pop",
   "gain": 0.45
  },
  {
-  "t": 48.438,
+  "t": 46.11,
   "name": "icon-tap",
   "gain": 0.7
  },
  {
-  "t": 49.388,
+  "t": 47.06,
   "name": "fingerprint",
   "gain": 0.3
  },
  {
-  "t": 50.188,
+  "t": 47.86,
   "name": "unlock",
   "gain": 0.45
  },
  {
-  "t": 48.038,
-  "name": "scan-ok",
+  "t": 44.01,
+  "name": "lan-radar",
+  "gain": 0.3
+ },
+ {
+  "t": 44.56,
+  "name": "lan-radar",
+  "gain": 0.3
+ },
+ {
+  "t": 44.91,
+  "name": "lan-found",
   "gain": 0.35
  },
  {
-  "t": 51.25,
+  "t": 45.31,
+  "name": "lan-connected",
+  "gain": 0.35
+ },
+ {
+  "t": 48.922,
   "name": "router-switch",
   "gain": 0.7
  },
@@ -270,87 +285,102 @@
   "gain": 0.4
  },
  {
-  "t": 62.703,
+  "t": 59.172,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 63.593,
+  "t": 60.062,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 63.593,
+  "t": 60.062,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 63.963,
+  "t": 60.432,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 64.183,
+  "t": 60.652,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 64.182,
+  "t": 64.245,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 65.012,
+  "t": 65.075,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 65.012,
+  "t": 65.075,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 65.382,
+  "t": 65.445,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 65.602,
+  "t": 65.665,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 65.528,
+  "t": 68.3,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 66.538,
+  "t": 69.31,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 66.538,
+  "t": 69.31,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 66.908,
+  "t": 69.68,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 67.128,
+  "t": 69.9,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 68.13,
+  "t": 60.462,
+  "name": "hero-pulse",
+  "gain": 0.55
+ },
+ {
+  "t": 65.495,
+  "name": "flip-reorder",
+  "gain": 0.4
+ },
+ {
+  "t": 69.71,
+  "name": "success-wave",
+  "gain": 0.45
+ },
+ {
+  "t": 70.425,
   "name": "amber-beam",
   "gain": 0.45
  },
  {
-  "t": 68.5,
+  "t": 70.795,
   "name": "uci-backup",
   "gain": 0.45
  },
@@ -410,9 +440,14 @@
   "gain": 1.0
  },
  {
-  "t": 84.614,
-  "name": "morph",
+  "t": 84.434,
+  "name": "collapse",
   "gain": 0.5
+ },
+ {
+  "t": 84.754,
+  "name": "core-burst",
+  "gain": 0.55
  },
  {
   "t": 84.45,

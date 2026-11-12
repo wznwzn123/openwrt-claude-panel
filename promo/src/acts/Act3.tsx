@@ -15,7 +15,7 @@ const SEG_C = 46.138;
 const END = 54;
 
 const NAV = [
-  { at: A, text: '六大主流网络扩展套件全自动识别 · 节点异常自动切换' },
+  { at: A, text: '六大主流网络扩展套件全自动识别 · 线路异常自动切换' },
   { at: SEG_B, text: '全屋设备流量洞察 · 一键定时断网' },
   { at: SEG_C, text: '桌面级 PWA 体验 · 原生安卓多端协同' },
 ];
@@ -130,117 +130,87 @@ const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: nu
   );
 };
 
+// 旁白后段前移对齐：第三幕后半句旁白紧接前半句（34.74s），34.5s 之后的画面事件整体提前 4.5 拍（2.328s，仍在拍点网格上）
+export const SHIFT3 = 2.328;
+const smooth01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+
 export const Act3: React.FC = () => {
-  const t = useT();
+  const tr = useT();
+  // 34.0–34.5s 是扇面静置段，在其中平滑追帧，之后全部事件按新旁白时刻运行
+  const t = tr + SHIFT3 * smooth01((tr - 34.0) / 0.5);
   const { fps } = useVideoConfig();
   const { W, H, vertical } = useV();
   const cx = W / 2;
   const cy = vertical ? H * 0.5 : H * 0.53;
 
   /* ── 段 A：card-stack 三联扇形矩阵 ── */
-  const segA = t < SEG_B + 0.6;
   const fan = springAt(t, FAN, fps, { damping: 20, stiffness: 150, mass: 1 });
   const prep = ramp(t, FAN - 0.15, 0.15, EASE.swift) * (1 - fan);
-  const aOut = ramp(t, SEG_B - 0.1, 0.5, EASE.swift);
   const swA = vertical ? 300 : 385;
   const spread = vertical ? 300 : 450;
   const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
   const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);
   const breathA = 1 + 0.038 * ramp(t, A, SEG_B - A, EASE.linear);
-  const pushA = 1 + (vertical ? 0.3 : 0.3) * (ramp(t, 36.85, 0.45, EASE.smooth) - ramp(t, 39.95, 0.45, EASE.smooth));
+  const pushA = 1 + 0.3 * (ramp(t, 36.85, 0.45, EASE.smooth) - ramp(t, 39.95, 0.45, EASE.smooth));
   const swB = vertical ? 300 : 340;
-  const pxB = vertical ? W / 2 : mix(cx - spread, W * 0.24, ramp(t, SEG_B, 0.6, EASE.snappy));
+  const pxB = vertical ? W / 2 : W * 0.24;
   const pyB = vertical ? H * 0.3 : cy;
   const pushB = 1 + (vertical ? 0.3 : 0.45) * (ramp(t, 44.05, 0.4, EASE.smooth) - ramp(t, 45.3, 0.4, EASE.smooth));
   const togX = pxB + ((313 - 180) / 360) * swB * (vertical ? 0.82 : 1);
   const togY = pyB + (-swB + (436 / 360) * swB) * (vertical ? 0.82 : 1);
 
-  /* ── 段 B：设备 + 流量 ── */
-  const bIn = ramp(t, SEG_B, 0.6, EASE.snappy);
-  const bOut = ramp(t, SEG_C - 0.15, 0.4, EASE.swift);
-  const panelK = springAt(t, SEG_B + 0.25, fps);
+  /* ── 转场①（原 40.45s）：100% 不透明磨砂卡片自右向左推入（translateX 100% → 0），旧画面视差左移，零叠影 ── */
+  const pushIn = ramp(t, SEG_B, 0.5, EASE.smooth);
+  const panelK = springAt(t, SEG_B + 0.35, fps);
+  /* ── 转场②（原 46.2s）：卡片自中心向两侧对称滑开（split-reveal），露出下层分屏，旧层 0.5s 内完全出画 ── */
+  const split = ramp(t, SEG_C, 0.5, EASE.smooth);
+  const endOut = ramp(tr, END - 0.45, 0.45, EASE.exit);
 
-  /* ── 段 C：对称分屏 ── */
-  const cIn = springAt(t, SEG_C + 0.05, fps);
-  const endOut = ramp(t, END - 0.45, 0.45, EASE.exit);
-
-  return (
-    <Abs style={{ inset: 0, overflow: 'hidden' }}>
-      <AuroraBG />
-      {segA && (
-        <Abs style={{ inset: 0, transform: `scale(${breathA * pushA * (1 - prep * 0.02)}) translateY(${stackPress}px)`, transformOrigin: `${cx}px ${cy + 0.05 * swA}px` }}>
-          {/* 接触影 */}
-          <div style={{ position: 'absolute', left: cx - 600, top: cy + swA + 30, width: 1200, height: 80, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)', opacity: 1 - aOut }} />
-          {[0, 2, 1].map((i) => {
-            const e = enter(i);
-            const side = i - 1;
-            const x = cx + side * spread * fan + (i === 0 ? -aOut * (vertical ? 0 : 0.03 * W) : side * aOut * W * 0.6);
-            const y = cy + (1 - e) * H * 0.9 + Math.abs(side) * 30 * fan + (i === 1 ? aOut * 200 : 0);
-            const rz = side * 7 * fan;
-            const s = i === 1 ? 1 : 1 - 0.08 * fan;
-            const o = i === 1 ? 1 - aOut : 1 - (i === 2 ? aOut : aOut * 0.999);
-            return (
-              <Pose key={i} x={x} y={y} sw={swA} rz={rz} s={s} o={o} ry={side * -10 * fan + 2 * Math.sin(t * 0.6 + i)} z={i === 1 ? 3 : 1}>
-                <Phone w={swA}>
-                  {i === 1 ? <PluginScreen t={t} w={swA} /> : <Img src={staticFile(i === 0 ? 'shots/devices.png' : 'shots/traffic.png')} style={{ width: swA, height: swA * 2 }} />}
-                </Phone>
-              </Pose>
-            );
-          })}
+  const segBContent = (
+    <>
+      <AuroraBG t={tr} />
+      <Abs style={{ inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.05))', boxShadow: 'inset 1.5px 0 0 rgba(255,255,255,0.35)' }} />
+      <Abs style={{ inset: 0, transform: `scale(${pushB})`, transformOrigin: `${togX}px ${togY}px` }}>
+        <Abs style={{ inset: 0, transform: `scale(${1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)})` }}>
+          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 160} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={1} />
         </Abs>
-      )}
-
-      {t >= SEG_B - 0.1 && t < SEG_C + 0.5 && (
-        <Abs style={{ inset: 0, transform: `scale(${pushB})`, transformOrigin: `${togX}px ${togY}px` }}>
-        <Abs style={{ inset: 0, opacity: 1 - bOut, transform: `scale(${(1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)) * (1 - 0.03 * bOut)})` }}>
-          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 300} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={Math.min(1, panelK * 1.5)} />
-        </Abs>
-          {t < SEG_C && (
-            <Pose x={pxB} y={pyB} sw={swB} s={vertical ? 0.82 : mix(0.92, 1, bIn)} rz={mix(-7, 0, bIn)} ry={mix(10, 8, bIn) + 2 * Math.sin(t * 0.6)}>
-              <Phone w={swB}>
-                <DevicesScreen t={t} w={swB} />
-              </Phone>
-            </Pose>
-          )}
-        </Abs>
-      )}
-
+        <Pose x={pxB} y={pyB} sw={swB} s={vertical ? 0.82 : 1} ry={8 + 2 * Math.sin(t * 0.6)}>
+          <Phone w={swB}>
+            <DevicesScreen t={t} w={swB} />
+          </Phone>
+        </Pose>
+      </Abs>
       {/* 定时断网锁定提示（不随推轨缩放，避开字幕与导航） */}
-      {t >= TOGGLE_AT && t < SEG_C + 0.3 && (
-        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.52 - 74 : 150, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out) * (1 - ramp(t, SEG_C - 0.15, 0.3, EASE.swift)) }}>
+      {t >= TOGGLE_AT && (
+        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.52 - 74 : 150, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out), whiteSpace: 'nowrap' }}>
           <Pill bg="rgba(255,149,0,0.22)" color="#ffd8a8" style={{ fontSize: 24 }}>
             🔒 儿童平板 · 每晚 23:00 自动断网 · 已锁定
           </Pill>
         </div>
       )}
-      {t >= SEG_C - 0.1 && (
+    </>
+  );
+
+  return (
+    <Abs style={{ inset: 0, overflow: 'hidden' }}>
+      <AuroraBG t={tr} />
+      {/* 段 C：对称分屏（在卡片下层，先在场，由 split-reveal 揭开） */}
+      {t >= SEG_C - 0.05 && (
         <Abs style={{ inset: 0, opacity: 1 - endOut }}>
-          {/* 中缝光线 */}
-          {!vertical && <div style={{ position: 'absolute', left: W / 2 - 1, top: 160 + (1 - cIn) * 400, bottom: 120 + (1 - cIn) * 400, width: 2, background: 'linear-gradient(180deg, rgba(255,255,255,0), rgba(160,200,255,0.55), rgba(255,255,255,0))' }} />}
+          {!vertical && <div style={{ position: 'absolute', left: W / 2 - 1, top: 160, bottom: 120, width: 2, background: 'linear-gradient(180deg, rgba(255,255,255,0), rgba(160,200,255,0.55), rgba(255,255,255,0))' }} />}
           {[0, 1].map((i) => {
-            // 左屏 = 段 B 的设备手机原地承接（不淡入），右屏从画外滑入
-            const x = vertical ? (i ? W * 0.73 : mix(W / 2, W * 0.27, cIn)) : i ? W * 0.75 + (1 - cIn) * 300 : mix(W * 0.24, W * 0.25, cIn);
-            const sw = vertical ? (i ? 290 : 300) : 330;
+            const x = vertical ? W * (0.27 + i * 0.46) : W * (0.25 + i * 0.5);
+            const sw = vertical ? 290 : 330;
             return (
               <React.Fragment key={i}>
-                <Pose x={x} y={vertical ? (i ? H * 0.47 : mix(H * 0.3, H * 0.47, cIn)) : i ? cy + 30 : mix(cy, cy + 30, cIn)} sw={sw} s={vertical ? (i ? 0.86 : mix(0.82, 0.86, cIn)) : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)} o={i ? Math.min(1, cIn * 1.4) : 1}>
-                  <Phone w={sw}>
-                    {/* 46.2s：新旧两页横向推挤切换（不再半透明叠影） */}
-                    <div style={{ position: 'absolute', inset: 0, transform: i === 0 ? `translateX(${(1 - ramp(t, SEG_C, 0.38, EASE.smooth)) * sw}px)` : undefined }}>
-                      {i === 0 ? <PwaFlow t={t} w={sw} a={SEG_C} /> : <AndroidFlow t={t} w={sw} a={SEG_C} />}
-                    </div>
-                    {i === 0 && t < SEG_C + 0.4 && (
-                      <div style={{ position: 'absolute', inset: 0, transform: `translateX(${-ramp(t, SEG_C, 0.38, EASE.smooth) * sw}px)` }}>
-                        <DevicesScreen t={t} w={sw} />
-                      </div>
-                    )}
-                  </Phone>
+                <Pose x={x} y={vertical ? H * 0.47 : cy + 30} sw={sw} s={vertical ? 0.86 : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
+                  <Phone w={sw}>{i === 0 ? <PwaFlow t={t} w={sw} a={SEG_C} /> : <AndroidFlow t={t} w={sw} a={SEG_C} />}</Phone>
                 </Pose>
                 <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
                   {!vertical && (
                     <>
-                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text }}>{i === 0 ? '添加到主屏幕 · 桌面级 PWA' : '原生安卓客户端'}</div>
-                      <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text3, marginTop: 6, letterSpacing: '0.08em' }}>{i === 0 ? 'iOS / ANDROID · 指纹面板锁' : 'v3.0.2 · 扫码秒连 · 多路由切换'}</div>
+                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text, whiteSpace: 'nowrap' }}>{i === 0 ? '添加到主屏幕 · 桌面级 PWA' : '原生安卓客户端'}</div>
+                      <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text3, marginTop: 6, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{i === 0 ? 'iOS / ANDROID · 指纹面板锁' : 'v3.0.2 · 局域网发现 · 多路由切换'}</div>
                     </>
                   )}
                 </div>
@@ -248,6 +218,41 @@ export const Act3: React.FC = () => {
             );
           })}
         </Abs>
+      )}
+      {/* 段 A（推入时视差左移，卡片完全覆盖后卸载） */}
+      {pushIn < 1 && (
+        <Abs style={{ inset: 0, transform: `translateX(${-0.35 * W * pushIn}px)` }}>
+          <Abs style={{ inset: 0, transform: `scale(${breathA * pushA * (1 - prep * 0.02)}) translateY(${stackPress}px)`, transformOrigin: `${cx}px ${cy + 0.05 * swA}px` }}>
+            <div style={{ position: 'absolute', left: cx - 600, top: cy + swA + 30, width: 1200, height: 80, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)' }} />
+            {[0, 2, 1].map((i) => {
+              const e = enter(i);
+              const side = i - 1;
+              const x = cx + side * spread * fan;
+              const y = cy + (1 - e) * H * 0.9 + Math.abs(side) * 30 * fan;
+              const rz = side * 7 * fan;
+              const s = i === 1 ? 1 : 1 - 0.08 * fan;
+              return (
+                <Pose key={i} x={x} y={y} sw={swA} rz={rz} s={s} ry={side * -10 * fan + 2 * Math.sin(t * 0.6 + i)} z={i === 1 ? 3 : 1}>
+                  <Phone w={swA}>
+                    {i === 1 ? <PluginScreen t={t} w={swA} /> : <Img src={staticFile(i === 0 ? 'shots/devices.png' : 'shots/traffic.png')} style={{ width: swA, height: swA * 2 }} />}
+                  </Phone>
+                </Pose>
+              );
+            })}
+          </Abs>
+        </Abs>
+      )}
+      {/* 段 B 卡片：推入 → 分屏前对称滑开 */}
+      {t >= SEG_B && split < 1 && (
+        split <= 0 ? (
+          <Abs style={{ inset: 0, overflow: 'hidden', transform: `translateX(${W * (1 - pushIn)}px)`, boxShadow: pushIn < 1 ? '-30px 0 80px rgba(0,0,0,0.55)' : undefined, borderRadius: pushIn < 1 ? 36 : 0 }}>{segBContent}</Abs>
+        ) : (
+          <>
+            <Abs style={{ inset: 0, overflow: 'hidden', clipPath: 'inset(0 50% 0 0)', transform: `translateX(${(-W / 2) * split}px)` }}>{segBContent}</Abs>
+            <Abs style={{ inset: 0, overflow: 'hidden', clipPath: 'inset(0 0 0 50%)', transform: `translateX(${(W / 2) * split}px)` }}>{segBContent}</Abs>
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: W / 2 - 2, width: 4, background: '#cfe6ff', boxShadow: '0 0 30px 8px rgba(120,180,255,0.7)', opacity: 1 - split }} />
+          </>
+        )
       )}
       <NavCapsule t={t} />
       <Vignette strength={0.45} />

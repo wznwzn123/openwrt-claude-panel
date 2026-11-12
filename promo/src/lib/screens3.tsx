@@ -7,7 +7,7 @@ import { Card, OkBadge, ScreenShell, Toggle, rollNum } from './screens';
 /* ── 第三幕手机屏（自绘部分依据真实面板功能：插件识别/批量测速/自动切换；文案用中文设备名示意） ── */
 
 const PLUGINS: Array<[string, string, number]> = [
-  ['智能分流套件', '#2f6bff', 31.6],
+  ['智能调度套件', '#2f6bff', 31.6],
   ['多线路由套件', '#7c3aed', 32.0],
   ['网络加速套件', '#0ea5e9', 32.4],
   ['家庭网关套件', '#06b6d4', 32.8],
@@ -22,9 +22,9 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   const fail = ramp(t, 38.7, 0.25, EASE.out);
   const switched = ramp(t, 39.35, 0.35, EASE.out);
   const nodes: Array<[string, number, number]> = [
-    ['低延迟电竞专线', 28, 0],
-    ['企业多线内网节点', 35, 0.12],
-    ['跨区域办公加速组', 42, 0.24],
+    ['低延迟线路 01', 28, 0],
+    ['企业多线内网线路', 35, 0.12],
+    ['跨区域办公线路', 42, 0.24],
   ];
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
@@ -47,7 +47,7 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
         </Card>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>4K 超清本地影音加速</div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>加速通道 · 超清影音通道</div>
             <div style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: 99, background: t > 37.15 && t < 37.35 ? '#0060d0' : '#007aff', color: '#fff', fontSize: 13, fontWeight: 700 }}>⚡ 批量测速</div>
           </div>
           {nodes.map(([n, ms, d], i) => {
@@ -72,14 +72,14 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
         </Card>
       </ScreenShell>
       <div style={{ position: 'absolute', left: 10, right: 10, top: 8, padding: '10px 12px', borderRadius: 14, background: 'rgba(240,253,244,0.96)', boxShadow: '0 8px 24px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(52,199,89,0.4)', color: '#1f9d4c', fontFamily: FONT.sans, fontSize: 13.5, fontWeight: 700, opacity: switched, transform: `translateY(${(1 - switched) * -40}px)` }}>
-        ✓ 线路异常，已自动切换至 低延迟电竞专线（28 ms）
+        ✓ 线路异常，已自动切换至 低延迟线路 01（28 ms）
       </div>
       {t > 36.6 && t < 37.7 && <Tap x={300} y={318} press={ramp(t, 37.05, 0.1, EASE.out) * (1 - ramp(t, 37.2, 0.15, EASE.out))} ring={ramp(t, 37.15, 0.45, EASE.out)} opacity={ramp(t, 36.6, 0.2, EASE.out) * (1 - ramp(t, 37.5, 0.2, EASE.out))} />}
     </div>
   );
 };
 
-/* 设备管理（中文设备名示意 · 分流状态 · 定时断网） */
+/* 设备管理（中文设备名示意 · 智能调度状态 · 定时断网） */
 export const DEVICES: Array<{ n: string; ip: string; route: string; color: string; dn: number[] }> = [
   { n: '书房台式机', ip: '192.168.1.20', route: '直连', color: '#2f6bff', dn: [12.4, 3.1] },
   { n: '客厅电视', ip: '192.168.1.36', route: '4K 本地影音加速', color: '#7c3aed', dn: [38.6, 0.4] },
@@ -106,7 +106,7 @@ export const DevicesScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
                 <div style={{ marginLeft: 'auto' }}>{i === 2 && tog > 0.5 ? <OkBadge text="已锁定" color={C.warn} /> : <OkBadge text="在线" />}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 12.5, fontWeight: 650 }}>
-                <span style={{ padding: '3px 9px', borderRadius: 99, background: 'rgba(0,122,255,0.1)', color: '#007aff' }}>分流 · {d.route}</span>
+                <span style={{ padding: '3px 9px', borderRadius: 99, background: 'rgba(0,122,255,0.1)', color: '#007aff' }}>智能调度 · {d.route}</span>
                 <span style={{ padding: '3px 9px', borderRadius: 99, background: 'rgba(118,118,128,.12)', fontFamily: FONT.mono }}>↓ {live.toFixed(1)} MB/s</span>
               </div>
               {i === 2 && (
@@ -204,7 +204,7 @@ export const PwaFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a
   );
 };
 
-/* 原生安卓客户端：扫码秒连 → 多台路由一键切换 */
+/* 原生安卓客户端：局域网自动发现直连 → 多台路由一键切换 */
 export const AndroidFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a }) => {
   const k = w / 360;
   const scanned = t >= a + 1.9;
@@ -225,23 +225,27 @@ export const AndroidFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, 
         <div style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 12, color: '#94a3b8' }}>v3.0.2</div>
       </div>
       {!scanned && (
-        <div style={{ position: 'absolute', left: 50, top: 170, width: 260, height: 260 }}>
-          <svg viewBox="0 0 25 25" style={{ position: 'absolute', inset: 30, width: 200, height: 200, background: '#f8fafc', borderRadius: 6, padding: 8, boxSizing: 'border-box' }} shapeRendering="crispEdges">
-            {Array.from({ length: 625 }, (_, i) => {
-              const x = i % 25, y = Math.floor(i / 25);
-              const inFinder = (fx: number, fy: number) => x >= fx && x < fx + 7 && y >= fy && y < fy + 7;
-              const f = [[0, 0], [18, 0], [0, 18]].find(([fx, fy]) => inFinder(fx, fy));
-              let on: boolean;
-              if (f) { const dx = x - f[0], dy = y - f[1]; on = dx === 0 || dy === 0 || dx === 6 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4); }
-              else on = Math.abs(Math.sin(i * 12.9898 + 78.233) * 43758.5453) % 1 > 0.52;
-              return on ? <rect key={i} x={x} y={y} width={1} height={1} fill="#0b1220" /> : null;
+        // 局域网自动发现：雷达波纹扫描 → 发现路由器 → 直连成功（不出现任何二维码）
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 130, height: 420 }}>
+          <div style={{ position: 'absolute', left: 180 - 130, top: 40, width: 260, height: 260 }}>
+            {[0, 1, 2].map((r) => {
+              const ph = ((t - a) / 1.1 + r / 3) % 1;
+              return <div key={r} style={{ position: 'absolute', left: 130 - 130 * ph, top: 130 - 130 * ph, width: 260 * ph, height: 260 * ph, borderRadius: '50%', border: `2px solid rgba(34,211,238,${0.8 * (1 - ph)})` }} />;
             })}
-          </svg>
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} style={{ position: 'absolute', width: 40, height: 40, left: i % 2 ? undefined : 0, right: i % 2 ? 0 : undefined, top: i < 2 ? 0 : undefined, bottom: i < 2 ? undefined : 0, borderLeft: i % 2 ? undefined : '4px solid #22d3ee', borderRight: i % 2 ? '4px solid #22d3ee' : undefined, borderTop: i < 2 ? '4px solid #22d3ee' : undefined, borderBottom: i < 2 ? undefined : '4px solid #22d3ee' }} />
-          ))}
-          <div style={{ position: 'absolute', left: 10, right: 10, top: 20 + 220 * ((t - a) % 0.9) / 0.9, height: 3, background: '#22d3ee', boxShadow: '0 0 14px #22d3ee' }} />
-          <div style={{ position: 'absolute', left: -50, right: -50, top: 290, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>扫描面板里「添加新手机」的二维码</div>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: `conic-gradient(from ${((t - a) * 260) % 360}deg, rgba(34,211,238,0.35) 0deg, rgba(34,211,238,0) 80deg, rgba(34,211,238,0) 360deg)` }} />
+            <div style={{ position: 'absolute', left: 130 - 26, top: 130 - 26, width: 52, height: 52, borderRadius: 16, background: '#0f1b33', boxShadow: '0 0 24px rgba(34,211,238,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <BrandMark size={34} id="radar" />
+            </div>
+            {t > a + 1.1 && (
+              <div style={{ position: 'absolute', left: 196, top: 52, opacity: ramp(t, a + 1.1, 0.3, EASE.out), transform: `scale(${mix(0.6, 1, ramp(t, a + 1.1, 0.35, EASE.snappy))})` }}>
+                <div style={{ width: 18, height: 18, borderRadius: 9, background: '#86efac', boxShadow: '0 0 16px #86efac' }} />
+              </div>
+            )}
+          </div>
+          <div style={{ position: 'absolute', left: 24, right: 24, top: 330, padding: '14px 16px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)', color: '#e2e8f0' }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{t > a + 1.1 ? '✓ 已发现：家里 · AX3000T' : '局域网自动发现中…'}</div>
+            <div style={{ fontSize: 12.5, color: t > a + 1.5 ? '#86efac' : '#94a3b8', marginTop: 4 }}>{t > a + 1.5 ? '直连成功 · 已加入路由器列表' : '同一 Wi-Fi 下自动搜索面板'}</div>
+          </div>
         </div>
       )}
       {scanned && (

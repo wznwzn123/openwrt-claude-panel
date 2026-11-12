@@ -36,7 +36,7 @@ export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtit
   const t = useT();
   return (
     <SafeCtx.Provider value={safe}>
-    <AbsoluteFill style={{ background: '#07090E', overflow: 'hidden' }}>
+    <AbsoluteFill style={{ background: '#07090E', overflow: 'hidden', ...({ textWrap: 'pretty' } as React.CSSProperties) }}>
       {t < 11.8 && <Act1 />}
       {t >= 11.8 && t < 28 && <Act2 />}
       {t >= 28 && t < 54 && <Act3 />}

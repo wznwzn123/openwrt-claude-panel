@@ -141,11 +141,11 @@ export const Act2: React.FC = () => {
   const inK = springAt(t, PHONE_IN, fps);
   const slideK = springAt(t, SLIDE, fps, { damping: 30, stiffness: 120, mass: 1 });
   const px0 = vertical ? W / 2 : W * 0.28;
-  const px1 = vertical ? W / 2 : W * 0.72;
+  const px1 = vertical ? W / 2 : W * 0.76; // 手机外移，把 Z 轴三层拆解完整让给中左区域
   // 自 O 的门洞（画面中心纵深）飞出，落到左黄金分割
   const px = mix(W / 2, px0, inK) + (px1 - px0) * slideK;
   const py = vertical ? H * 0.29 : H * 0.5 + 10;
-  const depthS = mix(0.35, 1, inK);
+  const depthS = mix(0.35, 1, inK) * (vertical ? 1 : mix(1, 0.92, slideK)); // 拆解时微缩 8%
   const ry = mix(14, -16, slideK) + 2 * Math.sin(t * 0.7); // ±2° 呼吸游走
   const outK = ramp(t, OUT, 0.45, EASE.exit);
   const breath = 1 + 0.038 * ramp(t, A, 16, EASE.linear);
@@ -182,11 +182,11 @@ export const Act2: React.FC = () => {
         {/* 2.5D 真机 + 层级爆炸 */}
         <div style={{ position: 'absolute', left: px - pw / 2, top: py - ph / 2, width: pw, height: ph, perspective: 1600 }}>
           <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `scale(${depthS}) rotateY(${ry}deg) rotateX(${4 + 4 * ex}deg)`, opacity: Math.min(1, inK * 2.5) }}>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-330 * ex}px, ${-110 * ex + bob(2)}px, ${-260 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-560 * ex}px, ${-110 * ex + bob(2)}px, ${-260 * ex}px)`, opacity: ex }}>
               <DaemonLayer w={sw} />
               <EdgePulse t={t} w={sw} color="#c4b5fd" phase={0.33} />
             </div>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-165 * ex}px, ${-55 * ex + bob(1)}px, ${-130 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-280 * ex}px, ${-55 * ex + bob(1)}px, ${-130 * ex}px)`, opacity: ex }}>
               <TunnelLayer t={t} w={sw} />
               <EdgePulse t={t} w={sw} color="#67e8f9" phase={0} />
             </div>
@@ -199,8 +199,11 @@ export const Act2: React.FC = () => {
             {['玻璃交互层 · PWA', '加密隧道层 · Cloudflare', '守护进程层 · ucode'].map((s, i) => {
               const k = ramp(t, EXPLODE + 0.5 + i * 0.25, 0.4, EASE.out);
               return (
-                <div key={s} style={{ position: 'absolute', left: [sw * 0.5, sw * 0.04 - 44, sw * 0.04 - 44][i], top: [-80, sw * 0.04 - 76, sw * 0.04 - 76][i], transform: `translate3d(${[0, -165, -330][i] * ex}px, ${[0, -55, -110][i] * ex + bob(i)}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
-                  <Pill bg="rgba(15,23,42,0.6)" style={{ fontSize: 18, padding: '6px 14px' }}>
+                <div key={s} style={{ position: 'absolute', left: [sw * 0.3, sw * 0.12, sw * 0.12][i], top: [-92, sw * 0.04 - 132, sw * 0.04 - 172][i], transform: `translate3d(${[0, -280, -560][i] * ex}px, ${[0, -55, -110][i] * ex + bob(i)}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
+                  {/* 引导折线：标签 → 所属层上沿 */}
+                  <div style={{ position: 'absolute', left: 22, top: 38, width: 1.5, height: [54, 94, 134][i], background: `linear-gradient(180deg, ${[C.blue, C.cyan, C.violet][i]}, rgba(255,255,255,0))` }} />
+                  <div style={{ position: 'absolute', left: 18, top: 34 + [54, 94, 134][i], width: 9, height: 9, borderRadius: 5, background: [C.blue, C.cyan, C.violet][i], boxShadow: `0 0 10px ${[C.blue, C.cyan, C.violet][i]}` }} />
+                  <Pill bg="rgba(15,23,42,0.72)" style={{ fontSize: 18, padding: '6px 14px' }}>
                     <Dot color={[C.blue, C.cyan, C.violet][i]} size={8} /> {s}
                   </Pill>
                 </div>
@@ -234,11 +237,11 @@ export const Act2: React.FC = () => {
           const y = vertical ? H * 0.745 : 520 + i * 150;
           if (vertical && i !== (t < PLATES[1] ? 0 : t < PLATES[2] ? 1 : 2)) return null;
           return (
-            <Glass key={i} radius={24} style={{ left: x + (1 - k) * -260, top: y, width: vertical ? W - 160 : 700, height: 124, opacity: Math.min(1, k * 1.6), display: 'flex', alignItems: 'center', gap: 22, padding: '0 28px' }}>
+            <Glass key={i} radius={24} style={{ left: x + (1 - k) * -260, top: y, width: vertical ? W - 160 : 600, height: 124, opacity: Math.min(1, k * 1.6), display: 'flex', alignItems: 'center', gap: 22, padding: '0 28px' }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(135deg, ${p.col}, rgba(255,255,255,0.08))`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, color: '#fff', boxShadow: `0 0 30px ${p.col}66`, flex: 'none' }}>{p.icon}</div>
               <div>
                 <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 32, color: C.text }}>{p.k}</div>
-                <div style={{ fontFamily: FONT.sans, fontWeight: 400, fontSize: 22, color: C.text2, marginTop: 6 }}>{p.d}</div>
+                <div style={{ fontFamily: FONT.sans, fontWeight: 400, fontSize: 19, color: C.text2, marginTop: 6, whiteSpace: 'nowrap' }}>{p.d}</div>
               </div>
               <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2, background: p.col, boxShadow: `0 0 16px ${p.col}` }} />
             </Glass>

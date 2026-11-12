@@ -137,7 +137,9 @@ const Monitors: React.FC<{ t: number }> = ({ t }) => {
         const appear = ramp(t, MON0 + i * 0.08, 0.12, EASE.linear);
         const c = crops[i];
         return (
-          <div key={i} style={{ position: 'absolute', left: x - mw / 2, top: y - mh / 2, width: mw, height: mh, transform: `scale(${sc}) rotate(${col * (i - 1) * 25}deg)`, opacity: appear, filter: `drop-shadow(${split}px 0 0 rgba(255,0,72,0.75)) drop-shadow(${-split}px 0 0 rgba(0,220,255,0.75))` }}>
+          <div key={i} style={{ position: 'absolute', left: x - mw / 2, top: y - mh / 2, width: mw, height: mh, transform: `scale(${sc}) rotate(${col * (i - 1) * 25}deg)`, opacity: appear }}>
+            <div style={{ position: 'absolute', inset: 0, transform: `translateX(${split}px)`, border: '2px solid rgba(255,0,72,0.8)', boxShadow: `inset ${split * 0.6}px 0 0 rgba(255,0,72,0.25)`, mixBlendMode: 'screen' }} />
+            <div style={{ position: 'absolute', inset: 0, transform: `translateX(${-split}px)`, border: '2px solid rgba(0,220,255,0.8)', boxShadow: `inset ${-split * 0.6}px 0 0 rgba(0,220,255,0.25)`, mixBlendMode: 'screen' }} />
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', border: '1.5px solid rgba(6,182,212,0.8)', background: '#000' }}>
               <div style={{ position: 'absolute', left: mw / 2 - c.cx * c.s, top: mh / 2 - c.cy * c.s, transform: `scale(${c.s})`, transformOrigin: '0 0', filter: 'saturate(0.55) contrast(1.2) brightness(0.9)' }}>
                 <LegacyAdmin errorOn={c.error ? 1 : 0} dialogOn={c.dialog ? 1 : 0} />
@@ -328,12 +330,18 @@ export const Act1: React.FC = () => {
         ? { x: W / 2, y: H / 2 + 120, w: mix(W * 0.8, 760, ramp(t, 1.56, 0.24, EASE.snappy)), h: mix(H * 0.6, 300, ramp(t, 1.56, 0.24, EASE.snappy)), lock: ramp(t, 1.56, 0.26, EASE.linear) }
         : undefined;
 
-  const flash = Math.max(flashEnv(t, 0, 0.12), flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08), flashEnv(t, WORD0, 0.1) * 0.5);
+  const flash = Math.max(flashEnv(t, 0.15, 0.06) * 0.35, flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08), flashEnv(t, WORD0, 0.1) * 0.5);
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: C.hud }}>
       {body}
       {t < MON0 && <Viewfinder t={t} shot={shot} focus={focus} />}
       <Abs style={{ inset: 0, background: '#fff', opacity: flash }} />
+      {t < 0.15 && (
+        <>
+          <Abs style={{ inset: 0, background: C.ink0, clipPath: `inset(0 0 0 ${(t / 0.15) * 100}%)` }} />
+          <Abs style={{ top: 0, bottom: 0, left: `calc(${(t / 0.15) * 100}% - 3px)`, width: 6, background: '#F5FAFF', boxShadow: '0 0 30px 10px rgba(220,240,255,0.95), 0 0 90px 30px rgba(160,210,255,0.55)' }} />
+        </>
+      )}
       <Grain opacity={0.1} />
     </Abs>
   );

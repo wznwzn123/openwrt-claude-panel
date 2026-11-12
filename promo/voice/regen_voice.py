@@ -1,8 +1,9 @@
-"""全片配音重合成：首字钉在原锚点（画面节拍不动），段尾超出时间窗则逐步提速重试"""
+"""全片配音重合成：首字钉在锚点（或紧接上一段 +0.4s 换气），段尾超出时间窗则逐步提速重试"""
 import asyncio, ssl, os, json
 import edge_tts, edge_tts.communicate as c
 c._SSL_CTX = ssl.create_default_context(cafile="/root/.ccr/ca-bundle.crt")
 S = json.load(open('script.json'))
+ends = {}
 async def synth(a, rate):
     comm = edge_tts.Communicate(a.get('speak', a['text']), S['voice'], rate=rate, pitch=S.get('pitch', '+0Hz'),
                                 boundary='WordBoundary', proxy=os.environ.get('HTTPS_PROXY'))
@@ -15,14 +16,18 @@ async def synth(a, rate):
     return words
 async def main():
     for a in S['acts']:
-        for r in (0, 4, 8, 12, 16, 20):
+        anchor = a['anchor']
+        if isinstance(anchor, str) and anchor.startswith('after:'):
+            anchor = round(ends[anchor[6:]] + 0.4, 3)   # 紧接上一段，留 0.4s 换气
+        for r in (0, 3, 6, 9, 12, 15, 18, 21):
             rate = f'+{r}%'
             w = await synth(a, rate)
-            start = round(a['anchor'] - w[0]['start'], 3)
+            start = round(anchor - w[0]['start'], 3)
             end = start + w[-1]['end']
             if end <= a['window'][1]: break
-        a['start'] = start; a['rate'] = rate
+        a['start'] = start; a['rate'] = rate; a['first'] = round(anchor, 3)
+        ends[a['id']] = end
         json.dump(w, open(f"{a['id']}.words.json", 'w'), ensure_ascii=False)
-        print(f"{a['id']:4s} rate {rate:5s} first@{start + w[0]['start']:.2f}  end {end:.2f}  window≤{a['window'][1]}")
+        print(f"{a['id']:4s} rate {rate:5s} first@{anchor:.2f}  end {end:.2f}  window≤{a['window'][1]}")
     json.dump(S, open('script.json', 'w'), ensure_ascii=False, indent=1)
 asyncio.run(main())

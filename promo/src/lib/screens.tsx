@@ -57,7 +57,7 @@ export const HomePhotoTheme: React.FC<{ t: number; w: number }> = ({ t, w }) => 
   </div>
 );
 
-/* 自绘玻璃 UI 的通用小件（片中无真实截图对应的界面：插件识别 / 节点测速 / 中文设备名示意） */
+/* 自绘玻璃 UI 的通用小件（片中无真实截图对应的界面：扩展套件识别 / 线路测速 / 中文设备名示意） */
 export const ScreenShell: React.FC<{ title: string; sub?: string; children: React.ReactNode; badge?: React.ReactNode; dark?: boolean }> = ({
   title,
   sub,

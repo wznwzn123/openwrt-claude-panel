@@ -34,7 +34,7 @@ const Notice: React.FC<{ t: number; at: number; title: string; body: string; slo
   const { fps } = useVideoConfig();
   const k = springAt(t, at, fps);
   return (
-    <div style={{ position: 'absolute', right: 96 + (1 - k) * -520, top: 150 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
+    <div style={{ position: 'absolute', right: 144 + (1 - k) * -560, top: 150 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
       <Glass radius={22} fill={0.1} style={{ position: 'relative', padding: '18px 22px', display: 'flex', gap: 16 }}>
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, flex: 'none', boxShadow: '0 0 20px rgba(34,197,94,0.45)' }}>✉</div>
         <div>
@@ -85,8 +85,11 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           const alarm = i === 1; // DNS 异常 → 自愈：亮橙告警
           const col = alarm ? '#F97316' : C.cyan;
           const blink = alarm ? 0.55 + 0.45 * Math.sin((t - ft) * 18) * Math.exp(-(t - ft) * 0.6) : 1;
+          const grow = ramp(t, ft, 0.32, EASE.out);
           const corner = (cx: number, cy: number, sx: number, sy: number, key: string) => (
-            <div key={key} style={{ position: 'absolute', left: cx - (sx < 0 ? arm : 0), top: cy - (sy < 0 ? arm : 0), width: arm, height: arm, borderLeft: sx > 0 ? `3px solid ${col}` : undefined, borderRight: sx < 0 ? `3px solid ${col}` : undefined, borderTop: sy > 0 ? `3px solid ${col}` : undefined, borderBottom: sy < 0 ? `3px solid ${col}` : undefined, filter: `drop-shadow(0 0 ${alarm ? 10 : 6}px ${col})`, opacity: blink }} />
+            <svg key={key} width={1} height={1} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', opacity: blink }}>
+              <path d={`M${cx} ${cy + sy * arm} L${cx} ${cy} L${cx + sx * arm} ${cy}`} fill="none" stroke={col} strokeWidth={3} strokeLinecap="square" strokeDasharray={2 * arm} strokeDashoffset={2 * arm * (1 - grow)} style={{ filter: `drop-shadow(0 0 ${alarm ? 8 : 5}px ${col})` }} />
+            </svg>
           );
           const lk = ramp(t, ft + 0.12, 0.3, EASE.out);
           const labelX = vertical ? 60 + (i % 2) * (W / 2 - 40) : W * 0.47;
@@ -102,7 +105,10 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
               {c > 0.95 && t < ft + 0.25 && <div style={{ position: 'absolute', left: x0, top: y0, width: x1 - x0, height: y1 - y0, background: alarm ? 'rgba(249,115,22,0.3)' : 'rgba(6,182,212,0.25)' }} />}
               {alarm && c > 0.9 && (
                 <>
-                  <div style={{ position: 'absolute', left: x0 - 4, top: y0 - 4, width: x1 - x0 + 8, height: y1 - y0 + 8, border: '2px solid #F97316', boxShadow: `0 0 ${18 * blink}px rgba(249,115,22,0.9), inset 0 0 ${10 * blink}px rgba(249,115,22,0.5)`, opacity: blink }} />
+                  <svg width={1} height={1} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', opacity: blink }}>
+                    {/* 告警框：沿边框画线生长一周 */}
+                    <rect x={x0 - 4} y={y0 - 4} width={x1 - x0 + 8} height={y1 - y0 + 8} fill="none" stroke="#F97316" strokeWidth={2} strokeDasharray={2 * (x1 - x0 + y1 - y0 + 16)} strokeDashoffset={2 * (x1 - x0 + y1 - y0 + 16) * (1 - ramp(t, ft + 0.15, 0.45, EASE.out))} style={{ filter: 'drop-shadow(0 0 8px rgba(249,115,22,0.9))' }} />
+                  </svg>
                   {[[0.5, -1], [0.5, 1], [-1, 0.5], [1, 0.5]].map(([fx, fy], j) => {
                     const cxp = fx === -1 ? x0 - 18 : fx === 1 ? x1 + 4 : (x0 + x1) / 2 - 1;
                     const cyp = fy === -1 ? y0 - 18 : fy === 1 ? y1 + 4 : (y0 + y1) / 2 - 1;
@@ -162,19 +168,25 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
   const markS = vertical ? 200 : 170;
   const markCx = W / 2;
   const markCy = vertical ? H * 0.36 : 300;
-  const m = springAt(t, MORPH, fps, { damping: 15, stiffness: 95, mass: 1 });
-  const cx = mix(W / 2, markCx, m);
-  const cy = mix(vertical ? H * 0.5 : H * 0.53, markCy, m);
-  const w = mix(tw, markS, m);
-  const h = mix(th, markS, m);
-  const r = mix(26, markS * 0.278, m);
+  const m = 0; // 终端不再变形为徽标，改为折叠坍缩成光核
+  const cx = W / 2;
+  const cy = vertical ? H * 0.5 : H * 0.53;
+  const w = tw;
+  const h = th;
+  const r = 26;
   const flood = ramp(t, MORPH - 0.1, 0.45, EASE.out);
   const n = Math.floor(ramp(t, TYPE0, 1.25, EASE.linear) * CMD.length);
   const textFly = ramp(t, ENTER + 0.02, 0.4, EASE.exit);
   const caps = ramp(t, 82.5, 0.5, EASE.out) * (1 - ramp(t, ENTER, 0.35, EASE.exit));
   const slots = ramp(t, DROP[0] - 0.3, 0.2, EASE.out) * (1 - ramp(t, DROP[2] + 0.35, 0.3, EASE.linear));
   const drops = DROP.map((d) => springAt(t, d, fps, { damping: 13, stiffness: 260, mass: 0.8 }));
-  const assembled = t > MORPH + 0.8;
+  // 回车 → 终端向内折叠（scaleY 1 → 0.02）→ 横向收成光核 → 光核爆发出徽标并升到落版位
+  const collapseY = ramp(t, ENTER + 0.02, 0.22, EASE.exit);
+  const collapseX = ramp(t, ENTER + 0.24, 0.1, EASE.exit);
+  const coreY = vertical ? H * 0.5 : H * 0.53;
+  const burst = springAt(t, ENTER + 0.34, fps, { damping: 12, stiffness: 180, mass: 0.8 });
+  const rise = springAt(t, ENTER + 0.5, fps, { damping: 18, stiffness: 120, mass: 1 });
+  const logoCy = mix(coreY, markCy, rise);
   const breathe = t > 88.8 ? 1 + 0.006 * Math.sin((t - 88.8) * 3) : 1;
   const enterFlash = t >= ENTER && t < ENTER + 0.15 ? 1 - (t - ENTER) / 0.15 : 0;
   const capData = [
@@ -192,8 +204,8 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
           </span>
         </div>
         {/* 终端窗 → 徽标 */}
-        {!assembled && (
-          <div style={{ position: 'absolute', left: cx - w / 2, top: cy - h / 2, width: w, height: h, borderRadius: r, overflow: 'hidden', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(28px) saturate(165%)', boxShadow: `inset 0 1px 0 rgba(255,255,255,0.26), inset 0 0 0 1px rgba(255,255,255,0.1), 0 30px 80px rgba(0,0,0,0.5)` }}>
+        {t < ENTER + 0.36 && (
+          <div style={{ position: 'absolute', left: cx - w / 2, top: cy - h / 2, width: w, height: h, borderRadius: r, overflow: 'hidden', transform: `scale(${mix(1, 0.02, collapseX)}, ${mix(1, 0.02, collapseY)})`, filter: collapseY > 0 ? `brightness(${1 + 3 * collapseY})` : undefined, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(28px) saturate(165%)', boxShadow: `inset 0 1px 0 rgba(255,255,255,0.26), inset 0 0 0 1px rgba(255,255,255,0.1), 0 30px 80px rgba(0,0,0,0.5)` }}>
             <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`, clipPath: `circle(${flood * 150}% at 92% 80%)` }} />
             <div style={{ position: 'absolute', left: 22, top: 18, display: 'flex', gap: 9, opacity: 1 - m }}>
               {['#ff5f57', '#febc2e', '#28c840'].map((c) => <div key={c} style={{ width: 14, height: 14, borderRadius: 7, background: c }} />)}
@@ -229,7 +241,8 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
               return (
                 <g key={i} opacity={Math.min(1, u * 6)}>
                   <line x1={tx2} y1={ty2} x2={hx} y2={hy} stroke={colr} strokeWidth={2} strokeLinecap="round" opacity={0.55} />
-                  <circle cx={hx} cy={hy} r={2.6} fill="#fff" style={{ filter: `drop-shadow(0 0 6px ${colr})` }} />
+                  <circle cx={hx} cy={hy} r={7} fill={colr} opacity={0.22} />
+                  <circle cx={hx} cy={hy} r={2.6} fill="#fff" />
                 </g>
               );
             })}
@@ -243,8 +256,12 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
           </>
         )}
         {/* 落槽拼装徽标 */}
-        {t > MORPH + 0.5 && (
-          <div style={{ position: 'absolute', left: markCx - markS / 2, top: markCy - markS / 2, perspective: 900 }}>
+        {/* 光核：坍缩点爆闪 */}
+        {t >= ENTER + 0.22 && t < ENTER + 1.0 && (
+          <div style={{ position: 'absolute', left: W / 2 - 300, top: coreY - 300, width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(200,225,255,0.7) 10%, rgba(124,58,237,0.25) 30%, rgba(0,0,0,0) 60%)', opacity: t < ENTER + 0.34 ? ramp(t, ENTER + 0.22, 0.12, EASE.out) : Math.exp(-((t - ENTER - 0.34) / 0.16) * 1.4), transform: `scale(${0.3 + 0.9 * ramp(t, ENTER + 0.3, 0.4, EASE.out)})` }} />
+        )}
+        {t > ENTER + 0.32 && (
+          <div style={{ position: 'absolute', left: markCx - markS / 2, top: logoCy - markS / 2, perspective: 900, transform: `scale(${burst})` }}>
             <div style={{ transform: `rotateX(${16 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 2 * Math.sin(t * 0.9)}deg) rotateY(${-14 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 3 * Math.sin(t * 0.7)}deg)`, filter: 'drop-shadow(0 2px 0 #3b2fb3) drop-shadow(0 4px 0 #2a2190) drop-shadow(0 6px 0 #1e1870) drop-shadow(0 24px 50px rgba(47,107,255,0.55))', position: 'relative' }}>
               <BrandMark size={markS} id="fin" plate={1} slots={slots} body={drops[0]} arc2={drops[1]} arc1={drops[2]} />
               <div style={{ position: 'absolute', inset: 0, borderRadius: markS * 0.278, overflow: 'hidden', pointerEvents: 'none' }}>
@@ -275,6 +292,27 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
               </div>
             );
           })}
+        {/* 金属拉丝边框落版：自中心向两侧拉开，边上一道扫光 */}
+        {t > WORD - 0.1 && !vertical && (() => {
+          const k = ramp(t, WORD - 0.1, 0.7, EASE.snappy);
+          const top = markCy - markS / 2 - 56;
+          const hgt = markS + 56 + 34 + 100 + 34 + 70 + 34 + 52 + 40;
+          const sheen = ((t - WORD) * 0.35) % 1;
+          return (
+            <svg width={1520} height={hgt} style={{ position: 'absolute', left: W / 2 - 760, top, overflow: 'visible', clipPath: `inset(-20px ${(1 - k) * 50}% -20px ${(1 - k) * 50}%)` }}>
+              <defs>
+                <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0.25" gradientTransform={`rotate(${sheen * 40 - 20} 0.5 0.5)`}>
+                  {[['#4b5563', 0], ['#e5e7eb', 0.16], ['#9ca3af', 0.3], ['#f8fafc', 0.48], ['#6b7280', 0.62], ['#d1d5db', 0.8], ['#4b5563', 1]].map(([c, o]) => (
+                    <stop key={o as number} offset={o as number} stopColor={c as string} />
+                  ))}
+                </linearGradient>
+              </defs>
+              {/* 金属拉丝描边（只描边、不填充）+ 内侧一圈发丝高光 */}
+              <rect x={1} y={1} width={1518} height={hgt - 2} rx={40} fill="rgba(255,255,255,0.015)" stroke="url(#metal)" strokeWidth={2.5} />
+              <rect x={7} y={7} width={1506} height={hgt - 14} rx={34} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
+            </svg>
+          );
+        })()}
         {/* 品牌字标 + 落版 */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: markCy + markS / 2 + 34, textAlign: 'center' }}>
           <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 72 : 86, color: C.text, letterSpacing: '-0.005em', opacity: ramp(t, WORD, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, WORD, 0.6, EASE.out)) * 16}px)` }}>
@@ -309,14 +347,17 @@ export const Act5: React.FC = () => {
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: C.hud }}>
       {t < FIN + 0.15 && (
-        <Abs style={{ inset: 0, opacity: 1 - x, transform: `scale(${1 + 0.08 * x})` }}>
+        <Abs style={{ inset: 0, transform: `scale(${1 + 0.08 * x})` }}>
           <Watchdog t={t} />
         </Abs>
       )}
       {t >= HUD_OUT && (
-        <Abs style={{ inset: 0, opacity: x, clipPath: `circle(${x * Math.hypot(W, H) * 0.6}px at 50% 53%)` }}>
-          <Finale t={t} />
-        </Abs>
+        <>
+          <Abs style={{ inset: 0, clipPath: `circle(${x * Math.hypot(W, H) * 0.6}px at 50% 53%)` }}>
+            <Finale t={t} />
+          </Abs>
+          {x > 0 && x < 1 && <div style={{ position: 'absolute', left: W / 2, top: H * 0.53, width: 2 * x * Math.hypot(W, H) * 0.6, height: 2 * x * Math.hypot(W, H) * 0.6, transform: 'translate(-50%,-50%)', borderRadius: '50%', border: '3px solid rgba(165,243,252,0.95)', boxShadow: '0 0 30px rgba(6,182,212,0.9)' }} />}
+        </>
       )}
       <Vignette strength={0.4} />
       <Grain opacity={0.1} />

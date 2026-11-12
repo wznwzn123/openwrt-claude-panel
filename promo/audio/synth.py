@@ -241,7 +241,7 @@ def seg_env(points):
     xs = [p[0] for p in points]; ys = [10 ** (p[1] / 20) for p in points]
     return np.interp(tt_, xs, ys)
 # 铺垫段 0–11s、30–50s 压低 3 dB；54s 高潮与 82s 落版大幅抬升
-DYN = [(0, -9), (11.0, -9), (11.8, 0), (28.5, 0), (30.0, -9), (50.0, -9), (52.0, -2), (53.6, -2), (54.2, 10), (73.6, 10), (74.2, 0), (81.6, 0), (82.6, 11), (88.6, 11), (90, 3)]
+DYN = [(0, -10.5), (11.0, -10.5), (11.8, 0), (28.5, 0), (30.0, -10.5), (50.0, -10.5), (52.0, -2), (53.6, -2), (54.2, 10), (73.6, 10), (74.2, 0), (81.6, 0), (82.6, 11), (88.6, 11), (90, 3)]
 env = seg_env(DYN)
 bgm *= env[:, None]
 # 合成器主旋律（A 小调，8 分音符动机，轻颤音的锯齿 lead）
@@ -343,6 +343,9 @@ cues = []
 
 
 def cue(name, at, sig, gain, p=0.0):
+    # 第三幕 34.5s 之后的画面事件整体提前 4.5 拍（与 Act3.SHIFT3 同源），音效跟随
+    if 34.5 <= at < 54.0 and name not in ('claude-enter',):
+        at = round(at - 2.328, 3)
     if sig.ndim == 1:
         sig = pan(sig, p)
     place(sfx, sig, at, gain)
@@ -394,7 +397,10 @@ cue('icon-pop', SEG_C + 1.7, glass_tap(2200), 0.45)
 cue('icon-tap', SEG_C + 2.3, click(), 0.7)
 cue('fingerprint', SEG_C + 3.25, sonar(1500), 0.3)
 cue('unlock', SEG_C + 4.05, chime(1318.5, 1760), 0.45)
-cue('scan-ok', SEG_C + 1.9, glass_tap(3000), 0.35, 0.5)
+cue('lan-radar', SEG_C + 0.2, sonar(1100), 0.3, 0.5)
+cue('lan-radar', SEG_C + 0.75, sonar(1250), 0.3, 0.5)
+cue('lan-found', SEG_C + 1.1, glass_tap(3000), 0.35, 0.5)
+cue('lan-connected', SEG_C + 1.5, chime(1318.5, 1760), 0.35, 0.5)
 cue('router-switch', 51.25, click(), 0.7, 0.5)
 # 第四幕
 cue('claude-enter', 54.0, whoosh(1.6, 200, 3000), 0.6)
@@ -414,6 +420,10 @@ for c4 in ACT4['cmds']:
     cue('core-impact', tool_at + 0.12, glass_tap(2600), 0.6, 0.4)
     place(sfx, pan(kick(0.35, 150, 60, 1.8), 0.4), tool_at + 0.12, 0.45)
     cue('claude-reply', reply, chime(), 0.5)
+s1_, s2_, s3_ = [c['toolAt'] + 0.15 for c in ACT4['cmds']]
+cue('hero-pulse', s1_, sub_drop(1.2, 140, 40), 0.55)            # 动作①：全屏脉冲波纹 + 核心点亮
+cue('flip-reorder', s2_ + 0.02, whoosh(0.45, 1200, 8000), 0.4, 0.4)  # 动作②：3D 翻转重排
+cue('success-wave', s3_, whoosh(0.8, 600, 9000), 0.45)            # 动作③：绿色全屏成功光波
 cue('amber-beam', ACT4['rollback'] - 0.25, riser(0.37, 800, 6000), 0.45, 0.3)
 cue('uci-backup', ACT4['rollback'] + 0.12, chime(784, 1174.7), 0.45)
 cue('scanline-wipe', 73.75 - 0.25, whoosh(0.9, 400, 7000), 0.75)   # 74.0s 扫描线横扫擦除
@@ -429,7 +439,8 @@ for i in range(int(1.25 / 0.03)):
     place(sfx, pan(key(True), 0.1), 82.35 + i * 0.03, 0.45)
 cues.append({'t': 82.35, 'name': 'terminal-typing', 'gain': 0.45})
 cue('enter', 84.414, key(True) * 2.0, 1.0)
-cue('morph', 84.614, whoosh(0.8, 200, 2500), 0.5)
+cue('collapse', 84.434, riser(0.32, 3000, 9000), 0.5)            # 终端向内折叠
+cue('core-burst', 84.754, chime(1760, 2637) * 1.2, 0.55)           # 光核爆发出徽标
 cue('particle-swirl', 84.45, riser(1.0, 500, 9000), 0.45)
 cue('converge-flash', 85.448, chime(1760, 2637) * 1.2, 0.55)
 for i, at in enumerate((85.448 + 0.083, 85.707 + 0.083, 85.966 + 0.083)):  # 弹簧落定比起跳晚约 5 帧
@@ -476,7 +487,7 @@ bgm_m = soft(bgm, 0.55 * np.percentile(np.abs(bgm), 99.9))
 sfx_m = soft(sfx, 0.6 * np.percentile(np.abs(sfx), 99.9))
 BGM_G, SFX_G = 0.4, 0.5
 # 旁白随段落轻微起伏（±1.5 dB）：铺垫段略收，高潮段略前
-VDYN = [(0, -3.5), (11.0, -3.5), (11.8, 0), (28.5, 0), (30.0, -3.5), (50.0, -3.5), (52.0, -1), (54.0, 2.5), (73.6, 2.5), (74.2, 0), (82.0, 0), (82.6, 2.5), (90, 2.5)]
+VDYN = [(0, -4), (11.0, -4), (11.8, 0), (28.5, 0), (30.0, -4), (50.0, -4), (52.0, -1), (54.0, 2.5), (73.6, 2.5), (74.2, 0), (82.0, 0), (82.6, 2.5), (90, 2.5)]
 venv = np.interp(np.arange(N) / SR, [p[0] for p in VDYN], [10 ** (p[1] / 20) for p in VDYN])
 mix = voice * venv[:, None] + bgm_m * duck[:, None] * BGM_G + sfx_m * SFX_G
 sf.write(f'{OUT}/mix_premaster.wav', mix.astype(np.float32), SR)

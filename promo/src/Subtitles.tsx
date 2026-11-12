@@ -23,8 +23,7 @@ export const SubtitleLine: React.FC<{ text: string; opacity?: number }> = ({ tex
 
 export const Subtitles: React.FC = () => {
   const t = useT();
-  // 54.4–61.0s 底部通栏屏幕大字与旁白同文，字幕让位避免重复
-  const cur = phrases().find((p) => t >= p.start && t < p.end && !(p.start >= 54.4 && p.start < 61.0));
+  const cur = phrases().find((p) => t >= p.start && t < p.end);
   if (!cur) return null;
   return <SubtitleLine text={cur.text} opacity={ramp(t, cur.start, 0.06, EASE.linear)} />;
 };

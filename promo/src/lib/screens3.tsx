@@ -7,12 +7,12 @@ import { Card, OkBadge, ScreenShell, Toggle, rollNum } from './screens';
 /* ── 第三幕手机屏（自绘部分依据真实面板功能：插件识别/批量测速/自动切换；文案用中文设备名示意） ── */
 
 const PLUGINS: Array<[string, string, number]> = [
-  ['OpenClash', '#2f6bff', 31.25],
-  ['Nikki', '#7c3aed', 33.1],
-  ['PassWall', '#0ea5e9', 33.6],
-  ['PassWall2', '#06b6d4', 33.9],
-  ['HomeProxy', '#10b981', 34.75],
-  ['SSR Plus+', '#f59e0b', 35.5],
+  ['智能分流套件', '#2f6bff', 31.6],
+  ['多线路由套件', '#7c3aed', 32.0],
+  ['网络加速套件', '#0ea5e9', 32.4],
+  ['家庭网关套件', '#06b6d4', 32.8],
+  ['流量调度套件', '#10b981', 33.2],
+  ['链路优化套件', '#f59e0b', 33.6],
 ];
 
 export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
@@ -22,16 +22,17 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   const fail = ramp(t, 38.7, 0.25, EASE.out);
   const switched = ramp(t, 39.35, 0.35, EASE.out);
   const nodes: Array<[string, number, number]> = [
-    ['新加坡 01 · 高速', 28, 0],
-    ['香港 02 · 高速', 35, 0.12],
-    ['日本 03 · 高速', 42, 0.24],
+    ['低延迟电竞专线', 28, 0],
+    ['企业多线内网节点', 35, 0.12],
+    ['跨区域办公加速组', 42, 0.24],
   ];
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
-      <ScreenShell title="网络插件" sub="自动识别已安装插件 · 一次只开一个" badge={<OkBadge text="6 个已识别" />}>
+      <ScreenShell title="网络扩展套件" sub="自动识别六大主流网络扩展套件 · 一次只开一个" badge={<OkBadge text="6 个已识别" />}>
         <Card style={{ padding: '6px 12px' }}>
           {PLUGINS.map(([n0, col, at], i) => {
-            const n = safe ? `主流网络插件 ${String(i + 1).padStart(2, '0')}` : n0;
+            const n = n0;
+            void safe;
             const on = ramp(t, at, 0.3, EASE.out);
             return (
               <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 37, borderTop: i ? '1px solid rgba(60,60,67,.1)' : undefined }}>
@@ -46,7 +47,7 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
         </Card>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>超清影音专线</div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>4K 超清本地影音加速</div>
             <div style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: 99, background: t > 37.15 && t < 37.35 ? '#0060d0' : '#007aff', color: '#fff', fontSize: 13, fontWeight: 700 }}>⚡ 批量测速</div>
           </div>
           {nodes.map(([n, ms, d], i) => {
@@ -65,14 +66,14 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
           })}
           <div style={{ display: 'flex', alignItems: 'center', height: 34, borderRadius: 10, padding: '0 8px', background: `rgba(255,59,48,${0.12 * fail * (1 - switched)})`, opacity: mix(1, 0.45, switched) }}>
             <Dot color={fail > 0 ? C.danger : '#c7c7cc'} size={7} glow={false} />
-            <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600, textDecoration: switched > 0.5 ? 'line-through' : undefined }}>日本 05 · 当前</span>
+            <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600, textDecoration: switched > 0.5 ? 'line-through' : undefined }}>备用线路 05 · 当前</span>
             <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: C.danger, opacity: fail }}>超时</span>
           </div>
         </Card>
-        <div style={{ margin: '4px 0 0', padding: '10px 12px', borderRadius: 14, background: 'rgba(52,199,89,0.14)', color: '#1f9d4c', fontSize: 13.5, fontWeight: 700, opacity: switched, transform: `translateY(${(1 - switched) * 10}px)` }}>
-          ✓ 节点异常，已自动切换至 新加坡 01（28 ms）
-        </div>
       </ScreenShell>
+      <div style={{ position: 'absolute', left: 10, right: 10, top: 8, padding: '10px 12px', borderRadius: 14, background: 'rgba(240,253,244,0.96)', boxShadow: '0 8px 24px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(52,199,89,0.4)', color: '#1f9d4c', fontFamily: FONT.sans, fontSize: 13.5, fontWeight: 700, opacity: switched, transform: `translateY(${(1 - switched) * -40}px)` }}>
+        ✓ 线路异常，已自动切换至 低延迟电竞专线（28 ms）
+      </div>
       {t > 36.6 && t < 37.7 && <Tap x={300} y={318} press={ramp(t, 37.05, 0.1, EASE.out) * (1 - ramp(t, 37.2, 0.15, EASE.out))} ring={ramp(t, 37.15, 0.45, EASE.out)} opacity={ramp(t, 36.6, 0.2, EASE.out) * (1 - ramp(t, 37.5, 0.2, EASE.out))} />}
     </div>
   );
@@ -81,7 +82,7 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
 /* 设备管理（中文设备名示意 · 分流状态 · 定时断网） */
 export const DEVICES: Array<{ n: string; ip: string; route: string; color: string; dn: number[] }> = [
   { n: '书房台式机', ip: '192.168.1.20', route: '直连', color: '#2f6bff', dn: [12.4, 3.1] },
-  { n: '客厅电视', ip: '192.168.1.36', route: '4K 超清影音专线', color: '#7c3aed', dn: [38.6, 0.4] },
+  { n: '客厅电视', ip: '192.168.1.36', route: '4K 本地影音加速', color: '#7c3aed', dn: [38.6, 0.4] },
   { n: '儿童平板', ip: '192.168.1.52', route: '直连', color: '#f59e0b', dn: [2.3, 0.2] },
 ];
 export const TOGGLE_AT = 44.586; // 116 BPM 拍点

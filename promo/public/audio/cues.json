@@ -115,32 +115,32 @@
   "gain": 0.5
  },
  {
-  "t": 31.25,
+  "t": 31.6,
   "name": "plugin-detect",
   "gain": 0.35
  },
  {
-  "t": 33.1,
+  "t": 32.0,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 32.4,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 32.8,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 33.2,
   "name": "plugin-detect",
   "gain": 0.35
  },
  {
   "t": 33.6,
-  "name": "plugin-detect",
-  "gain": 0.35
- },
- {
-  "t": 33.9,
-  "name": "plugin-detect",
-  "gain": 0.35
- },
- {
-  "t": 34.75,
-  "name": "plugin-detect",
-  "gain": 0.35
- },
- {
-  "t": 35.5,
   "name": "plugin-detect",
   "gain": 0.35
  },
@@ -265,59 +265,99 @@
   "gain": 0.5
  },
  {
-  "t": 58.75,
+  "t": 58.7,
+  "name": "greeting",
+  "gain": 0.4
+ },
+ {
+  "t": 62.47,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 60.05,
+  "t": 63.36,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 60.75,
-  "name": "claude-reply",
-  "gain": 0.55
+  "t": 63.36,
+  "name": "amber-beam",
+  "gain": 0.5
  },
  {
-  "t": 62.35,
-  "name": "dictation-typing",
+  "t": 63.73,
+  "name": "core-impact",
   "gain": 0.6
- },
- {
-  "t": 63.3,
-  "name": "send",
-  "gain": 0.55
  },
  {
   "t": 63.95,
   "name": "claude-reply",
-  "gain": 0.55
+  "gain": 0.5
  },
  {
-  "t": 65.55,
+  "t": 63.98,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 66.8,
+  "t": 64.78,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 67.45,
+  "t": 64.75,
+  "name": "amber-beam",
+  "gain": 0.5
+ },
+ {
+  "t": 65.12,
+  "name": "core-impact",
+  "gain": 0.6
+ },
+ {
+  "t": 65.3,
   "name": "claude-reply",
+  "gain": 0.5
+ },
+ {
+  "t": 65.2,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 66.18,
+  "name": "send",
   "gain": 0.55
  },
  {
-  "t": 68.15,
+  "t": 66.15,
+  "name": "amber-beam",
+  "gain": 0.5
+ },
+ {
+  "t": 66.52,
+  "name": "core-impact",
+  "gain": 0.6
+ },
+ {
+  "t": 66.7,
+  "name": "claude-reply",
+  "gain": 0.5
+ },
+ {
+  "t": 67.74,
+  "name": "amber-beam",
+  "gain": 0.45
+ },
+ {
+  "t": 68.11,
   "name": "uci-backup",
   "gain": 0.45
  },
  {
   "t": 73.5,
-  "name": "act-out",
-  "gain": 0.5
+  "name": "scanline-wipe",
+  "gain": 0.75
  },
  {
   "t": 74.4,
@@ -373,6 +413,16 @@
   "t": 84.614,
   "name": "morph",
   "gain": 0.5
+ },
+ {
+  "t": 84.45,
+  "name": "particle-swirl",
+  "gain": 0.45
+ },
+ {
+  "t": 85.448,
+  "name": "converge-flash",
+  "gain": 0.55
  },
  {
   "t": 85.531,

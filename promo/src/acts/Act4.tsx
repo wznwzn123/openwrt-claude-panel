@@ -16,10 +16,10 @@ const TOOLS: Array<[string, string]> = [
   ['节点智能调度', 'switch_proxy'], ['UCI 配置读写与回滚', 'uci_set'], ['系统日志智能诊断', 'system_log'], ['OAF 应用过滤', 'oaf_uci'],
   ['实时网速排行', 'net_speed'], ['系统服务控制', 'service_control'], ['设备列表', 'device_list'], ['连接追踪', 'list_connections'],
   ['防火墙总览', 'firewall_overview'], ['分流规则管理', 'list_rules'], ['节点延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
-  ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['插件日志', 'plugin_log'],
+  ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['套件日志', 'suite_log'],
   ['分流模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
   ['应用识别', 'oaf_find_app'], ['关闭异常连接', 'close_connections'], ['策略组总览', 'list_proxy_groups'], ['系统信息', 'system_info'],
-  ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['插件重启', 'restart_plugin'],
+  ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['套件重启', 'restart_suite'],
   ['UCI 配置查看', 'uci_show'], ['应用过滤详情', 'oaf_show'], ['安全命令执行', 'run_command'], ['计划重启', 'reboot_router'],
 ];
 
@@ -82,18 +82,19 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
 /* 双屏版式（飞字槽位与面板同源） */
 const layout = (W: number, H: number, vertical: boolean) => {
   const pw = vertical ? W - 80 : 860;
-  const ph = vertical ? 760 : 740;
+  const ph = vertical ? 700 : 720;
   return { pw, ph, lx: vertical ? 40 : W / 2 - pw - 22, rx: vertical ? 40 : W / 2 + 22, ly: vertical ? 170 : 110, ry: vertical ? 170 + ph + 30 : 110 };
 };
 
 /* —— 对话脚本 —— */
 type Cmd = { text: string; t0: number; send: number; tool: string; toolAt: number; reply: string; replyAt: number };
 const CMDS: Cmd[] = [
-  { text: '把超清影音专线切到新加坡低延迟节点', t0: 58.75, send: 60.05, tool: '节点切换 · 延迟测试', toolAt: 60.3, reply: '已将「超清影音专线」切换至 新加坡 01 · 28 ms', replyAt: 60.75 },
-  { text: '看看现在哪台设备在占满网速', t0: 62.35, send: 63.3, tool: '实时网速 · 设备列表', toolAt: 63.55, reply: '书房台式机正以 86.4 MB/s 下载，占用约 92% 带宽', replyAt: 63.95 },
-  { text: '给儿童平板设置每晚11点自动断网', t0: 65.55, send: 66.8, tool: 'UCI 写入 · 防火墙', toolAt: 67.05, reply: '已写入定时规则：儿童平板 每晚 23:00 断网，次日 07:00 恢复', replyAt: 67.45 },
+  { text: '把影音加速切到低延迟电竞专线', t0: 62.47, send: 63.36, tool: '节点切换 · 延迟测试', toolAt: 63.61, reply: '已将「4K 超清本地影音加速」切换至 低延迟电竞专线 · 28 ms', replyAt: 63.95 },
+  { text: '看看现在哪台设备在占满网速', t0: 63.98, send: 64.78, tool: '实时网速 · 设备列表', toolAt: 65.0, reply: '书房台式机正以 86.4 MB/s 下载，占用约 92% 带宽', replyAt: 65.3 },
+  { text: '给儿童平板设置每晚11点自动断网', t0: 65.2, send: 66.18, tool: 'UCI 写入 · 防火墙', toolAt: 66.4, reply: '已写入定时规则：儿童平板 每晚 23:00 断网，次日 07:00 恢复', replyAt: 66.7 },
 ];
-const CHAR = 0.072;
+const CHAR = 0.06;
+export const ROLLBACK_AT = 67.99; // 旁白「回滚 UCI 配置」
 
 const GlassPill: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   // 当前正在输入的指令
@@ -123,6 +124,7 @@ const Bubble: React.FC<{ me?: boolean; children: React.ReactNode; k: number }> =
 
 const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) => {
   const items: Array<{ at: number; h: number; node: (k: number) => React.ReactNode }> = [];
+  items.push({ at: 58.7, h: 130, node: (k) => <Bubble k={k}>已接入路由器面板，30+ 项底层工具就绪。直接用中文告诉我要做什么。</Bubble> });
   CMDS.forEach((c) => {
     items.push({ at: c.send, h: 78, node: (k) => <Bubble me k={k}>{c.text}</Bubble> });
     items.push({
@@ -139,7 +141,7 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
     items.push({ at: c.replyAt, h: c.reply.length > 26 ? 130 : 92, node: (k) => <Bubble k={k}>{c.reply}</Bubble> });
   });
   items.push({
-    at: 68.15,
+    at: ROLLBACK_AT,
     h: 130,
     node: (k) => (
       <Bubble k={k}>
@@ -160,7 +162,7 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
   });
   void total;
   return (
-    <Glass radius={34} fill={0.06} style={{ left: 0, top: 0, width: w, height: h, overflow: 'hidden' }}>
+    <Glass radius={34} fill={0.08} style={{ left: 0, top: 0, width: w, height: h, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', left: 30, top: 26, right: 30, display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ width: 54, height: 54, borderRadius: 16, background: 'radial-gradient(circle at 35% 30%, #F2B49B, #D97757 55%, #a4502f)', boxShadow: '0 0 24px rgba(217,119,87,0.6)' }} />
         <div>
@@ -200,10 +202,10 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
   let body: React.ReactNode = null;
   if (state <= 1) {
     const sel = state === 1 ? ramp(t, s1 + 0.1, 0.35, EASE.snappy) : 0;
-    const nodes: Array<[string, string]> = [['日本 05', '超时'], ['香港 02', '35 ms'], ['日本 03', '42 ms'], ['新加坡 01', '28 ms']];
+    const nodes: Array<[string, string]> = [['备用线路 05', '超时'], ['企业多线内网节点', '35 ms'], ['跨区域办公加速组', '42 ms'], ['低延迟电竞专线', '28 ms']];
     body = (
       <>
-        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>策略组 · 超清影音专线</div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>策略组 · 4K 超清本地影音加速</div>
         <div style={{ position: 'relative' }}>
           {nodes.map(([n, ms], i) => row(
             <>
@@ -216,7 +218,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
             n,
           ))}
         </div>
-        {state === 1 && <div style={{ marginTop: 10, opacity: sel }}><Pill bg="rgba(52,199,89,0.2)" color="#bbf7d0">✓ 已切换至新加坡 01 · 28 ms</Pill></div>}
+        {state === 1 && <div style={{ marginTop: 10, opacity: sel }}><Pill bg="rgba(52,199,89,0.2)" color="#bbf7d0">✓ 已切换至低延迟电竞专线 · 28 ms</Pill></div>}
       </>
     );
   } else if (state === 2) {
@@ -251,7 +253,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
     );
   } else {
     const wk = ramp(t, s3 + 0.1, 0.4, EASE.out);
-    const bk = ramp(t, 68.3, 0.4, EASE.out);
+    const bk = ramp(t, ROLLBACK_AT, 0.4, EASE.out);
     const lines = ["config rule 'pause_kids_tablet'", "  option src 'lan'", "  option src_mac 'AA:BB:CC:52:1F:07'", "  option start_time '23:00:00'", "  option stop_time '07:00:00'", "  option target 'REJECT'"];
     body = (
       <>
@@ -281,7 +283,7 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
     );
   }
   return (
-    <Glass radius={34} fill={0.05} style={{ left: 0, top: 0, width: w, height: h, overflow: 'hidden' }}>
+    <Glass radius={34} fill={0.08} style={{ left: 0, top: 0, width: w, height: h, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', left: 30, top: 28, right: 30, display: 'flex', alignItems: 'center' }}>
         <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text }}>OpenWrt · 底层状态</div>
         <div style={{ marginLeft: 'auto' }}>
@@ -306,9 +308,15 @@ export const Act4: React.FC = () => {
   const { fps } = useVideoConfig();
   const { W, H, vertical } = useV();
   const panelK = springAt(t, CONSOLE, fps);
-  const endOut = ramp(t, END - 0.5, 0.5, EASE.exit);
+  const endOut = 0 * ramp(t, END - 0.5, 0.5, EASE.exit); // 74s 由主合成的 scanline-wipe 接管，不再淡出
+  // 光束抵达右屏核心 → 1.03 弹性冲击波 + 全绿爆闪
+  const hits = [...CMDS.map((c) => c.toolAt + 0.12), ROLLBACK_AT + 0.12];
+  const dts = hits.map((a) => t - a).filter((d) => d >= 0 && d < 0.8);
+  const dt = dts.length ? Math.min(...dts) : -1;
+  const impact = dt >= 0 ? 0.03 * Math.exp(-dt * 6) * Math.cos(dt * 14) : 0;
+  const greenFlash = dt >= 0 ? Math.exp(-dt * 7) : 0;
   // 一拍一个主角：打字时对话舱是主角，工具调用后右屏状态是主角，另一侧降权留守
-  const focusR = CMDS.reduce((acc, c) => Math.max(acc, ramp(t, c.toolAt, 0.3, EASE.smooth) * (1 - ramp(t, c.toolAt + 1.6, 0.4, EASE.smooth))), 0) + ramp(t, 68.2, 0.4, EASE.smooth) * (1 - ramp(t, 69.8, 0.4, EASE.smooth));
+  const focusR = CMDS.reduce((acc, c) => Math.max(acc, ramp(t, c.toolAt, 0.3, EASE.smooth) * (1 - ramp(t, c.toolAt + 1.6, 0.4, EASE.smooth))), 0) + ramp(t, ROLLBACK_AT, 0.3, EASE.smooth) * (1 - ramp(t, 69.8, 0.4, EASE.smooth));
   const fL = 1 - 0.35 * Math.min(1, focusR);
   const fR = 1 - 0.35 * (1 - Math.min(1, focusR)) * ramp(t, CONSOLE + 0.4, 0.4, EASE.linear);
   const breath = 1 + 0.03 * ramp(t, CONSOLE, END - CONSOLE, EASE.linear);
@@ -335,14 +343,15 @@ export const Act4: React.FC = () => {
           <div style={{ position: 'absolute', left: lx + (vertical ? 0 : (1 - panelK) * -200), top: ly, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fL), filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5 + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
             <ChatCabin t={t} w={pw} h={ph} />
           </div>
-          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fR), filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5 + sway}deg) scale(${0.97 + 0.03 * fR})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
+          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fR), filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5 + sway}deg) scale(${(0.97 + 0.03 * fR) * (1 + impact)})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim}), 0 0 ${80 * greenFlash}px rgba(52,199,89,${0.85 * greenFlash})`, borderRadius: 34 }}>
             <StatePanel t={t} w={pw} h={ph} />
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 34, background: `radial-gradient(ellipse at 20% 30%, rgba(74,222,128,${0.35 * greenFlash}), rgba(52,199,89,${0.12 * greenFlash}) 60%, rgba(52,199,89,0) 100%)`, boxShadow: `inset 0 0 0 ${2 + 2 * greenFlash}px rgba(134,239,172,${0.9 * greenFlash})`, pointerEvents: 'none' }} />
           </div>
         </Abs>
       )}
       {t >= CONSOLE && CMDS.map((c, i) => {
-        const k = ramp(t, c.toolAt - 0.05, 0.4, EASE.swift);
-        const o = Math.sin(Math.PI * Math.min(1, Math.max(0, (t - c.toolAt + 0.05) / 0.55)));
+        const k = ramp(t, c.toolAt - 0.25, 0.37, EASE.exit);
+        const o = Math.sin(Math.PI * Math.min(1, Math.max(0, (t - c.toolAt + 0.25) / 0.6)));
         if (o <= 0) return null;
         const x0 = vertical ? W / 2 : lx + pw - 30, y0 = vertical ? ly + ph - 20 : ly + ph * 0.62;
         const x1 = vertical ? W / 2 : rx + 30, y1 = vertical ? ry + 20 : ry + ph * 0.3;
@@ -355,13 +364,13 @@ export const Act4: React.FC = () => {
                 <stop offset="1" stopColor="#FFD2BF" stopOpacity={0.95} />
               </linearGradient>
             </defs>
-            <line x1={x0} y1={y0} x2={hx} y2={hy} stroke={`url(#trail${i})`} strokeWidth={4} strokeLinecap="round" opacity={o} />
-            <circle cx={hx} cy={hy} r={9} fill="#FFE2D6" opacity={o} style={{ filter: 'drop-shadow(0 0 14px #D97757)' }} />
+            <line x1={x0} y1={y0} x2={hx} y2={hy} stroke={`url(#trail${i})`} strokeWidth={8} strokeLinecap="round" opacity={o} style={{ filter: 'drop-shadow(0 0 14px #D97757) drop-shadow(0 0 30px rgba(217,119,87,0.8))' }} />
+            <circle cx={hx} cy={hy} r={14} fill="#FFF4EC" opacity={o} style={{ filter: 'drop-shadow(0 0 18px #FFB089) drop-shadow(0 0 40px #D97757)' }} />
           </svg>
         );
       })}
       {/* 底部通栏毛玻璃字幕条（屏幕大字） */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 98, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 160, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) }}>
         <Glass radius={20} fill={0.08} style={{ position: 'relative', padding: '14px 40px' }}>
           <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: vertical ? 30 : 34, letterSpacing: '0.06em', color: C.text, opacity: barK, whiteSpace: 'nowrap' }}>{barText}</div>
         </Glass>

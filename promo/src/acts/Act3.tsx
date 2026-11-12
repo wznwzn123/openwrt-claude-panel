@@ -15,7 +15,7 @@ const SEG_C = 46.138;
 const END = 54;
 
 const NAV = [
-  { at: A, text: '六大网络插件全自动识别 · 节点异常自动切换' },
+  { at: A, text: '六大主流网络扩展套件全自动识别 · 节点异常自动切换' },
   { at: SEG_B, text: '全屋设备流量洞察 · 一键定时断网' },
   { at: SEG_C, text: '桌面级 PWA 体验 · 原生安卓多端协同' },
 ];
@@ -28,7 +28,7 @@ const NavCapsule: React.FC<{ t: number }> = ({ t }) => {
   const yieldK = (ramp(t, 36.75, 0.3, EASE.smooth) - ramp(t, 40.05, 0.3, EASE.smooth)) + (ramp(t, 43.95, 0.3, EASE.smooth) - ramp(t, 45.4, 0.3, EASE.smooth));
   const inK = ramp(t, A + 0.2, 0.5, EASE.out) * (1 - Math.min(1, Math.max(0, yieldK)));
   return (
-    <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 120 : 52, display: 'flex', justifyContent: 'center', opacity: inK }}>
+    <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 120 : 60, display: 'flex', justifyContent: 'center', opacity: inK }}>
       <Glass radius={999} fill={0.08} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, padding: vertical ? '16px 28px' : '16px 34px', maxWidth: W - 80 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {[0, 1, 2].map((i) => (
@@ -103,7 +103,7 @@ const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: nu
           const pre = isShoot ? 8.6 : r.v;
           let v = pre * grow;
           if (isShoot) v = mix(pre * grow, r.v, shoot);
-          const hpx = Math.min((v / max) * ch, isShoot && rescale < 0.02 ? ch + 220 : 99999);
+          const hpx = Math.min((v / max) * ch, isShoot && rescale < 0.02 ? ch + 90 : 99999);
           const bx = (cw / rows.length) * (i + 0.5) - bw / 2;
           const label = isShoot && rescale > 0.5;
           return (
@@ -112,7 +112,7 @@ const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: nu
               <div style={{ position: 'absolute', left: bx - 30, width: bw + 60, bottom: -44, textAlign: 'center', fontFamily: FONT.sans, fontWeight: 600, fontSize: 20, color: isShoot ? C.text : C.text2 }}>{r.n}</div>
               {label && (
                 <div style={{ position: 'absolute', left: bx - 40, width: bw + 80, bottom: hpx + 12, textAlign: 'center', transform: `scale(${ramp(t, 42.5, 0.35, EASE.snappy)})` }}>
-                  <Pill bg="rgba(124,58,237,0.5)" style={{ fontSize: 20, fontFamily: FONT.mono }}>31.6 GB · 4K 专线</Pill>
+                  <Pill bg="rgba(124,58,237,0.5)" style={{ fontSize: 20, fontFamily: FONT.mono }}>31.6 GB · 客厅电视</Pill>
                 </div>
               )}
             </React.Fragment>
@@ -147,7 +147,7 @@ export const Act3: React.FC = () => {
   const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
   const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);
   const breathA = 1 + 0.038 * ramp(t, A, SEG_B - A, EASE.linear);
-  const pushA = 1 + (vertical ? 0.35 : 0.5) * (ramp(t, 36.85, 0.45, EASE.smooth) - ramp(t, 39.95, 0.45, EASE.smooth));
+  const pushA = 1 + (vertical ? 0.3 : 0.3) * (ramp(t, 36.85, 0.45, EASE.smooth) - ramp(t, 39.95, 0.45, EASE.smooth));
   const swB = vertical ? 300 : 340;
   const pxB = vertical ? W / 2 : mix(cx - spread, W * 0.24, ramp(t, SEG_B, 0.6, EASE.snappy));
   const pyB = vertical ? H * 0.3 : cy;
@@ -194,12 +194,6 @@ export const Act3: React.FC = () => {
         <Abs style={{ inset: 0, transform: `scale(${pushB})`, transformOrigin: `${togX}px ${togY}px` }}>
         <Abs style={{ inset: 0, opacity: 1 - bOut, transform: `scale(${(1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)) * (1 - 0.03 * bOut)})` }}>
           <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 300} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={Math.min(1, panelK * 1.5)} />
-          {/* 定时断网锁定提示 */}
-          <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.52 - 74 : 920, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out) }}>
-            <Pill bg="rgba(255,149,0,0.22)" color="#ffd8a8" style={{ fontSize: 24 }}>
-              🔒 儿童平板 · 每晚 23:00 自动断网 · 已锁定
-            </Pill>
-          </div>
         </Abs>
           {t < SEG_C && (
             <Pose x={pxB} y={pyB} sw={swB} s={vertical ? 0.82 : mix(0.92, 1, bIn)} rz={mix(-7, 0, bIn)} ry={mix(10, 8, bIn) + 2 * Math.sin(t * 0.6)}>
@@ -211,6 +205,14 @@ export const Act3: React.FC = () => {
         </Abs>
       )}
 
+      {/* 定时断网锁定提示（不随推轨缩放，避开字幕与导航） */}
+      {t >= TOGGLE_AT && t < SEG_C + 0.3 && (
+        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.52 - 74 : 150, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out) * (1 - ramp(t, SEG_C - 0.15, 0.3, EASE.swift)) }}>
+          <Pill bg="rgba(255,149,0,0.22)" color="#ffd8a8" style={{ fontSize: 24 }}>
+            🔒 儿童平板 · 每晚 23:00 自动断网 · 已锁定
+          </Pill>
+        </div>
+      )}
       {t >= SEG_C - 0.1 && (
         <Abs style={{ inset: 0, opacity: 1 - endOut }}>
           {/* 中缝光线 */}
@@ -218,20 +220,23 @@ export const Act3: React.FC = () => {
           {[0, 1].map((i) => {
             // 左屏 = 段 B 的设备手机原地承接（不淡入），右屏从画外滑入
             const x = vertical ? (i ? W * 0.73 : mix(W / 2, W * 0.27, cIn)) : i ? W * 0.75 + (1 - cIn) * 300 : mix(W * 0.24, W * 0.25, cIn);
-            const sw = vertical ? (i ? 290 : 300) : 340;
+            const sw = vertical ? (i ? 290 : 300) : 330;
             return (
               <React.Fragment key={i}>
-                <Pose x={x} y={vertical ? (i ? H * 0.47 : mix(H * 0.3, H * 0.47, cIn)) : i ? cy + 10 : mix(cy, cy + 10, cIn)} sw={sw} s={vertical ? (i ? 0.86 : mix(0.82, 0.86, cIn)) : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)} o={i ? Math.min(1, cIn * 1.4) : 1}>
+                <Pose x={x} y={vertical ? (i ? H * 0.47 : mix(H * 0.3, H * 0.47, cIn)) : i ? cy + 30 : mix(cy, cy + 30, cIn)} sw={sw} s={vertical ? (i ? 0.86 : mix(0.82, 0.86, cIn)) : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)} o={i ? Math.min(1, cIn * 1.4) : 1}>
                   <Phone w={sw}>
-                    {i === 0 ? <PwaFlow t={t} w={sw} a={SEG_C} /> : <AndroidFlow t={t} w={sw} a={SEG_C} />}
-                    {i === 0 && t < SEG_C + 0.35 && (
-                      <div style={{ position: 'absolute', inset: 0, opacity: 1 - ramp(t, SEG_C, 0.35, EASE.swift) }}>
+                    {/* 46.2s：新旧两页横向推挤切换（不再半透明叠影） */}
+                    <div style={{ position: 'absolute', inset: 0, transform: i === 0 ? `translateX(${(1 - ramp(t, SEG_C, 0.38, EASE.smooth)) * sw}px)` : undefined }}>
+                      {i === 0 ? <PwaFlow t={t} w={sw} a={SEG_C} /> : <AndroidFlow t={t} w={sw} a={SEG_C} />}
+                    </div>
+                    {i === 0 && t < SEG_C + 0.4 && (
+                      <div style={{ position: 'absolute', inset: 0, transform: `translateX(${-ramp(t, SEG_C, 0.38, EASE.smooth) * sw}px)` }}>
                         <DevicesScreen t={t} w={sw} />
                       </div>
                     )}
                   </Phone>
                 </Pose>
-                <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 160, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
+                <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
                   {!vertical && (
                     <>
                       <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text }}>{i === 0 ? '添加到主屏幕 · 桌面级 PWA' : '原生安卓客户端'}</div>

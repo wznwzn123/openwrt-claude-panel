@@ -22,8 +22,8 @@ export const AuroraBG: React.FC<{ amber?: number; intensity?: number; t?: number
   const [ax2, ay2] = blob(0.62, 0.22, 0.08, 0.06, 19, 31, 4.2);
   const k = intensity;
   const layers = [
-    `radial-gradient(ellipse 46% 52% at ${bx}% ${by}%, rgba(37,99,235,${0.55 * k}) 0%, rgba(37,99,235,${0.2 * k}) 40%, rgba(37,99,235,0) 72%)`,
-    `radial-gradient(ellipse 44% 50% at ${vx}% ${vy}%, rgba(124,58,237,${0.48 * k}) 0%, rgba(124,58,237,${0.17 * k}) 42%, rgba(124,58,237,0) 74%)`,
+    `radial-gradient(ellipse 46% 52% at ${bx}% ${by}%, rgba(37,99,235,${0.74 * k}) 0%, rgba(37,99,235,${0.27 * k}) 40%, rgba(37,99,235,0) 72%)`,
+    `radial-gradient(ellipse 44% 50% at ${vx}% ${vy}%, rgba(124,58,237,${0.65 * k}) 0%, rgba(124,58,237,${0.23 * k}) 42%, rgba(124,58,237,0) 74%)`,
     `radial-gradient(ellipse 38% 40% at ${ax2}% ${ay2}%, rgba(217,119,87,${0.42 * amber * k}) 0%, rgba(217,119,87,${0.14 * amber * k}) 42%, rgba(217,119,87,0) 76%)`,
     `radial-gradient(ellipse 30% 30% at ${100 - bx * 0.6}% ${18 + by * 0.2}%, rgba(6,182,212,${0.16 * k}) 0%, rgba(6,182,212,0) 70%)`,
     `radial-gradient(ellipse 120% 100% at 50% 40%, ${C.ink1} 0%, ${C.ink0} 78%)`,
@@ -67,7 +67,7 @@ export const Vignette: React.FC<{ strength?: number }> = ({ strength = 0.55 }) =
 );
 
 /* ───────────── 08 · Cyberpunk HUD / FUI 硬核工程基底 ───────────── */
-export const HudBG: React.FC<{ scan?: boolean; tint?: string }> = ({ scan = true, tint = C.cyan }) => {
+export const HudBG: React.FC<{ scan?: boolean; tint?: string; chrome?: boolean }> = ({ scan = true, tint = C.cyan, chrome = true }) => {
   const t = useT();
   const { width: W, height: H } = useVideoConfig();
   const sy = ((t * 0.22) % 1) * (H + 200) - 100;
@@ -116,9 +116,9 @@ export const HudBG: React.FC<{ scan?: boolean; tint?: string }> = ({ scan = true
         </defs>
         <rect width={W} height={H} fill="url(#hex)" />
       </svg>
-      <HudRadar />
-      <HudDataColumn />
-      <HudTicks />
+      {chrome && <HudRadar />}
+      {chrome && <HudDataColumn />}
+      {chrome && <HudTicks />}
       <Vignette strength={0.7} />
     </div>
   );
@@ -131,7 +131,7 @@ export const HudRadar: React.FC = () => {
   const R = Math.min(W, H) * 0.11;
   const ang = (t * 180) % 360; // 2s 一圈
   return (
-    <div style={{ position: 'absolute', right: 70, bottom: 90, width: R * 2, height: R * 2 }}>
+    <div style={{ position: 'absolute', right: 96, bottom: 110, width: R * 2, height: R * 2 }}>
       <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: `conic-gradient(from ${ang}deg, rgba(6,182,212,0.42) 0deg, rgba(6,182,212,0) 70deg, rgba(6,182,212,0) 360deg)` }} />
       {[1, 0.66, 0.33].map((k) => (
         <div key={k} style={{ position: 'absolute', left: R * (1 - k), top: R * (1 - k), width: R * 2 * k, height: R * 2 * k, borderRadius: '50%', border: '1px solid rgba(6,182,212,0.4)' }} />
@@ -161,7 +161,7 @@ export const HudDataColumn: React.FC = () => {
     return `${['RTT', 'PKT', 'NAT', 'TTL', 'MTU', 'SYN', 'DNS', 'ARP', 'CPU'][i]} ${(v * 999).toFixed(1).padStart(6, '0')}`;
   });
   return (
-    <div style={{ position: 'absolute', left: 36, top: 92, fontFamily: FONT.mono, fontSize: 14, lineHeight: 1.7, color: 'rgba(6,182,212,0.55)', letterSpacing: '0.08em' }}>
+    <div style={{ position: 'absolute', left: 96, top: 120, fontFamily: FONT.mono, fontSize: 14, lineHeight: 1.7, color: 'rgba(6,182,212,0.55)', letterSpacing: '0.08em' }}>
       {rows.map((r) => (
         <div key={r}>{r}</div>
       ))}
@@ -183,10 +183,10 @@ export const HudTicks: React.FC = () => {
   return (
     <>
       {ticks}
-      <div style={{ position: 'absolute', left: 36, top: 44, fontFamily: FONT.mono, fontSize: 15, letterSpacing: '0.18em', color: 'rgba(6,182,212,0.7)' }}>
+      <div style={{ position: 'absolute', left: 96, top: 60, fontFamily: FONT.mono, fontSize: 15, letterSpacing: '0.18em', color: 'rgba(6,182,212,0.7)' }}>
         SYS.TELEMETRY · T+{t.toFixed(2).padStart(5, '0')}s
       </div>
-      <div style={{ position: 'absolute', right: 36, top: 44, fontFamily: FONT.mono, fontSize: 15, letterSpacing: '0.18em', color: 'rgba(6,182,212,0.7)' }}>
+      <div style={{ position: 'absolute', right: 96, top: 60, fontFamily: FONT.mono, fontSize: 15, letterSpacing: '0.18em', color: 'rgba(6,182,212,0.7)' }}>
         RX {(46 + 14 * Math.sin(t * 3.1)).toFixed(1)} · TX {(8 + 3 * Math.sin(t * 2.3 + 1)).toFixed(1)} MB/s
       </div>
     </>
@@ -194,13 +194,14 @@ export const HudTicks: React.FC = () => {
 };
 
 /* ───────────── 高端磨砂玻璃 ───────────── */
-export const glass = (radius = 28, fill = 0.07): React.CSSProperties => ({
+export const glass = (radius = 28, fill = 0.08): React.CSSProperties => ({
   borderRadius: radius,
-  background: `linear-gradient(180deg, rgba(255,255,255,${fill + 0.04}) 0%, rgba(255,255,255,${fill}) 60%, rgba(255,255,255,${fill * 0.7}) 100%)`,
+  // 通透玻璃：白 0.08 底 + 左上镜面高光（不再是深色卡）
+  background: `linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 38%, rgba(255,255,255,0) 60%), rgba(255,255,255,${Math.max(0.08, fill)})`,
   backdropFilter: 'blur(28px) saturate(165%)',
   WebkitBackdropFilter: 'blur(28px) saturate(165%)',
   boxShadow:
-    'inset 0 1px 0 rgba(255,255,255,0.24), inset 0 0 0 1px rgba(255,255,255,0.09), 0 30px 80px rgba(2,6,23,0.55), 0 8px 24px rgba(2,6,23,0.35)',
+    'inset 0 1.5px 0 rgba(255,255,255,0.42), inset 1px 0 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.14), inset 0 -1px 0 rgba(255,255,255,0.05), 0 30px 80px rgba(2,6,23,0.45), 0 8px 24px rgba(2,6,23,0.3)',
   boxSizing: 'border-box',
 });
 

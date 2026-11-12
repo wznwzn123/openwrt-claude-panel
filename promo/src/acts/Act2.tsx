@@ -93,6 +93,18 @@ const PhoneScreen: React.FC<{ t: number; w: number; local1: [number, number]; lo
 };
 
 /* exploded-view 的两层底层结构 */
+/* 沿层边流动的光脉冲（连接线上的数据流） */
+const EdgePulse: React.FC<{ t: number; w: number; color: string; phase: number }> = ({ t, w, color, phase }) => {
+  const h = w * 2;
+  const per = 2 * (w + h);
+  return (
+    <svg width={w} height={h} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', pointerEvents: 'none' }}>
+      <rect x={1} y={1} width={w - 2} height={h - 2} rx={w * 0.15} fill="none" stroke={color} strokeWidth={3} strokeDasharray={`${per * 0.08} ${per * 0.92}`} strokeDashoffset={-((t * 0.32 + phase) % 1) * per} style={{ filter: `drop-shadow(0 0 8px ${color})` }} />
+      <rect x={1} y={1} width={w - 2} height={h - 2} rx={w * 0.15} fill="none" stroke={color} strokeWidth={2} strokeDasharray={`${per * 0.04} ${per * 0.96}`} strokeDashoffset={-((t * 0.32 + phase + 0.5) % 1) * per} opacity={0.7} />
+    </svg>
+  );
+};
+
 const TunnelLayer: React.FC<{ t: number; w: number }> = ({ t, w }) => (
   <div style={{ position: 'absolute', inset: 0, borderRadius: w * 0.15, overflow: 'hidden', background: 'linear-gradient(180deg, rgba(6,182,212,0.32), rgba(37,99,235,0.34))', boxShadow: 'inset 0 0 0 1.5px rgba(6,182,212,0.6), 0 0 60px rgba(6,182,212,0.25)' }}>
     {Array.from({ length: 7 }, (_, i) => {
@@ -140,6 +152,8 @@ export const Act2: React.FC = () => {
   const explode = springAt(t, EXPLODE, fps, { damping: 18, stiffness: 140, mass: 1 });
   const unExplode = 0; // 本幕不合体：带着悬浮层直接交给第三幕
   const ex = explode * (1 - unExplode);
+  // 悬浮层 Z 轴呼吸：±6px 正弦，三层错相
+  const bob = (i: number) => 6 * Math.sin((2 * Math.PI * t) / 2.6 + i * 1.3) * ex;
 
   // 涟漪原点（屏幕坐标）= 手机屏幕上缘附近的命令胶囊中心；转为屏幕局部坐标
   const o1: [number, number] = [px0 + (vertical ? 0 : sw * 0.9), py - ph * 0.36];
@@ -168,13 +182,15 @@ export const Act2: React.FC = () => {
         {/* 2.5D 真机 + 层级爆炸 */}
         <div style={{ position: 'absolute', left: px - pw / 2, top: py - ph / 2, width: pw, height: ph, perspective: 1600 }}>
           <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `scale(${depthS}) rotateY(${ry}deg) rotateX(${4 + 4 * ex}deg)`, opacity: Math.min(1, inK * 2.5) }}>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-330 * ex}px, ${-110 * ex}px, ${-260 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-330 * ex}px, ${-110 * ex + bob(2)}px, ${-260 * ex}px)`, opacity: ex }}>
               <DaemonLayer w={sw} />
+              <EdgePulse t={t} w={sw} color="#c4b5fd" phase={0.33} />
             </div>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-165 * ex}px, ${-55 * ex}px, ${-130 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-165 * ex}px, ${-55 * ex + bob(1)}px, ${-130 * ex}px)`, opacity: ex }}>
               <TunnelLayer t={t} w={sw} />
+              <EdgePulse t={t} w={sw} color="#67e8f9" phase={0} />
             </div>
-            <div style={{ position: 'absolute', inset: 0, transform: `translateZ(${60 * ex}px)` }}>
+            <div style={{ position: 'absolute', inset: 0, transform: `translate3d(0, ${bob(0)}px, ${60 * ex}px)` }}>
               <Phone w={sw} glare={ramp(t, 12.5, 1.6, EASE.swift)}>
                 <PhoneScreen t={t} w={sw} local1={local(o1)} local2={local(o2)} />
               </Phone>
@@ -183,7 +199,7 @@ export const Act2: React.FC = () => {
             {['玻璃交互层 · PWA', '加密隧道层 · Cloudflare', '守护进程层 · ucode'].map((s, i) => {
               const k = ramp(t, EXPLODE + 0.5 + i * 0.25, 0.4, EASE.out);
               return (
-                <div key={s} style={{ position: 'absolute', left: [sw * 0.5, sw * 0.04 - 20, sw * 0.04 - 20][i], top: [-56, sw * 0.04 - 52, sw * 0.04 - 52][i], transform: `translate3d(${[0, -165, -330][i] * ex}px, ${[0, -55, -110][i] * ex}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
+                <div key={s} style={{ position: 'absolute', left: [sw * 0.5, sw * 0.04 - 44, sw * 0.04 - 44][i], top: [-80, sw * 0.04 - 76, sw * 0.04 - 76][i], transform: `translate3d(${[0, -165, -330][i] * ex}px, ${[0, -55, -110][i] * ex + bob(i)}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
                   <Pill bg="rgba(15,23,42,0.6)" style={{ fontSize: 18, padding: '6px 14px' }}>
                     <Dot color={[C.blue, C.cyan, C.violet][i]} size={8} /> {s}
                   </Pill>

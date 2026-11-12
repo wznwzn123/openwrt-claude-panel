@@ -3,9 +3,9 @@ import numpy as np, soundfile as sf
 SR = 48000
 CUTS = [(0.0, 6.3), (8.9, 12.0), (12.0, 16.0), (21.2, 28.0), (31.0, 40.4), (40.6, 46.2), (54.0, 58.4), (61.3, 73.6), (81.9, 90.0)]
 A = '../public/audio'
-v, _ = sf.read(f'{A}/narration.wav', always_2d=True)
-s, _ = sf.read(f'{A}/sfx.wav', always_2d=True)
-b, _ = sf.read(f'{A}/bgm.wav', always_2d=True)
+v, _ = sf.read(f'{A}/stem_voice.wav', always_2d=True)
+s, _ = sf.read(f'{A}/stem_sfx.wav', always_2d=True)
+b, _ = sf.read(f'{A}/stem_bgm.wav', always_2d=True)
 def cut(x, segs, fade=0.015):
     out = []
     for a, e in segs:
@@ -28,7 +28,6 @@ for i in range(0, N, 48):
     tgt = act[i]; c = np.exp(-48 / (0.04 * SR)) if tgt > cur else np.exp(-48 / (0.3 * SR))
     cur = tgt + (cur - tgt) * c; g[i:i + 48] = cur
 duck = 10 ** (-5 * g / 20)
-V = V / np.max(np.abs(V)) * 0.9
-mix = V + B * duck[:, None] * 0.26 + S * 0.36
+mix = V + B * duck[:, None] + S
 sf.write(f'{A}/vertical_premaster.wav', mix.astype(np.float32), SR)
 print(len(mix) / SR)

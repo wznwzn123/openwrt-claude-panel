@@ -68,7 +68,7 @@ const ShotA: React.FC<{ t: number }> = ({ t }) => {
   const finger = (s: number) => ({ x: W / 2 + s * (60 + 120 * pinch), y: H / 2 + 40 + s * (30 + 80 * pinch) });
   return (
     <Abs style={{ inset: 0, overflow: 'hidden' }}>
-      <HudBG scan={false} />
+      <HudBG scan={false} chrome={false} />
       <Abs style={{ left: W / 2, top: H / 2, transform: `translate(-50%,-30%) scale(${zoom * push}) rotateZ(-4deg)` }}>
         <Phone w={sw} shadow={false}>
           <div style={{ position: 'absolute', left: -fx, top: 0, transform: `scale(${pageScale})`, transformOrigin: '0 0' }}>

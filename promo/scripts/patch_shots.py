@@ -10,10 +10,11 @@ def font(size, w):
 def patch(im, box, text, size, color, weight=500, align='left'):
     x0, y0, x1, y1 = box
     a = np.asarray(im).astype(float)
+    # 按列上下插值补底（卡片底色多为横向渐变，左右插值会留色带）
+    top = a[max(0, y0 - 2):y0].mean(0); bot = a[y1:y1 + 2].mean(0)
     for y in range(y0, y1):
-        l = a[y, max(0, x0 - 3):x0].mean(0); r = a[y, x1:x1 + 3].mean(0)
-        for x in range(x0, x1):
-            k = (x - x0) / max(1, x1 - x0); a[y, x] = l * (1 - k) + r * k
+        k = (y - y0) / max(1, y1 - y0)
+        a[y, x0:x1] = top[x0:x1] * (1 - k) + bot[x0:x1] * k
     im = Image.fromarray(a.clip(0, 255).astype('uint8'))
     d = ImageDraw.Draw(im); f = font(size, weight)
     bb = d.textbbox((0, 0), text, font=f); tw = bb[2] - bb[0]; th = bb[3] - bb[1]
@@ -26,6 +27,9 @@ for name in ('home', 'devices', 'traffic', 'offline', 'dark', 'pause'):
     if name != 'pause':
         col = (230, 233, 240) if name == 'dark' else (40, 40, 48)
         im = patch(im, NAV, '同步配置', 11, col, 600, 'center')
+    if name == 'offline':
+        im = patch(im, (276, 244, 320, 264), '套件', 13, (40, 40, 48), 700, 'left')
+        im = patch(im, (32, 146, 356, 163), '网络套件，断了会自动修复并记下原因。记录存在路由器闪', 13.4, (88, 88, 96), 380)
     if name == 'devices':
         im = patch(im, (113, 296, 183, 315), '3 个分流', 13, (0, 122, 255), 600, 'center')
     if name == 'traffic':

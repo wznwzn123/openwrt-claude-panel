@@ -42,19 +42,19 @@
   "name": "word-reveal"
  },
  {
-  "t": 10.45,
+  "t": 10.3,
   "dur": 1.4,
   "src": "audio/sfx/07-rush-whoosh.wav",
   "name": "rush-whoosh"
  },
  {
-  "t": 12.0,
-  "dur": 0.54,
+  "t": 11.8,
+  "dur": 0.39,
   "src": "audio/sfx/08-spotlight-sweep.wav",
   "name": "spotlight-sweep"
  },
  {
-  "t": 12.55,
+  "t": 12.2,
   "dur": 1.4,
   "src": "audio/sfx/09-phone-land.wav",
   "name": "phone-land"
@@ -138,38 +138,38 @@
   "name": "fan-out"
  },
  {
-  "t": 31.25,
-  "dur": 1.4,
+  "t": 31.6,
+  "dur": 0.39,
   "src": "audio/sfx/23-plugin-detect.wav",
   "name": "plugin-detect"
  },
  {
-  "t": 33.1,
-  "dur": 0.49,
+  "t": 32.0,
+  "dur": 0.39,
   "src": "audio/sfx/24-plugin-detect.wav",
   "name": "plugin-detect"
  },
  {
-  "t": 33.6,
-  "dur": 0.29,
+  "t": 32.4,
+  "dur": 0.39,
   "src": "audio/sfx/25-plugin-detect.wav",
   "name": "plugin-detect"
  },
  {
-  "t": 33.9,
-  "dur": 0.84,
+  "t": 32.8,
+  "dur": 0.39,
   "src": "audio/sfx/26-plugin-detect.wav",
   "name": "plugin-detect"
  },
  {
-  "t": 34.75,
-  "dur": 0.74,
+  "t": 33.2,
+  "dur": 0.39,
   "src": "audio/sfx/27-plugin-detect.wav",
   "name": "plugin-detect"
  },
  {
-  "t": 35.5,
-  "dur": 1.29,
+  "t": 33.6,
+  "dur": 1.4,
   "src": "audio/sfx/28-plugin-detect.wav",
   "name": "plugin-detect"
  },
@@ -313,164 +313,224 @@
  },
  {
   "t": 58.034,
-  "dur": 0.706,
+  "dur": 0.656,
   "src": "audio/sfx/52-console.wav",
   "name": "console"
  },
  {
-  "t": 58.75,
-  "dur": 1.29,
-  "src": "audio/sfx/53-dictation-typing.wav",
-  "name": "dictation-typing"
- },
- {
-  "t": 60.05,
-  "dur": 0.69,
-  "src": "audio/sfx/54-send.wav",
-  "name": "send"
- },
- {
-  "t": 60.75,
+  "t": 58.7,
   "dur": 1.4,
-  "src": "audio/sfx/55-claude-reply.wav",
-  "name": "claude-reply"
+  "src": "audio/sfx/53-greeting.wav",
+  "name": "greeting"
  },
  {
-  "t": 62.35,
-  "dur": 0.94,
-  "src": "audio/sfx/56-dictation-typing.wav",
+  "t": 62.47,
+  "dur": 0.88,
+  "src": "audio/sfx/54-dictation-typing.wav",
   "name": "dictation-typing"
  },
  {
-  "t": 63.3,
-  "dur": 0.64,
-  "src": "audio/sfx/57-send.wav",
+  "t": 63.36,
+  "dur": 0.15,
+  "src": "audio/sfx/55-send.wav",
   "name": "send"
+ },
+ {
+  "t": 63.36,
+  "dur": 0.36,
+  "src": "audio/sfx/56-amber-beam.wav",
+  "name": "amber-beam"
+ },
+ {
+  "t": 63.73,
+  "dur": 0.21,
+  "src": "audio/sfx/57-core-impact.wav",
+  "name": "core-impact"
  },
  {
   "t": 63.95,
-  "dur": 1.4,
+  "dur": 0.15,
   "src": "audio/sfx/58-claude-reply.wav",
   "name": "claude-reply"
  },
  {
-  "t": 65.55,
-  "dur": 1.24,
+  "t": 63.98,
+  "dur": 0.76,
   "src": "audio/sfx/59-dictation-typing.wav",
   "name": "dictation-typing"
  },
  {
-  "t": 66.8,
-  "dur": 0.64,
-  "src": "audio/sfx/60-send.wav",
+  "t": 64.75,
+  "dur": 0.15,
+  "src": "audio/sfx/60-amber-beam.wav",
+  "name": "amber-beam"
+ },
+ {
+  "t": 64.78,
+  "dur": 0.33,
+  "src": "audio/sfx/61-send.wav",
   "name": "send"
  },
  {
-  "t": 67.45,
-  "dur": 0.69,
-  "src": "audio/sfx/61-claude-reply.wav",
+  "t": 65.12,
+  "dur": 0.15,
+  "src": "audio/sfx/62-core-impact.wav",
+  "name": "core-impact"
+ },
+ {
+  "t": 65.2,
+  "dur": 0.15,
+  "src": "audio/sfx/63-dictation-typing.wav",
+  "name": "dictation-typing"
+ },
+ {
+  "t": 65.3,
+  "dur": 0.84,
+  "src": "audio/sfx/64-claude-reply.wav",
   "name": "claude-reply"
  },
  {
-  "t": 68.15,
+  "t": 66.15,
+  "dur": 0.15,
+  "src": "audio/sfx/65-amber-beam.wav",
+  "name": "amber-beam"
+ },
+ {
+  "t": 66.18,
+  "dur": 0.33,
+  "src": "audio/sfx/66-send.wav",
+  "name": "send"
+ },
+ {
+  "t": 66.52,
+  "dur": 0.17,
+  "src": "audio/sfx/67-core-impact.wav",
+  "name": "core-impact"
+ },
+ {
+  "t": 66.7,
+  "dur": 1.03,
+  "src": "audio/sfx/68-claude-reply.wav",
+  "name": "claude-reply"
+ },
+ {
+  "t": 67.74,
+  "dur": 0.36,
+  "src": "audio/sfx/69-amber-beam.wav",
+  "name": "amber-beam"
+ },
+ {
+  "t": 68.11,
   "dur": 1.4,
-  "src": "audio/sfx/62-uci-backup.wav",
+  "src": "audio/sfx/70-uci-backup.wav",
   "name": "uci-backup"
  },
  {
   "t": 73.5,
   "dur": 0.89,
-  "src": "audio/sfx/63-act-out.wav",
-  "name": "act-out"
+  "src": "audio/sfx/71-scanline-wipe.wav",
+  "name": "scanline-wipe"
  },
  {
   "t": 74.4,
   "dur": 0.942,
-  "src": "audio/sfx/64-scan-sweep.wav",
+  "src": "audio/sfx/72-scan-sweep.wav",
   "name": "scan-sweep"
  },
  {
   "t": 75.352,
   "dur": 0.15,
-  "src": "audio/sfx/65-sonar-lock.wav",
+  "src": "audio/sfx/73-sonar-lock.wav",
   "name": "sonar-lock"
  },
  {
   "t": 75.432,
   "dur": 0.242,
-  "src": "audio/sfx/66-sonar-lock.wav",
+  "src": "audio/sfx/74-sonar-lock.wav",
   "name": "sonar-lock"
  },
  {
   "t": 75.684,
   "dur": 0.15,
-  "src": "audio/sfx/67-sonar-lock.wav",
+  "src": "audio/sfx/75-sonar-lock.wav",
   "name": "sonar-lock"
  },
  {
   "t": 75.764,
   "dur": 1.4,
-  "src": "audio/sfx/68-sonar-lock.wav",
+  "src": "audio/sfx/76-sonar-lock.wav",
   "name": "sonar-lock"
  },
  {
   "t": 77.4,
   "dur": 1.4,
-  "src": "audio/sfx/69-wechat-notice.wav",
+  "src": "audio/sfx/77-wechat-notice.wav",
   "name": "wechat-notice"
  },
  {
   "t": 79.8,
   "dur": 1.4,
-  "src": "audio/sfx/70-wechat-notice.wav",
+  "src": "audio/sfx/78-wechat-notice.wav",
   "name": "wechat-notice"
  },
  {
   "t": 81.428,
   "dur": 0.912,
-  "src": "audio/sfx/71-hud-to-aurora.wav",
+  "src": "audio/sfx/79-hud-to-aurora.wav",
   "name": "hud-to-aurora"
  },
  {
   "t": 82.35,
   "dur": 2.054,
-  "src": "audio/sfx/72-terminal-typing.wav",
+  "src": "audio/sfx/80-terminal-typing.wav",
   "name": "terminal-typing"
  },
  {
   "t": 84.414,
-  "dur": 0.19,
-  "src": "audio/sfx/73-enter.wav",
+  "dur": 0.15,
+  "src": "audio/sfx/81-enter.wav",
   "name": "enter"
+ },
+ {
+  "t": 84.45,
+  "dur": 0.154,
+  "src": "audio/sfx/82-particle-swirl.wav",
+  "name": "particle-swirl"
  },
  {
   "t": 84.614,
   "dur": 0.824,
-  "src": "audio/sfx/74-morph.wav",
+  "src": "audio/sfx/83-morph.wav",
   "name": "morph"
  },
  {
   "t": 85.448,
+  "dur": 0.15,
+  "src": "audio/sfx/84-converge-flash.wav",
+  "name": "converge-flash"
+ },
+ {
+  "t": 85.531,
   "dur": 0.249,
-  "src": "audio/sfx/75-assemble-drop.wav",
+  "src": "audio/sfx/85-assemble-drop.wav",
   "name": "assemble-drop"
  },
  {
-  "t": 85.707,
+  "t": 85.79,
   "dur": 0.249,
-  "src": "audio/sfx/76-assemble-drop.wav",
+  "src": "audio/sfx/86-assemble-drop.wav",
   "name": "assemble-drop"
  },
  {
-  "t": 85.966,
-  "dur": 0.248,
-  "src": "audio/sfx/77-assemble-drop.wav",
+  "t": 86.049,
+  "dur": 0.165,
+  "src": "audio/sfx/87-assemble-drop.wav",
   "name": "assemble-drop"
  },
  {
   "t": 86.224,
   "dur": 1.4,
-  "src": "audio/sfx/78-brand-sparkle.wav",
+  "src": "audio/sfx/88-brand-sparkle.wav",
   "name": "brand-sparkle"
  }
 ]

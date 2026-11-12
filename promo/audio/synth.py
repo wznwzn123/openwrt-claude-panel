@@ -237,9 +237,33 @@ place(bgm, sub_drop(2.4, 100, 24), 11.8, 0.6)
 
 # 能量曲线：54s Claude 登场 +3 dB，82.4s 终幕起再 +1 dB；58.03 双屏落定、85.45 字标成形各一记 impact
 tt_ = np.arange(N) / SR
-env = 1 + (10 ** (3 / 20) - 1) * np.clip((tt_ - 53.6) / 0.6, 0, 1) + (10 ** (4 / 20) - 10 ** (3 / 20)) * np.clip((tt_ - 82.4) / 1.5, 0, 1)
-env -= (env - 1) * np.clip((tt_ - 88.0) / 1.5, 0, 1)
+def seg_env(points):
+    xs = [p[0] for p in points]; ys = [10 ** (p[1] / 20) for p in points]
+    return np.interp(tt_, xs, ys)
+# 铺垫段 0–11s、30–50s 压低 3 dB；54s 高潮与 82s 落版大幅抬升
+DYN = [(0, -9), (11.0, -9), (11.8, 0), (28.5, 0), (30.0, -9), (50.0, -9), (52.0, -2), (53.6, -2), (54.2, 10), (73.6, 10), (74.2, 0), (81.6, 0), (82.6, 11), (88.6, 11), (90, 3)]
+env = seg_env(DYN)
 bgm *= env[:, None]
+# 合成器主旋律（A 小调，8 分音符动机，轻颤音的锯齿 lead）
+def lead(f, d):
+    t = t_(d)
+    vib = 1 + 0.004 * np.sin(2 * np.pi * 5.5 * t) * np.clip(t / 0.15, 0, 1)
+    ph = 2 * np.pi * f * np.cumsum(vib) / SR
+    x = sum(np.sin(h * ph) / h for h in range(1, 9))
+    env_ = np.minimum(1, t / 0.01) * np.exp(-t * 2.2)
+    return lp(x * env_, 4200) * 0.12
+MOTIF = [69, 72, 76, 74, 72, 69, 67, 69, 72, 74, 76, 79, 76, 74, 72, 74]
+for sec0, sec1, gain in ((54.0, 73.6, 1.0), (82.4, 88.6, 1.25)):
+    n = 0
+    tq = sec0
+    while tq < sec1:
+        m = MOTIF[n % len(MOTIF)] + (0 if sec0 < 80 else 12 if n % 8 == 7 else 0)
+        place(bgm, pan(lead(mtof(m), beat / 2 * 1.6), 0.15 * (1 if n % 2 else -1)), tq, gain)
+        tq += beat / 2
+        n += 1
+# 低频重击（Sub Impact）
+for at, g in ((54.0, 0.55), (82.4, 0.45)):
+    place(bgm, sub_drop(1.6, 120, 32), at, g)
 place(bgm, sub_drop(1.4, 110, 40), 58.034, 0.35)
 place(bgm, kick(0.5, 140, 45, 2.2), 58.034, 0.5)
 place(bgm, sub_drop(1.8, 110, 34), 85.448, 0.35)
@@ -349,7 +373,7 @@ cue('act-out', 27.5, whoosh(0.6, 400, 5000), 0.5)
 for i, at in enumerate((28.05, 28.21, 28.37)):
     cue('stack-thump', at + 0.22, thump(), 0.7)
 cue('fan-out', 29.069 - 0.3, whoosh(0.6, 300, 4000), 0.5)
-for i, at in enumerate((31.25, 33.1, 33.6, 33.9, 34.75, 35.5)):
+for i, at in enumerate((31.6, 32.0, 32.4, 32.8, 33.2, 33.6)):
     cue('plugin-detect', at, glass_tap(2600 + i * 120), 0.35)
 cue('tap', 37.15, click(), 0.8)
 cue('push-in', 36.8, whoosh(0.6, 200, 2500), 0.35)
@@ -376,15 +400,21 @@ cue('router-switch', 51.25, click(), 0.7, 0.5)
 cue('claude-enter', 54.0, whoosh(1.6, 200, 3000), 0.6)
 cue('converge', 57.517 - 0.3, whoosh(0.6, 400, 6000), 0.6)
 cue('console', 58.034, glass_tap(1600), 0.5)
-CHAR = 0.072
-for text, t0, send, reply in (('把超清影音专线切到新加坡低延迟节点', 58.75, 60.05, 60.75), ('看看现在哪台设备在占满网速', 62.35, 63.3, 63.95), ('给儿童平板设置每晚11点自动断网', 65.55, 66.8, 67.45)):
+cue('greeting', 58.7, chime(659.3, 987.8), 0.4)
+CHAR = 0.06
+# 三条指令锁定旁白关键词：状态响应 = toolAt + 0.15（63.76 / 65.15 / 66.55）
+for text, t0, send, tool_at, reply in (('把影音加速切到低延迟电竞专线', 62.47, 63.36, 63.61, 63.95), ('看看现在哪台设备在占满网速', 63.98, 64.78, 65.0, 65.3), ('给儿童平板设置每晚11点自动断网', 65.2, 66.18, 66.4, 66.7)):
     for i in range(len(text)):
         place(sfx, pan(key(False), 0), t0 + i * CHAR, 0.6)
     cues.append({'t': t0, 'name': 'dictation-typing', 'gain': 0.6})
     cue('send', send, glass_tap(1900), 0.55)
-    cue('claude-reply', reply, chime(), 0.55)
-cue('uci-backup', 68.15, chime(784, 1174.7), 0.45)
-cue('act-out', 73.5, whoosh(0.6, 300, 5000), 0.5)
+    cue('amber-beam', tool_at - 0.25, riser(0.37, 800, 6000), 0.5, 0.3)   # 琥珀光束跨屏
+    cue('core-impact', tool_at + 0.12, glass_tap(2600), 0.6, 0.4)
+    place(sfx, pan(kick(0.35, 150, 60, 1.8), 0.4), tool_at + 0.12, 0.45)
+    cue('claude-reply', reply, chime(), 0.5)
+cue('amber-beam', 67.99 - 0.25, riser(0.37, 800, 6000), 0.45, 0.3)
+cue('uci-backup', 67.99 + 0.12, chime(784, 1174.7), 0.45)
+cue('scanline-wipe', 73.75 - 0.25, whoosh(0.9, 400, 7000), 0.75)   # 74.0s 扫描线横扫擦除
 # 终幕
 cue('scan-sweep', 74.4, riser(3.2, 600, 2500) * 0.6, 0.35)
 for i, y1 in enumerate((224, 224, 268, 268)):
@@ -398,6 +428,8 @@ for i in range(int(1.25 / 0.03)):
 cues.append({'t': 82.35, 'name': 'terminal-typing', 'gain': 0.45})
 cue('enter', 84.414, key(True) * 2.0, 1.0)
 cue('morph', 84.614, whoosh(0.8, 200, 2500), 0.5)
+cue('particle-swirl', 84.45, riser(1.0, 500, 9000), 0.45)
+cue('converge-flash', 85.448, chime(1760, 2637) * 1.2, 0.55)
 for i, at in enumerate((85.448 + 0.083, 85.707 + 0.083, 85.966 + 0.083)):  # 弹簧落定比起跳晚约 5 帧
     cue('assemble-drop', at, glass_tap(1400 + i * 350), 0.6)
 cue('brand-sparkle', 86.224, chime(1760, 2637), 0.35)
@@ -408,7 +440,12 @@ sf.write(f'{OUT}/sfx.wav', sfx.astype(np.float32), SR)
 json.dump(cues, open(f'{OUT}/cues.json', 'w'), ensure_ascii=False, indent=1)
 
 # ───────────────────────────── 混音（-5 dB sidechain 闪避） ─────────────────────────────
-voice, vsr = sf.read(f'{OUT}/narration.wav', always_2d=True)
+# 人声压缩：TTS 原始峰值因数约 21 dB，先 4:1 压缩 + 峰值限幅，母带就不必大幅限幅、段落起伏得以保留
+import subprocess
+subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', f'{OUT}/narration.wav', '-af',
+                'acompressor=threshold=0.06:ratio=4:attack=4:release=120:makeup=1,alimiter=limit=0.22:attack=1:release=40:level=disabled',
+                f'{OUT}/narration_comp.wav'], check=True)
+voice, vsr = sf.read(f'{OUT}/narration_comp.wav', always_2d=True)
 assert vsr == SR
 voice = voice[:N]
 if len(voice) < N:
@@ -430,6 +467,19 @@ for i in range(0, N, 48):  # 1ms 步进
 duck = 10 ** (-5 * g / 20)
 vpk = np.max(np.abs(voice))
 voice = voice / vpk * 0.9
-mix = voice * 1.0 + bgm * duck[:, None] * 0.26 + sfx * 0.36
+# 峰值控制：配乐与音效软削波（tanh），把瞬态峰值收进来，母带限幅就不必压扁高潮段
+def soft(x, ceil):
+    return np.tanh(x / ceil) * ceil
+bgm_m = soft(bgm, 0.55 * np.percentile(np.abs(bgm), 99.9))
+sfx_m = soft(sfx, 0.6 * np.percentile(np.abs(sfx), 99.9))
+BGM_G, SFX_G = 0.4, 0.5
+# 旁白随段落轻微起伏（±1.5 dB）：铺垫段略收，高潮段略前
+VDYN = [(0, -3.5), (11.0, -3.5), (11.8, 0), (28.5, 0), (30.0, -3.5), (50.0, -3.5), (52.0, -1), (54.0, 2.5), (73.6, 2.5), (74.2, 0), (82.0, 0), (82.6, 2.5), (90, 2.5)]
+venv = np.interp(np.arange(N) / SR, [p[0] for p in VDYN], [10 ** (p[1] / 20) for p in VDYN])
+mix = voice * venv[:, None] + bgm_m * duck[:, None] * BGM_G + sfx_m * SFX_G
 sf.write(f'{OUT}/mix_premaster.wav', mix.astype(np.float32), SR)
+# 供竖屏剪辑复用的成型分轨（已压缩/起伏/软削波，增益已乘）
+sf.write(f'{OUT}/stem_voice.wav', (voice * venv[:, None]).astype(np.float32), SR)
+sf.write(f'{OUT}/stem_bgm.wav', (bgm_m * BGM_G).astype(np.float32), SR)
+sf.write(f'{OUT}/stem_sfx.wav', (sfx_m * SFX_G).astype(np.float32), SR)
 print('ok', np.max(np.abs(mix)))

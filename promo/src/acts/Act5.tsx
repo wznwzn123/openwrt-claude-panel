@@ -25,16 +25,16 @@ const CMD = 'cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude
 /* 扫描标注目标（真实断线记录截图坐标，390×780） */
 const TARGETS = [
   { x0: 36, y0: 196, x1: 132, y1: 224, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
-  { x0: 255, y0: 196, x1: 352, y1: 224, label: 'DNS 解析', note: '异常自愈 ×2 · 正常' },
+  { x0: 255, y0: 196, x1: 352, y1: 224, label: '⚠ DNS 解析', note: '异常 → 已自愈 ×2' },
   { x0: 36, y0: 240, x1: 132, y1: 268, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
-  { x0: 255, y0: 240, x1: 352, y1: 268, label: '网络插件进程', note: 'OpenClash · 守护中' },
+  { x0: 255, y0: 240, x1: 352, y1: 268, label: '扩展套件进程', note: '守护中 · 正常' },
 ];
 
 const Notice: React.FC<{ t: number; at: number; title: string; body: string; slot: number }> = ({ t, at, title, body, slot }) => {
   const { fps } = useVideoConfig();
   const k = springAt(t, at, fps);
   return (
-    <div style={{ position: 'absolute', right: 70 + (1 - k) * -520, top: 150 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
+    <div style={{ position: 'absolute', right: 96 + (1 - k) * -520, top: 150 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
       <Glass radius={22} fill={0.1} style={{ position: 'relative', padding: '18px 22px', display: 'flex', gap: 16 }}>
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, flex: 'none', boxShadow: '0 0 20px rgba(34,197,94,0.45)' }}>✉</div>
         <div>
@@ -82,8 +82,11 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           const x0 = left + g.x0 * k - 6, y0 = top + g.y0 * k - 6, x1 = left + g.x1 * k + 6, y1 = top + g.y1 * k + 6;
           const spread = (1 - c) * 60;
           const arm = 14;
+          const alarm = i === 1; // DNS 异常 → 自愈：亮橙告警
+          const col = alarm ? '#F97316' : C.cyan;
+          const blink = alarm ? 0.55 + 0.45 * Math.sin((t - ft) * 18) * Math.exp(-(t - ft) * 0.6) : 1;
           const corner = (cx: number, cy: number, sx: number, sy: number, key: string) => (
-            <div key={key} style={{ position: 'absolute', left: cx - (sx < 0 ? arm : 0), top: cy - (sy < 0 ? arm : 0), width: arm, height: arm, borderLeft: sx > 0 ? `3px solid ${C.cyan}` : undefined, borderRight: sx < 0 ? `3px solid ${C.cyan}` : undefined, borderTop: sy > 0 ? `3px solid ${C.cyan}` : undefined, borderBottom: sy < 0 ? `3px solid ${C.cyan}` : undefined, filter: `drop-shadow(0 0 6px ${C.cyan})` }} />
+            <div key={key} style={{ position: 'absolute', left: cx - (sx < 0 ? arm : 0), top: cy - (sy < 0 ? arm : 0), width: arm, height: arm, borderLeft: sx > 0 ? `3px solid ${col}` : undefined, borderRight: sx < 0 ? `3px solid ${col}` : undefined, borderTop: sy > 0 ? `3px solid ${col}` : undefined, borderBottom: sy < 0 ? `3px solid ${col}` : undefined, filter: `drop-shadow(0 0 ${alarm ? 10 : 6}px ${col})`, opacity: blink }} />
           );
           const lk = ramp(t, ft + 0.12, 0.3, EASE.out);
           const labelX = vertical ? 60 + (i % 2) * (W / 2 - 40) : W * 0.47;
@@ -96,14 +99,24 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
               {corner(x1 + spread, y0 - spread, -1, 1, 'b')}
               {corner(x0 - spread, y1 + spread, 1, -1, 'c')}
               {corner(x1 + spread, y1 + spread, -1, -1, 'd')}
-              {c > 0.95 && t < ft + 0.25 && <div style={{ position: 'absolute', left: x0, top: y0, width: x1 - x0, height: y1 - y0, background: 'rgba(6,182,212,0.25)' }} />}
+              {c > 0.95 && t < ft + 0.25 && <div style={{ position: 'absolute', left: x0, top: y0, width: x1 - x0, height: y1 - y0, background: alarm ? 'rgba(249,115,22,0.3)' : 'rgba(6,182,212,0.25)' }} />}
+              {alarm && c > 0.9 && (
+                <>
+                  <div style={{ position: 'absolute', left: x0 - 4, top: y0 - 4, width: x1 - x0 + 8, height: y1 - y0 + 8, border: '2px solid #F97316', boxShadow: `0 0 ${18 * blink}px rgba(249,115,22,0.9), inset 0 0 ${10 * blink}px rgba(249,115,22,0.5)`, opacity: blink }} />
+                  {[[0.5, -1], [0.5, 1], [-1, 0.5], [1, 0.5]].map(([fx, fy], j) => {
+                    const cxp = fx === -1 ? x0 - 18 : fx === 1 ? x1 + 4 : (x0 + x1) / 2 - 1;
+                    const cyp = fy === -1 ? y0 - 18 : fy === 1 ? y1 + 4 : (y0 + y1) / 2 - 1;
+                    return <div key={j} style={{ position: 'absolute', left: cxp, top: cyp, width: fx === 0.5 ? 2 : 14, height: fy === 0.5 ? 2 : 14, background: '#F97316', opacity: blink, boxShadow: '0 0 8px #F97316' }} />;
+                  })}
+                </>
+              )}
               {!vertical && (
                 <svg style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }} width={1} height={1}>
-                  <path d={`M${x1 + 8} ${(y0 + y1) / 2} L${labelX - 120} ${labelY + 34} L${labelX - 10} ${labelY + 34}`} stroke={C.cyan} strokeWidth={1.5} fill="none" strokeDasharray={1200} strokeDashoffset={1200 * (1 - lk)} opacity={0.7} />
+                  <path d={`M${left + sw + 14} ${(y0 + y1) / 2} L${labelX - 120} ${labelY + 34} L${labelX - 10} ${labelY + 34}`} stroke={col} strokeWidth={1.5} fill="none" strokeDasharray={1200} strokeDashoffset={1200 * (1 - lk)} opacity={0.7} />
                 </svg>
               )}
               <div style={{ position: 'absolute', left: labelX, top: labelY, opacity: Math.min(1, lk * 3) }}>
-                <div style={{ display: 'inline-block', padding: '10px 18px', background: 'rgba(6,182,212,0.16)', boxShadow: `inset 0 0 0 1.5px ${C.cyan}`, fontFamily: FONT.mono, fontSize: vertical ? 20 : 24, color: '#cffafe', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'inline-block', padding: '10px 18px', background: alarm ? 'rgba(249,115,22,0.18)' : 'rgba(6,182,212,0.16)', boxShadow: `inset 0 0 0 1.5px ${col}${alarm ? `, 0 0 ${16 * blink}px rgba(249,115,22,0.6)` : ''}`, fontFamily: FONT.mono, fontSize: vertical ? 20 : 24, color: alarm ? '#FFEDD5' : '#cffafe', whiteSpace: 'nowrap' }}>
                   <span style={{ color: C.cyan, marginRight: 10 }}>[{String(i + 1).padStart(2, '0')}]</span>
                   {txt}
                   <span style={{ opacity: lk < 1 ? 1 : 0 }}>▍</span>
@@ -195,19 +208,49 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
           </div>
         )}
         {/* 流光粒子：代码化作光粒向中心聚拢 */}
-        {t > ENTER && t < MORPH + 0.9 &&
-          Array.from({ length: 170 }, (_, i) => {
-            const sx = W / 2 + (hash(i * 3) - 0.5) * tw;
-            const sy = (vertical ? H * 0.5 : H * 0.53) + (hash(i * 5) - 0.3) * th * 0.6;
-            const k = ramp(t, ENTER + hash(i * 7) * 0.25, 0.6, EASE.inQuad);
-            const x = mix(sx, markCx, k);
-            const y = mix(sy, markCy, k) - Math.sin(Math.PI * k) * 80 * (hash(i) - 0.5);
-            return <div key={i} style={{ position: 'absolute', left: x, top: y, width: 4, height: 4, borderRadius: 2, background: i % 3 ? '#a5d8ff' : '#FFD2BF', boxShadow: '0 0 10px #a5d8ff', opacity: (1 - k) * 0.9 + 0.1 }} />;
-          })}
+        {t > ENTER && t < DROP[0] + 0.05 && (
+          <svg width={W} height={H} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}>
+            {Array.from({ length: 120 }, (_, i) => {
+              const sx = W / 2 + (hash(i * 3) - 0.5) * tw;
+              const sy = (vertical ? H * 0.5 : H * 0.53) + (hash(i * 5) - 0.35) * th * 0.7;
+              const st = ENTER + hash(i * 7) * 0.22;
+              const bz = (u: number) => {
+                // 二次贝塞尔：控制点向外甩出一道弧（螺旋汇聚）
+                const ang = hash(i * 11) * Math.PI * 2;
+                const cxp = mix(sx, markCx, 0.4) + Math.cos(ang) * 320;
+                const cyp = mix(sy, markCy, 0.4) + Math.sin(ang) * 200;
+                const a = (1 - u) * (1 - u), b = 2 * (1 - u) * u, c = u * u;
+                return [a * sx + b * cxp + c * markCx, a * sy + b * cyp + c * markCy];
+              };
+              const u = ramp(t, st, DROP[0] - st, EASE.inQuad);
+              const [hx, hy] = bz(u);
+              const [tx2, ty2] = bz(Math.max(0, u - 0.14));
+              const colr = i % 3 ? '#a5d8ff' : '#FFD2BF';
+              return (
+                <g key={i} opacity={Math.min(1, u * 6)}>
+                  <line x1={tx2} y1={ty2} x2={hx} y2={hy} stroke={colr} strokeWidth={2} strokeLinecap="round" opacity={0.55} />
+                  <circle cx={hx} cy={hy} r={2.6} fill="#fff" style={{ filter: `drop-shadow(0 0 6px ${colr})` }} />
+                </g>
+              );
+            })}
+          </svg>
+        )}
+        {/* 85.45s 汇聚点闪光 */}
+        {t >= DROP[0] && t < DROP[0] + 0.7 && (
+          <>
+            <div style={{ position: 'absolute', left: markCx - 600, top: markCy - 600, width: 1200, height: 1200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(165,216,255,0.45) 18%, rgba(124,58,237,0.15) 40%, rgba(0,0,0,0) 65%)', opacity: Math.exp(-((t - DROP[0]) / 0.12) * 1.6) }} />
+            <div style={{ position: 'absolute', left: markCx, top: markCy, width: 20 + 1400 * ramp(t, DROP[0], 0.6, EASE.out), height: 20 + 1400 * ramp(t, DROP[0], 0.6, EASE.out), transform: 'translate(-50%,-50%)', borderRadius: '50%', border: '2px solid rgba(200,230,255,0.9)', boxShadow: '0 0 30px rgba(124,58,237,0.7)', opacity: 1 - ramp(t, DROP[0], 0.6, EASE.linear) }} />
+          </>
+        )}
         {/* 落槽拼装徽标 */}
         {t > MORPH + 0.5 && (
-          <div style={{ position: 'absolute', left: markCx - markS / 2, top: markCy - markS / 2, filter: 'drop-shadow(0 20px 50px rgba(47,107,255,0.45))' }}>
-            <BrandMark size={markS} id="fin" plate={1} slots={slots} body={drops[0]} arc2={drops[1]} arc1={drops[2]} />
+          <div style={{ position: 'absolute', left: markCx - markS / 2, top: markCy - markS / 2, perspective: 900 }}>
+            <div style={{ transform: `rotateX(${16 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 2 * Math.sin(t * 0.9)}deg) rotateY(${-14 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 3 * Math.sin(t * 0.7)}deg)`, filter: 'drop-shadow(0 2px 0 #3b2fb3) drop-shadow(0 4px 0 #2a2190) drop-shadow(0 6px 0 #1e1870) drop-shadow(0 24px 50px rgba(47,107,255,0.55))', position: 'relative' }}>
+              <BrandMark size={markS} id="fin" plate={1} slots={slots} body={drops[0]} arc2={drops[1]} arc1={drops[2]} />
+              <div style={{ position: 'absolute', inset: 0, borderRadius: markS * 0.278, overflow: 'hidden', pointerEvents: 'none' }}>
+                <div style={{ position: 'absolute', top: -markS * 0.3, left: mix(-markS, markS * 1.4, ramp(t, DROP[2] + 0.2, 0.7, EASE.swift)), width: markS * 0.35, height: markS * 1.6, transform: 'rotate(20deg)', background: 'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.55), rgba(255,255,255,0))' }} />
+              </div>
+            </div>
           </div>
         )}
         {/* 双版本选择胶囊 */}

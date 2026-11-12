@@ -1,171 +1,130 @@
 import React from 'react';
 import { Img, staticFile } from 'remotion';
-import { C, EASE, FONT, mix, ramp, useSafe } from './core';
-import { BrandMark, Dot, Tap } from './visual';
-import { Card, OkBadge, ScreenShell, Toggle, rollNum } from './screens';
+import { EASE, FONT, mix, ramp } from './core';
+import { BrandMark, Tap } from './visual';
 
-/* ── 第三幕手机屏（自绘部分依据真实面板功能：插件识别/批量测速/自动切换；文案用中文设备名示意） ── */
+/* ── 第三幕手机屏：全部来自仓库 src/www/panel 真实界面（capture/capture.js 用本地演示数据 3× 实机渲染），
+   这里只负责按时间轴切换真实状态、叠点击反馈；坐标均为面板 CSS 像素（视口 393×852）── */
+const VW = 393;
+const VH = 852;
+const shot = (n: string) => staticFile(`shots/real/${n}.png`);
+const Frame: React.FC<{ w: number; children: React.ReactNode; bg?: string }> = ({ w, children, bg }) => (
+  <div style={{ position: 'absolute', left: 0, top: 0, width: VW, height: VH, transform: `scale(${w / VW})`, transformOrigin: '0 0', overflow: 'hidden', fontFamily: FONT.sans, background: bg }}>{children}</div>
+);
+const Shot: React.FC<{ n: string; style?: React.CSSProperties }> = ({ n, style }) => <Img src={shot(n)} style={{ position: 'absolute', left: 0, top: 0, width: VW, height: VH, ...style }} />;
+// 量自真实 DOM（rects.json → steps）
+const R = {
+  pxPick: [34, 331.2, 325, 38.9],
+  grpTest: [290, 150, 48, 27.6],
+  rows: [193.1, 265.1, 337.1, 409.1, 481.1],
+  devPause: [98, 687.6, 48, 27.6],
+  sheetAdd: [311, 719.1, 58, 34.8],
+  lkFp: [53.5, 629.6, 78, 78],
+};
+const cx = (r: number[]) => r[0] + r[2] / 2;
+const cy = (r: number[]) => r[1] + r[3] / 2;
+/* 底部弹层出入：真实面板的 sheet 自下而上，背景同时模糊变暗（两张截图交叉：底页 → 带弹层页） */
+const sheetMix = (k: number) => ({ clipPath: `inset(${(1 - k) * 100}% 0 0 0)`, opacity: Math.min(1, k * 3) });
 
-const PLUGINS: Array<[string, string, number]> = [
-  ['智能调度套件', '#2f6bff', 31.6],
-  ['多线路由套件', '#7c3aed', 32.0],
-  ['网络加速套件', '#0ea5e9', 32.4],
-  ['家庭网关套件', '#06b6d4', 32.8],
-  ['流量调度套件', '#10b981', 33.2],
-  ['链路优化套件', '#f59e0b', 33.6],
-];
+/* 系统通知横幅（iOS 样式，片中演示「异常自动切换」的推送提醒） */
+const Banner: React.FC<{ k: number; title: string; body: string }> = ({ k, title, body }) => (
+  <div style={{ position: 'absolute', left: 10, right: 10, top: 58, padding: '11px 13px', borderRadius: 20, background: 'rgba(250,250,252,0.86)', backdropFilter: 'blur(20px)', boxShadow: '0 10px 30px rgba(0,0,0,0.16)', display: 'flex', gap: 10, alignItems: 'center', opacity: k, transform: `translateY(${(1 - k) * -90}px)` }}>
+    <BrandMark size={34} id="bn" />
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111' }}>{title}</div>
+      <div style={{ fontSize: 13, color: '#3a3a3c', marginTop: 1, lineHeight: 1.35 }}>{body}</div>
+    </div>
+    <div style={{ marginLeft: 'auto', alignSelf: 'flex-start', fontSize: 11.5, color: '#8e8e93' }}>现在</div>
+  </div>
+);
 
+const tapAt = (t: number, at: number, x: number, y: number) =>
+  t > at - 0.45 && t < at + 0.6 ? (
+    <Tap x={x} y={y} press={ramp(t, at - 0.08, 0.08, EASE.out) * (1 - ramp(t, at + 0.08, 0.15, EASE.out))} ring={ramp(t, at, 0.45, EASE.out)} opacity={ramp(t, at - 0.45, 0.2, EASE.out) * (1 - ramp(t, at + 0.4, 0.2, EASE.out))} />
+  ) : null;
+
+/* 主机：概览页 → 点「扩展套件」→ 识别到的套件列表 → 进入线路页 → 测速 → 当前线路超时 → 自动切换 + 推送 */
 export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
-  const k = w / 360;
-  const safe = useSafe();
-  const sweep = ramp(t, 37.15, 1.0, EASE.linear);
-  const fail = ramp(t, 38.7, 0.25, EASE.out);
-  const switched = ramp(t, 39.35, 0.35, EASE.out);
-  const nodes: Array<[string, number, number]> = [
-    ['低延迟线路 01', 28, 0],
-    ['企业多线内网线路', 35, 0.12],
-    ['跨区域办公线路', 42, 0.24],
-  ];
+  const PICK = 31.45;
+  const pick = ramp(t, PICK + 0.1, 0.38, EASE.snappy) * (1 - ramp(t, 35.55, 0.3, EASE.smooth));
+  const PUSH = 35.95; // 应用内页面推入
+  const push = ramp(t, PUSH, 0.42, EASE.smooth);
+  const TEST = 37.15;
+  const SW = 39.35;
+  const switched = ramp(t, SW, 0.3, EASE.out);
+  const banner = ramp(t, SW + 0.05, 0.4, EASE.snappy) * (1 - ramp(t, 40.3, 0.3, EASE.smooth));
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
-      <ScreenShell title="网络扩展套件" sub="自动识别六大主流网络扩展套件 · 一次只开一个" badge={<OkBadge text="6 个已识别" />}>
-        <Card style={{ padding: '6px 12px' }}>
-          {PLUGINS.map(([n0, col, at], i) => {
-            const n = n0;
-            void safe;
-            const on = ramp(t, at, 0.3, EASE.out);
-            return (
-              <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, height: 37, borderTop: i ? '1px solid rgba(60,60,67,.1)' : undefined }}>
-                <div style={{ width: 24, height: 24, borderRadius: 7, background: col, color: '#fff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: mix(0.3, 1, on) }}>{safe ? i + 1 : n[0]}</div>
-                <div style={{ fontSize: 15, fontWeight: 650, opacity: mix(0.35, 1, on) }}>{n}</div>
-                <div style={{ marginLeft: 'auto', opacity: on, transform: `scale(${mix(0.6, 1, on)})` }}>
-                  {i === 0 ? <OkBadge text="运行中" /> : <OkBadge text="已识别" color="#2f6bff" />}
-                </div>
-              </div>
-            );
-          })}
-        </Card>
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>加速通道 · 超清影音通道</div>
-            <div style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: 99, background: t > 37.15 && t < 37.35 ? '#0060d0' : '#007aff', color: '#fff', fontSize: 13, fontWeight: 700 }}>⚡ 批量测速</div>
-          </div>
-          {nodes.map(([n, ms, d], i) => {
-            const lockAt = 37.35 + d + 0.5;
-            const locked = t >= lockAt;
-            const sel = i === 0 && switched > 0;
-            return (
-              <div key={n} style={{ display: 'flex', alignItems: 'center', height: 34, borderRadius: 10, padding: '0 8px', background: sel ? `rgba(52,199,89,${0.16 * switched})` : 'transparent' }}>
-                <Dot color={locked ? C.ok : '#c7c7cc'} size={7} glow={false} />
-                <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600 }}>{n}</span>
-                <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 15, fontWeight: 700, color: locked ? '#1f9d4c' : '#8e8e93', padding: '2px 8px', borderRadius: 8, background: locked ? 'rgba(52,199,89,0.14)' : 'transparent' }}>
-                  {sweep > 0 ? rollNum(t, 37.35 + d, 0.5, ms, i * 17) : '--'} ms
-                </span>
-              </div>
-            );
-          })}
-          <div style={{ display: 'flex', alignItems: 'center', height: 34, borderRadius: 10, padding: '0 8px', background: `rgba(255,59,48,${0.12 * fail * (1 - switched)})`, opacity: mix(1, 0.45, switched) }}>
-            <Dot color={fail > 0 ? C.danger : '#c7c7cc'} size={7} glow={false} />
-            <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600, textDecoration: switched > 0.5 ? 'line-through' : undefined }}>备用线路 05 · 当前</span>
-            <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: C.danger, opacity: fail }}>超时</span>
-          </div>
-        </Card>
-      </ScreenShell>
-      <div style={{ position: 'absolute', left: 10, right: 10, top: 8, padding: '10px 12px', borderRadius: 14, background: 'rgba(240,253,244,0.96)', boxShadow: '0 8px 24px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(52,199,89,0.4)', color: '#1f9d4c', fontFamily: FONT.sans, fontSize: 13.5, fontWeight: 700, opacity: switched, transform: `translateY(${(1 - switched) * -40}px)` }}>
-        ✓ 线路异常，已自动切换至 低延迟线路 01（28 ms）
+    <Frame w={w}>
+      <div style={{ position: 'absolute', inset: 0, transform: `translateX(${-push * VW * 0.3}px)`, filter: push > 0 ? `brightness(${1 - push * 0.15})` : undefined }}>
+        <Shot n="home" />
+        {pick > 0 && <Shot n="home-pick" style={sheetMix(pick)} />}
+        {tapAt(t, PICK, cx(R.pxPick) + 110, cy(R.pxPick))}
       </div>
-      {t > 36.6 && t < 37.7 && <Tap x={300} y={318} press={ramp(t, 37.05, 0.1, EASE.out) * (1 - ramp(t, 37.2, 0.15, EASE.out))} ring={ramp(t, 37.15, 0.45, EASE.out)} opacity={ramp(t, 36.6, 0.2, EASE.out) * (1 - ramp(t, 37.5, 0.2, EASE.out))} />}
-    </div>
-  );
-};
-
-/* 线路测速运行中（第三幕右下辅机：局部露出，数字持续刷新） */
-export const SpeedRunScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
-  const k = w / 360;
-  const lines: Array<[string, number]> = [['低延迟线路 01', 28], ['企业多线内网线路', 35], ['跨区域办公线路', 42], ['超清影音通道', 31], ['备用线路 05', 96], ['家庭直连', 12]];
-  const tick = Math.floor(t / 0.12);
-  return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
-      <ScreenShell title="线路测速" sub="批量测速 · 每 2 秒刷新" badge={<OkBadge text="运行中" color="#007aff" />}>
-        <Card>
-          {lines.map(([n, base], i) => {
-            const jitter = Math.round((Math.abs(Math.sin((tick + i * 7) * 12.9898) * 43758.5453) % 1) * 8 - 4);
-            const ms = Math.max(5, base + jitter);
-            const sweep = ((t * 0.9 + i * 0.17) % 1);
-            return (
-              <div key={n} style={{ padding: '7px 0', borderTop: i ? '1px solid rgba(60,60,67,.1)' : undefined }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <Dot color={ms < 50 ? C.ok : C.warn} size={7} glow={false} />
-                  <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 650 }}>{n}</span>
-                  <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 15, fontWeight: 700, color: ms < 50 ? '#1f9d4c' : '#c26a00' }}>{ms} ms</span>
-                </div>
-                <div style={{ marginTop: 5, height: 4, borderRadius: 2, background: 'rgba(118,118,128,.14)', overflow: 'hidden' }}>
-                  <div style={{ width: `${sweep * 100}%`, height: '100%', borderRadius: 2, background: ms < 50 ? '#34c759' : '#ff9500' }} />
-                </div>
-              </div>
-            );
+      {push > 0 && (
+        <div style={{ position: 'absolute', inset: 0, transform: `translateX(${(1 - push) * VW}px)`, boxShadow: '-12px 0 30px rgba(0,0,0,0.12)' }}>
+          <Shot n="proxy-pending" />
+          {/* 逐行出测速结果（真实「测速后」截图按行揭开） */}
+          {R.rows.map((y, i) => {
+            const k = ramp(t, TEST + 0.25 + i * 0.16, 0.18, EASE.out);
+            return k > 0 ? <Shot key={i} n="proxy-tested" style={{ clipPath: `inset(${y}px 0 ${VH - y - 64}px 0)`, opacity: k }} /> : null;
           })}
-        </Card>
-      </ScreenShell>
-    </div>
+          {t > TEST + 0.25 && <Shot n="proxy-tested" style={{ clipPath: `inset(80px 0 ${VH - 190}px 0)`, opacity: ramp(t, TEST + 1.1, 0.2, EASE.out) }} />}
+          {switched > 0 && <Shot n="proxy-switched" style={{ opacity: switched }} />}
+          {tapAt(t, TEST, cx(R.grpTest), cy(R.grpTest))}
+          {/* 测速进行中：组标题处细进度条 */}
+          {t > TEST && t < TEST + 1.2 && <div style={{ position: 'absolute', left: 31, top: 184, height: 3, borderRadius: 2, width: 331 * ramp(t, TEST, 1.1, EASE.linear), background: '#007aff', opacity: 1 - ramp(t, TEST + 1.05, 0.15, EASE.out) }} />}
+        </div>
+      )}
+      <Banner k={banner} title="路由器面板" body="备用线路 05 超时，已自动切换到低延迟线路 01（38 ms）" />
+    </Frame>
   );
 };
 
-/* 设备管理（中文设备名示意 · 智能调度状态 · 定时断网） */
+/* 设备页 → 点「儿童平板」的暂停 → 弹层 → 点「添加」每天 23:00–07:00 定时断网（真实 pause_set 流程） */
 export const DEVICES: Array<{ n: string; ip: string; route: string; color: string; dn: number[] }> = [
-  { n: '书房台式机', ip: '192.168.1.20', route: '直连', color: '#2f6bff', dn: [12.4, 3.1] },
-  { n: '客厅电视', ip: '192.168.1.36', route: '4K 本地影音加速', color: '#7c3aed', dn: [38.6, 0.4] },
-  { n: '儿童平板', ip: '192.168.1.52', route: '直连', color: '#f59e0b', dn: [2.3, 0.2] },
+  { n: '书房台式机', ip: '192.168.1.10', route: '直连', color: '#2f6bff', dn: [12.4, 3.1] },
+  { n: '客厅电视', ip: '192.168.1.23', route: '4K 本地影音加速', color: '#7c3aed', dn: [38.6, 0.4] },
+  { n: '儿童平板', ip: '192.168.1.36', route: '直连', color: '#f59e0b', dn: [2.3, 0.2] },
 ];
 export const TOGGLE_AT = 44.586; // 116 BPM 拍点
 
 export const DevicesScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
-  const k = w / 360;
-  const tog = ramp(t, TOGGLE_AT, 0.18, EASE.swift);
+  const OPEN = 43.6;
+  const sheet = ramp(t, OPEN + 0.08, 0.38, EASE.snappy);
+  const added = ramp(t, TOGGLE_AT + 0.05, 0.16, EASE.out);
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
-      <ScreenShell title="设备" sub="谁在线、走哪条线路、用了多少流量" badge={<OkBadge text="3 台在线" />}>
-        {DEVICES.map((d, i) => {
-          const live = d.dn[0] * (0.85 + 0.15 * Math.sin(t * 2.3 + i * 2));
-          return (
-            <Card key={d.n} style={{ padding: '12px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 10, background: `${d.color}22`, color: d.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{['▭', '▣', '▯'][i]}</div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 750 }}>{d.n}</div>
-                  <div style={{ fontSize: 12, color: '#6e6e73', fontFamily: FONT.mono }}>{d.ip}</div>
-                </div>
-                <div style={{ marginLeft: 'auto' }}>{i === 2 && tog > 0.5 ? <OkBadge text="已锁定" color={C.warn} /> : <OkBadge text="在线" />}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 12.5, fontWeight: 650 }}>
-                <span style={{ padding: '3px 9px', borderRadius: 99, background: 'rgba(0,122,255,0.1)', color: '#007aff' }}>智能调度 · {d.route}</span>
-                <span style={{ padding: '3px 9px', borderRadius: 99, background: 'rgba(118,118,128,.12)', fontFamily: FONT.mono }}>↓ {live.toFixed(1)} MB/s</span>
-              </div>
-              {i === 2 && (
-                <div style={{ display: 'flex', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(60,60,67,.1)' }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>定时断网</div>
-                    <div style={{ fontSize: 12, color: tog > 0.5 ? '#c26a00' : '#6e6e73' }}>{tog > 0.5 ? '每晚 23:00 自动断网 · 已生效' : '每晚 23:00 – 次日 07:00'}</div>
-                  </div>
-                  <div style={{ marginLeft: 'auto' }}>
-                    <Toggle on={tog} />
-                  </div>
-                </div>
-              )}
-            </Card>
-          );
-        })}
-      </ScreenShell>
-      {t > TOGGLE_AT - 0.7 && t < TOGGLE_AT + 0.7 && (
-        <Tap x={313} y={436} press={ramp(t, TOGGLE_AT - 0.08, 0.08, EASE.out) * (1 - ramp(t, TOGGLE_AT + 0.08, 0.15, EASE.out))} ring={ramp(t, TOGGLE_AT, 0.45, EASE.out)} opacity={ramp(t, TOGGLE_AT - 0.7, 0.2, EASE.out) * (1 - ramp(t, TOGGLE_AT + 0.45, 0.2, EASE.out))} />
-      )}
-    </div>
+    <Frame w={w}>
+      <Shot n="dev0" />
+      {sheet > 0 && <Shot n="dev-sheet0" style={sheetMix(sheet)} />}
+      {added > 0 && <Shot n="dev-sheet1" style={{ opacity: added }} />}
+      {tapAt(t, OPEN, cx(R.devPause), cy(R.devPause))}
+      {tapAt(t, TOGGLE_AT, cx(R.sheetAdd), cy(R.sheetAdd))}
+    </Frame>
   );
 };
 
-/* PWA：浏览器 → 分享 → 添加到主屏幕 → 桌面图标 → 面板锁指纹 → 面板 */
+/* 桌面图标（白色线性图标取自面板 NAV_IC） */
+const APP_IC: Array<[string, string]> = [
+  ['M4 7h16v10H4z|M4 7l8 6 8-6', '#34c759'],
+  ['M12 3v2M12 19v2M3 12h2M19 12h2|M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', '#ff9500'],
+  ['M9 18V6l10-2v12|M6 18a3 3 0 1 0 0-.1', '#ff2d55'],
+  ['M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z|M12 10h.01', '#0a84ff'],
+  ['M4 20h4L19 9l-4-4L4 16z', '#af52de'],
+  ['M12 7.5V12l3 2|M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z', '#5e5ce6'],
+  ['M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z', '#30b0c7'],
+  ['M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z|M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3', '#8e8e93'],
+  ['', ''],
+  ['M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z', '#34c759'],
+  ['M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z', '#ff3b30'],
+  ['M4 11l8-7 8 7v9H4z|M10 20v-5h4v5', '#ff9500'],
+  ['M3 13l18-8-8 18-2-8z', '#0a84ff'],
+  ['M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01', '#5e5ce6'],
+  ['M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z|M3 12h18', '#00c7be'],
+  ['M8 5v14l11-7z', '#ff2d55'],
+];
+
+/* PWA：浏览器 → 分享 → 添加到主屏幕 → 桌面图标 → 真实面板锁（指纹）→ 面板 */
 export const PwaFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a }) => {
-  const k = w / 360;
   const sheet = ramp(t, a + 0.35, 0.4, EASE.snappy);
   const add = a + 1.05;
   const home = t >= a + 1.55;
@@ -174,65 +133,81 @@ export const PwaFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a
   const fp = ramp(t, a + 3.25, 0.7, EASE.linear);
   const unlocked = t >= a + 4.05;
   const panelIn = ramp(t, a + 4.05, 0.45, EASE.snappy);
+  const fx = cx(R.lkFp), fy = cy(R.lkFp);
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0', fontFamily: FONT.sans, overflow: 'hidden' }}>
+    <Frame w={w}>
       {!home && (
         <div style={{ position: 'absolute', inset: 0 }}>
-          <Img src={staticFile('shots/home.png')} style={{ width: 360, height: 720, transform: 'translateY(52px)', filter: `brightness(${1 - sheet * 0.45})` }} />
-          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 92, background: '#f2f2f7', borderBottom: '1px solid #ddd' }}>
-            <div style={{ position: 'absolute', left: 16, right: 16, top: 48, height: 34, borderRadius: 10, background: '#e3e3e8', fontSize: 15, color: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔒 你的专属域名 / panel</div>
+          <div style={{ position: 'absolute', inset: 0, filter: `brightness(${1 - sheet * 0.4})` }}>
+            <Shot n="main" />
+            {/* Safari 底部地址栏 */}
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 96, background: 'rgba(246,246,250,0.94)', backdropFilter: 'blur(20px)', borderTop: '0.5px solid rgba(0,0,0,0.12)' }}>
+              <div style={{ position: 'absolute', left: 14, right: 14, top: 8, height: 44, borderRadius: 13, background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 15, color: '#111' }}>
+                <svg width={12} height={14} viewBox="0 0 12 14"><rect x="1" y="6" width="10" height="7.5" rx="2" fill="#111" /><path d="M3.3 6V4.4a2.7 2.7 0 0 1 5.4 0V6" stroke="#111" strokeWidth="1.5" fill="none" /></svg>
+                你的专属域名
+              </div>
+            </div>
           </div>
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 300, background: '#f2f2f7', borderRadius: '18px 18px 0 0', transform: `translateY(${(1 - sheet) * 320}px)`, padding: 16, boxSizing: 'border-box' }}>
-            {['拷贝链接', '添加到主屏幕', '添加书签'].map((s, i) => (
-              <div key={s} style={{ height: 52, borderRadius: 12, background: i === 1 && t > add ? '#d8e7ff' : '#fff', marginBottom: 8, display: 'flex', alignItems: 'center', padding: '0 16px', fontSize: 17, fontWeight: i === 1 ? 700 : 500, color: '#111' }}>
+          <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, borderRadius: 26, background: 'rgba(242,242,247,0.97)', padding: 14, transform: `translateY(${(1 - sheet) * 380}px)`, boxShadow: '0 -8px 30px rgba(0,0,0,0.15)' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+              <BrandMark size={44} id="pwa-s" />
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>路由器面板</div>
+                <div style={{ fontSize: 12.5, color: '#8e8e93' }}>你的专属域名</div>
+              </div>
+            </div>
+            {['拷贝', '添加到主屏幕', '添加书签'].map((s, i) => (
+              <div key={s} style={{ height: 50, borderRadius: 12, background: i === 1 && t > add ? '#d8e7ff' : '#fff', marginBottom: 8, display: 'flex', alignItems: 'center', padding: '0 16px', fontSize: 16.5, fontWeight: i === 1 ? 650 : 500, color: '#111' }}>
                 {s}
-                <span style={{ marginLeft: 'auto', color: '#888' }}>{['⧉', '⊞', '☆'][i]}</span>
+                <svg style={{ marginLeft: 'auto' }} width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+                  {i === 0 && <><rect x="8" y="8" width="11" height="12" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h8" /></>}
+                  {i === 1 && <><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M12 8.5v7M8.5 12h7" /></>}
+                  {i === 2 && <path d="M7 4h10v16l-5-3.5L7 20z" />}
+                </svg>
               </div>
             ))}
           </div>
-          {t > add - 0.4 && t < add + 0.4 && <Tap x={180} y={496} ring={ramp(t, add, 0.4, EASE.out)} press={ramp(t, add - 0.06, 0.06, EASE.out)} opacity={1 - ramp(t, add + 0.25, 0.15, EASE.out)} />}
+          {tapAt(t, add, 196, 739)}
         </div>
       )}
       {home && !lock && (
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #1e3a8a, #6d28d9 60%, #0e7490)' }}>
-          {Array.from({ length: 16 }, (_, i) => {
-            const isNew = i === 9;
-            const x = 28 + (i % 4) * 80;
-            const y = 90 + Math.floor(i / 4) * 96;
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 20% 15%, #4f7cff 0%, rgba(79,124,255,0) 50%), radial-gradient(circle at 85% 80%, #c45cff 0%, rgba(196,92,255,0) 55%), linear-gradient(160deg, #1e3a8a, #5b21b6 60%, #0e7490)' }}>
+          {APP_IC.map(([d, col], i) => {
+            const isNew = i === 8;
+            const x = 27 + (i % 4) * 90;
+            const y = 96 + Math.floor(i / 4) * 104;
             return (
-              <div key={i} style={{ position: 'absolute', left: x, top: y, width: 60, textAlign: 'center' }}>
-                <div style={{ width: 60, height: 60, borderRadius: 15, background: isNew ? 'transparent' : `linear-gradient(135deg, hsl(${(i * 47) % 360},70%,62%), hsl(${(i * 47 + 40) % 360},75%,48%))`, transform: isNew ? `scale(${iconPop})` : undefined, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, fontWeight: 800 }}>
-                  {!isNew && ['✉', '☼', '♪', '⌖', '✎', '◷', '☁', '⚙', '', '✆', '♥', '⌂', '✈', '☰', '◎', '▶'][i]}
-                  {isNew && <BrandMark size={60} id="pwa" />}
+              <div key={i} style={{ position: 'absolute', left: x, top: y, width: 68, textAlign: 'center' }}>
+                <div style={{ width: 64, height: 64, margin: '0 auto', borderRadius: 15, background: isNew ? 'transparent' : `linear-gradient(180deg, ${col}, ${col}cc)`, transform: isNew ? `scale(${iconPop})` : undefined, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isNew ? undefined : '0 2px 6px rgba(0,0,0,0.18)' }}>
+                  {isNew ? (
+                    <BrandMark size={64} id="pwa" />
+                  ) : (
+                    <svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+                      {d.split('|').map((p, j) => <path key={j} d={p} />)}
+                    </svg>
+                  )}
                 </div>
-                <div style={{ fontSize: 11, color: '#fff', marginTop: 5, opacity: isNew ? iconPop : 0.6 }}>{isNew ? '路由器面板' : ''}</div>
+                <div style={{ fontSize: 11.5, color: '#fff', marginTop: 5, opacity: isNew ? iconPop : 0.85, whiteSpace: 'nowrap' }}>{isNew ? '路由器面板' : ['邮件', '天气', '音乐', '地图', '备忘录', '时钟', '云盘', '设置', '', '电话', '健康', '家庭', '导航', '提醒', '浏览器', '视频'][i]}</div>
               </div>
             );
           })}
-          {t > a + 2.0 && <Tap x={58 + 80} y={312 + 30} ring={ramp(t, a + 2.3, 0.4, EASE.out)} opacity={ramp(t, a + 2.0, 0.15, EASE.out)} />}
+          {t > a + 2.0 && <Tap x={27 + 34} y={96 + 2 * 104 + 32} ring={ramp(t, a + 2.3, 0.4, EASE.out)} opacity={ramp(t, a + 2.0, 0.15, EASE.out)} />}
         </div>
       )}
       {lock && (
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, #0f172a, #1e1b4b)' }}>
-          <div style={{ position: 'absolute', top: 150, left: 0, right: 0, textAlign: 'center', color: '#fff' }}>
-            <div style={{ fontSize: 26, fontWeight: 800 }}>面板锁</div>
-            <div style={{ fontSize: 14, opacity: 0.6, marginTop: 6 }}>指纹或数字密码解锁</div>
-          </div>
-          <svg width={140} height={140} viewBox="0 0 24 24" style={{ position: 'absolute', left: 110, top: 300 }}>
-            {['M12 3a9 9 0 0 1 9 9', 'M3 12a9 9 0 0 1 6-8.5', 'M12 6.5a5.5 5.5 0 0 1 5.5 5.5v2', 'M6.5 12a5.5 5.5 0 0 1 3-4.9', 'M12 10v4.5a4 4 0 0 0 2 3.5', 'M9 12.5v2a7 7 0 0 0 1.5 4.3', 'M15 13v1.5'].map((d, i) => (
-              <path key={i} d={d} stroke={unlocked ? C.ok : fp > i / 7 ? '#60a5fa' : 'rgba(255,255,255,0.35)'} strokeWidth={1.2} fill="none" strokeLinecap="round" />
-            ))}
-          </svg>
-          {fp > 0 && fp < 1 && <div style={{ position: 'absolute', left: 100, width: 160, top: 300 + fp * 140, height: 2, background: '#60a5fa', boxShadow: '0 0 12px #60a5fa' }} />}
-          <div style={{ position: 'absolute', top: 470, left: 0, right: 0, textAlign: 'center', color: unlocked ? '#86efac' : 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: 600 }}>{unlocked ? '✓ 已解锁' : '请验证指纹'}</div>
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <Shot n="lock" />
+          {/* 指纹验证：图标处扫描光 + 识别成功变绿 */}
+          <div style={{ position: 'absolute', left: fx - 46, top: fy - 46, width: 92, height: 92, borderRadius: 46, boxShadow: `0 0 0 2px ${unlocked ? 'rgba(52,199,89,0.95)' : `rgba(96,165,250,${0.4 + 0.5 * fp})`}, 0 0 26px ${unlocked ? 'rgba(52,199,89,0.6)' : 'rgba(96,165,250,0.45)'}`, opacity: ramp(t, a + 2.9, 0.25, EASE.out) }} />
+          {fp > 0 && fp < 1 && <div style={{ position: 'absolute', left: fx - 34, width: 68, top: fy - 34 + fp * 68, height: 2, background: '#60a5fa', boxShadow: '0 0 12px #60a5fa' }} />}
           {unlocked && (
-            <div style={{ position: 'absolute', inset: 0, transform: `translateY(${(1 - panelIn) * 720}px)` }}>
-              <Img src={staticFile('shots/home.png')} style={{ width: 360, height: 720 }} />
+            <div style={{ position: 'absolute', inset: 0, transform: `translateY(${(1 - panelIn) * VH}px)` }}>
+              <Shot n="main" />
             </div>
           )}
         </div>
       )}
-    </div>
+    </Frame>
   );
 };
 
@@ -298,7 +273,7 @@ export const AndroidFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, 
           {t > switchAt - 0.5 && t < switchAt + 0.5 && <Tap x={300} y={20 + 30 + 2 * 84 + 37} ring={ramp(t, switchAt, 0.4, EASE.out)} opacity={1 - ramp(t, switchAt + 0.3, 0.2, EASE.out)} />}
           {t > switchAt + 0.3 && (
             <div style={{ marginTop: 12, borderRadius: 16, overflow: 'hidden', height: 300, opacity: ramp(t, switchAt + 0.3, 0.4, EASE.out) }}>
-              <Img src={staticFile('shots/dark.png')} style={{ width: 328, height: 656, transform: 'translateY(-48px)' }} />
+              <Img src={staticFile('shots/real/main-dark.png')} style={{ width: 328, height: 328 * (852 / 393), transform: 'translateY(-56px)' }} />
             </div>
           )}
         </div>

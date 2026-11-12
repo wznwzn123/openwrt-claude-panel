@@ -214,8 +214,33 @@ export const Glass: React.FC<{ style?: React.CSSProperties; radius?: number; fil
 
 /* ───────────── 2.5D 真机：iPhone 16 Pro 级超窄钛金属旗舰外观（CSS 3D + 物理接触投影） ───────────── */
 export const PHONE_BEZEL = 0.02; // 屏幕到外框的黑边（相对屏宽），旧版 0.04 减半
+/** 屏幕高宽比：与真实面板截图视口 393×852（iPhone 6.1 寸）一致，内容不再被裁切 */
+export const PHONE_ASPECT = 852 / 393;
+/** 顶部状态栏安全区（截图里 --sat=54px 留出的空白，由 Phone 叠画时间/信号/电量） */
+export const PHONE_SAT = 54 / 393;
 /** 手机整体外框尺寸（含黑边），布局/定位框统一从这里取 */
-export const phoneBox = (sw: number) => ({ pw: sw * (1 + 2 * PHONE_BEZEL), ph: sw * (2 + 2 * PHONE_BEZEL), bez: sw * PHONE_BEZEL });
+export const phoneBox = (sw: number) => ({ pw: sw * (1 + 2 * PHONE_BEZEL), ph: sw * (PHONE_ASPECT + 2 * PHONE_BEZEL), bez: sw * PHONE_BEZEL, sh: sw * PHONE_ASPECT });
+
+/* 状态栏图标（SVG，不用文字字形） */
+const StatusIcons: React.FC<{ s: number; c: string }> = ({ s, c }) => (
+  <span style={{ display: 'flex', alignItems: 'center', gap: s * 0.32 }}>
+    <svg width={s * 1.05} height={s * 0.7} viewBox="0 0 18 12" style={{ display: 'block' }}>
+      {[0, 1, 2, 3].map((i) => (
+        <rect key={i} x={i * 4.8} y={9 - i * 3} width={3.2} height={3 + i * 3} rx={0.9} fill={c} />
+      ))}
+    </svg>
+    <svg width={s * 0.98} height={s * 0.7} viewBox="0 0 17 12" style={{ display: 'block' }}>
+      <path d="M8.5 2.2c2.5 0 4.8 1 6.5 2.6l1.2-1.3A11 11 0 0 0 8.5.4 11 11 0 0 0 .8 3.5L2 4.8a9.3 9.3 0 0 1 6.5-2.6z" fill={c} />
+      <path d="M8.5 5.9c1.5 0 2.9.6 3.9 1.5l1.2-1.3a7.3 7.3 0 0 0-10.2 0l1.2 1.3c1-.9 2.4-1.5 3.9-1.5z" fill={c} />
+      <path d="M8.5 9.4c.6 0 1.1.2 1.5.6L8.5 11.6 7 10c.4-.4.9-.6 1.5-.6z" fill={c} />
+    </svg>
+    <svg width={s * 1.55} height={s * 0.72} viewBox="0 0 27 12.5" style={{ display: 'block' }}>
+      <rect x="0.6" y="0.6" width="22.6" height="11.3" rx="3.4" fill="none" stroke={c} strokeOpacity={0.4} strokeWidth={1.1} />
+      <rect x="2.3" y="2.3" width="15.6" height="7.9" rx="2" fill={c} />
+      <path d="M24.6 4.3v3.9c.9-.3 1.5-1.1 1.5-1.95s-.6-1.65-1.5-1.95z" fill={c} fillOpacity={0.45} />
+    </svg>
+  </span>
+);
 
 export const Phone: React.FC<{
   w?: number; // 屏幕宽（px）
@@ -223,12 +248,20 @@ export const Phone: React.FC<{
   children?: React.ReactNode;
   glare?: number; // 0..1 扫光位置
   shadow?: boolean;
-  dark?: boolean;
-}> = ({ w = 380, src, children, glare = -1, shadow = true }) => {
-  const h = w * 2;
+  dark?: boolean; // 深色界面：状态栏用白字
+  full?: boolean; // 子内容铺满整屏（真实截图，已含状态栏安全区）；否则从状态栏下方开始
+  topBg?: string; // 非 full 内容时状态栏区域的底色（与界面顶部同色，透明状态栏观感）
+  depth?: boolean; // 机身厚度层（3D 旋转时露出侧边中框）
+}> = ({ w = 380, src, children, glare = -1, shadow = true, dark = false, full, topBg, depth = true }) => {
+  const h = w * PHONE_ASPECT;
   const bez = w * PHONE_BEZEL;
-  const r = w * 0.155;
+  const r = w * 0.15;
   const rim = Math.max(1.5, w * 0.004); // 钛金属中框描边
+  const sat = w * PHONE_SAT;
+  const isFull = full ?? !!src;
+  const ink = dark ? '#fff' : '#0b0b0f';
+  const T = w * 0.105; // 机身厚度（iPhone ≈ 8.3mm / 71.6mm）
+  const LAYERS = 7;
   return (
     <div style={{ position: 'relative', width: w + bez * 2, height: h + bez * 2, transformStyle: 'preserve-3d' }}>
       {shadow && (
@@ -241,11 +274,30 @@ export const Phone: React.FC<{
             height: w * 0.14,
             borderRadius: '50%',
             background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%)',
-            transform: 'translateZ(-40px)',
+            transform: `translateZ(${-T - 30}px)`,
             filter: 'blur(6px)',
           }}
         />
       )}
+      {/* 机身厚度：多层钛金属侧框沿 Z 轴向后堆叠，侧转时露出中框 */}
+      {depth &&
+        Array.from({ length: LAYERS }, (_, i) => {
+          const k = (i + 1) / LAYERS;
+          const l = Math.round(150 - 70 * k);
+          return (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                inset: -rim,
+                borderRadius: r + bez + rim,
+                background: `linear-gradient(90deg, rgb(${l - 18},${l - 10},${l}) 0%, rgb(${l + 40},${l + 46},${l + 56}) 50%, rgb(${l - 24},${l - 16},${l - 6}) 100%)`,
+                transform: `translateZ(${-T * k}px)`,
+                boxShadow: i === LAYERS - 1 ? '0 30px 80px rgba(2,6,23,0.45)' : undefined,
+              }}
+            />
+          );
+        })}
       {/* 外圈钛金属拉丝中框：浅银灰 → 深枪灰，侧边受光的微弱外发光 + 多层柔光环境投影 */}
       <div
         style={{
@@ -259,7 +311,6 @@ export const Phone: React.FC<{
             '0 2px 4px rgba(0,0,0,0.22)',
             '0 12px 24px rgba(2,6,23,0.28)',
             '0 36px 72px rgba(2,6,23,0.34)',
-            '0 70px 140px rgba(2,6,23,0.32)',
           ].join(', '),
         }}
       />
@@ -276,24 +327,20 @@ export const Phone: React.FC<{
           height: h,
           borderRadius: r,
           overflow: 'hidden',
-          background: '#0b0c10',
+          background: topBg ?? (dark ? '#0b0c10' : '#E8ECF7'),
         }}
       >
-        <div style={{ position: 'absolute', left: 0, top: w * 0.115, width: w, height: h, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', left: 0, top: isFull ? 0 : sat, width: w, height: isFull ? h : h - sat, overflow: 'hidden' }}>
           {src && <Img src={staticFile(src)} style={{ width: w, height: h, display: 'block' }} />}
           {children}
         </div>
-        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: w * 0.115, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `0 ${w * 0.085}px`, boxSizing: 'border-box', fontFamily: FONT.sans, fontWeight: 600, fontSize: w * 0.04, color: '#fff' }}>
-          <span>9:41</span>
-          <span style={{ display: 'flex', gap: w * 0.015, alignItems: 'center' }}>
-            <span style={{ letterSpacing: -1 }}>▂▄▆█</span>
-            <span style={{ display: 'inline-block', width: w * 0.06, height: w * 0.028, borderRadius: 3, border: '1.5px solid #fff', position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 1.5, top: 1.5, bottom: 1.5, width: '70%', background: '#fff', borderRadius: 1 }} />
-            </span>
-          </span>
+        {/* 透明状态栏：时间 + SVG 信号/Wi-Fi/电量，与灵动岛同一水平线 */}
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: sat * 0.98, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `${w * 0.006}px ${w * 0.078}px 0 ${w * 0.1}px`, boxSizing: 'border-box', fontFamily: FONT.sans, fontWeight: 650, fontSize: w * 0.043, letterSpacing: -0.2, color: ink }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>21:46</span>
+          <StatusIcons s={w * 0.042} c={ink} />
         </div>
-        {/* 底部半透明磨砂 Home Bar 指示条 */}
-        <div style={{ position: 'absolute', left: '50%', bottom: w * 0.022, width: w * 0.34, height: Math.max(4, w * 0.013), marginLeft: -w * 0.17, borderRadius: 99, background: 'rgba(120,124,135,0.62)', backdropFilter: 'blur(6px)', boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.45), 0 0 0 0.5px rgba(0,0,0,0.12)' }} />
+        {/* 底部 Home Indicator：贴底、细，不压导航 */}
+        <div style={{ position: 'absolute', left: '50%', bottom: w * 0.017, width: w * 0.34, height: Math.max(3, w * 0.0115), marginLeft: -w * 0.17, borderRadius: 99, background: dark ? 'rgba(255,255,255,0.78)' : 'rgba(10,10,15,0.78)' }} />
         {/* 玻璃屏幕：极淡斜向镜面反光 */}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 45%)', pointerEvents: 'none' }} />
         {glare >= 0 && glare <= 1 && (
@@ -310,15 +357,15 @@ export const Phone: React.FC<{
           />
         )}
       </div>
-      {/* 纤细紧凑的灵动岛 */}
+      {/* 纤细紧凑的灵动岛（与状态栏文字垂直居中对齐） */}
       <div
         style={{
           position: 'absolute',
           left: '50%',
-          top: bez + w * 0.026,
-          width: w * 0.22,
-          height: w * 0.058,
-          marginLeft: -w * 0.11,
+          top: bez + sat * 0.5 - w * 0.033,
+          width: w * 0.24,
+          height: w * 0.066,
+          marginLeft: -w * 0.12,
           borderRadius: 99,
           background: '#000',
           boxShadow: 'inset 0 0 0 0.5px rgba(255,255,255,0.06)',

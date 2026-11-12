@@ -1,7 +1,7 @@
 import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
-import { AuroraBG, BrandMark, Dot, Glass, Grain, HudBG, Phone, Pill, Vignette, PHONE_BEZEL, phoneBox } from '../lib/visual';
+import { AuroraBG, BrandMark, Dot, Glass, Grain, HudBG, Phone, Pill, Vignette, PHONE_ASPECT, PHONE_BEZEL, phoneBox } from '../lib/visual';
 import { Img, staticFile } from 'remotion';
 
 /* 终幕 · 74–90s · 全天候守护与双轨极速启航
@@ -24,10 +24,11 @@ const CMD = 'cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude
 
 /* 扫描标注目标（真实断线记录截图坐标，390×780） */
 const TARGETS = [
-  { x0: 36, y0: 196, x1: 132, y1: 224, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
-  { x0: 255, y0: 196, x1: 352, y1: 224, label: '⚠ DNS 解析', note: '异常 → 已自愈 ×2' },
-  { x0: 36, y0: 240, x1: 132, y1: 268, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
-  { x0: 255, y0: 240, x1: 352, y1: 268, label: '扩展套件进程', note: '守护中 · 正常' },
+  // 坐标 = 真实面板「断线记录」页（shots/real/wd.png，CSS px，393 宽视口）里各状态胶囊的位置
+  { x0: 33, y0: 247, x1: 140, y1: 283, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
+  { x0: 256, y0: 247, x1: 359, y1: 283, label: '⚠ DNS 解析', note: '异常 → 已自愈 ×2' },
+  { x0: 33, y0: 291, x1: 140, y1: 327, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
+  { x0: 256, y0: 291, x1: 359, y1: 327, label: '扩展套件进程', note: '守护中 · 正常' },
 ];
 
 const Notice: React.FC<{ t: number; at: number; title: string; body: string; slot: number }> = ({ t, at, title, body, slot }) => {
@@ -49,14 +50,14 @@ const Notice: React.FC<{ t: number; at: number; title: string; body: string; slo
 
 const Watchdog: React.FC<{ t: number }> = ({ t }) => {
   const { W, H, vertical } = useV();
-  const sw = vertical ? 360 : 400;
-  const k = sw / 390;
+  const sw = vertical ? 333 : 370;
+  const k = sw / 393;
   const { pw, ph } = phoneBox(sw);
   const px = vertical ? W / 2 : W * 0.29;
   const py = vertical ? H * 0.42 : H * 0.53;
   const left = px - pw / 2 + sw * PHONE_BEZEL;
-  const top = py - ph / 2 + sw * PHONE_BEZEL + sw * 0.115; // 状态栏下移
-  const scanY = mix(-20, 800, ramp(t, SCAN0, SCAN1 - SCAN0, EASE.linear)); // 机器视线：严格匀速
+  const top = py - ph / 2 + sw * PHONE_BEZEL; // 真实截图已含状态栏安全区
+  const scanY = mix(-20, 870, ramp(t, SCAN0, SCAN1 - SCAN0, EASE.linear)); // 机器视线：严格匀速
   const scanO = ramp(t, SCAN0, 0.15, EASE.linear) * (1 - ramp(t, SCAN1, 0.25, EASE.linear));
   const push = 1 + 0.035 * ramp(t, A, HUD_OUT - A, EASE.linear);
   return (
@@ -65,8 +66,8 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
       <Abs style={{ inset: 0, transform: `scale(${push})` }}>
         <div style={{ position: 'absolute', left: px - pw / 2, top: py - ph / 2, perspective: 1600 }}>
           <div style={{ transform: `rotateY(${8 + 1.5 * Math.sin(t)}deg)` }}>
-            <Phone w={sw}>
-              <Img src={staticFile('shots/offline.png')} style={{ width: sw, height: sw * 2, filter: 'saturate(0.9)' }} />
+            <Phone w={sw} full>
+              <Img src={staticFile('shots/real/wd.png')} style={{ width: sw, height: sw * PHONE_ASPECT, display: 'block', filter: 'saturate(0.9)' }} />
               {/* 扫描线 + 已读余晖 */}
               <div style={{ position: 'absolute', left: 0, right: 0, top: scanY * k - 140, height: 140, background: 'linear-gradient(180deg, rgba(6,182,212,0), rgba(6,182,212,0.22))', opacity: scanO }} />
               <div style={{ position: 'absolute', left: 0, right: 0, top: scanY * k, height: 3, background: C.cyan, boxShadow: `0 0 18px ${C.cyan}, 0 0 4px #fff`, opacity: scanO }} />
@@ -75,7 +76,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
         </div>
         {/* 取景角标收拢 + 机器标签 */}
         {TARGETS.map((g, i) => {
-          const ft = mix(SCAN0, SCAN1, (g.y1 + 20) / 820) + i * 0.08;
+          const ft = mix(SCAN0, SCAN1, (g.y1 + 20) / 890) + i * 0.08;
           const c = springAt(t, ft, 60, { damping: 15, stiffness: 240 });
           if (t < ft) return null;
           const x0 = left + g.x0 * k - 6, y0 = top + g.y0 * k - 6, x1 = left + g.x1 * k + 6, y1 = top + g.y1 * k + 6;
@@ -126,7 +127,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
                   {txt}
                   <span style={{ opacity: lk < 1 ? 1 : 0 }}>▍</span>
                 </div>
-                <div style={{ marginTop: 6, fontFamily: FONT.mono, fontSize: 15, color: 'rgba(6,182,212,0.6)', letterSpacing: '0.14em' }}>AUTO-HEAL · LOG {`19:12:${String(10 + i * 7).padStart(2, '0')}`}</div>
+                <div style={{ marginTop: 6, fontFamily: FONT.mono, fontSize: 15, color: 'rgba(6,182,212,0.6)', letterSpacing: '0.14em' }}>AUTO-HEAL · LOG {`21:45:${String(31 + i * 7).padStart(2, '0')}`}</div>
               </div>
             </React.Fragment>
           );

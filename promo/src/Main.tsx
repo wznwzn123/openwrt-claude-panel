@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill } from 'remotion';
-import { SafeCtx, ensureFonts, useT } from './lib/core';
+import { FONT, SafeCtx, ensureFonts, ramp, useT, useV } from './lib/core';
 import { Act1 } from './acts/Act1';
 import { Act2 } from './acts/Act2';
 import { Act3 } from './acts/Act3';
@@ -24,6 +24,20 @@ const ScanWipe: React.FC<{ t: number; from: number; dur: number; children: React
   );
 };
 
+/* 角标：界面里的设备名、流量、延迟等均为演示数据（真实面板代码渲染，数据由本地模拟接口提供） */
+export const DEMO_FROM = 8.6;
+export const DEMO_TO = 81.8;
+const DemoTag: React.FC<{ t: number }> = ({ t }) => {
+  const { vertical } = useV();
+  const o = ramp(t, DEMO_FROM, 0.4) * (1 - ramp(t, DEMO_TO - 0.3, 0.3));
+  if (o <= 0) return null;
+  return (
+    <div style={{ position: 'absolute', right: vertical ? 54 : 96, bottom: vertical ? 40 : 26, fontFamily: FONT.sans, fontSize: vertical ? 20 : 16, fontWeight: 500, letterSpacing: '0.06em', color: 'rgba(226,232,240,0.5)', textShadow: '0 1px 6px rgba(0,0,0,0.55)', opacity: o, pointerEvents: 'none' }}>
+      界面为演示数据
+    </div>
+  );
+};
+
 export const ACTS = [
   { id: 'a1', start: 0, end: 12 },
   { id: 'a2', start: 12, end: 28 },
@@ -42,6 +56,7 @@ export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtit
       {t >= 28 && t < 54 && <Act3 />}
       {t >= 54 && t < 74.35 && <Act4 />}
       {t >= 73.75 && <ScanWipe t={t} from={73.75} dur={0.55}><Act5 /></ScanWipe>}
+      <DemoTag t={t} />
       {subtitles && <Subtitles />}
     </AbsoluteFill>
     </SafeCtx.Provider>

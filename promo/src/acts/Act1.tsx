@@ -205,7 +205,7 @@ const MaskWorld: React.FC<{ t: number }> = ({ t }) => {
   const { W, H, vertical } = useV();
   const drift = mix(160, -160, ramp(t, WORD0, RUSH0 - WORD0 + 1, EASE.smooth));
   const fade = 1 - ramp(t, RUSH0 - 0.1, 0.6, EASE.swift);
-  const shots = ['home', 'devices', 'traffic', 'dark', 'offline', 'pause'];
+  const shots = ['main', 'dev', 'traf', 'main-dark', 'wd', 'proxy']; // 真实面板截图（shots/real）
   const pw = vertical ? 230 : 300;
   return (
     <Abs style={{ inset: 0 }}>
@@ -213,10 +213,10 @@ const MaskWorld: React.FC<{ t: number }> = ({ t }) => {
       <Abs style={{ left: 0, top: 0, width: W, height: H, transform: `translateX(${drift}px)`, opacity: fade }}>
         {shots.map((s, i) => {
           const x = W / 2 + (i - 2.5) * (pw + 40) - pw / 2;
-          const y = H / 2 - pw * (i % 2 ? 0.9 : 1.15);
+          const y = H / 2 - pw * (i % 2 ? 0.98 : 1.24);
           return (
-            <div key={s} style={{ position: 'absolute', left: x, top: y, width: pw, height: pw * 2, borderRadius: 34, overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.5)', opacity: 0.92 }}>
-              <Img src={staticFile(`shots/${s}.png`)} style={{ width: '100%', height: '100%' }} />
+            <div key={s} style={{ position: 'absolute', left: x, top: y, width: pw, height: pw * (852 / 393), borderRadius: 34, overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.5)', opacity: 0.92 }}>
+              <Img src={staticFile(`shots/real/${s}.png`)} style={{ width: '100%', height: '100%' }} />
             </div>
           );
         })}

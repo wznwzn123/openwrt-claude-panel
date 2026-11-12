@@ -1,7 +1,7 @@
 import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
-import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette, PHONE_BEZEL, phoneBox } from '../lib/visual';
+import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette, PHONE_ASPECT, PHONE_BEZEL, phoneBox } from '../lib/visual';
 import { HomeLive, HomePhotoTheme } from '../lib/screens';
 
 /* 第二幕 · 12–28s · 10 Aurora & Glassmorphism
@@ -95,7 +95,7 @@ const PhoneScreen: React.FC<{ t: number; w: number; local1: [number, number]; lo
 /* exploded-view 的两层底层结构 */
 /* 沿层边流动的光脉冲（连接线上的数据流） */
 const EdgePulse: React.FC<{ t: number; w: number; color: string; phase: number }> = ({ t, w, color, phase }) => {
-  const h = w * 2;
+  const h = w * PHONE_ASPECT;
   const per = 2 * (w + h);
   return (
     <svg width={w} height={h} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', pointerEvents: 'none' }}>
@@ -133,7 +133,7 @@ export const Act2: React.FC = () => {
   const t = useT();
   const { fps } = useVideoConfig();
   const { W, H, vertical } = useV();
-  const sw = vertical ? 330 : 360; // 屏幕宽
+  const sw = vertical ? 305 : 334; // 屏幕宽（6.1 寸真机比例 393×852，高度与旧 1:2 版持平）
   const { pw, ph } = phoneBox(sw);
 
   // 手机运动：左侧破光而出 → 左黄金分割（28%）→ 20s 滑向右侧（72%）
@@ -157,7 +157,7 @@ export const Act2: React.FC = () => {
   // 涟漪原点（屏幕坐标）= 手机屏幕上缘附近的命令胶囊中心；转为屏幕局部坐标
   const o1: [number, number] = [px0 + (vertical ? 0 : sw * 0.9), py - ph * 0.36];
   const o2: [number, number] = [px0 + (vertical ? 0 : sw * 0.9), py - ph * 0.36];
-  const local = (o: [number, number]): [number, number] => [o[0] - (px - sw / 2), o[1] - (py - sw)];
+  const local = (o: [number, number]): [number, number] => [o[0] - (px - sw / 2), o[1] - (py - (sw * PHONE_ASPECT) / 2)];
 
   // 标题块：12–20s 在手机右侧；20s 后对穿到左侧
   const titleX0 = vertical ? 80 : W * 0.445;
@@ -190,7 +190,7 @@ export const Act2: React.FC = () => {
               <EdgePulse t={t} w={sw} color="#67e8f9" phase={0} />
             </div>
             <div style={{ position: 'absolute', inset: 0, transform: `translate3d(0, ${bob(0)}px, ${60 * ex}px)` }}>
-              <Phone w={sw} glare={ramp(t, 12.5, 1.6, EASE.swift)}>
+              <Phone w={sw} full glare={ramp(t, 12.5, 1.6, EASE.swift)}>
                 <PhoneScreen t={t} w={sw} local1={local(o1)} local2={local(o2)} />
               </Phone>
             </div>

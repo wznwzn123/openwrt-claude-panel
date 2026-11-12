@@ -3,39 +3,41 @@ import { Img, staticFile } from 'remotion';
 import { C, EASE, FONT, mix, ramp } from './core';
 import { Dot } from './visual';
 
-/* 真实首页截图 + 实时流淌的上下行网速曲线（叠在原图表区，原图 390×780 坐标） */
+/* 真实面板首页（仓库 src/www/panel 实机渲染，3× 截图）+ 叠一条与面板 mChart 同算法的实时流动曲线
+   坐标取自 capture/capture.js 量出的 #mChart 位置（CSS px，视口 393 宽） */
+const CHART = { x: 31, y: 275.77, w: 331, h: 120 };
+const liveWave = (i: number, s: number) =>
+  s * Math.max(0.08, 1 + 0.42 * Math.sin(i * 0.23 + 0.6) + 0.22 * Math.sin(i * 0.71 + 1.3) + 0.12 * Math.sin(i * 1.9 + 0.2) + 0.5 * Math.exp(-(((i % 60) - 48) ** 2) / 10));
 export const HomeLive: React.FC<{ t: number; w: number; dark?: boolean }> = ({ t, w, dark }) => {
-  const k = w / 390;
-  const N = 48;
-  const wave = (u: number, ph: number) => 0.5 + 0.22 * Math.sin(u * 0.33 + ph) + 0.12 * Math.sin(u * 0.91 + ph * 2) + 0.08 * Math.sin(u * 1.7);
-  const flow = t * 7;
-  const cw = 332, ch = 96;
-  const mk = (ph: number, amp: number, off: number) =>
-    Array.from({ length: N + 1 }, (_, i) => [(i / N) * cw, ch - (off + amp * wave(i + flow, ph)) * ch] as const);
-  const down = mk(0, 0.62, 0.22);
-  const up = mk(2.1, 0.18, 0.04);
-  const path = (p: readonly (readonly [number, number])[]) => p.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-  const bgA = dark ? 'rgb(22,21,36)' : 'rgb(240,245,253)';
-  const bgB = dark ? 'rgb(19,28,39)' : 'rgb(251,245,252)';
-  const last = down[down.length - 1];
+  const k = w / 393;
+  const N = 60;
+  const VW = 300, VH = 110;
+  const flow = t * 2.2; // 每秒推进 2.2 个采样点
+  const f0 = Math.floor(flow), fr = flow - f0;
+  const rx = Array.from({ length: N + 1 }, (_, i) => liveWave(i + f0, 7.5));
+  const tx = Array.from({ length: N + 1 }, (_, i) => liveWave(i + f0 + 9, 0.6));
+  const max = Math.max(1, ...rx, ...tx) * 1.15;
+  const pts = (arr: number[]) => arr.map((v, i) => [(VW * (i - fr)) / (N - 1), VH - 4 - (v / max) * (VH - 10)] as const);
+  const line = (p: readonly (readonly [number, number])[]) => p.map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join('');
+  const r = pts(rx), u = pts(tx);
+  const brand = dark ? '#0a84ff' : '#007aff';
+  const upl = dark ? '#40c8e0' : '#30b0c7';
+  const id = `mg${dark ? 'd' : 'l'}`;
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
-      <Img src={staticFile(dark ? 'shots/dark.png' : 'shots/home.png')} style={{ width: w, height: w * 2, display: 'block' }} />
-      <div style={{ position: 'absolute', left: 22 * k, top: 226 * k, width: 346 * k, height: 114 * k, background: `linear-gradient(90deg, ${bgA}, ${bgB})` }}>
-        <svg width={346 * k} height={114 * k} viewBox={`-7 -9 346 114`} style={{ display: 'block' }}>
-          <defs>
-            <linearGradient id={`hl${dark ? 'd' : 'l'}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#2f7bff" stopOpacity={dark ? 0.45 : 0.32} />
-              <stop offset="1" stopColor="#2f7bff" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={`${path(down)} L${cw} ${ch} L0 ${ch} Z`} fill={`url(#hl${dark ? 'd' : 'l'})`} />
-          <path d={path(down)} fill="none" stroke="#1d7bf5" strokeWidth={2.4} strokeLinejoin="round" />
-          <path d={path(up)} fill="none" stroke="#22b8c6" strokeWidth={2} strokeLinejoin="round" />
-          <circle cx={last[0]} cy={last[1]} r={4} fill="#1d7bf5" />
-          <circle cx={last[0]} cy={last[1]} r={9} fill="#1d7bf5" opacity={0.25 + 0.15 * Math.sin(t * 8)} />
-        </svg>
-      </div>
+      <Img src={staticFile(dark ? 'shots/real/main-nochart-dark.png' : 'shots/real/main-nochart.png')} style={{ width: w, height: w * (852 / 393), display: 'block' }} />
+      <svg width={CHART.w * k} height={CHART.h * k} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none" style={{ position: 'absolute', left: CHART.x * k, top: CHART.y * k, overflow: 'hidden' }}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={brand} stopOpacity={0.32} />
+            <stop offset="1" stopColor={brand} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <line x1={0} y1={VH / 2} x2={VW} y2={VH / 2} stroke={dark ? 'rgba(84,84,88,.55)' : 'rgba(60,60,67,.14)'} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+        <path d={`${line(r)}L${r[r.length - 1][0].toFixed(1)} ${VH}L${r[0][0].toFixed(1)} ${VH}Z`} fill={`url(#${id})`} />
+        <path d={line(r)} fill="none" stroke={brand} strokeWidth={2 * k} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={line(u)} fill="none" stroke={upl} strokeWidth={1.8 * k} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
     </div>
   );
 };

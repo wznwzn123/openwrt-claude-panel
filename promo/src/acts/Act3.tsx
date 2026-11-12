@@ -1,8 +1,8 @@
 import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
-import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette, phoneBox } from '../lib/visual';
-import { AndroidFlow, DEVICES, DevicesScreen, PluginScreen, PwaFlow, SpeedRunScreen, TOGGLE_AT } from '../lib/screens3';
+import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette, PHONE_ASPECT, phoneBox } from '../lib/visual';
+import { AndroidFlow, DEVICES, DevicesScreen, PluginScreen, PwaFlow, TOGGLE_AT } from '../lib/screens3';
 import { Img, staticFile } from 'remotion';
 
 /* 第三幕 · 28–54s · 全能掌中矩阵
@@ -47,7 +47,7 @@ const Pose: React.FC<{ x: number; y: number; sw: number; ry?: number; rz?: numbe
   const { pw, ph } = phoneBox(sw);
   return (
     <div style={{ position: 'absolute', left: x - pw / 2, top: y - ph / 2, width: pw, height: ph, perspective: 1600, opacity: o, zIndex: z }}>
-      <div style={{ position: 'absolute', inset: 0, transform: `rotateY(${ry}deg) rotateZ(${rz}deg) scale(${s})`, transformOrigin: '50% 60%' }}>{children}</div>
+      <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `rotateY(${ry}deg) rotateZ(${rz}deg) scale(${s})`, transformOrigin: '50% 60%' }}>{children}</div>
     </div>
   );
 };
@@ -55,11 +55,12 @@ const Pose: React.FC<{ x: number; y: number; sw: number; ry?: number; rz?: numbe
 /* 流量统计宽屏：axis-rescale-shock（新值冲破天花板 → 坐标轴平滑重标） */
 const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: number; o: number }> = ({ t, x, y, w, h, o }) => {
   const rows = [
-    { n: '书房台式机', v: 4.8, c: '#2f6bff' },
+    // 与真实面板截图里的演示数据一致（capture/capture.js · DEVS）
+    { n: '书房台式机', v: 9.8, c: '#2f6bff' },
     { n: '客厅电视', v: 31.6, c: '#7c3aed' },
     { n: '儿童平板', v: 1.9, c: '#f59e0b' },
-    { n: '手机 · 主卧', v: 3.2, c: '#06b6d4' },
-    { n: '笔记本', v: 6.1, c: '#10b981' },
+    { n: '我的手机', v: 3.5, c: '#06b6d4' },
+    { n: '家人的手机', v: 1.6, c: '#10b981' },
   ];
   const grow = ramp(t, 40.7, 0.8, EASE.out);
   const shootStart = 41.58; // 击穿落在 42.00 拍点
@@ -80,7 +81,7 @@ const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: nu
       <div style={{ position: 'absolute', left: 36, top: 80, fontFamily: FONT.sans, fontSize: 20, color: C.text2 }}>今日 · 按设备 · 每分钟更新</div>
       <div style={{ position: 'absolute', right: 36, top: 36 }}>
         <Pill style={{ fontSize: 20 }}>
-          今日合计 <b style={{ fontFamily: FONT.mono }}>{mix(16.0, 47.6, ramp(t, shootStart, 1.2, EASE.out)).toFixed(1)} GB</b>
+          今日合计 <b style={{ fontFamily: FONT.mono }}>{mix(16.8, 47.5, ramp(t, shootStart, 1.2, EASE.out)).toFixed(1)} GB</b>
         </Pill>
       </div>
       <div style={{ position: 'absolute', left: cx0, top: 150, width: cw, height: ch }}>
@@ -145,13 +146,13 @@ export const Act3: React.FC = () => {
   /* ── 段 A：card-stack 三联扇形矩阵 ── */
   const fan = springAt(t, FAN, fps, { damping: 20, stiffness: 150, mass: 1 });
   const prep = ramp(t, FAN - 0.15, 0.15, EASE.swift) * (1 - fan);
-  const swA = vertical ? 300 : 365; // 主机放大 1.08 后仍留出底部安全边与字幕区
+  const swA = vertical ? 278 : 338; // 主机放大 1.08 后仍留出底部安全边与字幕区
   const spread = vertical ? 300 : 450;
   const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
   const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);
   const breathA = 1 + 0.038 * ramp(t, A, SEG_B - A, EASE.linear);
   const pushA = 1 + 0.3 * (ramp(t, 36.85, 0.45, EASE.smooth) - ramp(t, 39.95, 0.45, EASE.smooth));
-  const swB = vertical ? 300 : 340;
+  const swB = vertical ? 278 : 316;
   const pxB = vertical ? W / 2 : W * 0.24;
   const pyB = vertical ? H * 0.3 : cy;
   const pushB = 1 + (vertical ? 0.3 : 0.45) * (ramp(t, 44.05, 0.4, EASE.smooth) - ramp(t, 45.3, 0.4, EASE.smooth));
@@ -174,7 +175,7 @@ export const Act3: React.FC = () => {
           <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 160} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={1} />
         </Abs>
         <Pose x={pxB} y={pyB} sw={swB} s={vertical ? 0.82 : 1} ry={8 + 2 * Math.sin(t * 0.6)}>
-          <Phone w={swB}>
+          <Phone w={swB} full>
             <DevicesScreen t={t} w={swB} />
           </Phone>
         </Pose>
@@ -199,11 +200,11 @@ export const Act3: React.FC = () => {
           {!vertical && <div style={{ position: 'absolute', left: W / 2 - 1, top: 160, bottom: 120, width: 2, background: 'linear-gradient(180deg, rgba(255,255,255,0), rgba(160,200,255,0.55), rgba(255,255,255,0))' }} />}
           {[0, 1].map((i) => {
             const x = vertical ? W * (0.27 + i * 0.46) : W * (0.25 + i * 0.5);
-            const sw = vertical ? 290 : 330;
+            const sw = vertical ? 268 : 306;
             return (
               <React.Fragment key={i}>
                 <Pose x={x} y={vertical ? H * 0.47 : cy + 30} sw={sw} s={vertical ? 0.86 : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
-                  <Phone w={sw}>{i === 0 ? <PwaFlow t={t} w={sw} a={SEG_C} /> : <AndroidFlow t={t} w={sw} a={SEG_C} />}</Phone>
+                  {i === 0 ? <Phone w={sw} full><PwaFlow t={t} w={sw} a={SEG_C} /></Phone> : <Phone w={sw} dark topBg="#0b1220"><AndroidFlow t={t} w={sw} a={SEG_C} /></Phone>}
                 </Pose>
                 <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
                   {!vertical && (
@@ -237,8 +238,8 @@ export const Act3: React.FC = () => {
               return (
                 <div key={i} style={{ position: 'absolute', inset: 0, zIndex: L.z, filter: L.blur * fan > 0.2 || L.dim < 1 ? `blur(${(L.blur * fan).toFixed(2)}px) brightness(${mix(1, L.dim, fan)})` : undefined }}>
                   <Pose x={x} y={y} sw={swA} rz={L.rz * fan} s={s} ry={L.ry * fan + 2 * Math.sin(t * 0.6 + i)} z={L.z}>
-                    <Phone w={swA}>
-                      {i === 1 ? <PluginScreen t={t} w={swA} /> : i === 2 ? <SpeedRunScreen t={t} w={swA} /> : <Img src={staticFile('shots/devices.png')} style={{ width: swA, height: swA * 2 }} />}
+                    <Phone w={swA} full>
+                      {i === 1 ? <PluginScreen t={t} w={swA} /> : <Img src={staticFile(i === 2 ? 'shots/real/traf.png' : 'shots/real/dev.png')} style={{ width: swA, height: swA * PHONE_ASPECT, display: 'block' }} />}
                     </Phone>
                   </Pose>
                 </div>

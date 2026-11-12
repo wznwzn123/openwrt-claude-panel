@@ -25,7 +25,9 @@ async function boot(b, clip) {
   await page.clock.install({ time: NOW - 60000 });
   await page.clock.pauseAt(NOW);
   const state = { vt: 0, queue: [] };
-  await ctx.addInitScript(({ wall, dark }) => {
+  await ctx.addInitScript(({ wall, dark, seed }) => {
+    // 实时曲线的前一分钟历史（面板自己会从 sessionStorage 接上），曲线一开始就是完整的
+    if (seed) sessionStorage.setItem('rp_mh', JSON.stringify({ rx: seed.rx, tx: seed.tx, at: Date.now() }));
     localStorage.setItem('rp_token', 'demo0000demo0000demo0000');
     localStorage.setItem('rp_glass', '1'); localStorage.setItem('rp_wall', wall);
     if (dark) localStorage.setItem('rp_dark', '1');
@@ -35,7 +37,7 @@ async function boot(b, clip) {
         try { a.pause(); a.currentTime = Math.max(0, vt - a.__s); } catch (e) {}
       }
     };
-  }, { wall: clip.wall || 'aurora', dark: !!clip.dark });
+  }, { wall: clip.wall || 'aurora', dark: !!clip.dark, seed: clip.seed ? clip.seed() : null });
   page.on('pageerror', (e) => console.log('[pageerror]', e.message));
   await page.route('**/*', async (route) => {
     const u = new URL(route.request().url());

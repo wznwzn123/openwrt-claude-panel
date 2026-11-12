@@ -26,6 +26,12 @@ export const CUES: Cue[] = [
   // 功能：每次甩镜（中点落拍，whoosh 提前到甩镜开始）+ 描边圈
   ...CUTS.slice(1).map((f, i) => ({ f, kind: 'whip', i })), // f = 甩镜中点（落拍）；音效按峰值对齐到这里
   ...SHOTS.map((s, i) => (s.split ? null : { f: B(8 + 2 * i, 2), kind: 'ring', i })).filter(Boolean) as Cue[],
+  // 功能段里面板自己的操作（tools/livecap.clips.cjs 的帧号 + 片段开始帧）
+  { f: B(10) + 84, kind: 'click' }, { f: B(10) + 196, kind: 'click' }, { f: B(10) + 200, kind: 'result', i: 0 },
+  { f: B(14) + 38, kind: 'click' }, { f: B(14) + 92, kind: 'result', i: 1 },
+  { f: B(16) + 34, kind: 'click' }, { f: B(16) + 100, kind: 'result', i: 2 },
+  { f: B(18) + 18, kind: 'click' }, { f: B(18) + 24, kind: 'typing', dur: 18 }, { f: B(18) + 46, kind: 'send' },
+  { f: B(19) + 44, kind: 'click' },
   // 对话
   { f: B(20, 1), kind: 'typing', dur: 12 },
   { f: B(21), kind: 'tool', i: 0 }, { f: B(21) + 7, kind: 'tool', i: 1 },

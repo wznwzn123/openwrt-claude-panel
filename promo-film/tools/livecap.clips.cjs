@@ -5,13 +5,15 @@ const { mac, S } = require('./capture-v4.cjs.mocks.cjs');
 // 实时网速：每 2 秒取一次（面板本身的节奏），数值按虚拟时间平滑起伏
 const liveAt = (vt) => { const t = vt / 1000; return { rx: Math.round((3.4 + 1.5 * Math.sin(t * 0.9) + 0.6 * Math.sin(t * 2.3 + 1)) * MB), tx: Math.round((0.45 + 0.18 * Math.sin(t * 1.3 + 2)) * MB) }; };
 const live = (k, p, st) => (k === 'panel/live' ? { res: liveAt(st.vt + 120000) } : null);
+// 前一分钟的历史：和之后的实时数值是同一条曲线
+const seed = () => { const a = Array.from({ length: 30 }, (_, i) => liveAt(120000 - (30 - i) * 2000)); return { rx: a.map((x) => x.rx), tx: a.map((x) => x.tx) }; };
 const SPEED0 = { direct: { down: 486, ping: 7, t: S - 540, bytes: 612 * MB } };
 
 module.exports = {
   // 首页（电脑端）：实时曲线每 2 秒刷新；开场笔记本屏幕 + 功能段第一站
-  home: { p: 'main', frames: 360, dyn: live }, // 开场笔记本屏幕（第 4 小节起）一直接到功能段第一站结束
+  home: { p: 'main', frames: 360, dyn: live, seed }, // 开场笔记本屏幕（第 4 小节起）一直接到功能段第一站结束
   // 手机首页（深色）：开场手机屏幕
-  phone: { p: 'main', frames: 270, mobile: true, dark: true, wall: 'night', dyn: live },
+  phone: { p: 'main', frames: 270, mobile: true, dark: true, wall: 'night', dyn: live, seed },
   // 设备 → 点「暂停」→ 弹出定时断网 → 点「到早上 7 点」：功能段第二、三站
   dev: {
     p: 'dev', frames: 250,

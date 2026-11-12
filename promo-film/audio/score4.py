@@ -152,6 +152,11 @@ def sound_design(m):
         elif k == 'arc_off':
             m.sfx(sfx.glitch(0.12, 'digital'), t, gain=-10)
             m.sfx(sfx.blip('E5', 'sine', 0.12), t + 0.08, gain=-12)
+        elif k == 'click':
+            m.sfx(sfx.click('soft'), t, gain=-6)
+        elif k == 'result':
+            m.sfx(marimba(PENTA[5 + i], 0.55), t, gain=-9, verb=-14)
+            m.sfx(marimba(PENTA[7 + i % 2], 0.45), t + 0.09, gain=-12, verb=-14)
         elif k == 'park':
             place(m, 'transition-snap', t + 0.3, -17)
         else:

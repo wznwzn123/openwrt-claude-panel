@@ -12,6 +12,8 @@ import { Laptop, Phone3D, Reflect } from './three/kit3d';
 import { Key } from './three/camkeys';
 
 const FLOOR = -0.5;
+// 笔记本屏幕上的面板是活的（tools/livecap.cjs 录的 home 片段），一直播到功能段第一站结束
+export const LIVE_HOME = { src: 'live/home.mp4', from: B(4), len: 360 };
 const LAP = { pos: new THREE.Vector3(-4.0, FLOOR, 0.3), rotY: 0.38 };
 const PHO = { pos: new THREE.Vector3(3.7, FLOOR + 0.89, 0.6), rotY: -0.32 };
 // 笔记本屏幕中心和法线（世界坐标）：铰链 (0,0.09,-1.06)，屏幕往后仰 0.22 rad
@@ -68,8 +70,8 @@ export const OpenWorld: React.FC<{ f: number }> = ({ f }) => {
   const content = (
     <group>
       <Router position={[0, 0, 0]} led={led} arcDraw={arcDraw} arc1={arcDraw > 0 ? 1 : 0} arc2={arcDraw > 0.4 ? 1 : 0} pulse={Math.max(0, 1 - (f - B(4)) / 10) * (f >= B(4) ? 1 : 0)} />
-      {lapUp > 0 && <Laptop src="ui/desk-home.png" position={v(lapP)} rotation={[0, LAP.rotY, 0]} screen={scr} />}
-      {phoUp > 0 && <Phone3D src="ui/home-dark-full.png" position={v(phoP)} rotation={[0, PHO.rotY, 0]} screen={scr} />}
+      {lapUp > 0 && <Laptop src="ui/desk-home.png" position={v(lapP)} rotation={[0, LAP.rotY, 0]} screen={scr} live={LIVE_HOME} f={f} />}
+      {phoUp > 0 && <Phone3D src="ui/home-dark-full.png" position={v(phoP)} rotation={[0, PHO.rotY, 0]} screen={scr} live={{ src: 'live/phone.mp4', from: B(4, 2), len: 270 }} f={f} />}
     </group>
   );
   return (

@@ -15,6 +15,7 @@ import { Install } from '../v4/Install';
 import { Finale, lensAt4 } from '../v4/Finale';
 import { CamRig, Env, Fog, Lights, Post } from './three/Stage';
 import { camAt } from './three/camkeys';
+import { SpeedBlur } from '../lib/speedblur';
 import { OPEN_KEYS, OpenWorld } from './OpenWorld';
 import { FEAT_KEYS, FeatWorld, STATIONS, featRoll } from './FeatWorld';
 import { CHAT_KEYS, ChatWorld, INSTALL_KEYS, InstallWorld } from './ChatWorld';
@@ -49,6 +50,8 @@ const rippleAt = (f: number): Ripple => {
   return [960, 540, 0, 0];
 };
 const between = (f: number, a: number, b: number) => f >= a && f < b;
+// 功能段甩镜时的方向性运动模糊：按镜头横向速度（世界单位/帧 → 画面像素/帧，站距 9 单位、画面宽约 8.4 单位）
+const whipV = (f: number) => (f >= B(8) && f < B(20) ? -(camAt(FEAT_KEYS, f + 0.5).look[0] - camAt(FEAT_KEYS, f - 0.5).look[0]) * (1920 / 8.4) * 0.5 : 0);
 
 // 3D 世界：按时间切换场景和镜头
 const world = (f: number) => {
@@ -81,6 +84,7 @@ export const Film5: React.FC<{ music?: boolean }> = ({ music = true }) => {
       <AuroraGL energy={energy} ripple={rippleAt(f)} lens={lensAt4(f)} />
       {ready && w && (
         <AbsoluteFill style={{ opacity: o3 }}>
+          <SpeedBlur vx={whipV(f)} amount={0.9} max={42}>
           <ThreeCanvas width={1920} height={1080} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }} camera={{ fov: 30, near: 0.05, far: 120 }}>
             <CamRig cam={w.cam} />
             <Env intensity={0.6} />
@@ -89,6 +93,7 @@ export const Film5: React.FC<{ music?: boolean }> = ({ music = true }) => {
             {w.node}
             <Post />
           </ThreeCanvas>
+          </SpeedBlur>
         </AbsoluteFill>
       )}
       {/* 文字层 */}

@@ -4,7 +4,8 @@ import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { EASE, mix, ramp } from '../lib/ease';
 import { B, BEAT_F } from '../v4/beat';
-import { Crop, UISlab } from './three/kit3d';
+import { Crop, Live, UISlab } from './three/kit3d';
+import { LIVE_HOME } from './OpenWorld';
 import { Key } from './three/camkeys';
 import L1 from '../../public/ui/layout.json';
 import L2 from '../../public/ui/layout-v4.json';
@@ -13,15 +14,15 @@ const L: any = { ...(L1 as any), ...(L2 as any) };
 const pad = (r: Crop, p = 10): Crop => ({ x: r.x - p, y: r.y - p, w: r.w + 2 * p, h: r.h + 2 * p });
 const SPEED_BOX: Crop = { x: L['desk-speed'].stnums.x, y: L['desk-speed'].stnums.y, w: L['desk-speed'].stnums.w / 2 - 5, h: L['desk-speed'].stnums.h };
 
-type Station = { word?: string; page: string; crop: Crop; ring?: Crop; at: number; end: number };
+type Station = { word?: string; page: string; crop: Crop; ring?: Crop; at: number; end: number; live?: Live };
 export const STATIONS: Station[] = [
-  { word: '实时网速', page: 'desk-home', crop: pad(L['desk-home'].live), ring: L['desk-home'].live, at: B(8), end: B(10) },
-  { word: '设备管理', page: 'desk-dev', crop: { x: 512, y: 180, w: 1168, h: 640 }, ring: L['desk-dev'].cards[1], at: B(10), end: B(12) },
-  { word: '定时断网', page: 'desk-pause', crop: pad(L['desk-pause'].modal), ring: L['desk-pause'].kv, at: B(12), end: B(14) },
-  { word: '每日体检', page: 'desk-wd', crop: pad(L['desk-wd'].dy), ring: L['desk-wd'].dyhead, at: B(14), end: B(16) },
-  { word: '网速测试', page: 'desk-speed', crop: pad(L['desk-speed'].cards[0]), ring: SPEED_BOX, at: B(16), end: B(18) },
-  { word: '终端 · 文件', page: 'desk-term', crop: { x: 522, y: 80, w: 1148, h: 330 }, at: B(18), end: B(19) },
-  { page: 'desk-files', crop: { x: 512, y: 70, w: 1168, h: 560 }, at: B(19), end: B(20) },
+  { word: '实时网速', page: 'desk-home', crop: pad(L['desk-home'].live), ring: L['desk-home'].live, at: B(8), end: B(10), live: LIVE_HOME },
+  { word: '设备管理', page: 'desk-dev', crop: { x: 512, y: 180, w: 1168, h: 640 }, ring: L['desk-dev'].cards[4], at: B(10), end: B(12), live: { src: 'live/dev.mp4', from: B(10), len: 250 } },
+  { word: '定时断网', page: 'desk-pause', crop: { x: 480, y: 330, w: 960, h: 540 }, ring: L['desk-pause'].kv, at: B(12), end: B(14), live: { src: 'live/dev.mp4', from: B(10), len: 250 } },
+  { word: '每日体检', page: 'desk-wd', crop: { x: 512, y: 96, w: 1168, h: 450 }, at: B(14), end: B(16), live: { src: 'live/daily.mp4', from: B(14), len: 150 } },
+  { word: '网速测试', page: 'desk-speed', crop: pad(L['desk-speed'].cards[0]), ring: SPEED_BOX, at: B(16), end: B(18), live: { src: 'live/speed.mp4', from: B(16), len: 150 } },
+  { word: '终端 · 文件', page: 'desk-term', crop: { x: 512, y: 70, w: 1168, h: 760 }, at: B(18), end: B(19), live: { src: 'live/term.mp4', from: B(18), len: 150 } },
+  { page: 'desk-files', crop: { x: 512, y: 70, w: 1168, h: 760 }, at: B(19), end: B(20), live: { src: 'live/files.mp4', from: B(19), len: 120 } },
 ];
 const SW = 5.0; // 界面板宽
 const SX = (i: number) => i * 9;
@@ -86,7 +87,7 @@ export const FeatWorld: React.FC<{ f: number }> = ({ f }) => (
           {/* 后面：整页界面的淡影（给空间纵深） */}
           <UISlab src={`ui/${s.page}.png`} crop={{ x: 0, y: 0, w: 1920, h: 1200 }} width={11} position={[0.5, 0.2, -3.2]} opacity={0.14} glow={0} radius={0.3} />
           <group position={[0, 0, mix(-1.2, 0, appear)]}>
-            <UISlab src={`ui/${s.page}.png`} crop={s.crop} width={SW} opacity={Math.max(0.15, appear)} />
+            <UISlab src={`ui/${s.page}.png`} crop={s.crop} width={SW} opacity={Math.max(0.15, appear)} live={s.live} f={f} />
             {s.ring && rp > 0 && (() => {
               const r = s.ring, k = SW / s.crop.w, pw = 10;
               const cx = (r.x + r.w / 2 - (s.crop.x + s.crop.w / 2)) * k, cy = -((r.y + r.h / 2) - (s.crop.y + s.crop.h / 2)) * k;

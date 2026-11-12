@@ -1076,6 +1076,8 @@ export class Hub extends DurableObject {
 const hubObj = (env) => env.H.get(env.H.idFromName('hub'));
 export async function hubFetch(req, env) {
 	const u = new URL(req.url), p = u.pathname;
+	// www 开头的地址：跳到不带 www 的主域名（登录状态、收藏的网址都统一在主域名上）
+	if (u.hostname === 'www.' + env.BASE_DOMAIN) return new Response(null, { status: 301, headers: { location: 'https://' + env.BASE_DOMAIN + p + u.search, 'cache-control': 'max-age=3600' } });
 	const body = async () => { try { return await req.json(); } catch (e) { return {}; } };
 	const H = hubObj(env);
 	if (p === '/api/ping') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY });
@@ -1158,7 +1160,12 @@ export async function hubFetch(req, env) {
 	if (p.startsWith('/dl/cfd/') && (req.method === 'GET' || req.method === 'HEAD')) return dlCfd(p.slice(8));
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
 	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
-	if (pg && req.method === 'GET') return new Response(pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" + (pg === ADMIN ? ' blob:' : '') + "; connect-src 'self'; frame-ancestors 'none'" } });
+	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
+	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
+	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {
+		const ins = pg === ADMIN ? '' : ' https://static.cloudflareinsights.com', insc = pg === ADMIN ? '' : ' https://cloudflareinsights.com';
+		return new Response(req.method === 'HEAD' ? null : pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'" + ins + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:" + (pg === ADMIN ? ' blob:' : '') + "; connect-src 'self'" + insc + "; frame-ancestors 'none'" } });
+	}
 	return J({ error: 'not found' }, 404);
 }
 

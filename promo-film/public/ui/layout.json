@@ -55,12 +55,7 @@
   "fbcode": null,
   "auto": [],
   "autoRows": [],
-  "proxyGroup": {
-   "x": 10,
-   "y": 630,
-   "w": 251,
-   "h": 37
-  }
+  "proxyGroup": null
  },
  "desk-auto": {
   "pageW": 1920,
@@ -138,12 +133,7 @@
     "h": 53
    }
   ],
-  "proxyGroup": {
-   "x": 10,
-   "y": 630,
-   "w": 251,
-   "h": 37
-  }
+  "proxyGroup": null
  },
  "desk-myfb": {
   "pageW": 1920,
@@ -186,11 +176,6 @@
   },
   "auto": [],
   "autoRows": [],
-  "proxyGroup": {
-   "x": 10,
-   "y": 630,
-   "w": 251,
-   "h": 37
-  }
+  "proxyGroup": null
  }
 }

@@ -345,7 +345,7 @@ cues = []
 def cue(name, at, sig, gain, p=0.0):
     # 第三幕 34.5s 之后的画面事件整体提前 4.5 拍（与 Act3.SHIFT3 同源），音效跟随
     if 34.5 <= at < 54.0 and name not in ('claude-enter',):
-        at = round(at - 2.328, 3)
+        at = round(at - 2.069, 3)
     if sig.ndim == 1:
         sig = pan(sig, p)
     place(sfx, sig, at, gain)
@@ -432,8 +432,8 @@ cue('scan-sweep', 74.4, riser(3.2, 600, 2500) * 0.6, 0.35)
 for i, y1 in enumerate((224, 224, 268, 268)):
     ft = 74.4 + 3.2 * (y1 + 20) / 820 + i * 0.08
     cue('sonar-lock', ft, sonar(1200 + i * 110), 0.5, 0.3)
-cue('wechat-notice', 77.4, chime(987.8, 1318.5), 0.55, 0.5)
-cue('wechat-notice', 79.8, chime(987.8, 1318.5), 0.55, 0.5)
+cue('wechat-notice', 76.6, chime(987.8, 1318.5), 0.55, 0.5)
+cue('wechat-notice', 79.25, chime(987.8, 1318.5), 0.55, 0.5)
 cue('hud-to-aurora', 81.828 - 0.4, whoosh(0.8, 300, 6000), 0.55)
 for i in range(int(1.25 / 0.03)):
     place(sfx, pan(key(True), 0.1), 82.35 + i * 0.03, 0.45)

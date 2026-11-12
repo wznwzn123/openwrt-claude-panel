@@ -19,12 +19,11 @@ async def main():
         anchor = a['anchor']
         if isinstance(anchor, str) and anchor.startswith('after:'):
             anchor = round(ends[anchor[6:]] + 0.4, 3)   # 紧接上一段，留 0.4s 换气
-        for r in (0, 3, 6, 9, 12, 15, 18, 21):
-            rate = f'+{r}%'
-            w = await synth(a, rate)
-            start = round(anchor - w[0]['start'], 3)
-            end = start + w[-1]['end']
-            if end <= a['window'][1]: break
+        rate = S.get('rate', '+0%')   # 全片统一语速，不逐段提速
+        w = await synth(a, rate)
+        start = round(anchor - w[0]['start'], 3)
+        end = start + w[-1]['end']
+        assert end <= a['window'][1], (a['id'], end, a['window'][1])
         a['start'] = start; a['rate'] = rate; a['first'] = round(anchor, 3)
         ends[a['id']] = end
         json.dump(w, open(f"{a['id']}.words.json", 'w'), ensure_ascii=False)

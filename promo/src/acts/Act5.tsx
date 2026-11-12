@@ -139,8 +139,8 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
       </Abs>
       {!vertical && (
         <>
-          <Notice t={t} at={77.4} slot={0} title="每日端到端加密云端备份已就绪" body="保留 10 份 · 可一键恢复" />
-          <Notice t={t} at={79.8} slot={1} title="离线根因诊断：家里市电断电" body="路由器 23:41 离线 · 来电后已自动恢复" />
+          <Notice t={t} at={76.6} slot={0} title="每日端到端加密云端备份已就绪" body="保留 10 份 · 可一键恢复" />
+          <Notice t={t} at={79.25} slot={1} title="离线根因诊断：家里市电断电" body="路由器 23:41 离线 · 来电后已自动恢复" />
         </>
       )}
       {vertical && (

@@ -130,8 +130,8 @@ const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: nu
   );
 };
 
-// 旁白后段前移对齐：第三幕后半句旁白紧接前半句（34.74s），34.5s 之后的画面事件整体提前 4.5 拍（2.328s，仍在拍点网格上）
-export const SHIFT3 = 2.328;
+// 旁白后段前移对齐：第三幕后半句旁白紧接前半句（35.11s），34.5s 之后的画面事件整体提前 4 拍（2.069s，仍在拍点网格上）
+export const SHIFT3 = 2.069;
 const smooth01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 export const Act3: React.FC = () => {

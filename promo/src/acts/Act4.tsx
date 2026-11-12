@@ -328,7 +328,8 @@ export const Act4: React.FC = () => {
   const fR = 1 - 0.35 * (1 - Math.min(1, focusR)) * ramp(t, CONSOLE + 0.4, 0.4, EASE.linear);
   const breath = 1 + 0.03 * ramp(t, CONSOLE, END - CONSOLE, EASE.linear);
   const { pw, ph, lx, rx, ly, ry } = layout(W, H, vertical);
-  const sway = vertical ? 0 : 4 * Math.sin((2 * Math.PI * (t - CONSOLE)) / 9);
+  const sway = vertical ? 0 : 2.5 * Math.sin((2 * Math.PI * (t - CONSOLE)) / 9);
+  const tilt = vertical ? 0 : 9; // 双屏相向内倾 9°，右屏错落下沉 24px，去正面平铺
   const rim = ramp(t, CONSOLE, 0.12, EASE.out) * (1 - ramp(t, CONSOLE + 0.12, 0.6, EASE.linear));
   const barText = t < 58.55 ? '接入 Claude 自定义连接器 · 双钥匙安全隔离' : '内置 30+ 项路由底层工具 · 中文对话言出法随';
   const barK = ramp(t, t < 58.55 ? 54.55 : 58.55, 0.45, EASE.out);
@@ -347,10 +348,10 @@ export const Act4: React.FC = () => {
       )}
       {t >= CONSOLE - 0.2 && (
         <Abs style={{ inset: 0, transform: `scale(${breath * (1 - endOut * 0.04)})`, opacity: 1 - endOut }}>
-          <div style={{ position: 'absolute', left: lx, top: ly, width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fL, filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5 + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
+          <div style={{ position: 'absolute', left: lx, top: ly, width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fL, filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + tilt + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
             <ChatCabin t={t} w={pw} h={ph} />
           </div>
-          <div style={{ position: 'absolute', left: rx, top: ry, width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fR, filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5 + sway}deg) scale(${(0.97 + 0.03 * fR) * (1 + impact)})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim}), 0 0 ${80 * greenFlash}px rgba(52,199,89,${0.85 * greenFlash})`, borderRadius: 34 }}>
+          <div style={{ position: 'absolute', left: rx, top: ry + (vertical ? 0 : 24), width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fR, filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - tilt + sway}deg) scale(${(0.97 + 0.03 * fR) * (1 + impact)})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim}), 0 0 ${80 * greenFlash}px rgba(52,199,89,${0.85 * greenFlash})`, borderRadius: 34 }}>
             <StatePanel t={t} w={pw} h={ph} />
             <div style={{ position: 'absolute', inset: 0, borderRadius: 34, background: `radial-gradient(ellipse at 20% 30%, rgba(74,222,128,${0.35 * greenFlash}), rgba(52,199,89,${0.12 * greenFlash}) 60%, rgba(52,199,89,0) 100%)`, boxShadow: `inset 0 0 0 ${2 + 2 * greenFlash}px rgba(134,239,172,${0.9 * greenFlash})`, pointerEvents: 'none' }} />
           </div>

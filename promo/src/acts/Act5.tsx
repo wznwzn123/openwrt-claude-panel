@@ -177,7 +177,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
   const flood = ramp(t, MORPH - 0.1, 0.45, EASE.out);
   const n = Math.floor(ramp(t, TYPE0, 1.25, EASE.linear) * CMD.length);
   const textFly = ramp(t, ENTER + 0.02, 0.4, EASE.exit);
-  const caps = ramp(t, 82.5, 0.5, EASE.out) * (1 - ramp(t, ENTER, 0.35, EASE.exit));
+  const caps = ramp(t, 82.5, 0.5, EASE.out) * (1 - ramp(t, ENTER - 0.3, 0.3, EASE.exit)); // 回车前两侧胶囊已完全退场，终端收束时零叠影
   const slots = ramp(t, DROP[0] - 0.3, 0.2, EASE.out) * (1 - ramp(t, DROP[2] + 0.35, 0.3, EASE.linear));
   const drops = DROP.map((d) => springAt(t, d, fps, { damping: 13, stiffness: 260, mass: 0.8 }));
   // 回车 → 终端向内折叠（scaleY 1 → 0.02）→ 横向收成光核 → 光核爆发出徽标并升到落版位

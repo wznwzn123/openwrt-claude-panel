@@ -229,10 +229,10 @@ export const Act3: React.FC = () => {
               const side = i - 1;
               const x = cx + side * spread * fan;
               const y = cy + (1 - e) * H * 0.9 + Math.abs(side) * 30 * fan;
-              const rz = side * 7 * fan;
+              const rz = side * 7 * fan; // 扇面 + 侧向 rotateY ±18°（中屏 -6°）错落纵深
               const s = i === 1 ? 1 : 1 - 0.08 * fan;
               return (
-                <Pose key={i} x={x} y={y} sw={swA} rz={rz} s={s} ry={side * -10 * fan + 2 * Math.sin(t * 0.6 + i)} z={i === 1 ? 3 : 1}>
+                <Pose key={i} x={x} y={y} sw={swA} rz={rz} s={s} ry={side * -18 * fan + (i === 1 ? -6 * fan : 0) + 2 * Math.sin(t * 0.6 + i)} z={i === 1 ? 3 : 1}>
                   <Phone w={swA}>
                     {i === 1 ? <PluginScreen t={t} w={swA} /> : <Img src={staticFile(i === 0 ? 'shots/devices.png' : 'shots/traffic.png')} style={{ width: swA, height: swA * 2 }} />}
                   </Phone>

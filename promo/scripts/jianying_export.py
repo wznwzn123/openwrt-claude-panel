@@ -71,10 +71,13 @@ for a, b in [(0, 12), (12, 28), (28, 54), (54, 74), (74, 90)]:
 timing = json.load(open(os.path.join(ROOT, 'src', 'timing.json')))
 phr = timing['phrases']
 style = draft.TextStyle(size=3.2, color=(1.0, 1.0, 1.0), align=1)
+starts = [s2f(p['start'] - 0.04) for p in phr]
 for i, p in enumerate(phr):
     nxt = phr[i + 1]['start'] if i + 1 < len(phr) else 90
-    f0 = s2f(p['start'] - 0.04)
-    f1 = min(s2f(min(p['end'] + 0.3, nxt - 0.02)), TOTAL_F)
+    f0 = starts[i]
+    f1 = min(s2f(min(p['end'] + 0.3, nxt - 0.02)), TOTAL_F, starts[i + 1] if i + 1 < len(phr) else TOTAL_F)  # 帧取整后不得与下一句重叠
+    if f1 <= f0:
+        continue
     text = p['text'].replace('，', ' ').replace('。', ' ').strip()
     script.add_segment(
         draft.TextSegment(text, rng(f0, f1), style=style, clip_settings=draft.ClipSettings(transform_y=-0.85),

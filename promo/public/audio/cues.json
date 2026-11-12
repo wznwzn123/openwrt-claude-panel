@@ -50,42 +50,42 @@
   "gain": 0.5
  },
  {
-  "t": 16.53,
+  "t": 16.435,
   "name": "ripple-crt",
   "gain": 0.6
  },
  {
-  "t": 16.75,
+  "t": 16.655,
   "name": "ripple",
   "gain": 0.45
  },
  {
-  "t": 18.33,
+  "t": 18.504,
   "name": "ripple-crt",
   "gain": 0.6
  },
  {
-  "t": 18.55,
+  "t": 18.724,
   "name": "ripple",
   "gain": 0.45
  },
  {
-  "t": 20.0,
+  "t": 19.359,
   "name": "slide",
   "gain": 0.6
  },
  {
-  "t": 20.3,
+  "t": 20.276,
   "name": "plate-pop",
   "gain": 0.6
  },
  {
-  "t": 21.3,
+  "t": 21.31,
   "name": "plate-pop",
   "gain": 0.6
  },
  {
-  "t": 23.45,
+  "t": 23.379,
   "name": "plate-pop",
   "gain": 0.6
  },
@@ -110,7 +110,7 @@
   "gain": 0.7
  },
  {
-  "t": 29.0,
+  "t": 28.769,
   "name": "fan-out",
   "gain": 0.5
  },
@@ -150,6 +150,11 @@
   "gain": 0.8
  },
  {
+  "t": 36.8,
+  "name": "push-in",
+  "gain": 0.35
+ },
+ {
   "t": 37.85,
   "name": "latency-lock",
   "gain": 0.3
@@ -175,67 +180,67 @@
   "gain": 0.6
  },
  {
-  "t": 40.5,
+  "t": 40.098,
   "name": "seg-b",
   "gain": 0.5
  },
  {
-  "t": 41.75,
+  "t": 41.58,
   "name": "bar-shoot",
   "gain": 0.6
  },
  {
-  "t": 42.17,
+  "t": 42.0,
   "name": "ceiling-crack",
   "gain": 0.55
  },
  {
-  "t": 42.55,
+  "t": 42.26,
   "name": "axis-rescale",
   "gain": 0.5
  },
  {
-  "t": 44.55,
+  "t": 44.586,
   "name": "toggle",
   "gain": 0.85
  },
  {
-  "t": 44.75,
+  "t": 44.78,
   "name": "lock",
   "gain": 0.45
  },
  {
-  "t": 46.3,
+  "t": 45.788,
   "name": "seg-c",
   "gain": 0.5
  },
  {
-  "t": 47.4,
+  "t": 47.188,
   "name": "share-tap",
   "gain": 0.7
  },
  {
-  "t": 48.05,
+  "t": 47.838,
   "name": "icon-pop",
   "gain": 0.45
  },
  {
-  "t": 48.65,
+  "t": 48.438,
   "name": "icon-tap",
   "gain": 0.7
  },
  {
-  "t": 49.6,
+  "t": 49.388,
   "name": "fingerprint",
   "gain": 0.3
  },
  {
-  "t": 50.4,
+  "t": 50.188,
   "name": "unlock",
   "gain": 0.45
  },
  {
-  "t": 48.25,
+  "t": 48.038,
   "name": "scan-ok",
   "gain": 0.35
  },
@@ -250,12 +255,12 @@
   "gain": 0.6
  },
  {
-  "t": 57.7,
+  "t": 57.217,
   "name": "converge",
   "gain": 0.6
  },
  {
-  "t": 58.15,
+  "t": 58.034,
   "name": "console",
   "gain": 0.5
  },
@@ -350,7 +355,7 @@
   "gain": 0.55
  },
  {
-  "t": 81.75,
+  "t": 81.428,
   "name": "hud-to-aurora",
   "gain": 0.55
  },
@@ -360,32 +365,32 @@
   "gain": 0.45
  },
  {
-  "t": 84.55,
+  "t": 84.414,
   "name": "enter",
   "gain": 1.0
  },
  {
-  "t": 84.75,
+  "t": 84.614,
   "name": "morph",
   "gain": 0.5
  },
  {
-  "t": 85.55,
+  "t": 85.448,
   "name": "assemble-drop",
   "gain": 0.6
  },
  {
-  "t": 85.8,
+  "t": 85.707,
   "name": "assemble-drop",
   "gain": 0.6
  },
  {
-  "t": 86.05,
+  "t": 85.966,
   "name": "assemble-drop",
   "gain": 0.6
  },
  {
-  "t": 86.3,
+  "t": 86.224,
   "name": "brand-sparkle",
   "gain": 0.35
  }

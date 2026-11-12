@@ -69,13 +69,17 @@ const ShotA: React.FC<{ t: number }> = ({ t }) => {
   return (
     <Abs style={{ inset: 0, overflow: 'hidden' }}>
       <HudBG scan={false} />
-      <Abs style={{ left: W / 2, top: H / 2, transform: `translate(-50%,-38%) scale(${zoom * push}) rotateZ(-4deg)` }}>
+      <Abs style={{ left: W / 2, top: H / 2, transform: `translate(-50%,-30%) scale(${zoom * push}) rotateZ(-4deg)` }}>
         <Phone w={sw} shadow={false}>
           <div style={{ position: 'absolute', left: -fx, top: 0, transform: `scale(${pageScale})`, transformOrigin: '0 0' }}>
             <LegacyAdmin />
           </div>
         </Phone>
       </Abs>
+      {/* 0.3s 红色失败条（钩子第一拍就给冲突） */}
+      <div style={{ position: 'absolute', left: W / 2 - (vertical ? 360 : 330), top: H * 0.16, width: vertical ? 720 : 660, padding: '14px 22px', borderRadius: 10, background: 'rgba(200,20,20,0.92)', color: '#fff', fontFamily: 'Arial, "Noto Sans SC", sans-serif', fontSize: 26, fontWeight: 700, boxShadow: '0 12px 40px rgba(200,0,0,0.45)', opacity: ramp(t, 0.3, 0.08, EASE.linear), transform: `translateY(${(1 - ramp(t, 0.3, 0.2, EASE.snappy)) * -30}px) rotate(-1.5deg)` }}>
+        ✕ Port forwarding failed · 端口映射失败
+      </div>
       {/* 双指触点 */}
       {t > 0.18 && t < 0.98 && (
         <>
@@ -158,11 +162,12 @@ const Monitors: React.FC<{ t: number }> = ({ t }) => {
             position: 'absolute',
             left: W / 2,
             top: H / 2,
-            width: 10,
-            height: 10,
-            transform: `translate(-50%,-50%) scale(${1 + 260 * ramp(t, COLLAPSE1, 0.45, EASE.out)})`,
+            width: 10 + 2600 * ramp(t, COLLAPSE1, 0.45, EASE.out),
+            height: 10 + 2600 * ramp(t, COLLAPSE1, 0.45, EASE.out),
+            transform: 'translate(-50%,-50%)',
             borderRadius: '50%',
-            border: '0.4px solid rgba(160,240,255,0.9)',
+            border: `2px solid rgba(160,240,255,0.95)`,
+            boxShadow: '0 0 24px rgba(6,182,212,0.8), inset 0 0 24px rgba(6,182,212,0.5)',
             opacity: 1 - ramp(t, COLLAPSE1, 0.45, EASE.linear),
           }}
         />
@@ -323,7 +328,7 @@ export const Act1: React.FC = () => {
         ? { x: W / 2, y: H / 2 + 120, w: mix(W * 0.8, 760, ramp(t, 1.56, 0.24, EASE.snappy)), h: mix(H * 0.6, 300, ramp(t, 1.56, 0.24, EASE.snappy)), lock: ramp(t, 1.56, 0.26, EASE.linear) }
         : undefined;
 
-  const flash = Math.max(flashEnv(t, 0, 0.12), flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.2), flashEnv(t, WORD0, 0.1) * 0.5);
+  const flash = Math.max(flashEnv(t, 0, 0.12), flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08), flashEnv(t, WORD0, 0.1) * 0.5);
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: C.hud }}>
       {body}

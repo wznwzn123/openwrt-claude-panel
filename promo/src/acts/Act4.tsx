@@ -7,17 +7,17 @@ import { AuroraBG, Dot, Glass, Grain, Pill, Vignette } from '../lib/visual';
  * 配方卡：flying-words → glass-pill-dictation-typing */
 
 const A = 54;
-const CONVERGE = 57.7;
-const CONSOLE = 58.15;
+const CONVERGE = 57.517;
+const CONSOLE = 58.034;
 const END = 74;
 
 /* 30+ 项底层能力（来自仓库 cgi-bin/mcp 的真实工具清单，中文化） */
 const TOOLS: Array<[string, string]> = [
   ['节点智能调度', 'switch_proxy'], ['UCI 配置读写与回滚', 'uci_set'], ['系统日志智能诊断', 'system_log'], ['OAF 应用过滤', 'oaf_uci'],
   ['实时网速排行', 'net_speed'], ['系统服务控制', 'service_control'], ['设备列表', 'device_list'], ['连接追踪', 'list_connections'],
-  ['防火墙总览', 'firewall_overview'], ['代理规则管理', 'list_rules'], ['节点延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
+  ['防火墙总览', 'firewall_overview'], ['分流规则管理', 'list_rules'], ['节点延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
   ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['插件日志', 'openclash_log'],
-  ['代理模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
+  ['分流模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
   ['应用识别', 'oaf_find_app'], ['关闭异常连接', 'close_connections'], ['策略组总览', 'list_proxy_groups'], ['系统信息', 'system_info'],
   ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['插件重启', 'restart_openclash'],
   ['UCI 配置查看', 'uci_show'], ['应用过滤详情', 'oaf_show'], ['安全命令执行', 'run_command'], ['计划重启', 'reboot_router'],
@@ -43,8 +43,8 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
     const tx = mix(x, W / 2 + side * W * 0.24, conv);
     const ty = mix(y, H * 0.5 + (hash(i * 9) - 0.5) * H * 0.5, conv);
     const accent = i % 6 === 0;
-    const dc = Math.hypot((x - W / 2) / 520, (y - H / 2) / 170);
-    const titleDim = t < CONVERGE ? mix(0.18, 1, Math.min(1, Math.max(0, dc - 0.6))) : 1;
+    const dc = Math.hypot((x - W / 2) / 640, (y - H / 2) / 220);
+    const titleDim = t < CONVERGE ? mix(0.08, 1, Math.min(1, Math.max(0, dc - 0.7) * 1.5)) : 1;
     return { zh, en, x: tx, y: ty, s: mix(s, 0.5, conv), o: life * fog * titleDim * (1 - conv) * ramp(t, A, 0.3, EASE.linear), accent, z };
   });
   items.sort((a, b) => a.z - b.z);
@@ -289,6 +289,10 @@ export const Act4: React.FC = () => {
   const { W, H, vertical } = useV();
   const panelK = springAt(t, CONSOLE, fps);
   const endOut = ramp(t, END - 0.5, 0.5, EASE.exit);
+  // 一拍一个主角：打字时对话舱是主角，工具调用后右屏状态是主角，另一侧降权留守
+  const focusR = CMDS.reduce((acc, c) => Math.max(acc, ramp(t, c.toolAt, 0.3, EASE.smooth) * (1 - ramp(t, c.toolAt + 1.6, 0.4, EASE.smooth))), 0) + ramp(t, 68.2, 0.4, EASE.smooth) * (1 - ramp(t, 69.8, 0.4, EASE.smooth));
+  const fL = 1 - 0.35 * Math.min(1, focusR);
+  const fR = 1 - 0.35 * (1 - Math.min(1, focusR)) * ramp(t, CONSOLE + 0.4, 0.4, EASE.linear);
   const breath = 1 + 0.03 * ramp(t, CONSOLE, END - CONSOLE, EASE.linear);
   const pw = vertical ? W - 80 : 860;
   const ph = vertical ? 760 : 740;
@@ -313,10 +317,10 @@ export const Act4: React.FC = () => {
       )}
       {t >= CONSOLE - 0.2 && (
         <Abs style={{ inset: 0, transform: `scale(${breath * (1 - endOut * 0.04)})`, opacity: 1 - endOut }}>
-          <div style={{ position: 'absolute', left: lx + (vertical ? 0 : (1 - panelK) * -200), top: ly, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5), transform: `perspective(1800px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5}deg)` }}>
+          <div style={{ position: 'absolute', left: lx + (vertical ? 0 : (1 - panelK) * -200), top: ly, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fL), filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + 1.5}deg) scale(${0.97 + 0.03 * fL})` }}>
             <ChatCabin t={t} w={pw} h={ph} />
           </div>
-          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5), transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5}deg)` }}>
+          <div style={{ position: 'absolute', left: rx + (vertical ? 0 : (1 - panelK) * 200), top: ry, width: pw, height: ph, opacity: Math.min(1, panelK * 1.5) * (0.55 + 0.45 * fR), filter: `brightness(${0.75 + 0.25 * fR})`, transform: `perspective(1800px) rotateY(${vertical ? 0 : -3 * (1 - panelK) - 1.5}deg) scale(${0.97 + 0.03 * fR})` }}>
             <StatePanel t={t} w={pw} h={ph} />
           </div>
         </Abs>

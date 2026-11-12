@@ -9,11 +9,11 @@ import { HomeLive, HomePhotoTheme } from '../lib/screens';
 
 const A = 12;
 const PHONE_IN = 12.25;
-const RIP1 = 16.75; // 涟漪①：浅 → 深
-const RIP2 = 18.55; // 涟漪②：深 → 相册磨砂玻璃
-const SLIDE = 20.0; // 手机滑向右侧 + 文字对穿到左侧
-const EXPLODE = 20.6;
-const PLATES = [20.3, 21.3, 23.45];
+const RIP1 = 16.655; // 涟漪①：浅 → 深
+const RIP2 = 18.724; // 涟漪②：深 → 相册磨砂玻璃
+const SLIDE = 19.759; // 手机滑向右侧 + 文字对穿到左侧
+const EXPLODE = 20.36;
+const PLATES = [20.276, 21.31, 23.379]; // 116 BPM 拍点
 const OUT = 27.55;
 
 /* 冷白体积聚光灯：光束横扫画布 */
@@ -197,7 +197,7 @@ export const Act2: React.FC = () => {
           <div style={{ marginTop: 26, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 16.2, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 16.2, 0.6, EASE.out)) * 12}px)` }}>
             原生 ucode 驱动<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>仅占 2MB 闪存
           </div>
-          <div style={{ marginTop: 12, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 23.45, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 23.45, 0.6, EASE.out)) * 12}px)` }}>
+          <div style={{ marginTop: 12, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 23.379, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 23.379, 0.6, EASE.out)) * 12}px)` }}>
             无需公网 IP<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>加密隧道直连
           </div>
         </div>

@@ -82,7 +82,7 @@ export const DEVICES: Array<{ n: string; ip: string; route: string; color: strin
   { n: '客厅电视', ip: '192.168.1.36', route: '4K 超清影音专线', color: '#7c3aed', dn: [38.6, 0.4] },
   { n: '儿童平板', ip: '192.168.1.52', route: '直连', color: '#f59e0b', dn: [2.3, 0.2] },
 ];
-export const TOGGLE_AT = 44.55;
+export const TOGGLE_AT = 44.586; // 116 BPM 拍点
 
 export const DevicesScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   const k = w / 360;

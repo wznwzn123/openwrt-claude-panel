@@ -72,12 +72,36 @@ export const LegacyAdmin: React.FC<{ errorOn?: number; dialogOn?: number }> = ({
           ].map((r, i) => row([r[0], r[1]], i))}
         </tbody>
       </table>
+      <h3 style={{ fontSize: 15, fontWeight: 400, margin: '22px 0 6px' }}>Active DHCP Leases</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <tbody>
+          {Array.from({ length: 14 }, (_, i) => row([`host-${(i * 37 + 11).toString(16)}`, `192.168.1.${20 + i * 3}`, `a4:${(10 + i).toString(16)}:3c:9e:${(40 + i * 7).toString(16)}:0${i % 9}`, `${11 - (i % 11)}h ${(i * 13) % 60}m`], i))}
+        </tbody>
+      </table>
+      <h3 style={{ fontSize: 15, fontWeight: 400, margin: '22px 0 6px' }}>Firewall - Traffic Rules</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <tbody>
+          {['Allow-DHCP-Renew', 'Allow-Ping', 'Allow-IGMP', 'Allow-DHCPv6', 'Allow-MLD', 'Allow-ICMPv6-Input', 'Allow-ICMPv6-Forward', 'Allow-IPSec-ESP', 'Allow-ISAKMP', 'Support-UDP-Traceroute'].map((n, i) => row([n, 'IPv4/IPv6, From any host in wan', 'Accept input', '☑'], i))}
+        </tbody>
+      </table>
       <pre style={{ fontFamily: FONT.mono, fontSize: 10, background: '#f4f4f4', padding: 8, marginTop: 16, color: '#555', lineHeight: 1.45 }}>
 {`Tue Nov 11 23:41:07 daemon.err uhttpd[1532]: luci: accepted login on / for root
 Tue Nov 11 23:41:22 daemon.warn odhcpd[1188]: No default route present, overriding ra_lifetime!
 Tue Nov 11 23:41:30 user.notice firewall: Reloading firewall due to ifupdate of wan (pppoe-wan)
 Tue Nov 11 23:41:31 daemon.err ddns-scripts[3301]: myddns_ipv4: public IP not found
-Tue Nov 11 23:41:47 kern.warn kernel: [ 1873.2] nf_conntrack: table full, dropping packet`}
+Tue Nov 11 23:41:47 kern.warn kernel: [ 1873.2] nf_conntrack: table full, dropping packet
+Tue Nov 11 23:42:00 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 1/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:42:07 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 2/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:42:14 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 3/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:42:21 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 4/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:42:28 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 5/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:42:35 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 6/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:43:42 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 7/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:43:49 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 8/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:43:56 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 9/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:43:03 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 10/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:43:10 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 11/12 — no public IPv4 on pppoe-wan
+Tue Nov 11 23:43:17 daemon.err ddns-scripts[3301]: myddns_ipv4: retry 12/12 — no public IPv4 on pppoe-wan`}
       </pre>
     </div>
     {dialogOn > 0 && (

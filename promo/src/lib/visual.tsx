@@ -22,10 +22,10 @@ export const AuroraBG: React.FC<{ amber?: number; intensity?: number; t?: number
   const [ax2, ay2] = blob(0.62, 0.22, 0.08, 0.06, 19, 31, 4.2);
   const k = intensity;
   const layers = [
-    `radial-gradient(ellipse 46% 52% at ${bx}% ${by}%, rgba(37,99,235,${0.42 * k}) 0%, rgba(37,99,235,${0.16 * k}) 38%, rgba(37,99,235,0) 72%)`,
-    `radial-gradient(ellipse 44% 50% at ${vx}% ${vy}%, rgba(124,58,237,${0.36 * k}) 0%, rgba(124,58,237,${0.13 * k}) 40%, rgba(124,58,237,0) 74%)`,
+    `radial-gradient(ellipse 46% 52% at ${bx}% ${by}%, rgba(37,99,235,${0.55 * k}) 0%, rgba(37,99,235,${0.2 * k}) 40%, rgba(37,99,235,0) 72%)`,
+    `radial-gradient(ellipse 44% 50% at ${vx}% ${vy}%, rgba(124,58,237,${0.48 * k}) 0%, rgba(124,58,237,${0.17 * k}) 42%, rgba(124,58,237,0) 74%)`,
     `radial-gradient(ellipse 38% 40% at ${ax2}% ${ay2}%, rgba(217,119,87,${0.42 * amber * k}) 0%, rgba(217,119,87,${0.14 * amber * k}) 42%, rgba(217,119,87,0) 76%)`,
-    `radial-gradient(ellipse 30% 30% at ${100 - bx * 0.6}% ${18 + by * 0.2}%, rgba(6,182,212,${0.1 * k}) 0%, rgba(6,182,212,0) 70%)`,
+    `radial-gradient(ellipse 30% 30% at ${100 - bx * 0.6}% ${18 + by * 0.2}%, rgba(6,182,212,${0.16 * k}) 0%, rgba(6,182,212,0) 70%)`,
     `radial-gradient(ellipse 120% 100% at 50% 40%, ${C.ink1} 0%, ${C.ink0} 78%)`,
   ];
   return <div style={{ position: 'absolute', width: W, height: H, background: layers.join(',') }} />;
@@ -107,8 +107,64 @@ export const HudBG: React.FC<{ scan?: boolean; tint?: string }> = ({ scan = true
           }}
         />
       )}
+      {/* 六边形网格 */}
+      <svg width={W} height={H} style={{ position: 'absolute', left: 0, top: 0, opacity: 0.06 }}>
+        <defs>
+          <pattern id="hex" width="56" height="97" patternUnits="userSpaceOnUse">
+            <path d="M28 0 L56 16 L56 48 L28 64 L0 48 L0 16 Z M28 64 L28 97" fill="none" stroke="#06B6D4" strokeWidth="1" />
+          </pattern>
+        </defs>
+        <rect width={W} height={H} fill="url(#hex)" />
+      </svg>
+      <HudRadar />
+      <HudDataColumn />
       <HudTicks />
       <Vignette strength={0.7} />
+    </div>
+  );
+};
+
+/* 雷达扫描环：conic 扇区旋转 + 目标点闪烁 */
+export const HudRadar: React.FC = () => {
+  const t = useT();
+  const { width: W, height: H } = useVideoConfig();
+  const R = Math.min(W, H) * 0.11;
+  const ang = (t * 180) % 360; // 2s 一圈
+  return (
+    <div style={{ position: 'absolute', right: 70, bottom: 90, width: R * 2, height: R * 2 }}>
+      <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: `conic-gradient(from ${ang}deg, rgba(6,182,212,0.42) 0deg, rgba(6,182,212,0) 70deg, rgba(6,182,212,0) 360deg)` }} />
+      {[1, 0.66, 0.33].map((k) => (
+        <div key={k} style={{ position: 'absolute', left: R * (1 - k), top: R * (1 - k), width: R * 2 * k, height: R * 2 * k, borderRadius: '50%', border: '1px solid rgba(6,182,212,0.4)' }} />
+      ))}
+      <div style={{ position: 'absolute', left: R, top: 0, width: 1, height: R * 2, background: 'rgba(6,182,212,0.25)' }} />
+      <div style={{ position: 'absolute', top: R, left: 0, height: 1, width: R * 2, background: 'rgba(6,182,212,0.25)' }} />
+      {[[0.55, 0.3, 40], [0.25, 0.62, 200], [0.7, 0.72, 300]].map(([x, y, a], i) => {
+        const d = ((ang - a + 360) % 360) / 360;
+        return <div key={i} style={{ position: 'absolute', left: R * 2 * x - 4, top: R * 2 * y - 4, width: 8, height: 8, borderRadius: 4, background: i === 1 ? '#FF6A3D' : C.cyan, boxShadow: `0 0 10px ${i === 1 ? '#FF6A3D' : C.cyan}`, opacity: Math.max(0.15, 1 - d * 2.5) }} />;
+      })}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: R * 2 + 8, textAlign: 'center', fontFamily: FONT.mono, fontSize: 13, letterSpacing: '0.2em', color: 'rgba(6,182,212,0.7)' }}>WAN · SCAN</div>
+    </div>
+  );
+};
+
+/* 等宽数据列：随机数快速跳变 4 帧后落定 */
+export const HudDataColumn: React.FC = () => {
+  const t = useT();
+  const { fps } = useVideoConfig();
+  const f = Math.round(t * fps);
+  const step = Math.max(1, Math.round(fps / 15));
+  const rows = Array.from({ length: 9 }, (_, i) => {
+    const epoch = Math.floor((f + i * 7) / (fps * 1.2));
+    const local = (f + i * 7) - epoch * fps * 1.2;
+    const settled = local > step * 4;
+    const v = settled ? hash(epoch * 13 + i) : hash(Math.floor(f / step) * 31 + i);
+    return `${['RTT', 'PKT', 'NAT', 'TTL', 'MTU', 'SYN', 'DNS', 'ARP', 'CPU'][i]} ${(v * 999).toFixed(1).padStart(6, '0')}`;
+  });
+  return (
+    <div style={{ position: 'absolute', left: 36, top: 92, fontFamily: FONT.mono, fontSize: 14, lineHeight: 1.7, color: 'rgba(6,182,212,0.55)', letterSpacing: '0.08em' }}>
+      {rows.map((r) => (
+        <div key={r}>{r}</div>
+      ))}
     </div>
   );
 };

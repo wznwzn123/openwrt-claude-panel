@@ -10,15 +10,15 @@ import { Img, staticFile } from 'remotion';
 const A = 74;
 const SCAN0 = 74.4;
 const SCAN1 = 77.6;
-const HUD_OUT = 81.75;
-const FIN = 82.0;
+const HUD_OUT = 81.828;
+const FIN = 82.087;
 const TYPE0 = 82.35;
-const ENTER = 84.55;
-const MORPH = 84.75;
-const DROP = [85.55, 85.8, 86.05];
-const WORD = 86.3;
-const LINKS = 86.75;
-const STAR = 87.35;
+const ENTER = 84.414;
+const MORPH = 84.614;
+const DROP = [85.448, 85.707, 85.966]; // 拍 / 半拍 / 拍
+const WORD = 86.224;
+const LINKS = 86.741;
+const STAR = 87.258;
 
 const CMD = 'cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh';
 

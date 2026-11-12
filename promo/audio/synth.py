@@ -226,10 +226,10 @@ for b in range(nbars):
 
 # 54s Claude 登场 & 82s 终幕：riser → impact
 place(bgm, riser(2.2, 300, 6000), 51.8, 0.4)
-place(bgm, riser(2.3, 300, 8000), 82.25, 0.45)
-place(bgm, sub_drop(2.5, 90, 28), 84.55, 0.4)
+place(bgm, riser(2.3, 300, 8000), 84.414 - 2.3, 0.45)
+place(bgm, sub_drop(2.5, 90, 28), 84.414, 0.4)
 # 终幕长尾：Am(add9) 大铺底直至 90s，最后 1.2s 微呼吸
-place(bgm, pad([mtof(n) for n in (45, 57, 60, 64, 71)], 6.0, att=0.3, rel=2.5, bright=6), 84.55, 1.6)
+place(bgm, pad([mtof(n) for n in (45, 57, 60, 64, 71)], 6.0, att=0.3, rel=2.5, bright=6), 84.414, 1.6)
 
 # 主骨：两次 Sub Drop
 place(bgm, sub_drop(), 5.75, 0.5)
@@ -325,43 +325,45 @@ cue('rush-whoosh', 10.45, whoosh(1.5, 300, 7000), 0.9)
 # 第二幕
 cue('spotlight-sweep', 12.0, whoosh(1.6, 500, 6000), 0.55)
 cue('phone-land', 12.55, glass_tap(1800), 0.5)
-cue('ripple-crt', 16.53, click(), 0.6)
-cue('ripple', 16.75, whoosh(0.7, 800, 9000), 0.45)
-cue('ripple-crt', 18.33, click(), 0.6)
-cue('ripple', 18.55, whoosh(0.7, 800, 9000), 0.45)
-cue('slide', 20.0, whoosh(0.8, 250, 3000), 0.6)
-for i, at in enumerate((20.3, 21.3, 23.45)):
+cue('ripple-crt', 16.435, click(), 0.6)
+cue('ripple', 16.655, whoosh(0.7, 800, 9000), 0.45)
+cue('ripple-crt', 18.504, click(), 0.6)
+cue('ripple', 18.724, whoosh(0.7, 800, 9000), 0.45)
+cue('slide', 19.759 - 0.4, whoosh(0.8, 250, 3000), 0.6)
+for i, at in enumerate((20.276, 21.31, 23.379)):
     cue('plate-pop', at, glass_tap(2000 + i * 300), 0.6, -0.4)
 cue('act-out', 27.5, whoosh(0.6, 400, 5000), 0.5)
 # 第三幕
 for i, at in enumerate((28.05, 28.21, 28.37)):
     cue('stack-thump', at + 0.22, thump(), 0.7)
-cue('fan-out', 29.0, whoosh(0.6, 300, 4000), 0.5)
+cue('fan-out', 29.069 - 0.3, whoosh(0.6, 300, 4000), 0.5)
 for i, at in enumerate((31.25, 33.1, 33.6, 33.9, 34.75, 35.5)):
     cue('plugin-detect', at, glass_tap(2600 + i * 120), 0.35)
 cue('tap', 37.15, click(), 0.8)
+cue('push-in', 36.8, whoosh(0.6, 200, 2500), 0.35)
 for i, at in enumerate((37.85, 37.97, 38.09)):
     cue('latency-lock', at, glass_tap(3200), 0.3)
 cue('node-fail', 38.7, sonar(620), 0.45)
 cue('auto-switch', 39.35, chime(1046.5, 1568), 0.6)
-cue('seg-b', 40.5, whoosh(0.7, 300, 4000), 0.5)
-cue('bar-shoot', 41.75, riser(0.45, 400, 3000), 0.6)
-cue('ceiling-crack', 42.17, kick(0.35, 160, 60, 2.0), 0.55)
-cue('axis-rescale', 42.55, whoosh(0.35, 1000, 8000), 0.5)
-cue('toggle', 44.55, click(), 0.85)
-cue('lock', 44.75, glass_tap(1500), 0.45)
-cue('seg-c', 46.3, whoosh(0.7, 300, 4000), 0.5)
-cue('share-tap', 47.4, click(), 0.7)
-cue('icon-pop', 48.05, glass_tap(2200), 0.45)
-cue('icon-tap', 48.65, click(), 0.7)
-cue('fingerprint', 49.6, sonar(1500), 0.3)
-cue('unlock', 50.4, chime(1318.5, 1760), 0.45)
-cue('scan-ok', 48.25, glass_tap(3000), 0.35, 0.5)
+cue('seg-b', 40.448 - 0.35, whoosh(0.7, 300, 4000), 0.5)
+cue('bar-shoot', 41.58, riser(0.42, 400, 3000), 0.6)
+cue('ceiling-crack', 42.0, kick(0.35, 160, 60, 2.0), 0.55)
+cue('axis-rescale', 42.26, whoosh(0.35, 1000, 8000), 0.5)
+cue('toggle', 44.586, click(), 0.85)
+cue('lock', 44.78, glass_tap(1500), 0.45)
+cue('seg-c', 46.138 - 0.35, whoosh(0.7, 300, 4000), 0.5)
+SEG_C = 46.138
+cue('share-tap', SEG_C + 1.05, click(), 0.7)
+cue('icon-pop', SEG_C + 1.7, glass_tap(2200), 0.45)
+cue('icon-tap', SEG_C + 2.3, click(), 0.7)
+cue('fingerprint', SEG_C + 3.25, sonar(1500), 0.3)
+cue('unlock', SEG_C + 4.05, chime(1318.5, 1760), 0.45)
+cue('scan-ok', SEG_C + 1.9, glass_tap(3000), 0.35, 0.5)
 cue('router-switch', 51.25, click(), 0.7, 0.5)
 # 第四幕
 cue('claude-enter', 54.0, whoosh(1.6, 200, 3000), 0.6)
-cue('converge', 57.7, whoosh(0.6, 400, 6000), 0.6)
-cue('console', 58.15, glass_tap(1600), 0.5)
+cue('converge', 57.517 - 0.3, whoosh(0.6, 400, 6000), 0.6)
+cue('console', 58.034, glass_tap(1600), 0.5)
 CHAR = 0.072
 for text, t0, send, reply in (('把超清影音专线切到新加坡低延迟节点', 58.75, 60.05, 60.75), ('看看现在哪台设备在占满网速', 62.35, 63.3, 63.95), ('给儿童平板设置每晚11点自动断网', 65.55, 66.8, 67.45)):
     for i in range(len(text)):
@@ -378,15 +380,15 @@ for i, y1 in enumerate((224, 224, 268, 268)):
     cue('sonar-lock', ft, sonar(1200 + i * 110), 0.5, 0.3)
 cue('wechat-notice', 77.4, chime(987.8, 1318.5), 0.55, 0.5)
 cue('wechat-notice', 79.8, chime(987.8, 1318.5), 0.55, 0.5)
-cue('hud-to-aurora', 81.75, whoosh(0.8, 300, 6000), 0.55)
+cue('hud-to-aurora', 81.828 - 0.4, whoosh(0.8, 300, 6000), 0.55)
 for i in range(int(1.25 / 0.03)):
     place(sfx, pan(key(True), 0.1), 82.35 + i * 0.03, 0.45)
 cues.append({'t': 82.35, 'name': 'terminal-typing', 'gain': 0.45})
-cue('enter', 84.55, key(True) * 2.0, 1.0)
-cue('morph', 84.75, whoosh(0.8, 200, 2500), 0.5)
-for i, at in enumerate((85.55, 85.8, 86.05)):
+cue('enter', 84.414, key(True) * 2.0, 1.0)
+cue('morph', 84.614, whoosh(0.8, 200, 2500), 0.5)
+for i, at in enumerate((85.448, 85.707, 85.966)):
     cue('assemble-drop', at, glass_tap(1400 + i * 350), 0.6)
-cue('brand-sparkle', 86.3, chime(1760, 2637), 0.35)
+cue('brand-sparkle', 86.224, chime(1760, 2637), 0.35)
 sfx = reverb(sfx, 0.12)
 
 sf.write(f'{OUT}/bgm.wav', bgm.astype(np.float32), SR)

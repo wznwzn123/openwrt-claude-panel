@@ -15,8 +15,8 @@ const T = FIN_T;
 // v3：整组改到画面垂直居中（y=540），透镜放大到 680px、色散加倍，让折射看得出来（v2 评审）
 const S = 16, OX = 704, OY = 284, CX = 960, CY = 540;
 const ICON = iconStrokes(OX, OY, S);
-// 定版：图标缩到 0.6（≈307px），图标 + 64px 间距 + 字标整组以 x=960 居中
-const PARK_S = 0.6, ICON_X = 488, TEXT_X = 705;
+// 定版：透镜缩到 0.6（外缘 x≈284–692），离字标留 56px，整组（x≈284–1643）以 x=960 居中
+const PARK_S = 0.6, ICON_X = 488, TEXT_X = 748;
 
 export const lensAt = (f: number) => {
   const on = ramp(f, T.lens0, 10, EASE.out); // 定版画面一直停到最后一帧，不淡出

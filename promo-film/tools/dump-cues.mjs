@@ -4,7 +4,7 @@
 import { build } from 'esbuild';
 import fs from 'node:fs';
 const src = process.argv[2] || 'src/cues.ts';
-const out = src.includes('v4') ? 'out/cues4.json' : 'out/cues.json';
+const out = src.includes('v5') ? 'out/cues5.json' : src.includes('v4') ? 'out/cues4.json' : 'out/cues.json';
 fs.mkdirSync('out', { recursive: true });
 await build({ entryPoints: [src], bundle: true, platform: 'node', format: 'esm', outfile: 'out/cues.bundle.mjs', loader: { '.png': 'empty' }, logLevel: 'error' });
 const m = await import(new URL('../out/cues.bundle.mjs', import.meta.url).href + '?t=' + Date.now());

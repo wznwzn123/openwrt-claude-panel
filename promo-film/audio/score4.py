@@ -23,7 +23,8 @@ from mgaudio import sfx, samples
 from mgaudio.core import Sound
 
 SR = 48000
-CUE = json.load(open(os.path.join(HERE, '..', 'out', 'cues4.json')))
+CUE = json.load(open(os.environ.get('CUES', os.path.join(HERE, '..', 'out', 'cues4.json'))))
+OUTNAME = os.environ.get('OUT', 'film4')
 FPS = CUE['fps']
 MUS = CUE['music']
 DUR = MUS['end'] / FPS
@@ -142,6 +143,15 @@ def sound_design(m):
             place(m, 'impact-cine', t, -5, verb=-10)
             m.sfx(sfx.shimmer_hit('A5'), t, gain=-9)
             m.sfx(sfx.sparkle(1.6, 20, 'A', 'minor_pentatonic'), t, gain=-14)
+        elif k == 'light_sweep':
+            m.sfx(sfx.whoosh(max(0.8, d), 'air', peak=0.6), t, gain=-10, verb=-12)
+            m.sfx(sfx.shimmer_hit('E6'), t + d * 0.6, gain=-18)
+        elif k == 'streams':
+            m.sfx(sfx.sparkle(1.4, 16, 'A', 'minor_pentatonic'), t, gain=-12)
+            m.sfx(sfx.data_chirp(6), t, gain=-16)
+        elif k == 'arc_off':
+            m.sfx(sfx.glitch(0.12, 'digital'), t, gain=-10)
+            m.sfx(sfx.blip('E5', 'sine', 0.12), t + 0.08, gain=-12)
         elif k == 'park':
             place(m, 'transition-snap', t + 0.3, -17)
         else:
@@ -152,10 +162,10 @@ if __name__ == '__main__':
     out = os.path.join(HERE, '..', 'public', 'audio')
     os.makedirs(out, exist_ok=True)
     full = build(True)
-    r1 = full.export(os.path.join(out, 'film4.wav'), lufs=-14, tp=-2.0)
+    r1 = full.export(os.path.join(out, OUTNAME + '.wav'), lufs=-14, tp=-2.0)
     full.report()
     nomusic = build(False)
-    r2 = nomusic.export(os.path.join(out, 'film4-nomusic.wav'), lufs=-18, tp=-2.0)
+    r2 = nomusic.export(os.path.join(out, OUTNAME + '-nomusic.wav'), lufs=-18, tp=-2.0)
     json.dump({'full': {k: v for k, v in r1.items() if k in ('duration', 'lufs', 'true_peak', 'warnings', 'stereo_corr')},
                'nomusic': {k: v for k, v in r2.items() if k in ('duration', 'lufs', 'true_peak', 'warnings')}},
-              open(os.path.join(HERE, '..', 'out', 'audio4-qc.json'), 'w'), ensure_ascii=False, indent=1, default=float)
+              open(os.path.join(HERE, '..', 'out', OUTNAME + '-audio-qc.json'), 'w'), ensure_ascii=False, indent=1, default=float)

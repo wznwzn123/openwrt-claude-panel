@@ -9,7 +9,7 @@ import { EASE, mix, ramp, springAt } from '../lib/ease';
 import { B } from './beat';
 import { DemoLabel, Keyword } from './kit';
 
-const PX = 700, PY = 120, PW = 1100, PH = 840, PAD = 44, INNER = PH - PAD * 2 - 96; // 下面留一条输入栏
+const PY = 120, PW = 1100, PH = 840, PAD = 44, INNER = PH - PAD * 2 - 96; // 下面留一条输入栏
 const GAP = 22;
 
 type Item = { at: number; h: number; render: (f: number, p: number) => React.ReactNode };
@@ -66,15 +66,17 @@ const ITEMS: Item[] = [
 const TOPS: number[] = []; { let y = 0; for (const it of ITEMS) { TOPS.push(y); y += it.h + GAP; } }
 const SCROLL = ITEMS.map((it, i) => Math.max(0, TOPS[i] + it.h - INNER));
 
-export const Chat: React.FC<{ f: number }> = ({ f }) => {
+// side='left'：v5 用——对话框在左，右边留给 3D 路由器，关键词放右上
+export const Chat: React.FC<{ f: number; side?: 'right' | 'left' }> = ({ f, side = 'right' }) => {
+  const PX = side === 'left' ? 100 : 700, PY0 = side === 'left' ? 172 : PY;
   const enter = springAt(f, B(20), { damping: 15, stiffness: 160 });
   const out = ramp(f, B(28) - 8, 8, EASE.exit);
   let scroll = 0;
   ITEMS.forEach((it, i) => { scroll = mix(scroll, Math.max(scroll, SCROLL[i]), ramp(f, it.at, 12, EASE.panel)); });
   return (
     <AbsoluteFill style={{ opacity: 1 - out, filter: out > 0.01 ? `blur(${(out * 18).toFixed(1)}px)` : undefined }}>
-      <Keyword f={f} at={B(20)} out={B(28)} idx="AI 版" text="用中文说" x={110} y={420} />
-      <div style={{ position: 'absolute', left: PX, top: PY, width: PW, height: PH, ...glass({ radius: 40, fill: 0.07 }), opacity: Math.min(1, enter * 1.3), transform: `translateY(${((1 - enter) * 80).toFixed(1)}px) scale(${mix(1.06, 1, Math.min(1, enter)).toFixed(4)})`, overflow: 'hidden' }}>
+      <Keyword f={f} at={B(20)} out={B(28)} idx="AI 版" text="用中文说" x={side === 'left' ? 100 : 110} y={side === 'left' ? 22 : 420} size={side === 'left' ? 68 : 112} />
+      <div style={{ position: 'absolute', left: PX, top: PY0, width: side === 'left' ? 1000 : PW, height: PH, ...glass({ radius: 40, fill: 0.07 }), opacity: Math.min(1, enter * 1.3), transform: `translateY(${((1 - enter) * 80).toFixed(1)}px) scale(${mix(1.06, 1, Math.min(1, enter)).toFixed(4)})`, overflow: 'hidden' }}>
         <div style={{ position: 'absolute', left: PAD, right: PAD, top: PAD, height: INNER, overflow: 'hidden' }}>
           <div style={{ position: 'absolute', left: 0, right: 0, top: -scroll }}>
             {ITEMS.map((it, i) => {

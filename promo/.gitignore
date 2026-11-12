@@ -4,3 +4,4 @@ out/
 public/audio/*.wav
 public/audio/sfx/
 public/fonts/*.ttf
+review/*/work/

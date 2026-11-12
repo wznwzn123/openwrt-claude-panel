@@ -270,87 +270,87 @@
   "gain": 0.4
  },
  {
-  "t": 62.47,
+  "t": 62.703,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 63.36,
+  "t": 63.593,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 63.36,
+  "t": 63.593,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 63.73,
+  "t": 63.963,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 63.95,
+  "t": 64.183,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 63.98,
+  "t": 64.182,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 64.78,
+  "t": 65.012,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 64.75,
+  "t": 65.012,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 65.12,
+  "t": 65.382,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 65.3,
+  "t": 65.602,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 65.2,
+  "t": 65.528,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 66.18,
+  "t": 66.538,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 66.15,
+  "t": 66.538,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 66.52,
+  "t": 66.908,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 66.7,
+  "t": 67.128,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 67.74,
+  "t": 68.13,
   "name": "amber-beam",
   "gain": 0.45
  },
  {
-  "t": 68.11,
+  "t": 68.5,
   "name": "uci-backup",
   "gain": 0.45
  },

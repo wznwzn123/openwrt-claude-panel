@@ -1,7 +1,7 @@
 """竖屏 60s 音频：人声/音效按 VCUTS 剪辑（15ms 淡接），配乐分三段长跨度拼接（80ms 交叉），重算 -5dB 闪避后两遍响度归一。"""
 import numpy as np, soundfile as sf
 SR = 48000
-CUTS = [(0.0, 6.3), (8.9, 12.0), (12.0, 16.0), (21.2, 28.0), (31.0, 40.4), (40.6, 46.2), (54.0, 58.4), (61.3, 73.6), (81.9, 90.0)]
+CUTS = [(0.0, 6.4), (9.2, 12.0), (12.0, 15.8), (21.2, 28.0), (31.1, 40.6), (40.7, 46.5), (54.2, 58.7), (61.5, 73.5), (81.6, 90.0)]
 A = '../public/audio'
 v, _ = sf.read(f'{A}/stem_voice.wav', always_2d=True)
 s, _ = sf.read(f'{A}/stem_sfx.wav', always_2d=True)
@@ -20,7 +20,7 @@ N = int(60 * SR)
 pad = lambda x: np.vstack([x, np.zeros((max(0, N - len(x)), 2))])[:N]
 V = pad(V); S = pad(S)
 # 配乐：A1 两段跟画面（保住 11.8s Sub Drop），之后源 12.0s 起连续，dst 51.9s 交叉进入终幕段
-B = pad(cut(b, [(0.0, 6.3), (8.9, 12.0), (12.0, 12.0 + 42.5), (81.9, 90.0)], fade=0.08))
+B = pad(cut(b, [(0.0, 6.4), (9.2, 12.0), (12.0, 12.0 + 42.4), (81.6, 90.0)], fade=0.08))
 v_env = np.convolve(np.abs(V).mean(1), np.ones(960) / 960, 'same')
 act = (v_env > 0.01).astype(float)
 g = np.zeros(N); cur = 0

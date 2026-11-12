@@ -401,9 +401,11 @@ cue('claude-enter', 54.0, whoosh(1.6, 200, 3000), 0.6)
 cue('converge', 57.517 - 0.3, whoosh(0.6, 400, 6000), 0.6)
 cue('console', 58.034, glass_tap(1600), 0.5)
 cue('greeting', 58.7, chime(659.3, 987.8), 0.4)
-CHAR = 0.06
+CHAR = json.load(open('../src/act4.json'))['char']
 # 三条指令锁定旁白关键词：状态响应 = toolAt + 0.15（63.76 / 65.15 / 66.55）
-for text, t0, send, tool_at, reply in (('把影音加速切到低延迟电竞专线', 62.47, 63.36, 63.61, 63.95), ('看看现在哪台设备在占满网速', 63.98, 64.78, 65.0, 65.3), ('给儿童平板设置每晚11点自动断网', 65.2, 66.18, 66.4, 66.7)):
+ACT4 = json.load(open('../src/act4.json'))   # 与画面同源：由 voice/act4_sync.py 从字级时间戳推导
+for c4 in ACT4['cmds']:
+    text, t0, send, tool_at, reply = c4['text'], c4['t0'], c4['send'], c4['toolAt'], c4['replyAt']
     for i in range(len(text)):
         place(sfx, pan(key(False), 0), t0 + i * CHAR, 0.6)
     cues.append({'t': t0, 'name': 'dictation-typing', 'gain': 0.6})
@@ -412,8 +414,8 @@ for text, t0, send, tool_at, reply in (('把影音加速切到低延迟电竞专
     cue('core-impact', tool_at + 0.12, glass_tap(2600), 0.6, 0.4)
     place(sfx, pan(kick(0.35, 150, 60, 1.8), 0.4), tool_at + 0.12, 0.45)
     cue('claude-reply', reply, chime(), 0.5)
-cue('amber-beam', 67.99 - 0.25, riser(0.37, 800, 6000), 0.45, 0.3)
-cue('uci-backup', 67.99 + 0.12, chime(784, 1174.7), 0.45)
+cue('amber-beam', ACT4['rollback'] - 0.25, riser(0.37, 800, 6000), 0.45, 0.3)
+cue('uci-backup', ACT4['rollback'] + 0.12, chime(784, 1174.7), 0.45)
 cue('scanline-wipe', 73.75 - 0.25, whoosh(0.9, 400, 7000), 0.75)   # 74.0s 扫描线横扫擦除
 # 终幕
 cue('scan-sweep', 74.4, riser(3.2, 600, 2500) * 0.6, 0.35)

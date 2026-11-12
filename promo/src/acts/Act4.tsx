@@ -1,4 +1,5 @@
 import React from 'react';
+import ACT4 from '../act4.json';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
 import { AuroraBG, Dot, Glass, Grain, Pill, Vignette } from '../lib/visual';
@@ -88,13 +89,10 @@ const layout = (W: number, H: number, vertical: boolean) => {
 
 /* —— 对话脚本 —— */
 type Cmd = { text: string; t0: number; send: number; tool: string; toolAt: number; reply: string; replyAt: number };
-const CMDS: Cmd[] = [
-  { text: '把影音加速切到低延迟电竞专线', t0: 62.47, send: 63.36, tool: '节点切换 · 延迟测试', toolAt: 63.61, reply: '已将「4K 超清本地影音加速」切换至 低延迟电竞专线 · 28 ms', replyAt: 63.95 },
-  { text: '看看现在哪台设备在占满网速', t0: 63.98, send: 64.78, tool: '实时网速 · 设备列表', toolAt: 65.0, reply: '书房台式机正以 86.4 MB/s 下载，占用约 92% 带宽', replyAt: 65.3 },
-  { text: '给儿童平板设置每晚11点自动断网', t0: 65.2, send: 66.18, tool: 'UCI 写入 · 防火墙', toolAt: 66.4, reply: '已写入定时规则：儿童平板 每晚 23:00 断网，次日 07:00 恢复', replyAt: 66.7 },
-];
-const CHAR = 0.06;
-export const ROLLBACK_AT = 67.99; // 旁白「回滚 UCI 配置」
+// 三条指令的时刻由 voice/act4_sync.py 从字级时间戳推导（状态响应 = 旁白关键词发声帧），换配音后重跑即重新对齐
+const CMDS: Cmd[] = ACT4.cmds;
+const CHAR = ACT4.char;
+export const ROLLBACK_AT = ACT4.rollback; // 旁白「回滚 UCI 配置」
 
 const GlassPill: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   // 当前正在输入的指令

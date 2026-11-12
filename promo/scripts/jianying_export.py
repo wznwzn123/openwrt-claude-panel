@@ -14,8 +14,8 @@ import sys
 
 import pyJianYingDraft as draft
 
-FPS = 60
-TOTAL_F = 5400
+FPS = 30
+TOTAL_F = 2700
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLATE = os.path.abspath(sys.argv[1])
 STAGING = os.path.abspath(sys.argv[2])

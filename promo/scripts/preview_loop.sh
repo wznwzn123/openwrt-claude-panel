@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# 15 秒无声无缝循环预览（1280×720 · 30fps）：第二幕～第四幕精华四段交叉溶接，尾帧溶回首帧
+set -euo pipefail
+cd "$(dirname "$0")/.."
+SRC=${1:-out/plate.mp4}; O=${2:-out/preview-loop-15s.mp4}
+X=0.4
+# 段：聚光登场 · 层级爆炸+铭牌 · 批量测速+自动切换 · Claude 指令对话（合计 17.0s，4 次溶接后取 [0.4, L) = 15.0s）
+segs=("12.25 3.6" "20.0 4.4" "36.7 3.8" "59.4 5.2" "12.25 3.6")
+in=(); fc=""; i=0
+for s in "${segs[@]}"; do set -- $s; in+=(-ss "$1" -t "$2" -i "$SRC"); fc+="[$i:v]fps=30,scale=1280:720:flags=lanczos,setpts=PTS-STARTPTS[v$i];"; i=$((i+1)); done
+off=$(python3 -c "print(3.6-$X)"); fc+="[v0][v1]xfade=transition=fade:duration=$X:offset=$off[x1];"
+off=$(python3 -c "print(3.6+4.4-2*$X)"); fc+="[x1][v2]xfade=transition=fade:duration=$X:offset=$off[x2];"
+off=$(python3 -c "print(3.6+4.4+3.8-3*$X)"); fc+="[x2][v3]xfade=transition=fade:duration=$X:offset=$off[x3];"
+off=$(python3 -c "print(3.6+4.4+3.8+5.2-4*$X)"); fc+="[x3][v4]xfade=transition=fade:duration=$X:offset=$off[x4];"
+fc+="[x4]trim=start=$X:duration=15,setpts=PTS-STARTPTS[o]"
+ffmpeg -v error -y "${in[@]}" -filter_complex "$fc" -map "[o]" -an -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 20 -preset slow -movflags +faststart "$O"
+ffprobe -v error -count_frames -show_entries stream=width,height,r_frame_rate,nb_read_frames -show_entries format=duration -of default=nw=1 "$O"

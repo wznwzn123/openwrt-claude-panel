@@ -84,7 +84,8 @@ async function el(page, sel, name, pad = 0) {
   await page.screenshot({ path: path.join(OUT, name + '.png'), clip: { x: bb.x - pad, y: bb.y - pad, width: bb.width + pad * 2, height: bb.height + pad * 2 }, omitBackground: false });
   console.log('saved', name, Math.round(bb.width), 'x', Math.round(bb.height));
 }
-(async () => {
+module.exports = { boot, el, MOCK, OUT, NOW, GB, MB };
+if (require.main === module) (async () => {
   const b = await chromium.launch();
   // 1) 首页：整屏 + 各张卡片
   let { ctx, page } = await boot(b, { p: 'main' });

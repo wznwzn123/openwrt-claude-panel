@@ -2,7 +2,7 @@ import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
 import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette } from '../lib/visual';
-import { AndroidFlow, DEVICES, DevicesScreen, PluginScreen, PwaFlow, TOGGLE_AT } from '../lib/screens3';
+import { AndroidFlow, DEVICES, DevicesScreen, PluginScreen, PwaFlow, SpeedRunScreen, TOGGLE_AT } from '../lib/screens3';
 import { Img, staticFile } from 'remotion';
 
 /* 第三幕 · 28–54s · 全能掌中矩阵
@@ -146,7 +146,7 @@ export const Act3: React.FC = () => {
   /* ── 段 A：card-stack 三联扇形矩阵 ── */
   const fan = springAt(t, FAN, fps, { damping: 20, stiffness: 150, mass: 1 });
   const prep = ramp(t, FAN - 0.15, 0.15, EASE.swift) * (1 - fan);
-  const swA = vertical ? 300 : 385;
+  const swA = vertical ? 300 : 365; // 主机放大 1.08 后仍留出底部安全边与字幕区
   const spread = vertical ? 300 : 450;
   const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
   const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);
@@ -222,21 +222,27 @@ export const Act3: React.FC = () => {
       {/* 段 A（推入时视差左移，卡片完全覆盖后卸载） */}
       {pushIn < 1 && (
         <Abs style={{ inset: 0, transform: `translateX(${-0.35 * W * pushIn}px)` }}>
-          <Abs style={{ inset: 0, transform: `scale(${breathA * pushA * (1 - prep * 0.02)}) translateY(${stackPress}px)`, transformOrigin: `${cx}px ${cy + 0.05 * swA}px` }}>
-            <div style={{ position: 'absolute', left: cx - 600, top: cy + swA + 30, width: 1200, height: 80, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)' }} />
+          <Abs style={{ inset: 0, transform: `scale(${breathA * pushA * (1 - prep * 0.02)}) translateY(${stackPress}px)`, transformOrigin: `${W * 0.58}px ${cy + 0.05 * swA}px` }}>
+            <div style={{ position: 'absolute', left: W * 0.55 - 600, top: cy + swA + 30, width: 1200, height: 80, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)' }} />
+            {/* 黄金三角立体交错：主机居中偏右前景、左辅机退到左后方虚化、右辅机沉入右下角露出局部测速面板 */}
             {[0, 2, 1].map((i) => {
               const e = enter(i);
-              const side = i - 1;
-              const x = cx + side * spread * fan;
-              const y = cy + (1 - e) * H * 0.9 + Math.abs(side) * 30 * fan;
-              const rz = side * 7 * fan; // 扇面 + 侧向 rotateY ±18°（中屏 -6°）错落纵深
-              const s = i === 1 ? 1 : 1 - 0.08 * fan;
+              const L = [
+                { x: W * 0.33, dy: -10, s: 0.88, ry: 22, rz: -2, z: 1, blur: 1.6, dim: 0.78 }, // 辅机一：左后方
+                { x: W * 0.58, dy: 0, s: 1.08, ry: -8, rz: 0, z: 3, blur: 0, dim: 1 }, // 主机：前景主视角
+                { x: W * 0.77, dy: 40, s: 0.82, ry: -12, rz: 3, z: 2, blur: 0, dim: 0.92 }, // 辅机二：右下角，部分被主机遮挡
+              ][i];
+              const x = mix(cx, L.x, fan);
+              const y = cy - (vertical ? 0 : 15) + (1 - e) * H * 0.9 + L.dy * fan;
+              const s = mix(1, L.s, fan);
               return (
-                <Pose key={i} x={x} y={y} sw={swA} rz={rz} s={s} ry={side * -18 * fan + (i === 1 ? -6 * fan : 0) + 2 * Math.sin(t * 0.6 + i)} z={i === 1 ? 3 : 1}>
-                  <Phone w={swA}>
-                    {i === 1 ? <PluginScreen t={t} w={swA} /> : <Img src={staticFile(i === 0 ? 'shots/devices.png' : 'shots/traffic.png')} style={{ width: swA, height: swA * 2 }} />}
-                  </Phone>
-                </Pose>
+                <div key={i} style={{ position: 'absolute', inset: 0, zIndex: L.z, filter: L.blur * fan > 0.2 || L.dim < 1 ? `blur(${(L.blur * fan).toFixed(2)}px) brightness(${mix(1, L.dim, fan)})` : undefined }}>
+                  <Pose x={x} y={y} sw={swA} rz={L.rz * fan} s={s} ry={L.ry * fan + 2 * Math.sin(t * 0.6 + i)} z={L.z}>
+                    <Phone w={swA}>
+                      {i === 1 ? <PluginScreen t={t} w={swA} /> : i === 2 ? <SpeedRunScreen t={t} w={swA} /> : <Img src={staticFile('shots/devices.png')} style={{ width: swA, height: swA * 2 }} />}
+                    </Phone>
+                  </Pose>
+                </div>
               );
             })}
           </Abs>

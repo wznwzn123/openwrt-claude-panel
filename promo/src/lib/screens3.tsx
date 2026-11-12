@@ -79,6 +79,38 @@ export const PluginScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   );
 };
 
+/* 线路测速运行中（第三幕右下辅机：局部露出，数字持续刷新） */
+export const SpeedRunScreen: React.FC<{ t: number; w: number }> = ({ t, w }) => {
+  const k = w / 360;
+  const lines: Array<[string, number]> = [['低延迟线路 01', 28], ['企业多线内网线路', 35], ['跨区域办公线路', 42], ['超清影音通道', 31], ['备用线路 05', 96], ['家庭直连', 12]];
+  const tick = Math.floor(t / 0.12);
+  return (
+    <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0' }}>
+      <ScreenShell title="线路测速" sub="批量测速 · 每 2 秒刷新" badge={<OkBadge text="运行中" color="#007aff" />}>
+        <Card>
+          {lines.map(([n, base], i) => {
+            const jitter = Math.round((Math.abs(Math.sin((tick + i * 7) * 12.9898) * 43758.5453) % 1) * 8 - 4);
+            const ms = Math.max(5, base + jitter);
+            const sweep = ((t * 0.9 + i * 0.17) % 1);
+            return (
+              <div key={n} style={{ padding: '7px 0', borderTop: i ? '1px solid rgba(60,60,67,.1)' : undefined }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <Dot color={ms < 50 ? C.ok : C.warn} size={7} glow={false} />
+                  <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 650 }}>{n}</span>
+                  <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 15, fontWeight: 700, color: ms < 50 ? '#1f9d4c' : '#c26a00' }}>{ms} ms</span>
+                </div>
+                <div style={{ marginTop: 5, height: 4, borderRadius: 2, background: 'rgba(118,118,128,.14)', overflow: 'hidden' }}>
+                  <div style={{ width: `${sweep * 100}%`, height: '100%', borderRadius: 2, background: ms < 50 ? '#34c759' : '#ff9500' }} />
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      </ScreenShell>
+    </div>
+  );
+};
+
 /* 设备管理（中文设备名示意 · 智能调度状态 · 定时断网） */
 export const DEVICES: Array<{ n: string; ip: string; route: string; color: string; dn: number[] }> = [
   { n: '书房台式机', ip: '192.168.1.20', route: '直连', color: '#2f6bff', dn: [12.4, 3.1] },

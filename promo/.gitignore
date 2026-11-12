@@ -1,0 +1,6 @@
+node_modules/
+out/
+.cache/
+public/audio/*.wav
+public/audio/sfx/
+public/fonts/*.ttf

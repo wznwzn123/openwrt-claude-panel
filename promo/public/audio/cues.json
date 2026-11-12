@@ -1,0 +1,392 @@
+[
+ {
+  "t": 0.0,
+  "name": "flash-cut",
+  "gain": 0.9
+ },
+ {
+  "t": 1.0,
+  "name": "paparazzi-flash",
+  "gain": 0.9
+ },
+ {
+  "t": 1.9,
+  "name": "paparazzi-flash",
+  "gain": 0.9
+ },
+ {
+  "t": 3.0,
+  "name": "monitor-cut",
+  "gain": 0.8
+ },
+ {
+  "t": 3.4,
+  "name": "rgb-glitch",
+  "gain": 0.6
+ },
+ {
+  "t": 5.05,
+  "name": "collapse-whoosh",
+  "gain": 0.8
+ },
+ {
+  "t": 6.0,
+  "name": "word-reveal",
+  "gain": 0.5
+ },
+ {
+  "t": 10.45,
+  "name": "rush-whoosh",
+  "gain": 0.9
+ },
+ {
+  "t": 12.0,
+  "name": "spotlight-sweep",
+  "gain": 0.55
+ },
+ {
+  "t": 12.55,
+  "name": "phone-land",
+  "gain": 0.5
+ },
+ {
+  "t": 16.53,
+  "name": "ripple-crt",
+  "gain": 0.6
+ },
+ {
+  "t": 16.75,
+  "name": "ripple",
+  "gain": 0.45
+ },
+ {
+  "t": 18.33,
+  "name": "ripple-crt",
+  "gain": 0.6
+ },
+ {
+  "t": 18.55,
+  "name": "ripple",
+  "gain": 0.45
+ },
+ {
+  "t": 20.0,
+  "name": "slide",
+  "gain": 0.6
+ },
+ {
+  "t": 20.3,
+  "name": "plate-pop",
+  "gain": 0.6
+ },
+ {
+  "t": 21.3,
+  "name": "plate-pop",
+  "gain": 0.6
+ },
+ {
+  "t": 23.45,
+  "name": "plate-pop",
+  "gain": 0.6
+ },
+ {
+  "t": 27.5,
+  "name": "act-out",
+  "gain": 0.5
+ },
+ {
+  "t": 28.27,
+  "name": "stack-thump",
+  "gain": 0.7
+ },
+ {
+  "t": 28.43,
+  "name": "stack-thump",
+  "gain": 0.7
+ },
+ {
+  "t": 28.59,
+  "name": "stack-thump",
+  "gain": 0.7
+ },
+ {
+  "t": 29.0,
+  "name": "fan-out",
+  "gain": 0.5
+ },
+ {
+  "t": 31.25,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 33.1,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 33.6,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 33.9,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 34.75,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 35.5,
+  "name": "plugin-detect",
+  "gain": 0.35
+ },
+ {
+  "t": 37.15,
+  "name": "tap",
+  "gain": 0.8
+ },
+ {
+  "t": 37.85,
+  "name": "latency-lock",
+  "gain": 0.3
+ },
+ {
+  "t": 37.97,
+  "name": "latency-lock",
+  "gain": 0.3
+ },
+ {
+  "t": 38.09,
+  "name": "latency-lock",
+  "gain": 0.3
+ },
+ {
+  "t": 38.7,
+  "name": "node-fail",
+  "gain": 0.45
+ },
+ {
+  "t": 39.35,
+  "name": "auto-switch",
+  "gain": 0.6
+ },
+ {
+  "t": 40.5,
+  "name": "seg-b",
+  "gain": 0.5
+ },
+ {
+  "t": 41.75,
+  "name": "bar-shoot",
+  "gain": 0.6
+ },
+ {
+  "t": 42.17,
+  "name": "ceiling-crack",
+  "gain": 0.55
+ },
+ {
+  "t": 42.55,
+  "name": "axis-rescale",
+  "gain": 0.5
+ },
+ {
+  "t": 44.55,
+  "name": "toggle",
+  "gain": 0.85
+ },
+ {
+  "t": 44.75,
+  "name": "lock",
+  "gain": 0.45
+ },
+ {
+  "t": 46.3,
+  "name": "seg-c",
+  "gain": 0.5
+ },
+ {
+  "t": 47.4,
+  "name": "share-tap",
+  "gain": 0.7
+ },
+ {
+  "t": 48.05,
+  "name": "icon-pop",
+  "gain": 0.45
+ },
+ {
+  "t": 48.65,
+  "name": "icon-tap",
+  "gain": 0.7
+ },
+ {
+  "t": 49.6,
+  "name": "fingerprint",
+  "gain": 0.3
+ },
+ {
+  "t": 50.4,
+  "name": "unlock",
+  "gain": 0.45
+ },
+ {
+  "t": 48.25,
+  "name": "scan-ok",
+  "gain": 0.35
+ },
+ {
+  "t": 51.25,
+  "name": "router-switch",
+  "gain": 0.7
+ },
+ {
+  "t": 54.0,
+  "name": "claude-enter",
+  "gain": 0.6
+ },
+ {
+  "t": 57.7,
+  "name": "converge",
+  "gain": 0.6
+ },
+ {
+  "t": 58.15,
+  "name": "console",
+  "gain": 0.5
+ },
+ {
+  "t": 58.75,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 60.05,
+  "name": "send",
+  "gain": 0.55
+ },
+ {
+  "t": 60.75,
+  "name": "claude-reply",
+  "gain": 0.55
+ },
+ {
+  "t": 62.35,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 63.3,
+  "name": "send",
+  "gain": 0.55
+ },
+ {
+  "t": 63.95,
+  "name": "claude-reply",
+  "gain": 0.55
+ },
+ {
+  "t": 65.55,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 66.8,
+  "name": "send",
+  "gain": 0.55
+ },
+ {
+  "t": 67.45,
+  "name": "claude-reply",
+  "gain": 0.55
+ },
+ {
+  "t": 68.15,
+  "name": "uci-backup",
+  "gain": 0.45
+ },
+ {
+  "t": 73.5,
+  "name": "act-out",
+  "gain": 0.5
+ },
+ {
+  "t": 74.4,
+  "name": "scan-sweep",
+  "gain": 0.35
+ },
+ {
+  "t": 75.352,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 75.432,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 75.684,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 75.764,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 77.4,
+  "name": "wechat-notice",
+  "gain": 0.55
+ },
+ {
+  "t": 79.8,
+  "name": "wechat-notice",
+  "gain": 0.55
+ },
+ {
+  "t": 81.75,
+  "name": "hud-to-aurora",
+  "gain": 0.55
+ },
+ {
+  "t": 82.35,
+  "name": "terminal-typing",
+  "gain": 0.45
+ },
+ {
+  "t": 84.55,
+  "name": "enter",
+  "gain": 1.0
+ },
+ {
+  "t": 84.75,
+  "name": "morph",
+  "gain": 0.5
+ },
+ {
+  "t": 85.55,
+  "name": "assemble-drop",
+  "gain": 0.6
+ },
+ {
+  "t": 85.8,
+  "name": "assemble-drop",
+  "gain": 0.6
+ },
+ {
+  "t": 86.05,
+  "name": "assemble-drop",
+  "gain": 0.6
+ },
+ {
+  "t": 86.3,
+  "name": "brand-sparkle",
+  "gain": 0.35
+ }
+]

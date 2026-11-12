@@ -1,0 +1,232 @@
+import React from 'react';
+import { useVideoConfig } from 'remotion';
+import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
+import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette } from '../lib/visual';
+import { AndroidFlow, DEVICES, DevicesScreen, PluginScreen, PwaFlow, TOGGLE_AT } from '../lib/screens3';
+import { Img, staticFile } from 'remotion';
+
+/* 第三幕 · 28–54s · 全能掌中矩阵
+ * 配方卡：card-stack → axis-rescale-shock → quad-split-parallel-scenes（16:9 对称分屏变体） */
+
+const A = 28;
+const FAN = 29.0;
+const SEG_B = 40.55;
+const SEG_C = 46.35;
+const END = 54;
+
+const NAV = [
+  { at: A, text: '六大网络插件全自动识别 · 节点异常自动切换' },
+  { at: SEG_B, text: '全屋设备流量洞察 · 一键定时断网' },
+  { at: SEG_C, text: '桌面级 PWA 体验 · 原生安卓多端协同' },
+];
+
+/* 顶部悬浮毛玻璃胶囊导航条 */
+const NavCapsule: React.FC<{ t: number }> = ({ t }) => {
+  const { W, vertical } = useV();
+  const idx = t < SEG_B ? 0 : t < SEG_C ? 1 : 2;
+  const k = ramp(t, NAV[idx].at + 0.1, 0.45, EASE.out);
+  const inK = ramp(t, A + 0.2, 0.5, EASE.out);
+  return (
+    <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 120 : 52, display: 'flex', justifyContent: 'center', opacity: inK }}>
+      <Glass radius={999} fill={0.08} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 18, padding: vertical ? '16px 28px' : '16px 34px', maxWidth: W - 80 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ width: i === idx ? 30 : 10, height: 10, borderRadius: 5, background: i === idx ? C.blue : 'rgba(255,255,255,0.25)', boxShadow: i === idx ? `0 0 12px ${C.blue}` : undefined }} />
+          ))}
+        </div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 20, color: C.text3, letterSpacing: '0.1em' }}>0{idx + 1}</div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: vertical ? 30 : 34, color: C.text, letterSpacing: '0.03em', opacity: k, transform: `translateY(${(1 - k) * 8}px)`, whiteSpace: 'nowrap' }}>{NAV[idx].text}</div>
+      </Glass>
+    </div>
+  );
+};
+
+/* 2.5D 手机外壳 + 3D 姿态 */
+const Pose: React.FC<{ x: number; y: number; sw: number; ry?: number; rz?: number; s?: number; o?: number; z?: number; children: React.ReactNode }> = ({ x, y, sw, ry = 0, rz = 0, s = 1, o = 1, z = 0, children }) => {
+  const pw = sw * 1.08;
+  const ph = sw * 2.08;
+  return (
+    <div style={{ position: 'absolute', left: x - pw / 2, top: y - ph / 2, width: pw, height: ph, perspective: 1600, opacity: o, zIndex: z }}>
+      <div style={{ position: 'absolute', inset: 0, transform: `rotateY(${ry}deg) rotateZ(${rz}deg) scale(${s})`, transformOrigin: '50% 60%' }}>{children}</div>
+    </div>
+  );
+};
+
+/* 流量统计宽屏：axis-rescale-shock（新值冲破天花板 → 坐标轴平滑重标） */
+const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: number; o: number }> = ({ t, x, y, w, h, o }) => {
+  const rows = [
+    { n: '书房台式机', v: 4.8, c: '#2f6bff' },
+    { n: '客厅电视', v: 31.6, c: '#7c3aed' },
+    { n: '儿童平板', v: 1.9, c: '#f59e0b' },
+    { n: '手机 · 主卧', v: 3.2, c: '#06b6d4' },
+    { n: '笔记本', v: 6.1, c: '#10b981' },
+  ];
+  const grow = ramp(t, 40.8, 0.8, EASE.out);
+  const shootStart = 41.75;
+  const shoot = ramp(t, shootStart, 0.55, EASE.inQuad); // 越冲越快
+  const pierceT = shootStart + 0.42;
+  const rescale = ramp(t, 42.55, 0.3, EASE.snappy);
+  const max = mix(10, 40, rescale);
+  const ch = h - 230;
+  const cx0 = 120;
+  const cw = w - 180;
+  const shake = t > pierceT && t < pierceT + 0.25 ? 10 * Math.sin((t - pierceT) * 90) * (1 - (t - pierceT) / 0.25) : 0;
+  const ticksOld = [0, 2.5, 5, 7.5, 10];
+  const ticksNew = [0, 10, 20, 30, 40];
+  const bw = (cw / rows.length) * 0.46;
+  return (
+    <Glass radius={30} style={{ left: x, top: y, width: w, height: h, opacity: o, transform: `translateY(${shake}px)` }}>
+      <div style={{ position: 'absolute', left: 36, top: 30, fontFamily: FONT.sans, fontWeight: 800, fontSize: 34, color: C.text }}>流量统计</div>
+      <div style={{ position: 'absolute', left: 36, top: 80, fontFamily: FONT.sans, fontSize: 20, color: C.text2 }}>今日 · 按设备 · 每分钟更新</div>
+      <div style={{ position: 'absolute', right: 36, top: 36 }}>
+        <Pill style={{ fontSize: 20 }}>
+          今日合计 <b style={{ fontFamily: FONT.mono }}>{mix(16.0, 47.6, ramp(t, shootStart, 1.2, EASE.out)).toFixed(1)} GB</b>
+        </Pill>
+      </div>
+      <div style={{ position: 'absolute', left: cx0, top: 150, width: cw, height: ch }}>
+        {/* 刻度：旧刻度向下飞出 / 新刻度从上滑入 */}
+        {ticksOld.map((v, i) => (
+          <div key={'o' + i} style={{ position: 'absolute', left: -84, width: 70, textAlign: 'right', top: ch - (v / 10) * ch - 12 + rescale * 120, opacity: 1 - rescale, fontFamily: FONT.mono, fontSize: 18, color: C.text3 }}>{v} GB</div>
+        ))}
+        {ticksNew.map((v, i) => (
+          <div key={'n' + i} style={{ position: 'absolute', left: -84, width: 70, textAlign: 'right', top: ch - (v / 40) * ch - 12 - (1 - rescale) * 120, opacity: rescale, fontFamily: FONT.mono, fontSize: 18, color: C.text3 }}>{v} GB</div>
+        ))}
+        {Array.from({ length: 4 + Math.round(rescale * 4) }, (_, i) => (
+          <div key={'g' + i} style={{ position: 'absolute', left: 0, right: 0, top: (ch * i) / (4 + Math.round(rescale * 4)), height: 1, background: 'rgba(255,255,255,0.07)' }} />
+        ))}
+        {/* 天花板规线（被击穿处裂开） */}
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 3, background: t > pierceT && rescale < 1 ? `linear-gradient(90deg, rgba(255,255,255,0.35) 0 26%, transparent 26% 34%, rgba(255,255,255,0.35) 34%)` : 'rgba(255,255,255,0.35)', opacity: 1 - rescale * 0.6 }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, background: 'rgba(255,255,255,0.45)' }} />
+        {rows.map((r, i) => {
+          const isShoot = i === 1;
+          const pre = isShoot ? 8.6 : r.v;
+          let v = pre * grow;
+          if (isShoot) v = mix(pre * grow, r.v, shoot);
+          const hpx = Math.min((v / max) * ch, isShoot && rescale < 0.02 ? ch + 220 : 99999);
+          const bx = (cw / rows.length) * (i + 0.5) - bw / 2;
+          const label = isShoot && rescale > 0.5;
+          return (
+            <React.Fragment key={r.n}>
+              <div style={{ position: 'absolute', left: bx, bottom: 0, width: bw, height: hpx, borderRadius: '12px 12px 4px 4px', background: `linear-gradient(180deg, ${r.c}, ${r.c}55)`, boxShadow: isShoot && shoot > 0 ? `0 0 ${30 * shoot}px ${r.c}` : undefined }} />
+              <div style={{ position: 'absolute', left: bx - 30, width: bw + 60, bottom: -44, textAlign: 'center', fontFamily: FONT.sans, fontWeight: 600, fontSize: 20, color: isShoot ? C.text : C.text2 }}>{r.n}</div>
+              {label && (
+                <div style={{ position: 'absolute', left: bx - 40, width: bw + 80, bottom: hpx + 12, textAlign: 'center', transform: `scale(${ramp(t, 42.8, 0.35, EASE.snappy)})` }}>
+                  <Pill bg="rgba(124,58,237,0.5)" style={{ fontSize: 20, fontFamily: FONT.mono }}>31.6 GB · 4K 专线</Pill>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+        {/* 击穿碎屑 */}
+        {t > pierceT && t < pierceT + 0.6 &&
+          [0, 1, 2, 3].map((i) => {
+            const k = (t - pierceT) / 0.6;
+            const bx = (cw / rows.length) * 1.5;
+            return <div key={i} style={{ position: 'absolute', left: bx + (i - 1.5) * 40 * k * 3, top: -k * 120 + k * k * 160, width: 14, height: 4, background: 'rgba(255,255,255,0.7)', transform: `rotate(${i * 50 + k * 300}deg)`, opacity: 1 - k }} />;
+          })}
+      </div>
+    </Glass>
+  );
+};
+
+export const Act3: React.FC = () => {
+  const t = useT();
+  const { fps } = useVideoConfig();
+  const { W, H, vertical } = useV();
+  const cx = W / 2;
+  const cy = vertical ? H * 0.5 : H * 0.53;
+
+  /* ── 段 A：card-stack 三联扇形矩阵 ── */
+  const segA = t < SEG_B + 0.6;
+  const fan = springAt(t, FAN, fps, { damping: 20, stiffness: 150, mass: 1 });
+  const prep = ramp(t, FAN - 0.15, 0.15, EASE.swift) * (1 - fan);
+  const aOut = ramp(t, SEG_B - 0.1, 0.5, EASE.swift);
+  const swA = vertical ? 300 : 365;
+  const spread = vertical ? 300 : 450;
+  const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
+  const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);
+  const breathA = 1 + 0.038 * ramp(t, A, SEG_B - A, EASE.linear);
+
+  /* ── 段 B：设备 + 流量 ── */
+  const bIn = ramp(t, SEG_B, 0.6, EASE.snappy);
+  const bOut = ramp(t, SEG_C - 0.15, 0.4, EASE.swift);
+  const panelK = springAt(t, SEG_B + 0.25, fps);
+
+  /* ── 段 C：对称分屏 ── */
+  const cIn = springAt(t, SEG_C + 0.05, fps);
+  const endOut = ramp(t, END - 0.45, 0.45, EASE.exit);
+
+  return (
+    <Abs style={{ inset: 0, overflow: 'hidden' }}>
+      <AuroraBG />
+      {segA && (
+        <Abs style={{ inset: 0, transform: `scale(${breathA * (1 - prep * 0.02)}) translateY(${stackPress}px)` }}>
+          {/* 接触影 */}
+          <div style={{ position: 'absolute', left: cx - 600, top: cy + swA + 30, width: 1200, height: 80, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)', opacity: 1 - aOut }} />
+          {[0, 2, 1].map((i) => {
+            const e = enter(i);
+            const side = i - 1;
+            const x = cx + side * spread * fan + (i === 0 ? -aOut * (vertical ? 0 : 0.03 * W) : side * aOut * W * 0.6);
+            const y = cy + (1 - e) * H * 0.9 + Math.abs(side) * 30 * fan + (i === 1 ? aOut * 200 : 0);
+            const rz = side * 7 * fan;
+            const s = i === 1 ? 1 : 1 - 0.08 * fan;
+            const o = i === 1 ? 1 - aOut : 1 - (i === 2 ? aOut : aOut * 0.999);
+            return (
+              <Pose key={i} x={x} y={y} sw={swA} rz={rz} s={s} o={o} ry={side * -10 * fan + 2 * Math.sin(t * 0.6 + i)} z={i === 1 ? 3 : 1}>
+                <Phone w={swA}>
+                  {i === 1 ? <PluginScreen t={t} w={swA} /> : <Img src={staticFile(i === 0 ? 'shots/devices.png' : 'shots/traffic.png')} style={{ width: swA, height: swA * 2 }} />}
+                </Phone>
+              </Pose>
+            );
+          })}
+        </Abs>
+      )}
+
+      {t >= SEG_B - 0.1 && t < SEG_C + 0.5 && (
+        <Abs style={{ inset: 0, opacity: 1 - bOut, transform: `scale(${(1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)) * (1 - 0.03 * bOut)})` }}>
+          <Pose x={vertical ? W / 2 : mix(cx - spread, W * 0.24, bIn)} y={vertical ? H * 0.3 : cy} sw={vertical ? 300 : 330} s={vertical ? 0.82 : mix(0.92, 1, bIn)} rz={mix(-7, 0, bIn)} ry={mix(10, 8, bIn) + 2 * Math.sin(t * 0.6)}>
+            <Phone w={vertical ? 300 : 330}>
+              <DevicesScreen t={t} w={vertical ? 300 : 330} />
+            </Phone>
+          </Pose>
+          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 300} y={vertical ? H * 0.55 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={Math.min(1, panelK * 1.5)} />
+          {/* 定时断网锁定提示 */}
+          <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.55 - 74 : 920, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out) }}>
+            <Pill bg="rgba(255,149,0,0.22)" color="#ffd8a8" style={{ fontSize: 24 }}>
+              🔒 儿童平板 · 每晚 23:00 自动断网 · 已锁定
+            </Pill>
+          </div>
+        </Abs>
+      )}
+
+      {t >= SEG_C - 0.1 && (
+        <Abs style={{ inset: 0, opacity: 1 - endOut }}>
+          {/* 中缝光线 */}
+          {!vertical && <div style={{ position: 'absolute', left: W / 2 - 1, top: 160 + (1 - cIn) * 400, bottom: 120 + (1 - cIn) * 400, width: 2, background: 'linear-gradient(180deg, rgba(255,255,255,0), rgba(160,200,255,0.55), rgba(255,255,255,0))' }} />}
+          {[0, 1].map((i) => {
+            const x = vertical ? W * (0.27 + i * 0.46) : W * (0.25 + i * 0.5) + (i ? 1 : -1) * (1 - cIn) * 300;
+            const sw = vertical ? 290 : 330;
+            return (
+              <React.Fragment key={i}>
+                <Pose x={x} y={vertical ? H * 0.47 : cy + 10} sw={sw} s={vertical ? 0.86 : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)} o={Math.min(1, cIn * 1.4)}>
+                  <Phone w={sw}>{i === 0 ? <PwaFlow t={t} w={sw} a={SEG_C} /> : <AndroidFlow t={t} w={sw} a={SEG_C} />}</Phone>
+                </Pose>
+                <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 160, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
+                  {!vertical && (
+                    <>
+                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text }}>{i === 0 ? '添加到主屏幕 · 桌面级 PWA' : '原生安卓客户端'}</div>
+                      <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text3, marginTop: 6, letterSpacing: '0.08em' }}>{i === 0 ? 'iOS / ANDROID · 指纹面板锁' : 'v3.0.2 · 扫码秒连 · 多路由切换'}</div>
+                    </>
+                  )}
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </Abs>
+      )}
+      <NavCapsule t={t} />
+      <Vignette strength={0.45} />
+      <Grain opacity={0.1} />
+    </Abs>
+  );
+};

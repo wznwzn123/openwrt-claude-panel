@@ -27,7 +27,7 @@ const TARGETS = [
   { x0: 36, y0: 196, x1: 132, y1: 224, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
   { x0: 255, y0: 196, x1: 352, y1: 224, label: 'DNS 解析', note: '异常自愈 ×2 · 正常' },
   { x0: 36, y0: 240, x1: 132, y1: 268, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
-  { x0: 255, y0: 240, x1: 352, y1: 268, label: '网络插件进程', note: '进程守护中 · 正常' },
+  { x0: 255, y0: 240, x1: 352, y1: 268, label: '网络插件进程', note: 'OpenClash · 守护中' },
 ];
 
 const Notice: React.FC<{ t: number; at: number; title: string; body: string; slot: number }> = ({ t, at, title, body, slot }) => {

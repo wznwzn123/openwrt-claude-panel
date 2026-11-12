@@ -9,7 +9,7 @@ export const Vertical: React.FC = () => (
     {VCUTS.map((c) => (
       <Sequence key={c.dst} from={Math.round(c.dst * 30)} durationInFrames={Math.round((c.src[1] - c.src[0]) * 30)}>
         <Sequence from={-Math.round(c.src[0] * 30)}>
-          <Main safe />
+          <Main />
         </Sequence>
       </Sequence>
     ))}

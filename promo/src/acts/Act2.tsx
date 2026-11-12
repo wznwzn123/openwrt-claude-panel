@@ -1,7 +1,7 @@
 import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
-import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette } from '../lib/visual';
+import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette, PHONE_BEZEL, phoneBox } from '../lib/visual';
 import { HomeLive, HomePhotoTheme } from '../lib/screens';
 
 /* 第二幕 · 12–28s · 10 Aurora & Glassmorphism
@@ -134,8 +134,7 @@ export const Act2: React.FC = () => {
   const { fps } = useVideoConfig();
   const { W, H, vertical } = useV();
   const sw = vertical ? 330 : 360; // 屏幕宽
-  const pw = sw * 1.08;
-  const ph = sw * 2.08;
+  const { pw, ph } = phoneBox(sw);
 
   // 手机运动：左侧破光而出 → 左黄金分割（28%）→ 20s 滑向右侧（72%）
   const inK = springAt(t, PHONE_IN, fps);
@@ -182,11 +181,11 @@ export const Act2: React.FC = () => {
         {/* 2.5D 真机 + 层级爆炸 */}
         <div style={{ position: 'absolute', left: px - pw / 2, top: py - ph / 2, width: pw, height: ph, perspective: 1600 }}>
           <div style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', transform: `scale(${depthS}) rotateY(${ry}deg) rotateX(${4 + 4 * ex}deg)`, opacity: Math.min(1, inK * 2.5) }}>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-560 * ex}px, ${-110 * ex + bob(2)}px, ${-260 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * PHONE_BEZEL, transform: `translate3d(${-560 * ex}px, ${-110 * ex + bob(2)}px, ${-260 * ex}px)`, opacity: ex }}>
               <DaemonLayer w={sw} />
               <EdgePulse t={t} w={sw} color="#c4b5fd" phase={0.33} />
             </div>
-            <div style={{ position: 'absolute', inset: sw * 0.04, transform: `translate3d(${-280 * ex}px, ${-55 * ex + bob(1)}px, ${-130 * ex}px)`, opacity: ex }}>
+            <div style={{ position: 'absolute', inset: sw * PHONE_BEZEL, transform: `translate3d(${-280 * ex}px, ${-55 * ex + bob(1)}px, ${-130 * ex}px)`, opacity: ex }}>
               <TunnelLayer t={t} w={sw} />
               <EdgePulse t={t} w={sw} color="#67e8f9" phase={0} />
             </div>

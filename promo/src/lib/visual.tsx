@@ -212,7 +212,11 @@ export const Glass: React.FC<{ style?: React.CSSProperties; radius?: number; fil
   children,
 }) => <div style={{ position: 'absolute', ...glass(radius, fill), ...style }}>{children}</div>;
 
-/* ───────────── 2.5D 真机（CSS 3D + 物理接触投影） ───────────── */
+/* ───────────── 2.5D 真机：iPhone 16 Pro 级超窄钛金属旗舰外观（CSS 3D + 物理接触投影） ───────────── */
+export const PHONE_BEZEL = 0.02; // 屏幕到外框的黑边（相对屏宽），旧版 0.04 减半
+/** 手机整体外框尺寸（含黑边），布局/定位框统一从这里取 */
+export const phoneBox = (sw: number) => ({ pw: sw * (1 + 2 * PHONE_BEZEL), ph: sw * (2 + 2 * PHONE_BEZEL), bez: sw * PHONE_BEZEL });
+
 export const Phone: React.FC<{
   w?: number; // 屏幕宽（px）
   src?: string;
@@ -222,36 +226,47 @@ export const Phone: React.FC<{
   dark?: boolean;
 }> = ({ w = 380, src, children, glare = -1, shadow = true }) => {
   const h = w * 2;
-  const bez = Math.round(w * 0.04);
-  const r = w * 0.15;
+  const bez = w * PHONE_BEZEL;
+  const r = w * 0.155;
+  const rim = Math.max(1.5, w * 0.004); // 钛金属中框描边
   return (
     <div style={{ position: 'relative', width: w + bez * 2, height: h + bez * 2, transformStyle: 'preserve-3d' }}>
       {shadow && (
         <div
           style={{
             position: 'absolute',
-            left: '8%',
-            right: '8%',
-            bottom: -w * 0.16,
-            height: w * 0.16,
+            left: '10%',
+            right: '10%',
+            bottom: -w * 0.14,
+            height: w * 0.14,
             borderRadius: '50%',
-            background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 70%)',
+            background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%)',
             transform: 'translateZ(-40px)',
             filter: 'blur(6px)',
           }}
         />
       )}
-      {/* 机身：钛金属边框 */}
+      {/* 外圈钛金属拉丝中框：浅银灰 → 深枪灰，侧边受光的微弱外发光 + 多层柔光环境投影 */}
       <div
         style={{
           position: 'absolute',
-          inset: 0,
-          borderRadius: r + bez,
-          background: 'linear-gradient(145deg, #3a3f4b 0%, #14161c 35%, #0b0c10 60%, #2c303a 100%)',
-          boxShadow:
-            '0 0 0 1.5px rgba(255,255,255,0.14), inset 0 0 0 1px rgba(255,255,255,0.08), 0 50px 120px rgba(0,0,0,0.6), 0 18px 40px rgba(0,0,0,0.45)',
+          inset: -rim,
+          borderRadius: r + bez + rim,
+          background: 'linear-gradient(135deg, #CBD5E1 0%, #94A3B8 18%, #64748B 42%, #334155 62%, #94A3B8 82%, #475569 100%)',
+          boxShadow: [
+            '0 0 0 0.5px rgba(255,255,255,0.18)',
+            '-1px 0 6px rgba(203,213,225,0.18)',
+            '0 2px 4px rgba(0,0,0,0.22)',
+            '0 12px 24px rgba(2,6,23,0.28)',
+            '0 36px 72px rgba(2,6,23,0.34)',
+            '0 70px 140px rgba(2,6,23,0.32)',
+          ].join(', '),
         }}
       />
+      {/* 拉丝纹理（极细横纹） */}
+      <div style={{ position: 'absolute', inset: -rim, borderRadius: r + bez + rim, backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px, rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)', mixBlendMode: 'overlay' }} />
+      {/* 极窄黑边 */}
+      <div style={{ position: 'absolute', inset: 0, borderRadius: r + bez, background: '#05060A', boxShadow: 'inset 0 0 0 0.5px rgba(255,255,255,0.10)' }} />
       <div
         style={{
           position: 'absolute',
@@ -277,16 +292,10 @@ export const Phone: React.FC<{
             </span>
           </span>
         </div>
-        {/* 屏幕玻璃反光 */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'linear-gradient(125deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 28%, rgba(255,255,255,0) 50%)',
-            pointerEvents: 'none',
-          }}
-        />
+        {/* 底部半透明磨砂 Home Bar 指示条 */}
+        <div style={{ position: 'absolute', left: '50%', bottom: w * 0.022, width: w * 0.34, height: Math.max(4, w * 0.013), marginLeft: -w * 0.17, borderRadius: 99, background: 'rgba(120,124,135,0.62)', backdropFilter: 'blur(6px)', boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.45), 0 0 0 0.5px rgba(0,0,0,0.12)' }} />
+        {/* 玻璃屏幕：极淡斜向镜面反光 */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 45%)', pointerEvents: 'none' }} />
         {glare >= 0 && glare <= 1 && (
           <div
             style={{
@@ -301,17 +310,18 @@ export const Phone: React.FC<{
           />
         )}
       </div>
-      {/* 灵动岛 */}
+      {/* 纤细紧凑的灵动岛 */}
       <div
         style={{
           position: 'absolute',
           left: '50%',
-          top: bez + w * 0.03,
-          width: w * 0.27,
-          height: w * 0.075,
-          marginLeft: -w * 0.135,
+          top: bez + w * 0.026,
+          width: w * 0.22,
+          height: w * 0.058,
+          marginLeft: -w * 0.11,
           borderRadius: 99,
           background: '#000',
+          boxShadow: 'inset 0 0 0 0.5px rgba(255,255,255,0.06)',
         }}
       />
     </div>

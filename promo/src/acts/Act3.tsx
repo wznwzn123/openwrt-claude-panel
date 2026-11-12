@@ -1,7 +1,7 @@
 import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
-import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette } from '../lib/visual';
+import { AuroraBG, Dot, Glass, Grain, Phone, Pill, Vignette, phoneBox } from '../lib/visual';
 import { AndroidFlow, DEVICES, DevicesScreen, PluginScreen, PwaFlow, SpeedRunScreen, TOGGLE_AT } from '../lib/screens3';
 import { Img, staticFile } from 'remotion';
 
@@ -44,8 +44,7 @@ const NavCapsule: React.FC<{ t: number }> = ({ t }) => {
 
 /* 2.5D 手机外壳 + 3D 姿态 */
 const Pose: React.FC<{ x: number; y: number; sw: number; ry?: number; rz?: number; s?: number; o?: number; z?: number; children: React.ReactNode }> = ({ x, y, sw, ry = 0, rz = 0, s = 1, o = 1, z = 0, children }) => {
-  const pw = sw * 1.08;
-  const ph = sw * 2.08;
+  const { pw, ph } = phoneBox(sw);
   return (
     <div style={{ position: 'absolute', left: x - pw / 2, top: y - ph / 2, width: pw, height: ph, perspective: 1600, opacity: o, zIndex: z }}>
       <div style={{ position: 'absolute', inset: 0, transform: `rotateY(${ry}deg) rotateZ(${rz}deg) scale(${s})`, transformOrigin: '50% 60%' }}>{children}</div>

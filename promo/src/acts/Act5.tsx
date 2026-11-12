@@ -1,7 +1,7 @@
 import React from 'react';
 import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
-import { AuroraBG, BrandMark, Dot, Glass, Grain, HudBG, Phone, Pill, Vignette } from '../lib/visual';
+import { AuroraBG, BrandMark, Dot, Glass, Grain, HudBG, Phone, Pill, Vignette, PHONE_BEZEL, phoneBox } from '../lib/visual';
 import { Img, staticFile } from 'remotion';
 
 /* 终幕 · 74–90s · 全天候守护与双轨极速启航
@@ -51,12 +51,11 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
   const { W, H, vertical } = useV();
   const sw = vertical ? 360 : 400;
   const k = sw / 390;
-  const pw = sw * 1.08;
-  const ph = sw * 2.08;
+  const { pw, ph } = phoneBox(sw);
   const px = vertical ? W / 2 : W * 0.29;
   const py = vertical ? H * 0.42 : H * 0.53;
-  const left = px - pw / 2 + sw * 0.04;
-  const top = py - ph / 2 + sw * 0.04 + sw * 0.115; // 状态栏下移
+  const left = px - pw / 2 + sw * PHONE_BEZEL;
+  const top = py - ph / 2 + sw * PHONE_BEZEL + sw * 0.115; // 状态栏下移
   const scanY = mix(-20, 800, ramp(t, SCAN0, SCAN1 - SCAN0, EASE.linear)); // 机器视线：严格匀速
   const scanO = ramp(t, SCAN0, 0.15, EASE.linear) * (1 - ramp(t, SCAN1, 0.25, EASE.linear));
   const push = 1 + 0.035 * ramp(t, A, HUD_OUT - A, EASE.linear);

@@ -1,7 +1,8 @@
 // 3D 共用件：纹理加载（配合 Remotion 的 delayRender）、圆角 UI 板（真实面板截图裁切）、笔记本、手机、倒影。
-import React, { useMemo } from 'react';
-import { Sequence, staticFile } from 'remotion';
-import { useOffthreadVideoTexture } from '@remotion/three';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Sequence, cancelRender, continueRender, delayRender, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { NoReactInternals } from 'remotion/no-react';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RoundedBox } from '@react-three/drei';
 
@@ -26,17 +27,44 @@ export const roundedPlane = (w: number, h: number, r: number, crop?: { u0: numbe
 
 // 真实界面的「活」画面：在 [from, from+len) 这段时间播放录好的面板视频（tools/livecap.cjs），之外用静态截图
 export type Live = { src: string; from: number; len: number };
+// 视频帧纹理：和 @remotion/three 的 useOffthreadVideoTexture 一样从 OffthreadVideo 取当前帧，
+// 区别是纹理贴上以后先 advance() 让画布重画，再 continueRender——@remotion/three 的画布只在帧号变化时重画，
+// 原版的钩子在纹理到达前那一刻就重画过了，截下来是空的。
 const LiveMat: React.FC<{ src: string; opacity: number; color?: THREE.Color }> = ({ src, opacity, color }) => {
-  const tex = useOffthreadVideoTexture({ src: staticFile(src), toneMapped: false });
-  if (tex) tex.colorSpace = THREE.SRGBColorSpace;
-  return tex ? <meshBasicMaterial map={tex} transparent opacity={opacity} toneMapped={false} color={color} /> : <meshBasicMaterial color="#0b0e1c" />;
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const { advance } = useThree();
+  const url = useMemo(() => NoReactInternals.getOffthreadVideoSource({ currentTime: frame / fps, src: staticFile(src), transparent: false, toneMapped: false }), [frame, fps, src]);
+  const [state, setState] = useState<{ url: string; tex: THREE.Texture } | null>(null);
+  const handle = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (state?.url === url) return;
+    const h = delayRender('live frame ' + url);
+    handle.current = h;
+    let gone = false;
+    new THREE.TextureLoader().loadAsync(url).then((t) => {
+      if (gone) { t.dispose(); continueRender(h); return; }
+      t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+      setState((old) => { old?.tex.dispose(); return { url, tex: t }; });
+    }).catch((e) => cancelRender(e));
+    return () => { gone = true; };
+  }, [url]);
+  useLayoutEffect(() => {
+    if (state && state.url === url && handle.current != null) {
+      advance(performance.now());
+      const h = handle.current; handle.current = null;
+      continueRender(h);
+    }
+  }, [state, url, advance]);
+  // 有贴图和没贴图是两种着色器：用不同的 key 让材质重建（只换 map 属性，three 不会重新编译，贴图不会出现）
+  return state ? <meshBasicMaterial key="tex" map={state.tex} transparent opacity={opacity} toneMapped={false} color={color} /> : <meshBasicMaterial key="none" color="#0b0e1c" />;
 };
 export const Surface: React.FC<{ poster: string; live?: Live; f: number; opacity?: number; color?: THREE.Color }> = ({ poster, live, f, opacity = 1, color }) => {
   const still = useTex(poster);
   if (live && f >= live.from && f < live.from + live.len) {
-    return <Sequence from={live.from} durationInFrames={live.len} layout="none"><LiveMat src={live.src} opacity={opacity} color={color} /></Sequence>;
+    return <Sequence key="live" from={live.from} durationInFrames={live.len} layout="none"><LiveMat src={live.src} opacity={opacity} color={color} /></Sequence>;
   }
-  return still ? <meshBasicMaterial map={still} transparent opacity={opacity} toneMapped={false} color={color} /> : <meshBasicMaterial color="#0b0e1c" />;
+  return still ? <meshBasicMaterial key="still" map={still} transparent opacity={opacity} toneMapped={false} color={color} /> : <meshBasicMaterial key="none" color="#0b0e1c" />;
 };
 
 // UI 板：一块真实界面（整页里裁出 crop，裁切做在 UV 上，静态截图和视频都能用），宽 width，带一圈玻璃边

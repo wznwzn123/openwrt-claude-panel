@@ -487,7 +487,7 @@ export const Act4: React.FC = () => {
       </div>
       {/* 演示已加速：AI 调用真实耗时为数秒，片中压缩呈现 */}
       {t > CMDS[0].t0 - 0.4 && (
-        <div style={{ position: 'absolute', right: vertical ? 54 : 96, top: vertical ? 96 : 64, display: 'flex', alignItems: 'center', gap: 10, padding: vertical ? '8px 18px' : '8px 18px', borderRadius: 999, background: 'rgba(8,12,24,0.55)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18)', fontFamily: FONT.sans, fontSize: vertical ? 24 : 22, fontWeight: 600, color: 'rgba(226,232,240,0.85)', opacity: ramp(t, CMDS[0].t0 - 0.4, 0.3, EASE.out) }}>
+        <div style={{ position: 'absolute', right: vertical ? 54 : 96, top: vertical ? 46 : 64, display: 'flex', alignItems: 'center', gap: 10, padding: vertical ? '8px 18px' : '8px 18px', borderRadius: 999, background: 'rgba(8,12,24,0.55)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18)', fontFamily: FONT.sans, fontSize: vertical ? 24 : 22, fontWeight: 600, color: 'rgba(226,232,240,0.85)', opacity: ramp(t, CMDS[0].t0 - 0.4, 0.3, EASE.out) }}>
           <span style={{ fontFamily: FONT.mono, letterSpacing: '-0.1em' }}>▶▶</span> 画面已加速
         </div>
       )}

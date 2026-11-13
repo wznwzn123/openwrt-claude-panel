@@ -14,7 +14,7 @@ import sys
 
 import pyJianYingDraft as draft
 
-FPS = 30
+FPS = 60   # 第六版：底片改为 60fps 无字幕版（Promo90Clean），与主片一致（审片 B13）
 TOTAL_F = 2700
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLATE = os.path.abspath(sys.argv[1])
@@ -104,4 +104,12 @@ for i in range(len(lanes)):
 for lane, start, d, mat in placed:
     script.add_segment(draft.AudioSegment(mat, draft.Timerange(start, d), volume=0.4), f'SFX{lane + 1}')
 script.save()
+# 草稿里的素材是本机绝对路径（剪映草稿格式要求）：附一份重新链接说明（审片 B13）
+open(os.path.join(STAGING, '如何重新链接素材.txt'), 'w', encoding='utf-8').write(
+    '剪映草稿使用说明\n\n'
+    '1. 把压缩包里的「%s」文件夹整个复制到剪映的草稿目录\n'
+    '   （剪映 → 设置 → 草稿位置 可以看到路径）。\n'
+    '2. 重启剪映，在草稿列表里打开它。\n'
+    '3. 如果提示「素材丢失」：点「重新链接」，选择草稿文件夹里的 assets 文件夹，剪映会按文件名自动匹配全部素材。\n\n'
+    '轨道说明：底片（无字幕 1920×1080 · 60fps，按五幕切段）、字幕、人声、BGM、SFX1…N（每个音效单独一段）。\n' % NAME)
 print('draft ok:', os.path.join(STAGING, NAME), 'sfx lanes', len(lanes), 'subs', len(phr))

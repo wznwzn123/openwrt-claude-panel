@@ -285,197 +285,237 @@
   "gain": 0.4
  },
  {
-  "t": 59.079,
+  "t": 60.2,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 59.969,
+  "t": 61.09,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 59.969,
+  "t": 62.977,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 60.339,
+  "t": 63.347,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 60.559,
+  "t": 63.577,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 62.873,
+  "t": 64.492,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 63.703,
+  "t": 65.322,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 63.703,
+  "t": 65.805,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 64.073,
+  "t": 66.175,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 64.293,
+  "t": 66.405,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 66.116,
+  "t": 68.476,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 67.126,
+  "t": 69.966,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 67.126,
+  "t": 71.771,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 67.496,
+  "t": 72.141,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 67.716,
+  "t": 72.371,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 60.369,
+  "t": 61.21,
+  "name": "thinking",
+  "gain": 0.25
+ },
+ {
+  "t": 62.439,
+  "name": "tool-chip",
+  "gain": 0.35
+ },
+ {
+  "t": 65.442,
+  "name": "thinking",
+  "gain": 0.25
+ },
+ {
+  "t": 65.655,
+  "name": "tool-chip",
+  "gain": 0.35
+ },
+ {
+  "t": 70.086,
+  "name": "thinking",
+  "gain": 0.25
+ },
+ {
+  "t": 70.426,
+  "name": "tool-chip",
+  "gain": 0.35
+ },
+ {
+  "t": 70.776,
+  "name": "confirm-ask",
+  "gain": 0.4
+ },
+ {
+  "t": 71.771,
+  "name": "confirm-ok",
+  "gain": 0.75
+ },
+ {
+  "t": 63.377,
   "name": "hero-pulse",
   "gain": 0.55
  },
  {
-  "t": 64.123,
+  "t": 66.225,
   "name": "flip-reorder",
   "gain": 0.4
  },
  {
-  "t": 67.526,
+  "t": 72.171,
   "name": "success-wave",
   "gain": 0.45
  },
  {
-  "t": 68.051,
+  "t": 72.471,
   "name": "amber-beam",
   "gain": 0.45
  },
  {
-  "t": 68.421,
+  "t": 72.841,
   "name": "uci-backup",
   "gain": 0.45
  },
  {
-  "t": 71.431,
+  "t": 73.5,
   "name": "scanline-wipe",
   "gain": 0.75
  },
  {
-  "t": 72.331,
+  "t": 74.4,
   "name": "scan-sweep",
   "gain": 0.35
  },
  {
-  "t": 73.283,
+  "t": 75.352,
   "name": "sonar-lock",
   "gain": 0.5
  },
  {
-  "t": 73.363,
+  "t": 75.432,
   "name": "sonar-lock",
   "gain": 0.5
  },
  {
-  "t": 73.615,
+  "t": 75.684,
   "name": "sonar-lock",
   "gain": 0.5
  },
  {
-  "t": 73.695,
+  "t": 75.764,
   "name": "sonar-lock",
   "gain": 0.5
  },
  {
-  "t": 74.531,
+  "t": 76.6,
   "name": "wechat-notice",
   "gain": 0.55
  },
  {
-  "t": 77.181,
+  "t": 79.25,
   "name": "wechat-notice",
   "gain": 0.55
  },
  {
-  "t": 79.359,
+  "t": 81.428,
   "name": "hud-to-aurora",
   "gain": 0.55
  },
  {
-  "t": 80.281,
+  "t": 82.35,
   "name": "terminal-typing",
   "gain": 0.45
  },
  {
-  "t": 82.345,
+  "t": 84.414,
   "name": "enter",
   "gain": 1.0
  },
  {
-  "t": 82.365,
+  "t": 84.434,
   "name": "collapse",
   "gain": 0.5
  },
  {
-  "t": 82.685,
+  "t": 84.754,
   "name": "core-burst",
   "gain": 0.55
  },
  {
-  "t": 82.381,
+  "t": 84.45,
   "name": "particle-swirl",
   "gain": 0.45
  },
  {
-  "t": 83.379,
+  "t": 85.448,
   "name": "converge-flash",
   "gain": 0.55
  },
  {
-  "t": 83.462,
+  "t": 85.531,
   "name": "assemble-drop",
   "gain": 0.6
  },
  {
-  "t": 83.721,
+  "t": 85.79,
   "name": "assemble-drop",
   "gain": 0.6
  },
  {
-  "t": 83.98,
+  "t": 86.049,
   "name": "assemble-drop",
   "gain": 0.6
  },
  {
-  "t": 84.155,
+  "t": 86.224,
   "name": "brand-sparkle",
   "gain": 0.35
  }

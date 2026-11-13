@@ -141,12 +141,12 @@ export const Act3: React.FC = () => {
   const { fps } = useVideoConfig();
   const { W, H, vertical } = useV();
   const cx = W / 2;
-  const cy = vertical ? H * 0.5 : H * 0.53;
+  const cy = vertical ? H * 0.46 : H * 0.53;
 
   /* ── 段 A：card-stack 三联扇形矩阵 ── */
   const fan = springAt(t, FAN, fps, { damping: 20, stiffness: 150, mass: 1 });
   const prep = ramp(t, FAN - 0.15, 0.15, EASE.swift) * (1 - fan);
-  const swA = vertical ? 470 : 338; // 竖屏只留主机、近满宽（审片 B12）；横屏主机放大 1.08 后仍留出底部安全边与字幕区
+  const swA = vertical ? 430 : 338; // 竖屏只留主机、近满宽（审片 B12）；横屏主机放大 1.08 后仍留出底部安全边与字幕区
   const spread = vertical ? 300 : 450;
   const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
   const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);

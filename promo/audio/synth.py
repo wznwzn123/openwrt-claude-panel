@@ -161,6 +161,10 @@ drone = lp(drone, 380) * np.minimum(1, drone_t / 1.0) * np.minimum(1, (12 - dron
 # 3–5.75s 震颤加剧：drone 加上高频不安的颤音
 trem = 1 + 0.6 * np.clip((drone_t - 3) / 2.75, 0, 1) * np.sin(2 * np.pi * (6 + 14 * np.clip((drone_t - 3) / 2.75, 0, 1)) * drone_t)
 place(bgm, pan(drone * trem, 0), 0, 1.0)
+# 第六版：0.4–11.8s 加一层中频暗色铺底（A3/C4/E4，低通 2.2kHz），手机外放也能听见情绪托底（审片 A4）
+pad1 = pad([mtof(n) for n in (57, 60, 64)], 11.4, att=1.6, rel=1.2, bright=6)
+pad1 = np.stack([lp(pad1[:, 0], 2200), lp(pad1[:, 1], 2200)], axis=1)
+place(bgm, pad1, 0.4, 0.55)
 place(bgm, riser(2.6, 200, 3500), 3.15, 0.35)
 place(bgm, riser(1.4, 400, 7000), 10.4, 0.45)
 
@@ -185,7 +189,7 @@ for b in range(nbars):
     # pad（每两小节一铺）
     if b % 2 == 0 and bs < 88:
         dd = min(bar * 2 + 1.2, DUR - bs)
-        pv = pad([mtof(n) for n in chord], dd, att=0.9, rel=1.4)
+        pv = pad([mtof(n) for n in chord], dd, att=0.9, rel=1.4, bright=10)
         place(bgm, pv, bs, 1.0 if energy < 3 else 1.35)
         # 54s 起：琥珀暖色高八度铺底
         if energy >= 3:
@@ -224,7 +228,7 @@ for b in range(nbars):
             idx = arp[i % 8] % 3
             n = chord[idx] + 12 + (12 if (i % 8 == 3 and energy >= 3) else 0)
             pp = (i % 4 - 1.5) / 2
-            place(bgm, pan(pluck(mtof(n), 0.7, 1.2 if energy >= 3 else 0.9), pp), bs + i * step, 0.5 if energy < 3 else 0.38)
+            place(bgm, pan(pluck(mtof(n), 0.7, 1.2 if energy >= 3 else 1.25), pp), bs + i * step, 0.78 if energy < 3 else 0.38)
 
 # 54s Claude 登场 & 82s 终幕：riser → impact
 place(bgm, riser(2.2, 300, 6000), 51.8, 0.4)
@@ -265,7 +269,7 @@ def seg_env(points):
     xs = [p[0] for p in points]; ys = [10 ** (p[1] / 20) for p in points]
     return np.interp(tt_, xs, ys)
 # 铺垫段 0–11s、30–50s 压低 3 dB；54s 高潮与 82s 落版大幅抬升
-DYN = [(0, -10.5), (11.0, -10.5), (11.8, 0), (28.5, 0), (30.0, -10.5), (50.0, -10.5), (52.0, -2), (53.6, -2), (54.2, 10), (73.6 - S5, 10), (74.2 - S5, 0), (81.6 - S5, 0), (82.6 - S5, 11), (HIT + 0.6, 11), (DUR, 6)]
+DYN = [(0, -8), (5.6, -6), (6.0, -3), (11.0, -3), (11.8, 2), (28.5, 2), (30.0, -1.5), (49.0, -1.5), (49.8, -7), (52.2, -5), (53.6, 3), (54.2, 6.5), (73.6 - S5, 6.5), (74.2 - S5, 1), (81.6 - S5, 1), (82.6 - S5, 7.5), (HIT + 0.6, 7.5), (DUR, 0)]
 env = seg_env(DYN)
 bgm *= env[:, None]
 # 合成器主旋律（A 小调，8 分音符动机，轻颤音的锯齿 lead）
@@ -446,7 +450,14 @@ for c4 in ACT4['cmds']:
     cue('core-impact', tool_at + 0.12, glass_tap(2600), 0.6, 0.4)
     place(sfx, pan(kick(0.35, 150, 60, 1.8), 0.4), tool_at + 0.12, 0.45)
     cue('claude-reply', reply, chime(), 0.5)
-s1_, s2_, s3_ = [c['toolAt'] + 0.15 for c in ACT4['cmds']]
+for c4 in ACT4['cmds']:
+    cue('thinking', c4['think'], glass_tap(1300) * 0.5, 0.25, -0.2)
+    for tl in c4.get('tools', [])[:-1]:            # 最后一个工具已有琥珀光束 + 冲击
+        cue('tool-chip', tl['at'], glass_tap(2900), 0.35, -0.2)
+    if c4.get('confirm'):
+        cue('confirm-ask', c4['confirm']['ask'], chime(784, 987.8), 0.4, -0.2)
+        cue('confirm-ok', c4['confirm']['ok'], click(), 0.75, -0.2)
+s1_, s2_, s3_ = [c['state'] for c in ACT4['cmds']]
 cue('hero-pulse', s1_, sub_drop(1.2, 140, 40), 0.55)            # 动作①：全屏脉冲波纹 + 核心点亮
 cue('flip-reorder', s2_ + 0.02, whoosh(0.45, 1200, 8000), 0.4, 0.4)  # 动作②：3D 翻转重排
 cue('success-wave', s3_, whoosh(0.8, 600, 9000), 0.45)            # 动作③：绿色全屏成功光波
@@ -505,7 +516,7 @@ for i in range(0, N, 48):  # 1ms 步进
     g[i:i + 48] = cur
 duck = 10 ** (-5 * g / 20)
 vpk = np.max(np.abs(voice))
-voice = voice / vpk * 0.9
+voice = voice / vpk * 0.8
 # 峰值控制：配乐与音效软削波（tanh），把瞬态峰值收进来，母带限幅就不必压扁高潮段
 def soft(x, ceil):
     return np.tanh(x / ceil) * ceil
@@ -513,7 +524,7 @@ bgm_m = soft(bgm, 0.55 * np.percentile(np.abs(bgm), 99.9))
 sfx_m = soft(sfx, 0.6 * np.percentile(np.abs(sfx), 99.9))
 BGM_G, SFX_G = 0.4, 0.5
 # 旁白随段落轻微起伏（±1.5 dB）：铺垫段略收，高潮段略前
-VDYN = [(0, -4), (11.0, -4), (11.8, 0), (28.5, 0), (30.0, -4), (50.0, -4), (52.0, -1), (54.0, 2.5), (73.6 - S5, 2.5), (74.2 - S5, 0), (82.0 - S5, 0), (82.6 - S5, 2.5), (90, 2.5)]
+VDYN = [(0, -2.5), (11.0, -2.5), (11.8, 1), (28.5, 1), (30.0, 0), (50.0, 0), (52.0, 1), (54.0, 2), (73.6 - S5, 2), (74.2 - S5, 1), (82.0 - S5, 1), (82.6 - S5, 2), (90, 2)]
 venv = np.interp(np.arange(N) / SR, [p[0] for p in VDYN], [10 ** (p[1] / 20) for p in VDYN])
 mix = voice * venv[:, None] + bgm_m * duck[:, None] * BGM_G + sfx_m * SFX_G
 sf.write(f'{OUT}/mix_premaster.wav', mix.astype(np.float32), SR)

@@ -12,7 +12,8 @@ if [ "$STEP" = vertical ] || [ "$STEP" = all ]; then
   echo "STAGE vertical done $(date +%H:%M)"
 fi
 if [ "$STEP" = rest ] || [ "$STEP" = all ]; then
-  npx remotion render src/index.ts Plate30 out/plate.mp4 --concurrency=2 --crf=16 --log=error || { echo "STAGE plate FAILED"; exit 1; }
+  # 底片：无字幕 60fps（Promo90Clean），分段渲染可断点续渲（审片 B13）
+  node /home/user/vincentwei1021/video-talkcraft/scripts/render_shots.mjs --shots shots.json --entry src/index.ts --comp Promo90Clean --seg-dir out/segments_clean --image-format jpeg --jpeg-quality 95 --crf 16 --parallel 2 --concat out/plate.mp4 || { echo "STAGE plate FAILED"; exit 1; }
   echo "STAGE plate done $(date +%H:%M)"
   SKIP_VFINAL=1 ./scripts/deliver.sh && echo "STAGE deliver done $(date +%H:%M)" || echo "STAGE deliver FAILED"
 fi

@@ -123,6 +123,9 @@ export const springAt = (
   config: Partial<{ stiffness: number; damping: number; mass: number }> = SPRING,
 ) => (t < start ? 0 : spring({ frame: (t - start) * fps, fps, config: { ...SPRING, ...config } }));
 
+/** 第五幕整体提前一小节（116 BPM ≈ 2.069s，取 60fps 整帧 124 帧）：第四幕压缩换来片尾 logo 定格与终止和弦 */
+export const SHIFT5 = 124 / 60;
+
 /** 当前时间（秒） */
 export const useT = () => {
   const f = useCurrentFrame();

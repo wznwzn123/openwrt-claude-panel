@@ -211,73 +211,39 @@ export const PwaFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a
   );
 };
 
-/* 原生安卓客户端：局域网自动发现直连 → 多台路由一键切换 */
+/* 原生安卓客户端：仓库 android/ 的真实首页（capture/android.js 实机截图）——
+   粘贴登录地址 → 添加即打开该路由器面板 → 返回列表多了一台 →「打开」切到另一台 */
+const AR = { paste: [263.3, 152.2, 113.7, 92.4], add: [299, 328.1, 62, 45.3], card0: [16, 449.2, 361, 111.1], open2: [308, 716, 53, 34.9] };
 export const AndroidFlow: React.FC<{ t: number; w: number; a: number }> = ({ t, w, a }) => {
-  const k = w / 360;
-  const scanned = t >= a + 1.9;
-  const listIn = ramp(t, a + 2.1, 0.4, EASE.snappy);
+  const PASTE = a + 0.35;
+  const ADD = a + 1.0;
+  const BACK = a + 2.1;
   const switchAt = 51.25;
-  const sel = t < switchAt ? 0 : 2;
-  const selY = mix(0, 2, ramp(t, switchAt, 0.3, EASE.snappy));
-  const routers = [
-    ['家里 · AX3000T', '在线 · 3 台设备'],
-    ['公司 · R4S', '在线 · 12 台设备'],
-    ['父母家 · AX6S', '在线 · 5 台设备'],
-  ];
+  const pasted = ramp(t, PASTE + 0.1, 0.18, EASE.out);
+  const open1 = ramp(t, ADD + 0.12, 0.38, EASE.snappy) * (1 - ramp(t, BACK, 0.38, EASE.smooth));
+  const back = t >= BACK;
+  const glow = ramp(t, BACK + 0.25, 0.3, EASE.out) * (1 - ramp(t, BACK + 1.6, 0.5, EASE.smooth));
+  const open2 = ramp(t, switchAt + 0.12, 0.38, EASE.snappy);
+  const slide = (k: number) => ({ transform: `translateX(${(1 - k) * VW}px)`, boxShadow: '-12px 0 30px rgba(0,0,0,0.35)' });
   return (
-    <div style={{ position: 'absolute', left: 0, top: 0, width: 360, height: 720, transform: `scale(${k})`, transformOrigin: '0 0', fontFamily: FONT.sans, background: '#0b1220', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 40, height: 56, display: 'flex', alignItems: 'center', padding: '0 18px', color: '#fff', gap: 10 }}>
-        <BrandMark size={30} id="and" />
-        <div style={{ fontSize: 18, fontWeight: 750 }}>路由器面板</div>
-        <div style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 12, color: '#94a3b8' }}>v3.0.2</div>
-      </div>
-      {!scanned && (
-        // 局域网自动发现：雷达波纹扫描 → 发现路由器 → 直连成功（不出现任何二维码）
-        <div style={{ position: 'absolute', left: 0, right: 0, top: 130, height: 420 }}>
-          <div style={{ position: 'absolute', left: 180 - 130, top: 40, width: 260, height: 260 }}>
-            {[0, 1, 2].map((r) => {
-              const ph = ((t - a) / 1.1 + r / 3) % 1;
-              return <div key={r} style={{ position: 'absolute', left: 130 - 130 * ph, top: 130 - 130 * ph, width: 260 * ph, height: 260 * ph, borderRadius: '50%', border: `2px solid rgba(34,211,238,${0.8 * (1 - ph)})` }} />;
-            })}
-            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: `conic-gradient(from ${((t - a) * 260) % 360}deg, rgba(34,211,238,0.35) 0deg, rgba(34,211,238,0) 80deg, rgba(34,211,238,0) 360deg)` }} />
-            <div style={{ position: 'absolute', left: 130 - 26, top: 130 - 26, width: 52, height: 52, borderRadius: 16, background: '#0f1b33', boxShadow: '0 0 24px rgba(34,211,238,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <BrandMark size={34} id="radar" />
-            </div>
-            {t > a + 1.1 && (
-              <div style={{ position: 'absolute', left: 196, top: 52, opacity: ramp(t, a + 1.1, 0.3, EASE.out), transform: `scale(${mix(0.6, 1, ramp(t, a + 1.1, 0.35, EASE.snappy))})` }}>
-                <div style={{ width: 18, height: 18, borderRadius: 9, background: '#86efac', boxShadow: '0 0 16px #86efac' }} />
-              </div>
-            )}
-          </div>
-          <div style={{ position: 'absolute', left: 24, right: 24, top: 330, padding: '14px 16px', borderRadius: 16, background: 'rgba(255,255,255,0.06)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)', color: '#e2e8f0' }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{t > a + 1.1 ? '✓ 已发现：家里 · AX3000T' : '局域网自动发现中…'}</div>
-            <div style={{ fontSize: 12.5, color: t > a + 1.5 ? '#86efac' : '#94a3b8', marginTop: 4 }}>{t > a + 1.5 ? '直连成功 · 已加入路由器列表' : '同一 Wi-Fi 下自动搜索面板'}</div>
-          </div>
-        </div>
+    <Frame w={w} bg="#0b1024">
+      {!back ? (
+        <>
+          <Shot n="and-home2" />
+          {pasted > 0 && <Shot n="and-home2-paste" style={{ opacity: pasted }} />}
+          {tapAt(t, PASTE, cx(AR.paste), cy(AR.paste))}
+          {tapAt(t, ADD, cx(AR.add), cy(AR.add))}
+        </>
+      ) : (
+        <>
+          <Shot n="and-home3" />
+          {/* 新加入的路由器：卡片描边轻亮一下 */}
+          <div style={{ position: 'absolute', left: AR.card0[0], top: AR.card0[1], width: AR.card0[2], height: AR.card0[3], borderRadius: 22, boxShadow: `0 0 0 2px rgba(10,132,255,${0.9 * glow}), 0 0 24px rgba(10,132,255,${0.45 * glow})` }} />
+          {tapAt(t, switchAt, cx(AR.open2), cy(AR.open2))}
+        </>
       )}
-      {scanned && (
-        <div style={{ position: 'absolute', left: 16, right: 16, top: 120, opacity: listIn, transform: `translateY(${(1 - listIn) * 20}px)` }}>
-          <div style={{ color: '#86efac', fontSize: 14, fontWeight: 700, marginBottom: 12 }}>✓ 已添加，三台路由器随时切换</div>
-          <div style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', left: 0, right: 0, top: selY * 84, height: 74, borderRadius: 16, background: 'rgba(37,99,235,0.28)', boxShadow: 'inset 0 0 0 1.5px #3b82f6' }} />
-            {routers.map(([n, s], i) => (
-              <div key={n} style={{ position: 'relative', height: 74, marginBottom: 10, borderRadius: 16, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', padding: '0 16px', color: '#fff' }}>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700 }}>{n}</div>
-                  <div style={{ fontSize: 12.5, color: '#94a3b8', marginTop: 4 }}>{s}</div>
-                </div>
-                <div style={{ marginLeft: 'auto', fontSize: 13, color: i === sel ? '#93c5fd' : '#64748b', fontWeight: 700 }}>{i === sel ? '当前' : '切换'}</div>
-              </div>
-            ))}
-          </div>
-          {t > switchAt - 0.5 && t < switchAt + 0.5 && <Tap x={300} y={20 + 30 + 2 * 84 + 37} ring={ramp(t, switchAt, 0.4, EASE.out)} opacity={1 - ramp(t, switchAt + 0.3, 0.2, EASE.out)} />}
-          {t > switchAt + 0.3 && (
-            <div style={{ marginTop: 12, borderRadius: 16, overflow: 'hidden', height: 300, opacity: ramp(t, switchAt + 0.3, 0.4, EASE.out) }}>
-              <Img src={staticFile('shots/real/main-dark.png')} style={{ width: 328, height: 328 * (852 / 393), transform: 'translateY(-56px)' }} />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      {open1 > 0 && <div style={{ position: 'absolute', inset: 0, ...slide(open1) }}><Shot n="main-dark" /></div>}
+      {open2 > 0 && <div style={{ position: 'absolute', inset: 0, ...slide(open2) }}><Shot n="main-dark" /></div>}
+    </Frame>
   );
 };

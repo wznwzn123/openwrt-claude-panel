@@ -1,16 +1,16 @@
 import React from 'react';
 import ACT4 from '../act4.json';
 import { useVideoConfig } from 'remotion';
-import { Abs, C, EASE, FONT, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
+import { Abs, C, EASE, FONT, SHIFT5, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
 import { AuroraBG, Dot, Glass, Grain, Pill, Vignette } from '../lib/visual';
 
-/* 第四幕 · 54–74s · 与 AI 对话，言出法随（琥珀金 × 克莱因蓝双色极光）
+/* 第四幕 · 54–71.9s（74 − SHIFT5）· 与 AI 对话，言出法随（琥珀金 × 克莱因蓝双色极光）
  * 配方卡：flying-words → glass-pill-dictation-typing */
 
 const A = 54;
 const CONVERGE = 57.517;
 const CONSOLE = 58.034;
-const END = 74;
+const END = 74 - SHIFT5;
 
 /* 30+ 项底层能力（来自仓库 cgi-bin/mcp 的真实工具清单，中文化） */
 const TOOLS: Array<[string, string]> = [
@@ -310,6 +310,41 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
   );
 };
 
+
+/* —— 快切镜头表：打字特写 → 光束全景 → 结果特写 → 中景（看回复）；硬切，每刀 0.25s 微推 —— */
+type Shot = { at: number; kind: 'wide' | 'mid' | 'type' | 'result' | 'rollback' };
+const SHOTS: Shot[] = (() => {
+  const out: Shot[] = [{ at: 0, kind: 'wide' }];
+  CMDS.forEach((c) => {
+    const s = c.toolAt + 0.15;
+    out.push({ at: c.t0 - 0.1, kind: 'type' }, { at: c.send + 0.08, kind: 'wide' }, { at: s, kind: 'result' }, { at: s + 1.2, kind: 'mid' });
+  });
+  const last = out[out.length - 1];
+  last.at = Math.min(last.at, ROLLBACK_AT - 0.05);
+  last.kind = 'rollback';
+  out.push({ at: ROLLBACK_AT + 1.0, kind: 'wide' });
+  return out;
+})();
+const camAt = (t: number, W: number, H: number, L: ReturnType<typeof layout>, vertical: boolean) => {
+  let cur = SHOTS[0];
+  for (const sh of SHOTS) if (t >= sh.at) cur = sh;
+  const rTop = L.ry + (vertical ? 0 : 24);
+  const F: Record<Shot['kind'], [number, number, number]> = {
+    wide: [W / 2, H / 2, 1],
+    mid: [W / 2, H / 2, vertical ? 1.02 : 1.1],
+    type: [L.lx + L.pw / 2, L.ly + L.ph * (vertical ? 0.74 : 0.8), vertical ? 1.06 : 1.55],
+    result: [L.rx + L.pw / 2, rTop + L.ph * 0.4, vertical ? 1.06 : 1.42],
+    rollback: [L.rx + L.pw / 2, rTop + L.ph * 0.62, vertical ? 1.06 : 1.42],
+  };
+  // 竖屏双屏上下排、各占满宽：只做 1.06 轻推 + 上下换焦点，不放大裁字
+  const [fx, fy, s0] = F[cur.kind];
+  const dt = t - cur.at;
+  // 切入瞬间 2% 冲击回弹 + 镜头内缓推；最后一个全景缓拉回 1.0
+  const punch = 1 + 0.02 * (1 - ramp(t, cur.at, 0.25, EASE.out));
+  const drift = cur.kind === 'wide' && cur.at > 0 && cur.at >= ROLLBACK_AT ? mix(1.1, 1, ramp(t, cur.at, END - cur.at, EASE.smooth)) : 1 + 0.012 * Math.min(dt, 1.5);
+  return { fx, fy, s: s0 * punch * drift };
+};
+
 export const Act4: React.FC = () => {
   const t = useT();
   const { fps } = useVideoConfig();
@@ -323,11 +358,13 @@ export const Act4: React.FC = () => {
   const impact = dt >= 0 ? 0.03 * Math.exp(-dt * 6) * Math.cos(dt * 14) : 0;
   const greenFlash = dt >= 0 ? Math.exp(-dt * 7) : 0;
   // 一拍一个主角：打字时对话舱是主角，工具调用后右屏状态是主角，另一侧降权留守
-  const focusR = CMDS.reduce((acc, c) => Math.max(acc, ramp(t, c.toolAt, 0.3, EASE.smooth) * (1 - ramp(t, c.toolAt + 1.6, 0.4, EASE.smooth))), 0) + ramp(t, ROLLBACK_AT, 0.3, EASE.smooth) * (1 - ramp(t, 69.8, 0.4, EASE.smooth));
+  const focusR = CMDS.reduce((acc, c) => Math.max(acc, ramp(t, c.toolAt, 0.3, EASE.smooth) * (1 - ramp(t, c.toolAt + 1.6, 0.4, EASE.smooth))), 0) + ramp(t, ROLLBACK_AT, 0.3, EASE.smooth) * (1 - ramp(t, ROLLBACK_AT + 1.5, 0.4, EASE.smooth));
   const fL = 1 - 0.35 * Math.min(1, focusR);
   const fR = 1 - 0.35 * (1 - Math.min(1, focusR)) * ramp(t, CONSOLE + 0.4, 0.4, EASE.linear);
   const breath = 1 + 0.03 * ramp(t, CONSOLE, END - CONSOLE, EASE.linear);
-  const { pw, ph, lx, rx, ly, ry } = layout(W, H, vertical);
+  const L = layout(W, H, vertical);
+  const { pw, ph, lx, rx, ly, ry } = L;
+  const cam = t >= CONSOLE ? camAt(t, W, H, L, vertical) : { fx: W / 2, fy: H / 2, s: 1 };
   const sway = vertical ? 0 : 2.5 * Math.sin((2 * Math.PI * (t - CONSOLE)) / 9);
   const tilt = vertical ? 0 : 9; // 双屏相向内倾 9°，右屏错落下沉 24px，去正面平铺
   const rim = ramp(t, CONSOLE, 0.12, EASE.out) * (1 - ramp(t, CONSOLE + 0.12, 0.6, EASE.linear));
@@ -346,6 +383,7 @@ export const Act4: React.FC = () => {
           <div style={{ marginTop: 16, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 64 : 84, color: C.text, textShadow: '0 0 40px rgba(217,119,87,0.45)' }}>与 AI 对话，言出法随</div>
         </Abs>
       )}
+      <Abs style={{ left: 0, top: 0, width: W, height: H, transformOrigin: '0 0', transform: `translate(${W / 2 - cam.fx * cam.s}px, ${H / 2 - cam.fy * cam.s}px) scale(${cam.s})` }}>
       {t >= CONSOLE - 0.2 && (
         <Abs style={{ inset: 0, transform: `scale(${breath * (1 - endOut * 0.04)})`, opacity: 1 - endOut }}>
           <div style={{ position: 'absolute', left: lx, top: ly, width: pw, height: ph, opacity: t < CONSOLE - 0.05 ? 0 : 0.55 + 0.45 * fL, filter: `brightness(${0.75 + 0.25 * fL})`, transform: `perspective(1800px) translateZ(${-900 * (1 - panelK)}px) rotateY(${vertical ? 0 : 3 * (1 - panelK) + tilt + sway}deg) scale(${0.97 + 0.03 * fL})`, boxShadow: `0 0 ${60 * rim}px rgba(217,119,87,${0.9 * rim})`, borderRadius: 34 }}>
@@ -400,8 +438,9 @@ export const Act4: React.FC = () => {
           </>
         );
       })()}
-      {/* 底部通栏毛玻璃字幕条（屏幕大字） */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 160, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) }}>
+      </Abs>
+      {/* 底部通栏毛玻璃字幕条（屏幕大字）；快切特写期间隐去，避免压住特写画面，收尾全景再回来 */}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 160, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) * (1 - ramp(t, CMDS[0].t0 - 0.3, 0.2, EASE.out) * (1 - ramp(t, ROLLBACK_AT + 1.0, 0.4, EASE.out))) }}>
         <Glass radius={20} fill={0.08} style={{ position: 'relative', padding: '14px 40px' }}>
           <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: vertical ? 30 : 34, letterSpacing: '0.06em', color: C.text, opacity: barK, whiteSpace: 'nowrap' }}>{barText}</div>
         </Glass>

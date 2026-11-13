@@ -204,13 +204,13 @@ export const Act3: React.FC = () => {
             return (
               <React.Fragment key={i}>
                 <Pose x={x} y={vertical ? H * 0.47 : cy + 30} sw={sw} s={vertical ? 0.86 : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
-                  {i === 0 ? <Phone w={sw} full><PwaFlow t={t} w={sw} a={SEG_C} /></Phone> : <Phone w={sw} dark topBg="#0b1220"><AndroidFlow t={t} w={sw} a={SEG_C} /></Phone>}
+                  {i === 0 ? <Phone w={sw} full><PwaFlow t={t} w={sw} a={SEG_C} /></Phone> : <Phone w={sw} full dark><AndroidFlow t={t} w={sw} a={SEG_C} /></Phone>}
                 </Pose>
                 <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
                   {!vertical && (
                     <>
                       <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text, whiteSpace: 'nowrap' }}>{i === 0 ? '添加到主屏幕 · 桌面级 PWA' : '原生安卓客户端'}</div>
-                      <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text3, marginTop: 6, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{i === 0 ? 'iOS / ANDROID · 指纹面板锁' : 'v3.0.2 · 局域网发现 · 多路由切换'}</div>
+                      <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text3, marginTop: 6, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{i === 0 ? 'iOS / ANDROID · 指纹面板锁' : 'v3.1.1 · 扫码 / 粘贴添加 · 多路由切换'}</div>
                     </>
                   )}
                 </div>

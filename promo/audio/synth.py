@@ -169,17 +169,19 @@ BPM = 116
 beat = 60 / BPM
 bar = beat * 4
 T0 = 12.0
+# 第五幕整体提前一小节（与 src/lib/core.tsx 的 SHIFT5 同源；画面取 124 帧，差 2ms 可忽略）
+S5 = bar
+CAD = T0 + 36 * bar          # 86.48s：终止式小节（属 → 主）
+HIT = CAD + 2 * beat          # 87.52s：主和弦落定，此后只留和弦长尾 + logo 定格
 prog = [(57, [57, 60, 64]), (53, [53, 57, 60]), (48, [55, 60, 64]), (55, [55, 59, 62])]  # Am F C G
 arp = [0, 2, 1, 2, 0, 2, 1, 3]
 nbars = int((DUR - T0) / bar) + 1
 for b in range(nbars):
     bs = T0 + b * bar
-    if bs >= DUR:
+    if bs >= DUR or bs >= CAD - 0.01:
         break
     root, chord = prog[(b // 2) % 4]
-    energy = 1 if bs < 28 else 2 if bs < 54 else 3 if bs < 82 else 4
-    if bs > 88.6:
-        energy = 0
+    energy = 1 if bs < 28 else 2 if bs < 54 else 3 if bs < 82 - S5 else 4
     # pad（每两小节一铺）
     if b % 2 == 0 and bs < 88:
         dd = min(bar * 2 + 1.2, DUR - bs)
@@ -226,10 +228,32 @@ for b in range(nbars):
 
 # 54s Claude 登场 & 82s 终幕：riser → impact
 place(bgm, riser(2.2, 300, 6000), 51.8, 0.4)
-place(bgm, riser(2.3, 300, 8000), 84.414 - 2.3, 0.45)
-place(bgm, sub_drop(2.5, 90, 28), 84.414, 0.4)
-# 终幕长尾：Am(add9) 大铺底直至 90s，最后 1.2s 微呼吸
-place(bgm, pad([mtof(n) for n in (45, 57, 60, 64, 71)], 6.0, att=0.3, rel=2.5, bright=6), 84.414, 1.6)
+place(bgm, riser(2.3, 300, 8000), 84.414 - S5 - 2.3, 0.45)
+place(bgm, sub_drop(2.5, 90, 28), 84.414 - S5, 0.4)
+# 终幕铺底：Am(add9) 到终止式小节前收住，让位给属和弦
+place(bgm, pad([mtof(n) for n in (45, 57, 60, 64, 71)], CAD - (84.414 - S5) + 0.2, att=0.3, rel=1.2, bright=6), 84.414 - S5, 1.6)
+
+# 终止式：半小节属和弦 E（鼓组照走）→ 87.52s 主和弦 Am 一记落定（kick + sub + 拨弦和弦 + 高光），之后无节奏、和弦自然延音到片尾
+E_CH = [52, 56, 59]
+place(bgm, pad([mtof(n) for n in (40, 52, 56, 59, 64)], 2 * beat + 0.3, att=0.08, rel=0.5, bright=7), CAD, 1.5)
+for i in range(4):
+    t = t_(beat / 2 * 0.95)
+    f = mtof(40)
+    place(bgm, (np.sin(2 * np.pi * f * t) + 0.3 * np.sin(2 * np.pi * f * 2 * t)) * np.exp(-t * 5), CAD + i * beat / 2, 0.22)
+for i in range(2):
+    place(bgm, kick(), CAD + i * beat, 0.5)
+for i in range(4):
+    place(bgm, pan(hat(), 0.3 if i % 2 else -0.3), CAD + i * beat / 2, 0.18 if i % 2 else 0.09)
+for i in range(8):   # 16 分拨弦上行，把耳朵推向主和弦
+    n = [52, 56, 59, 64, 68, 71, 76, 80][i]
+    place(bgm, pan(pluck(mtof(n), 0.6, 1.2), (i % 4 - 1.5) / 2), CAD + i * beat / 4, 0.36)
+place(bgm, kick(0.6, 140, 42, 2.2), HIT, 0.6)
+place(bgm, sub_drop(2.2, 110, 30), HIT, 0.45)
+place(bgm, pad([mtof(n) for n in (33, 45, 57, 60, 64, 71, 76)], DUR - HIT, att=0.02, rel=1.6, bright=7), HIT, 1.9)
+for i, n in enumerate((69, 72, 76, 81)):
+    place(bgm, pan(pluck(mtof(n), 2.4, 1.1), (i - 1.5) / 3), HIT + i * 0.012, 0.42)
+t_hs = t_(2.4)
+place(bgm, pan(sum(np.sin(2 * np.pi * f * t_hs + i) * np.exp(-t_hs * 1.6) for i, f in enumerate((1760, 2637, 3520))) * 0.05, -0.2), HIT, 1.0)
 
 # 主骨：两次 Sub Drop
 place(bgm, sub_drop(), 5.75, 0.5)
@@ -241,7 +265,7 @@ def seg_env(points):
     xs = [p[0] for p in points]; ys = [10 ** (p[1] / 20) for p in points]
     return np.interp(tt_, xs, ys)
 # 铺垫段 0–11s、30–50s 压低 3 dB；54s 高潮与 82s 落版大幅抬升
-DYN = [(0, -10.5), (11.0, -10.5), (11.8, 0), (28.5, 0), (30.0, -10.5), (50.0, -10.5), (52.0, -2), (53.6, -2), (54.2, 10), (73.6, 10), (74.2, 0), (81.6, 0), (82.6, 11), (88.6, 11), (90, 3)]
+DYN = [(0, -10.5), (11.0, -10.5), (11.8, 0), (28.5, 0), (30.0, -10.5), (50.0, -10.5), (52.0, -2), (53.6, -2), (54.2, 10), (73.6 - S5, 10), (74.2 - S5, 0), (81.6 - S5, 0), (82.6 - S5, 11), (HIT + 0.6, 11), (DUR, 6)]
 env = seg_env(DYN)
 bgm *= env[:, None]
 # 合成器主旋律（A 小调，8 分音符动机，轻颤音的锯齿 lead）
@@ -253,7 +277,7 @@ def lead(f, d):
     env_ = np.minimum(1, t / 0.01) * np.exp(-t * 2.2)
     return lp(x * env_, 4200) * 0.12
 MOTIF = [69, 72, 76, 74, 72, 69, 67, 69, 72, 74, 76, 79, 76, 74, 72, 74]
-for sec0, sec1, gain in ((54.0, 73.6, 1.0), (82.4, 88.6, 1.25)):
+for sec0, sec1, gain in ((54.0, 73.6 - S5, 1.0), (82.4 - S5, CAD, 1.25)):
     n = 0
     tq = sec0
     while tq < sec1:
@@ -262,18 +286,18 @@ for sec0, sec1, gain in ((54.0, 73.6, 1.0), (82.4, 88.6, 1.25)):
         tq += beat / 2
         n += 1
 # 低频重击（Sub Impact）
-for at, g in ((54.0, 0.55), (82.4, 0.45)):
+for at, g in ((54.0, 0.55), (82.4 - S5, 0.45)):
     place(bgm, sub_drop(1.6, 120, 32), at, g)
 place(bgm, sub_drop(1.4, 110, 40), 58.034, 0.35)
 place(bgm, kick(0.5, 140, 45, 2.2), 58.034, 0.5)
-place(bgm, sub_drop(1.8, 110, 34), 85.448, 0.35)
-place(bgm, kick(0.5, 140, 45, 2.2), 85.448, 0.45)
+place(bgm, sub_drop(1.8, 110, 34), 85.448 - S5, 0.35)
+place(bgm, kick(0.5, 140, 45, 2.2), 85.448 - S5, 0.45)
 t_sh = t_(1.6)
 shimmer = sum(np.sin(2 * np.pi * f * t_sh + i) * np.exp(-t_sh * 2.2) for i, f in enumerate((2637, 3136, 3520, 4186))) * 0.05
-place(bgm, pan(shimmer, 0.2), 85.448, 1.0)
+place(bgm, pan(shimmer, 0.2), 85.448 - S5, 1.0)
 bgm = reverb(bgm, 0.22)
 fade = np.ones(N)
-fade[-int(SR * 1.2):] = np.linspace(1, 0, int(SR * 1.2)) ** 1.5
+fade[-int(SR * 0.9):] = np.linspace(1, 0, int(SR * 0.9)) ** 1.5   # 和弦长尾最后 0.9s 收尽
 bgm *= fade[:, None]
 bgm /= np.percentile(np.abs(bgm), 99.7) + 1e-9
 bgm = np.tanh(bgm * 0.8) * 0.85
@@ -346,6 +370,8 @@ def cue(name, at, sig, gain, p=0.0):
     # 第三幕 34.5s 之后的画面事件整体提前 4.5 拍（与 Act3.SHIFT3 同源），音效跟随
     if 34.5 <= at < 54.0 and name not in ('claude-enter',):
         at = round(at - 2.069, 3)
+    if at >= 73.0:   # 第五幕（含 73.5s 擦除转场）整体提前一小节
+        at = round(at - S5, 3)
     if sig.ndim == 1:
         sig = pan(sig, p)
     place(sfx, sig, at, gain)
@@ -397,10 +423,10 @@ cue('icon-pop', SEG_C + 1.7, glass_tap(2200), 0.45)
 cue('icon-tap', SEG_C + 2.3, click(), 0.7)
 cue('fingerprint', SEG_C + 3.25, sonar(1500), 0.3)
 cue('unlock', SEG_C + 4.05, chime(1318.5, 1760), 0.45)
-cue('lan-radar', SEG_C + 0.2, sonar(1100), 0.3, 0.5)
-cue('lan-radar', SEG_C + 0.75, sonar(1250), 0.3, 0.5)
-cue('lan-found', SEG_C + 1.1, glass_tap(3000), 0.35, 0.5)
-cue('lan-connected', SEG_C + 1.5, chime(1318.5, 1760), 0.35, 0.5)
+cue('paste-tap', SEG_C + 0.35, click(), 0.6, 0.5)                  # 安卓客户端：粘贴登录地址
+cue('add-tap', SEG_C + 1.0, click(), 0.6, 0.5)                     # 添加 → 打开该路由器面板
+cue('panel-open', SEG_C + 1.12, whoosh(0.45, 600, 5000), 0.35, 0.5)
+cue('router-added', SEG_C + 2.35, glass_tap(2400), 0.35, 0.5)      # 返回列表：新路由器已加入
 cue('router-switch', 51.25, click(), 0.7, 0.5)
 # 第四幕
 cue('claude-enter', 54.0, whoosh(1.6, 200, 3000), 0.6)
@@ -436,8 +462,8 @@ cue('wechat-notice', 76.6, chime(987.8, 1318.5), 0.55, 0.5)
 cue('wechat-notice', 79.25, chime(987.8, 1318.5), 0.55, 0.5)
 cue('hud-to-aurora', 81.828 - 0.4, whoosh(0.8, 300, 6000), 0.55)
 for i in range(int(1.25 / 0.03)):
-    place(sfx, pan(key(True), 0.1), 82.35 + i * 0.03, 0.45)
-cues.append({'t': 82.35, 'name': 'terminal-typing', 'gain': 0.45})
+    place(sfx, pan(key(True), 0.1), 82.35 - S5 + i * 0.03, 0.45)
+cues.append({'t': round(82.35 - S5, 3), 'name': 'terminal-typing', 'gain': 0.45})
 cue('enter', 84.414, key(True) * 2.0, 1.0)
 cue('collapse', 84.434, riser(0.32, 3000, 9000), 0.5)            # 终端向内折叠
 cue('core-burst', 84.754, chime(1760, 2637) * 1.2, 0.55)           # 光核爆发出徽标
@@ -487,7 +513,7 @@ bgm_m = soft(bgm, 0.55 * np.percentile(np.abs(bgm), 99.9))
 sfx_m = soft(sfx, 0.6 * np.percentile(np.abs(sfx), 99.9))
 BGM_G, SFX_G = 0.4, 0.5
 # 旁白随段落轻微起伏（±1.5 dB）：铺垫段略收，高潮段略前
-VDYN = [(0, -4), (11.0, -4), (11.8, 0), (28.5, 0), (30.0, -4), (50.0, -4), (52.0, -1), (54.0, 2.5), (73.6, 2.5), (74.2, 0), (82.0, 0), (82.6, 2.5), (90, 2.5)]
+VDYN = [(0, -4), (11.0, -4), (11.8, 0), (28.5, 0), (30.0, -4), (50.0, -4), (52.0, -1), (54.0, 2.5), (73.6 - S5, 2.5), (74.2 - S5, 0), (82.0 - S5, 0), (82.6 - S5, 2.5), (90, 2.5)]
 venv = np.interp(np.arange(N) / SR, [p[0] for p in VDYN], [10 ** (p[1] / 20) for p in VDYN])
 mix = voice * venv[:, None] + bgm_m * duck[:, None] * BGM_G + sfx_m * SFX_G
 sf.write(f'{OUT}/mix_premaster.wav', mix.astype(np.float32), SR)

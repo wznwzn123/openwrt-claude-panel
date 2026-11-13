@@ -26,7 +26,7 @@ const CMD = 'cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude
 const TARGETS = [
   // 坐标 = 真实面板「断线记录」页（shots/real/wd.png，CSS px，393 宽视口）里各状态胶囊的位置
   { x0: 33, y0: 247, x1: 140, y1: 283, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
-  { x0: 256, y0: 247, x1: 359, y1: 283, label: '⚠ DNS 解析', note: '异常 → 已自动修复 ×2' },
+  { x0: 256, y0: 247, x1: 359, y1: 283, label: '⚠ DNS 解析', note: '异常 → 已恢复 · 已推送提醒' },
   { x0: 33, y0: 291, x1: 140, y1: 327, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
   { x0: 256, y0: 291, x1: 359, y1: 327, label: '扩展套件进程', note: '守护中 · 正常' },
 ];
@@ -82,7 +82,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           const x0 = left + g.x0 * k - 6, y0 = top + g.y0 * k - 6, x1 = left + g.x1 * k + 6, y1 = top + g.y1 * k + 6;
           const spread = (1 - c) * 60;
           const arm = 14;
-          const alarm = i === 1; // DNS 异常 → 自愈：亮橙告警
+          const alarm = i === 1; // DNS 异常 → 恢复后推送提醒（看门狗对 DNS 只检测、记录、推送，不做修复动作）：亮橙告警
           const col = alarm ? '#F97316' : C.cyan;
           const blink = alarm ? 0.55 + 0.45 * Math.sin((t - ft) * 18) * Math.exp(-(t - ft) * 0.6) : 1;
           const grow = ramp(t, ft, 0.32, EASE.out);

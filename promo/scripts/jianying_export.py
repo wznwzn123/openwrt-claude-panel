@@ -15,7 +15,7 @@ import sys
 import pyJianYingDraft as draft
 
 FPS = 60   # 第六版：底片改为 60fps 无字幕版（Promo90Clean），与主片一致（审片 B13）
-TOTAL_F = 2700
+TOTAL_F = 90 * FPS   # 第七版修正：原写死 2700（30fps 的 90 秒），改 60fps 后人声/BGM/字幕/音效被截在 45 秒
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLATE = os.path.abspath(sys.argv[1])
 STAGING = os.path.abspath(sys.argv[2])

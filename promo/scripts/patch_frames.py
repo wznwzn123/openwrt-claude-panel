@@ -17,7 +17,7 @@ enc = ['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s
 if mode == 'final':
     enc += ['-i', audio, '-map', '0:v', '-map', '1:a',
             '-vf', 'scale=out_range=tv:out_color_matrix=bt709,format=yuv420p',
-            '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'slow', '-crf', '16', '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709',
+            '-c:v', 'libx264', '-profile:v', 'high', '-preset', os.environ.get('PRESET', 'slow'), '-crf', '16', '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709',
             '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
             '-af', 'volume=0.6dB,aresample=192000,alimiter=limit=0.72:attack=1:release=60:level=false:asc=1,aresample=48000',
             '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-shortest', '-movflags', '+faststart', tmp]

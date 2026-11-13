@@ -27,8 +27,17 @@ const trafDays = {};
 for (let i = 0; i < 40; i++) {
   const k = 0.55 + 0.45 * Math.abs(Math.sin(i * 1.7 + 0.4)) + (i % 7 === 5 || i % 7 === 6 ? 0.35 : 0);
   const g = (x) => Math.round(x * k * 1e9);
-  trafDays[day(i)] = {
-    [MAC(11)]: [g(0.05), g(i ? 14 : 30), g(0.02), g(i ? 2.2 : 1.6)],
+  // 四元组 = [加速上行, 加速下行, 直连上行, 直连下行]；今天（i=0）的各设备合计与设备页 DEVS 的 dl+ul 完全一致，
+  // 全部相加 = 首页「今日」= 48.5 GB（审片 B4：首页、流量页、片中柱状图三处统一）
+  trafDays[day(i)] = i === 0 ? {
+    [MAC(11)]: [0.03e9, 31.0e9, 0.40e9, 2.50e9],
+    [MAC(12)]: [0.9e9, 5.0e9, 1.2e9, 3.4e9],
+    [MAC(13)]: [0.02e9, 1.2e9, 0.10e9, 0.70e9],
+    [MAC(14)]: [0.3e9, 2.0e9, 0.3e9, 1.2e9],
+    [MAC(15)]: [0.1e9, 0.9e9, 0.2e9, 0.5e9],
+    [MAC(16)]: [0, 0.06e9, 0.01e9, 0.02e9],
+  } : {
+    [MAC(11)]: [g(0.05), g(14), g(0.02), g(2.2)],
     [MAC(12)]: [g(0.8), g(4.6), g(0.6), g(2.4)],
     [MAC(13)]: [g(0.03), g(1.1), g(0.02), g(0.6)],
     [MAC(14)]: [g(0.2), g(1.8), g(0.1), g(1.1)],
@@ -51,7 +60,7 @@ const grpFix = () => {
 };
 const FIX = {
   live: () => ({ rx: 9.86e6, tx: 0.71e6 }),
-  home_stats: { today: { dl: 47.3e9, ul: 3.6e9, counting: true, top: DEVS.slice(0, 3).map((d) => ({ name: d.name, id: d.mac, dl: d.stats.dl, ul: d.stats.ul })) }, devices: { online: 6, wifi: 5, wired: 1, total: 7 } },
+  home_stats: { today: { dl: 48.48e9, ul: 3.56e9, counting: true, top: DEVS.slice(0, 3).map((d) => ({ name: d.name, id: d.mac, dl: d.stats.dl, ul: d.stats.ul })) }, devices: { online: 6, wifi: 5, wired: 1, total: 7 } },
   svc_info: { hosted: false },
   jobs: { list: [] },
   luci_menu: { items: [] },

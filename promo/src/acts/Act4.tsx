@@ -4,7 +4,7 @@ import { useVideoConfig } from 'remotion';
 import { Abs, C, EASE, FONT, SHIFT5, hash, mix, ramp, springAt, useT, useV } from '../lib/core';
 import { AuroraBG, Dot, Glass, Grain, Pill, Vignette } from '../lib/visual';
 
-/* 第四幕 · 54–71.9s（74 − SHIFT5）· 与 AI 对话，言出法随（琥珀金 × 克莱因蓝双色极光）
+/* 第四幕 · 54–74s · 说一句，它来办（改动前先确认）（琥珀金 × 克莱因蓝双色极光）
  * 配方卡：flying-words → glass-pill-dictation-typing */
 
 const A = 54;
@@ -90,11 +90,11 @@ const layout = (W: number, H: number, vertical: boolean) => {
 };
 
 /* —— 对话脚本 —— */
-type Cmd = { text: string; t0: number; send: number; tool: string; toolAt: number; reply: string; replyAt: number };
+type Cmd = { text: string; t0: number; send: number; think: number; tools: Array<{ name: string; at: number }>; confirm?: { ask: number; ok: number; text: string }; toolAt: number; state: number; reply: string; replyAt: number };
 // 三条指令的时刻由 voice/act4_sync.py 从字级时间戳推导（状态响应 = 旁白关键词发声帧），换配音后重跑即重新对齐
 const CMDS: Cmd[] = ACT4.cmds;
 const CHAR = ACT4.char;
-export const ROLLBACK_AT = ACT4.rollback; // 旁白「回滚 UCI 配置」
+export const ROLLBACK_AT = ACT4.rollback; // 旁白「改之前还自动备份」：右屏弹出变更前快照
 
 const GlassPill: React.FC<{ t: number; w: number }> = ({ t, w }) => {
   // 当前正在输入的指令
@@ -127,27 +127,52 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
   items.push({ at: 58.7, h: 130, node: (k) => <Bubble k={k}>已接入路由器面板，30+ 项底层工具就绪。直接用中文告诉我要做什么。</Bubble> });
   CMDS.forEach((c) => {
     items.push({ at: c.send, h: 78, node: (k) => <Bubble me k={k}>{c.text}</Bubble> });
+    // 思考中 → 依次调用的工具（连接器里的真实工具名）；生效后圆点变绿
     items.push({
-      at: c.toolAt,
-      h: 50,
-      node: (k) => (
-        <div style={{ marginBottom: 10, opacity: k }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '6px 14px', borderRadius: 10, background: 'rgba(217,119,87,0.14)', boxShadow: 'inset 0 0 0 1px rgba(217,119,87,0.4)', fontFamily: FONT.mono, fontSize: 18, color: '#FFD2BF' }}>
-            <Dot color={t > c.replyAt ? C.ok : C.amber} size={8} /> 调用工具 · {c.tool}
-          </span>
-        </div>
-      ),
+      at: c.think,
+      h: 52,
+      node: (k) => {
+        const shown = c.tools.filter((tl) => t >= tl.at);
+        return (
+          <div style={{ marginBottom: 10, opacity: k, display: 'flex', alignItems: 'center', gap: 10, fontFamily: FONT.mono, fontSize: 18, color: '#FFD2BF' }}>
+            {shown.length === 0 ? (
+              <span style={{ padding: '6px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', color: C.text2 }}>
+                思考中{'·'.repeat(1 + (Math.floor(t * 4) % 3))}
+              </span>
+            ) : (
+              shown.map((tl, j) => (
+                <span key={j} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 10, background: 'rgba(217,119,87,0.14)', boxShadow: 'inset 0 0 0 1px rgba(217,119,87,0.4)', opacity: ramp(t, tl.at, 0.2, EASE.out) }}>
+                  <Dot color={t > c.state || j < shown.length - 1 ? C.ok : C.amber} size={8} /> {j === 0 ? '调用工具 · ' : ''}{tl.name}
+                </span>
+              ))
+            )}
+          </div>
+        );
+      },
     });
+    if (c.confirm) {
+      const cf = c.confirm;
+      items.push({
+        at: cf.ask,
+        h: 168,
+        node: (k) => {
+          const done = t >= cf.ok;
+          const press = ramp(t, cf.ok - 0.06, 0.06, EASE.out) * (1 - ramp(t, cf.ok + 0.06, 0.15, EASE.out));
+          return (
+            <div style={{ opacity: k, transform: `translateY(${(1 - k) * 14}px)`, marginBottom: 14 }}>
+              <div style={{ maxWidth: '86%', padding: '14px 20px', borderRadius: '22px 22px 22px 6px', background: 'rgba(255,255,255,0.08)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.16), inset 0 0 0 1px rgba(255,190,150,0.35)', fontFamily: FONT.sans, fontSize: 24, lineHeight: 1.5, color: C.text }}>
+                {cf.text}
+                <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+                  <span style={{ padding: '6px 22px', borderRadius: 12, fontWeight: 700, fontSize: 22, background: done ? 'rgba(52,199,89,0.3)' : '#D97757', color: done ? '#bbf7d0' : '#fff', transform: `scale(${1 - 0.08 * press})`, boxShadow: done ? 'inset 0 0 0 1.5px rgba(52,199,89,0.7)' : '0 6px 18px rgba(217,119,87,0.45)' }}>{done ? '✓ 已确认' : '确认'}</span>
+                  <span style={{ padding: '6px 22px', borderRadius: 12, fontSize: 22, color: C.text3, background: 'rgba(255,255,255,0.06)', opacity: done ? 0.4 : 1 }}>取消</span>
+                </div>
+              </div>
+            </div>
+          );
+        },
+      });
+    }
     items.push({ at: c.replyAt, h: c.reply.length > 26 ? 130 : 92, node: (k) => <Bubble k={k}>{c.reply}</Bubble> });
-  });
-  items.push({
-    at: ROLLBACK_AT,
-    h: 130,
-    node: (k) => (
-      <Bubble k={k}>
-        变更前已自动备份 UCI 配置，可随时 <span style={{ color: '#FFD2BF' }}>一键回滚</span>
-      </Bubble>
-    ),
   });
   const visible = items.filter((it) => t >= it.at);
   const total = visible.reduce((a, b) => a + b.h, 0);
@@ -191,9 +216,9 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
 
 /* 右银幕：OpenWrt 底层状态实时映射 */
 const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) => {
-  const s1 = CMDS[0].toolAt + 0.15;
-  const s2 = CMDS[1].toolAt + 0.15;
-  const s3 = CMDS[2].toolAt + 0.15;
+  const s1 = CMDS[0].state;
+  const s2 = CMDS[1].state;
+  const s3 = CMDS[2].state;
   const state = t < s1 ? 0 : t < s2 ? 1 : t < s3 ? 2 : 3;
   const k = ramp(t, [CONSOLE, s1, s2, s3][state], 0.4, EASE.out);
   const row = (children: React.ReactNode, hi = false, key?: string | number) => (
@@ -261,13 +286,14 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
   } else {
     const wk = ramp(t, s3 + 0.1, 0.4, EASE.out);
     const bk = ramp(t, ROLLBACK_AT, 0.4, EASE.out);
-    const lines = ["config rule 'pause_kids_tablet'", "  option src 'lan'", "  option src_mac 'AA:BB:CC:52:1F:07'", "  option start_time '23:00:00'", "  option stop_time '07:00:00'", "  option target 'REJECT'"];
+    // 连接器 uci_set：在 DHCP 里加一条静态地址（config host），reload dhcp；改前自动备份（uci_backups 可还原）
+    const lines = ["dhcp.@host[-1]=host", "dhcp.@host[-1].name='study-pc'", "dhcp.@host[-1].mac='3C:22:FB:4A:1E:12'", "dhcp.@host[-1].ip='192.168.1.10'", "reload: dhcp"];
     body = (
       <>
-        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>防火墙 · 定时策略</div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>DHCP · 静态地址</div>
         {row(
           <>
-            <span>儿童平板 · 每晚 23:00 自动休眠 → 次日 07:00</span>
+            <span>书房台式机 · 3C:22:FB:4A:1E:12 → 192.168.1.10</span>
             <span style={{ marginLeft: 'auto', fontSize: 20, color: '#bbf7d0' }}>✓ 已写入生效</span>
           </>,
           wk > 0.5,
@@ -281,8 +307,8 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
           {row(
             <>
               <span style={{ fontSize: 20, color: C.text2 }}>UCI 备份</span>
-              <span style={{ marginLeft: 16 }}>备份 #12 · 变更前快照</span>
-              <span style={{ marginLeft: 'auto', fontSize: 18, padding: '4px 12px', borderRadius: 8, background: 'rgba(217,119,87,0.25)', color: '#FFD2BF' }}>↺ 一键回滚</span>
+              <span style={{ marginLeft: 16 }}>备份 #12 · 修改前自动快照</span>
+              <span style={{ marginLeft: 'auto', fontSize: 18, padding: '4px 12px', borderRadius: 8, background: 'rgba(217,119,87,0.25)', color: '#FFD2BF' }}>↺ 一键还原</span>
             </>,
           )}
         </div>
@@ -311,18 +337,30 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
 };
 
 
-/* —— 快切镜头表：打字特写 → 光束全景 → 结果特写 → 中景（看回复）；硬切，每刀 0.25s 微推 —— */
-type Shot = { at: number; kind: 'wide' | 'mid' | 'type' | 'result' | 'rollback' };
+/* —— 快切镜头表：打字特写 → 对话特写（思考中 / 工具 / 确认）→ 光束全景 → 结果特写 → 中景；硬切，每刀 0.25s 微推。
+   切点吸附到 116 BPM 半拍网格（相对 12.0s 起拍），最大挪动 0.13s —— */
+type Shot = { at: number; kind: 'wide' | 'mid' | 'type' | 'chat' | 'result' | 'rollback' };
+const HALF = 60 / 116 / 2;
+const snap = (x: number) => 12 + Math.round((x - 12) / HALF) * HALF;
 const SHOTS: Shot[] = (() => {
-  const out: Shot[] = [{ at: 0, kind: 'wide' }];
-  CMDS.forEach((c) => {
-    const s = c.toolAt + 0.15;
-    out.push({ at: c.t0 - 0.1, kind: 'type' }, { at: c.send + 0.08, kind: 'wide' }, { at: s, kind: 'result' }, { at: s + 1.2, kind: 'mid' });
+  const raw: Shot[] = [];
+  CMDS.forEach((c, i) => {
+    const next = CMDS[i + 1];
+    raw.push({ at: c.t0 - 0.1, kind: 'type' }, { at: c.send + 0.08, kind: 'chat' });
+    raw.push({ at: c.confirm ? c.confirm.ok + 0.12 : c.toolAt - 0.3, kind: 'wide' }, { at: c.state, kind: 'result' });
+    if (next) {
+      const m = Math.min(c.state + 1.1, next.t0 - 0.35);
+      if (next.t0 - 0.1 - m >= 0.45) raw.push({ at: m, kind: 'mid' });
+    } else {
+      raw.push({ at: Math.max(ROLLBACK_AT - 0.05, c.state + 0.45), kind: 'rollback' }, { at: Math.min(ROLLBACK_AT + 0.9, END - 0.6), kind: 'wide' });
+    }
   });
-  const last = out[out.length - 1];
-  last.at = Math.min(last.at, ROLLBACK_AT - 0.05);
-  last.kind = 'rollback';
-  out.push({ at: ROLLBACK_AT + 1.0, kind: 'wide' });
+  const out: Shot[] = [{ at: 0, kind: 'wide' }];
+  for (const sh of raw) {
+    const at = snap(sh.at);
+    if (at <= out[out.length - 1].at) out[out.length - 1] = { at: out[out.length - 1].at, kind: sh.kind };
+    else out.push({ at, kind: sh.kind });
+  }
   return out;
 })();
 const camAt = (t: number, W: number, H: number, L: ReturnType<typeof layout>, vertical: boolean) => {
@@ -333,6 +371,7 @@ const camAt = (t: number, W: number, H: number, L: ReturnType<typeof layout>, ve
     wide: [W / 2, H / 2, 1],
     mid: [W / 2, H / 2, vertical ? 1.02 : 1.1],
     type: [L.lx + L.pw / 2, L.ly + L.ph * (vertical ? 0.74 : 0.8), vertical ? 1.06 : 1.55],
+    chat: [L.lx + L.pw / 2, L.ly + L.ph * (vertical ? 0.5 : 0.56), vertical ? 1.06 : 1.32],
     result: [L.rx + L.pw / 2, rTop + L.ph * 0.4, vertical ? 1.06 : 1.42],
     rollback: [L.rx + L.pw / 2, rTop + L.ph * 0.62, vertical ? 1.06 : 1.42],
   };
@@ -368,7 +407,7 @@ export const Act4: React.FC = () => {
   const sway = vertical ? 0 : 2.5 * Math.sin((2 * Math.PI * (t - CONSOLE)) / 9);
   const tilt = vertical ? 0 : 9; // 双屏相向内倾 9°，右屏错落下沉 24px，去正面平铺
   const rim = ramp(t, CONSOLE, 0.12, EASE.out) * (1 - ramp(t, CONSOLE + 0.12, 0.6, EASE.linear));
-  const barText = t < 58.55 ? '接入 Claude 自定义连接器 · 双钥匙安全隔离' : '内置 30+ 项路由底层工具 · 中文对话言出法随';
+  const barText = t < 58.55 ? '连接器地址只给 AI 用 · 打不开你的面板' : '30+ 项路由器工具 · 改动前先确认';
   const barK = ramp(t, t < 58.55 ? 54.55 : 58.55, 0.45, EASE.out);
   // 开幕：一束琥珀金光注入
   const amberIn = ramp(t, A, 1.2, EASE.out);
@@ -380,7 +419,8 @@ export const Act4: React.FC = () => {
       {t < CONVERGE + 0.4 && (
         <Abs style={{ left: 0, right: 0, top: H / 2 - 90, textAlign: 'center', opacity: ramp(t, 54.45, 0.6, EASE.out) * (1 - ramp(t, CONVERGE - 0.2, 0.4, EASE.exit)) }}>
           <div style={{ fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.4em', color: '#FFD2BF' }}>CUSTOM CONNECTOR</div>
-          <div style={{ marginTop: 16, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 64 : 84, color: C.text, textShadow: '0 0 40px rgba(217,119,87,0.45)' }}>与 AI 对话，言出法随</div>
+          <div style={{ marginTop: 16, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 64 : 84, color: C.text, textShadow: '0 0 40px rgba(217,119,87,0.45)' }}>说一句，它来办</div>
+          <div style={{ marginTop: 14, fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 30 : 34, color: '#FFD2BF' }}>要改设置时，会先跟你确认</div>
         </Abs>
       )}
       <Abs style={{ left: 0, top: 0, width: W, height: H, transformOrigin: '0 0', transform: `translate(${W / 2 - cam.fx * cam.s}px, ${H / 2 - cam.fy * cam.s}px) scale(${cam.s})` }}>
@@ -445,6 +485,12 @@ export const Act4: React.FC = () => {
           <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: vertical ? 30 : 34, letterSpacing: '0.06em', color: C.text, opacity: barK, whiteSpace: 'nowrap' }}>{barText}</div>
         </Glass>
       </div>
+      {/* 演示已加速：AI 调用真实耗时为数秒，片中压缩呈现 */}
+      {t > CMDS[0].t0 - 0.4 && (
+        <div style={{ position: 'absolute', right: vertical ? 54 : 96, top: vertical ? 96 : 64, display: 'flex', alignItems: 'center', gap: 10, padding: vertical ? '8px 18px' : '8px 18px', borderRadius: 999, background: 'rgba(8,12,24,0.55)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18)', fontFamily: FONT.sans, fontSize: vertical ? 24 : 22, fontWeight: 600, color: 'rgba(226,232,240,0.85)', opacity: ramp(t, CMDS[0].t0 - 0.4, 0.3, EASE.out) }}>
+          <span style={{ fontFamily: FONT.mono, letterSpacing: '-0.1em' }}>▶▶</span> 画面已加速
+        </div>
+      )}
       <Vignette strength={0.45} />
       <Grain opacity={0.1} />
     </Abs>

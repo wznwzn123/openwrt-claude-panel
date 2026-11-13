@@ -18,7 +18,8 @@ const RUSH0 = 10.35;
 const RUSH1 = 11.8;
 
 /** 白闪包络：峰值即刻，指数衰减（快门余韵） */
-const flashEnv = (t: number, at: number, len = 0.16) => (t < at ? 0 : Math.exp(-((t - at) / len) * 3.2));
+// up > 0：闪光前用 up 秒线性爬升（降低黑→白单帧跳变的刺激，审片 C1）
+const flashEnv = (t: number, at: number, len = 0.16, up = 0) => (t < at - up ? 0 : t < at ? (t - (at - up)) / up : Math.exp(-((t - at) / len) * 3.2));
 
 /* 取景器 HUD：四角括号 + 曝光读数 + 张数 */
 const Viewfinder: React.FC<{ t: number; shot: number; focus?: { x: number; y: number; w: number; h: number; lock: number } }> = ({ t, shot, focus }) => {
@@ -298,8 +299,7 @@ const TextMask: React.FC<{ t: number }> = ({ t }) => {
         </div>
       </Abs>
       <Abs style={{ left: 0, right: 0, top: vertical ? H * 0.66 : 712, textAlign: 'center', opacity: ramp(t, 9.0, 0.6, EASE.out) * lines, transform: `translateY(${(1 - ramp(t, 9.0, 0.6, EASE.out)) * 12}px)` }}>
-        <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 52 : 60, letterSpacing: '0.08em', color: C.text }}>旧时代的路由繁琐，至此终结</div>
-        <div style={{ marginTop: 14, fontFamily: FONT.mono, fontSize: 18, letterSpacing: '0.4em', color: 'rgba(6,182,212,0.75)' }}>END OF LEGACY · ENTERING NEW VIEW</div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 52 : 60, letterSpacing: '0.08em', color: C.text }}>OpenWrt，换一种管法</div>
       </Abs>
       {/* 冲入时的径向变焦拖影 */}
       {u > 0.25 && <Abs style={{ inset: 0, background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0) 30%, rgba(160,200,255,${0.25 * Math.sin(Math.PI * u)}) 100%)` }} />}
@@ -330,7 +330,7 @@ export const Act1: React.FC = () => {
         ? { x: W / 2, y: H / 2 + 120, w: mix(W * 0.8, 760, ramp(t, 1.56, 0.24, EASE.snappy)), h: mix(H * 0.6, 300, ramp(t, 1.56, 0.24, EASE.snappy)), lock: ramp(t, 1.56, 0.26, EASE.linear) }
         : undefined;
 
-  const flash = Math.max(flashEnv(t, 0.15, 0.06) * 0.35, flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08), flashEnv(t, WORD0, 0.1) * 0.5);
+  const flash = Math.max(flashEnv(t, 0.15, 0.06) * 0.35, flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08, 0.05), flashEnv(t, WORD0, 0.1, 0.05) * 0.5);
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: C.hud }}>
       {body}

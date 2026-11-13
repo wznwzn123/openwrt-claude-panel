@@ -124,9 +124,9 @@ const DaemonLayer: React.FC<{ w: number }> = ({ w }) => (
 );
 
 const PLATE_DATA = [
-  { k: '原生 ucode + uhttpd', d: '零 Python · 零 Node · 零 Docker，纯粹原生基因', icon: '⌁', col: C.violet },
-  { k: '仅占 2MB 闪存空间', d: '兼容 OpenWrt 22.03+ · Kwrt · ImmortalWrt', icon: '◫', col: C.blue },
-  { k: 'Cloudflare 加密隧道', d: '无需公网 IP · 无需开放端口 · 出门秒级直连', icon: '⟁', col: C.cyan },
+  { k: '跑在自带的 ucode + uhttpd 上', d: '不用装 Python、Node、Docker', icon: '⌁', col: C.violet },
+  { k: '面板本体约 2MB', d: '隧道组件 cloudflared 另计 · 小闪存可放内存运行', icon: '◫', col: C.blue },
+  { k: 'Cloudflare 加密隧道', d: '不用公网 IP · 不用开端口 · 出门也能连回家', icon: '⟁', col: C.cyan },
 ];
 
 export const Act2: React.FC = () => {
@@ -222,10 +222,10 @@ export const Act2: React.FC = () => {
             OpenWrt <span style={{ background: `linear-gradient(90deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`, WebkitBackgroundClip: 'text', color: 'transparent' }}>Claude</span> Panel
           </div>
           <div style={{ marginTop: 26, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 16.2, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 16.2, 0.6, EASE.out)) * 12}px)` }}>
-            原生 ucode 驱动<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>仅占 2MB 闪存
+            路由器自带 ucode 驱动<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>面板本体约 2MB
           </div>
           <div style={{ marginTop: 12, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 23.379, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 23.379, 0.6, EASE.out)) * 12}px)` }}>
-            无需公网 IP<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>加密隧道直连
+            无需公网 IP<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>出门也能连回家
           </div>
         </div>
 

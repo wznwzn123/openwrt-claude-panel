@@ -10,6 +10,7 @@ S = json.load(open('script.json'))
 ids = [a for a in sys.argv[1:] if not a.startswith('--')]
 keep = {a[7:] for a in sys.argv[1:] if a.startswith('--keep=')}
 GAP = 0.4
+OVER = []
 async def synth(a, rate):
     comm = edge_tts.Communicate(a.get('speak', a['text']), S['voice'], rate=rate, pitch=S.get('pitch', '+0Hz'),
                                 boundary='WordBoundary', proxy=os.environ.get('HTTPS_PROXY'))
@@ -35,7 +36,9 @@ async def main():
         else:
             w = json.load(open(f"{a['id']}.words.json"))
         end = a['start'] + w[-1]['end']
-        assert end <= a['window'][1], (a['id'], end, a['window'][1])
+        if end > a['window'][1]: print(f"  !! {a['id']} 超出时间窗 {end - a['window'][1]:.2f}s（结束 {end:.2f} > {a['window'][1]}）"); OVER.append(a['id'])
         ends[a['id']] = end
     json.dump(S, open('script.json', 'w'), ensure_ascii=False, indent=1)
 asyncio.run(main())
+import sys
+sys.exit(1 if OVER else 0)

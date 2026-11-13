@@ -147,19 +147,9 @@ export const HudRadar: React.FC = () => {
   );
 };
 
-/* 等宽数据列：随机数快速跳变 4 帧后落定 */
+/* 等宽数据列：路由器真实可见的状态信息（ifstatus / logread 风格，固定值；替换早期无意义的随机遥测数字） */
 export const HudDataColumn: React.FC = () => {
-  const t = useT();
-  const { fps } = useVideoConfig();
-  const f = Math.round(t * fps);
-  const step = Math.max(1, Math.round(fps / 15));
-  const rows = Array.from({ length: 9 }, (_, i) => {
-    const epoch = Math.floor((f + i * 7) / (fps * 1.2));
-    const local = (f + i * 7) - epoch * fps * 1.2;
-    const settled = local > step * 4;
-    const v = settled ? hash(epoch * 13 + i) : hash(Math.floor(f / step) * 31 + i);
-    return `${['RTT', 'PKT', 'NAT', 'TTL', 'MTU', 'SYN', 'DNS', 'ARP', 'CPU'][i]} ${(v * 999).toFixed(1).padStart(6, '0')}`;
-  });
+  const rows = ['WAN 100.64.23.18 · CGNAT', 'IPv4 公网 · 未获取', 'NAT 端口映射 · 失败', 'DNS 解析 · 18 ms', 'DHCP · 7 台在线', 'CONN 1284', 'LOAD 0.21 0.18 0.15', 'MEM 41%', 'UPTIME 12d 04h'];
   return (
     <div style={{ position: 'absolute', left: 96, top: 120, fontFamily: FONT.mono, fontSize: 14, lineHeight: 1.7, color: 'rgba(6,182,212,0.55)', letterSpacing: '0.08em' }}>
       {rows.map((r) => (

@@ -123,8 +123,9 @@ export const springAt = (
   config: Partial<{ stiffness: number; damping: number; mass: number }> = SPRING,
 ) => (t < start ? 0 : spring({ frame: (t - start) * fps, fps, config: { ...SPRING, ...config } }));
 
-/** 第五幕整体提前一小节（116 BPM ≈ 2.069s，取 60fps 整帧 124 帧）：第四幕压缩换来片尾 logo 定格与终止和弦 */
-export const SHIFT5 = 124 / 60;
+/** 第五幕整体平移量（秒）。第五版曾提前一小节（124/60）换片尾留白；第六版第四幕要放「思考中 / 先确认」，改回 0，
+ *  片尾留白改由更短的旁白与 87.5s 终止和弦提供 */
+export const SHIFT5 = 0;
 
 /** 当前时间（秒） */
 export const useT = () => {

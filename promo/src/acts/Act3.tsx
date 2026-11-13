@@ -15,9 +15,9 @@ const SEG_C = 46.138;
 const END = 54;
 
 const NAV = [
-  { at: A, text: '六大主流网络扩展套件全自动识别 · 线路异常自动切换' },
-  { at: SEG_B, text: '全屋设备流量洞察 · 一键定时断网' },
-  { at: SEG_C, text: '桌面级 PWA 体验 · 原生安卓多端协同' },
+  { at: A, text: '自动识别六款扩展套件 · 线路挂了自动换' },
+  { at: SEG_B, text: '每台设备的流量 · 一键定时断网' },
+  { at: SEG_C, text: '添加到主屏幕 · 安卓 App · 多台路由切换' },
 ];
 
 /* 顶部悬浮毛玻璃胶囊导航条 */
@@ -78,10 +78,10 @@ const TrafficPanel: React.FC<{ t: number; x: number; y: number; w: number; h: nu
   return (
     <Glass radius={30} style={{ left: x, top: y, width: w, height: h, opacity: o, transform: `translateY(${shake}px)` }}>
       <div style={{ position: 'absolute', left: 36, top: 30, fontFamily: FONT.sans, fontWeight: 800, fontSize: 34, color: C.text }}>流量统计</div>
-      <div style={{ position: 'absolute', left: 36, top: 80, fontFamily: FONT.sans, fontSize: 20, color: C.text2 }}>今日 · 按设备 · 每分钟更新</div>
+      <div style={{ position: 'absolute', left: 36, top: 80, fontFamily: FONT.sans, fontSize: 20, color: C.text2 }}>今日 · 按设备 · 每分钟更新 · 需配合扩展套件</div>
       <div style={{ position: 'absolute', right: 36, top: 36 }}>
         <Pill style={{ fontSize: 20 }}>
-          今日合计 <b style={{ fontFamily: FONT.mono }}>{mix(16.8, 47.5, ramp(t, shootStart, 1.2, EASE.out)).toFixed(1)} GB</b>
+          今日合计 <b style={{ fontFamily: FONT.mono }}>{mix(16.8, 48.5, ramp(t, shootStart, 1.2, EASE.out)).toFixed(1)} GB</b>
         </Pill>
       </div>
       <div style={{ position: 'absolute', left: cx0, top: 150, width: cw, height: ch }}>
@@ -146,7 +146,7 @@ export const Act3: React.FC = () => {
   /* ── 段 A：card-stack 三联扇形矩阵 ── */
   const fan = springAt(t, FAN, fps, { damping: 20, stiffness: 150, mass: 1 });
   const prep = ramp(t, FAN - 0.15, 0.15, EASE.swift) * (1 - fan);
-  const swA = vertical ? 278 : 338; // 主机放大 1.08 后仍留出底部安全边与字幕区
+  const swA = vertical ? 470 : 338; // 竖屏只留主机、近满宽（审片 B12）；横屏主机放大 1.08 后仍留出底部安全边与字幕区
   const spread = vertical ? 300 : 450;
   const enter = (i: number) => springAt(t, A + 0.05 + i * 0.16, fps, { damping: 14, stiffness: 200, mass: 0.85 });
   const stackPress = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, Math.sin(Math.PI * ramp(t, A + 0.25 + i * 0.16, 0.18, EASE.linear))) * 5, 0);
@@ -199,17 +199,17 @@ export const Act3: React.FC = () => {
         <Abs style={{ inset: 0, opacity: 1 - endOut }}>
           {!vertical && <div style={{ position: 'absolute', left: W / 2 - 1, top: 160, bottom: 120, width: 2, background: 'linear-gradient(180deg, rgba(255,255,255,0), rgba(160,200,255,0.55), rgba(255,255,255,0))' }} />}
           {[0, 1].map((i) => {
-            const x = vertical ? W * (0.27 + i * 0.46) : W * (0.25 + i * 0.5);
-            const sw = vertical ? 268 : 306;
+            const x = W * (0.25 + i * 0.5);
+            const sw = vertical ? 440 : 306; // 竖屏双机放大到并排满宽（审片 B12）
             return (
               <React.Fragment key={i}>
-                <Pose x={x} y={vertical ? H * 0.47 : cy + 30} sw={sw} s={vertical ? 0.86 : 1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
+                <Pose x={x} y={vertical ? H * 0.47 : cy + 30} sw={sw} s={1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
                   {i === 0 ? <Phone w={sw} full><PwaFlow t={t} w={sw} a={SEG_C} /></Phone> : <Phone w={sw} full dark><AndroidFlow t={t} w={sw} a={SEG_C} /></Phone>}
                 </Pose>
                 <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
                   {!vertical && (
                     <>
-                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text, whiteSpace: 'nowrap' }}>{i === 0 ? '添加到主屏幕 · 桌面级 PWA' : '原生安卓客户端'}</div>
+                      <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text, whiteSpace: 'nowrap' }}>{i === 0 ? '添加到主屏幕' : '安卓 App'}</div>
                       <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text3, marginTop: 6, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>{i === 0 ? 'iOS / ANDROID · 指纹面板锁' : 'v3.1.3 · 扫码 / 粘贴添加 · 多路由切换'}</div>
                     </>
                   )}
@@ -222,14 +222,14 @@ export const Act3: React.FC = () => {
       {/* 段 A（推入时视差左移，卡片完全覆盖后卸载） */}
       {pushIn < 1 && (
         <Abs style={{ inset: 0, transform: `translateX(${-0.35 * W * pushIn}px)` }}>
-          <Abs style={{ inset: 0, transform: `scale(${breathA * pushA * (1 - prep * 0.02)}) translateY(${stackPress}px)`, transformOrigin: `${W * 0.58}px ${cy + 0.05 * swA}px` }}>
+          <Abs style={{ inset: 0, transform: `scale(${breathA * pushA * (1 - prep * 0.02)}) translateY(${stackPress}px)`, transformOrigin: `${vertical ? W / 2 : W * 0.58}px ${cy + 0.05 * swA}px` }}>
             <div style={{ position: 'absolute', left: W * 0.55 - 600, top: cy + swA + 30, width: 1200, height: 80, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)' }} />
             {/* 黄金三角立体交错：主机居中偏右前景、左辅机退到左后方虚化、右辅机沉入右下角露出局部测速面板 */}
-            {[0, 2, 1].map((i) => {
+            {(vertical ? [1] : [0, 2, 1]).map((i) => {
               const e = enter(i);
               const L = [
                 { x: W * 0.33, dy: -10, s: 0.88, ry: 22, rz: -2, z: 1, blur: 1.6, dim: 0.78 }, // 辅机一：左后方
-                { x: W * 0.58, dy: 0, s: 1.08, ry: -8, rz: 0, z: 3, blur: 0, dim: 1 }, // 主机：前景主视角
+                { x: vertical ? W / 2 : W * 0.58, dy: 0, s: vertical ? 1 : 1.08, ry: vertical ? -4 : -8, rz: 0, z: 3, blur: 0, dim: 1 }, // 主机：前景主视角
                 { x: W * 0.77, dy: 40, s: 0.82, ry: -12, rz: 3, z: 2, blur: 0, dim: 0.92 }, // 辅机二：右下角，部分被主机遮挡
               ][i];
               const x = mix(cx, L.x, fan);

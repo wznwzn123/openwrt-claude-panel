@@ -64,7 +64,7 @@ script.append_track(draft.TrackSpec(draft.TrackType.audio, name='人声'))
 script.append_track(draft.TrackSpec(draft.TrackType.audio, name='BGM'))
 
 plate = draft.VideoMaterial(plate_dst)
-for a, b in [(0, 12), (12, 28), (28, 54), (54, 74 - 124 / 60), (74 - 124 / 60, 90)]:
+for a, b in [(0, 12), (12, 28), (28, 54), (54, 74), (74, 90)]:
     r = rng(s2f(a), s2f(b))
     script.add_segment(draft.VideoSegment(plate, r, source_timerange=r), '底片')
 

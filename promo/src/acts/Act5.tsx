@@ -26,12 +26,12 @@ const CMD = 'cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude
 const TARGETS = [
   // 坐标 = 真实面板「断线记录」页（shots/real/wd.png，CSS px，393 宽视口）里各状态胶囊的位置
   { x0: 33, y0: 247, x1: 140, y1: 283, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
-  { x0: 256, y0: 247, x1: 359, y1: 283, label: '⚠ DNS 解析', note: '异常 → 已自愈 ×2' },
+  { x0: 256, y0: 247, x1: 359, y1: 283, label: '⚠ DNS 解析', note: '异常 → 已自动修复 ×2' },
   { x0: 33, y0: 291, x1: 140, y1: 327, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
   { x0: 256, y0: 291, x1: 359, y1: 327, label: '扩展套件进程', note: '守护中 · 正常' },
 ];
 
-const Notice: React.FC<{ t: number; at: number; title: string; body: string; slot: number }> = ({ t, at, title, body, slot }) => {
+const Notice: React.FC<{ t: number; at: number; title: string; body: string; slot: number; tag?: string }> = ({ t, at, title, body, slot, tag = '完整版 / 托管版' }) => {
   const { fps } = useVideoConfig();
   const k = springAt(t, at, fps);
   return (
@@ -39,7 +39,7 @@ const Notice: React.FC<{ t: number; at: number; title: string; body: string; slo
       <Glass radius={22} fill={0.1} style={{ position: 'relative', padding: '18px 22px', display: 'flex', gap: 16 }}>
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, flex: 'none', boxShadow: '0 0 20px rgba(34,197,94,0.45)' }}>✉</div>
         <div>
-          <div style={{ fontFamily: FONT.sans, fontSize: 18, color: C.text2 }}>微信 · PushPlus 推送 · 刚刚</div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 18, color: C.text2, display: 'flex', alignItems: 'center', gap: 10 }}>微信 · PushPlus 推送 · 刚刚<span style={{ fontSize: 15, padding: '1px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.1)', color: C.text2 }}>{tag}</span></div>
           <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginTop: 4 }}>{title}</div>
           <div style={{ fontFamily: FONT.sans, fontSize: 19, color: C.text2, marginTop: 4 }}>{body}</div>
         </div>
@@ -139,20 +139,20 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
       </Abs>
       {!vertical && (
         <>
-          <Notice t={t} at={76.6} slot={0} title="每日端到端加密云端备份已就绪" body="保留 10 份 · 可一键恢复" />
-          <Notice t={t} at={79.25} slot={1} title="离线根因诊断：家里市电断电" body="路由器 23:41 离线 · 来电后已自动恢复" />
+          <Notice t={t} at={76.6} slot={0} title="今日云端备份完成（已加密）" body="保留 10 份 · 开启加密后在路由器本地加密" />
+          <Notice t={t} at={79.25} slot={1} title="路由器离线原因：家里断电" body="23:41 离线 · 来电后已自动恢复" />
         </>
       )}
       {vertical && (
         <>
           <div style={{ position: 'absolute', left: 0, right: 0, top: H * 0.73, transform: 'scale(0.95)' }}>
-            <Notice t={t} at={79.8} slot={0} title="离线根因诊断：家里市电断电" body="来电后已自动恢复" />
+            <Notice t={t} at={79.8} slot={0} title="路由器离线原因：家里断电" body="来电后已自动恢复" />
           </div>
         </>
       )}
       <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 170 : 80, textAlign: 'center', opacity: ramp(t, 74.3, 0.5, EASE.out) }}>
         <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 40 : 40, letterSpacing: '0.06em', color: C.text }}>
-          30秒看门狗自动自愈<span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>断电断网微信精准推送
+          看门狗 30 秒巡检，出问题自动修<span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>断电 / 断网微信提醒
         </span>
       </div>
     </Abs>
@@ -190,8 +190,8 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
   const breathe = t > 88.8 ? 1 + 0.006 * Math.sin((t - 88.8) * 3) : 1;
   const enterFlash = t >= ENTER && t < ENTER + 0.15 ? 1 - (t - ENTER) / 0.15 : 0;
   const capData = [
-    { k: '托管版 · 零门槛', a: '输入邀请码即得专属域名', b: '官网注册领 7 天免费试用', col: C.blue },
-    { k: '自建版 · 全掌控', a: '自有 Cloudflare 域名', b: '端到端加密备份 · MIT 协议开源', col: C.violet },
+    { k: '托管版 · 免折腾', a: '输入邀请码即得专属域名', b: '官网注册领 7 天免费试用', col: C.blue },
+    { k: '自建版 · 全掌控', a: '自有 Cloudflare 域名', b: '可选加密云端备份 · MIT 协议开源', col: C.violet },
   ];
   return (
     <Abs style={{ inset: 0 }}>
@@ -318,7 +318,11 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
           <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 72 : 86, color: C.text, letterSpacing: '-0.005em', opacity: ramp(t, WORD, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, WORD, 0.6, EASE.out)) * 16}px)` }}>
             OpenWrt <span style={{ background: `linear-gradient(90deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`, WebkitBackgroundClip: 'text', color: 'transparent' }}>Claude</span> Panel
           </div>
-          <div style={{ marginTop: 34, display: 'flex', justifyContent: 'center', opacity: ramp(t, LINKS, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, LINKS, 0.6, EASE.out)) * 12}px)` }}>
+          {/* 品牌全称（官网与 App 名为「路由器面板」）+ 核心主张（审片 B8 / A7） */}
+          <div style={{ marginTop: 18, fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 30 : 34, color: C.text2, letterSpacing: '0.02em', opacity: ramp(t, WORD + 0.25, 0.6, EASE.out) }}>
+            路由器面板<span style={{ color: C.text3, margin: '0 0.5em' }}>·</span>不用公网 IP，在手机上管好家里的路由器
+          </div>
+          <div style={{ marginTop: 30, display: 'flex', justifyContent: 'center', opacity: ramp(t, LINKS, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, LINKS, 0.6, EASE.out)) * 12}px)` }}>
             <Glass radius={999} fill={0.07} style={{ position: 'relative', padding: '16px 36px', display: 'flex', gap: 26, alignItems: 'center', flexDirection: vertical ? 'column' : 'row' }}>
               <span style={{ fontFamily: FONT.sans, fontSize: 30, color: C.text2 }}>
                 官网 <b style={{ fontFamily: FONT.mono, color: C.text, fontWeight: 700 }}>yrlove520.com</b>

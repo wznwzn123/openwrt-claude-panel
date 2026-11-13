@@ -7,7 +7,7 @@ ffmpeg -v error -y -i "$V" -i "$A" -map 0:v -map 1:a \
   -vf "scale=in_range=auto:out_range=tv:in_color_matrix=auto:out_color_matrix=bt709,format=yuv420p" \
   -c:v libx264 -profile:v high -preset slow -crf 16 -x264-params "colorprim=bt709:transfer=bt709:colormatrix=bt709" \
   -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
-  -af "volume=0.4dB,aresample=192000,alimiter=limit=0.74:attack=1:release=60:level=false:asc=1,aresample=48000" \
+  -af "volume=0.6dB,aresample=192000,alimiter=limit=0.72:attack=1:release=60:level=false:asc=1,aresample=48000" \
   -c:a aac -b:a 256k -ar 48000 -shortest -movflags +faststart "$O"
 echo "== $O"
 ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=width,height,r_frame_rate,nb_read_frames,profile,codec_name,pix_fmt,color_range,color_space,color_primaries,color_transfer -show_entries format=duration,bit_rate -of default=nw=1 "$O"

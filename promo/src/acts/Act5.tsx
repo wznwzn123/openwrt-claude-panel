@@ -35,7 +35,7 @@ const Notice: React.FC<{ t: number; at: number; title: string; body: string; slo
   const { fps } = useVideoConfig();
   const k = springAt(t, at, fps);
   return (
-    <div style={{ position: 'absolute', right: 144 + (1 - k) * -560, top: 150 + slot * 148, width: 520, opacity: Math.min(1, k * 1.5) }}>
+    <div style={{ position: 'absolute', right: 144 + (1 - k) * -560, top: 140 + slot * 122, width: 520, opacity: Math.min(1, k * 1.5) }}>
       <Glass radius={22} fill={0.1} style={{ position: 'relative', padding: '18px 22px', display: 'flex', gap: 16 }}>
         <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 26, flex: 'none', boxShadow: '0 0 20px rgba(34,197,94,0.45)' }}>✉</div>
         <div>
@@ -92,8 +92,9 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
             </svg>
           );
           const lk = ramp(t, ft + 0.12, 0.3, EASE.out);
-          const labelX = vertical ? 60 + (i % 2) * (W / 2 - 40) : W * 0.47;
-          const labelY = vertical ? py + ph / 2 + 30 + Math.floor(i / 2) * 110 : 470 + i * 112;
+          // 竖屏改为单列，避免长标注互相重叠（审片 A7）
+          const labelX = vertical ? 60 : W * 0.47;
+          const labelY = vertical ? py + ph / 2 + 30 + i * 84 : 470 + i * 112;
           const n = Math.floor(lk * (g.label.length + g.note.length + 3));
           const txt = `${g.label} · ${g.note}`.slice(0, n);
           return (
@@ -134,13 +135,13 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
         })}
         {/* 状态行 + 30 秒巡检环 */}
         <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.47, top: vertical ? 300 : 410, fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.16em', color: t > SCAN1 ? '#86efac' : C.cyan }}>
-          {t > SCAN1 ? 'WATCHDOG · 4/4 SIGNALS HEALTHY' : 'WATCHDOG · SCANNING…'} · INTERVAL 30s
+          {t > SCAN1 ? 'WATCHDOG · ALL CHECKS OK' : 'WATCHDOG · SCANNING…'} · INTERVAL 30s
         </div>
       </Abs>
       {!vertical && (
         <>
           <Notice t={t} at={76.6} slot={0} title="今日云端备份完成（已加密）" body="保留 10 份 · 开启加密后在路由器本地加密" />
-          <Notice t={t} at={79.25} slot={1} title="路由器离线原因：家里断电" body="23:41 离线 · 来电后已自动恢复" />
+          <Notice t={t} at={79.25} slot={1} title="路由器离线原因：家里断电" body="21:41 离线 · 来电后已自动恢复" />
         </>
       )}
       {vertical && (
@@ -152,7 +153,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
       )}
       <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 170 : 80, textAlign: 'center', opacity: ramp(t, 74.3, 0.5, EASE.out) }}>
         <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 40 : 40, letterSpacing: '0.06em', color: C.text }}>
-          看门狗 30 秒巡检，出问题自动修<span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>断电 / 断网微信提醒
+          看门狗 30 秒巡检，出问题自动修{vertical ? <br /> : <span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>}断电 / 断网微信提醒
         </span>
       </div>
     </Abs>
@@ -191,7 +192,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
   const enterFlash = t >= ENTER && t < ENTER + 0.15 ? 1 - (t - ENTER) / 0.15 : 0;
   const capData = [
     { k: '托管版 · 免折腾', a: '输入邀请码即得专属域名', b: '官网注册领 7 天免费试用', col: C.blue },
-    { k: '自建版 · 全掌控', a: '自有 Cloudflare 域名', b: '可选加密云端备份 · MIT 协议开源', col: C.violet },
+    { k: '自建版 · 全掌控', a: '自己的 Cloudflare · 精简版可免账号', b: '可选加密云端备份 · MIT 协议开源', col: C.violet },
   ];
   return (
     <Abs style={{ inset: 0 }}>
@@ -200,7 +201,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
         {/* 顶部大字 */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? H * 0.22 : 150, textAlign: 'center', opacity: ramp(t, FIN + 0.1, 0.5, EASE.out) * (1 - ramp(t, ENTER, 0.3, EASE.exit)) }}>
           <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 38 : 46, letterSpacing: '0.05em', color: C.text }}>
-            托管版免折腾即刻上手<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>自建版 MIT 协议全开源
+            托管版：输邀请码就能用<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>自建版：代码全部开源（MIT）
           </span>
         </div>
         {/* 终端窗 → 徽标 */}
@@ -208,7 +209,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
           <div style={{ position: 'absolute', left: cx - w / 2, top: cy - h / 2, width: w, height: h, borderRadius: r, overflow: 'hidden', transform: `scale(${mix(1, 0.02, collapseX)}, ${mix(1, 0.02, collapseY)})`, filter: collapseY > 0 ? `brightness(${1 + 3 * collapseY})` : undefined, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(28px) saturate(165%)', boxShadow: `inset 0 1px 0 rgba(255,255,255,0.26), inset 0 0 0 1px rgba(255,255,255,0.1), 0 30px 80px rgba(0,0,0,0.5)` }}>
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1D2D5E, #101C40 60%, #0B1430)', clipPath: `circle(${flood * 150}% at 92% 80%)` }} />
             <div style={{ position: 'absolute', left: 22, top: 18, display: 'flex', gap: 9, opacity: 1 - m }}>
-              {['#ff5f57', '#febc2e', '#28c840'].map((c) => <div key={c} style={{ width: 14, height: 14, borderRadius: 7, background: c }} />)}
+              {/* 路由器终端不画 macOS 三色点（审片 B11） */}
               <span style={{ marginLeft: 14, fontFamily: FONT.mono, fontSize: 17, color: C.text3 }}>root@OpenWrt: ~</span>
             </div>
             <div style={{ position: 'absolute', left: 28, right: 28, top: 58, fontFamily: FONT.mono, fontSize: vertical ? 21 : 21, lineHeight: 1.6, color: '#e2e8f0', wordBreak: 'normal', overflowWrap: 'normal', opacity: 1 - textFly, transform: `translate(${textFly * 300}px, ${-textFly * 120}px) rotate(${-textFly * 6}deg)`, filter: textFly > 0 ? `blur(${textFly * 4}px)` : undefined }}>
@@ -219,42 +220,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
             {enterFlash > 0 && <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: enterFlash * 0.5 }} />}
           </div>
         )}
-        {/* 流光粒子：代码化作光粒向中心聚拢 */}
-        {t > ENTER && t < DROP[0] + 0.05 && (
-          <svg width={W} height={H} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible' }}>
-            {Array.from({ length: 120 }, (_, i) => {
-              const sx = W / 2 + (hash(i * 3) - 0.5) * tw;
-              const sy = (vertical ? H * 0.5 : H * 0.53) + (hash(i * 5) - 0.35) * th * 0.7;
-              const st = ENTER + hash(i * 7) * 0.22;
-              const bz = (u: number) => {
-                // 二次贝塞尔：控制点向外甩出一道弧（螺旋汇聚）
-                const ang = hash(i * 11) * Math.PI * 2;
-                const cxp = mix(sx, markCx, 0.4) + Math.cos(ang) * 320;
-                const cyp = mix(sy, markCy, 0.4) + Math.sin(ang) * 200;
-                const a = (1 - u) * (1 - u), b = 2 * (1 - u) * u, c = u * u;
-                return [a * sx + b * cxp + c * markCx, a * sy + b * cyp + c * markCy];
-              };
-              const u = ramp(t, st, DROP[0] - st, EASE.inQuad);
-              const [hx, hy] = bz(u);
-              const [tx2, ty2] = bz(Math.max(0, u - 0.14));
-              const colr = i % 3 ? '#a5d8ff' : '#FFD2BF';
-              return (
-                <g key={i} opacity={Math.min(1, u * 6)}>
-                  <line x1={tx2} y1={ty2} x2={hx} y2={hy} stroke={colr} strokeWidth={2} strokeLinecap="round" opacity={0.55} />
-                  <circle cx={hx} cy={hy} r={7} fill={colr} opacity={0.22} />
-                  <circle cx={hx} cy={hy} r={2.6} fill="#fff" />
-                </g>
-              );
-            })}
-          </svg>
-        )}
-        {/* 85.45s 汇聚点闪光 */}
-        {t >= DROP[0] && t < DROP[0] + 0.7 && (
-          <>
-            <div style={{ position: 'absolute', left: markCx - 600, top: markCy - 600, width: 1200, height: 1200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(165,216,255,0.45) 18%, rgba(124,58,237,0.15) 40%, rgba(0,0,0,0) 65%)', opacity: Math.exp(-((t - DROP[0]) / 0.12) * 1.6) }} />
-            <div style={{ position: 'absolute', left: markCx, top: markCy, width: 20 + 1400 * ramp(t, DROP[0], 0.6, EASE.out), height: 20 + 1400 * ramp(t, DROP[0], 0.6, EASE.out), transform: 'translate(-50%,-50%)', borderRadius: '50%', border: '2px solid rgba(200,230,255,0.9)', boxShadow: '0 0 30px rgba(124,58,237,0.7)', opacity: 1 - ramp(t, DROP[0], 0.6, EASE.linear) }} />
-          </>
-        )}
+        {/* 第六版删掉流光粒子与汇聚点闪光环（模板化），徽标由光核点亮后部件落位 */}
         {/* 落槽拼装徽标 */}
         {/* 光核：坍缩点爆闪 */}
         {t >= ENTER + 0.22 && t < ENTER + 1.0 && (

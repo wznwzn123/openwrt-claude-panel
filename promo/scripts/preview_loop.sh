@@ -6,7 +6,7 @@ SRC=${1:-out/plate.mp4}; O=${2:-out/preview-loop-15s.mp4}
 X=0.4
 # 段：聚光登场 · 层级爆炸+铭牌 · 批量测速+自动切换 · Claude 指令（思考→工具→生效），末段 = 首段副本。
 # 前四段溶接后第 5 段起点 = 3.6+4.4+3.8+4.8-4×0.4 = 15.0s；取 [0.4, 15.4)：尾帧 = 第 5 段 0.4s = 首帧，真正无缝（审片 C7）
-segs=("12.25 3.6" "20.0 4.4" "36.7 3.8" "60.1 4.8" "12.25 3.6")
+segs=("12.25 3.6" "20.0 4.4" "36.7 3.8" "54.0 4.8" "12.25 3.6")   # 第四段改用工具墙（54.0–58.8s 内无硬切），循环点不再跳（审片 C5）
 in=(); fc=""; i=0
 for s in "${segs[@]}"; do set -- $s; in+=(-ss "$1" -t "$2" -i "$SRC"); fc+="[$i:v]fps=30,scale=1280:720:flags=lanczos,setpts=PTS-STARTPTS[v$i];"; i=$((i+1)); done
 off=$(python3 -c "print(3.6-$X)"); fc+="[v0][v1]xfade=transition=fade:duration=$X:offset=$off[x1];"

@@ -1,6 +1,6 @@
 import json, re, subprocess
 S=json.load(open("script.json"))
-P=r'[，。；、：]'
+P=r'[，。；、：？]'
 norm=lambda s: re.sub(r'[\s，。；、,.;]','',s).lower()
 out={"acts":[],"phrases":[]}
 filt=[]; inputs=[]

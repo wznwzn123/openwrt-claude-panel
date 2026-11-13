@@ -112,12 +112,12 @@ const TunnelLayer: React.FC<{ t: number; w: number }> = ({ t, w }) => (
       const inset = k * w * 0.48;
       return <div key={i} style={{ position: 'absolute', left: inset, right: inset, top: inset * 2, bottom: inset * 2, borderRadius: w * 0.15 * (1 - k), border: `1.5px solid rgba(103,232,249,${0.7 * (1 - k)})` }} />;
     })}
-    <div style={{ position: 'absolute', left: 0, right: 0, top: '46%', textAlign: 'center', fontFamily: FONT.mono, fontSize: 18, color: '#a5f3fc', letterSpacing: '0.12em' }}>TLS · QUIC · 0 OPEN PORTS</div>
+    <div style={{ position: 'absolute', left: 0, right: 0, top: '46%', textAlign: 'center', fontFamily: FONT.mono, fontSize: 18, color: '#a5f3fc', letterSpacing: '0.12em' }}>TLS · HTTP/2 · 0 OPEN PORTS</div>
   </div>
 );
 const DaemonLayer: React.FC<{ w: number }> = ({ w }) => (
   <div style={{ position: 'absolute', inset: 0, borderRadius: w * 0.15, overflow: 'hidden', background: 'linear-gradient(160deg, #2a1b52, #141033)', boxShadow: 'inset 0 0 0 2px rgba(167,139,250,0.8), 0 0 80px rgba(124,58,237,0.45)', padding: 26, boxSizing: 'border-box', fontFamily: FONT.mono, fontSize: 16, lineHeight: 1.75, color: '#c4b5fd' }}>
-    {['$ ps | grep -E "uhttpd|ucode"', '  1532 root  uhttpd -p 0.0.0.0:80', '  1611 root  ucode /www/cgi-bin/api', '  1688 root  cmcp-watchdog --30s', '  1702 root  cloudflared tunnel run', '', '$ du -sh /www/panel', '  2.0M   /www/panel', '', '# python: none', '# node:   none', '# docker: none'].map((l, i) => (
+    {/* 与 src/init.d/claude-mcp 一致：uhttpd 只监听本机 127.0.0.1:18765，隧道 --protocol http2；其余用注释说明（不伪造命令输出） */ ['$ ps | grep -E "uhttpd|cloudflared"', '  1532 root uhttpd -f', '       -p 127.0.0.1:18765', '       -h /www-claude-mcp', '  1702 root cloudflared tunnel', '       --protocol http2', '', '# 只监听本机，不开端口', '# 看门狗每 30 秒巡检', '# 不用 python/node/docker', '# 面板本体约 2 MB'].map((l, i) => (
       <div key={i} style={{ color: l.startsWith('#') ? '#86efac' : l.startsWith('$') ? '#e9d5ff' : '#c4b5fd', whiteSpace: 'pre' }}>{l}</div>
     ))}
   </div>
@@ -133,7 +133,7 @@ export const Act2: React.FC = () => {
   const t = useT();
   const { fps } = useVideoConfig();
   const { W, H, vertical } = useV();
-  const sw = vertical ? 305 : 334; // 屏幕宽（6.1 寸真机比例 393×852，高度与旧 1:2 版持平）
+  const sw = vertical ? 400 : 334; // 屏幕宽（6.1 寸真机比例 393×852，高度与旧 1:2 版持平）
   const { pw, ph } = phoneBox(sw);
 
   // 手机运动：左侧破光而出 → 左黄金分割（28%）→ 20s 滑向右侧（72%）
@@ -222,10 +222,7 @@ export const Act2: React.FC = () => {
             OpenWrt <span style={{ background: `linear-gradient(90deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`, WebkitBackgroundClip: 'text', color: 'transparent' }}>Claude</span> Panel
           </div>
           <div style={{ marginTop: 26, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 16.2, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 16.2, 0.6, EASE.out)) * 12}px)` }}>
-            路由器自带 ucode 驱动<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>面板本体约 2MB
-          </div>
-          <div style={{ marginTop: 12, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 23.379, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 23.379, 0.6, EASE.out)) * 12}px)` }}>
-            无需公网 IP<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>出门也能连回家
+            不用公网 IP，在手机上管好家里的路由器
           </div>
         </div>
 
@@ -236,7 +233,7 @@ export const Act2: React.FC = () => {
           const y = vertical ? H * 0.745 : 520 + i * 150;
           if (vertical && i !== (t < PLATES[1] ? 0 : t < PLATES[2] ? 1 : 2)) return null;
           return (
-            <Glass key={i} radius={24} style={{ left: x + (1 - k) * -260, top: y, width: vertical ? W - 160 : 600, height: 124, opacity: Math.min(1, k * 1.6), display: 'flex', alignItems: 'center', gap: 22, padding: '0 28px' }}>
+            <Glass key={i} radius={24} style={{ left: x + (1 - k) * -260, top: y, width: vertical ? W - 160 : 600, height: 124, opacity: Math.min(1, k * 1.6) * (i < PLATES.filter((pt) => t >= pt + 0.3).length - 1 ? 0.5 : 1), display: 'flex', alignItems: 'center', gap: 22, padding: '0 28px' }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(135deg, ${p.col}, rgba(255,255,255,0.08))`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, color: '#fff', boxShadow: `0 0 30px ${p.col}66`, flex: 'none' }}>{p.icon}</div>
               <div>
                 <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 32, color: C.text }}>{p.k}</div>

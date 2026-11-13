@@ -32,7 +32,7 @@ const DemoTag: React.FC<{ t: number }> = ({ t }) => {
   const o = ramp(t, DEMO_FROM, 0.4) * (1 - ramp(t, DEMO_TO - 0.3, 0.3));
   if (o <= 0) return null;
   return (
-    <div style={{ position: 'absolute', ...(vertical ? { left: 54, top: 56 } : { right: 96, bottom: 24 }), fontFamily: FONT.sans, fontSize: vertical ? 24 : 20, fontWeight: 600, letterSpacing: '0.06em', color: 'rgba(226,232,240,0.72)', textShadow: '0 1px 6px rgba(0,0,0,0.55)', opacity: o, pointerEvents: 'none' }}>
+    <div style={{ position: 'absolute', ...(vertical ? { left: 54, top: 56 } : { right: 96, bottom: 24 }), fontFamily: FONT.sans, fontSize: vertical ? 26 : 24, fontWeight: 600, letterSpacing: '0.06em', color: 'rgba(226,232,240,0.72)', textShadow: '0 1px 6px rgba(0,0,0,0.55)', opacity: o, pointerEvents: 'none' }}>
       界面为演示数据
     </div>
   );
@@ -49,6 +49,7 @@ export const ACTS = [
 export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtitles = true, safe = false }) => {
   const t = useT();
   const { fps } = useVideoConfig();
+  const { vertical } = useV();
   // 第四幕 → 第五幕：第六版不再第二次用扫描线擦除（模板感），改为卡在半拍 73.81s 的硬切 + 一记轻闪 + 第五幕 3% 回弹
   const W5 = 73.81 - SHIFT5;
   return (
@@ -58,7 +59,7 @@ export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtit
       {/* 近静止段补缓慢推镜（审片 A6 / B9）：第二幕全程 1→1.07；第三幕按段推进，段间转场前 0.35s 收回 */}
       {t >= 11.8 && t < 28 && <AbsoluteFill style={{ transform: `scale(${1 + 0.035 * ramp(t, 12.4, 3.4) + 0.035 * ramp(t, 21.6, 6.2)})` }}><Act2 /></AbsoluteFill>}
       {t >= 28 && t < 54 && (
-        <AbsoluteFill style={{ transform: `scale(${1 + 0.04 * ramp(t, 29.4, 8.6) * (1 - ramp(t, 38.0, 0.35)) + 0.03 * ramp(t, 38.6, 5.0) * (1 - ramp(t, 43.7, 0.35)) + 0.07 * ramp(t, 45.0, 9.0)})` }}>
+        <AbsoluteFill style={{ transform: `scale(${1 + (vertical ? 0.4 : 1) * (0.04 * ramp(t, 29.4, 8.6) * (1 - ramp(t, 38.0, 0.35)) + 0.03 * ramp(t, 38.6, 5.0) * (1 - ramp(t, 43.7, 0.35)) + 0.07 * ramp(t, 45.0, 9.0))})` }}>
           <Act3 />
         </AbsoluteFill>
       )}

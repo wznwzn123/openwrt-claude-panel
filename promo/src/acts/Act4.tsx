@@ -62,12 +62,12 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
 /* 双屏版式（飞字槽位与面板同源） */
 const layout = (W: number, H: number, vertical: boolean) => {
   const pw = vertical ? W - 80 : 860;
-  const ph = vertical ? 700 : 720;
+  const ph = vertical ? 620 : 720;
   return { pw, ph, lx: vertical ? 40 : W / 2 - pw - 22, rx: vertical ? 40 : W / 2 + 22, ly: vertical ? 170 : 110, ry: vertical ? 170 + ph + 30 : 110 };
 };
 
 /* —— 对话脚本 —— */
-type Cmd = { text: string; t0: number; send: number; think: number; tools: Array<{ name: string; at: number }>; confirm?: { ask: number; ok: number; text: string }; toolAt: number; state: number; reply: string; replyAt: number };
+type Cmd = { text: string; t0: number; send: number; think: number; tools: Array<{ name: string; at: number }>; confirm?: { ask: number; ok: number; text: string; detail?: string }; toolAt: number; state: number; reply: string; replyAt: number };
 // 三条指令的时刻由 voice/act4_sync.py 从字级时间戳推导（状态响应 = 旁白关键词发声帧），换配音后重跑即重新对齐
 const CMDS: Cmd[] = ACT4.cmds;
 const CHAR = ACT4.char;
@@ -128,20 +128,25 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
       },
     });
     if (c.confirm) {
+      // Claude 客户端对标为「危险操作」的连接器工具默认弹出授权卡（允许 / 拒绝），而不是对话里的自绘按钮
       const cf = c.confirm;
       items.push({
         at: cf.ask,
-        h: 168,
+        h: 176,
         node: (k) => {
           const done = t >= cf.ok;
           const press = ramp(t, cf.ok - 0.06, 0.06, EASE.out) * (1 - ramp(t, cf.ok + 0.06, 0.15, EASE.out));
           return (
             <div style={{ opacity: k, transform: `translateY(${(1 - k) * 14}px)`, marginBottom: 14 }}>
-              <div style={{ maxWidth: '86%', padding: '14px 20px', borderRadius: '22px 22px 22px 6px', background: 'rgba(255,255,255,0.08)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.16), inset 0 0 0 1px rgba(255,190,150,0.35)', fontFamily: FONT.sans, fontSize: 24, lineHeight: 1.5, color: C.text }}>
-                {cf.text}
-                <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
-                  <span style={{ padding: '6px 22px', borderRadius: 12, fontWeight: 700, fontSize: 22, background: done ? 'rgba(52,199,89,0.3)' : '#D97757', color: done ? '#bbf7d0' : '#fff', transform: `scale(${1 - 0.08 * press})`, boxShadow: done ? 'inset 0 0 0 1.5px rgba(52,199,89,0.7)' : '0 6px 18px rgba(217,119,87,0.45)' }}>{done ? '✓ 已确认' : '确认'}</span>
-                  <span style={{ padding: '6px 22px', borderRadius: 12, fontSize: 22, color: C.text3, background: 'rgba(255,255,255,0.06)', opacity: done ? 0.4 : 1 }}>取消</span>
+              <div style={{ maxWidth: '90%', padding: '14px 18px', borderRadius: 18, background: 'rgba(12,16,28,0.72)', boxShadow: 'inset 0 0 0 1.5px rgba(255,190,150,0.45), 0 12px 30px rgba(0,0,0,0.35)', fontFamily: FONT.sans, color: C.text }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22, fontWeight: 700 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: 6, background: 'radial-gradient(circle at 35% 30%, #F2B49B, #D97757 60%)' }} />
+                  {cf.text}
+                </div>
+                {cf.detail && <div style={{ fontFamily: FONT.mono, fontSize: 18, color: C.text2, marginTop: 8 }}>{cf.detail}</div>}
+                <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                  <span style={{ padding: '6px 22px', borderRadius: 10, fontWeight: 700, fontSize: 21, background: done ? 'rgba(52,199,89,0.3)' : '#E8E6E1', color: done ? '#bbf7d0' : '#1a1a1a', transform: `scale(${1 - 0.08 * press})` }}>{done ? '✓ 已允许' : '允许'}</span>
+                  <span style={{ padding: '6px 22px', borderRadius: 10, fontSize: 21, color: C.text3, background: 'rgba(255,255,255,0.06)', opacity: done ? 0.4 : 1 }}>拒绝</span>
                 </div>
               </div>
             </div>
@@ -174,7 +179,7 @@ const ChatCabin: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) =
       </div>
       <div style={{ position: 'absolute', left: 30, top: 104, right: 30 }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderRadius: 12, background: 'rgba(217,119,87,0.16)', boxShadow: 'inset 0 0 0 1px rgba(217,119,87,0.45)', fontFamily: FONT.sans, fontSize: 19, fontWeight: 600, color: '#FFE2D6', opacity: ramp(t, CONSOLE + 0.3, 0.4, EASE.out) }}>
-          🔐 双钥匙架构隔离 · 连接器地址仅限 AI 调用，无法打开面板
+          🔐 两把钥匙分开：给 Claude 的那把，打不开你的面板
         </div>
       </div>
       <div style={{ position: 'absolute', left: 30, right: 30, top: 170, height: area, overflow: 'hidden', maskImage: 'linear-gradient(180deg, transparent 0, #000 40px)' }}>
@@ -225,11 +230,11 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
     );
   } else if (state === 2) {
     const sortK = ramp(t, s2 + 0.15, 0.45, EASE.snappy);
-    const devs: Array<[string, number]> = [['客厅电视', 6.2], ['儿童平板', 1.1], ['书房台式机', 86.4], ['手机 · 主卧', 0.8]];
+    const devs: Array<[string, number]> = [['客厅电视', 0.62], ['儿童平板', 0.12], ['书房台式机', 2.1], ['手机 · 主卧', 0.05]]; // 最近 5 分钟、按来源 IP 汇总的连接流量（GB）
     const sorted = [2, 0, 1, 3];
     body = (
       <>
-        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>终端实时下行速率排行</div>
+        <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 26, color: C.text, marginBottom: 16 }}>按设备汇总的连接流量 · 最近 5 分钟<span style={{ marginLeft: 14, fontSize: 18, fontWeight: 500, color: C.text3 }}>需扩展套件运行</span></div>
         <div style={{ position: 'relative', height: 4 * 74 }}>
           {devs.map(([n, v], i) => {
             const y = mix(i, sorted.indexOf(i), sortK) * 74;
@@ -240,9 +245,9 @@ const StatePanel: React.FC<{ t: number; w: number; h: number }> = ({ t, w, h }) 
                   <>
                     <span style={{ width: 200 }}>{n}</span>
                     <div style={{ flex: 1, height: 10, borderRadius: 5, background: 'rgba(255,255,255,0.08)', margin: '0 18px' }}>
-                      <div style={{ width: `${(v / 90) * 100 * mix(0.3, 1, sortK)}%`, height: '100%', borderRadius: 5, background: top ? 'linear-gradient(90deg, #f59e0b, #D97757)' : '#3b82f6' }} />
+                      <div style={{ width: `${(v / 2.2) * 100 * mix(0.3, 1, sortK)}%`, height: '100%', borderRadius: 5, background: top ? 'linear-gradient(90deg, #f59e0b, #D97757)' : '#3b82f6' }} />
                     </div>
-                    <span style={{ fontFamily: FONT.mono, color: top ? '#fde68a' : C.text2, width: 150, textAlign: 'right' }}>{v.toFixed(1)} MB/s</span>
+                    <span style={{ fontFamily: FONT.mono, color: top ? '#fde68a' : C.text2, width: 150, textAlign: 'right' }}>{v.toFixed(2)} GB</span>
                   </>,
                   false,
                 )}
@@ -353,7 +358,9 @@ const camAt = (t: number, W: number, H: number, L: ReturnType<typeof layout>, ve
     rollback: [L.rx + L.pw / 2, rTop + L.ph * 0.62, vertical ? 1.06 : 1.42],
   };
   // 竖屏双屏上下排、各占满宽：只做 1.06 轻推 + 上下换焦点，不放大裁字
-  const [fx, fy, s0] = F[cur.kind];
+  const [fx0, fy0, s0] = F[cur.kind];
+  // 竖屏：焦点固定在画面中心（上下换焦点会把下方面板推进字幕区，审片 A7），只保留轻推与冲击回弹
+  const fx = vertical ? W / 2 : fx0, fy = vertical ? H / 2 : fy0;
   const dt = t - cur.at;
   // 切入瞬间 2% 冲击回弹 + 镜头内缓推；最后一个全景缓拉回 1.0
   const punch = 1 + 0.02 * (1 - ramp(t, cur.at, 0.25, EASE.out));
@@ -368,7 +375,7 @@ export const Act4: React.FC = () => {
   const panelK = springAt(t, CONSOLE, fps);
   const endOut = 0 * ramp(t, END - 0.5, 0.5, EASE.exit); // 74s 由主合成的 scanline-wipe 接管，不再淡出
   // 光束抵达右屏核心 → 1.03 弹性冲击波 + 全绿爆闪
-  const hits = [...CMDS.map((c) => c.toolAt + 0.12), ROLLBACK_AT + 0.12];
+  const hits = [CMDS[0].toolAt + 0.12]; // 第六版：只有第一条指令保留冲击与绿闪，后两条只靠行内高亮（审片 B8）
   const dts = hits.map((a) => t - a).filter((d) => d >= 0 && d < 0.8);
   const dt = dts.length ? Math.min(...dts) : -1;
   const impact = dt >= 0 ? 0.03 * Math.exp(-dt * 6) * Math.cos(dt * 14) : 0;
@@ -384,7 +391,7 @@ export const Act4: React.FC = () => {
   const sway = vertical ? 0 : 2.5 * Math.sin((2 * Math.PI * (t - CONSOLE)) / 9);
   const tilt = vertical ? 0 : 9; // 双屏相向内倾 9°，右屏错落下沉 24px，去正面平铺
   const rim = ramp(t, CONSOLE, 0.12, EASE.out) * (1 - ramp(t, CONSOLE + 0.12, 0.6, EASE.linear));
-  const barText = t < 58.55 ? '连接器地址只给 AI 用 · 打不开你的面板' : '30+ 项路由器工具 · 改动前先确认';
+  const barText = t < 58.55 ? '给 Claude 单独一把钥匙 · 打不开你的面板' : '32 个路由器工具 · 改配置前先请你同意';
   const barK = ramp(t, t < 58.55 ? 54.55 : 58.55, 0.45, EASE.out);
   // 开幕：一束琥珀金光注入
   const amberIn = ramp(t, A, 1.2, EASE.out);
@@ -397,7 +404,7 @@ export const Act4: React.FC = () => {
         <Abs style={{ left: 0, right: 0, top: vertical ? H * 0.2 : H * 0.17, textAlign: 'center', opacity: ramp(t, 54.45, 0.6, EASE.out) * (1 - ramp(t, CONVERGE - 0.2, 0.4, EASE.exit)) }}>
           <div style={{ fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.4em', color: '#FFD2BF' }}>CUSTOM CONNECTOR · 32 TOOLS</div>
           <div style={{ marginTop: 16, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 64 : 84, color: C.text, textShadow: '0 0 40px rgba(217,119,87,0.45)' }}>说一句，它来办</div>
-          <div style={{ marginTop: 14, fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 30 : 34, color: '#FFD2BF' }}>要改设置时，会先跟你确认</div>
+          <div style={{ marginTop: 14, fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 30 : 34, color: '#FFD2BF' }}>改配置前，默认先请你同意</div>
         </Abs>
       )}
       <Abs style={{ left: 0, top: 0, width: W, height: H, transformOrigin: '0 0', transform: `translate(${W / 2 - cam.fx * cam.s}px, ${H / 2 - cam.fy * cam.s}px) scale(${cam.s})` }}>
@@ -412,7 +419,7 @@ export const Act4: React.FC = () => {
           </div>
         </Abs>
       )}
-      {t >= CONSOLE && CMDS.map((c, i) => {
+      {t >= CONSOLE && CMDS.slice(0, 1).map((c, i) => {
         const k = ramp(t, c.toolAt - 0.25, 0.37, EASE.exit);
         const o = Math.sin(Math.PI * Math.min(1, Math.max(0, (t - c.toolAt + 0.25) / 0.6)));
         if (o <= 0) return null;
@@ -428,33 +435,11 @@ export const Act4: React.FC = () => {
               </linearGradient>
             </defs>
             <line x1={x0} y1={y0} x2={hx} y2={hy} stroke={`url(#trail${i})`} strokeWidth={8} strokeLinecap="round" opacity={o} style={{ filter: 'drop-shadow(0 0 14px #D97757) drop-shadow(0 0 30px rgba(217,119,87,0.8))' }} />
-            <circle cx={hx} cy={hy} r={14} fill="#FFF4EC" opacity={o} style={{ filter: 'drop-shadow(0 0 18px #FFB089) drop-shadow(0 0 40px #D97757)' }} />
+            <circle cx={hx} cy={hy} r={7} fill="#FFF4EC" opacity={o} />
           </svg>
         );
       })}
-      {(() => {
-        const s1 = CMDS[0].toolAt + 0.15;
-        const s3 = CMDS[2].toolAt + 0.15;
-        const cxr = vertical ? W / 2 : rx + pw * 0.5;
-        const cyr = vertical ? ry + ph * 0.35 : ry + ph * 0.42;
-        const R = Math.hypot(W, H);
-        const p1 = ramp(t, s1, 0.9, EASE.out);
-        const p3 = ramp(t, s3, 0.8, EASE.swift);
-        return (
-          <>
-            {t >= s1 && t < s1 + 0.95 && [0, 0.12, 0.24].map((d, j) => {
-              const q = ramp(t, s1 + d, 0.8, EASE.out);
-              return <div key={j} style={{ position: 'absolute', left: cxr, top: cyr, width: 2 * R * q, height: 2 * R * q, transform: 'translate(-50%,-50%)', borderRadius: '50%', border: `${3 - j}px solid rgba(255,214,170,${0.9 * (1 - q)})`, boxShadow: `0 0 40px rgba(217,119,87,${0.6 * (1 - q)}), inset 0 0 60px rgba(96,165,250,${0.35 * (1 - q)})`, pointerEvents: 'none' }} />;
-            })}
-            {t >= s1 - 0.05 && t < s1 + 1.6 && (
-              <div style={{ position: 'absolute', left: cxr - 120, top: cyr - 120, width: 240, height: 240, borderRadius: '50%', background: `radial-gradient(circle, rgba(255,240,220,${0.95 * (1 - ramp(t, s1 + 0.2, 1.3, EASE.out))}) 0%, rgba(217,119,87,${0.5 * (1 - p1)}) 35%, rgba(0,0,0,0) 70%)`, pointerEvents: 'none', mixBlendMode: 'screen' }} />
-            )}
-            {t >= s3 && t < s3 + 0.85 && (
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, rgba(52,199,89,0) ${p3 * 130 - 40}%, rgba(134,239,172,0.55) ${p3 * 130 - 15}%, rgba(52,199,89,0) ${p3 * 130}%)`, mixBlendMode: 'screen', pointerEvents: 'none' }} />
-            )}
-          </>
-        );
-      })()}
+      {/* 第六版删掉全屏波纹环、光斑球与绿色扫光（模板化光效，审片 A6 / B8） */}
       </Abs>
       {/* 底部通栏毛玻璃字幕条（屏幕大字）；快切特写期间隐去，避免压住特写画面，收尾全景再回来 */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? 120 : 160, display: 'flex', justifyContent: 'center', opacity: (1 - endOut) * Math.min(1, ramp(t, 54.55, 0.45, EASE.out)) * (1 - ramp(t, CMDS[0].t0 - 0.3, 0.2, EASE.out) * (1 - ramp(t, ROLLBACK_AT + 1.0, 0.4, EASE.out))) }}>
@@ -464,7 +449,7 @@ export const Act4: React.FC = () => {
       </div>
       {/* 演示已加速：AI 调用真实耗时为数秒，片中压缩呈现 */}
       {t > CMDS[0].t0 - 0.4 && (
-        <div style={{ position: 'absolute', right: vertical ? 54 : 96, top: vertical ? 46 : 64, display: 'flex', alignItems: 'center', gap: 10, padding: vertical ? '8px 18px' : '8px 18px', borderRadius: 999, background: 'rgba(8,12,24,0.55)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18)', fontFamily: FONT.sans, fontSize: vertical ? 24 : 22, fontWeight: 600, color: 'rgba(226,232,240,0.85)', opacity: ramp(t, CMDS[0].t0 - 0.4, 0.3, EASE.out) }}>
+        <div style={{ position: 'absolute', right: vertical ? 54 : 96, top: vertical ? 46 : 22, display: 'flex', alignItems: 'center', gap: 10, padding: vertical ? '8px 18px' : '8px 18px', borderRadius: 999, background: 'rgba(8,12,24,0.55)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.18)', fontFamily: FONT.sans, fontSize: vertical ? 24 : 22, fontWeight: 600, color: 'rgba(226,232,240,0.85)', opacity: ramp(t, CMDS[0].t0 - 0.4, 0.3, EASE.out) }}>
           <span style={{ fontFamily: FONT.mono, letterSpacing: '-0.1em' }}>▶▶</span> 画面已加速
         </div>
       )}

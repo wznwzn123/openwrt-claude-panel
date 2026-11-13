@@ -47,6 +47,7 @@ for f in ('narration.wav', 'bgm.wav'):
 # SFX：按 cue 从 sfx 总轨切出独立小段（窗口 = 到下一个 cue 或 1.4s）
 cues = sorted(json.load(open(os.path.join(A, 'cues.json'))), key=lambda c: c['t'])
 sfx_dir = os.path.join(assets, 'sfx')
+shutil.rmtree(sfx_dir, ignore_errors=True)   # 第六版：先清空，避免历次导出残留的旧音效混进压缩包（审片 B13）
 os.makedirs(sfx_dir, exist_ok=True)
 sfx_items = []
 for i, c in enumerate(cues):
@@ -110,6 +111,6 @@ open(os.path.join(STAGING, '如何重新链接素材.txt'), 'w', encoding='utf-8
     '1. 把压缩包里的「%s」文件夹整个复制到剪映的草稿目录\n'
     '   （剪映 → 设置 → 草稿位置 可以看到路径）。\n'
     '2. 重启剪映，在草稿列表里打开它。\n'
-    '3. 如果提示「素材丢失」：点「重新链接」，选择草稿文件夹里的 assets 文件夹，剪映会按文件名自动匹配全部素材。\n\n'
+    '3. 如果提示「素材丢失」：点「重新链接」，选择压缩包根目录下的 assets 文件夹（和草稿文件夹并列），剪映会按文件名自动匹配全部素材。\n\n'
     '轨道说明：底片（无字幕 1920×1080 · 60fps，按五幕切段）、字幕、人声、BGM、SFX1…N（每个音效单独一段）。\n' % NAME)
 print('draft ok:', os.path.join(STAGING, NAME), 'sfx lanes', len(lanes), 'subs', len(phr))

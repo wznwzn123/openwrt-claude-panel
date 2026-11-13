@@ -252,6 +252,7 @@ for i in range(8):   # 16 分拨弦上行，把耳朵推向主和弦
     n = [52, 56, 59, 64, 68, 71, 76, 80][i]
     place(bgm, pan(pluck(mtof(n), 0.6, 1.2), (i % 4 - 1.5) / 2), CAD + i * beat / 4, 0.36)
 place(bgm, kick(0.6, 140, 42, 2.2), HIT, 0.6)
+place(bgm, pan(pluck(mtof(69), 2.6, 0.9), 0.0), HIT + 0.02, 0.55)   # 终止单音（A4）延音
 place(bgm, sub_drop(2.2, 110, 30), HIT, 0.45)
 place(bgm, pad([mtof(n) for n in (33, 45, 57, 60, 64, 71, 76)], DUR - HIT, att=0.02, rel=1.6, bright=7), HIT, 1.9)
 for i, n in enumerate((69, 72, 76, 81)):
@@ -269,7 +270,7 @@ def seg_env(points):
     xs = [p[0] for p in points]; ys = [10 ** (p[1] / 20) for p in points]
     return np.interp(tt_, xs, ys)
 # 铺垫段 0–11s、30–50s 压低 3 dB；54s 高潮与 82s 落版大幅抬升
-DYN = [(0, -8), (5.6, -6), (6.0, -3), (11.0, -3), (11.8, 2), (28.5, 2), (30.0, -1.5), (49.0, -1.5), (49.8, -7), (52.2, -5), (53.6, 3), (54.2, 6.5), (73.6 - S5, 6.5), (74.2 - S5, 1), (81.6 - S5, 1), (82.6 - S5, 7.5), (HIT + 0.6, 7.5), (DUR, 0)]
+DYN = [(0, -8), (5.6, -6), (6.0, -3), (11.0, -3), (11.8, 2), (28.5, 2), (30.0, -1.5), (49.0, -1.5), (49.8, -7), (52.2, -5), (53.6, 2), (54.2, 1.5), (73.6 - S5, 1.5), (74.2 - S5, -3), (81.6 - S5, -3), (82.6 - S5, 2.5), (HIT + 0.3, 4), (DUR, 0)]   # 第六版：4/5 幕降约 5 dB 给人声（审片 A4）
 env = seg_env(DYN)
 bgm *= env[:, None]
 # 合成器主旋律（A 小调，8 分音符动机，轻颤音的锯齿 lead）
@@ -310,7 +311,7 @@ shimmer = sum(np.sin(2 * np.pi * f * t_sh + i) * np.exp(-t_sh * 2.2) for i, f in
 place(bgm, pan(shimmer, 0.2), 85.448 - S5, 1.0)
 bgm = reverb(bgm, 0.22)
 fade = np.ones(N)
-fade[-int(SR * 0.9):] = np.linspace(1, 0, int(SR * 0.9)) ** 1.5   # 和弦长尾最后 0.9s 收尽
+fade[-int(SR * 2.2):] = np.linspace(1, 0, int(SR * 2.2)) ** 1.3   # 第六版：和弦长尾淡出拉长到 2.2s（审片 B9）
 bgm *= fade[:, None]
 bgm /= np.percentile(np.abs(bgm), 99.7) + 1e-9
 bgm = np.tanh(bgm * 0.8) * 0.85
@@ -455,9 +456,10 @@ for c4 in ACT4['cmds']:
         place(sfx, pan(key(False), 0), t0 + i * CHAR, 0.38)
     cues.append({'t': t0, 'name': 'dictation-typing', 'gain': 0.6})
     cue('send', send, glass_tap(1900), 0.55)
-    cue('amber-beam', tool_at - 0.25, riser(0.37, 800, 6000), 0.5, 0.3)   # 琥珀光束跨屏
-    cue('core-impact', tool_at + 0.12, glass_tap(2600), 0.6, 0.4)
-    place(sfx, pan(kick(0.35, 150, 60, 1.8), 0.4), tool_at + 0.12, 0.45)
+    if c4 is ACT4['cmds'][0]:   # 第六版：只有第一条指令保留光束与冲击，后两条只留发送与回复（审片 B8）
+        cue('amber-beam', tool_at - 0.25, riser(0.37, 800, 6000), 0.5, 0.3)   # 琥珀光束跨屏
+        cue('core-impact', tool_at + 0.12, glass_tap(2600), 0.6, 0.4)
+        place(sfx, pan(kick(0.35, 150, 60, 1.8), 0.4), tool_at + 0.12, 0.45)
     cue('claude-reply', reply, chime(), 0.5)
 for c4 in ACT4['cmds']:
     cue('thinking', c4['think'], glass_tap(1300) * 0.5, 0.25, -0.2)
@@ -469,8 +471,6 @@ for c4 in ACT4['cmds']:
 s1_, s2_, s3_ = [c['state'] for c in ACT4['cmds']]
 cue('hero-pulse', s1_, sub_drop(1.2, 140, 40), 0.55)            # 动作①：全屏脉冲波纹 + 核心点亮
 cue('flip-reorder', s2_ + 0.02, whoosh(0.45, 1200, 8000), 0.4, 0.4)  # 动作②：3D 翻转重排
-cue('success-wave', s3_, whoosh(0.8, 600, 9000), 0.45)            # 动作③：绿色全屏成功光波
-cue('amber-beam', ACT4['rollback'] - 0.25, riser(0.37, 800, 6000), 0.45, 0.3)
 cue('uci-backup', ACT4['rollback'] + 0.12, chime(784, 1174.7), 0.45)
 cue('scanline-wipe', 73.75 - 0.25, whoosh(0.9, 400, 7000), 0.75)   # 74.0s 扫描线横扫擦除
 # 终幕
@@ -487,7 +487,6 @@ cues.append({'t': round(82.35 - S5, 3), 'name': 'terminal-typing', 'gain': 0.45}
 cue('enter', 84.414, key(True) * 2.0, 1.0)
 cue('collapse', 84.434, riser(0.32, 3000, 9000), 0.5)            # 终端向内折叠
 cue('core-burst', 84.754, chime(1760, 2637) * 1.2, 0.55)           # 光核爆发出徽标
-cue('particle-swirl', 84.45, riser(1.0, 500, 9000), 0.45)
 cue('converge-flash', 85.448, chime(1760, 2637) * 1.2, 0.55)
 for i, at in enumerate((85.448 + 0.083, 85.707 + 0.083, 85.966 + 0.083)):  # 弹簧落定比起跳晚约 5 帧
     cue('assemble-drop', at, glass_tap(1400 + i * 350), 0.6)
@@ -523,7 +522,8 @@ for i in range(0, N, 48):  # 1ms 步进
     c = a_c ** 48 if tgt > cur else r_c ** 48
     cur = tgt + (cur - tgt) * c
     g[i:i + 48] = cur
-duck = 10 ** (-5 * g / 20)
+depth = np.interp(np.arange(N) / SR, [0, 52.5, 54.0, 90], [6, 6, 9, 9])   # 第六版：1–3 幕闪避 -6 dB，4–5 幕 -9 dB（审片 A4：关键段人声要清楚）
+duck = 10 ** (-depth * g / 20)
 vpk = np.max(np.abs(voice))
 voice = voice / vpk * 0.8
 # 峰值控制：配乐与音效软削波（tanh），把瞬态峰值收进来，母带限幅就不必压扁高潮段

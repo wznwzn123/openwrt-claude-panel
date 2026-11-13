@@ -15,7 +15,7 @@ const SEG_C = 46.138;
 const END = 54;
 
 const NAV = [
-  { at: A, text: '自动识别六款扩展套件 · 线路挂了自动换' },
+  { at: A, text: '自动识别六款扩展套件 · 智能调度套件线路挂了自动换' },
   { at: SEG_B, text: '每台设备的流量 · 一键定时断网' },
   { at: SEG_C, text: '添加到主屏幕 · 安卓 App · 多台路由切换' },
 ];
@@ -155,7 +155,8 @@ export const Act3: React.FC = () => {
   const swB = vertical ? 278 : 316;
   const pxB = vertical ? W / 2 : W * 0.24;
   const pyB = vertical ? H * 0.3 : cy;
-  const pushB = 1 + (vertical ? 0.3 : 0.45) * (ramp(t, 44.05, 0.4, EASE.smooth) - ramp(t, 45.3, 0.4, EASE.smooth));
+  const pushB = 1 + (vertical ? 0.3 : 0.3) *   // 第七版 0.45→0.3：推近时流量图标签不再落进字幕区（审片 B6）
+    (ramp(t, 44.05, 0.4, EASE.smooth) - ramp(t, 45.3, 0.4, EASE.smooth));
   const togX = pxB + ((313 - 180) / 360) * swB * (vertical ? 0.82 : 1);
   const togY = pyB + (-swB + (436 / 360) * swB) * (vertical ? 0.82 : 1);
 
@@ -172,7 +173,7 @@ export const Act3: React.FC = () => {
       <Abs style={{ inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.05))', boxShadow: 'inset 1.5px 0 0 rgba(255,255,255,0.35)' }} />
       <Abs style={{ inset: 0, transform: `scale(${pushB})`, transformOrigin: `${togX}px ${togY}px` }}>
         <Abs style={{ inset: 0, transform: `scale(${1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)})` }}>
-          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 160} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 540 : 690} o={1} />
+          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 160} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 470 : 690} o={1} />
         </Abs>
         <Pose x={pxB} y={pyB} sw={swB} s={vertical ? 0.82 : 1} ry={8 + 2 * Math.sin(t * 0.6)}>
           <Phone w={swB} full>
@@ -180,14 +181,7 @@ export const Act3: React.FC = () => {
           </Phone>
         </Pose>
       </Abs>
-      {/* 定时断网锁定提示（不随推轨缩放，避开字幕与导航） */}
-      {t >= TOGGLE_AT && (
-        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.43, top: vertical ? H * 0.52 - 74 : 150, opacity: ramp(t, TOGGLE_AT + 0.2, 0.4, EASE.out), whiteSpace: 'nowrap' }}>
-          <Pill bg="rgba(255,149,0,0.22)" color="#ffd8a8" style={{ fontSize: 24 }}>
-            🔒 儿童平板 · 每晚 23:00 自动断网 · 已锁定
-          </Pill>
-        </div>
-      )}
+      {/* 第七版删掉「已锁定」浮动胶囊：推轨时会压住流量图副标题（审片 B6），锁定结果手机里的真实暂停弹层已显示 */}
     </>
   );
 

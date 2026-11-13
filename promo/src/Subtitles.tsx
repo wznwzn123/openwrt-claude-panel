@@ -14,7 +14,7 @@ export const SubtitleLine: React.FC<{ text: string; opacity?: number }> = ({ tex
   const { vertical, W, H } = useV();
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? H * 0.135 : 56, textAlign: 'center', opacity }}>
-      <span style={{ fontFamily: FONT.sans, fontWeight: 500, fontSize: vertical ? 44 : 34, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.94)', textShadow: '0 2px 10px rgba(0,0,0,0.75), 0 0 2px rgba(0,0,0,0.9)', padding: '4px 22px', borderRadius: 10, background: 'rgba(5,7,12,0.62)', backdropFilter: 'blur(8px)', maxWidth: W - 120, display: 'inline-block', textWrap: 'balance' } as React.CSSProperties}>
+      <span style={{ fontFamily: FONT.sans, fontWeight: 500, fontSize: vertical ? 44 : 42, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.94)', textShadow: '0 2px 10px rgba(0,0,0,0.75), 0 0 2px rgba(0,0,0,0.9)', padding: '4px 22px', borderRadius: 10, background: 'rgba(5,7,12,0.62)', backdropFilter: 'blur(8px)', maxWidth: W - 120, display: 'inline-block', textWrap: 'balance' } as React.CSSProperties}>
         {text}
       </span>
     </div>
@@ -22,7 +22,7 @@ export const SubtitleLine: React.FC<{ text: string; opacity?: number }> = ({ tex
 };
 
 /* 屏幕大标题与旁白同句时不再重复字幕（审片 B7）：6.6–9.7s 第一幕标题「OpenWrt，换一种管法」 */
-const HIDE: [number, number][] = [[6.6, 9.7]];
+const HIDE: [number, number][] = [[7.8, 10.8]];
 export const Subtitles: React.FC = () => {
   const t = useT();
   const cur = phrases().find((p) => t >= p.start && t < p.end);

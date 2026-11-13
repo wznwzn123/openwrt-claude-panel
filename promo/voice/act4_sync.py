@@ -20,27 +20,28 @@ cmds.append({'text': text1, 't0': t0, 'send': send, 'think': r(send + 0.12),
              'toolAt': r(state - 0.15), 'state': r(state),
              'reply': '备用线路 05 超时，已把「超清影音通道」切到低延迟线路 01 · 28 ms', 'replyAt': r(state + 0.2)})
 
-# ② 「问它谁在占网速，它直接告诉你是哪台设备」：「它直接告诉你」发声帧 = 排行锁定
-p_ask, p_tell = ph('问它谁在占网速'), ph('它直接告诉你')
+# ② 「问它谁在占网速，它查一遍连接，告诉你是哪台设备」：查看连接（含来源 IP 与流量，需扩展套件）+ 设备列表（IP→设备名），
+#    「告诉你是哪台设备」发声帧 = 结果锁定。连接器没有「每台设备实时速率」工具，所以结果只给能推出来的「最近几分钟流量」
+p_ask, p_look, p_tell = ph('问它谁在占网速'), ph('它查一遍连接'), ph('告诉你是哪台设备')
 text2 = '看看现在哪台设备在占满网速'
 t0 = r(p_ask['start'] - 0.15); send = r(t0 + len(text2) * CHAR + 0.05)
 state = p_tell['start']
 cmds.append({'text': text2, 't0': t0, 'send': send, 'think': r(send + 0.12),
-             'tools': [{'name': '实时网速', 'at': r(state - 0.55)}, {'name': '设备列表', 'at': r(state - 0.15)}],
+             'tools': [{'name': '查看连接', 'at': r(p_look['start'])}, {'name': '设备列表', 'at': r(state - 0.15)}],
              'toolAt': r(state - 0.15), 'state': r(state),
-             'reply': '书房台式机正以 86.4 MB/s 下载，占了约 92% 带宽', 'replyAt': r(state + 0.2)})
+             'reply': '这几分钟流量最大的是书房台式机，下载了约 2 GB', 'replyAt': r(state + 0.2)})
 
 # ③ 「让它给书房电脑固定个 IP，它会先跟你确认，改之前还自动备份」
-p_set, p_conf, p_bak = ph('固定个 IP'), ph('它会先跟你确认'), ph('改之前还自动备份')
+p_set, p_conf, p_bak = ph('固定个 IP'), ph('它会先问你同不同意'), ph('改之前还自动备份')
 text3 = '给书房台式机固定 IP 192.168.1.10'
 t0 = r(p_set['start'] - 0.1); send = r(t0 + len(text3) * CHAR + 0.05)
-ask = r(p_conf['start'])            # Claude 说明要改什么、请求确认
-ok = r(p_conf['end'] - 0.05)        # 用户点「确认」
+ask = r(p_conf['start'])            # Claude 客户端弹出工具授权（修改配置在连接器里标为危险操作，默认先请用户允许）
+ok = r(p_conf['end'] - 0.05)        # 用户点「允许」
 tool = r(ok + 0.25)                 # 修改配置（改前自动备份）
 state = r(tool + 0.15)
 cmds.append({'text': text3, 't0': t0, 'send': send, 'think': r(send + 0.12),
              'tools': [{'name': '读取配置', 'at': r(min(ask - 0.35, send + 0.6))}, {'name': '修改配置', 'at': tool}],
-             'confirm': {'ask': ask, 'ok': ok, 'text': '要在 DHCP 里把书房台式机固定为 192.168.1.10，确认执行吗？'},
+             'confirm': {'ask': ask, 'ok': ok, 'text': 'Claude 想使用「修改配置」 · 路由器面板', 'detail': 'DHCP 静态地址：书房台式机 → 192.168.1.10'},
              'toolAt': tool, 'state': state,
              'reply': '已固定：书房台式机 → 192.168.1.10。改动前已自动备份配置，可一键还原', 'replyAt': r(state + 0.2)})
 

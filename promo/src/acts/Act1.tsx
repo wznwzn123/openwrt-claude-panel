@@ -90,8 +90,9 @@ const ShotA: React.FC<{ t: number }> = ({ t }) => {
 };
 
 /* 镜头 B/C：定格裁切（照片感：去饱和 + 提对比） */
-const Crop: React.FC<{ t: number; at: number; cx: number; cy: number; s: number; error?: boolean; dialog?: boolean }> = ({ t, at, cx, cy, s, error, dialog }) => {
-  const { W, H } = useV();
+const Crop: React.FC<{ t: number; at: number; cx: number; cy: number; s: number; error?: boolean; dialog?: boolean }> = ({ t, at, cx, cy, s: s0, error, dialog }) => {
+  const { W, H, vertical } = useV();
+  const s = vertical ? s0 * 0.6 : s0; // 竖屏画面窄：缩小放大倍数，弹窗标题不出画（审片 A7）
   const settle = 1.03 - 0.03 * ramp(t, at, 0.35, EASE.out) + 0.012 * ramp(t, at + 0.35, 1.5, EASE.linear);
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: '#111' }}>
@@ -113,7 +114,8 @@ const Monitors: React.FC<{ t: number }> = ({ t }) => {
   const amp = 1.5 + 22 * ramp(t, MON0 + 0.4, COLLAPSE0 - MON0 - 0.4, EASE.inQuad);
   const split = 2 + 16 * ramp(t, MON0 + 0.6, COLLAPSE1 - MON0 - 0.6, EASE.inQuad);
   const col = ramp(t, COLLAPSE0, COLLAPSE1 - COLLAPSE0, EASE.exit);
-  const labels = ['CAM 01 · LEGACY UI · 4PX', 'CAM 02 · PORT FWD · FAILED', 'CAM 03 · WAN · NO PUBLIC IP'];
+  // 第六版：去掉 CAM / ERR 监控代码（模板化），标签直接写痛点
+  const labels = ['手机上只能放大老后台', '端口映射失败', '没有公网 IP，连不回家'];
   const crops = [
     { cx: 300, cy: 150, s: 0.62, error: false, dialog: false },
     { cx: 512, cy: 205, s: 0.9, error: true, dialog: false },
@@ -144,11 +146,8 @@ const Monitors: React.FC<{ t: number }> = ({ t }) => {
               <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0px, rgba(0,0,0,0.28) 1px, transparent 1px, transparent 3px)' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(6,182,212,0.08), rgba(6,182,212,0))' }} />
             </div>
-            <div style={{ position: 'absolute', left: 0, top: -34, fontFamily: FONT.mono, fontSize: 17, letterSpacing: '0.14em', color: C.cyan }}>
+            <div style={{ position: 'absolute', left: 0, top: -40, fontFamily: FONT.sans, fontWeight: 600, fontSize: 22, color: '#e2e8f0' }}>
               <span style={{ color: '#ff3b30' }}>●</span> {labels[i]}
-            </div>
-            <div style={{ position: 'absolute', right: 0, top: -34, fontFamily: FONT.mono, fontSize: 17, color: 'rgba(255,59,48,0.9)' }}>
-              {i === 0 ? 'ZOOM ×3.4' : i === 1 ? 'ERR 0x1F' : 'TIMEOUT'}
             </div>
           </div>
         );
@@ -290,7 +289,7 @@ const TextMask: React.FC<{ t: number }> = ({ t }) => {
       {/* 屏幕大字 */}
       <Abs style={{ left: 0, right: 0, top: vertical ? H * 0.26 : 214, textAlign: 'center', opacity: ramp(t, WORD0 + 0.5, 0.6, EASE.out) * lines, transform: `translateY(${(1 - ramp(t, WORD0 + 0.5, 0.6, EASE.out)) * 12}px)` }}>
         <div style={{ fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 40 : 46, letterSpacing: '0.16em', color: C.text }}>
-          告别指尖缩放<span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>告别公网束缚
+          不用再放大缩小<span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>没有公网 IP 也能连回家
         </div>
       </Abs>
       <Abs style={{ left: 0, right: 0, top: vertical ? H * 0.66 : 712, textAlign: 'center', opacity: ramp(t, 9.0, 0.6, EASE.out) * lines, transform: `translateY(${(1 - ramp(t, 9.0, 0.6, EASE.out)) * 12}px)` }}>
@@ -327,7 +326,8 @@ export const Act1: React.FC = () => {
         ? { x: W / 2, y: H / 2 + 120, w: mix(W * 0.8, 760, ramp(t, 1.56, 0.24, EASE.snappy)), h: mix(H * 0.6, 300, ramp(t, 1.56, 0.24, EASE.snappy)), lock: ramp(t, 1.56, 0.26, EASE.linear) }
         : undefined;
 
-  const flash = Math.max(flashEnv(t, 0.15, 0.06) * 0.35, flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08, 0.05), flashEnv(t, WORD0, 0.1, 0.05) * 0.5);
+  // 第六版：所有闪光峰值 ≤ 0.65（审片 B1：整帧闪白刺眼）
+  const flash = 0.65 * Math.max(flashEnv(t, 0.15, 0.06) * 0.35, flashEnv(t, FLASH1), flashEnv(t, FLASH2), flashEnv(t, MON0, 0.08) * 0.6, flashEnv(t, COLLAPSE1, 0.08, 0.05), flashEnv(t, WORD0, 0.1, 0.05) * 0.5);
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: C.hud }}>
       {body}

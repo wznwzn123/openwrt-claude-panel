@@ -387,7 +387,7 @@ export const BrandMark: React.FC<{
 }> = ({ size, arc1 = 1, arc2 = 1, body = 1, plate = 1, slots = 0 }) => {
   // 「守夜」：深夜蓝底 + 月白弯月 + 月亮里一盏琥珀灯 + 一道信号弧（仓库 src/www/panel/icon.svg 同源，100 单位坐标）
   const drop = (k: number, dy: number) => `translate(0 ${(1 - k) * -dy})`;
-  const MOON = 'M41.914 24.45A29 29 0 1 0 75.55 58.086A24 24 0 0 1 41.914 24.45Z';
+  const MOON = 'M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z';
   const ARC = 'M62.6 21.4A17 17 0 0 1 78.6 37.4';
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: 'visible', display: 'block' }}>

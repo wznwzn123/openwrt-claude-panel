@@ -215,7 +215,7 @@ export const Act2: React.FC = () => {
         <div style={{ position: 'absolute', left: titleX, top: titleY, transform: `scale(${titleScale})`, transformOrigin: '0 0', opacity: vertical ? 1 : 1 - ramp(t, SLIDE - 0.3, 0.22, EASE.exit) + ramp(t, SLIDE + 0.32, 0.4, EASE.out) }}>
           <div style={{ opacity: ramp(t, 12.6, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 12.6, 0.6, EASE.out)) * 12}px)` }}>
             <Pill style={{ fontSize: 20 }}>
-              <Dot color={C.ok} size={8} /> 开源项目 · MIT · <span style={{ fontFamily: FONT.mono }}>v3.1.1</span>
+              <Dot color={C.ok} size={8} /> 开源项目 · MIT · <span style={{ fontFamily: FONT.mono }}>v3.1.3</span>
             </Pill>
           </div>
           <div style={{ marginTop: 20, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 84 : 86, lineHeight: 1.04, letterSpacing: '-0.01em', color: C.text, opacity: ramp(t, 12.85, 0.7, EASE.out), transform: `translateY(${(1 - ramp(t, 12.85, 0.7, EASE.out)) * 16}px)`, whiteSpace: vertical ? 'normal' : 'nowrap', width: vertical ? W - 160 : undefined }}>

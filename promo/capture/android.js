@@ -27,7 +27,7 @@ const STATES = [
     const p = await ctx.newPage();
     await p.clock.setFixedTime(BASE);
     await p.addInitScript((routers) => {
-      window.App = { version: () => '3.1.1', dark: () => true, hub: () => '', routers: () => JSON.stringify(routers), saveRouters() {}, open() {}, external() {}, scan() {}, pickQr() {}, clipboard: () => '', update() {} };
+      window.App = { version: () => '3.1.3', dark: () => true, hub: () => '', routers: () => JSON.stringify(routers), saveRouters() {}, open() {}, external() {}, scan() {}, pickQr() {}, clipboard: () => '', update() {} };
     }, list);
     await p.goto(HOME);
     await p.waitForTimeout(300);

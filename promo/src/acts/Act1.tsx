@@ -314,10 +314,10 @@ export const Act1: React.FC = () => {
   } else if (t < MON0) {
     shot = 3;
     body = <Crop t={t} at={FLASH2} cx={512} cy={392} s={2.6} error dialog />;
-  }
-  // 1–3s 旧式后台大面积白底压暗一档、偏冷，和全片暗调统一（审片：白底与暗调割裂）
-  if (t >= FLASH1 && t < MON0) body = <><>{body}</><Abs style={{ inset: 0, background: 'rgba(10,16,34,0.34)', mixBlendMode: 'multiply' }} /><Abs style={{ inset: 0, background: 'rgba(12,20,44,0.18)' }} /></>; else if (t < WORD0) body = <Monitors t={t} />;
+  } else if (t < WORD0) body = <Monitors t={t} />;
   else body = <TextMask t={t} />;
+  // 1–3s 旧式后台大面积白底压暗一档、偏冷，和全片暗调统一（审片：白底与暗调割裂）
+  const dimLegacy = t >= FLASH1 && t < MON0;
 
   // 对焦框：闪前 0.28s 收拢到下一张裁切并锁定
   const focus =
@@ -331,6 +331,7 @@ export const Act1: React.FC = () => {
   return (
     <Abs style={{ inset: 0, overflow: 'hidden', background: C.hud }}>
       {body}
+      {dimLegacy && <><Abs style={{ inset: 0, background: 'rgba(10,16,34,0.34)', mixBlendMode: 'multiply' }} /><Abs style={{ inset: 0, background: 'rgba(12,20,44,0.18)' }} /></>}
       {t < MON0 && <Viewfinder t={t} shot={shot} focus={focus} />}
       <Abs style={{ inset: 0, background: '#fff', opacity: flash }} />
       {t < 0.15 && (

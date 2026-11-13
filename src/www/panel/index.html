@@ -37,7 +37,7 @@ h1,h2,h3{letter-spacing:-.02em}
 :root.dark .top.scrolled{border-bottom-color:rgba(255,255,255,.08);box-shadow:0 8px 20px -10px rgba(0,0,0,.6)}
 .topin{max-width:1180px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}.brand>div:last-child{min-width:0}
-.logo{position:relative;width:34px;height:34px;border-radius:10px;background:radial-gradient(90% 70% at 88% 8%,rgba(255,95,180,.75),rgba(255,95,180,0) 70%),radial-gradient(80% 60% at 30% 0%,rgba(255,255,255,.28),rgba(255,255,255,0) 70%),linear-gradient(135deg,#6a4dff 0%,#2f6bff 50%,#00c2d8 100%);display:grid;place-items:center;color:#fff;box-shadow:0 3px 10px rgba(63,90,255,.35),inset 0 0 0 .5px rgba(255,255,255,.25);flex:none;overflow:hidden}
+.logo{position:relative;width:34px;height:34px;border-radius:10px;background:#101C40;display:grid;place-items:center;color:#fff;box-shadow:0 3px 10px rgba(16,28,64,.35),inset 0 0 0 .5px rgba(255,255,255,.18);flex:none;overflow:hidden}
 .logo svg{position:relative;width:100%;height:100%;display:block}
 .title{font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sub,.muted{font-size:12px;color:var(--muted)}
@@ -431,7 +431,7 @@ pre.out.tall{max-height:none;min-height:40vh}
 #lgbg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .lgcard{position:relative;z-index:1;width:100%;max-width:400px;margin:auto 0;background:rgba(255,255,255,.66);-webkit-backdrop-filter:blur(26px) saturate(1.7);backdrop-filter:blur(26px) saturate(1.7);border:1px solid rgba(255,255,255,.8);border-radius:28px;padding:26px 22px 22px;box-shadow:0 30px 70px rgba(20,24,40,.12),0 2px 6px rgba(0,0,0,.04);animation:popIn .55s var(--spring) both}
 :root.dark .lgcard{background:rgba(30,30,33,.62);border-color:rgba(255,255,255,.09);box-shadow:0 30px 70px rgba(0,0,0,.5)}
-.lgbiglogo{width:64px!important;height:64px!important;border-radius:19px!important;box-shadow:0 16px 36px rgba(63,90,255,.35),inset 0 0 0 .5px rgba(255,255,255,.25)!important}
+.lgbiglogo{width:64px!important;height:64px!important;border-radius:19px!important;box-shadow:0 16px 36px rgba(16,28,64,.35),inset 0 0 0 .5px rgba(255,255,255,.25)!important}
 .lgcard h2{font-size:25px;margin:18px 0 4px;letter-spacing:.2px}
 .lglabel{display:block;font-size:13px;font-weight:600;margin:16px 0 7px}
 .lgcard .input{background:rgba(255,255,255,.9);box-shadow:inset 0 0 0 1px rgba(60,60,67,.1);border-radius:13px;padding:13px 14px}
@@ -530,7 +530,7 @@ section.page{display:none}section.page.on{display:block}
 
 <div id="login" class="lgwrap hidden"><canvas id="lgbg" aria-hidden="true"></canvas>
 <main class="lgcard">
-	<div class="logo lgbiglogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="#fff"/><circle cx="11.4" cy="19.75" r="1.1" fill="#2f6bff"/><circle cx="14.6" cy="19.75" r="1.1" fill="#2f6bff"/><path d="M18 19.75h3.4" stroke="#2f6bff" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+	<div class="logo lgbiglogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.914 24.45A29 29 0 1 0 75.55 58.086A24 24 0 0 1 41.914 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 	<h2>连接你的路由器</h2>
 	<div class="muted" style="font-size:14px">粘贴安装时显示的「登录地址」（用 Claude 的话，就是添加连接器时用的那个地址）。密钥只保存在这台手机上</div>
 	<label class="lglabel" for="lgInput">连接地址</label>
@@ -563,7 +563,7 @@ section.page{display:none}section.page.on{display:block}
 	<div class="topin">
 		<div class="brand">
 			<button class="menubtn" id="menuBtn" aria-label="打开菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
-			<div class="logo toplogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="#fff"/><circle cx="11.4" cy="19.75" r="1.1" fill="#2f6bff"/><circle cx="14.6" cy="19.75" r="1.1" fill="#2f6bff"/><path d="M18 19.75h3.4" stroke="#2f6bff" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+			<div class="logo toplogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.914 24.45A29 29 0 1 0 75.55 58.086A24 24 0 0 1 41.914 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 			<div style="min-width:0"><div class="title" id="pageTitle">我的路由器</div><div class="sub" id="topSub">正在连接…</div></div>
 		</div>
 		<div class="actions">
@@ -575,7 +575,7 @@ section.page{display:none}section.page.on{display:block}
 <div class="scrim" id="scrim"></div>
 <aside class="side" id="side" aria-label="导航">
 	<div class="sidehead">
-		<div class="logo" role="img" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="#fff"/><circle cx="11.4" cy="19.75" r="1.1" fill="#2f6bff"/><circle cx="14.6" cy="19.75" r="1.1" fill="#2f6bff"/><path d="M18 19.75h3.4" stroke="#2f6bff" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+		<div class="logo" role="img" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none"><path d="M41.914 24.45A29 29 0 1 0 75.55 58.086A24 24 0 0 1 41.914 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 		<div style="min-width:0"><b>我的路由器</b><div class="sub" id="sideSub">OpenWrt 管理面板</div></div>
 	</div>
 	<input class="sideq" id="sideQ" type="search" placeholder="搜索功能，如 DHCP、端口转发" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索功能">

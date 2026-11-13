@@ -375,57 +375,38 @@ export const Phone: React.FC<{
   );
 };
 
-/* ───────────── 品牌徽标（来自仓库 src/www/panel/icon.svg，可拆件用于 input-morph-assemble） ───────────── */
+/* ───────────── 品牌徽标「守夜」（来自仓库 src/www/panel/icon.svg，可拆件用于 input-morph-assemble） ───────────── */
 export const BrandMark: React.FC<{
   size: number;
-  arc1?: number; // 0..1 外弧出现
-  arc2?: number; // 内弧
-  body?: number; // 路由机身
+  arc1?: number; // 0..1 信号弧落定
+  arc2?: number; // 灯
+  body?: number; // 弯月
   plate?: number; // 底板
   slots?: number; // 构造虚线槽
   id?: string;
-}> = ({ size, arc1 = 1, arc2 = 1, body = 1, plate = 1, slots = 0, id = 'bm' }) => {
+}> = ({ size, arc1 = 1, arc2 = 1, body = 1, plate = 1, slots = 0 }) => {
+  // 「守夜」：深夜蓝底 + 月白弯月 + 月亮里一盏琥珀灯 + 一道信号弧（仓库 src/www/panel/icon.svg 同源，100 单位坐标）
   const drop = (k: number, dy: number) => `translate(0 ${(1 - k) * -dy})`;
+  const MOON = 'M41.914 24.45A29 29 0 1 0 75.55 58.086A24 24 0 0 1 41.914 24.45Z';
+  const ARC = 'M62.6 21.4A17 17 0 0 1 78.6 37.4';
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" style={{ overflow: 'visible', display: 'block' }}>
-      <defs>
-        <linearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6a4dff" />
-          <stop offset=".5" stopColor="#2f6bff" />
-          <stop offset="1" stopColor="#00c2d8" />
-        </linearGradient>
-        <radialGradient id={`${id}p`} cx=".88" cy=".08" r=".8">
-          <stop offset="0" stopColor="#ff5fb4" stopOpacity=".75" />
-          <stop offset=".7" stopColor="#ff5fb4" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={`${id}w`} cx=".3" cy="0" r=".7">
-          <stop offset="0" stopColor="#fff" stopOpacity=".28" />
-          <stop offset=".7" stopColor="#fff" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <g opacity={plate}>
-        <rect width="32" height="32" rx="8.9" fill={`url(#${id}g)`} />
-        <rect width="32" height="32" rx="8.9" fill={`url(#${id}p)`} />
-        <rect width="32" height="32" rx="8.9" fill={`url(#${id}w)`} />
-      </g>
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: 'visible', display: 'block' }}>
+      <rect width="100" height="100" rx="22.5" fill="#101C40" opacity={plate} />
       {slots > 0 && (
-        <g opacity={slots} fill="none" stroke="#9cc3ff" strokeWidth="0.35" strokeDasharray="0.9 0.7">
-          <path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" />
-          <path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" />
-          <rect x="7.5" y="16" width="17" height="7.5" rx="2.4" />
+        <g opacity={slots} fill="none" stroke="#FFD9A0" strokeWidth="1.1" strokeDasharray="2.8 2.2">
+          <path d={MOON} />
+          <path d={ARC} />
+          <circle cx="63" cy="37" r="7" />
         </g>
       )}
-      <g transform={drop(body, 26)} opacity={Math.min(1, body * 3)}>
-        <rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="#fff" />
-        <circle cx="11.4" cy="19.75" r="1.1" fill="#2f6bff" />
-        <circle cx="14.6" cy="19.75" r="1.1" fill="#2f6bff" />
-        <path d="M18 19.75h3.4" stroke="#2f6bff" strokeWidth="1.6" strokeLinecap="round" />
+      <g transform={drop(body, 80)} opacity={Math.min(1, body * 3)}>
+        <path d={MOON} fill="#F4F1EA" />
       </g>
-      <g transform={drop(arc2, 22)} opacity={Math.min(1, arc2 * 3)}>
-        <path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <g transform={drop(arc2, 70)} opacity={Math.min(1, arc2 * 3)}>
+        <circle cx="63" cy="37" r="7" fill="#FFB547" />
       </g>
-      <g transform={drop(arc1, 18)} opacity={Math.min(1, arc1 * 3)}>
-        <path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="#fff" strokeOpacity=".55" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <g transform={drop(arc1, 56)} opacity={Math.min(1, arc1 * 3)}>
+        <path d={ARC} stroke="#FFB547" strokeWidth="4" strokeLinecap="round" fill="none" />
       </g>
     </svg>
   );

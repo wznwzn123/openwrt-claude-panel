@@ -206,7 +206,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
         {/* 终端窗 → 徽标 */}
         {t < ENTER + 0.36 && (
           <div style={{ position: 'absolute', left: cx - w / 2, top: cy - h / 2, width: w, height: h, borderRadius: r, overflow: 'hidden', transform: `scale(${mix(1, 0.02, collapseX)}, ${mix(1, 0.02, collapseY)})`, filter: collapseY > 0 ? `brightness(${1 + 3 * collapseY})` : undefined, background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(28px) saturate(165%)', boxShadow: `inset 0 1px 0 rgba(255,255,255,0.26), inset 0 0 0 1px rgba(255,255,255,0.1), 0 30px 80px rgba(0,0,0,0.5)` }}>
-            <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`, clipPath: `circle(${flood * 150}% at 92% 80%)` }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, #1D2D5E, #101C40 60%, #0B1430)', clipPath: `circle(${flood * 150}% at 92% 80%)` }} />
             <div style={{ position: 'absolute', left: 22, top: 18, display: 'flex', gap: 9, opacity: 1 - m }}>
               {['#ff5f57', '#febc2e', '#28c840'].map((c) => <div key={c} style={{ width: 14, height: 14, borderRadius: 7, background: c }} />)}
               <span style={{ marginLeft: 14, fontFamily: FONT.mono, fontSize: 17, color: C.text3 }}>root@OpenWrt: ~</span>
@@ -262,9 +262,9 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
         )}
         {t > ENTER + 0.32 && (
           <div style={{ position: 'absolute', left: markCx - markS / 2, top: logoCy - markS / 2, perspective: 900, transform: `scale(${burst})` }}>
-            <div style={{ transform: `rotateX(${16 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 2 * Math.sin(t * 0.9)}deg) rotateY(${-14 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 3 * Math.sin(t * 0.7)}deg)`, filter: 'drop-shadow(0 2px 0 #3b2fb3) drop-shadow(0 4px 0 #2a2190) drop-shadow(0 6px 0 #1e1870) drop-shadow(0 24px 50px rgba(47,107,255,0.55))', position: 'relative' }}>
+            <div style={{ transform: `rotateX(${16 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 2 * Math.sin(t * 0.9)}deg) rotateY(${-14 * (1 - ramp(t, DROP[0], 1.0, EASE.snappy)) + 3 * Math.sin(t * 0.7)}deg)`, filter: 'drop-shadow(0 2px 0 #0B1430) drop-shadow(0 4px 0 #08102A) drop-shadow(0 6px 0 #060C22) drop-shadow(0 24px 50px rgba(16,28,64,0.6)) drop-shadow(0 0 36px rgba(255,181,71,0.22))', position: 'relative' }}>
               <BrandMark size={markS} id="fin" plate={1} slots={slots} body={drops[0]} arc2={drops[1]} arc1={drops[2]} />
-              <div style={{ position: 'absolute', inset: 0, borderRadius: markS * 0.278, overflow: 'hidden', pointerEvents: 'none' }}>
+              <div style={{ position: 'absolute', inset: 0, borderRadius: markS * 0.225, overflow: 'hidden', pointerEvents: 'none' }}>
                 <div style={{ position: 'absolute', top: -markS * 0.3, left: mix(-markS, markS * 1.4, ramp(t, DROP[2] + 0.2, 0.7, EASE.swift)), width: markS * 0.35, height: markS * 1.6, transform: 'rotate(20deg)', background: 'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.55), rgba(255,255,255,0))' }} />
               </div>
             </div>

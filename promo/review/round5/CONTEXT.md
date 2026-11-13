@@ -39,6 +39,11 @@
 ## 用户指定的背景说明 3：配音
 - 旁白为 TTS 合成（zh-CN-YunyangNeural）。为保证品牌名读音，合成时「Claude」按中文习惯读作「克劳德」；字幕与画面仍写 Claude。
 
+## 用户指定的背景说明 4：新图标
+- 用户已选定新 logo「守夜」（深夜蓝底 + 月白弯月 + 月亮里一盏琥珀灯 + 一道信号弧），并已同步更新到仓库本分支的产品代码：
+  面板 `src/www/panel/icon.svg`、`icon-192.png`、`icon-512.png` 与页内 logo，安卓客户端首页 logo 与启动图标（含单色主题图标）。
+  片中截图按新代码重新实机采集。官网 yrlove520.com 与已发布的旧版本可能仍是旧图标，属于发布时间差，不是片中造假。
+
 ## 可用工具
 - ffmpeg / ffprobe（抽帧、黑帧/静止/响度/峰值检测）
 - Python + PIL；OpenCV（`cv2`，可用 `cv2.QRCodeDetector` 检测二维码）

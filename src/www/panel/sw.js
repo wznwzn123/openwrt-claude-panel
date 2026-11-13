@@ -1,8 +1,8 @@
 // 面板网页先从手机缓存打开（路由器断电、断网、隧道掉线时也能看），同时在后台取新版本，下次打开生效。
 // 接口请求和下载永远直连路由器。
-const CACHE = 'router-panel-v9';
+const CACHE = 'router-panel-v10';
 const BASE = new URL('./', self.location).href;
-const SHELL = ['./', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon.svg'];
+const SHELL = ['./', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'icon.svg'];
 
 self.addEventListener('install', (e) => {
 	// 一个一个缓存：某个文件取不到不影响其它文件（addAll 只要错一个就全部作废）

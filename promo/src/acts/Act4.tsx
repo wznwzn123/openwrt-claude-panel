@@ -12,24 +12,18 @@ const CONVERGE = 57.517;
 const CONSOLE = 58.034;
 const END = 74 - SHIFT5;
 
-/* 30+ 项底层能力（来自仓库 cgi-bin/mcp 的真实工具清单，中文化） */
-const TOOLS: Array<[string, string]> = [
-  ['线路智能调度', 'switch_proxy'], ['UCI 配置读写与回滚', 'uci_set'], ['系统日志智能诊断', 'system_log'], ['OAF 应用过滤', 'oaf_uci'],
-  ['实时网速排行', 'net_speed'], ['系统服务控制', 'service_control'], ['设备列表', 'device_list'], ['连接追踪', 'list_connections'],
-  ['防火墙总览', 'firewall_overview'], ['调度规则管理', 'list_rules'], ['线路延迟测试', 'test_delay'], ['自定义规则', 'set_custom_rules'],
-  ['规则一键还原', 'restore_custom_rules'], ['网络信息', 'network_info'], ['软件包查询', 'packages'], ['套件日志', 'suite_log'],
-  ['调度模式切换', 'set_mode'], ['路由器状态', 'router_status'], ['UCI 备份清单', 'uci_backups'], ['配置回滚', 'uci_revert'],
-  ['应用识别', 'oaf_find_app'], ['关闭异常连接', 'close_connections'], ['加速通道总览', 'list_proxy_groups'], ['系统信息', 'system_info'],
-  ['服务清单', 'list_services'], ['日志检索', 'get_logs'], ['读取自定义规则', 'get_custom_rules'], ['套件重启', 'restart_suite'],
-  ['UCI 配置查看', 'uci_show'], ['应用过滤详情', 'oaf_show'], ['安全命令执行', 'run_command'], ['计划重启', 'reboot_router'],
+/* 连接器的 32 个真实工具（src/www/cgi-bin/mcp 的 title，按合规口径：节点→线路、代理→加速、OpenClash→智能调度套件） */
+const TOOLS: string[] = [
+  '路由器状态', '查看加速通道/线路', '测速', '切换线路', '切换加速模式', '查看连接', '断开连接', '查看生效规则',
+  '实时日志', '读取自定义规则', '保存自定义规则', '还原自定义规则', '重启智能调度套件', '智能调度套件日志', 'OAF 配置', 'OAF 查找应用',
+  '修改 OAF 配置', '系统信息', '实时网速', '设备列表', '网络信息', '服务列表', '控制服务', '重启路由器',
+  '防火墙与端口转发', '读取配置', '修改配置', '放弃未提交修改', '配置备份', '系统日志', '软件包', '执行命令',
 ];
 
-/* flying-words：词语纵深隧道（手算透视 s = P/(P−z)） */
+/* 工具清单：32 个工具名整齐排成网格依次亮起（替换早期的 3D 飞字词云，审片 AI 味），54.0–57.5；随后飞入左右双屏外框 */
 const Tunnel: React.FC<{ t: number }> = ({ t }) => {
-  const { W, H } = useV();
-  const P = 4400;
-  const conv = ramp(t, CONVERGE, CONSOLE - CONVERGE + 0.05, EASE.exit); // 越飞越快，被吸进槽位
-  const { vertical } = useV();
+  const { W, H, vertical } = useV();
+  const conv = ramp(t, CONVERGE, CONSOLE - CONVERGE + 0.05, EASE.exit);
   const L = layout(W, H, vertical);
   const slot = (i: number): [number, number] => {
     const r = i % 2 ? { x: L.rx, y: L.ry } : { x: L.lx, y: L.ly };
@@ -39,45 +33,28 @@ const Tunnel: React.FC<{ t: number }> = ({ t }) => {
     if (p < 2 * L.pw + L.ph) return [r.x + L.pw - (p - L.pw - L.ph), r.y + L.ph];
     return [r.x, r.y + L.ph - (p - 2 * L.pw - L.ph)];
   };
-  const items = TOOLS.map(([zh, en], i) => {
-    const golden = i * 2.39996;
-    const rad = 260 + (i % 5) * 120 + hash(i) * 80;
-    const layer = i % 3; // 三层纵深，速度错开
-    const u = ((t - A) * [0.34, 0.42, 0.52][layer] + i / TOOLS.length) % 1.0;
-    const z = mix(-7000, 3000, u);
-    const s = P / (P - z);
-    const x = W / 2 + Math.cos(golden) * rad * s;
-    const y = H / 2 + Math.sin(golden) * rad * 0.62 * s;
-    const life = u < 0.25 ? u / 0.25 : u < 0.6 ? mix(1, 0.6, (u - 0.25) / 0.35) : mix(0.6, 0, (u - 0.6) / 0.4);
-    const fog = Math.min(1, s * 1.4);
-    // 汇聚：飞向左右双屏
-    const side = Math.cos(golden) < 0 ? -1 : 1;
-    void side;
-    const [sx, sy] = slot(i);
-    const tx = mix(x, sx, conv);
-    const ty = mix(y, sy, conv);
-    const accent = i % 6 === 0;
-    const dc = Math.hypot((x - W / 2) / 640, (y - H / 2) / 220);
-    const titleDim = t < CONVERGE ? mix(0.08, 1, Math.min(1, Math.max(0, dc - 0.7) * 1.5)) : 1;
-    const blur = conv > 0.5 ? 0 : s < 0.55 ? (0.55 - s) * 7 : s > 1.6 ? Math.min(6, (s - 1.6) * 3) : 0; // 远景失焦 / 擦身而过失焦
-    return { zh, en, x: tx, y: ty, s: mix(s, 0.3, conv), o: mix(life * fog * titleDim, 1, conv) * (1 - ramp(t, CONSOLE + 0.05, 0.15, EASE.linear)) * ramp(t, A, 0.3, EASE.linear), accent, z, blur };
-  });
-  items.sort((a, b) => a.z - b.z);
-  // 隧道壁发丝环
-  const rings = Array.from({ length: 9 }, (_, i) => {
-    const u = ((t - A) * 0.42 + i / 9) % 1;
-    const s = P / (P - mix(-7000, 3000, u));
-    return <div key={i} style={{ position: 'absolute', left: W / 2 - 520 * s, top: H / 2 - 320 * s, width: 1040 * s, height: 640 * s, borderRadius: '50%', border: `${Math.min(3, 0.6 * s)}px solid rgba(217,119,87,${0.22 * Math.min(1, u * 3) * (1 - u)})`, opacity: 1 - conv }} />;
-  });
+  const cols = vertical ? 4 : 8;
+  const cw = vertical ? 236 : 206, chh = vertical ? 64 : 54, gx = vertical ? 14 : 14, gy = vertical ? 16 : 14;
+  const rows = Math.ceil(TOOLS.length / cols);
+  const gw = cols * cw + (cols - 1) * gx, gh = rows * chh + (rows - 1) * gy;
+  const gx0 = W / 2 - gw / 2, gy0 = (vertical ? H * 0.5 : H * 0.6) - gh / 2;
+  const sweep = ((t - A - 1.2) / 1.6) % 1; // 琥珀高光自左向右扫过一遍又一遍：工具都在线
   return (
     <Abs style={{ inset: 0 }}>
-      <Abs style={{ left: W / 2 - 400, top: H / 2 - 400, width: 800, height: 800, borderRadius: '50%', background: `radial-gradient(circle, rgba(217,119,87,${0.5 + 0.15 * Math.sin(t * 3)}) 0%, rgba(37,99,235,0.18) 40%, rgba(0,0,0,0) 70%)`, opacity: 1 - conv }} />
-      {rings}
-      {items.map((w, i) => (
-        <div key={i} style={{ position: 'absolute', left: w.x, top: w.y, transform: `translate(-50%,-50%) scale(${w.s})`, opacity: w.o, whiteSpace: 'nowrap', textAlign: 'center', filter: w.blur > 0.3 ? `blur(${w.blur.toFixed(1)}px)` : undefined }}>
-          <div style={{ fontFamily: FONT.sans, fontWeight: 700, fontSize: 40, color: w.accent ? '#FFD2BF' : C.text, textShadow: w.accent ? '0 0 24px rgba(217,119,87,0.9)' : '0 0 12px rgba(120,160,255,0.35)' }}>{w.zh}</div>
-        </div>
-      ))}
+      {TOOLS.map((name, i) => {
+        const c = i % cols, r = Math.floor(i / cols);
+        const x0 = gx0 + c * (cw + gx), y0 = gy0 + r * (chh + gy);
+        const inK = ramp(t, A + 0.35 + i * 0.035, 0.35, EASE.out);
+        const [sx, sy] = slot(i);
+        const x = mix(x0, sx - cw / 2, conv), y = mix(y0, sy - chh / 2, conv);
+        const hot = t > A + 1.2 && Math.abs(c / (cols - 1) - sweep) < 0.08;
+        const o = inK * (1 - ramp(t, CONSOLE + 0.05, 0.15, EASE.linear));
+        return (
+          <div key={name} style={{ position: 'absolute', left: x, top: y + (1 - inK) * 14, width: cw, height: chh, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transform: `scale(${mix(1, 0.4, conv)})`, opacity: o, background: hot ? 'rgba(217,119,87,0.22)' : 'rgba(255,255,255,0.06)', boxShadow: hot ? 'inset 0 0 0 1px rgba(255,190,150,0.6)' : 'inset 0 0 0 1px rgba(255,255,255,0.1)', fontFamily: FONT.sans, fontSize: vertical ? 22 : 19, fontWeight: 600, color: hot ? '#FFE2D6' : C.text2, whiteSpace: 'nowrap' }}>
+            <Dot color={hot ? C.amber : C.ok} size={7} /> {name}
+          </div>
+        );
+      })}
     </Abs>
   );
 };
@@ -417,8 +394,8 @@ export const Act4: React.FC = () => {
       {t < CONSOLE + 0.4 && <Tunnel t={t} />}
       {/* 开幕标题 */}
       {t < CONVERGE + 0.4 && (
-        <Abs style={{ left: 0, right: 0, top: H / 2 - 90, textAlign: 'center', opacity: ramp(t, 54.45, 0.6, EASE.out) * (1 - ramp(t, CONVERGE - 0.2, 0.4, EASE.exit)) }}>
-          <div style={{ fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.4em', color: '#FFD2BF' }}>CUSTOM CONNECTOR</div>
+        <Abs style={{ left: 0, right: 0, top: vertical ? H * 0.2 : H * 0.17, textAlign: 'center', opacity: ramp(t, 54.45, 0.6, EASE.out) * (1 - ramp(t, CONVERGE - 0.2, 0.4, EASE.exit)) }}>
+          <div style={{ fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.4em', color: '#FFD2BF' }}>CUSTOM CONNECTOR · 32 TOOLS</div>
           <div style={{ marginTop: 16, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 64 : 84, color: C.text, textShadow: '0 0 40px rgba(217,119,87,0.45)' }}>说一句，它来办</div>
           <div style={{ marginTop: 14, fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 30 : 34, color: '#FFD2BF' }}>要改设置时，会先跟你确认</div>
         </Abs>

@@ -84,7 +84,7 @@ const FIX = {
   overview: { clash: { running: true, mode: 'rule', connections: 243 }, wan: { up: true, ip: '100.64.12.8', proto: 'pppoe', uptime: 864000 },
     system: { model: 'OpenWrt', cpu: 7, cpus: 4, load: [0.21, 0.18, 0.15], mem_total: 1024e6, mem_avail: 712e6, temp: 46, firmware: 'OpenWrt 24.10', uptime: 1728000 },
     speed: { rx: 9.86e6, tx: 0.71e6, rx_total: 812e9, tx_total: 96e9 },
-    px: { active: 'openclash', list: [{ id: 'openclash', name: 'OpenClash', kind: 'clash', enabled: true, running: true }, { id: 'nikki', name: 'Nikki', kind: 'clash', enabled: false, running: false }, { id: 'passwall2', name: 'PassWall2', kind: 'other', enabled: false, running: false }] } },
+    px: { active: 'openclash', list: [{ id: 'openclash', name: 'OpenClash', kind: 'clash', enabled: true, running: true }, { id: 'nikki', name: 'Nikki', kind: 'clash', enabled: false, running: false }, { id: 'passwall', name: 'PassWall', kind: 'other', enabled: false, running: false }, { id: 'passwall2', name: 'PassWall2', kind: 'other', enabled: false, running: false }, { id: 'homeproxy', name: 'HomeProxy', kind: 'other', enabled: false, running: false }, { id: 'shadowsocksr', name: 'SSR Plus+', kind: 'other', enabled: false, running: false }] } }, // 六款全装（审片 C8：「六款」要真的列出六个）
   groups: grpFix,
   autosw: () => ({ enabled: true, groups: ['超清影音通道'], group: '超清影音通道', now: ST.grp === 'switched' ? '低延迟线路 01' : '备用线路 05', hist: [] }),
   providers: { proxies: [] },
@@ -92,7 +92,7 @@ const FIX = {
 // 合规改写：真实界面里的这些词在片中统一替换（与旁白术语一致）
 const REPL = [
   [/国内直连，海外走代理/g, '智能分配直连与加速通道'], [/Meta 运行中/g, '内核运行中'],
-  [/OpenClash/g, '智能调度套件'], [/PassWall ?2?/g, '网络加速套件'], [/Nikki/g, '多线路由套件'], [/机场/g, '线路服务商'], [/走代理/g, '走加速通道'], [/代理插件/g, '扩展套件'], [/代理/g, '加速'],
+  [/OpenClash/g, '智能调度套件'], [/PassWall ?2/g, '网络加速套件 2'], [/PassWall/g, '网络加速套件'], [/HomeProxy/g, '轻量路由套件'], [/SSR Plus\+/g, '加密转发套件'], [/Nikki/g, '多线路由套件'], [/机场/g, '线路服务商'], [/走代理/g, '走加速通道'], [/代理插件/g, '扩展套件'], [/代理/g, '加速'],
   [/策略组/g, '加速通道'], [/节点/g, '线路'], [/分流/g, '智能调度'], [/订阅/g, '线路源'], [/Cloudflare/g, '云端'],
 ];
 

@@ -117,32 +117,32 @@
  {
   "t": 31.6,
   "name": "plugin-detect",
-  "gain": 0.35
+  "gain": 0.22
  },
  {
   "t": 32.0,
   "name": "plugin-detect",
-  "gain": 0.35
+  "gain": 0.22
  },
  {
   "t": 32.4,
   "name": "plugin-detect",
-  "gain": 0.35
+  "gain": 0.22
  },
  {
   "t": 32.8,
   "name": "plugin-detect",
-  "gain": 0.35
+  "gain": 0.22
  },
  {
   "t": 33.2,
   "name": "plugin-detect",
-  "gain": 0.35
+  "gain": 0.22
  },
  {
   "t": 33.6,
   "name": "plugin-detect",
-  "gain": 0.35
+  "gain": 0.22
  },
  {
   "t": 35.081,
@@ -156,16 +156,6 @@
  },
  {
   "t": 35.781,
-  "name": "latency-lock",
-  "gain": 0.3
- },
- {
-  "t": 35.901,
-  "name": "latency-lock",
-  "gain": 0.3
- },
- {
-  "t": 36.021,
   "name": "latency-lock",
   "gain": 0.3
  },

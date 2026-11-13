@@ -116,9 +116,8 @@ export const HudBG: React.FC<{ scan?: boolean; tint?: string; chrome?: boolean }
         </defs>
         <rect width={W} height={H} fill="url(#hex)" />
       </svg>
-      {chrome && <HudRadar />}
+      {/* 第六版去掉雷达与刻度装饰（模板化科技元素，审片 AI 味），只留真实状态行 */}
       {chrome && <HudDataColumn />}
-      {chrome && <HudTicks />}
       <Vignette strength={0.7} />
     </div>
   );

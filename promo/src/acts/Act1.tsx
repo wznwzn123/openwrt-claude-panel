@@ -34,12 +34,7 @@ const Viewfinder: React.FC<{ t: number; shot: number; focus?: { x: number; y: nu
       {corner(W - m, m, -1, 1)}
       {corner(m, H - m, 1, -1)}
       {corner(W - m, H - m, -1, -1)}
-      <Abs style={{ left: m + 60, top: m + 8, fontFamily: FONT.mono, fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.12em' }}>
-        ISO 3200 · 1/250 · ƒ1.8 · <span style={{ color: '#ff4d4d' }}>●</span> REC
-      </Abs>
-      <Abs style={{ right: m + 60, top: m + 8, fontFamily: FONT.mono, fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.12em' }}>
-        SHOT {String(shot).padStart(2, '0')}/03 · {t < FLASH2 ? '⚡ CHARGING' : '⚡ READY'}
-      </Abs>
+      {/* 第六版去掉取景框参数文字（ISO / REC / SHOT），只留四角括号 */}
       {focus && focus.lock >= 0 && (
         <div
           style={{
@@ -319,7 +314,9 @@ export const Act1: React.FC = () => {
   } else if (t < MON0) {
     shot = 3;
     body = <Crop t={t} at={FLASH2} cx={512} cy={392} s={2.6} error dialog />;
-  } else if (t < WORD0) body = <Monitors t={t} />;
+  }
+  // 1–3s 旧式后台大面积白底压暗一档、偏冷，和全片暗调统一（审片：白底与暗调割裂）
+  if (t >= FLASH1 && t < MON0) body = <><>{body}</><Abs style={{ inset: 0, background: 'rgba(10,16,34,0.34)', mixBlendMode: 'multiply' }} /><Abs style={{ inset: 0, background: 'rgba(12,20,44,0.18)' }} /></>; else if (t < WORD0) body = <Monitors t={t} />;
   else body = <TextMask t={t} />;
 
   // 对焦框：闪前 0.28s 收拢到下一张裁切并锁定

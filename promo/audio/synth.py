@@ -289,6 +289,15 @@ for sec0, sec1, gain in ((54.0, 73.6 - S5, 1.0), (82.4 - S5, CAD, 1.25)):
         place(bgm, pan(lead(mtof(m), beat / 2 * 1.6), 0.15 * (1 if n % 2 else -1)), tq, gain)
         tq += beat / 2
         n += 1
+# 第六版：第二幕、第三幕中段加一条稀疏的四分音符轻旋律（隔拍出音，低于第四幕主旋律），减少循环的单调感
+for sec0, sec1, gain in ((16.55, 27.4, 0.42), (38.4, 49.2, 0.36)):
+    n = 0
+    tq = sec0
+    while tq < sec1:
+        if n % 2 == 0 or n % 8 == 5:
+            place(bgm, pan(lead(mtof(MOTIF[(n // 2) % len(MOTIF)] - 12), beat * 1.2), -0.25 if n % 4 < 2 else 0.25), tq, gain)
+        tq += beat
+        n += 1
 # 低频重击（Sub Impact）
 for at, g in ((54.0, 0.55), (82.4 - S5, 0.45)):
     place(bgm, sub_drop(1.6, 120, 32), at, g)
@@ -407,11 +416,11 @@ for i, at in enumerate((28.05, 28.21, 28.37)):
     cue('stack-thump', at + 0.22, thump(), 0.7)
 cue('fan-out', 29.069 - 0.3, whoosh(0.6, 300, 4000), 0.5)
 for i, at in enumerate((31.6, 32.0, 32.4, 32.8, 33.2, 33.6)):
-    cue('plugin-detect', at, glass_tap(2600 + i * 120), 0.35)
+    cue('plugin-detect', at, glass_tap(2600 + i * 120), 0.22)
 cue('tap', 37.15, click(), 0.8)
 cue('push-in', 36.8, whoosh(0.6, 200, 2500), 0.35)
 for i, at in enumerate((37.85, 37.97, 38.09)):
-    cue('latency-lock', at, glass_tap(3200), 0.3)
+    if i == 0: cue('latency-lock', at, glass_tap(3200), 0.3)
 cue('node-fail', 38.7, sonar(620), 0.45)
 cue('auto-switch', 39.35, chime(1046.5, 1568), 0.6)
 cue('seg-b', 40.448 - 0.35, whoosh(0.7, 300, 4000), 0.5)
@@ -442,8 +451,8 @@ CHAR = json.load(open('../src/act4.json'))['char']
 ACT4 = json.load(open('../src/act4.json'))   # 与画面同源：由 voice/act4_sync.py 从字级时间戳推导
 for c4 in ACT4['cmds']:
     text, t0, send, tool_at, reply = c4['text'], c4['t0'], c4['send'], c4['toolAt'], c4['replyAt']
-    for i in range(len(text)):
-        place(sfx, pan(key(False), 0), t0 + i * CHAR, 0.6)
+    for i in range(0, len(text), 2):   # 第六版：隔字一响、减量（审片：音效过密显得碎）
+        place(sfx, pan(key(False), 0), t0 + i * CHAR, 0.38)
     cues.append({'t': t0, 'name': 'dictation-typing', 'gain': 0.6})
     cue('send', send, glass_tap(1900), 0.55)
     cue('amber-beam', tool_at - 0.25, riser(0.37, 800, 6000), 0.5, 0.3)   # 琥珀光束跨屏

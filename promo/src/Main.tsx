@@ -49,7 +49,8 @@ export const ACTS = [
 export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtitles = true, safe = false }) => {
   const t = useT();
   const { fps } = useVideoConfig();
-  const W5 = 73.75 - SHIFT5; // 第四幕 → 第五幕扫描线擦除
+  // 第四幕 → 第五幕：第六版不再第二次用扫描线擦除（模板感），改为卡在半拍 73.81s 的硬切 + 一记轻闪 + 第五幕 3% 回弹
+  const W5 = 73.81 - SHIFT5;
   return (
     <SafeCtx.Provider value={safe}>
     <AbsoluteFill style={{ background: '#07090E', overflow: 'hidden', ...({ textWrap: 'pretty' } as React.CSSProperties) }}>
@@ -61,9 +62,14 @@ export const Main: React.FC<{ subtitles?: boolean; safe?: boolean }> = ({ subtit
           <Act3 />
         </AbsoluteFill>
       )}
-      {t >= 54 && t < W5 + 0.6 && <Act4 />}
+      {t >= 54 && t < W5 && <Act4 />}
       {/* 第五幕内部仍按原时间轴（74–90s）编排，整体提前 SHIFT5；片尾多出的时长 = logo 定格 */}
-      {t >= W5 && <ScanWipe t={t} from={W5} dur={0.55}><Sequence from={-Math.round(SHIFT5 * fps)} layout="none"><Act5 /></Sequence></ScanWipe>}
+      {t >= W5 && (
+        <AbsoluteFill style={{ transform: `scale(${1 + 0.03 * (1 - ramp(t, W5, 0.5))})` }}>
+          <Sequence from={-Math.round(SHIFT5 * fps)} layout="none"><Act5 /></Sequence>
+        </AbsoluteFill>
+      )}
+      {t >= W5 && t < W5 + 0.3 && <AbsoluteFill style={{ background: '#d6ecff', opacity: 0.32 * (1 - ramp(t, W5, 0.25)) }} />}
       <DemoTag t={t} />
       {subtitles && <Subtitles />}
     </AbsoluteFill>

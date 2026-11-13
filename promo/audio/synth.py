@@ -508,14 +508,14 @@ assert vsr == SR
 voice = voice[:N]
 if len(voice) < N:
     voice = np.vstack([voice, np.zeros((N - len(voice), 2))])
-# 人声包络 → 闪避增益（attack 40ms / release 300ms）
+# 人声包络 → 闪避增益（attack 40ms / release 600ms）
 env = np.abs(voice).mean(1)
 win = int(0.02 * SR)
 env = np.convolve(env, np.ones(win) / win, 'same')
 active = (env > 0.01).astype(float)
 g = np.zeros(N)
 a_c = np.exp(-1 / (0.04 * SR))
-r_c = np.exp(-1 / (0.30 * SR))
+r_c = np.exp(-1 / (0.60 * SR))   # 第八版 0.3→0.6s：旁白间隙配乐回升放缓，减轻抽吸感（审片 B-11）
 cur = 0.0
 for i in range(0, N, 48):  # 1ms 步进
     tgt = active[i]

@@ -155,7 +155,7 @@ export const Act3: React.FC = () => {
   const swB = vertical ? 278 : 316;
   const pxB = vertical ? W / 2 : W * 0.24;
   const pyB = vertical ? H * 0.3 : cy;
-  const pushB = 1 + (vertical ? 0.3 : 0.3) *   // 第七版 0.45→0.3：推近时流量图标签不再落进字幕区（审片 B6）
+  const pushB = 1 + (vertical ? 0 : 0.3) *   // 第七版 0.45→0.3：推近时流量图标签不再落进字幕区（审片 B6）；第八版竖屏不推镜：流量卡已近满宽，推近会左右出画
     (ramp(t, 44.05, 0.4, EASE.smooth) - ramp(t, 45.3, 0.4, EASE.smooth));
   const togX = pxB + ((313 - 180) / 360) * swB * (vertical ? 0.82 : 1);
   const togY = pyB + (-swB + (436 / 360) * swB) * (vertical ? 0.82 : 1);

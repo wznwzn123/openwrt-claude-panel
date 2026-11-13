@@ -10,7 +10,7 @@ CHAR = 0.06
 r = lambda x: round(x, 3)
 cmds = []
 
-# ① 「说一句，切到低延迟线路，它先测速，再帮你切好」：测速发声时出「测速」，「再帮你切好」发声帧 = 切换生效
+# ① 「说一句换条快线路，它先测速，再帮你切好」：测速发声时出「测速」，「再帮你切好」发声帧 = 切换生效
 p_test, p_done = ph('它先测速'), ph('再帮你切好')
 text1 = '把超清影音通道切到低延迟线路'
 t0 = r(ph('说一句')['start'] - 0.1); send = r(t0 + len(text1) * CHAR + 0.05)
@@ -20,9 +20,9 @@ cmds.append({'text': text1, 't0': t0, 'send': send, 'think': r(send + 0.12),
              'toolAt': r(state - 0.15), 'state': r(state),
              'reply': '备用线路 05 超时，已把「超清影音通道」切到低延迟线路 01 · 28 ms', 'replyAt': r(state + 0.2)})
 
-# ② 「问它谁在占网速，它查一遍连接，告诉你是哪台设备」：查看连接（含来源 IP 与流量，需扩展套件）+ 设备列表（IP→设备名），
+# ② 「问它谁在占网速，它查完连接，告诉你是哪台」：查看连接（含来源 IP 与流量，需扩展套件）+ 设备列表（IP→设备名），
 #    「告诉你是哪台设备」发声帧 = 结果锁定。连接器没有「每台设备实时速率」工具，所以结果只给能推出来的「最近几分钟流量」
-p_ask, p_look, p_tell = ph('问它谁在占网速'), ph('它查一遍连接'), ph('告诉你是哪台设备')
+p_ask, p_look, p_tell = ph('问它谁在占网速'), ph('它查完连接'), ph('告诉你是哪台')
 text2 = '看看现在哪台设备在占满网速'
 t0 = r(p_ask['start'] - 0.15); send = r(t0 + len(text2) * CHAR + 0.05)
 state = p_tell['start']
@@ -31,11 +31,12 @@ cmds.append({'text': text2, 't0': t0, 'send': send, 'think': r(send + 0.12),
              'toolAt': r(state - 0.15), 'state': r(state),
              'reply': '这几分钟流量最大的是书房台式机，下载了约 2 GB', 'replyAt': r(state + 0.2)})
 
-# ③ 「让它给书房电脑固定个 IP，它会先跟你确认，改之前还自动备份」
-p_set, p_conf, p_bak = ph('固定个 IP'), ph('它会先问你同不同意'), ph('改之前还自动备份')
+# ③ 「要改设置，它先问你；改之前，自动备份」（第八版删稿：指令内容由画面打字呈现）
+p_set, p_conf, p_bak = ph('要改设置'), ph('它先问你'), ph('自动备份')
 text3 = '给书房台式机固定 IP 192.168.1.10'
-t0 = r(p_set['start'] - 0.1); send = r(t0 + len(text3) * CHAR + 0.05)
-ask = r(p_conf['start'])            # Claude 客户端弹出工具授权（修改配置在连接器里标为危险操作，默认先请用户允许）
+ask = r(p_conf['start'])
+# 第八版：旁白变短，打字起点按授权卡倒推（发送 → 思考 → 读取配置 → 授权，留足 0.75s），保证先发送、后弹授权
+t0 = r(min(p_set['start'] - 0.1, ask - 0.75 - len(text3) * CHAR - 0.05)); send = r(t0 + len(text3) * CHAR + 0.05)            # Claude 客户端弹出工具授权（修改配置在连接器里标为危险操作，默认先请用户允许）
 ok = r(p_conf['end'] - 0.05)        # 用户点「允许」
 tool = r(ok + 0.25)                 # 修改配置（改前自动备份）
 state = r(tool + 0.15)

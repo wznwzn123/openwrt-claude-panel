@@ -285,47 +285,47 @@
   "gain": 0.55
  },
  {
-  "t": 62.067,
+  "t": 61.45,
   "name": "amber-beam",
   "gain": 0.5
  },
  {
-  "t": 62.437,
+  "t": 61.82,
   "name": "core-impact",
   "gain": 0.6
  },
  {
-  "t": 62.667,
+  "t": 62.05,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 63.631,
+  "t": 63.85,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 64.461,
+  "t": 64.68,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 66.661,
+  "t": 66.8,
   "name": "claude-reply",
   "gain": 0.5
  },
  {
-  "t": 68.035,
+  "t": 67.698,
   "name": "dictation-typing",
   "gain": 0.6
  },
  {
-  "t": 69.525,
+  "t": 69.188,
   "name": "send",
   "gain": 0.55
  },
  {
-  "t": 72.363,
+  "t": 71.325,
   "name": "claude-reply",
   "gain": 0.5
  },
@@ -335,52 +335,52 @@
   "gain": 0.25
  },
  {
-  "t": 61.53,
+  "t": 60.862,
   "name": "tool-chip",
   "gain": 0.35
  },
  {
-  "t": 64.581,
+  "t": 64.8,
   "name": "thinking",
   "gain": 0.25
  },
  {
-  "t": 65.308,
+  "t": 65.6,
   "name": "tool-chip",
   "gain": 0.35
  },
  {
-  "t": 69.645,
+  "t": 69.308,
   "name": "thinking",
   "gain": 0.25
  },
  {
-  "t": 70.033,
+  "t": 69.588,
   "name": "tool-chip",
   "gain": 0.35
  },
  {
-  "t": 70.383,
+  "t": 69.938,
   "name": "confirm-ask",
   "gain": 0.4
  },
  {
-  "t": 71.763,
+  "t": 70.725,
   "name": "confirm-ok",
   "gain": 0.75
  },
  {
-  "t": 62.467,
+  "t": 61.85,
   "name": "hero-pulse",
   "gain": 0.55
  },
  {
-  "t": 66.481,
+  "t": 66.62,
   "name": "flip-reorder",
   "gain": 0.4
  },
  {
-  "t": 72.833,
+  "t": 71.857,
   "name": "uci-backup",
   "gain": 0.45
  },

@@ -134,26 +134,28 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           );
         })}
         {/* 状态行 + 30 秒巡检环 */}
-        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.47, top: vertical ? 300 : 410, fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.16em', color: t > SCAN1 ? '#86efac' : C.cyan }}>
+        <div style={{ position: 'absolute', left: vertical ? 60 : W * 0.47, top: vertical ? 300 : 410, fontFamily: FONT.mono, fontSize: 20, letterSpacing: '0.16em', color: t > SCAN1 ? '#86efac' : C.cyan, opacity: vertical ? 1 - ramp(t, 79.5, 0.3) : 1 }}>
           {t > SCAN1 ? 'WATCHDOG · ALL CHECKS OK' : 'WATCHDOG · SCANNING…'} · INTERVAL 30s
         </div>
       </Abs>
       {!vertical && (
         <>
-          <Notice t={t} at={76.6} slot={0} title="今日云端备份完成（已加密）" body="保留 10 份 · 开启加密后在路由器本地加密" />
+          {/* 第八版：换成真实会推送的事件（cmcp-traffic 新设备提醒）；备份成功不推送，只有失败才通知 */}
+          <Notice t={t} at={76.6} slot={0} title="新设备连上了：小米手机" body="IP 192.168.1.36 · 不认识可在面板里暂停它" />
           <Notice t={t} at={79.25} slot={1} title="路由器离线原因：家里断电" body="21:41 离线 · 来电后已自动恢复" />
         </>
       )}
       {vertical && (
         <>
-          <div style={{ position: 'absolute', left: 0, right: 0, top: H * 0.73, transform: 'scale(0.95)' }}>
+          {/* 第八版：竖屏推送卡移到手机上方（原位置被字幕盖住），出现时状态行让位 */}
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 175, transform: 'scale(0.95)' }}>
             <Notice t={t} at={79.8} slot={0} title="路由器离线原因：家里断电" body="来电后已自动恢复" />
           </div>
         </>
       )}
       <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? 170 : 80, textAlign: 'center', opacity: ramp(t, 74.3, 0.5, EASE.out) }}>
         <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 40 : 40, letterSpacing: '0.06em', color: C.text }}>
-          看门狗 30 秒巡检，出问题自动修{vertical ? <br /> : <span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>}断电 / 断网微信提醒
+          看门狗 30 秒查一遍，断了自动重连{vertical ? <br /> : <span style={{ color: C.cyan, margin: '0 0.5em' }}>·</span>}断电 / 断网微信提醒
         </span>
       </div>
     </Abs>
@@ -201,7 +203,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
         {/* 顶部大字 */}
         <div style={{ position: 'absolute', left: 0, right: 0, top: vertical ? H * 0.22 : 150, textAlign: 'center', opacity: ramp(t, FIN + 0.1, 0.5, EASE.out) * (1 - ramp(t, ENTER, 0.3, EASE.exit)) }}>
           <span style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 38 : 46, letterSpacing: '0.05em', color: C.text }}>
-            托管版：输邀请码就能用<span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>自建版：代码全部开源（MIT）
+            托管版：输邀请码，五分钟装好{vertical ? <br /> : <span style={{ color: C.text3, margin: '0 0.45em' }}>·</span>}自建版：代码全部开源（MIT）
           </span>
         </div>
         {/* 终端窗 → 徽标 */}
@@ -286,7 +288,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
           </div>
           {/* 品牌全称（官网与 App 名为「路由器面板」）+ 核心主张（审片 B8 / A7） */}
           <div style={{ marginTop: 18, fontFamily: FONT.sans, fontWeight: 600, fontSize: vertical ? 30 : 34, color: C.text2, letterSpacing: '0.02em', opacity: ramp(t, WORD + 0.25, 0.6, EASE.out) }}>
-            路由器面板<span style={{ color: C.text3, margin: '0 0.5em' }}>·</span>不用公网 IP，在手机上管好家里的路由器
+            家里的路由器，出门也在手上
           </div>
           <div style={{ marginTop: 30, display: 'flex', justifyContent: 'center', opacity: ramp(t, LINKS, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, LINKS, 0.6, EASE.out)) * 12}px)` }}>
             <Glass radius={999} fill={0.07} style={{ position: 'relative', padding: '16px 36px', display: 'flex', gap: 26, alignItems: 'center', flexDirection: vertical ? 'column' : 'row' }}>

@@ -198,6 +198,20 @@ ok('[页面] 安全头：不能被嵌入、不带来源', r.headers.get('x-frame
 r = await api('GET', '/r/abc'); ok('[页面] 编号格式不对：404', r.status === 404);
 for (const p of ['/r', '/r/']) { r = await api('GET', p); ok('[页面] ' + p + ' 打开「输入编号查进度」', r.status === 200 && /输入编号查进度/.test(await r.text())); }
 r = await api('GET', '/r/ABCDEFGH/x'); ok('[页面] /r/编号/多余的路径：404', r.status === 404);
+// www 开头的地址、HEAD 请求、网页统计
+r = await req('GET', 'https://www.panel.example/r/ABCD2345?x=1');
+ok('[网址] www 开头：301 跳到不带 www 的主域名，路径和参数都带着', r.status === 301 && r.headers.get('location') === 'https://panel.example/r/ABCD2345?x=1', r.status + ' ' + r.headers.get('location'));
+r = await req('GET', 'https://www.panel.example/'); ok('[网址] www 首页也跳', r.status === 301 && r.headers.get('location') === 'https://panel.example/');
+for (const p of ['/', '/app', '/r', '/security', '/privacy', '/admin']) {
+	const h = await api('HEAD', p), g = await api('GET', p);
+	ok('[HEAD] ' + p + '：跟打开一样回 200，不带内容（聊天软件生成预览不会再看到「找不到」）', h.status === 200 && (await h.text()) === '' && h.headers.get('content-type') === g.headers.get('content-type'), h.status);
+}
+r = await api('HEAD', '/nope'); ok('[HEAD] 不存在的地址：还是 404', r.status === 404);
+const csp = async (p) => (await api('GET', p)).headers.get('content-security-policy') || '';
+ok('[统计] 官网各页放行 Cloudflare 网页统计（脚本和上报地址）', (await Promise.all(['/', '/app', '/r', '/security', '/privacy'].map(csp))).every((c) => c.includes("script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com") && c.includes("connect-src 'self' https://cloudflareinsights.com")));
+ok('[统计] 管理页不放行（管理页不统计），其他安全设置不变', !(await csp('/admin')).includes('cloudflareinsights') && /frame-ancestors 'none'/.test(await csp('/admin')) && /frame-ancestors 'none'/.test(await csp('/')));
+r = await api('GET', '/privacy'); const phtml = await r.text();
+ok('[隐私] 隐私政策如实写了官网用 Cloudflare 网页统计、不用 Cookie、面板和管理页没有', /Cloudflare 网页统计/.test(phtml) && /不用 Cookie/.test(phtml) && /管理页和你的面板里没有统计/.test(phtml) && !/没有广告、统计、跟踪代码/.test(phtml));
 // 页面把回复当文字显示（不会被当成网页代码执行）
 ok('[页面] 说明用 esc() 转义后再显示', /esc\(x\.note\)/.test(html) && !/\$\{d\.reply\}|\$\{x\.note\}/.test(html));
 

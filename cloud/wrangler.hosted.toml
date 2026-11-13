@@ -7,6 +7,8 @@ compatibility_date = "2025-09-01"
 routes = [
   # 主域名：官网和开通接口
   { pattern = "example.com", custom_domain = true },
+  # www 开头的也能打开（自动跳到不带 www 的主域名）
+  { pattern = "www.example.com", custom_domain = true },
   # 每台路由器的子域名下的 /cloud/：推送、云端备份、断电断网判断（其他路径直接走隧道到路由器）
   { pattern = "*.example.com/cloud/*", zone_name = "example.com" }
 ]

@@ -228,12 +228,17 @@ have_pkg() { [ -n "$(command -v "$1")" ]; }
 free_mb() { { df -k /overlay 2>/dev/null || df -k / 2>/dev/null; } | awk 'NR==2{print int($4/1024)}'; }
 mem_mb() { awk -v k="$1:" '$1 == k { print int($2 / 1024) }' "${CMCP_MEMINFO:-/proc/meminfo}" 2>/dev/null; }
 # 装软件包。opkg / apk 自己崩溃（Segmentation fault 这类，退出码 ≥ 128）时，清掉软件源列表重试一次
-PKGERR=""
+PKGERR="" PKGFEEDS="" PKGNONE=""
+UPLOG=/tmp/cmcp_pkgupdate.log
+# 更新软件源失败时，从报错里找出连不上的软件源地址（最多 3 个，给用户和上报看）
+pkg_feeds() { grep -i -e fail -e error -e warn "$UPLOG" 2>/dev/null | grep -o 'https\{0,1\}://[^ ,:"]*[^ ,:".]' | sed 's#/Packages\(\.gz\|\.sig\)\{0,1\}$##; s#/APKINDEX\.tar\.gz$##' | awk '!s[$0]++' | head -n 3; }
+# 软件源里根本没有的包（更新成功、但列表里找不到）
+pkg_none() { local p n=""; for p in "$@"; do if have_pkg apk; then apk search -e "$p" 2>/dev/null | grep -q . || n="$n $p"; else opkg list "$p" 2>/dev/null | grep -q "^$p " || n="$n $p"; fi; done; echo "${n# }"; }
 pkg_add() {
 	local rc=0
-	PKGERR=""
+	PKGERR="" PKGFEEDS="" PKGNONE=""
 	if have_pkg apk; then
-		apk update >/dev/null 2>&1 || PKGERR=net
+		apk update >"$UPLOG" 2>&1 || PKGERR=net
 		apk add "$@" || rc=$?
 		if [ $rc -gt 128 ] && [ $rc -lt 160 ]; then
 			warn "apk 崩溃了（退出码 $rc），清掉缓存重试一次"; rc=0
@@ -241,7 +246,7 @@ pkg_add() {
 			apk add "$@" || rc=$?
 		fi
 	elif have_pkg opkg; then
-		opkg update >/dev/null 2>&1 || PKGERR=net
+		opkg update >"$UPLOG" 2>&1 || PKGERR=net
 		opkg install "$@" || rc=$?
 		if [ $rc -gt 128 ] && [ $rc -lt 160 ]; then
 			warn "opkg 崩溃了（退出码 $rc），清掉软件源列表重试一次"; rc=0
@@ -251,16 +256,87 @@ pkg_add() {
 	else PKGERR=nopm; return 1; fi
 	[ $rc -eq 0 ] && return 0
 	[ $rc -gt 128 ] && [ $rc -lt 160 ] && PKGERR=crash
+	[ "$PKGERR" = net ] && PKGFEEDS=$(pkg_feeds)
+	[ -z "$PKGERR" ] && { PKGNONE=$(pkg_none "$@"); [ -n "$PKGNONE" ] && PKGERR=none; }
 	return 1
+}
+# 软件源出问题的说明（连不上哪几个 / 里面没有哪些包），给 pkg_die 和 ucode 补装失败时用
+pkg_why() {
+	case "$PKGERR" in
+		net) if [ -n "$PKGFEEDS" ]; then printf '路由器连不上这几个软件源：\n%s\n可能是路由器没联网，或者固件里设置的软件源地址已经失效（路由器后台「系统 → 软件包 → 配置」里能看、能改）' "$(echo "$PKGFEEDS" | sed 's/^/    /')"
+			else printf '更新软件源列表时出错了，可能是路由器连不上软件源：检查路由器能不能上网、软件源地址对不对'; fi ;;
+		none) printf '这个固件的软件源里没有 %s。面板要用 ucode（OpenWrt 22.03 以后才有），这个固件可能比较旧，或者不是标准的 OpenWrt' "$PKGNONE" ;;
+		*) printf '在路由器后台「系统 → 软件包」里搜一下这几个包，看看能不能手动装上' ;;
+	esac
 }
 pkg_die() {
 	local pm; pm=$(have_pkg apk && echo apk || echo opkg)
 	case "$PKGERR" in
 		crash) die "路由器的软件包管理器（$pm）自己崩溃了（Segmentation fault），清掉软件源列表重试也一样。这是路由器固件的问题，不是面板的问题：先重启路由器再装一次；还不行，建议换这个固件的稳定版（SNAPSHOT 测试版容易这样）。没装上的：$1" ;;
 		nopm) die "没有找到 opkg / apk，请手动安装：$1" ;;
-		net) die "依赖安装失败：$1。更新软件源列表时出错了，可能是路由器连不上软件源：检查路由器能不能上网、软件源地址对不对，再装一次" ;;
-		*) die "依赖安装失败：$1（在路由器后台「系统 → 软件包」里搜一下这几个包，看看能不能手动装上）" ;;
+		net) die "依赖安装失败：$1。$(pkg_why)。改好以后再装一次" ;;
+		none) die "依赖安装失败：$1。$(pkg_why)。建议换成 ImmortalWrt、iStoreOS 或官方 OpenWrt 再装" ;;
+		*) die "依赖安装失败：$1（$(pkg_why)）" ;;
 	esac
+}
+# ucode 从软件源装不上（软件源连不上、或者固件的软件源里没有）时的补救：
+# 从 OpenWrt 官方（先国内镜像）下载 23.05 的 ucode 这几个包，核对安装包里写好的 SHA256；
+# 只补系统里没有的文件（已有的一个都不动），补完真的跑一遍；跑不起来就把补的文件删干净
+RT=${CMCP_ROOT:-}
+UC_SUMS="$SRC/etc/ucode.sums"
+uc_arch() {
+	local a; a=$(sed -n "s/^DISTRIB_ARCH=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $RT/etc/openwrt_release 2>/dev/null | head -n 1)
+	[ -n "$a" ] || a=$(opkg print-architecture 2>/dev/null | awk '$2 != "all" && $2 != "noarch" { a = $2 } END { print a }')
+	echo "$a"
+}
+# 试运行（测试时 CMCP_UCCHROOT 指向一个真的 OpenWrt 根目录，在里面跑）
+# 结果用拼出来的字（出错时 ucode 会把程序原文打出来，原文里不能直接有「通过」的字样）
+UC_TRY='let fs = require("fs"), uci = require("uci"); print((type(fs.readfile) == "function" && type(uci.cursor) == "function") ? "UCODE" + "-PASS" : "UCODE" + "-BAD");'
+uc_ok() { if [ -n "$CMCP_UCCHROOT" ]; then chroot "$CMCP_UCCHROOT" /usr/bin/ucode -e "$UC_TRY" 2>&1; else $RT/usr/bin/ucode -e "$UC_TRY" 2>&1; fi; }
+# 系统里有没有这个库（几个可能的位置，有一个就算有）
+uc_has() { local f; for f in "$@"; do [ -e "$f" ] && return 0; done; return 1; }
+ucode_fetch() {
+	local a v t n line f s u got pk p out
+	UCWHY=""
+	a=$(uc_arch); v=$(sed -n 's/^VER=//p' "$UC_SUMS" 2>/dev/null | head -n 1)
+	if [ -z "$a" ] || [ -z "$v" ] || ! grep -q "^$a " "$UC_SUMS" 2>/dev/null; then UCWHY="安装包里没有这个架构（${a:-认不出来}）的 ucode"; return 1; fi
+	have_pkg sha256sum || { UCWHY="系统里没有 sha256sum，没法校验下载的文件"; return 1; }
+	t=$(mktemp -d /tmp/cmcp_uc.XXXXXX 2>/dev/null) || { UCWHY="建不了临时目录"; return 1; }
+	pk="libucode20230711 ucode ucode-mod-fs ucode-mod-uci"
+	# 按 ucode 要的版本找（老固件的 libubox 版本号不同，文件名也不同；补上新版跟老版并存，不会覆盖）
+	uc_has $RT/usr/lib/libjson-c.so.5 $RT/lib/libjson-c.so.5 || pk="libjson-c5 $pk"
+	uc_has $RT/usr/lib/libuci.so $RT/lib/libuci.so || pk="libuci20130104 $pk"
+	uc_has $RT/usr/lib/libubox.so.20230523 $RT/lib/libubox.so.20230523 || pk="libubox20230523 $pk"
+	mkdir -p "$t/root"
+	for n in $pk; do
+		line=$(awk -v a="$a" -v n="$n" '$1 == a && $2 == n { print $3, $4; exit }' "$UC_SUMS"); f=${line% *}; s=${line#* }
+		[ -n "$line" ] || { UCWHY="安装包里没有 $n（$a）"; rm -rf "$t"; return 1; }
+		got=0
+		for u in https://mirrors.tuna.tsinghua.edu.cn/openwrt https://mirrors.ustc.edu.cn/openwrt https://downloads.openwrt.org; do
+			curl -fsSL --connect-timeout 10 -m 180 -o "$t/$f" "$u/releases/$v/packages/$a/base/$f" 2>/dev/null || continue
+			[ "$(sha256sum "$t/$f" | cut -d' ' -f1)" = "$s" ] && { got=1; break; }
+		done
+		[ $got = 1 ] || { UCWHY="下载 $n 失败（国内镜像和 OpenWrt 官网都没下成，或者文件校验不对）"; rm -rf "$t"; return 1; }
+		mkdir -p "$t/x" && tar -xzf "$t/$f" -C "$t/x" ./data.tar.gz 2>/dev/null && tar -xzf "$t/x/data.tar.gz" -C "$t/root" 2>/dev/null \
+			|| { UCWHY="解不开下载的 $n"; rm -rf "$t"; return 1; }
+		rm -rf "$t/x" "$t/$f"
+	done
+	: > "$t/added"
+	( cd "$t/root" && find . ! -type d ) | sed 's#^\.##' > "$t/list"
+	while read -r p; do
+		[ -n "$p" ] || continue
+		if [ -e "$RT$p" ] || [ -L "$RT$p" ]; then continue; fi
+		mkdir -p "$(dirname "$RT$p")" && cp -a "$t/root$p" "$RT$p" && echo "$p" >> "$t/added"
+	done < "$t/list"
+	out=$(uc_ok)
+	case "$out" in
+		UCODE-PASS) mkdir -p $D; cat "$t/added" >> $D/ucode.files; rm -rf "$t"; return 0 ;;
+	esac
+	# 跑不起来：把这次补的文件删干净，跟没装过一样
+	while read -r p; do [ -n "$p" ] && rm -f "$RT$p"; done < "$t/added"
+	rm -rf "$t"
+	UCWHY="下载的 ucode 在这个固件上跑不起来（$(echo "$out" | head -n 1 | cut -c1-120)），已经删掉了"
+	return 1
 }
 # 小闪存模式能不能用：要官方有这个架构的 cloudflared、内存够、能校验
 cfd_ram_check() {
@@ -283,7 +359,21 @@ FREE=$(free_mb); FREE=${FREE:-0}
 [ "$FREE" -lt 6 ] && die "闪存只剩 $FREE MB，装面板至少要 6 MB。先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），再装一次"
 if [ -n "$need" ]; then
 	say "安装依赖：$need"
-	pkg_add $need || pkg_die "$need"
+	if ! pkg_add $need; then
+		# 还缺哪些：ucode 那几个可以从 OpenWrt 官方补；别的（uhttpd、curl）补不了
+		uneed="" oneed=""
+		[ -x /usr/bin/ucode ] || uneed="$uneed ucode"
+		[ -f /usr/lib/ucode/fs.so ] || uneed="$uneed ucode-mod-fs"
+		[ -f /usr/lib/ucode/uci.so ] || uneed="$uneed ucode-mod-uci"
+		[ -x /usr/sbin/uhttpd ] || oneed="$oneed uhttpd"
+		have_pkg curl || oneed="$oneed curl"
+		{ [ "$PKGERR" = crash ] || [ "$PKGERR" = nopm ] || [ -n "$oneed" ]; } && pkg_die "${uneed# }${oneed}"
+		if [ -n "$uneed" ]; then
+			warn "软件源里装不上 ucode（$(pkg_why | head -n 1 | sed 's/：$//')），改从 OpenWrt 官方下载补上（会先核对校验值，只补缺的文件）"
+			ucode_fetch || die "依赖安装失败：${uneed# }。$(pkg_why)。从 OpenWrt 官方补装也不行：$UCWHY。建议换成 ImmortalWrt、iStoreOS 或官方 OpenWrt 再装"
+			ok "ucode 已从 OpenWrt 官方补上，校验通过，试运行正常"
+		fi
+	fi
 fi
 # cloudflared（远程访问必需，约 30 MB）：闪存放得下就装进闪存（跟以前一样）；
 # 放不下、或者软件源里没有，但内存够的，用小闪存模式：不装进闪存，开机时下载到内存里运行

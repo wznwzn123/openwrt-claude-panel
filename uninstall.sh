@@ -35,6 +35,12 @@ rm -f /etc/cmcp-report
 sec=$(uci -q show rpcd | sed -n "s/^rpcd\.\(@login\[[0-9]*\]\)\.username='cmcp'$/\1/p" | head -n1)
 [ -n "$sec" ] && { uci delete rpcd.$sec; uci commit rpcd; /etc/init.d/rpcd reload >/dev/null 2>&1; }
 sed -i '\#^/etc/claude-mcp/$#d; \#^/www-claude-mcp/$#d; \#^/usr/share/ucode/cmcp/$#d; \#cmcp#d; \#claude-mcp#d' /etc/sysupgrade.conf 2>/dev/null
+# 固件软件源装不上 ucode 时，安装脚本从 OpenWrt 官方补装过的文件（只记了它自己补的，系统原有的不在里面）：
+# 普通卸载保留（面板以外的东西可能也用上了）；--purge 一起删掉
+UCF=/etc/claude-mcp/ucode.files
+UCF_LIST=$(grep -E '^/(usr|lib)/[A-Za-z0-9._/+-]+$' $UCF 2>/dev/null | grep -v '\.\.' | tr '\n' ' ')
+RT=${CMCP_ROOT:-}
+[ "$1" = --purge ] && for f in $UCF_LIST; do rm -f "$RT$f"; done
 if [ "$1" = --purge ]; then rm -rf /etc/claude-mcp; echo "已卸载（包括所有设置和记录）"
 else echo "已卸载。设置和记录还在 /etc/claude-mcp，彻底删除请运行：sh uninstall.sh --purge"; fi
 echo "提示：OpenClash 覆写/自定义规则里如果加过面板的规则，请在 OpenClash 里自行检查。"
@@ -54,5 +60,8 @@ chk "隧道直连设置已删除（dnsmasq、各代理插件的直连名单）" 
 chk "路由器登录账号（rpcd 里的 cmcp）已删除" '! uci -q show rpcd 2>/dev/null | grep -q "username=.cmcp."'
 chk "系统升级保留列表已清理" '! grep -q "cmcp\|claude-mcp" /etc/sysupgrade.conf 2>/dev/null'
 [ "$1" = --purge ] && chk "设置和记录（/etc/claude-mcp）已删除" '[ ! -e /etc/claude-mcp ]'
+UC_LEFT=""; for f in $UCF_LIST; do [ -e "$RT$f" ] && UC_LEFT="$UC_LEFT $f"; done
+[ "$1" = --purge ] && [ -n "$UCF_LIST" ] && chk "从 OpenWrt 官方补装的 ucode 已删除" '[ -z "$UC_LEFT" ]'
 if [ $bad = 0 ]; then echo "检查通过：面板的东西都清理干净了。" | tee -a $CK; else echo "有没清理干净的（上面打 ✗ 的），可以把 $CK 的内容发给开发者。" | tee -a $CK; fi
+[ "$1" != --purge ] && [ -n "$UCF_LIST" ] && echo "安装时从 OpenWrt 官方补装的 ucode 保留着（固件的软件源里没有，别的程序可能也用上了）；不需要的话运行 sh uninstall.sh --purge 一起删掉"
 echo "检查记录存在 $CK（重启后会清空）。cloudflared 软件包保留着（别的程序可能也在用），不需要的话：opkg remove cloudflared（用小闪存模式的没装进闪存，不用删）"

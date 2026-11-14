@@ -10,6 +10,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, ADMIN_APP, ADMIN_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
+import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -962,18 +963,25 @@ export class Hub extends DurableObject {
 	}
 	async feedbacksAdmin() { return (await this.feedbacks()).map((x) => ({ ...x, mailTo: this.fbMailTo(x) })); }
 	/* ---------- 公告：管理页发；托管版、自建版的面板都来拿（只读）；重要的由各自的路由器推送到手机 ---------- */
-	async anns(all) { const l = (await this.ctx.storage.get('ann')) || [], now = Date.now(); return all ? l : l.filter((a) => !a.exp || a.exp > now); }
+	async anns(all) { const l = (await this.ctx.storage.get('ann')) || [], now = Date.now(); return all ? l : l.filter((a) => (!a.exp || a.exp > now) && (!a.start || a.start <= now)); }
 	// 新建（id 空）或修改；days：多少天后不再显示（0 = 一直显示）
 	async annSave(id, b) {
 		const title = String(b.title || '').trim().slice(0, 80), body = String(b.body || '').trim().slice(0, 2000);
 		if (!title) return { st: 400, error: '标题不能是空的' };
 		const level = b.level === 'important' ? 'important' : 'normal', days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
+		// 定时发布（5.0）：到时间才出现在面板里；路由器按发布时间判断要不要推送到手机
+		let start = Math.round(+b.start || 0);
+		if (start && start <= Date.now() + 60e3) start = 0;
+		if (start && start > Date.now() + 90 * DAY) return { st: 400, error: '定时发布最多提前 90 天' };
 		return this.lock(async () => {
 			const l = (await this.ctx.storage.get('ann')) || [], now = Date.now();
 			let a = id ? l.find((x) => x.id === id) : null;
 			if (id && !a) return { st: 404, error: '没有这条公告（可能已经删了）' };
 			if (!a) { a = { id: rnd(10), at: now }; l.unshift(a); }
-			Object.assign(a, { title, body, level, exp: days ? now + days * DAY : 0, upd: now });
+			const from = start || (a.start && a.start > now ? now : 0) || now;
+			Object.assign(a, { title, body, level, exp: days ? Math.max(now, start || 0) + days * DAY : 0, upd: start || now });
+			if (start) { a.start = start; a.at = start; } else if (a.start && a.start > now) { delete a.start; a.at = now; }
+			void from;
 			await this.ctx.storage.put('ann', l.slice(0, 50));
 			return { st: 200, ok: true, ann: a };
 		});
@@ -1130,7 +1138,11 @@ export async function hubFetch(req, env) {
 	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
 	// 公告（公开、只读；面板经路由器每 30 分钟来拿一次，缓存 5 分钟）
 	if (p === '/api/notices' && req.method === 'GET') {
-		const list = (await H.anns(false)).slice(0, 20).map((a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0 }));
+		const anns = await H.anns(false);
+		// 路由器带着匿名编号来拿：记下「这台收到了」（公告统计用；编号是路由器随机生成的，跟账号、IP 都没关系）
+		const rid = u.searchParams.get('r') || '';
+		if (rid && anns.length) { try { await H.annGot(rid, anns.slice(0, 20).map((a) => a.id)); } catch (e) {} }
+		const list = anns.slice(0, 20).map((a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0 }));
 		return new Response(JSON.stringify({ ok: true, list }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 	}
 	if (p.startsWith('/api/fb/') && req.method === 'GET') {
@@ -1152,6 +1164,8 @@ export async function hubFetch(req, env) {
 	}
 	// 实时对话（面板经路由器转发；托管版凭路由器钥匙，自建版凭匿名身份）
 	if (p === '/api/chat' && req.method === 'POST') return chatApi(req, env, H, body);
+	// 5.0：面板报错上报、公告点开统计
+	{ const vp = await v5Public(req, env, H, body, u, p); if (vp) return vp; }
 	if (p.startsWith('/api/admin/')) {
 		const k = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), aip = req.headers.get('cf-connecting-ip') || '';
 		const aua = uaLabel(req.headers.get('user-agent')), apl = placeOf(req.cf);
@@ -1159,8 +1173,19 @@ export async function hubFetch(req, env) {
 		if (aip && (await H.admBlocked(aip))) return J({ error: '密钥错太多次了，15 分钟后再试' }, 429);
 		if (!env.ADMIN_KEY || env.ADMIN_KEY.length < 16 || !safeEq(k, env.ADMIN_KEY)) { if (k) await H.admFail(aip, aua, apl, p); return J({ error: '需要管理员密钥' }, 401); }
 		const a = p.slice('/api/admin/'.length).split('/');
-		// 管理后台登录：只在输入密钥进来时记一次（之后每个请求不记）
-		if (a[0] === 'login' && req.method === 'POST') { await H.loginLog({ k: 'admin', who: '管理后台', ok: true, why: '登录成功', ip: aip, ua: aua, place: apl }); return J({ ok: true, ...(await H.stats()) }); }
+		// 管理后台登录：只在输入密钥进来时记一次（之后每个请求不记）；开了两步验证的还要验证码，换一个 12 小时的通行证
+		if (a[0] === 'login' && req.method === 'POST') {
+			const b = await body(), t = await H.tfaLogin(b.code);
+			if (t.st !== 200) { if (b.code) await H.admFail(aip, aua, apl, '两步验证码不对'); return J({ error: b.code ? t.error : '要输入两步验证码', need2fa: true }, 401); }
+			await H.loginLog({ k: 'admin', who: '管理后台', ok: true, why: '登录成功', ip: aip, ua: aua, place: apl });
+			try { await H.admLoginSeen(aip, aua, apl); } catch (e) {}
+			await H.admTouch();
+			return J({ ok: true, sess: t.sess || '', ...(await H.stats()) });
+		}
+		if (!(await H.tfaCheck(req))) return J({ error: '要重新登录（两步验证）', need2fa: true }, 401);
+		await H.admTouch();
+		const vx = await v5Admin(req, a, H, body, u, env);
+		if (vx) return vx;
 		const ox = await opsAdmin(req, a, H, body, u);
 		if (ox) return ox;
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
@@ -1219,6 +1244,8 @@ export async function hubFetch(req, env) {
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
 	// 管理后台（4.0 新版）：打包好的页面和静态文件都在 site.js 里，不从任何外部网站加载东西
 	if ((p === '/admin' || p === '/admin/') && (req.method === 'GET' || req.method === 'HEAD')) return adminPage(req.method === 'HEAD' ? null : ADMIN_APP);
+	// 管理后台的推送（5.0）：手机上收到「有人发来消息」，点开回到对话
+	if (p === '/admin/sw.js' && req.method === 'GET') return new Response(ADMIN_SW, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'service-worker-allowed': '/admin/', 'x-content-type-options': 'nosniff' } });
 	if (p.startsWith('/admin/assets/') && (req.method === 'GET' || req.method === 'HEAD')) {
 		const f = ADMIN_FILES[p.slice('/admin/assets/'.length)];
 		if (!f) return J({ error: 'not found' }, 404);
@@ -1237,6 +1264,22 @@ export async function hubFetch(req, env) {
 	return J({ error: 'not found' }, 404);
 }
 
+const ADMIN_SW = `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('push', (e) => {
+	let d = {};
+	try { d = e.data ? e.data.json() : {}; } catch (x) { d = { body: e.data ? e.data.text() : '' }; }
+	e.waitUntil(self.registration.showNotification(d.title || '管理后台', { body: d.body || '', tag: d.tag || 'adm', renotify: true, data: { url: d.url || '/admin/' }, icon: '/favicon.ico' }));
+});
+self.addEventListener('notificationclick', (e) => {
+	e.notification.close();
+	const url = new URL((e.notification.data && e.notification.data.url) || '/admin/', self.location.origin).href;
+	e.waitUntil((async () => {
+		for (const c of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) if (c.url.includes('/admin')) { await c.focus(); try { await c.navigate(url); } catch (x) {} return; }
+		await self.clients.openWindow(url);
+	})());
+});
+`;
 function adminPage(html) {
 	return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'permissions-policy': 'camera=(), microphone=(), geolocation=()',
 		'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
@@ -1418,6 +1461,7 @@ async function accountApi(req, env, H, p, body) {
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); }
 installOps(Hub);
+installV5(Hub);
 export { hubObj };

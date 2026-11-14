@@ -115,9 +115,8 @@ sh install.sh
 **卸载**：
 
 ```sh
-cd /tmp/openwrt-claude-panel
-sh uninstall.sh          # 保留设置和记录，以后重装还能接着用
-sh uninstall.sh --purge  # 全部删掉
+cmcp-uninstall           # 保留设置和记录，以后重装还能接着用（5.0 起；更早的版本在安装包目录里运行 sh uninstall.sh）
+cmcp-uninstall --purge   # 全部删掉
 ```
 
 （`/tmp` 重启后会清空，到时候重新解压一次安装包即可。）

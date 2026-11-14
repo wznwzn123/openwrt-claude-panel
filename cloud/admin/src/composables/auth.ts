@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { adminKey, call, get } from '@/api'
+import { adminKey, adminSess, call, get } from '@/api'
 import type { NavGroup } from '@/data'
 
 /* ============================================================
@@ -57,9 +57,10 @@ export function startBadges() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBadges() })
 }
 
-export async function login(key: string, remember: boolean) {
-  await call('POST', 'login', {}, key)
+export async function login(key: string, remember: boolean, code = '') {
+  const r = await call<{ sess?: string }>('POST', 'login', code ? { code } : {}, key)
   adminKey.set(key, remember)
+  adminSess.set(r.sess || '', remember)
   authed.value = true
 }
 export function clearSession() {

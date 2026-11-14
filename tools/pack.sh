@@ -9,6 +9,8 @@
 # 设置了环境变量 HUB_URL 时，再多打两个托管版：openwrt-claude-panel-hosted-{ai,noai}.tar.gz
 set -e
 cd "$(dirname "$0")/.."
+# 面板和路由器服务是从 src/panel、src/mcp 拼出来的：没重新拼就不打包（免得发出去的是旧的）
+if command -v node >/dev/null 2>&1; then node tools/build-src.mjs --check || { echo "先运行 node tools/build-src.mjs" >&2; exit 1; }; fi
 V=${1:-$(git describe --tags --always 2>/dev/null || echo dev)}
 rm -rf dist && mkdir -p dist/tmp
 # 小闪存模式要用的 cloudflared 校验值：从 Cloudflare 官方 GitHub 发布下载固定版本（tools/cloudflared.ver），
@@ -40,6 +42,20 @@ elif [ "$UC_SKIP" != 1 ]; then
 	echo "ucode 校验值：$(grep -c ' ucode ' dist/ucode.sums) 个架构"
 	[ "$(grep -c ' ucode ' dist/ucode.sums)" -ge 20 ] || { echo "ucode 校验值太少，OpenWrt 官网可能出问题了"; exit 1; }
 fi
+# 打进安装包的面板精简一下、再压缩一份（省路由器闪存；仓库里的源文件不动，功能不变）：
+#   去掉源文件目录（src/panel、src/mcp 只是开发用的，拼好的在 src/www 里）
+#   面板脚本和样式去掉空白注释（tools/minify，要先 npm ci --prefix tools/minify）
+#   index.zh = 压缩过的面板，路由器上能用就只留它（见 install.sh）
+slim() {
+	rm -rf "$1/src/panel" "$1/src/mcp"
+	if [ -d tools/minify/node_modules/esbuild ]; then
+		node tools/minify/minify-panel.mjs "$1/src/www/panel"
+	else
+		echo "没装 tools/minify 的依赖（npm ci --prefix tools/minify），面板没精简" >&2
+		[ -n "$CI" ] && exit 1
+	fi
+	gzip -9 -n -c "$1/src/www/panel/index.html" > "$1/src/www/panel/index.zh"
+}
 for ai in ai noai; do
 	for ed in lite full; do
 		k=$ai-$ed
@@ -55,6 +71,7 @@ for ai in ai noai; do
 		[ -s dist/cfd.sums ] && cp dist/cfd.sums "$d/src/etc/cfd.sums"
 		[ -s dist/ucode.sums ] && cp dist/ucode.sums "$d/src/etc/ucode.sums"
 		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
+		slim "$d"
 		cp "docs/install-$k.md" "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$ed" "${V#v}" "$k" > "$d/EDITION"
 		# 安装失败时用户同意上报，发到这里（只在设置了 HUB_URL 时）
@@ -63,7 +80,7 @@ for ai in ai noai; do
 			rm -f "$d/src/bin/cmcp-backup"
 		else
 			# worker.js 要用 hub.js、ops.js、site.js（自己部署 Worker 时 wrangler 会一起打包）
-			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
+			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/v5.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
 		fi
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done
@@ -79,6 +96,7 @@ if [ -n "$HUB_URL" ]; then
 		[ -s dist/cfd.sums ] && cp dist/cfd.sums "$d/src/etc/cfd.sums"
 		[ -s dist/ucode.sums ] && cp dist/ucode.sums "$d/src/etc/ucode.sums"
 		sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"${V#v}\">/" "$d/src/www/panel/index.html"
+		slim "$d"
 		cp docs/install-hosted.md "$d/INSTALL.md"
 		printf '# %s（%s）\nPKG_AI=%s\nPKG_ED=full\nPKG_HUB=%s\nPKG_VER=%s\nPKG_CODE=%s\n' "$name" "$V" "$( [ $ai = ai ] && echo 1 || echo 0 )" "$HUB_URL" "${V#v}" "$k" > "$d/EDITION"
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel

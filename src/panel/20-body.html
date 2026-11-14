@@ -1,0 +1,443 @@
+</style></head><body>
+<div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
+
+<div id="login" class="lgwrap hidden"><canvas id="lgbg" aria-hidden="true"></canvas>
+<main class="lgcard">
+	<div class="logo lgbiglogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+	<h2>连接你的路由器</h2>
+	<div class="muted" style="font-size:14px">粘贴安装时显示的「登录地址」（用 Claude 的话，就是添加连接器时用的那个地址）。密钥只保存在这台手机上</div>
+	<label class="lglabel" for="lgInput">连接地址</label>
+	<input id="lgInput" class="input" placeholder="https://…/cgi-bin/mcp/……" autocomplete="off" autocapitalize="off" spellcheck="false">
+	<div id="lgErr" class="formerr hidden"></div>
+	<button id="lgBtn" class="lgmain">连接</button>
+</main>
+<div class="lgfoot">我的路由器 · OpenWrt 管理面板</div>
+</div>
+
+<!-- 托管版：这台手机第一次打开面板，要输一次登录码 -->
+<div id="needcode" class="lgwrap hidden" role="dialog" aria-modal="true" aria-labelledby="lcTitle">
+<main class="lgcard">
+	<div class="logo lgbiglogo" aria-hidden="true" style="font-size:30px">🔐</div>
+	<h2 id="lcTitle">输入登录码</h2>
+	<div class="muted" style="font-size:14px;line-height:1.7">为了安全，托管版每台手机第一次打开面板要输一次登录码，输对以后这台手机就不用再输了。</div>
+	<div id="lcPair" class="ncpair hidden"><b>第一次用：先绑定官网账号</b><span>点下面的按钮，登录或注册官网账号，这台路由器会自动绑定；绑定好官网会显示登录码，点「打开面板」就自动填好回到这里。</span><a id="lcPairBtn" class="lgmain" href="#">绑定官网账号</a></div>
+	<ol class="ncsteps muted" id="lcSteps"><li>打开官网 <b id="lcHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
+	<label class="lglabel" for="lcInput">登录码</label>
+	<input id="lcInput" class="input nccode" placeholder="8 位登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false">
+	<div id="lcErr" class="formerr hidden"></div>
+	<button id="lcBtn" class="lgmain">确定</button>
+	<a id="lcHub" class="nchub" href="https://yrlove520.com/app" target="_blank" rel="noopener">打开官网拿登录码</a>
+	<div class="ncmore muted">官网账号里还没有这台路由器：用安装时终端里显示的配对码绑定（过期了在路由器后台终端运行 <code>cmcp-pair</code> 再拿一个）。<br>官网打不开、急着用：在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH，不是这个面板里的终端）运行 <code>cmcp-logincode</code>，拿一个应急登录码。<br><a href="#" id="lcOut">换一个登录地址</a></div>
+</main>
+</div>
+
+<div id="app" class="hidden">
+<header class="top" id="topbar">
+	<div class="topin">
+		<div class="brand">
+			<button class="menubtn" id="menuBtn" aria-label="打开菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
+			<div class="logo toplogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+			<div style="min-width:0"><div class="title" id="pageTitle">我的路由器</div><div class="sub" id="topSub">正在连接…</div></div>
+		</div>
+		<div class="actions">
+			<span class="pill hidden" id="jobPill"><i class="dot busy"></i><span id="jobText">后台任务</span></span>
+			<button class="bell" id="bellBtn" type="button" aria-label="通知" title="通知"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><em id="bellN" class="hidden"></em></button>
+			<div class="topcap"><span class="pill" id="statusPill"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
+		</div>
+	</div>
+</header>
+<div class="scrim" id="scrim"></div>
+<aside class="side" id="side" aria-label="导航">
+	<div class="sidehead">
+		<div class="logo" role="img" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+		<div style="min-width:0"><b>我的路由器</b><div class="sub" id="sideSub">OpenWrt 管理面板</div></div>
+	</div>
+	<input class="sideq" id="sideQ" type="search" placeholder="搜索功能，如 DHCP、端口转发" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索功能">
+	<nav class="sidenav" id="sidenav">
+	</nav>
+	<div class="sidefoot"><button class="sidefb" id="sideFb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z"/><path d="M9 9h6M9 12h4"/></svg>问题反馈</button><button class="sideout" id="sideOut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>退出登录</button></div>
+</aside>
+
+<main class="wrap">
+
+<!-- 首页：打开面板默认就是这一页 -->
+<section class="page" id="p-main">
+	<div class="card updcard hidden" id="rUpd"><div class="updtop"><div><b>路由器有新版本 <span id="rUpdV"></span></b><span class="muted" id="rUpdCur"></span></div><button class="btn sm primary" id="rUpdGo">一键更新</button></div>
+		<p class="muted" id="rUpdN"></p><div class="updfoot"><button class="linkbtn" id="rUpdMore">查看完整更新内容</button><button class="linkbtn" id="rUpdLater">以后再说</button></div></div>
+	<div class="card updcard hidden" id="mSvc"><div class="updtop"><div><b id="mSvcT">托管服务快到期了</b><span class="muted" id="mSvcD"></span></div><button class="btn sm primary" id="mSvcGo">申请续期</button></div></div>
+	<div class="notice w hidden" id="mOffBox" style="margin-bottom:12px"><b>连不上路由器</b><div id="mOff" class="hidden"></div></div>
+	<section class="card mcard" id="mLive">
+		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg></span><div><b>实时流量</b><span class="muted">每 2 秒刷新</span></div></div>
+		<div class="mrates"><div><span class="muted"><s class="dn">↓</s> 下行</span><b class="dn" id="mRx">—</b></div><div><span class="muted"><s class="up">↑</s> 上行</span><b class="up" id="mTx">—</b></div></div>
+		<svg class="mchart" id="mChart" viewBox="0 0 300 110" preserveAspectRatio="none" aria-label="最近 2 分钟的网速曲线"></svg>
+	</section>
+	<section class="card mcard mlink" id="mToday" role="button" tabindex="0" data-mgo="traf">
+		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="11" width="3" height="9" rx="1"/><rect x="9" y="6" width="3" height="14" rx="1"/><rect x="14" y="9" width="3" height="11" rx="1"/><rect x="19" y="13" width="2.5" height="7" rx="1"/></svg></span><div><b>今日流量</b></div><s class="mgo">›</s></div>
+		<div class="mtot"><b class="dn" id="mDl">—</b><b class="up" id="mUl">—</b></div>
+		<div class="muted msub" id="mTopT">今天用得最多</div>
+		<div id="mTop"></div>
+	</section>
+	<section class="card mcard mlink" id="mDev" role="button" tabindex="0" data-mgo="dev">
+		<div class="mhd"><span class="mic dn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="13" height="10" rx="1.5"/><path d="M1.5 18h15"/><rect x="17.5" y="8" width="4.5" height="10" rx="1.2"/></svg></span><div><b>在线设备</b></div><s class="mgo">›</s></div>
+		<div class="mdev"><b id="mOn">—</b><div class="muted"><div>无线 <span id="mWifi">—</span></div><div>有线 <span id="mWired">—</span></div><div class="faint">共 <span id="mAll">—</span> 台</div></div></div>
+	</section>
+	<button class="card mfb" id="mFb"><span class="mfbic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z"/><path d="M9 9h6M9 12h4"/></svg></span><span><b>遇到问题、想要新功能？</b><span class="muted">直接告诉开发者</span></span><span class="muted">›</span></button>
+</section>
+
+<!-- 概览 -->
+<section class="page" id="p-home">
+	<section class="grid two">
+		<div class="hero">
+			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
+			<p class="muted" id="hDesc">&nbsp;</p>
+			<label class="pxrow" id="pxRow"><span class="pxtxt"><b id="pxTitle">代理</b><span class="muted" id="pxSub">读取中…</span></span><span class="sw"><input type="checkbox" id="pxSw" disabled aria-label="代理开关"><i></i></span><span class="pxlog" id="pxLog"></span></label>
+			<button class="pxpick hidden" id="pxPick"></button>
+			<div id="modeBox"><div class="muted" style="font-weight:600">代理模式</div>
+			<div class="chips" id="modeChips" style="margin-top:6px">
+				<button class="chip" data-mode="rule">规则</button>
+				<button class="chip" data-mode="global">全局</button>
+				<button class="chip" data-mode="direct">直连</button>
+			</div></div>
+			<div id="runBox"><div class="muted" style="font-weight:600;margin-top:12px">运行模式</div>
+			<div class="chips" id="runChips" style="margin-top:6px">
+				<button class="chip" data-run="fake-ip">Fake-IP 增强</button>
+				<button class="chip" data-run="fake-ip-tun">TUN</button>
+				<button class="chip" data-run="fake-ip-mix">TUN 混合</button>
+			</div></div>
+			<div id="pxNone" class="notice hidden" style="margin-top:4px;line-height:1.65">这台路由器没装代理插件。设备、网速、流量、断线记录、定时断网这些照常能用。<br><span class="muted">以后装了 OpenClash、Nikki、PassWall、PassWall2、HomeProxy 或 SSR Plus+，这里会自动显示它的开关和节点。</span></div>
+		</div>
+		<div class="card urgent">
+			<div><div class="muted">实时下载</div><b id="hRx">—</b></div>
+			<div class="muted" style="text-align:right">上传 <b id="hTx" style="font-size:15px">—</b><br>开机累计 <b id="hTotal" style="font-size:13px">—</b><br><span id="hDev"></span></div>
+		</div>
+	</section>
+	<section class="stat4">
+		<div class="card"><b id="sConn">—</b><div class="muted">连接</div></div>
+		<div class="card"><b id="sCpu">—</b><div class="bar" id="sCpuBar"><i style="width:0"></i></div><div class="muted" style="margin-top:5px">CPU</div></div>
+		<div class="card"><b id="sMem">—</b><div class="bar" id="sMemBar"><i style="width:0"></i></div><div class="muted" style="margin-top:5px">内存</div></div>
+		<div class="card"><b id="sTemp">—</b><div class="muted">温度</div></div>
+	</section>
+	<div class="sectitle hidden" id="pgHead"><b id="pgName">代理插件</b><button class="btn sm blue" id="pgLuci">插件原版页面 ›</button></div>
+	<section class="card list hidden" id="pgCard">
+		<div class="kv"><span>当前节点</span><span><button class="btn sm" id="pgNode"><span id="pgCur">—</span> ›</button></span></div>
+		<div class="kv"><span>状态</span><span id="pgSt">—</span></div>
+		<div class="kv"><span>节点数</span><span id="pgCnt">—</span></div>
+		<div class="btngrid" style="margin:10px 0 2px"><button class="btn" id="pgNodes">换节点 / 测延迟</button><button class="btn" id="pgRestart">重启插件</button></div>
+	</section>
+	<div class="sectitle" id="ocHead"><b id="ocName">OpenClash</b><button class="btn sm blue" id="oDash">打开控制面板</button></div>
+	<section class="card list" id="ocCard">
+		<div class="kv oconly"><span>配置文件</span><span><button class="btn sm" id="oCfgBtn"><span id="oCfg">—</span> ›</button></span></div>
+		<div class="kv oconly"><span>订阅流量</span><span id="oSub">—</span></div>
+		<div class="kv"><span>内核版本</span><span id="oVer">—</span></div>
+		<div class="kv oconly"><span>插件版本</span><span id="oPlug">—</span></div>
+		<div class="kv oconly"><span>内核内存</span><span id="oRss">—</span></div>
+		<div class="kv"><span>累计流量</span><span id="oTotal">—</span></div>
+	</section>
+	<div class="sectitle" id="qHead"><b>快捷操作</b></div>
+	<section class="card" id="qCard"><div class="qgrid" id="qGrid"></div></section>
+	<div class="sectitle"><b>网络检测</b><span class="actions" style="flex-wrap:nowrap"><span class="live off" id="ncLive"><i></i><span id="ncAgo">实时</span></span><button class="btn sm" id="ncBtn" aria-label="重新检测">↻</button></span></div>
+	<section class="card nc" id="ncIp"><div class="nch"><span>出口 IP</span><a class="ipfull" href="https://ipcheck.ing/" target="_blank" rel="noopener">完整检测 ↗</a></div><div class="ipl" id="ipList"></div></section>
+	<section class="card nc" id="ncSite"><div class="nch"><span>网站访问</span></div><div class="tiles" id="siteTiles"></div></section>
+	<section class="card nc" id="ncUnl"><div class="nch"><span>流媒体 / AI 解锁</span><span class="muted" id="unlNode" style="font-weight:500;font-size:12px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div><div class="tiles" id="unlTiles"></div></section>
+	<div class="sectitle"><b>宽带</b><span class="pill" id="wanPill">—</span></div>
+	<section class="card list">
+		<div class="kv"><span>公网 IP</span><span id="wIp">—</span></div>
+		<div class="kv"><span>拨号方式</span><span id="wProto">—</span></div>
+		<div class="kv"><span>已连接</span><span id="wUp">—</span></div>
+	</section>
+	<div class="sectitle"><b>系统</b></div>
+	<section class="card list">
+		<div class="kv"><span>型号</span><span id="yModel">—</span></div>
+		<div class="kv"><span>固件</span><span id="yFw">—</span></div>
+		<div class="kv"><span>运行时间</span><span id="yUp">—</span></div>
+	</section>
+</section>
+
+<!-- 节点 -->
+<section class="page" id="p-proxy">
+	<div class="hero">
+		<div class="herohead"><h1>节点</h1><button class="btn blue" id="pxTestAll">全部测速</button></div>
+		<p class="muted" style="margin-bottom:6px">点节点即可切换。自动选择的策略组只能测速，不能手动切换。</p>
+		<label class="notice" style="display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--text)"><span>切换后断开旧连接<br><span class="muted">让 App 立刻走新节点</span></span><span class="sw"><input type="checkbox" id="pxClose" checked><i></i></span></label>
+	</div>
+	<div class="sectitle"><b>自动切换</b><span class="pill" id="aswPill">—</span></div>
+	<section class="card" id="aswCard"><div class="muted" style="font-size:13px">读取中…</div></section>
+	<div class="sectitle"><b>策略组</b><span class="pill" id="pxCount">—</span></div>
+	<div id="pxList" class="grid"></div>
+	<div class="sectitle"><b>代理集</b><span class="pill" id="ppCount">—</span></div>
+	<section class="card list" id="ppList"><div class="empty">读取中…</div></section>
+</section>
+
+<!-- 订阅 -->
+<section class="page" id="p-subs">
+	<div class="hero">
+		<div class="herohead"><h1>配置订阅</h1><button class="btn primary" id="subAdd">＋ 添加</button></div>
+		<p class="muted" style="margin-bottom:0">每个订阅会下载成一个配置文件。可以单独更新，也可以一起更新。</p>
+		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" id="subUpdAll">更新全部订阅</button><button class="btn" id="subAuto">自动更新设置</button></div>
+	</div>
+	<div class="sectitle"><b>订阅列表</b><span class="pill" id="subCount">—</span></div>
+	<div id="subList" class="grid"></div>
+</section>
+
+<!-- 配置文件 -->
+<section class="page" id="p-cfg">
+	<div class="seg"><div class="chips" id="cfgSeg">
+		<button class="chip on" data-k="config">配置文件</button>
+		<button class="chip" data-k="proxy_provider">代理集文件</button>
+		<button class="chip" data-k="rule_provider">规则集文件</button>
+		<button class="chip" data-k="backup">备份与恢复</button>
+	</div></div>
+	<div id="cfgBody"></div>
+</section>
+
+<!-- 覆写设置 -->
+<section class="page" id="p-ow">
+	<div class="seg"><div class="chips" id="owSeg"></div></div>
+	<div id="owBody"></div>
+</section>
+
+<!-- 规则 -->
+<section class="page" id="p-rules">
+	<div class="seg"><div class="chips" id="ruSeg">
+		<button class="chip on" data-k="custom">自定义规则</button>
+		<button class="chip" data-k="live">生效规则</button>
+		<button class="chip" data-k="providers">规则集</button>
+	</div></div>
+	<div id="ruBody"></div>
+</section>
+
+<!-- 插件设置 -->
+<section class="page" id="p-set">
+	<div class="seg"><div class="chips" id="setSeg"></div></div>
+	<div id="setBody"></div>
+</section>
+
+<!-- 日志 -->
+<section class="page" id="p-log">
+	<section class="card">
+		<div class="chips" id="logSeg" style="margin-top:0">
+			<button class="chip on" data-k="plugin">插件日志</button>
+			<button class="chip" data-k="core">内核日志</button>
+			<button class="chip" data-k="start">启动日志</button>
+		</div>
+		<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px"><input id="logFilter" class="input" placeholder="筛选关键字，如 error、douyin" autocomplete="off" autocapitalize="off" spellcheck="false"><label class="pill" style="padding:6px 6px 6px 11px;gap:8px">自动刷新<span class="sw" style="transform:scale(.8);margin:-4px -6px"><input type="checkbox" id="logAuto" checked><i></i></span></label></div>
+		<div class="muted" style="font-weight:600;margin-top:12px">内核日志级别（临时，重启后恢复插件设置）</div>
+		<div class="chips" id="logLevel" style="margin-top:6px">
+			<button class="chip" data-l="debug">调试</button><button class="chip" data-l="info">信息</button><button class="chip" data-l="warning">警告</button><button class="chip" data-l="error">错误</button><button class="chip" data-l="silent">静默</button>
+		</div>
+		<div class="btngrid three" style="margin-bottom:0"><button class="btn" id="logCopy">复制</button><button class="btn danger" id="logClear">清空</button><button class="btn blue" id="logDebug">调试日志</button></div>
+	</section>
+	<div class="sectitle"><b id="logTitle">插件日志</b><span class="pill" id="logCount">—</span></div>
+	<pre class="out tall log" id="logBox">读取中…</pre>
+</section>
+
+<!-- 设备 -->
+<section class="page" id="p-dev">
+	<div class="hero">
+		<div class="herohead"><h1 id="dvHead">设备</h1><span class="pill good" id="dvOnline">—</span></div>
+		<p class="muted" style="margin:6px 0 0">点设备可以看它正在访问哪些网站、走的哪条线路；「暂停」可以让它暂时上不了网，或者每天定时断网。</p>
+	</div>
+	<div id="pzBox"></div>
+	<div class="sectitle"><b>全部设备</b><span class="pill" id="dvCount">—</span></div>
+	<section id="dvList" class="grid tasks"></section>
+</section>
+
+<!-- 流量统计 -->
+<section class="page" id="p-traf">
+	<div class="hero">
+		<div class="herohead"><h1>流量统计</h1><span class="pill" id="tfPill">—</span></div>
+		<p class="muted" style="margin:6px 0 0">每台设备用了多少流量，分「走代理」和「直连」。每分钟更新，保留最近 3 个月。</p>
+		<div class="chips tfseg" id="tfRange"><button class="chip on" data-r="today">今天</button><button class="chip" data-r="yday">昨天</button><button class="chip" data-r="7">7 天</button><button class="chip" data-r="month">本月</button><button class="chip" data-r="last">上月</button></div>
+	</div>
+	<div id="tfBody"><section class="card empty">读取中…</section></div>
+</section>
+
+<!-- 我的反馈：这台路由器发过的反馈和开发者的处理进度（托管版） -->
+<section class="page" id="p-notice">
+	<div class="hero">
+		<div class="nthead"><h1>通知</h1><span class="pill" id="ntPill">—</span></div>
+		<p class="muted ntsub">路由器出的问题和自动修复、云端监测、托管服务、开发者公告、版本更新、反馈进度都汇总在这里；重要的也会推送到手机。</p>
+		<div class="ntent">
+			<button type="button" data-goto="chat"><i style="background:#34c759"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z"/><path d="M9 9.5h6M9 12.5h3.5"/></svg></i><div><b>实时联系开发者</b><span id="ntChatSub">遇到问题直接问</span></div><em class="hidden" id="ntChatN"></em></button>
+			<button type="button" data-goto="myfb"><i style="background:#5e5ce6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M10 12l1.8 1.8L15 10.5"/></svg></i><div><b>我的反馈</b><span id="ntFbSub">处理到哪一步</span></div></button>
+		</div>
+		<div class="chips tfseg ntseg" id="ntChips" style="margin-top:14px"></div>
+	</div>
+	<div id="ntPin"></div>
+	<div id="ntList" style="margin-top:4px"><section class="card empty" style="margin-top:14px">读取中…</section></div>
+</section>
+<section class="page" id="p-chat">
+	<div class="hero chhero">
+		<div class="chtop"><div class="chav" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+			<div style="min-width:0;flex:1"><h1>实时联系开发者</h1><div class="muted" id="chSub">直接跟开发这个面板的人对话</div></div>
+			<button class="btn sm" id="chTipBtn" type="button">说明</button></div>
+		<div class="chtips" id="chTips"><b>这是干嘛的？</b>遇到问题、看不懂的提示、想要的新功能，都可以在这里直接跟开发者说，不用填表格。
+			<ul><li>开发者看到会尽快回复（一般当天），回复会<b>推送到手机</b>，打开这一页也能看到。</li>
+			<li>说清楚是<b>哪一页、做了什么、看到什么提示</b>；能<b>截图</b>就更快（点输入框左边的图片按钮）。</li>
+			<li><b>别发密码、密钥、订阅链接</b>这些敏感信息。开发者不会找你要。</li>
+			<li>路由器的型号和面板版本会自动带上，不用自己写。</li></ul></div>
+	</div>
+	<div class="chlist" id="chList"><div class="chempty">读取中…</div></div>
+	<div class="chbox">
+		<div class="chpre hidden" id="chPre"><img alt="要发的图片" id="chPreImg"><span>图片会跟这条消息一起发出去</span><button class="btn sm" id="chPreX" type="button">不发了</button></div>
+		<div class="chin">
+			<button type="button" id="chImgBtn" aria-label="发图片" title="发图片"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-5-5L7 19"/></svg></button>
+			<input type="file" id="chFile" accept="image/*" class="hidden">
+			<textarea id="chText" rows="1" maxlength="2000" placeholder="写下你的问题或建议…" aria-label="消息内容"></textarea>
+			<button type="button" class="send" id="chSend" aria-label="发送" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button>
+		</div>
+		<div class="chnote" id="chNote">开发者回复后会推送到手机</div>
+	</div>
+</section>
+<section class="page" id="p-myfb">
+	<div class="hero">
+		<div class="herohead"><h1>我的反馈</h1></div>
+		<p class="muted">在这台路由器上发过的反馈，和开发者处理到哪一步了。有新进展时会提醒你。</p>
+		<button class="btn primary" id="myfbNew" style="width:100%">发新反馈</button>
+	</div>
+	<div id="myfbList" style="margin-top:14px"><section class="card empty">读取中…</section></div>
+</section>
+<section class="page" id="p-speed">
+	<div class="hero">
+		<div class="herohead"><h1>网速测试</h1><span class="pill" id="stPill">—</span></div>
+		<p class="muted" style="margin:6px 0 0">「走代理」测当前节点，「宽带直连」测家里宽带本身。每次约 10–15 秒，测的时候网会卡一下。</p>
+	</div>
+	<div id="stBody" style="margin-top:14px"><section class="card empty">读取中…</section></div>
+</section>
+
+<section class="page" id="p-cbk">
+	<div class="hero">
+		<div class="herohead"><h1>云端备份</h1><span class="pill" id="bkPill">—</span></div>
+		<p class="muted" style="margin:6px 0 0">把整台路由器的设置（网络、Wi‑Fi、OpenClash 配置和规则、这个面板）存到 Cloudflare。开启加密后，上传前先在路由器上加密，密钥只在这台路由器上，云端看不到内容。每天凌晨 4:07 自动备份一次，最多留 10 份，最旧的会自动删掉。</p>
+		<button class="btn primary" id="bkNow" style="width:100%;padding:12px;margin-top:12px">立即备份</button>
+	</div>
+	<div id="bkBody" style="margin-top:14px"><section class="card empty">读取中…</section></div>
+</section>
+
+<!-- 连接 -->
+<section class="page" id="p-conn">
+	<section class="card">
+		<div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input id="cnFilter" class="input" placeholder="搜索域名、设备、节点…" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn danger" id="cnCloseAll">全部断开</button></div>
+		<div class="chips" id="cnChips">
+			<button class="chip on" data-q="">全部</button>
+			<button class="chip" data-q="proxy">走代理</button>
+			<button class="chip" data-q="direct">直连</button>
+		</div>
+	</section>
+	<div class="sectitle"><b>活跃连接</b><span class="pill" id="cnCount">—</span></div>
+	<section class="card list" id="cnBox"><div id="cnList"></div></section>
+</section>
+
+<!-- 拉黑名单 -->
+<section class="page" id="p-black"><div id="blBody"></div></section>
+
+<!-- 终端 -->
+<section class="page" id="p-term">
+	<div class="chips" id="termQuick" style="margin:0 0 10px"></div>
+	<div class="term" id="termOut"></div>
+	<div class="termin"><span class="ps" id="termPs">~ #</span><input id="termIn" class="input" placeholder="输入命令，回车执行" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send"><button class="btn primary" id="termGo">执行</button></div>
+	<div class="btngrid" style="margin-bottom:0"><button class="btn" id="termHist">历史命令</button><button class="btn" id="termClear">清屏</button></div>
+</section>
+
+<!-- 文件管理 -->
+<section class="page" id="p-files">
+	<section class="card">
+		<div class="crumb" id="fmCrumb"></div>
+		<div class="muted" id="fmInfo" style="margin-top:8px"></div>
+		<div class="chips" style="margin-top:10px"><button class="chip" id="fmUpload">⇡ 上传</button><button class="chip" id="fmNewFile">＋ 新建文件</button><button class="chip" id="fmNewDir">＋ 新建文件夹</button><button class="chip" id="fmGoto">跳到路径</button></div>
+	</section>
+	<section class="card list" id="fmList" style="margin-top:10px"></section>
+</section>
+
+<!-- 断线记录 -->
+<section class="page" id="p-wd"><div id="wdBody"></div></section>
+<!-- 自动任务 -->
+<section class="page" id="p-auto">
+	<div class="hero">
+		<div class="herohead"><h1>自动任务</h1><span class="pill" id="auPill">—</span></div>
+		<p class="muted" style="margin-bottom:0">路由器自己会做的事：出了问题自动修、选网络线路、定时提醒和备份。每一项都能单独开关，关掉以后会怎样写在下面。</p>
+	</div>
+	<div id="auCard"><section class="card"><div class="muted" style="font-size:13px">读取中…</div></section></div>
+</section>
+
+<!-- 系统 -->
+<!-- 内嵌 Kwrt 原版页面 -->
+<section class="page" id="p-luci">
+	<iframe id="lfr" title="LuCI 原版页面"></iframe>
+	<div class="lfmask hidden" id="lfMask"><span class="spin">↻</span><span id="lfMsg">正在打开…</span><button class="btn hidden" id="lfRetry">重新打开</button></div>
+</section>
+
+<!-- 系统日志 -->
+<section class="page" id="p-slog">
+	<section class="card">
+		<div class="chips" id="slSeg" style="margin-top:0">
+			<button class="chip on" data-k="sys">系统日志</button>
+			<button class="chip" data-k="kern">内核日志</button>
+		</div>
+		<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px"><input id="slFilter" class="input" placeholder="筛选关键字，如 dnsmasq、error、wan" autocomplete="off" autocapitalize="off" spellcheck="false"><label class="pill" style="padding:6px 6px 6px 11px;gap:8px">自动刷新<span class="sw" style="transform:scale(.8);margin:-4px -6px"><input type="checkbox" id="slAuto" checked><i></i></span></label></div>
+		<div class="btngrid" style="margin-bottom:0"><button class="btn" id="slCopy">复制</button><button class="btn" id="slErr">只看错误</button></div>
+	</section>
+	<div class="sectitle"><b id="slTitle">系统日志</b><span class="pill" id="slCount">—</span></div>
+	<pre class="out tall log" id="slBox">读取中…</pre>
+</section>
+
+<!-- 进程 -->
+<section class="page" id="p-proc">
+	<section class="card">
+		<div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input id="prFilter" class="input" placeholder="搜索进程名或命令…" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="pill" id="prMem" style="align-self:center">—</span></div>
+		<div class="chips" id="prSort">
+			<button class="chip on" data-s="cpu">按 CPU</button>
+			<button class="chip" data-s="mem">按内存</button>
+			<button class="chip" data-s="pid">按编号</button>
+			<button class="chip" data-s="kt">内核线程</button>
+		</div>
+	</section>
+	<div class="sectitle"><b>运行中的进程</b><span class="pill" id="prCount">—</span></div>
+	<section class="card list"><div id="prList"></div></section>
+</section>
+
+<section class="page" id="p-more">
+	<div class="sectitle" style="margin-top:2px"><b>查看</b></div>
+	<section class="card">
+		<div class="btngrid" style="margin:0">
+			<button class="btn blue" data-t="system_info">系统信息</button>
+			<button class="btn blue" data-t="network_info">网络信息</button>
+			<button class="btn blue" data-t="firewall_overview">防火墙</button>
+			<button class="btn blue" data-t="system_log">系统日志</button>
+		</div>
+	</section>
+	<div class="sectitle"><b>管理</b></div>
+	<section class="card list">
+		<button class="file" data-t="update"><div><b>检查更新</b><span class="muted" id="updState">路由器面板的版本</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="svc" id="svcBtn"><div><b>托管服务</b><span class="muted" id="svcState">—</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="devices" id="devsBtn"><div><b>已登录的手机</b><span class="muted">看看哪些手机能打开面板，把不认识的移除</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="ckey" id="ckeyBtn"><div><b>Claude 连接器地址</b><span class="muted">在 Claude 里添加连接器用（打不开面板）</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="hubbind" id="hubBindBtn"><div><b>绑定到账号</b><span class="muted">把这台路由器加到官网账号里，换手机时好找</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="feedback"><div><b>问题反馈 / 建议</b><span class="muted">遇到问题、想要什么功能，直接告诉开发者</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="logout"><div><b>退出登录</b><span class="muted">这台手机退出面板，下次要重新登录</span></div><span class="muted">›</span></button>
+	</section>
+	<div class="dangerzone"><button class="btn danger" data-t="reboot" style="padding:12px 22px">重启路由器</button></div>
+	<p class="muted" style="text-align:center;margin-top:16px" id="about"></p>
+</section>
+
+</main>
+
+<nav class="dock" id="dock">
+	<button data-d="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg><span>重启</span></button>
+	<button data-d="subs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z"/><path d="M12 10.5v6M9.5 14l2.5 2.5 2.5-2.5"/></svg><span>更新订阅</span></button>
+	<button data-d="mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span id="dockMode">模式</span></button>
+	<button data-d="ip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z"/></svg><span>IP 检查</span></button>
+	<button data-d="quick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10.5 21 19 10.5h-6z"/></svg><span>快捷</span></button>
+</nav>
+</div>
+
+<div id="tload" class="tload" aria-hidden="true"></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"><span></span><i class="tbar"></i></div>
+
+<script>

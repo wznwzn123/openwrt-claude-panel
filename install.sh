@@ -391,6 +391,13 @@ cfd_ram_check() {
 [ -x /usr/sbin/uhttpd ] || need="$need uhttpd"
 have_pkg curl || need="$need curl"
 FREE=$(free_mb); FREE=${FREE:-0}
+# 认出这台路由器的配置：小内存、单核的机器自动开省资源设置（cloudflared 早点回收内存、面板刷新放慢一点），功能不变
+MEMT=$(mem_mb MemTotal); MEMT=${MEMT:-0}
+CPUS=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null); CPUS=${CPUS:-1}; [ "$CPUS" -ge 1 ] 2>/dev/null || CPUS=1
+LOWHW=""
+[ "$MEMT" -gt 0 ] && [ "$MEMT" -le 256 ] && LOWHW="内存小"
+[ "$CPUS" -le 1 ] && LOWHW="${LOWHW:+$LOWHW、}单核"
+ok "这台路由器：内存 ${MEMT} MB · 闪存剩 ${FREE} MB · ${CPUS} 核${LOWHW:+ → $LOWHW，已自动开启省资源设置（功能不变）}"
 # 面板本身加上面这几个小依赖，大约要 5 MB
 [ "$FREE" -lt 6 ] && die "闪存只剩 $FREE MB，装面板至少要 6 MB。先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），再装一次。路由器上各分区的情况：
 $(df_raw)"
@@ -451,6 +458,8 @@ for f in "$SRC"/bin/cmcp-*; do cp -f "$f" /usr/sbin/; chmod 755 "/usr/sbin/${f##
 cp -f "$SRC/init.d/claude-mcp" "$SRC/init.d/cmcp-watchdog" /etc/init.d/
 chmod 755 /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog
 cp -f "$SRC/hotplug/90-cmcp-synced" /etc/hotplug.d/ntp/
+# 卸载脚本也放一份到路由器上（安装包解压在内存里，装完就删了）：以后直接运行 cmcp-uninstall
+[ -f "$SRC/../uninstall.sh" ] && cp -f "$SRC/../uninstall.sh" /usr/sbin/cmcp-uninstall && chmod 755 /usr/sbin/cmcp-uninstall
 # 小闪存模式：校验值跟着安装包走；cfd.ram 是记号（升级、体检、卸载时看）
 [ -s "$SRC/etc/cfd.sums" ] && cp -f "$SRC/etc/cfd.sums" $D/cfd.sums
 if [ "$CFD_RAM" = 1 ]; then : > $D/cfd.ram; else rm -f $D/cfd.ram; fi
@@ -588,7 +597,7 @@ echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
 
 # ---------- 升级系统时保留 ----------
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -618,6 +627,23 @@ say "启动服务"
 sleep 3
 code=$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json || true)
 [ "$code" = 200 ] && ok "面板服务已运行" || warn "面板服务没响应（HTTP $code），看看 logread | grep uhttpd"
+# 面板压缩着存（省闪存，发给手机也更快）：确认这台路由器上真的能用，能用才删掉没压缩的那份；不能用就照旧
+if [ -f $WWW/panel/index.zh ]; then
+	zok=0
+	if command -v gzip >/dev/null 2>&1 && [ -x /usr/sbin/cmcp-gz ]; then
+		curl -s -m 8 -H 'Accept-Encoding: gzip' -o /tmp/cmcp_zchk.gz http://127.0.0.1:18765/panel/ 2>/dev/null
+		gzip -dc /tmp/cmcp_zchk.gz 2>/dev/null | grep -q 'name="panel-ver"' && zok=1
+		[ $zok = 1 ] && { curl -s -m 8 http://127.0.0.1:18765/panel/ 2>/dev/null | grep -q 'name="panel-ver"' || zok=0; }
+		rm -f /tmp/cmcp_zchk.gz
+	fi
+	if [ $zok = 1 ]; then
+		# 有人直接打开 index.html（旧书签）：跳回面板
+		printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=./"><script>location.replace("./"+location.search+location.hash)</script><a href="./">打开面板</a>\n' > $WWW/panel/index.html
+		ok "面板压缩存放（省闪存约 $(( ($(wc -c < "$SRC/www/panel/index.html") - $(wc -c < $WWW/panel/index.zh)) / 1024 )) KB）"
+	else
+		rm -f $WWW/panel/index.zh
+	fi
+fi
 
 if [ -z "$DOMAIN" ]; then
 	say "等待临时隧道地址（最多 30 秒）"
@@ -699,4 +725,15 @@ else
 fi
 rm -f /etc/cmcp-report
 echo
-echo "卸载：sh uninstall.sh"
+echo "卸载：cmcp-uninstall"
+# 安装包是解压在内存（/tmp）里的：装完就删掉，省内存（一键更新用的临时目录由更新程序自己删）
+case "$SRC" in
+	/tmp/cmcp_upd/*) ;;
+	/tmp/?*/src)
+		PD=${SRC%/src}
+		if [ -f "$PD/install.sh" ] && [ -f "$PD/EDITION" ]; then
+			[ -f /tmp/p.tar.gz ] && tar -tzf /tmp/p.tar.gz 2>/dev/null | head -n 1 | grep -q '^openwrt-claude-panel/' && rm -f /tmp/p.tar.gz
+			rm -rf "$PD"
+			echo "（安装用的临时文件已删除，省内存；当前目录已不存在，可以运行 cd / ）"
+		fi ;;
+esac

@@ -130,6 +130,9 @@ const M = {
 	// 发一条：from 'u' 用户 / 'a' 开发者
 	chatSend(who, from, text, img, extra) { return this.lock(() => this._chatSend(who, from, text, img, extra)); },
 	async _chatSend(who, from, text, img, extra = {}) {
+		// from：u = 用户，a = 开发者，b = 自动回复（显示成开发者那边，但不算开发者已经回复：后台的「没看」「等回复」不变）
+		const bot = from === 'b';
+		if (bot) from = 'a';
 		text = clip(text, 2000);
 		let im = null;
 		if (img) {
@@ -146,6 +149,7 @@ const M = {
 		if (!t) { if (from === 'a') return { st: 404, error: '没有这个对话' }; t = { tid: who.tid, kind: who.kind, sub: who.sub || '', at: now, seq: 0, ua: 0, uu: 0, n: 0 }; l.unshift(t); }
 		if (from === 'u') { t.name = who.name; t.model = who.model; for (const [k, v] of Object.entries(extra)) if (v) t[k] = v; }
 		const seq = ++t.seq, msg = { s: seq, f: from, t: now, x: text };
+		if (bot) msg.auto = 1;
 		if (im) {
 			const n = Math.ceil(im.u8.length / CHUNK), put = {};
 			for (let k = 0; k < n; k++) put['cmi:' + who.tid + ':' + pad(seq) + ':' + k] = im.u8.slice(k * CHUNK, (k + 1) * CHUNK);
@@ -153,8 +157,10 @@ const M = {
 			msg.img = { type: im.type, size: im.size, n };
 		}
 		await this.ctx.storage.put('cm:' + who.tid + ':' + pad(seq), msg);
-		t.last = now; t.lastFrom = from; t.preview = text ? text.slice(0, 80) : '[图片]'; t.n = (t.n || 0) + 1;
-		if (from === 'u') t.ua = (t.ua || 0) + 1; else { t.uu = (t.uu || 0) + 1; t.ua = 0; }
+		t.n = (t.n || 0) + 1;
+		if (!bot) { t.last = now; t.lastFrom = from; t.preview = text ? text.slice(0, 80) : '[图片]'; }
+		if (from === 'a' && !bot) t.lastAdmin = now;
+		if (from === 'u') t.ua = (t.ua || 0) + 1; else { t.uu = (t.uu || 0) + 1; if (!bot) t.ua = 0; }
 		l.sort((a, b) => (b.last || 0) - (a.last || 0));
 		const drop = l.splice(CHAT_THREADS);
 		await this.ctx.storage.put('cth', l);
@@ -199,7 +205,7 @@ async function sha(s) { const h = await crypto.subtle.digest('SHA-256', new Text
 export function installOps(Cls) { for (const [k, f] of Object.entries(M)) Cls.prototype[k] = f; }
 
 // 用户发来的消息里图片换成「有图」标记（图片另外按编号拿）
-const pubMsg = (m) => ({ s: m.s, f: m.f, t: m.t, x: m.x || '', img: m.img ? { type: m.img.type, size: m.img.size } : null });
+const pubMsg = (m) => ({ s: m.s, f: m.f, t: m.t, x: m.x || '', img: m.img ? { type: m.img.type, size: m.img.size } : null, ...(m.auto ? { auto: 1 } : {}) });
 
 /* ---------- 路由（面板经路由器转发来的对话请求） ---------- */
 export async function chatApi(req, env, H, body) {
@@ -213,7 +219,7 @@ export async function chatApi(req, env, H, body) {
 	if (op === 'send') {
 		if (!(await H.hit('cs:' + who.tid, 20, 600e3)) || !(await H.hit('csd:' + who.tid, 200, DAY))) return J({ error: '发得太快了，歇一会儿再发' }, 429);
 		const { st, ...r } = await H.chatSend(who, 'u', s(b.text), b.img ? s(b.img) : '', { ver: s(b.ver).slice(0, 20), place: placeOf(req.cf), dev: uaLabel(s(b.ua)) });
-		if (st === 200) await H.track('chat_in');
+		if (st === 200) { await H.track('chat_in'); try { if (H.v5AfterUserMsg) await H.v5AfterUserMsg(who.tid); } catch (e) {} }
 		return J(st === 200 ? { ok: true, msg: pubMsg(r.msg) } : r, st);
 	}
 	return J({ error: 'not found' }, 404);

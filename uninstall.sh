@@ -26,7 +26,7 @@ done
 # 隧道直连的设置（dnsmasq、OpenClash 局域网名单里加的那一行）删掉
 [ -x /usr/sbin/cmcp-tunbypass ] && /usr/sbin/cmcp-tunbypass remove
 sed -i '/\/usr\/sbin\/cmcp-/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
-rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd
+rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz
 # 小闪存模式下载到内存里的 cloudflared
 rm -rf /tmp/cmcp-cfd
 rm -rf /usr/share/ucode/cmcp /www-claude-mcp
@@ -42,7 +42,7 @@ UCF_LIST=$(grep -E '^/(usr|lib)/[A-Za-z0-9._/+-]+$' $UCF 2>/dev/null | grep -v '
 RT=${CMCP_ROOT:-}
 [ "$1" = --purge ] && for f in $UCF_LIST; do rm -f "$RT$f"; done
 if [ "$1" = --purge ]; then rm -rf /etc/claude-mcp; echo "已卸载（包括所有设置和记录）"
-else echo "已卸载。设置和记录还在 /etc/claude-mcp，彻底删除请运行：sh uninstall.sh --purge"; fi
+else echo "已卸载。设置和记录还在 /etc/claude-mcp，彻底删除请运行：sh /etc/claude-mcp/uninstall.sh --purge"; fi
 echo "提示：OpenClash 覆写/自定义规则里如果加过面板的规则，请在 OpenClash 里自行检查。"
 
 # ---------- 卸载检查：确认没留下面板的东西（只检查、只输出，不再改动任何东西），结果另存一份 ----------
@@ -52,7 +52,7 @@ echo "卸载检查（$(date '+%Y-%m-%d %H:%M')）" > $CK
 echo "卸载检查："
 chk "面板和看门狗服务已删除" '[ ! -e /etc/init.d/claude-mcp ] && [ ! -e /etc/init.d/cmcp-watchdog ]'
 chk "面板网页服务、面板隧道已停止" '! ps w 2>/dev/null | grep -v grep | grep -q "uhttpd.*18765\|claude-mcp-tunnel"'
-chk "程序文件已删除" '! ls /usr/sbin/cmcp-* >/dev/null 2>&1 && [ ! -e /www-claude-mcp ] && [ ! -e /usr/share/ucode/cmcp ] && [ ! -e /etc/hotplug.d/ntp/90-cmcp-synced ]'
+chk "程序文件已删除" '! ls /usr/sbin/cmcp-* 2>/dev/null | grep -v /usr/sbin/cmcp-uninstall | grep -q . && [ ! -e /www-claude-mcp ] && [ ! -e /usr/share/ucode/cmcp ] && [ ! -e /etc/hotplug.d/ntp/90-cmcp-synced ]'
 chk "小闪存模式下载的 cloudflared 已删除" '[ ! -e /tmp/cmcp-cfd ]'
 chk "定时任务已删除" '! grep -q "/usr/sbin/cmcp-" /etc/crontabs/root 2>/dev/null'
 chk "防火墙规则（设备暂停）已删除" '! { iptables -t mangle -S 2>/dev/null; ip6tables -t mangle -S 2>/dev/null; } | grep -q CMCP_PAUSE'
@@ -63,5 +63,8 @@ chk "系统升级保留列表已清理" '! grep -q "cmcp\|claude-mcp" /etc/sysup
 UC_LEFT=""; for f in $UCF_LIST; do [ -e "$RT$f" ] && UC_LEFT="$UC_LEFT $f"; done
 [ "$1" = --purge ] && [ -n "$UCF_LIST" ] && chk "从 OpenWrt 官方补装的 ucode 已删除" '[ -z "$UC_LEFT" ]'
 if [ $bad = 0 ]; then echo "检查通过：面板的东西都清理干净了。" | tee -a $CK; else echo "有没清理干净的（上面打 ✗ 的），可以把 $CK 的内容发给开发者。" | tee -a $CK; fi
-[ "$1" != --purge ] && [ -n "$UCF_LIST" ] && echo "安装时从 OpenWrt 官方补装的 ucode 保留着（固件的软件源里没有，别的程序可能也用上了）；不需要的话运行 sh uninstall.sh --purge 一起删掉"
+[ "$1" != --purge ] && [ -n "$UCF_LIST" ] && echo "安装时从 OpenWrt 官方补装的 ucode 保留着（固件的软件源里没有，别的程序可能也用上了）；不需要的话运行 sh /etc/claude-mcp/uninstall.sh --purge 一起删掉"
 echo "检查记录存在 $CK（重启后会清空）。cloudflared 软件包保留着（别的程序可能也在用），不需要的话：opkg remove cloudflared（用小闪存模式的没装进闪存，不用删）"
+# 路由器上的卸载脚本（cmcp-uninstall）最后删掉自己；只是普通卸载（设置还留着）的话，在设置目录留一份，以后彻底删除用
+[ "$1" != --purge ] && [ -d /etc/claude-mcp ] && [ -f "$0" ] && [ "$0" != /etc/claude-mcp/uninstall.sh ] && cp -f "$0" /etc/claude-mcp/uninstall.sh 2>/dev/null
+rm -f /usr/sbin/cmcp-uninstall

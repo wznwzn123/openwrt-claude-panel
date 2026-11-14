@@ -117,6 +117,15 @@
   .chat-back { display: inline-flex; }
   .chat-row { max-width: 86%; }
 }
+/* 侧边栏开着、内容区不够宽（比如 iPhone 横屏、小窗口）时，对话也改成一次只显示一栏，不然右边对话只剩一小条 */
+.chat-cq { container-type: inline-size; }
+@container (max-width: 720px) {
+  .chat-wrap { grid-template-columns: minmax(0, 1fr); }
+  .chat-wrap.has-open .chat-side { display: none; }
+  .chat-wrap:not(.has-open) .chat-main { display: none; }
+  .chat-back { display: inline-flex; }
+  .chat-row { max-width: 86%; }
+}
 .hub-logo { padding: 0; background: none !important; box-shadow: 0 3px 10px rgba(16, 28, 64, .3) !important; overflow: hidden; border: 0; }
 .hub-logo svg { display: block; border-radius: inherit; }
 .chat-head .t b { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -179,6 +188,7 @@
 
 /* 对话标题栏：窄屏上「拉黑 / 删除」换成图标按钮，名字留得下 */
 .chat-head .act-ico { display: none; }
+.chat-head .act-txt { flex: none; white-space: nowrap; }
 .chat-head .kind-sm { display: none; font-style: normal; }
 @media (max-width: 420px) { .chat-head .t b .tag { display: none; } .chat-head .kind-sm { display: inline; } }
 @media (max-width: 560px) {
@@ -186,3 +196,30 @@
   .chat-head .act-ico { display: inline-flex; flex: none; }
   .chat-head { gap: 6px; }
 }
+
+/* 两步验证设置 */
+.tfa-setup { display: flex; gap: 18px; align-items: flex-start; padding: 6px 0 4px; flex-wrap: wrap; }
+.tfa-qr { width: 168px; height: 168px; border-radius: 12px; background: #fff; padding: 6px; image-rendering: pixelated; flex: none; }
+.tfa-steps { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; line-height: 1.6; }
+.tfa-steps p { margin: 0; }
+.tfa-secret code { font-family: var(--font-mono); font-size: 14px; letter-spacing: .04em; overflow-wrap: anywhere; }
+
+/* 对话（5.0）：筛选、自动回复 */
+.chat-filter { margin-bottom: 10px; }
+.chat-filter .segmented { width: 100%; }
+.chat-filter .segmented button { flex: 1; }
+.chat-auto { font-size: 11.5px; color: var(--ink-faint); margin: 0 4px 3px; text-align: right; }
+.chat-row.is-auto .chat-bub { background: var(--groove-bg); color: var(--ink-soft); border: 1px dashed var(--line-strong); }
+
+/* 公告（5.0）：定时发布、面板里的样子 */
+.ann-dt { width: 100%; min-height: 38px; padding: 0 12px; font: inherit; color: var(--ink); background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
+.ann-pv { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--r-md); background: var(--groove-bg); }
+.ann-pv-cap { font-size: 11.5px; color: var(--ink-faint); }
+.ann-pv-card { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 16px; background: var(--surface-solid); box-shadow: var(--e1); max-width: 420px; }
+.ann-pv-ic { flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-style: normal; background: rgba(36, 87, 245, .12); }
+.ann-pv-ic.imp { background: rgba(255, 59, 48, .14); }
+.ann-pv-main { min-width: 0; flex: 1; }
+.ann-pv-top { display: flex; flex-direction: column; gap: 2px; }
+.ann-pv-top b { font-size: 14.5px; overflow-wrap: anywhere; }
+.ann-pv-top span { font-size: 11.5px; color: var(--ink-faint); }
+.ann-pv-main p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-soft); }

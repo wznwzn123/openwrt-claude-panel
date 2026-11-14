@@ -9,6 +9,8 @@ import * as CL from 'cmcp.lib';
 const VERSION = '2.2.0';
 const CONF_PATH = getenv('CLAUDE_MCP_CONF') || '/etc/claude-mcp/config.json';
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
+// 改设置前留的备份（/etc/claude-mcp/bak）：最多 40 份；加起来超过 4 MB（闪存剩不到 16 MB 时 1 MB）就从最旧的删，最新 5 份一定留着
+const BAK_PRUNE = 'cd /etc/claude-mcp/bak 2>/dev/null && { ls -1t | sed -n "41,\\$p" | while read f; do rm -f "$f"; done; fr=$(df -k . 2>/dev/null | tail -n 1 | awk \'{print $(NF-2)}\'); cap=4096; [ "${fr:-99999}" -lt 16384 ] 2>/dev/null && cap=1024; n=0; t=0; ls -1t | while read f; do [ -f "$f" ] || continue; n=$((n+1)); t=$((t+($(wc -c < "$f")+1023)/1024)); [ $n -gt 5 ] && [ $t -gt $cap ] && rm -f "$f"; done; }';
 
 /* ---------------- 基础工具 ---------------- */
 
@@ -1257,7 +1259,7 @@ function oc_backup_file(kind, p) {
 	if (!stat(p)) return null;
 	mkdir('/etc/claude-mcp/bak');
 	let b = sprintf('/etc/claude-mcp/bak/%s.%s.%s', kind, replace(p, /.*\//, ''), now_str());
-	sh(sprintf('cp -f %s %s; ls -1t /etc/claude-mcp/bak/ | sed -n "41,\\$p" | while read f; do rm -f "/etc/claude-mcp/bak/$f"; done', shq(p), shq(b)));
+	sh(sprintf('cp -f %s %s; ' + BAK_PRUNE, shq(p), shq(b)));
 	return b;
 }
 
@@ -1836,7 +1838,7 @@ P.restore = function(a) {
 	if (!match(ls, /\.\/(openclash|config|custom|overwrite|core|rule_provider|proxy_provider)/)) {
 		sh('rm -rf ' + dir); die('备份里没有 OpenClash 的文件');
 	}
-	sh(sprintf('mkdir -p /etc/claude-mcp/bak; cp -f /etc/config/openclash /etc/claude-mcp/bak/openclash.uci.before-restore.%s', now_str()));
+	sh(sprintf('mkdir -p /etc/claude-mcp/bak; cp -f /etc/config/openclash /etc/claude-mcp/bak/openclash.uci.before-restore.%s; ' + BAK_PRUNE, now_str()));
 	sh(sprintf('cd %s && for d in config custom overwrite core rule_provider proxy_provider; do [ -d "$d" ] && mkdir -p /etc/openclash/$d && cp -rf "$d"/. /etc/openclash/$d/; done; [ -f openclash ] && cp -f openclash /etc/config/openclash; chmod 755 /etc/openclash/core/* 2>/dev/null', dir));
 	sh('rm -rf ' + dir);
 	if (a.restart) restart_openclash_bg();
@@ -1845,7 +1847,7 @@ P.restore = function(a) {
 
 P.oc_reset = function(a) {
 	if (a.confirm !== 'RESET') die('需要确认');
-	sh(sprintf('mkdir -p /etc/claude-mcp/bak; cp -f /etc/config/openclash /etc/claude-mcp/bak/openclash.uci.before-reset.%s', now_str()));
+	sh(sprintf('mkdir -p /etc/claude-mcp/bak; cp -f /etc/config/openclash /etc/claude-mcp/bak/openclash.uci.before-reset.%s; ' + BAK_PRUNE, now_str()));
 	sh("uci set openclash.config.enable=0; uci commit openclash; /etc/init.d/openclash stop >/dev/null 2>&1; mkdir -p /etc/openclash/custom /etc/openclash/overwrite /etc/openclash/rule_provider; cp -f /usr/share/openclash/backup/openclash /etc/config/openclash; cp -f /usr/share/openclash/backup/openclash_custom* /etc/openclash/custom/; cp -f /usr/share/openclash/backup/openclash_force_sniffing* /etc/openclash/custom/; cp -f /usr/share/openclash/backup/openclash_sniffing* /etc/openclash/custom/; cp -f /usr/share/openclash/backup/china_ip_route.ipset /etc/openclash/china_ip_route.ipset; cp -f /usr/share/openclash/backup/china_ip6_route.ipset /etc/openclash/china_ip6_route.ipset; cp -f /usr/share/openclash/backup/overwrite/default /etc/openclash/overwrite/default");
 	return { ok: true };
 };
@@ -2011,7 +2013,7 @@ P.fs_write = function(a) {
 	if (st && st.size < 2 * 1024 * 1024) {
 		mkdir('/etc/claude-mcp/bak');
 		bak = sprintf('/etc/claude-mcp/bak/file.%s.%s', replace(p, /\//g, '_'), now_str());
-		sh(sprintf('cp -f %s %s; ls -1t /etc/claude-mcp/bak/ | sed -n "41,\\$p" | while read f; do rm -f "/etc/claude-mcp/bak/$f"; done', shq(p), shq(bak)));
+		sh(sprintf('cp -f %s %s; ' + BAK_PRUNE, shq(p), shq(bak)));
 	}
 	let tmp = p + '.cmcp_tmp';
 	if (a.b64 != null) {
@@ -2882,7 +2884,31 @@ P.notices_seen = function(a) {
 	let id = '' + (a?.pop ?? '');
 	if (length(id)) { if (!match(id, /^[a-z2-9]{10}$/)) die('公告编号不对'); if (index(s.pop, id) < 0) { push(s.pop, id); s.pop = slice(s.pop, -50); ch = true; } }
 	if (ch) writefile(NT_SEEN, sprintf('%J', s));
+	// 公告统计（5.0）：告诉开发者「这台点开看了哪几条」（匿名编号；后台发，不等它）
+	if (ch) {
+		let ids = [], c = null;
+		try { c = json(readfile('/tmp/cmcp_ann.json') ?? 'null'); } catch (e) {}
+		for (let x in (type(c?.list) == 'array' ? c.list : [])) if (type(x) == 'object' && match('' + x.id, /^[a-z2-9]{10}$/) && (x.id == id || (t > 0 && +(x.upd ?? x.at ?? 0) <= t))) push(ids, x.id);
+		if (length(ids)) try { sh(sprintf("(curl -s -m 15 -X POST -H 'Content-Type: application/json' -d %s %s >/dev/null 2>&1 &)", shq(sprintf('%J', { r: CL.ann_rid(), ids: slice(ids, 0, 20) })), shq(CL.ann_hub() + '/api/notices/seen'))); } catch (e) {}
+	}
 	return { ok: true, seen: s };
+};
+// 面板脚本出错（5.0）：转给开发者的「出错记录」，帮着发现手机上才出现的问题；只带错误本身和手机型号、屏幕大小，不带任何设置和密钥。
+// 每台路由器一小时最多转 10 条
+P.client_error = function(a) {
+	let f = '/tmp/cmcp_cerr.json', st = null, now = time();
+	try { st = json(readfile(f) ?? 'null'); } catch (e) {}
+	if (type(st) != 'object' || now - (+st.h || 0) >= 3600) st = { h: now, n: 0 };
+	if (st.n >= 10) return { ok: true, sent: false };
+	st.n++;
+	writefile(f, sprintf('%J', st));
+	let s = (v, n) => substr(replace('' + (v ?? ''), /[\r\n\t]+/g, ' '), 0, n);
+	let ver = trim(readfile('/etc/claude-mcp/version') ?? '');
+	let m = match(ver, /VER=([^\n]+)/);
+	let b = { msg: s(a?.msg, 300), where: s(a?.where, 120), stack: substr('' + (a?.stack ?? ''), 0, 800), page: s(a?.page, 30), ua: s(a?.ua, 60), w: +(a?.w ?? 0), h: +(a?.h ?? 0), ver: m ? m[1] : '' };
+	if (!length(b.msg)) return { ok: true, sent: false };
+	try { sh(sprintf("(curl -s -m 15 -X POST -H 'Content-Type: application/json' -d %s %s >/dev/null 2>&1 &)", shq(sprintf('%J', b)), shq(CL.ann_hub() + '/api/cerr'))); } catch (e) {}
+	return { ok: true, sent: true };
 };
 P.feedback_diag = function() { return { text: fb_diag(), hosted: !!hub_conf(true)?.HUB }; };
 // 「@global[0]」这种匿名节：换成真正的节名
@@ -3329,7 +3355,7 @@ function reqlog(msg, t0, r) {
 		let m = msg?.method ?? '?';
 		if (m == 'tools/call') m += ':' + (msg.params?.name ?? '');
 		let lf = '/tmp/cmcp_req.log', st = stat(lf);
-		if (st && st.size > 300000) rename(lf, lf + '.1');
+		if (st && st.size > 65536) rename(lf, lf + '.1');  // 请求记录在内存里：最多两份各 64 KB
 		let h = fs_open(lf, 'a');
 		if (h) { h.write(sprintf('%d %s %d %s\n', time(), m, ms, r?.error ? 'ERR' : 'ok')); h.close(); }
 	} catch (e) {}

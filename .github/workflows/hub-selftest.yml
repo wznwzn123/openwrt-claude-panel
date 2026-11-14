@@ -17,11 +17,14 @@ jobs:
     env:
       HUB: ${{ vars.HUB_URL }}
       AK: ${{ secrets.HUB_ADMIN_KEY }}
+      # 管理后台开了两步验证的话：把开启时显示的那串密钥存成 Secrets 里的 HUB_TOTP_SECRET，这里现算验证码（没开就是空的，不影响）
+      TS: ${{ secrets.HUB_TOTP_SECRET }}
+      OTPJS: 'const c=require("crypto"),s=(process.env.TS||"").toUpperCase().replace(/[^A-Z2-7]/g,"");if(!s)process.exit(0);let b=0,v=0,o=[];for(const ch of s){v=(v<<5)|"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".indexOf(ch);b+=5;if(b>=8){o.push((v>>>(b-8))&255);b-=8}}const t=Buffer.alloc(8);t.writeBigUInt64BE(BigInt(Math.floor(Date.now()/3e4)));const h=c.createHmac("sha1",Buffer.from(o)).update(t).digest(),f=h[19]&15;process.stdout.write(String((h.readUInt32BE(f)&2147483647)%1e6).padStart(6,"0"))'
     steps:
       - name: 生成一次性邀请码
         run: |
           [ -n "$HUB" ] && [ -n "$AK" ] || { echo "::error::没有设置 HUB_URL 或 HUB_ADMIN_KEY"; exit 1; }
-          R=$(curl -sS -m 20 -X POST -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' -d '{"max":1,"days":1,"note":"自检（会自动删除）"}' "$HUB/api/admin/invites")
+          R=$(curl -sS -m 20 -X POST -H "Authorization: Bearer $AK" -H "x-adm-otp: $(node -e "$OTPJS")" -H 'Content-Type: application/json' -d '{"max":1,"days":1,"note":"自检（会自动删除）"}' "$HUB/api/admin/invites")
           INV=$(echo "$R" | jq -r '.invite.code // empty')
           [ -n "$INV" ] || { echo "::error::生成邀请码失败：$R"; exit 1; }
           echo "::add-mask::$INV"
@@ -79,4 +82,4 @@ jobs:
             R=$(curl -sS -m 60 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RK\"}" "$HUB/api/unregister")
             if echo "$R" | jq -e '.ok == true' >/dev/null; then echo "::notice::5/5 已注销：隧道和子域名都删掉了"; else echo "::error::注销失败：$R（到 $HUB/admin 手动删除 $SUB）"; fi
           fi
-          [ -n "$INV" ] && curl -sS -m 20 -X DELETE -H "Authorization: Bearer $AK" "$HUB/api/admin/invites/$INV" >/dev/null || true
+          [ -n "$INV" ] && curl -sS -m 20 -X DELETE -H "Authorization: Bearer $AK" -H "x-adm-otp: $(node -e "$OTPJS")" "$HUB/api/admin/invites/$INV" >/dev/null || true

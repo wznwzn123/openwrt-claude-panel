@@ -6,7 +6,7 @@ import { pathToFileURL } from 'url';
 const SHIM = 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }';
 export async function load() {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcp-w-'));
-	for (const f of ['worker.js', 'hub.js', 'ops.js', 'site.js']) {
+	for (const f of ['worker.js', 'hub.js', 'ops.js', 'v5.js', 'site.js']) {
 		const src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')
 			.replace("import { DurableObject } from 'cloudflare:workers';", SHIM)
 			.replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");

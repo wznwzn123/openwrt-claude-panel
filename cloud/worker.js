@@ -8,6 +8,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE, hubObj } from './hub.js';
 export { Hub };
 export { dayKey } from './hub.js';
+export { totp, b32enc } from './v5.js'; // 测试用：两步验证的验证码算法
 
 const BEAT_GAP = 170e3; // 一切正常时，心跳最多每 3 分钟（隔 170 秒以上）交给 Durable Object 一次
 const STALE = 300e3; // 超过 5 分钟没收到交过来的心跳算失联（正常时最多隔 4 分钟交一次）

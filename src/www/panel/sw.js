@@ -41,8 +41,17 @@ self.addEventListener('fetch', (e) => {
 	e.respondWith((async () => {
 		const c = await caches.open(CACHE);
 		const hit = await c.match(key, { ignoreSearch: true }) || (nav ? await c.match(BASE + 'index.html', { ignoreSearch: true }) : null);
-		// 打开网页的请求不能带额外参数（浏览器会直接报错），所以按网址重新请求
-		const net = fetch(nav ? req.url : req, { cache: 'no-cache' }).then((r) => {
+		// 打开网页的请求不能带额外参数（浏览器会直接报错），所以按网址重新请求。
+		// 打开的是 index.html（旧书签）也取面板本身（压缩存放的路由器上 index.html 只是跳转页，不能存成面板）；
+		// 手机里已经有一份：网址带上它的 ETag，路由器上没变就回 304（不用再下载一遍）
+		let nu = req;
+		if (nav) {
+			nu = new URL(u.pathname.endsWith('/index.html') ? BASE + u.search : req.url);
+			const et = hit && hit.headers.get('etag');
+			if (et) nu.searchParams.set('_et', et);
+			nu = nu.href;
+		}
+		const net = fetch(nu, { cache: 'no-cache' }).then((r) => {
 			// 只缓存真正的面板；Cloudflare 的 1033/502 错误页不缓存
 			if (r.ok && (!nav || (r.headers.get('content-type') || '').includes('text/html'))) c.put(key, r.clone());
 			return r;

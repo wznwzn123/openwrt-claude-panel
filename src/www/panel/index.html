@@ -6,6 +6,7 @@
 <title>我的路由器</title>
 <link rel="manifest" href="./manifest.json"><link rel="icon" type="image/png" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png">
 <script>try{var d=localStorage.getItem("rp_dark");if(d==="1"||(d===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}
+try{var N=navigator,dm=N.deviceMemory,hc=N.hardwareConcurrency;if(/Android/i.test(N.userAgent)&&((dm&&dm<=2)||(hc&&hc<=4)))document.documentElement.classList.add("lowfx")}catch(e){}
 try{var R=document.documentElement,g=localStorage.getItem("rp_glass"),w=localStorage.getItem("rp_wall"),b=localStorage.getItem("rp_wblur"),m=localStorage.getItem("rp_wdim");if(g==="1"||(g===null&&!matchMedia("(prefers-reduced-transparency: reduce)").matches))R.classList.add("glass");if(w)R.setAttribute("data-wall",w);R.style.setProperty("--wblur",(b===null?20:+b)+"px");R.style.setProperty("--wdim",(m===null?0:+m)/100)}catch(e){}
 // 手机最上面状态栏的颜色 = 页面最上面那一条的颜色（背景图顶部的平均色，再按「变暗」和深色模式压暗）；安卓 App 会读这个颜色，还会把状态栏变透明（RP_EDGE）
 var RP_EDGE=1,WALL_TOP={mist:"#e3e2f8",night:"#191e4a",aurora:"#2d5586",ocean:"#baddfe",sunset:"#ffcca8",mint:"#e2fbca",sakura:"#f4dff2",graphite:"#393d46"};
@@ -596,6 +597,15 @@ section.page{display:none}section.page.on{display:block}
 .wsl{display:grid;grid-template-columns:72px 1fr 40px;align-items:center;gap:10px;margin:12px 0 0;font-size:14px}
 .wsl b{text-align:right;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .wsl input{width:100%;accent-color:var(--brand)}
+/* 低端安卓手机（内存 2 GB 及以下，或者 4 核及以下）：不用毛玻璃，滚动更流畅；底色换成接近的不透明色，看起来差不多 */
+:root.lowfx *,:root.lowfx *::before,:root.lowfx *::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+:root.lowfx{--glass:rgba(249,249,251,.97)}:root.lowfx.dark{--glass:rgba(22,22,24,.97)}
+:root.lowfx.glass{--glass:rgba(250,250,252,.95);--card:rgba(255,255,255,.9);--card2:rgba(255,255,255,.8)}
+:root.lowfx.glass.dark{--glass:rgba(24,24,28,.95);--card:rgba(34,34,38,.92);--card2:rgba(62,62,70,.78)}
+:root.lowfx.glass .modalbox{background:rgba(242,242,247,.97)}:root.lowfx.glass.dark .modalbox{background:rgba(30,30,34,.97)}
+:root.lowfx.glass .modal{background:rgba(0,0,0,.32)}
+:root.lowfx .top,:root.lowfx .dock,:root.lowfx .savebar,:root.lowfx .side{background:rgba(249,249,251,.98)!important}
+:root.lowfx.dark .top,:root.lowfx.dark .dock,:root.lowfx.dark .savebar,:root.lowfx.dark .side{background:rgba(24,24,28,.98)!important}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1044,6 +1054,8 @@ section.page{display:none}section.page.on{display:block}
 const $ = (id) => document.getElementById(id);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// 低端路由器（单核，或者内存 256 MB 及以下）：概览、连接页自动刷新放慢一倍（8 秒一次），少占路由器 CPU
+let lowRouter = false, lowTick = 0;
 const store = {
 	get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
 	set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -1123,6 +1135,21 @@ async function rpcOnce(method, params, timeoutMs) {
 	return j.result;
 }
 const P = (m, a, t) => rpc('panel/' + m, a, t);
+// 面板脚本出错（5.0）：经路由器转给开发者（只带错误本身、手机型号和屏幕大小）；同一条只报一次，一次打开最多报 3 条
+const errSent = new Set();
+function reportErr(msg, stack, where) {
+	try {
+		msg = String(msg || '').slice(0, 300);
+		if (!msg || errSent.has(msg) || errSent.size >= 3 || /ResizeObserver loop|Script error\.?$|NetworkError|Failed to fetch|Load failed|OfflineError|请求超时/.test(msg)) return;
+		errSent.add(msg);
+		const ua = navigator.userAgent, dev = /iPhone|iPad/.test(ua) ? '苹果' : /Android/.test(ua) ? '安卓' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : '其它';
+		const br = /EdgA?\//.test(ua) ? 'Edge' : /MicroMessenger/.test(ua) ? '微信' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : '浏览器';
+		P('client_error', { msg, stack: String(stack || '').slice(0, 800), where: String(where || '').replace(/[?#].*$/, '').slice(-120), page: typeof page === 'string' ? page : '', ua: dev + ' · ' + br, w: innerWidth, h: innerHeight }).catch(() => {});
+	} catch (e) {}
+}
+addEventListener('error', (e) => { if (e && e.message) reportErr(e.message, e.error && e.error.stack, e.filename); });
+// 没接住的 Promise：只报程序本身的错（TypeError 这类）；路由器回的业务错误、断网不报
+addEventListener('unhandledrejection', (e) => { const r = e && e.reason; if (r instanceof TypeError || r instanceof ReferenceError || r instanceof RangeError || r instanceof SyntaxError) reportErr(r.message, r.stack, location.pathname); });
 async function tool(name, args, timeoutMs) {
 	const res = await rpc('tools/call', { name, arguments: args || {} }, timeoutMs);
 	const text = (res.content && res.content[0] && res.content[0].text) || '';
@@ -2097,6 +2124,7 @@ function renderOv(o, cached) {
 	}
 	$('sConn').textContent = kind === 'clash' ? c.connections ?? '—' : '—';
 	// 新接口给真实 CPU 使用率；旧接口只有负载，用负载 ÷ 核数估算
+	lowRouter = (s.cpus || 1) <= 1 || (s.mem_total > 0 && s.mem_total <= 268435456);
 	const cpu = s.cpu != null ? Math.min(100, Math.round(s.cpu)) : Math.min(100, Math.round((+s.load || 0) / (s.cpus || 1) * 100));
 	$('sCpu').innerHTML = `${cpu}<small>%</small>`; bar('sCpuBar', cpu);
 	const mem = s.mem_total ? Math.round((s.mem_total - s.mem_avail) / s.mem_total * 100) : 0;
@@ -4537,7 +4565,7 @@ function chRender(scroll) {
 		const me = m.f === 'u';
 		const img = m.img ? (m.local || CH.imgs[m.s] ? `<img src="${esc(m.local || CH.imgs[m.s])}" alt="图片" data-big="${m.s || ''}">` : `<span class="imgph" data-load="${m.s}">点开看图片</span>`) : '';
 		const st = m.pending ? '<div class="chmeta">发送中…</div>' : m.fail ? `<div class="chmeta bad" data-retry="${m.id}">没发出去：${esc(m.fail)} · 点这里重发</div>` : `<div class="chmeta">${chTime(m.t)}${me && CH.adminSeen >= m.s ? ' · 开发者已读' : ''}</div>`;
-		html += `<div class="chrow${me ? ' me' : ''}">${me ? '' : '<div class="chwho">开发者</div>'}<div class="chbub">${img}${m.x ? esc(m.x) : ''}</div>${st}</div>`;
+		html += `<div class="chrow${me ? ' me' : ''}">${me ? '' : `<div class="chwho">${m.auto ? '自动回复' : '开发者'}</div>`}<div class="chbub">${img}${m.x ? esc(m.x) : ''}</div>${st}</div>`;
 	}
 	box.innerHTML = html;
 	for (const ph of box.querySelectorAll('[data-load]')) chImg(+ph.dataset.load);
@@ -5138,7 +5166,7 @@ function start() {
 	clearInterval(ticker);
 	ticker = setInterval(() => {
 		if (document.hidden || LK.on || document.querySelector('.modal')) return;
-		if (page === 'home' || page === 'conn' || (page === 'wd' && ++wdTick % 3 === 0)) refresh(true);
+		if (((page === 'home' || page === 'conn') && !(lowRouter && ++lowTick % 2)) || (page === 'wd' && ++wdTick % 3 === 0)) refresh(true);
 		if (page === 'log' && $('logAuto').checked) refresh(true);
 		if (page === 'slog' && $('slAuto').checked) refresh(true);
 		if (page === 'home') ncAgo();

@@ -3,7 +3,7 @@ export const APP = Object.freeze({
   name: '路由器面板 · 托管服务管理后台',
   shortName: '管理后台',
   subtitle: 'Router Panel Hub',
-  version: 'v4.0',
+  version: 'v5.0',
 })
 
 export interface NavLeaf { key: string; label: string; icon: string; path: string; badge?: string }

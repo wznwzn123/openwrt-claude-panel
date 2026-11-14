@@ -55,7 +55,7 @@
 
 测试情况：在 **OpenWrt 21.02（x86_64）** 和 **ImmortalWrt 18.06（x86_64，跟 Lean LEDE 同一个系列）** 的真实系统文件里实测过，补上的 ucode 能读写 uci，面板后台程序能正常运行。**eSir、Lean LEDE 的真机没有实测。**
 
-补装的文件记在 `/etc/claude-mcp/ucode.files`。普通卸载保留（别的程序可能也用上了），`sh uninstall.sh --purge` 会一起删掉。
+补装的文件记在 `/etc/claude-mcp/ucode.files`。普通卸载保留（别的程序可能也用上了），`cmcp-uninstall --purge` 会一起删掉。
 
 ## 已知问题
 
@@ -94,4 +94,4 @@
 
 ## 卸载
 
-在路由器上运行 `sh uninstall.sh`（连设置一起删：`sh uninstall.sh --purge`）。卸载完会逐项检查有没有留下东西（服务、程序文件、定时任务、防火墙规则、隧道直连设置、登录账号、系统升级保留列表），结果存在 `/tmp/cmcp-uninstall-check.txt`。`cloudflared` 软件包会保留（别的程序可能也在用）；小闪存模式下载到内存里的那份会删掉。
+在路由器上运行 `cmcp-uninstall`（连设置一起删：`cmcp-uninstall --purge`；5.0 以前的版本在安装包目录里运行 `sh uninstall.sh`）。卸载完会逐项检查有没有留下东西（服务、程序文件、定时任务、防火墙规则、隧道直连设置、登录账号、系统升级保留列表），结果存在 `/tmp/cmcp-uninstall-check.txt`。`cloudflared` 软件包会保留（别的程序可能也在用）；小闪存模式下载到内存里的那份会删掉。

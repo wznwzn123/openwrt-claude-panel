@@ -15,7 +15,9 @@ import { APP } from '@/data'
 const router = useRouter()
 const route = useRoute()
 
-const form = reactive({ key: '' })
+const form = reactive({ key: '', code: '' })
+// 开了两步验证：密钥对了以后再要手机上的验证码
+const need2fa = ref(false)
 const errors = ref<Partial<Record<keyof typeof form, string>>>({})
 const remember = ref(false)
 const submitting = ref(false)
@@ -95,7 +97,8 @@ async function submit() {
   if (Object.keys(errors.value).length) return
   submitting.value = true
   try {
-    await login(form.key.trim(), remember.value)
+    if (need2fa.value && !/^\d{6}$/.test(form.code.trim())) { errors.value = { code: '输入手机验证码 App 里的 6 位数字' }; return }
+    await login(form.key.trim(), remember.value, need2fa.value ? form.code.trim() : '')
     await playSuccess()
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
     const failure = await router.replace(redirect)
@@ -103,7 +106,12 @@ async function submit() {
     if (failure || router.currentRoute.value.name === 'login') succeeded.value = false
   } catch (error) {
     succeeded.value = false
-    formError.value = error instanceof ApiError ? (error.status === 401 ? '管理员密钥不对' : error.message) : '登录失败，请稍后重试'
+    if (error instanceof ApiError && error.need2fa) {
+      if (need2fa.value) formError.value = '验证码不对：看看手机上的时间准不准，或者等下一个验证码'
+      need2fa.value = true
+      await nextTick()
+      root.value?.querySelector<HTMLInputElement>('.code-field input')?.focus()
+    } else formError.value = error instanceof ApiError ? (error.status === 401 ? '管理员密钥不对' : error.message) : '登录失败，请稍后重试'
   } finally {
     submitting.value = false
   }
@@ -241,6 +249,9 @@ onBeforeUnmount(() => {
           <form class="login-form" novalidate @submit.prevent="submit">
             <Field label="管理员密钥" :error="errors.key">
               <TextInput v-model="form.key" type="password" icon="key" placeholder="请输入管理员密钥" autocomplete="current-password" :invalid="!!errors.key" />
+            </Field>
+            <Field v-if="need2fa" class="code-field" label="两步验证码" :error="errors.code" hint="打开手机上的验证码 App（比如 Google Authenticator），输入「路由器托管服务」那一行的 6 位数字">
+              <TextInput v-model="form.code" icon="shield" inputmode="numeric" :maxlength="6" placeholder="6 位数字" autocomplete="one-time-code" :invalid="!!errors.code" />
             </Field>
             <div class="login-options">
               <Checkbox v-model="remember" label="在这台设备上记住（公用电脑别勾）" />

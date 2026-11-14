@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # 要完整历史和标签：算 App 上次改动是哪个版本
+      - name: 装面板精简工具
+        run: npm ci --prefix tools/minify --no-audit --no-fund
       - name: 打包
         env:
           HUB_URL: ${{ vars.HUB_URL }}

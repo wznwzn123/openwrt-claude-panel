@@ -1,0 +1,19 @@
+#!/bin/sh
+# 面板网页压缩着存、压缩着发（uhttpd 遇到 .zh 文件交给这里）：闪存里只放压缩过的面板（约为原来的 1/4），
+# 发给手机也是压缩的（浏览器自己解开）；万一浏览器不收压缩的，就当场解开再发。
+# 没改过就回「没变」（304），手机直接用缓存：uhttpd 不把 If-None-Match 转给这里，
+# 所以面板的 sw.js 在网址后面带上 _et=手机里那份的 ETag
+f="${1:-$SCRIPT_FILENAME}"
+[ -f "$f" ] || { printf 'Status: 404 Not Found\r\nContent-Type: text/plain\r\n\r\nnot found\n'; exit 0; }
+sz=$(wc -c < "$f" | tr -d ' '); mt=$(date -r "$f" +%s 2>/dev/null)
+tag="\"$sz-$mt\""
+h='Content-Type: text/html; charset=utf-8\r\nVary: Accept-Encoding\r\nCache-Control: no-cache\r\nX-Content-Type-Options: nosniff\r\nETag: '"$tag"'\r\n'
+same=0
+[ "$HTTP_IF_NONE_MATCH" = "$tag" ] && same=1
+case "&$QUERY_STRING&" in *"&_et=%22$sz-$mt%22&"*) same=1 ;; esac
+if [ $same = 1 ]; then printf "Status: 304 Not Modified\r\n${h}\r\n"; exit 0; fi
+[ "$REQUEST_METHOD" = HEAD ] && { printf "Status: 200 OK\r\n${h}\r\n"; exit 0; }
+case "$HTTP_ACCEPT_ENCODING" in
+	*gzip*) printf "Status: 200 OK\r\n${h}Content-Encoding: gzip\r\n\r\n"; cat "$f" ;;
+	*) printf "Status: 200 OK\r\n${h}\r\n"; gzip -dc "$f" ;;
+esac

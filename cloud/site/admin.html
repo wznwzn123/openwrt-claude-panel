@@ -87,16 +87,30 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 let tt; function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove('hide'); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), 2600); }
 let KEY = ''; try { KEY = sessionStorage.getItem('hubkey') || ''; } catch (e) {}
-async function api(method, path, body) {
-	const r = await fetch('/api/admin/' + path, { method, headers: { authorization: 'Bearer ' + KEY, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+// 开了两步验证（5.0）：输一次验证码换 12 小时的通行证
+let SESS = '', TFA = null; try { SESS = sessionStorage.getItem('hubsess') || ''; } catch (e) {}
+const hdr = () => Object.assign({ authorization: 'Bearer ' + KEY, 'content-type': 'application/json' }, SESS ? { 'x-adm-sess': SESS } : {});
+async function api(method, path, body, again) {
+	const r = await fetch('/api/admin/' + path, { method, headers: hdr(), body: body ? JSON.stringify(body) : undefined });
 	let j = {}; try { j = await r.json(); } catch (e) {}
-	if (r.status === 401) { logout(); throw new Error('管理员密钥不对'); }
+	if (r.status === 401 && j.need2fa && !again) {
+		// 好几个请求同时要验证码时只问一次
+		if (!TFA) TFA = (async () => {
+			const c = window.prompt('管理后台开了两步验证：输入手机验证码 App 里的 6 位数字');
+			if (!c) return false;
+			const l = await fetch('/api/admin/login', { method: 'POST', headers: hdr(), body: JSON.stringify({ code: c.trim() }) }); let lj = {}; try { lj = await l.json(); } catch (e) {}
+			if (l.ok && lj.sess) { SESS = lj.sess; try { sessionStorage.setItem('hubsess', SESS); } catch (e) {} return true; }
+			return false;
+		})().finally(() => setTimeout(() => { TFA = null; }, 0));
+		if (await TFA) return api(method, path, body, true);
+	}
+	if (r.status === 401) { logout(); throw new Error(j.need2fa ? '两步验证码不对' : '管理员密钥不对'); }
 	if (!r.ok) throw new Error(j.error || '出错了（' + r.status + '）');
 	return j;
 }
 const day = (t) => t ? new Date(t).toLocaleDateString('zh-CN') : '—';
 const ago = (t) => { if (!t) return '—'; const s = (Date.now() - t) / 1000; return s < 3600 ? Math.max(1, Math.round(s / 60)) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
-function logout() { KEY = ''; try { sessionStorage.removeItem('hubkey'); } catch (e) {} $('vKey').classList.remove('hidden'); $('vMain').classList.add('hidden'); $('outBtn').classList.add('hidden'); }
+function logout() { KEY = ''; SESS = ''; try { sessionStorage.removeItem('hubkey'); sessionStorage.removeItem('hubsess'); } catch (e) {} $('vKey').classList.remove('hidden'); $('vMain').classList.add('hidden'); $('outBtn').classList.add('hidden'); }
 $('outBtn').onclick = logout;
 $('mailTest').onclick = async () => {
 	const b = $('mailTest'); b.disabled = true;
@@ -452,7 +466,7 @@ const IMG = {};
 async function fbImgs() {
 	for (const b of document.querySelectorAll('[data-img]')) {
 		const k = b.dataset.img;
-		if (!IMG[k]) { try { const r = await fetch('/api/admin/feedback/' + k.replace(':', '/img/'), { headers: { authorization: 'Bearer ' + KEY } }); if (!r.ok) throw 0; IMG[k] = URL.createObjectURL(await r.blob()); } catch (x) { b.innerHTML = '<span class="muted">截图读不出来</span>'; continue; } }
+		if (!IMG[k]) { try { const r = await fetch('/api/admin/feedback/' + k.replace(':', '/img/'), { headers: hdr() }); if (!r.ok) throw 0; IMG[k] = URL.createObjectURL(await r.blob()); } catch (x) { b.innerHTML = '<span class="muted">截图读不出来</span>'; continue; } }
 		b.innerHTML = `<img src="${IMG[k]}" alt="截图">`;
 	}
 }
@@ -464,7 +478,7 @@ $('fbs').onclick = async (e) => {
 	if (lg) {
 		lg.disabled = true;
 		try {
-			const r = await fetch('/api/admin/feedback/' + lg.dataset.log + '/log', { headers: { authorization: 'Bearer ' + KEY } }); if (!r.ok) throw new Error('日志读不出来');
+			const r = await fetch('/api/admin/feedback/' + lg.dataset.log + '/log', { headers: hdr() }); if (!r.ok) throw new Error('日志读不出来');
 			const t = await r.text(), w = document.createElement('div'); w.className = 'dlg'; w.style.alignItems = 'center';
 			w.innerHTML = `<div class="card" style="width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>安装日志</h3><span><button class="btn sm" data-copy>复制</button> <button class="btn sm" data-x>关闭</button></span></div><pre style="flex:1;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.55;margin:10px 0 0;padding:10px;border-radius:10px;background:var(--fill)"></pre></div>`;
 			w.querySelector('pre').textContent = t;

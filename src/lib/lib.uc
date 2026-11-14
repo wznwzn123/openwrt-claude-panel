@@ -62,9 +62,20 @@ function notify(lvl, kind, title, body, tag) {
    存到 /tmp/cmcp_ann.json 给面板看（定时任务每 30 分钟取一次）；取不到时保留上次的，5 分钟后再试 */
 const ANN_HUB = 'https://yrlove520.com', ANN_CACHE = '/tmp/cmcp_ann.json';
 function ann_hub() { let m = match(readfile(D + '/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/); return m ? replace(trim(m[2]), /\/+$/, '') : ANN_HUB; }
+// 匿名编号（5.0）：公告统计「多少台收到、多少台点开」用；随机生成存在路由器上，跟账号、密钥、IP 都没关系
+function ann_rid() {
+	let f = D + '/rid', r = trim(readfile(f) ?? '');
+	if (match(r, /^[a-f0-9]{16}$/)) return r;
+	let b = readfile('/dev/urandom', 8) ?? '';
+	r = '';
+	for (let i = 0; i < length(b); i++) r += sprintf('%02x', ord(b, i));
+	if (length(r) != 16) r = substr(sprintf('%08x%08x', time(), int(time() * 7919) % 4294967291), 0, 16);
+	writefile(f, r);
+	return r;
+}
 function ann_get(url, tmo) {
 	let j = null;
-	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices')))); } catch (e) {}
+	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices?r=' + ann_rid())))); } catch (e) {}
 	return type(j) == 'object' && j.ok && type(j.list) == 'array' ? j.list : null;
 }
 function ann_fetch(tmo) {
@@ -152,4 +163,4 @@ function local_key() {
 	return k;
 }
 
-export { D, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ANN_CACHE };
+export { D, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };

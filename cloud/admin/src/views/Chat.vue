@@ -5,6 +5,7 @@ import Icon from '@/components/Icon.vue'
 import Button from '@/components/ui/Button.vue'
 import IconButton from '@/components/ui/IconButton.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import Segmented from '@/components/ui/Segmented.vue'
 import Tag from '@/components/ui/Tag.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import { blobUrl, del, get, post, type ChatMsg, type ChatThread } from '@/api'
@@ -19,6 +20,8 @@ const route = useRoute()
 const router = useRouter()
 const threads = ref<ChatThread[]>([])
 const q = ref('')
+// 筛选（5.0）：全部 / 等我回复 / 已解决
+const view = ref<'all' | 'wait' | 'done'>('all')
 const cur = ref<string>(String(route.query.t || ''))
 const msgs = ref<ChatMsg[]>([])
 const seq = ref(0)
@@ -33,7 +36,7 @@ const loaded = ref(false)
 const thread = computed(() => threads.value.find(t => t.tid === cur.value) || null)
 const shown = computed(() => {
   const k = q.value.trim().toLowerCase()
-  return threads.value.filter(t => !k || [t.name, t.model, t.sub, t.tid, t.preview].join(' ').toLowerCase().includes(k))
+  return threads.value.filter(t => (view.value === 'all' || (view.value === 'done' ? !!t.done : !t.done && t.lastFrom === 'u')) && (!k || [t.name, t.model, t.sub, t.tid, t.preview].join(' ').toLowerCase().includes(k)))
 })
 const COLORS = ['#2457F5', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#30b0c7', '#5e5ce6']
 const colorOf = (t: ChatThread) => COLORS[[...t.tid].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length]
@@ -98,6 +101,11 @@ async function block(on: boolean) {
   if (on && !(await confirm({ title: '拉黑这个对话', message: `拉黑以后「${t.name}」不能再发消息（之前的记录还在），随时可以解除。`, confirmText: '拉黑', danger: true }))) return
   try { await post(`chat/${t.tid}/${on ? 'block' : 'unblock'}`); pushToast(on ? '已拉黑' : '已解除拉黑'); loadThreads() } catch (e) { toastError(e, '没成功') }
 }
+// 已解决（5.0）：问题处理完了标一下，列表里分开；对方再发消息会自动重新打开
+async function setDone(on: boolean) {
+  const t = thread.value; if (!t) return
+  try { await post(`chat/${t.tid}/${on ? 'done' : 'undone'}`); t.done = on ? Date.now() : 0; pushToast(on ? '标为已解决：对方再发消息会自动重新打开' : '重新打开了'); loadThreads() } catch (e) { toastError(e, '没成功') }
+}
 async function remove() {
   const t = thread.value; if (!t) return
   if (!(await confirm({ title: '删除对话', message: `「${t.name}」的全部消息和图片都会删掉，不能恢复。对方再发消息会开一个新对话。`, confirmText: '删除', danger: true }))) return
@@ -123,18 +131,20 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
     <PageHeader title="实时对话" desc="用户在面板里点「实时联系开发者」发来的消息。回复后托管版会马上推送到对方手机，自建版半小时内推送；对方开着对话页几秒内就能看到。">
       <Tag v-if="badges.chat" tone="danger" dot>{{ badges.chat }} 条没看</Tag>
     </PageHeader>
+    <div class="chat-cq">
     <div :class="['chat-wrap reveal', cur && 'has-open']">
       <section class="panel m-surface chat-side">
         <div class="hub-tools"><TextInput v-model="q" icon="search" placeholder="搜路由器名、型号、内容" clearable /></div>
+        <div class="chat-filter"><Segmented v-model="view" label="筛选对话" :options="[{ label: '全部', value: 'all' }, { label: '等我回复', value: 'wait' }, { label: '已解决', value: 'done' }]" /></div>
         <div class="chat-threads">
           <button v-for="t in shown" :key="t.tid" type="button" :class="['chat-th', t.tid === cur && 'is-on']" @click="open(t.tid)">
             <span class="chat-av" :style="{ background: colorOf(t) }">{{ (t.name || '?').slice(0, 1).toUpperCase() }}</span>
             <span class="chat-th-main">
               <span class="chat-th-top"><span>{{ t.name || t.tid }}</span><time>{{ short(t.last) }}</time></span>
-              <span class="chat-th-sub"><span>{{ t.lastFrom === 'a' ? '我：' : '' }}{{ t.preview }}</span><em v-if="t.ua" class="nav-badge" style="margin: 0">{{ t.ua }}</em><Tag v-else-if="t.blocked" tone="danger">已拉黑</Tag></span>
+              <span class="chat-th-sub"><span>{{ t.lastFrom === 'a' ? '我：' : '' }}{{ t.preview }}</span><em v-if="t.ua" class="nav-badge" style="margin: 0">{{ t.ua }}</em><Tag v-else-if="t.blocked" tone="danger">已拉黑</Tag><Tag v-else-if="t.done" tone="ok">已解决</Tag></span>
             </span>
           </button>
-          <div v-if="loaded && !shown.length" class="chat-empty">{{ q ? '没找到' : '还没有人发消息。用户在面板侧边栏「消息与帮助 → 实时联系开发者」里发的消息会出现在这里。' }}</div>
+          <div v-if="loaded && !shown.length" class="chat-empty">{{ q ? '没找到' : view === 'done' ? '还没有标为已解决的对话' : view === 'wait' ? '没有在等你回复的对话' : '还没有人发消息。用户在面板侧边栏「消息与帮助 → 实时联系开发者」里发的消息会出现在这里。' }}</div>
         </div>
       </section>
       <section class="panel m-surface chat-main">
@@ -146,6 +156,8 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
               <b><span>{{ thread.name }}</span><Tag :tone="thread.kind === 'hosted' ? 'info' : 'neutral'">{{ thread.kind === 'hosted' ? '托管版' : '自建版' }}</Tag></b>
               <span><em class="kind-sm">{{ thread.kind === 'hosted' ? '托管版' : '自建版' }} · </em>{{ [thread.model, thread.ver ? 'v' + thread.ver : '', thread.sub, thread.place, thread.dev].filter(Boolean).join(' · ') }}</span>
             </div>
+            <Button class="act-txt" size="sm" :variant="thread.done ? 'secondary' : 'ghost'" @click="setDone(!thread.done)">{{ thread.done ? '重新打开' : '已解决' }}</Button>
+            <IconButton class="act-ico" name="check" :label="thread.done ? '重新打开' : '标为已解决'" @click="setDone(!thread.done)" />
             <Button class="act-txt" size="sm" :variant="thread.blocked ? 'secondary' : 'ghost'" @click="block(!thread.blocked)">{{ thread.blocked ? '解除拉黑' : '拉黑' }}</Button>
             <Button class="act-txt" size="sm" variant="ghost" @click="remove">删除</Button>
             <IconButton class="act-ico" name="ban" :label="thread.blocked ? '解除拉黑' : '拉黑'" :danger="thread.blocked" @click="block(!thread.blocked)" />
@@ -154,7 +166,8 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
           <div ref="box" class="chat-msgs">
             <template v-for="(r, i) in rows" :key="i">
               <div v-if="r.day" class="chat-day">{{ r.day }}</div>
-              <div v-else-if="r.m" :class="['chat-row', r.m.f === 'a' && 'me']">
+              <div v-else-if="r.m" :class="['chat-row', r.m.f === 'a' && 'me', r.m.auto && 'is-auto']">
+                <div v-if="r.m.auto" class="chat-auto">自动回复（你不在线时发的）</div>
                 <div class="chat-bub">
                   <img v-if="r.m.img && imgs[r.m.s]" :src="imgs[r.m.s]" alt="图片" @click="viewImage(imgs[r.m.s])">
                   <span v-else-if="r.m.img" class="soft2">图片加载中…</span>
@@ -178,6 +191,7 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
         </template>
         <div v-else class="chat-empty">选左边的一个对话开始回复<br><span class="faint">{{ threads.length }} 个对话 · 最近一条 {{ threads[0] ? ago(threads[0].last) : '—' }}</span></div>
       </section>
+    </div>
     </div>
   </div>
 </template>

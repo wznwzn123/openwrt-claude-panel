@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="panel-ver" content="dev"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" id="tcm" content="#f2f2f7">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>我的路由器</title>
+<link rel="manifest" href="./manifest.json"><link rel="icon" type="image/png" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png">
+<script>try{var d=localStorage.getItem("rp_dark");if(d==="1"||(d===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}
+try{var N=navigator,dm=N.deviceMemory,hc=N.hardwareConcurrency;if(/Android/i.test(N.userAgent)&&((dm&&dm<=2)||(hc&&hc<=4)))document.documentElement.classList.add("lowfx")}catch(e){}
+try{var R=document.documentElement,g=localStorage.getItem("rp_glass"),w=localStorage.getItem("rp_wall"),b=localStorage.getItem("rp_wblur"),m=localStorage.getItem("rp_wdim");if(g==="1"||(g===null&&!matchMedia("(prefers-reduced-transparency: reduce)").matches))R.classList.add("glass");if(w)R.setAttribute("data-wall",w);R.style.setProperty("--wblur",(b===null?20:+b)+"px");R.style.setProperty("--wdim",(m===null?0:+m)/100)}catch(e){}
+// 手机最上面状态栏的颜色 = 页面最上面那一条的颜色（背景图顶部的平均色，再按「变暗」和深色模式压暗）；安卓 App 会读这个颜色，还会把状态栏变透明（RP_EDGE）
+var RP_EDGE=1,WALL_TOP={mist:"#e3e2f8",night:"#191e4a",aurora:"#2d5586",ocean:"#baddfe",sunset:"#ffcca8",mint:"#e2fbca",sakura:"#f4dff2",graphite:"#393d46"};
+function rpTop(){var R=document.documentElement,dk=R.classList.contains("dark");if(!R.classList.contains("glass"))return dk?"#000000":"#f2f2f7";var w=R.getAttribute("data-wall")||(dk?"night":"mist"),c=w==="photo"?(localStorage.getItem("rp_walltop")||"#888888"):(WALL_TOP[w]||"#888888"),m=localStorage.getItem("rp_wdim"),k=1-Math.min(.95,(m===null?0:+m)/100+(dk?.28:0)),n=parseInt(c.slice(1),16),h=function(v){v=Math.round(v*k);return(v<16?"0":"")+v.toString(16)};return"#"+h(n>>16&255)+h(n>>8&255)+h(n&255)}
+function rpBar(){try{document.getElementById("tcm").setAttribute("content",rpTop())}catch(e){}}
+try{rpBar()}catch(e){}</script>
+<style>

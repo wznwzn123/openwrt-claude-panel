@@ -184,10 +184,10 @@ Claude 能用的工具包括：路由器状态、设备列表、实时网速、�
 # 升级：面板里「一键更新」最省事（v2.0.2 起；更早的版本先手动升级一次）；或者下载新版解压后再运行一次，密钥和设置保留
 sh install.sh
 
-# 卸载：保留 /etc/claude-mcp 里的设置和记录
-sh uninstall.sh
+# 卸载：保留 /etc/claude-mcp 里的设置和记录（5.0 起装好后就有这个命令，不用再找安装包）
+cmcp-uninstall
 # 连设置一起删掉
-sh uninstall.sh --purge
+cmcp-uninstall --purge
 ```
 
 ## 文件位置

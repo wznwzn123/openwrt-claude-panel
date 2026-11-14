@@ -94,7 +94,7 @@ onMounted(load)
           <div class="hub-chips"><button v-for="(v, k) in FS" :key="k" type="button" :class="['hub-chip', f === k && 'is-on']" @click="f = k as string">{{ v.n }}<b>{{ devs.filter(v.f).length }}</b></button></div>
           <TextInput v-model="q" icon="search" placeholder="搜编号、名称、型号、备注" clearable />
         </div>
-        <p v-if="vdist.length" class="hub-row-meta" style="margin: 0 0 6px">各版本：<template v-for="(x, i) in vdist" :key="x.v"><b :class="x.old && 'bad'">{{ x.v === '?' ? '版本未知' : 'v' + x.v }}</b> {{ x.n }} 台<template v-if="i < vdist.length - 1"> · </template></template><template v-if="latest"> · 最新 v{{ latest }}</template></p>
+        <p v-if="vdist.length" class="hub-row-meta" style="margin-top: 0; margin-bottom: 6px">各版本：<template v-for="(x, i) in vdist" :key="x.v"><b :class="x.old && 'bad'">{{ x.v === '?' ? '版本未知' : 'v' + x.v }}</b> {{ x.n }} 台<template v-if="i < vdist.length - 1"> · </template></template><template v-if="latest"> · 最新 v{{ latest }}</template></p>
         <p v-if="f === 'bin'" class="hub-row-meta">回收站：网址已停用，隧道和数据都还在，随时可以恢复；到期自动彻底删除。</p>
         <div class="hub-list">
           <div v-for="d in shown" :key="d.sub" class="hub-row">

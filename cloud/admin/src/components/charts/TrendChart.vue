@@ -185,7 +185,7 @@ onMounted(() => {
     shown.value = target.value
     shown2.value = target2.value
   })
-  if (box.value) observer.observe(box.value)
+  if (box.value) { width.value = Math.round(box.value.clientWidth) || width.value; observer.observe(box.value) }
 })
 onBeforeUnmount(() => {
   observer?.disconnect()

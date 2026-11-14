@@ -181,7 +181,8 @@
 .cat-5 { --cat-bg: var(--cat-5-bg); --cat-ink: var(--cat-5-ink); }
 
 /* ── 趋势图 ─────────────────────────────────────────────────── */
-.trend { position: relative; width: 100%; touch-action: pan-y; }
+.trend { position: relative; width: 100%; min-width: 0; overflow: hidden; touch-action: pan-y; }
+.trend > svg { max-width: 100%; }
 .trend svg { display: block; overflow: visible; }
 .trend.tone-blue { --trend-ink: var(--blue); }
 .trend.tone-ink { --trend-ink: var(--ink); }

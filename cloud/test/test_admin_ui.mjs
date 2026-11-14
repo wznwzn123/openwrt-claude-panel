@@ -51,7 +51,7 @@ const A = await api('/api/chat', { op: 'anon', name: 'OpenWrt-x86', model: 'x86/
 await api('/api/chat', { cid: A.cid, ckey: A.ckey, op: 'send', text: '自建版也能问吗？' + '很长的一句话'.repeat(12) });
 await api('/api/dev/feedback', { sub: R1.sub, rkey: R1.rkey, text: '首页的流量图不动了', contact: '微信 ming', images: [PNG] });
 const RP = await api('/api/report', { kind: 'install', text: '面板版本：3.1.3\n失败的步骤：安装依赖\n错误：opkg 崩溃', log: 'Segmentation fault\n'.repeat(30), email: 'ming@x.com' });
-for (const [p, ip] of [['/', '1.2.3.4'], ['/', '1.2.3.4'], ['/app', '5.6.7.8'], ['/r', '9.9.9.9']]) await realFetch(B + p, { headers: { 'x-ip': ip } });
+for (const [p, ip] of [['/', '1.2.3.4'], ['/', '1.2.3.4'], ['/app', '5.6.7.8'], ['/privacy', '2001:b011:7c05:1a2b:3c4d:5e6f:7a8b:9c0d'], ['/r', '9.9.9.9']]) await realFetch(B + p, { headers: { 'x-ip': ip } });
 await realFetch(B + '/api/account/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ email: 'x@x.com', password: 'wrong-pass' }) });
 await realFetch(B + '/api/admin/devices', { headers: { authorization: 'Bearer wrong-key-123456789' } });
 ok('[准备] 安装失败上报成功', !!RP.code, JSON.stringify(RP));
@@ -77,6 +77,11 @@ const overlap = (p) => p.evaluate(() => {
 		const x = a.getBoundingClientRect(), y = b.getBoundingClientRect();
 		if (x.left < y.right - 2 && y.left < x.right - 2 && x.top < y.bottom - 2 && y.top < x.bottom - 2) bad.push((a.className || a.tagName).toString().slice(0, 24) + '×' + (b.className || b.tagName).toString().slice(0, 24));
 	}
+	// 任何没被裁切/横向滚动容器包住的元素超出屏幕右边
+	const inBox = (e) => { for (let q = e.parentElement; q && q !== document.body; q = q.parentElement) { const cs = getComputedStyle(q); if (cs.overflowX !== 'visible' && q.getBoundingClientRect().right <= innerWidth + 1) return true; } return false; };
+	for (const e of document.querySelectorAll('.content *, .topbar *')) { const r = e.getBoundingClientRect(); if (r.width && r.right > innerWidth + 1 && !inBox(e)) { bad.push('超出屏幕：' + (e.className || e.tagName).toString().slice(0, 24) + ' ' + (e.textContent || '').trim().slice(0, 10)); break; } }
+	// 卡片里的内容不能贴着卡片边
+	for (const pn of document.querySelectorAll('.panel')) { const L = pn.getBoundingClientRect().left; for (const c of pn.children) { if (c.matches('.panel-head, .table-wrap') || !c.getBoundingClientRect().width) continue; if (c.getBoundingClientRect().left - L < 8) { bad.push('贴边：' + (c.className || c.tagName).toString().slice(0, 24)); break; } } }
 	return [...new Set(bad)].slice(0, 6).join('；');
 });
 const W = (ms) => new Promise((z) => setTimeout(z, ms));
@@ -84,7 +89,7 @@ const browser = await chromium.launch();
 for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 	if (process.env.ONLY && process.env.ONLY !== dn + (dark ? '-dark' : '')) continue;
 	const sfx = ' [' + dn + (dark ? ' 深色' : '') + ']';
-	const ctx = await browser.newContext({ ...dv, colorScheme: dark ? 'dark' : 'light', extraHTTPHeaders: { 'x-ip': '10.1.' + Object.keys(DEV).indexOf(dn) + '.' + (dark ? 2 : 1) } });
+	const ctx = await browser.newContext({ ...dv, colorScheme: dark ? 'dark' : 'light', extraHTTPHeaders: { 'x-ip': dn === 'android' ? '2402:7500:5d2:9c41:a1b2:c3d4:e5f6:' + (dark ? 'aaaa' : 'bbbb') : '10.1.' + Object.keys(DEV).indexOf(dn) + '.' + (dark ? 2 : 1) } });
 	const page = await ctx.newPage(); const errs = [], cons = [], ext = [];
 	page.on('pageerror', (e) => errs.push(e.message));
 	page.on('console', (m) => { if (m.type() === 'error' && !/401|429|Failed to load resource/.test(m.text())) cons.push(m.text()); });
@@ -105,6 +110,12 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		const o = await overlap(page), sw = await page.evaluate(() => document.documentElement.scrollWidth);
 		ok(`「${pg}」打开了，排版不重叠、不超出、没有横向滚动` + sfx, !o && sw <= dv.viewport.width + 1 && !/页面不存在/.test(await page.textContent('.content')), o + ' 宽' + sw);
 		if (pg !== 'dashboard') await shot(pg);
+	}
+	if (dv.isMobile) {
+		// 页面上多出一个很宽的东西时，手机也不能把整页排成两倍宽（用户截图里只看到左半边的问题）
+		await page.goto(B + '/admin#/visits'); await W(1200);
+		const iw = await page.evaluate(async () => { const d = document.createElement('div'); d.style.cssText = 'position:absolute;left:0;top:0;width:900px;height:4px'; document.body.append(d); await new Promise(r => setTimeout(r, 400)); const w = innerWidth; d.remove(); return w; });
+		ok('手机：页面不会被撑成两倍宽' + sfx, iw === dv.viewport.width, '宽 ' + iw);
 	}
 	// 实时对话：打开对话 → 看到用户发的图片 → 回复文字和图片
 	await page.goto(B + '/admin#/chat'); await W(1200);

@@ -1,0 +1,23 @@
+{
+  "name": "openwrt-claude-panel-promo",
+  "private": true,
+  "description": "OpenWrt Claude Panel 90s promo (Remotion)",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render:main": "remotion render src/index.ts Promo90 out/openwrt-claude-panel-promo-90s.mp4",
+    "render:vertical": "remotion render src/index.ts Vertical60 out/promo-vertical-60s.mp4"
+  },
+  "dependencies": {
+    "remotion": "4.0.519",
+    "@remotion/cli": "4.0.519",
+    "@remotion/bundler": "4.0.519",
+    "@remotion/renderer": "4.0.519",
+    "@remotion/media-utils": "4.0.519",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "typescript": "5.9.3"
+  }
+}

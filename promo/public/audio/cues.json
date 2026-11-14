@@ -1,0 +1,477 @@
+[
+ {
+  "t": 0.0,
+  "name": "flash-cut",
+  "gain": 0.9
+ },
+ {
+  "t": 1.0,
+  "name": "paparazzi-flash",
+  "gain": 0.9
+ },
+ {
+  "t": 1.9,
+  "name": "paparazzi-flash",
+  "gain": 0.9
+ },
+ {
+  "t": 3.0,
+  "name": "monitor-cut",
+  "gain": 0.8
+ },
+ {
+  "t": 3.4,
+  "name": "rgb-glitch",
+  "gain": 0.6
+ },
+ {
+  "t": 5.05,
+  "name": "collapse-whoosh",
+  "gain": 0.8
+ },
+ {
+  "t": 6.0,
+  "name": "word-reveal",
+  "gain": 0.5
+ },
+ {
+  "t": 10.3,
+  "name": "rush-whoosh",
+  "gain": 0.9
+ },
+ {
+  "t": 11.8,
+  "name": "spotlight-sweep",
+  "gain": 0.55
+ },
+ {
+  "t": 12.2,
+  "name": "phone-land",
+  "gain": 0.5
+ },
+ {
+  "t": 16.435,
+  "name": "ripple-crt",
+  "gain": 0.6
+ },
+ {
+  "t": 16.655,
+  "name": "ripple",
+  "gain": 0.45
+ },
+ {
+  "t": 18.504,
+  "name": "ripple-crt",
+  "gain": 0.6
+ },
+ {
+  "t": 18.724,
+  "name": "ripple",
+  "gain": 0.45
+ },
+ {
+  "t": 19.359,
+  "name": "slide",
+  "gain": 0.6
+ },
+ {
+  "t": 20.276,
+  "name": "plate-pop",
+  "gain": 0.6
+ },
+ {
+  "t": 21.31,
+  "name": "plate-pop",
+  "gain": 0.6
+ },
+ {
+  "t": 23.379,
+  "name": "plate-pop",
+  "gain": 0.6
+ },
+ {
+  "t": 27.5,
+  "name": "act-out",
+  "gain": 0.5
+ },
+ {
+  "t": 28.27,
+  "name": "stack-thump",
+  "gain": 0.7
+ },
+ {
+  "t": 28.43,
+  "name": "stack-thump",
+  "gain": 0.7
+ },
+ {
+  "t": 28.59,
+  "name": "stack-thump",
+  "gain": 0.7
+ },
+ {
+  "t": 28.769,
+  "name": "fan-out",
+  "gain": 0.5
+ },
+ {
+  "t": 31.6,
+  "name": "plugin-detect",
+  "gain": 0.22
+ },
+ {
+  "t": 32.0,
+  "name": "plugin-detect",
+  "gain": 0.22
+ },
+ {
+  "t": 32.4,
+  "name": "plugin-detect",
+  "gain": 0.22
+ },
+ {
+  "t": 32.8,
+  "name": "plugin-detect",
+  "gain": 0.22
+ },
+ {
+  "t": 33.2,
+  "name": "plugin-detect",
+  "gain": 0.22
+ },
+ {
+  "t": 33.6,
+  "name": "plugin-detect",
+  "gain": 0.22
+ },
+ {
+  "t": 35.081,
+  "name": "tap",
+  "gain": 0.8
+ },
+ {
+  "t": 34.731,
+  "name": "push-in",
+  "gain": 0.35
+ },
+ {
+  "t": 35.781,
+  "name": "latency-lock",
+  "gain": 0.3
+ },
+ {
+  "t": 36.631,
+  "name": "node-fail",
+  "gain": 0.45
+ },
+ {
+  "t": 37.281,
+  "name": "auto-switch",
+  "gain": 0.6
+ },
+ {
+  "t": 38.029,
+  "name": "seg-b",
+  "gain": 0.5
+ },
+ {
+  "t": 39.511,
+  "name": "bar-shoot",
+  "gain": 0.6
+ },
+ {
+  "t": 39.931,
+  "name": "ceiling-crack",
+  "gain": 0.55
+ },
+ {
+  "t": 40.191,
+  "name": "axis-rescale",
+  "gain": 0.5
+ },
+ {
+  "t": 42.517,
+  "name": "toggle",
+  "gain": 0.85
+ },
+ {
+  "t": 42.711,
+  "name": "lock",
+  "gain": 0.45
+ },
+ {
+  "t": 43.719,
+  "name": "seg-c",
+  "gain": 0.5
+ },
+ {
+  "t": 45.119,
+  "name": "share-tap",
+  "gain": 0.7
+ },
+ {
+  "t": 45.769,
+  "name": "icon-pop",
+  "gain": 0.45
+ },
+ {
+  "t": 46.369,
+  "name": "icon-tap",
+  "gain": 0.7
+ },
+ {
+  "t": 47.319,
+  "name": "fingerprint",
+  "gain": 0.3
+ },
+ {
+  "t": 48.119,
+  "name": "unlock",
+  "gain": 0.45
+ },
+ {
+  "t": 44.419,
+  "name": "paste-tap",
+  "gain": 0.6
+ },
+ {
+  "t": 45.069,
+  "name": "add-tap",
+  "gain": 0.6
+ },
+ {
+  "t": 45.189,
+  "name": "panel-open",
+  "gain": 0.35
+ },
+ {
+  "t": 46.419,
+  "name": "router-added",
+  "gain": 0.35
+ },
+ {
+  "t": 49.181,
+  "name": "router-switch",
+  "gain": 0.7
+ },
+ {
+  "t": 54.0,
+  "name": "claude-enter",
+  "gain": 0.6
+ },
+ {
+  "t": 57.217,
+  "name": "converge",
+  "gain": 0.6
+ },
+ {
+  "t": 58.034,
+  "name": "console",
+  "gain": 0.5
+ },
+ {
+  "t": 58.7,
+  "name": "greeting",
+  "gain": 0.4
+ },
+ {
+  "t": 59.05,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 59.94,
+  "name": "send",
+  "gain": 0.55
+ },
+ {
+  "t": 61.45,
+  "name": "amber-beam",
+  "gain": 0.5
+ },
+ {
+  "t": 61.82,
+  "name": "core-impact",
+  "gain": 0.6
+ },
+ {
+  "t": 62.05,
+  "name": "claude-reply",
+  "gain": 0.5
+ },
+ {
+  "t": 63.85,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 64.68,
+  "name": "send",
+  "gain": 0.55
+ },
+ {
+  "t": 66.8,
+  "name": "claude-reply",
+  "gain": 0.5
+ },
+ {
+  "t": 67.698,
+  "name": "dictation-typing",
+  "gain": 0.6
+ },
+ {
+  "t": 69.188,
+  "name": "send",
+  "gain": 0.55
+ },
+ {
+  "t": 71.325,
+  "name": "claude-reply",
+  "gain": 0.5
+ },
+ {
+  "t": 60.06,
+  "name": "thinking",
+  "gain": 0.25
+ },
+ {
+  "t": 60.862,
+  "name": "tool-chip",
+  "gain": 0.35
+ },
+ {
+  "t": 64.8,
+  "name": "thinking",
+  "gain": 0.25
+ },
+ {
+  "t": 65.6,
+  "name": "tool-chip",
+  "gain": 0.35
+ },
+ {
+  "t": 69.308,
+  "name": "thinking",
+  "gain": 0.25
+ },
+ {
+  "t": 69.588,
+  "name": "tool-chip",
+  "gain": 0.35
+ },
+ {
+  "t": 69.938,
+  "name": "confirm-ask",
+  "gain": 0.4
+ },
+ {
+  "t": 70.725,
+  "name": "confirm-ok",
+  "gain": 0.75
+ },
+ {
+  "t": 61.85,
+  "name": "hero-pulse",
+  "gain": 0.55
+ },
+ {
+  "t": 66.62,
+  "name": "flip-reorder",
+  "gain": 0.4
+ },
+ {
+  "t": 71.857,
+  "name": "uci-backup",
+  "gain": 0.45
+ },
+ {
+  "t": 73.5,
+  "name": "scanline-wipe",
+  "gain": 0.75
+ },
+ {
+  "t": 74.4,
+  "name": "scan-sweep",
+  "gain": 0.35
+ },
+ {
+  "t": 75.352,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 75.432,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 75.684,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 75.764,
+  "name": "sonar-lock",
+  "gain": 0.5
+ },
+ {
+  "t": 76.6,
+  "name": "wechat-notice",
+  "gain": 0.55
+ },
+ {
+  "t": 79.25,
+  "name": "wechat-notice",
+  "gain": 0.55
+ },
+ {
+  "t": 81.428,
+  "name": "hud-to-aurora",
+  "gain": 0.55
+ },
+ {
+  "t": 82.35,
+  "name": "terminal-typing",
+  "gain": 0.45
+ },
+ {
+  "t": 84.414,
+  "name": "enter",
+  "gain": 1.0
+ },
+ {
+  "t": 84.434,
+  "name": "collapse",
+  "gain": 0.5
+ },
+ {
+  "t": 84.754,
+  "name": "core-burst",
+  "gain": 0.55
+ },
+ {
+  "t": 85.448,
+  "name": "converge-flash",
+  "gain": 0.55
+ },
+ {
+  "t": 85.531,
+  "name": "assemble-drop",
+  "gain": 0.6
+ },
+ {
+  "t": 85.79,
+  "name": "assemble-drop",
+  "gain": 0.6
+ },
+ {
+  "t": 86.049,
+  "name": "assemble-drop",
+  "gain": 0.6
+ },
+ {
+  "t": 86.224,
+  "name": "brand-sparkle",
+  "gain": 0.35
+ }
+]

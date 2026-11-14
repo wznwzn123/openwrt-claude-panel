@@ -19,7 +19,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	for (const scheme of ['light', 'dark']) {
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: scheme, deviceScaleFactor: 2 });
 		const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
-		await page.addInitScript(() => { try { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); if (!localStorage.getItem('x')) { localStorage.setItem('rp_page', 'proxy'); localStorage.setItem('x', 1); } } catch (e) {} });
+		await page.addInitScript(() => { try { localStorage.setItem('rp_token', 'testtokentesttokentest'); if (!localStorage.getItem('x')) { localStorage.setItem('rp_page', 'proxy'); localStorage.setItem('x', 1); } } catch (e) {} });
 		await page.goto('http://localhost:8151/panel/'); await W(scheme === 'dark' ? 30000 : 5000);
 		if (scheme === 'dark') { await page.evaluate(() => { document.documentElement.classList.add('dark'); }); await W(300); await page.screenshot({ path: path.join(__dirname, 'shots', 'main-dark.png') }); await ctx.close(); continue; }
 		ok('新打开面板：默认是首页（就算上次停在别的页面）', await page.isVisible('#p-main') && (await page.textContent('#pageTitle')) === '首页');

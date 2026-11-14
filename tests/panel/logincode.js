@@ -5,7 +5,7 @@ const { respond } = require('./mock');
 const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') : path.join(__dirname, '..', '..', 'src', 'www', 'panel'));
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
-const TOK = 'tok1234567890abcdefgh';
+const TOK = 'testtokentesttokentest';
 let hosted = true, ai = true;
 const DEVS = { old00001: { s: 'x'.repeat(32), name: 'iPhone · Safari', at: 1761900000, via: '账号 al***@x.com' } };
 const calls = []; let n = 0;

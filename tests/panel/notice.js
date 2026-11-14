@@ -38,7 +38,7 @@ const OUT = path.join(__dirname, 'shots');
 		const sfx = dark ? '-dark' : '';
 		const c = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light', userAgent: 'Mozilla/5.0 (Linux; Android 14; 23127PN0CC Build/UKQ1) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 RouterPanelApp/3.1.3' });
 		const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-		await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh'));
+		await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest'));
 		await p.clock.install();
 		await p.goto('http://localhost:8155/panel/'); await p.clock.runFor(2000); await p.waitForTimeout(300);
 		ok('顶栏有铃铛' + sfx, await p.isVisible('#bellBtn'));
@@ -103,7 +103,7 @@ const OUT = path.join(__dirname, 'shots');
 	// 窄屏 320、宽屏 1280：顶栏不挤
 	for (const w of [320, 360, 1280]) {
 		const c = await b.newContext({ viewport: { width: w, height: 800 }, deviceScaleFactor: 1 }); const p = await c.newPage();
-		await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh'));
+		await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest'));
 		await p.goto('http://localhost:8155/panel/?p=notice'); await p.waitForTimeout(2500);
 		ok('宽 ' + w + '：顶栏不重叠、不超出', !(await overlap(p, '#topbar .brand > *, #bellBtn, #topbar .topcap')), await overlap(p, '#topbar .brand > *, #bellBtn, #topbar .topcap'));
 		ok('宽 ' + w + '：通知页不重叠、没有横向滚动', !(await overlap(p, '#p-notice .hero > *, .ntent button, .ntpin, .ntit > *, .ntm > *')) && (await p.evaluate(() => document.documentElement.scrollWidth)) <= w, await overlap(p, '#p-notice .hero > *, .ntent button, .ntpin, .ntit > *, .ntm > *'));
@@ -112,7 +112,7 @@ const OUT = path.join(__dirname, 'shots');
 	}
 	// 没有公告、没有新通知：铃铛不显示数字；不在 App 里：没有 App 那条
 	SEEN = { t: T + 864e5, pop: ['abcdefghij'] }; UPDNEW = false;
-	{ const c = await b.newContext({ viewport: { width: 390, height: 844 } }); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh')); await p.clock.install();
+	{ const c = await b.newContext({ viewport: { width: 390, height: 844 } }); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest')); await p.clock.install();
 		await p.goto('http://localhost:8155/panel/'); await p.clock.runFor(9000); await p.waitForTimeout(600);
 		ok('都看过了：铃铛没有数字、不弹公告', await p.isHidden('#bellN') && !(await p.isVisible('.modal[data-ann]')));
 		await p.click('#bellBtn'); await p.waitForTimeout(900);

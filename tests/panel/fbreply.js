@@ -36,7 +36,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		const ctx = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light' });
 		await ctx.route('https://yrlove520.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'ok' }));
 		const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(e.message));
-		await page.addInitScript((d) => { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
+		await page.addInitScript((d) => { localStorage.setItem('rp_token', 'testtokentesttokentest'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
 		await page.goto('http://localhost:8153/panel/'); return { ctx, page, errs };
 	};
 	// 1 没有回复：不弹
@@ -165,7 +165,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		const ctx2 = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light' });
 		await ctx2.route('https://yrlove520.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'ok' }));
 		const pg = await ctx2.newPage(); const er = []; pg.on('pageerror', (e) => er.push(e.message));
-		await pg.addInitScript((d) => { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
+		await pg.addInitScript((d) => { localStorage.setItem('rp_token', 'testtokentesttokentest'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
 		await pg.clock.install(); await pg.goto('http://localhost:8153/panel/?p=myfb'); await pg.waitForTimeout(2500);
 		const sfx = dark ? '（深色）' : '';
 		if (!dark) {
@@ -217,7 +217,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	// 8 面板开着、在别的页面：标了「已收到」，一分钟内弹出来；切回前台也会马上查
 	LIST = MY().map((x) => ({ ...x, seen: x.updated }));
 	ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
-	page = await ctx.newPage(); await page.addInitScript(() => { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); });
+	page = await ctx.newPage(); await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtokentesttokentest'); });
 	await page.clock.install(); await page.goto('http://localhost:8153/panel/'); await page.waitForTimeout(5000);
 	ok('都看过了：不弹窗', !(await page.isVisible('.modal[data-fbr]')));
 	LIST = LIST.map((x) => (x.code === 'SENT2345' ? { ...x, stage: 2, ackAt: Date.now(), updated: Date.now() } : x));

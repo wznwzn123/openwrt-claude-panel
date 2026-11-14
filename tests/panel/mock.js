@@ -219,7 +219,7 @@ function respond(method, p) {
 	}
 	case 'node_check': return OC.nodeOk ? { ok: true, delay: 150 } : { ok: false, delay: 0 };
 	case 'quick': if (p.action === 'start') OC.running = true; if (p.action === 'stop') OC.running = false; return { ok: true, msg: '已执行 ' + p.action, text: p.action === 'debug' ? 'debug log...' : undefined };
-	case 'age': return p.op === 'public' ? { public: 'age1pubpubpub' } : { secret: 'AGE-SECRET-KEY-1ABCDEF', public: 'age1abcdef' };
+	case 'age': return p.op === 'public' ? { public: 'age1pubpubpub' } : { secret: 'AGE-SECRET-KEY-1AAAAAA', public: 'age1abcdef' };
 	case 'oc_sec': return { ok: true, sid: p.sid || 'cfgnew01' };
 	case 'black_state': return { entries: BL, devices: [{ ip: '192.168.5.8', mac: 'aa:bb:cc:dd:ee:ff', name: 'iPhone', online: true, stats: { conns: 12, dl: 123456789, ul: 1234567, proxied: 3 } }, { ip: '192.168.5.20', mac: '11:22:33:44:55:66', name: 'TV', online: true }, { ip: '192.168.5.9', mac: null, name: null, online: false }], ready: BLREADY.v, live: BLREADY.v, custom_on: true, lan_ac_mode: '0' };
 	case 'black_set': if (p.on) BL.push({ mac: p.mac || null, ip: p.ip, name: p.name || null, pinned: !!p.mac, at: 1793169000 }); else BL.splice(BL.findIndex((e) => (e.mac || e.ip) === (p.mac || p.ip)), 1); return { ok: true, ip: p.ip, pinned: !!p.mac, live: BLREADY.v, need_setup: !BLREADY.v };

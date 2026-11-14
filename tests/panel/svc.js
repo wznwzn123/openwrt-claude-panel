@@ -23,7 +23,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	const browser = await chromium.launch();
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
-	await page.addInitScript(() => { try { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); } catch (e) {} });
+	await page.addInitScript(() => { try { localStorage.setItem('rp_token', 'testtokentesttokentest'); } catch (e) {} });
 	await page.goto('http://localhost:8155/panel/'); await W(2500);
 	ok('快到期（还剩 3 天以内）：首页最上面提示「托管服务还剩 3 天到期」，有「申请续期」按钮', await page.isVisible('#mSvc') && /还剩 3 天到期/.test(await page.textContent('#mSvcT')));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'svc-home.png') });

@@ -38,7 +38,7 @@ const LAY = '.chhero .chtop > *, #chTips, .chrow, .chbub, .chday, .chbox, .chin 
 	for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		reset(); const sfx = '-' + dn + (dark ? '-dark' : '');
 		const c = await b.newContext({ ...dv, colorScheme: dark ? 'dark' : 'light' }); const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-		await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh'));
+		await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest'));
 		await p.goto('http://localhost:8156/panel/?p=chat'); await p.waitForTimeout(1500);
 		const first = dn === 'android' && !dark;
 		ok('打开就是对话页，有说明' + sfx, await p.isVisible('#p-chat') && /这是干嘛的/.test(await p.textContent('#chTips')) && /别发密码/.test(await p.textContent('#chTips')));
@@ -94,19 +94,19 @@ const LAY = '.chhero .chtop > *, #chTips, .chrow, .chbub, .chday, .chbox, .chin 
 	}
 	// 拉黑
 	reset({ blocked: true, msgs: [{ s: 1, f: 'u', t: T, x: 'hi' }], seq: 1 });
-	{ const c = await b.newContext(DEV.android); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh')); await p.goto('http://localhost:8156/panel/?p=chat'); await p.waitForTimeout(1500);
+	{ const c = await b.newContext(DEV.android); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest')); await p.goto('http://localhost:8156/panel/?p=chat'); await p.waitForTimeout(1500);
 		ok('被拉黑：输入框不能用，说明原因', await p.isDisabled('#chText') && await p.isDisabled('#chSend') && /暂时不能发消息/.test(await p.textContent('#chNote')));
 		await c.close(); }
 	// 自建版：还没对话
 	reset({ hosted: false, none: true });
-	{ const c = await b.newContext(DEV.android); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh')); await p.goto('http://localhost:8156/panel/?p=chat'); await p.waitForTimeout(1500);
+	{ const c = await b.newContext(DEV.android); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest')); await p.goto('http://localhost:8156/panel/?p=chat'); await p.waitForTimeout(1500);
 		ok('自建版：说明第一次发消息时自动建立对话、回复半小时内推送', /自建版也能用/.test(await p.textContent('#chSub')) && /半小时内推送/.test(await p.textContent('#chNote')));
 		await p.fill('#chText', '自建版能问吗'); await p.click('#chSend'); await p.waitForTimeout(700);
 		ok('自建版：能发', S.sends.length === 1);
 		await c.close(); }
 	// 别的页面：开发者回复了 → 铃铛 + 侧边栏红点 + 通知里一条
 	reset({ msgs: [{ s: 1, f: 'u', t: T - 6e4, x: 'hi' }, { s: 2, f: 'a', t: T, x: '回复' }], seq: 2, uu: 1 });
-	{ const c = await b.newContext(DEV.android); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'tok1234567890abcdefgh')); await p.clock.install(); await p.goto('http://localhost:8156/panel/'); await p.clock.runFor(8000); await p.waitForTimeout(600);
+	{ const c = await b.newContext(DEV.android); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest')); await p.clock.install(); await p.goto('http://localhost:8156/panel/'); await p.clock.runFor(8000); await p.waitForTimeout(600);
 		ok('在别的页：铃铛上显示开发者回复', (await p.textContent('#bellN')) === '1');
 		await p.click('#menuBtn'); await p.waitForTimeout(500);
 		ok('侧边栏「实时联系开发者」上有红点', (await p.textContent('#sidenav button[data-p="chat"]')).includes('1'));

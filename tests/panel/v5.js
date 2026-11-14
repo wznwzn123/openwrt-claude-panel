@@ -20,7 +20,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	await new Promise((z) => server.listen(8164, z));
 	const B = 'http://localhost:8164/panel/';
 	const browser = await chromium.launch();
-	const mk = async (o = {}) => { const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ...o }); await ctx.addInitScript(() => { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); }); return ctx; };
+	const mk = async (o = {}) => { const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, ...o }); await ctx.addInitScript(() => { localStorage.setItem('rp_token', 'testtokentesttokentest'); }); return ctx; };
 	const W = (ms) => new Promise((z) => setTimeout(z, ms));
 
 	// 1. 脚本出错自动上报

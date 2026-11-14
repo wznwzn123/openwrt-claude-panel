@@ -87,7 +87,7 @@ const W = (ms) => new Promise((z) => setTimeout(z, ms));
 		await ctx.route(/^https?:\/\/(?!panel\.test)/, (r) => r.fulfill({ status: 200, body: '{}' }));
 		const page = await ctx.newPage(); const errs = [];
 		page.on('pageerror', (e) => errs.push(e.message));
-		await page.addInitScript((d) => { localStorage.setItem('rp_token', 'tok1234567890abcdefgh'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
+		await page.addInitScript((d) => { localStorage.setItem('rp_token', 'testtokentesttokentest'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
 		try {
 			for (const pg of PAGES) {
 				await page.goto('http://panel.test/panel/?p=' + pg); await W(1800);

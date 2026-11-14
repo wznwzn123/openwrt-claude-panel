@@ -363,3 +363,10 @@
   .nav-group + .nav-group { margin-top: 8px; }
   .nav-group-title { padding: 4px 10px; }
 }
+
+/* 工作区宽度锁死在屏幕宽：不管浏览器怎么算「内容区」（有的手机浏览器不把它当成滚动区），
+   里面再宽的表格、图表都只能在自己的滑动区里滑，不会把整个工作区撑宽 */
+.workspace { grid-template-columns: minmax(0, 1fr); }
+.workspace > .topbar, .workspace > .content { min-width: 0; max-width: 100%; }
+.content > * { min-width: 0; max-width: 100%; }
+.page { min-width: 0; }

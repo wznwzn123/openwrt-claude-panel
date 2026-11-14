@@ -167,6 +167,14 @@ for (const [dn, dv] of Object.entries(DEV)) for (const font of FONTS) for (const
 			const after = await page.evaluate((k) => document.querySelectorAll('.hs.is-on .hs-sc')[k].scrollLeft, k);
 			ok('手机：拖滑动条，内容跟着左右动' + tag, after > before + 20, before + '→' + after + ' k=' + k + ' ' + JSON.stringify(bb));
 		}
+		// 有的手机浏览器（用户的安卓 Edge）不把内容区当成滚动区来算宽度：模拟这种情况，工作区也不能被里面的宽表格、图表撑宽
+		if (font === '普通' && !dark) for (const pg of ['visits', 'oplog', 'dashboard', 'logins']) {
+			await page.goto(B + '/admin#/' + pg); await W(1400);
+			await page.addStyleTag({ content: '.content{overflow:visible!important}' }); await W(400);
+			const r = await page.evaluate(() => ({ top: Math.round(document.querySelector('.topbar').getBoundingClientRect().right), page: Math.round(document.querySelector('.page').getBoundingClientRect().width), w: innerWidth }));
+			ok(`「${pg}」浏览器不把内容区当滚动区时，整页也不会被撑宽（顶栏按钮都在屏幕里）` + tag, r.top <= r.w + 1 && r.page <= r.w + 1, JSON.stringify(r));
+			await page.reload(); await W(800);
+		}
 		ok('没有脚本报错' + tag, !errs.length, errs.slice(0, 2).join(' | '));
 	} catch (e) { ok('跑完' + tag, false, e.message.split('\n')[0]); }
 	await ctx.close();

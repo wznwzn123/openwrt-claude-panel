@@ -156,7 +156,7 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
                 <div class="chat-bub">
                   <img v-if="r.m.img && imgs[r.m.s]" :src="imgs[r.m.s]" alt="图片" @click="viewImage(imgs[r.m.s])">
                   <span v-else-if="r.m.img" class="soft2">图片加载中…</span>
-                  {{ r.m.x }}
+                  <span v-if="r.m.x" class="chat-tx">{{ r.m.x }}</span>
                 </div>
                 <span class="chat-meta" :title="full(r.m.t)">{{ tm(r.m.t) }}</span>
               </div>

@@ -72,7 +72,7 @@ const M = {
 		for (const [k, s] of all) {
 			const age = now - Date.parse(k.slice(3) + 'T00:00:00+08:00');
 			if (age > 180 * DAY) del.push(k);
-			else if (age > 31 * DAY && s && s.ipn) { s.ip = {}; s.ipStripped = 1; await this.ctx.storage.put(k, s); } // 访客 IP 只留 30 天，计数留着
+			else if (age > 31 * DAY && s && s.ip && Object.keys(s.ip).length) { s.ip = {}; s.ipStripped = 1; await this.ctx.storage.put(k, s); } // 访客 IP 只留 30 天，计数留着
 		}
 		for (let i = 0; i < del.length; i += 128) await this.ctx.storage.delete(del.slice(i, i + 128));
 		const ll = (await this.ctx.storage.get('ll')) || [];

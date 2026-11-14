@@ -12,6 +12,7 @@ W, H = info['width'], info['height']; num, den = map(int, info['r_frame_rate'].s
 T = 12.0   # 64px 块的最大平均差阈值：编码误差约 2–5，缺块故障 30 以上
 os.makedirs(outdir, exist_ok=True)
 tmp = os.path.abspath(f'out/vote_tmp_{comp}')
+BUNDLE = os.path.abspath('out/.bundle_vote')   # 整次表决复用同一份打包
 def small(x):  # RGB → 1/4 灰度
     g = x.astype(np.float32).mean(2)
     return g[:H // 4 * 4, :W // 4 * 4].reshape(H // 4, 4, W // 4, 4).mean((1, 3))
@@ -23,7 +24,7 @@ def decode(f0, n):
     return np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3)
 def render(frames_spec, d):
     shutil.rmtree(d, ignore_errors=True)
-    env = dict(os.environ, OUTDIR=d)
+    env = dict(os.environ, OUTDIR=d, BUNDLE_DIR=BUNDLE)
     r = subprocess.run(['node', 'scripts/render_frames.mjs', comp, *frames_spec], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-2000:]
     return os.path.join(d, comp)
@@ -51,4 +52,4 @@ if disagree:
         elif d_o3 <= T: pass                                                                                    # 第二遍是坏帧，成片正确
         else: unresolved.append((n, round(d_o3, 1), round(d_23, 1)))
 print(f'{comp}: 不一致 {len(disagree)} 帧 → 成片坏帧（需替换）{len(fix)}：{fix}；无法判定：{unresolved}')
-for d in (tmp + '_r2', tmp + '_r3', tmp + '_keep'): shutil.rmtree(d, ignore_errors=True)
+for d in (tmp + '_r2', tmp + '_r3', tmp + '_keep', BUNDLE): shutil.rmtree(d, ignore_errors=True)

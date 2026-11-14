@@ -5,7 +5,11 @@ import { selectComposition, renderFrames } from '@remotion/renderer';
 import fs from 'node:fs'; import path from 'node:path';
 const [comp, ...specs] = process.argv.slice(2);
 const ranges = specs.map((s) => { const [a, b] = s.split('-').map(Number); return [a, b ?? a]; });
-const serveUrl = await bundle({ entryPoint: path.resolve('src/index.ts') });
+// 第八版：BUNDLE_DIR 指定时复用同一份打包（每次重新打包会在 /tmp 留下约 240MB，批量调用会写满磁盘）
+const BUNDLE_DIR = process.env.BUNDLE_DIR && path.resolve(process.env.BUNDLE_DIR);
+const serveUrl = BUNDLE_DIR && fs.existsSync(path.join(BUNDLE_DIR, 'index.html')) ? BUNDLE_DIR
+  : await bundle({ entryPoint: path.resolve('src/index.ts'), ...(BUNDLE_DIR ? { outDir: BUNDLE_DIR } : {}) });
+const tmpBundle = BUNDLE_DIR ? null : serveUrl;
 const chromiumOptions = { gl: 'swangle' };
 const composition = await selectComposition({ serveUrl, id: comp, chromiumOptions });
 const out = path.resolve(process.env.OUTDIR || 'out/patch', comp); fs.mkdirSync(out, { recursive: true });
@@ -19,4 +23,5 @@ for (const [a, b] of ranges) {
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`${comp} ${a}-${b} ✓`);
 }
+if (tmpBundle) fs.rmSync(tmpBundle, { recursive: true, force: true });   // 不复用时用完即删
 process.exit(0);

@@ -115,7 +115,9 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 	ok('对话头部：路由器名、托管版、型号、版本' + sfx, /托管版/.test(await page.textContent('.chat-head')) && /JDCloud/.test(await page.textContent('.chat-head')) && /v4\.0\.0/.test(await page.textContent('.chat-head')));
 	await shot('chat-open');
 	const reply = '收到！先重启一下 OpenClash 试试 ' + dn + (dark ? 'd' : '');
-	await page.fill('.chat-in textarea', reply); await page.keyboard.press('Enter'); await W(1200);
+	await page.fill('.chat-in textarea', reply);
+	if (dv.isMobile) { await page.keyboard.press('Enter'); await W(300); ok('手机上回车是换行，不会误发' + sfx, (await page.inputValue('.chat-in textarea')).includes('\n')); await page.fill('.chat-in textarea', reply); await page.click('.chat-in button:has-text("发送")'); } else await page.keyboard.press('Enter');
+	await W(1200);
 	const um = await api('/api/chat', { sub: R1.sub, rkey: R1.rkey, op: 'get', after: 0 });
 	ok('回复发出去了，用户那边拿得到' + sfx, um.msgs.some((m) => m.f === 'a' && m.x === reply), JSON.stringify(um.msgs.slice(-2)));
 	await page.setInputFiles('.chat-in input[type=file]', { name: 'shot.png', mimeType: 'image/png', buffer: Buffer.from(PNG.split(',')[1], 'base64') }); await W(800);

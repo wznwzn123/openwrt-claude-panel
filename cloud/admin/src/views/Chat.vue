@@ -90,7 +90,9 @@ async function send() {
   } catch (e) { toastError(e, '没发出去') }
   finally { sending.value = false }
 }
-function onKey(e: KeyboardEvent) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send() } }
+// 电脑上回车发送（Shift+回车换行）；手机上回车是换行，点「发送」才发
+const desk = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+function onKey(e: KeyboardEvent) { if (desk && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send() } }
 async function block(on: boolean) {
   const t = thread.value; if (!t) return
   if (on && !(await confirm({ title: '拉黑这个对话', message: `拉黑以后「${t.name}」不能再发消息（之前的记录还在），随时可以解除。`, confirmText: '拉黑', danger: true }))) return
@@ -167,7 +169,7 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
             <div class="chat-in">
               <IconButton name="image" label="发图片" @click="file?.click()" />
               <input ref="file" type="file" accept="image/*" hidden @change="pick">
-              <textarea v-model="text" rows="2" maxlength="2000" placeholder="回复…（回车发送，Shift+回车换行）" @keydown="onKey" />
+              <textarea v-model="text" rows="2" maxlength="2000" :placeholder="desk ? '回复…（回车发送，Shift+回车换行）' : '回复…'" @keydown="onKey" />
               <Button variant="primary" icon="send" :loading="sending" :disabled="!text.trim() && !img" @click="send">发送</Button>
             </div>
           </div>

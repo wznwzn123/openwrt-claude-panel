@@ -8,13 +8,13 @@
     "render:vertical": "remotion render src/index.ts Vertical60 out/promo-vertical-60s.mp4"
   },
   "dependencies": {
-    "remotion": "4.0.519",
-    "@remotion/cli": "4.0.519",
-    "@remotion/bundler": "4.0.519",
-    "@remotion/renderer": "4.0.519",
-    "@remotion/media-utils": "4.0.519",
+    "@remotion/bundler": "4.0.543",
+    "@remotion/cli": "4.0.543",
+    "@remotion/media-utils": "4.0.543",
+    "@remotion/renderer": "4.0.543",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "remotion": "4.0.543"
   },
   "devDependencies": {
     "@types/react": "19.2.14",

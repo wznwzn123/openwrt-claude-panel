@@ -11,8 +11,8 @@ import soundfile as sf
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 48000
-# 第十版：使用商用授权曲（audio/music_edit.py 剪辑）作为 11.8s 之后的配乐；设 SYNTH_ONLY=1 回到纯合成配乐
-MUSIC = None if os.environ.get('SYNTH_ONLY') else '../public/audio/music/main_edit.wav'
+# 可选：USE_MUSIC=1 时用商用授权曲（audio/music_edit.py 剪辑）作为 11.8s 之后的配乐
+MUSIC = '../public/audio/music/main_edit.wav' if os.environ.get('USE_MUSIC') else None   # 默认合成配乐（第九版成片）；USE_MUSIC=1 使用授权曲
 DUR = 90.0
 N = int(SR * DUR)
 rng = np.random.default_rng(20261112)

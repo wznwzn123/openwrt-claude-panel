@@ -24,7 +24,7 @@ B = pad(cut(b, [(0.0, 234 / 30), (323 / 30, 323 / 30 + (668 - 234) / 30), (1518 
 B[-int(0.6 * SR):] *= np.linspace(1, 0, int(0.6 * SR))[:, None] ** 1.5   # 结尾和弦 0.6s 收尽
 # 第十版：8.83s（产品登场）起换成剪好的授权曲（Future Bass，见 music_edit.py），开场暗场段仍取主片合成配乐
 import os
-if not os.environ.get('SYNTH_ONLY'):
+if os.environ.get('USE_MUSIC'):
     mv, _ = sf.read(f'{A}/music/vertical_edit.wav', always_2d=True); mv = pad(mv)
     tv = np.arange(N) / SR; D0 = 7.8 + (11.8 - 323 / 30)
     keep = np.clip((D0 + 0.3 - tv) / 0.3, 0, 1)[:, None]
@@ -37,7 +37,7 @@ g = np.zeros(N); cur = 0
 for i in range(0, N, 48):
     tgt = act[i]; c = np.exp(-48 / (0.04 * SR)) if tgt > cur else np.exp(-48 / (0.3 * SR))
     cur = tgt + (cur - tgt) * c; g[i:i + 48] = cur
-duck = 10 ** (-(5 if os.environ.get('SYNTH_ONLY') else 7) * g / 20)   # 第十版：Future Bass 能量更足，闪避加深到 -7dB
+duck = 10 ** (-(7 if os.environ.get('USE_MUSIC') else 5) * g / 20)   # 第十版：Future Bass 能量更足，闪避加深到 -7dB
 mix = V + B * duck[:, None] + S
 sf.write(f'{A}/vertical_premaster.wav', mix.astype(np.float32), SR)
 print(len(mix) / SR)

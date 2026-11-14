@@ -6,7 +6,7 @@ import { AuroraBG, BrandMark, Grain, Phone, Vignette } from './lib/visual';
 /* 发布封面（静帧）：横版 16:9（B 站 / 视频号）、竖版 9:16（抖音）、竖版 3:4（小红书）
    主标题要在缩略图里一眼读出：「不用公网 IP」；副标题讲清是什么；手机里是仓库真实界面（演示数据） */
 
-type Layout = 'h' | 'v' | 'x';
+type Layout = 'h' | 'v' | 'x' | 'w';   // w = 横版 4:3
 
 const grad = `linear-gradient(90deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`;
 
@@ -37,14 +37,15 @@ const Phones: React.FC<{ w: number; spread: number }> = ({ w, spread }) => (
 );
 
 export const Cover: React.FC<{ layout: Layout }> = ({ layout }) => {
-  const H = layout === 'h';
+  const W43 = layout === 'w';
+  const H = layout === 'h' || W43;
   const V = layout === 'v';
-  const headSize = H ? 168 : V ? 150 : 140;
-  const subSize = H ? 60 : V ? 62 : 56;
+  const headSize = W43 ? 124 : H ? 168 : V ? 150 : 140;
+  const subSize = W43 ? 46 : H ? 60 : V ? 62 : 56;
   const chips = ['不用开端口', '手机直接管', '接入 Claude', '开源 MIT'];
   const text = (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: H ? 'flex-start' : 'center', textAlign: H ? 'left' : 'center' }}>
-      <Brand size={H ? 92 : 96} text={H ? 46 : 48} />
+      <Brand size={W43 ? 76 : H ? 92 : 96} text={W43 ? 38 : H ? 46 : 48} />
       <div style={{ marginTop: H ? 42 : 46, fontFamily: FONT.sans, fontWeight: 900, fontSize: headSize, lineHeight: 1.04, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
         <span style={{ color: C.text }}>不用</span>
         <span style={{ background: grad, WebkitBackgroundClip: 'text', color: 'transparent' }}>公网 IP</span>
@@ -55,8 +56,8 @@ export const Cover: React.FC<{ layout: Layout }> = ({ layout }) => {
       <div style={{ marginTop: H ? 18 : 20, fontFamily: FONT.sans, fontWeight: 600, fontSize: subSize * 0.62, color: C.text2, whiteSpace: 'nowrap' }}>
         出门在外也能连回家
       </div>
-      <div style={{ marginTop: H ? 40 : 44, display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: H ? 'flex-start' : 'center', maxWidth: H ? 900 : 960 }}>
-        {chips.map((c) => <Chip key={c} size={H ? 30 : 34}>{c}</Chip>)}
+      <div style={{ marginTop: H ? 40 : 44, display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: H ? 'flex-start' : 'center', maxWidth: W43 ? 560 : H ? 900 : 960 }}>
+        {chips.map((c) => <Chip key={c} size={W43 ? 26 : H ? 30 : 34}>{c}</Chip>)}
       </div>
     </div>
   );
@@ -65,9 +66,9 @@ export const Cover: React.FC<{ layout: Layout }> = ({ layout }) => {
       <AuroraBG t={3} intensity={1.15} />
       <Vignette strength={0.45} />
       {H && (
-        <AbsoluteFill style={{ flexDirection: 'row', alignItems: 'center', padding: '0 110px', justifyContent: 'space-between' }}>
+        <AbsoluteFill style={{ flexDirection: 'row', alignItems: 'center', padding: W43 ? '0 72px' : '0 110px', justifyContent: 'space-between' }}>
           {text}
-          <div style={{ marginRight: 20 }}><Phones w={330} spread={250} /></div>
+          <div style={{ marginRight: W43 ? 0 : 20 }}><Phones w={W43 ? 270 : 330} spread={W43 ? 180 : 250} /></div>
         </AbsoluteFill>
       )}
       {!H && (

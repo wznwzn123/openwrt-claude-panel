@@ -154,7 +154,7 @@ export const Act3: React.FC = () => {
   const pushA = 1 + 0.3 * (ramp(t, 36.85, 0.45, EASE.smooth) - ramp(t, 39.95, 0.45, EASE.smooth));
   const swB = vertical ? 278 : 316;
   const pxB = vertical ? W / 2 : W * 0.24;
-  const pyB = vertical ? H * 0.3 : cy;
+  const pyB = vertical ? H * 0.27 : cy;   // 第八版修：竖屏字幕上移到 ~72%，流量卡与小手机整体上提
   const pushB = 1 + (vertical ? 0 : 0.3) *   // 第七版 0.45→0.3：推近时流量图标签不再落进字幕区（审片 B6）；第八版竖屏不推镜：流量卡已近满宽，推近会左右出画
     (ramp(t, 44.05, 0.4, EASE.smooth) - ramp(t, 45.3, 0.4, EASE.smooth));
   const togX = pxB + ((313 - 180) / 360) * swB * (vertical ? 0.82 : 1);
@@ -173,7 +173,7 @@ export const Act3: React.FC = () => {
       <Abs style={{ inset: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.05))', boxShadow: 'inset 1.5px 0 0 rgba(255,255,255,0.35)' }} />
       <Abs style={{ inset: 0, transform: `scale(${pushB})`, transformOrigin: `${togX}px ${togY}px` }}>
         <Abs style={{ inset: 0, transform: `scale(${1 + 0.03 * ramp(t, SEG_B, SEG_C - SEG_B, EASE.linear)})` }}>
-          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 160} y={vertical ? H * 0.52 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 470 : 690} o={1} />
+          <TrafficPanel t={t} x={vertical ? 60 : W * 0.43 + (1 - panelK) * 160} y={vertical ? H * 0.43 : 210} w={vertical ? W - 120 : W * 0.5} h={vertical ? 420 : 690} o={1} />
         </Abs>
         <Pose x={pxB} y={pyB} sw={swB} s={vertical ? 0.82 : 1} ry={8 + 2 * Math.sin(t * 0.6)}>
           <Phone w={swB} full>
@@ -197,10 +197,10 @@ export const Act3: React.FC = () => {
             const sw = vertical ? 440 : 306; // 竖屏双机放大到并排满宽（审片 B12）
             return (
               <React.Fragment key={i}>
-                <Pose x={x} y={vertical ? H * 0.47 : cy + 30} sw={sw} s={1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
+                <Pose x={x} y={vertical ? H * 0.44 : cy + 30} sw={sw} s={1} ry={(i ? -8 : 8) + 2 * Math.sin(t * 0.6 + i)}>
                   {i === 0 ? <Phone w={sw} full><PwaFlow t={t} w={sw} a={SEG_C} /></Phone> : <Phone w={sw} full dark><AndroidFlow t={t} w={sw} a={SEG_C} /></Phone>}
                 </Pose>
-                <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.47 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
+                <div style={{ position: 'absolute', left: x - 300, width: 600, top: vertical ? H * 0.44 + 340 : 146, textAlign: 'center', opacity: ramp(t, SEG_C + 0.4, 0.5, EASE.out) }}>
                   {!vertical && (
                     <>
                       <div style={{ fontFamily: FONT.sans, fontWeight: 800, fontSize: 30, color: C.text, whiteSpace: 'nowrap' }}>{i === 0 ? '添加到主屏幕' : '安卓 App'}</div>

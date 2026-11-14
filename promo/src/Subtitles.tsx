@@ -13,7 +13,7 @@ export const phrases = () =>
 export const SubtitleLine: React.FC<{ text: string; opacity?: number }> = ({ text, opacity = 1 }) => {
   const { vertical, W, H } = useV();
   return (
-    <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? H * 0.135 : 56, textAlign: 'center', opacity }}>
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: vertical ? H * 0.25 : 56 /* 第八版修：竖屏字幕中心从约 84% 上移到约 72% 高度，避开抖音底部文案栏（审片 B-11） */, textAlign: 'center', opacity }}>
       <span style={{ fontFamily: FONT.sans, fontWeight: 500, fontSize: vertical ? 44 : 42, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.94)', textShadow: '0 2px 10px rgba(0,0,0,0.75), 0 0 2px rgba(0,0,0,0.9)', padding: '4px 22px', borderRadius: 10, background: 'rgba(5,7,12,0.62)', backdropFilter: 'blur(8px)', maxWidth: W - 120, display: 'inline-block', textWrap: 'balance' } as React.CSSProperties}>
         {text}
       </span>

@@ -126,7 +126,7 @@ const DaemonLayer: React.FC<{ w: number }> = ({ w }) => (
 const PLATE_DATA = [
   { k: '跑在自带的 ucode + uhttpd 上', d: '不用装 Python、Node、Docker', icon: '⌁', col: C.violet },
   { k: '面板本体约 2MB', d: '隧道组件 cloudflared 另计 · 小闪存可放内存运行', icon: '◫', col: C.blue },
-  { k: 'Cloudflare 加密隧道', d: '不用公网 IP · 不用开端口 · 出门也能连回家', icon: '⟁', col: C.cyan },
+  { k: '云端加密隧道', d: '不用公网 IP · 不用开端口 · 出门也能连回家', icon: '⟁', col: C.cyan },
 ];
 
 export const Act2: React.FC = () => {
@@ -195,7 +195,7 @@ export const Act2: React.FC = () => {
               </Phone>
             </div>
             {/* 层标注 */}
-            {['玻璃交互层 · PWA', '加密隧道层 · Cloudflare', '守护进程层 · ucode'].map((s, i) => {
+            {['玻璃交互层 · PWA', '加密隧道层 · 云端', '守护进程层 · ucode'].map((s, i) => {
               const k = ramp(t, EXPLODE + 0.5 + i * 0.25, 0.4, EASE.out);
               return (
                 <div key={s} style={{ position: 'absolute', left: [sw * 0.3, sw * 0.12, sw * 0.12][i], top: [-92, sw * 0.04 - 132, sw * 0.04 - 172][i], transform: `translate3d(${[0, -280, -560][i] * ex}px, ${[0, -55, -110][i] * ex + bob(i)}px, ${[60, -130, -260][i] * ex}px)`, opacity: k, whiteSpace: 'nowrap' }}>
@@ -218,7 +218,7 @@ export const Act2: React.FC = () => {
               <Dot color={C.ok} size={8} /> 开源项目 · MIT · <span style={{ fontFamily: FONT.mono }}>v3.1.3</span>
             </Pill>
           </div>
-          <div style={{ marginTop: 20, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 84 : 86, lineHeight: 1.04, letterSpacing: '-0.01em', color: C.text, opacity: ramp(t, 12.85, 0.7, EASE.out), transform: `translateY(${(1 - ramp(t, 12.85, 0.7, EASE.out)) * 16}px)`, whiteSpace: vertical ? 'normal' : 'nowrap', width: vertical ? W - 160 : undefined }}>
+          <div style={{ marginTop: 20, fontFamily: FONT.sans, fontWeight: 800, fontSize: vertical ? 66 : 86, lineHeight: 1.04, letterSpacing: '-0.01em', color: C.text, opacity: ramp(t, 12.85, 0.7, EASE.out), transform: `translateY(${(1 - ramp(t, 12.85, 0.7, EASE.out)) * 16}px)`, whiteSpace: 'nowrap', width: vertical ? W - 160 : undefined /* 第八版修：竖屏品牌名保持一行（审片 B-11） */ }}>
             OpenWrt <span style={{ background: `linear-gradient(90deg, ${C.iconA}, ${C.iconB} 50%, ${C.iconC})`, WebkitBackgroundClip: 'text', color: 'transparent' }}>Claude</span> Panel
           </div>
           <div style={{ marginTop: 26, fontFamily: FONT.sans, fontWeight: 600, fontSize: 38, color: C.text, letterSpacing: '0.04em', opacity: ramp(t, 16.2, 0.6, EASE.out), transform: `translateY(${(1 - ramp(t, 16.2, 0.6, EASE.out)) * 12}px)` }}>

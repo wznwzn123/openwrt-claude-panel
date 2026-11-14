@@ -27,7 +27,7 @@ const TARGETS = [
   // 坐标 = 真实面板「断线记录」页（shots/real/wd.png，CSS px，393 宽视口）里各状态胶囊的位置
   { x0: 33, y0: 247, x1: 140, y1: 283, label: '宽带拨号', note: '每 30s 巡检 · 正常' },
   { x0: 256, y0: 247, x1: 359, y1: 283, label: '⚠ DNS 解析', note: '异常 → 已恢复 · 已推送提醒' },
-  { x0: 33, y0: 291, x1: 140, y1: 327, label: 'Cloudflare 隧道', note: '4 条连接 · 已自动重连' },
+  { x0: 33, y0: 291, x1: 140, y1: 327, label: '云端隧道', note: '4 条连接 · 已自动重连' },
   { x0: 256, y0: 291, x1: 359, y1: 327, label: '扩展套件进程', note: '守护中 · 正常' },
 ];
 
@@ -50,11 +50,11 @@ const Notice: React.FC<{ t: number; at: number; title: string; body: string; slo
 
 const Watchdog: React.FC<{ t: number }> = ({ t }) => {
   const { W, H, vertical } = useV();
-  const sw = vertical ? 333 : 370;
+  const sw = vertical ? 270 : 370;   // 第八版修：竖屏缩小手机、标签上提，给上移后的字幕让位
   const k = sw / 393;
   const { pw, ph } = phoneBox(sw);
   const px = vertical ? W / 2 : W * 0.29;
-  const py = vertical ? H * 0.42 : H * 0.53;
+  const py = vertical ? H * 0.38 : H * 0.53;
   const left = px - pw / 2 + sw * PHONE_BEZEL;
   const top = py - ph / 2 + sw * PHONE_BEZEL; // 真实截图已含状态栏安全区
   const scanY = mix(-20, 870, ramp(t, SCAN0, SCAN1 - SCAN0, EASE.linear)); // 机器视线：严格匀速
@@ -94,7 +94,7 @@ const Watchdog: React.FC<{ t: number }> = ({ t }) => {
           const lk = ramp(t, ft + 0.12, 0.3, EASE.out);
           // 竖屏改为单列，避免长标注互相重叠（审片 A7）
           const labelX = vertical ? 60 : W * 0.47;
-          const labelY = vertical ? py + ph / 2 + 30 + i * 84 : 470 + i * 112;
+          const labelY = vertical ? py + ph / 2 + 30 + i * 72 : 470 + i * 112;
           const n = Math.floor(lk * (g.label.length + g.note.length + 3));
           const txt = `${g.label} · ${g.note}`.slice(0, n);
           return (
@@ -194,7 +194,7 @@ const Finale: React.FC<{ t: number }> = ({ t }) => {
   const enterFlash = t >= ENTER && t < ENTER + 0.15 ? 1 - (t - ENTER) / 0.15 : 0;
   const capData = [
     { k: '托管版 · 免折腾', a: '输入邀请码即得专属域名', b: '官网注册领 7 天免费试用', col: C.blue },
-    { k: '自建版 · 全掌控', a: '自己的 Cloudflare · 精简版可免账号', b: '可选加密云端备份 · MIT 协议开源', col: C.violet },
+    { k: '自建版 · 全掌控', a: '自己的云端账号 · 精简版可免账号', b: '可选加密云端备份 · MIT 协议开源', col: C.violet },
   ];
   return (
     <Abs style={{ inset: 0 }}>

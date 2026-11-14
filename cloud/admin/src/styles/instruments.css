@@ -181,8 +181,7 @@
 .cat-5 { --cat-bg: var(--cat-5-bg); --cat-ink: var(--cat-5-ink); }
 
 /* ── 趋势图 ─────────────────────────────────────────────────── */
-.trend { position: relative; width: 100%; min-width: 0; overflow: hidden; touch-action: pan-y; }
-.trend > svg { max-width: 100%; }
+.trend { position: relative; width: 100%; min-width: 0; overflow: hidden; touch-action: pan-x pan-y; }
 .trend svg { display: block; overflow: visible; }
 .trend.tone-blue { --trend-ink: var(--blue); }
 .trend.tone-ink { --trend-ink: var(--ink); }
@@ -223,7 +222,9 @@
 .tip-key.is-secondary { background: var(--red); }
 
 /* ── 柱状图 ─────────────────────────────────────────────────── */
-.bars { display: flex; flex-direction: column; gap: 8px; }
+.bars { display: flex; flex-direction: column; gap: 8px; touch-action: pan-x pan-y; }
+.bars.is-dense .bars-plot, .bars.is-dense .bars-labels { gap: 4px; }
+.bars.is-dense .bars-labels span { white-space: nowrap; }
 .bars-plot {
   flex: 1;
   min-height: 0;

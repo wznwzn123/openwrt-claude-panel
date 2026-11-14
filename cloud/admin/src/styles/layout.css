@@ -355,3 +355,11 @@
   .search-form .field, .search-form .field.is-wide { width: 100%; }
   .search-form .search-actions { margin-left: 0; }
 }
+
+/* 导航放不下时底部渐隐，提示还能往下滑；屏幕不高的电脑（1280×720、13 寸 Mac）导航排紧一点 */
+.rail-nav { -webkit-mask-image: linear-gradient(#000 calc(100% - 18px), transparent); mask-image: linear-gradient(#000 calc(100% - 18px), transparent); }
+@media (min-width: 821px) and (max-height: 940px) {
+  .nav-item, .nav-thumb { height: 34px; }
+  .nav-group + .nav-group { margin-top: 8px; }
+  .nav-group-title { padding: 4px 10px; }
+}

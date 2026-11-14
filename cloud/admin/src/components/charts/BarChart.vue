@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { gsap, motionSkipped, EASE } from '@/composables/motion'
+import HScroll from '@/components/ui/HScroll.vue'
 
 /* 柱状图：柱子从基线生长（结 Crystallize），highlight 柱用斜线填充表示「当前」。
    失败部分叠在柱顶，红色细段。悬停显示准星与读数。 */
@@ -11,7 +12,10 @@ const props = withDefaults(defineProps<{
   highlight?: number | null
   height?: number
   unit?: string
+  /** 每根柱子至少占多少像素；放不下时可以左右滑（0 = 不限） */
+  step?: number
 }>(), {
+  step: 0,
   failed: () => [],
   highlight: null,
   height: 168,
@@ -39,7 +43,8 @@ onBeforeUnmount(() => gsap.killTweensOf(bars.value?.querySelectorAll('.bar-col')
 </script>
 
 <template>
-  <div class="bars" :style="{ height: `${height}px` }" @pointerleave="hover = null">
+  <HScroll end label="左右滑看更早的日期">
+  <div :class="['bars', values.length > 14 && 'is-dense']" :style="{ height: `${height}px`, minWidth: step ? `${values.length * step}px` : undefined }" @pointerleave="hover = null">
     <div ref="bars" class="bars-plot" role="img" :aria-label="`柱状图，最高 ${Math.max(0, ...values)}${unit}`">
       <div
         v-for="(v, i) in values"
@@ -60,4 +65,5 @@ onBeforeUnmount(() => gsap.killTweensOf(bars.value?.querySelectorAll('.bar-col')
       <span v-for="(l, i) in labels" :key="i" :class="{ 'is-highlight': i === highlight }">{{ l }}</span>
     </div>
   </div>
+  </HScroll>
 </template>

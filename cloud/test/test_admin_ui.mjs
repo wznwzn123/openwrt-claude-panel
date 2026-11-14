@@ -81,7 +81,7 @@ const overlap = (p) => p.evaluate(() => {
 	const inBox = (e) => { for (let q = e.parentElement; q && q !== document.body; q = q.parentElement) { const cs = getComputedStyle(q); if (cs.overflowX !== 'visible' && q.getBoundingClientRect().right <= innerWidth + 1) return true; } return false; };
 	for (const e of document.querySelectorAll('.content *, .topbar *')) { const r = e.getBoundingClientRect(); if (r.width && r.right > innerWidth + 1 && !inBox(e)) { bad.push('超出屏幕：' + (e.className || e.tagName).toString().slice(0, 24) + ' ' + (e.textContent || '').trim().slice(0, 10)); break; } }
 	// 卡片里的内容不能贴着卡片边
-	for (const pn of document.querySelectorAll('.panel')) { const L = pn.getBoundingClientRect().left; for (const c of pn.children) { if (c.matches('.panel-head, .table-wrap') || !c.getBoundingClientRect().width) continue; if (c.getBoundingClientRect().left - L < 8) { bad.push('贴边：' + (c.className || c.tagName).toString().slice(0, 24)); break; } } }
+	for (const pn of document.querySelectorAll('.panel')) { const L = pn.getBoundingClientRect().left; for (const c of pn.children) { if (c.matches('.panel-head, .table-wrap, .bleed') || !c.getBoundingClientRect().width) continue; if (c.getBoundingClientRect().left - L < 8) { bad.push('贴边：' + (c.className || c.tagName).toString().slice(0, 24)); break; } } }
 	return [...new Set(bad)].slice(0, 6).join('；');
 });
 const W = (ms) => new Promise((z) => setTimeout(z, ms));

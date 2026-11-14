@@ -343,7 +343,10 @@
 .panel-body { padding: 0 20px 20px; }
 
 /* ── 数据表格 ───────────────────────────────────────────────── */
-.table-wrap { position: relative; overflow-x: auto; overflow-y: clip; }
+.table-wrap { position: relative; }
+/* 表格首尾两列和卡片里其它内容对齐 */
+.table th:first-child, .table td:first-child { padding-left: var(--edge, var(--cell-px)); }
+.table th:last-child, .table td:last-child { padding-right: var(--edge, var(--cell-px)); }
 .table {
   width: 100%;
   min-width: 720px;

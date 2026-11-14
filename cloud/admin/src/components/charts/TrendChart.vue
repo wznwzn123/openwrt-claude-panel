@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { drawPath, gsap, motionSkipped, EASE } from '@/composables/motion'
+import HScroll from '@/components/ui/HScroll.vue'
 
 /* 纯 SVG 趋势图：按容器真实宽度计算路径，线宽不被拉伸。
    - 数据切换时折线从旧形态形变到新形态（导 Conduct），不是擦掉重画
@@ -19,7 +20,10 @@ const props = withDefaults(defineProps<{
   /** 节点圆点：自动（点数 ≤ 12 时全部显示，否则只显示末点） */
   dots?: boolean
   tone?: 'blue' | 'ink'
+  /** 每个点至少占多少像素；点太多放不下时图变宽、可以左右滑（0 = 不限） */
+  step?: number
 }>(), {
+  step: 0,
   height: 220,
   unit: '',
   band: null,
@@ -33,7 +37,9 @@ const box = ref<HTMLElement | null>(null)
 const line = ref<SVGPathElement | null>(null)
 const area = ref<SVGPathElement | null>(null)
 const tip = ref<HTMLElement | null>(null)
-const width = ref(600)
+const hs = ref<InstanceType<typeof HScroll> | null>(null)
+const avail = ref(0)
+const width = computed(() => Math.max(avail.value || 320, props.step ? props.values.length * props.step + PAD.left + PAD.right : 0))
 const hover = ref<number | null>(null)
 const uid = Math.random().toString(36).slice(2, 8)
 const PAD = { top: 18, right: 14, bottom: 28, left: 38 }
@@ -179,13 +185,16 @@ function onLeave() {
 
 let observer: ResizeObserver | null = null
 onMounted(() => {
+  const root = (hs.value?.$el as HTMLElement | undefined)
+  if (!root) return
+  avail.value = Math.round(root.clientWidth)
   observer = new ResizeObserver(entries => {
-    width.value = Math.round(entries[0].contentRect.width)
+    avail.value = Math.round(entries[0].contentRect.width)
     morph?.kill()
     shown.value = target.value
     shown2.value = target2.value
   })
-  if (box.value) { width.value = Math.round(box.value.clientWidth) || width.value; observer.observe(box.value) }
+  observer.observe(root)
 })
 onBeforeUnmount(() => {
   observer?.disconnect()
@@ -196,10 +205,11 @@ watch(() => [props.values, props.secondary], morphTo, { immediate: true })
 </script>
 
 <template>
+  <HScroll ref="hs" end class="trend-hs" label="左右滑看更早的日期">
   <div
     ref="box"
     :class="['trend', `tone-${tone}`]"
-    :style="{ height: `${height}px` }"
+    :style="{ height: `${height}px`, width: `${width}px` }"
     @pointermove="onMove"
     @pointerleave="onLeave"
   >
@@ -256,4 +266,5 @@ watch(() => [props.values, props.secondary], morphTo, { immediate: true })
       <span v-if="secondary?.length" class="trend-tip-row"><i class="tip-key is-secondary" />{{ secondaryLabel }}<b class="tnum">{{ secondary[hover] }}{{ unit }}</b></span>
     </div>
   </div>
+  </HScroll>
 </template>

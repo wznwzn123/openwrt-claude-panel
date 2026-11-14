@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import Icon from '@/components/Icon.vue'
 import Checkbox from './Checkbox.vue'
+import HScroll from './HScroll.vue'
 import EmptyState from './EmptyState.vue'
 import { revealRows } from '@/composables/motion'
 
@@ -118,7 +119,7 @@ defineExpose({ expandAll, collapseAll })
 </script>
 
 <template>
-  <div class="table-wrap">
+  <HScroll class="table-wrap" label="表格可以左右滑">
     <table class="table" :style="minWidth ? { minWidth: `${minWidth}px` } : undefined" :aria-busy="loading">
       <thead>
         <tr>
@@ -172,5 +173,5 @@ defineExpose({ expandAll, collapseAll })
         </template>
       </tbody>
     </table>
-  </div>
+  </HScroll>
 </template>

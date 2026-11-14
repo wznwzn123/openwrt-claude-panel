@@ -9,6 +9,7 @@ import DataTable, { type Column } from '@/components/ui/DataTable.vue'
 import Pagination from '@/components/ui/Pagination.vue'
 import TrendChart from '@/components/charts/TrendChart.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import HScroll from '@/components/ui/HScroll.vue'
 import { get, type DayStat } from '@/api'
 import { usePaged } from '@/composables/paged'
 import { toastError } from '@/composables/toast'
@@ -56,7 +57,7 @@ onMounted(async () => { await load(); loadVisitors() })
         <section class="bento bento-third"><span class="side-label">机器人</span><Metric :value="loading ? null : sum(days.map(d => d.n.bot || 0))" unit="次" size="l" /></section>
       </div>
       <Panel title="每天的访问和访客" class="reveal">
-        <TrendChart v-if="days.length" :values="pv" :labels="labels" :secondary="uv" secondary-label="访客" primary-label="访问" :height="240" unit=" 次" />
+        <TrendChart v-if="days.length" :step="24" :values="pv" :labels="labels" :secondary="uv" secondary-label="访客" primary-label="访问" :height="240" unit=" 次" />
       </Panel>
       <div class="bento-grid reveal">
         <section class="bento bento-half">
@@ -71,7 +72,7 @@ onMounted(async () => { await load(); loadVisitors() })
         </section>
       </div>
       <Panel title="这段时间的各项次数" class="reveal">
-        <dl class="today-grid"><div v-for="c in counters" :key="c.k"><dt>{{ c.n }}</dt><dd :class="['tnum', (c.k.includes('fail') || c.k === 'err') && c.v && 'bad']">{{ c.v }}</dd></div></dl>
+        <HScroll bleed label="左右滑看全部"><dl class="today-grid strip"><div v-for="c in counters" :key="c.k"><dt>{{ c.n }}</dt><dd :class="['tnum', (c.k.includes('fail') || c.k === 'err') && c.v && 'bad']">{{ c.v }}</dd></div></dl></HScroll>
       </Panel>
       <Panel title="按天" class="reveal">
         <DataTable :columns="dayCols" :data="table" row-key="d" :loading="loading" :min-width="680">
@@ -82,7 +83,7 @@ onMounted(async () => { await load(); loadVisitors() })
       </Panel>
       <Panel :title="`访客 IP · ${day}`" :meta="visitors.length + ' 个'" class="reveal">
         <div class="hub-tools"><TextInput v-model="vq" icon="search" placeholder="搜 IP" clearable /><span class="hub-row-meta">点上面表格里的日期换一天</span></div>
-        <DataTable :columns="vCols" :data="view" row-key="ip" :loading="vLoading" empty-text="这一天没有访客（或者超过 30 天，IP 已经删了）">
+        <DataTable :columns="vCols" :data="view" row-key="ip" :min-width="300" :loading="vLoading" empty-text="这一天没有访客（或者超过 30 天，IP 已经删了）">
           <template #cell-ip="{ row }"><span class="mono">{{ row.ip }}</span></template>
         </DataTable>
         <Pagination v-if="total > pageSize" v-model:page="page" v-model:page-size="pageSize" :total="total" />

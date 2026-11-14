@@ -144,10 +144,12 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); Object.values(imgs
             <span class="chat-av" :style="{ background: colorOf(thread) }">{{ (thread.name || '?').slice(0, 1).toUpperCase() }}</span>
             <div class="t">
               <b><span>{{ thread.name }}</span><Tag :tone="thread.kind === 'hosted' ? 'info' : 'neutral'">{{ thread.kind === 'hosted' ? '托管版' : '自建版' }}</Tag></b>
-              <span>{{ [thread.model, thread.ver ? 'v' + thread.ver : '', thread.sub, thread.place, thread.dev].filter(Boolean).join(' · ') }}</span>
+              <span><em class="kind-sm">{{ thread.kind === 'hosted' ? '托管版' : '自建版' }} · </em>{{ [thread.model, thread.ver ? 'v' + thread.ver : '', thread.sub, thread.place, thread.dev].filter(Boolean).join(' · ') }}</span>
             </div>
-            <Button size="sm" :variant="thread.blocked ? 'secondary' : 'ghost'" @click="block(!thread.blocked)">{{ thread.blocked ? '解除拉黑' : '拉黑' }}</Button>
-            <Button size="sm" variant="ghost" @click="remove">删除</Button>
+            <Button class="act-txt" size="sm" :variant="thread.blocked ? 'secondary' : 'ghost'" @click="block(!thread.blocked)">{{ thread.blocked ? '解除拉黑' : '拉黑' }}</Button>
+            <Button class="act-txt" size="sm" variant="ghost" @click="remove">删除</Button>
+            <IconButton class="act-ico" name="ban" :label="thread.blocked ? '解除拉黑' : '拉黑'" :danger="thread.blocked" @click="block(!thread.blocked)" />
+            <IconButton class="act-ico" name="trash" label="删除这个对话" @click="remove" />
           </header>
           <div ref="box" class="chat-msgs">
             <template v-for="(r, i) in rows" :key="i">

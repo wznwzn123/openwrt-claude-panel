@@ -113,7 +113,7 @@ const KN: Record<string, string> = { user: '账号登录', admin: '管理后台'
             </dl>
           </div>
           <div class="hero-chart">
-            <TrendChart :values="pv" :labels="labels" :secondary="uv" secondary-label="访客" primary-label="访问" :height="212" unit=" 次" tone="ink" />
+            <TrendChart :step="24" :values="pv" :labels="labels" :secondary="uv" secondary-label="访客" primary-label="访问" :height="212" unit=" 次" tone="ink" />
           </div>
         </div>
         <div class="hero-actions">
@@ -135,7 +135,7 @@ const KN: Record<string, string> = { user: '账号登录', admin: '管理后台'
 
       <section class="bento bento-third">
         <div class="bento-head"><SectionLabel title="登录次数" /><span class="bento-meta tnum">失败 {{ sum(loginFail) }} 次</span></div>
-        <BarChart :values="loginOk.map((v, i) => v + loginFail[i])" :failed="loginFail" :labels="labels.map((l, i) => (range === 30 && i % 5 ? '' : l))" :highlight="labels.length - 1" unit=" 次" />
+        <BarChart :step="18" :values="loginOk.map((v, i) => v + loginFail[i])" :failed="loginFail" :labels="labels.map((l, i) => (range === 30 && i % 5 ? '' : l))" :highlight="labels.length - 1" unit=" 次" />
       </section>
       <section class="bento bento-third bento-ring">
         <div class="bento-head"><SectionLabel title="登录成功率" /><span class="bento-meta">近 {{ range }} 天</span></div>

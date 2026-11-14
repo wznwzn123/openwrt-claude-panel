@@ -28,7 +28,7 @@ def render(frames_spec, d):
     assert r.returncode == 0, r.stderr[-2000:]
     return os.path.join(d, comp)
 disagree = {}
-CH = 150
+CH = 60
 for c0 in range(a, b + 1, CH):
     c1 = min(b, c0 + CH - 1)
     rd = render([f'{c0}-{c1}'], tmp + '_r2')

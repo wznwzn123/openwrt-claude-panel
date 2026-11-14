@@ -8,7 +8,7 @@ const ranges = specs.map((s) => { const [a, b] = s.split('-').map(Number); retur
 const serveUrl = await bundle({ entryPoint: path.resolve('src/index.ts') });
 const chromiumOptions = { gl: 'swangle' };
 const composition = await selectComposition({ serveUrl, id: comp, chromiumOptions });
-const out = path.resolve('out/patch', comp); fs.mkdirSync(out, { recursive: true });
+const out = path.resolve(process.env.OUTDIR || 'out/patch', comp); fs.mkdirSync(out, { recursive: true });
 for (const [a, b] of ranges) {
   const tmp = path.join(out, `_tmp_${a}`); fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp);
   await renderFrames({ serveUrl, composition, frameRange: [a, b], outputDir: tmp, imageFormat: 'png', concurrency: 2, chromiumOptions,

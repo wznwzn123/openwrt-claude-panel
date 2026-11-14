@@ -30,14 +30,23 @@ async function save(patch: Record<string, unknown>) {
   try { cfg.value = (await post('v5cfg', patch)).cfg; pushToast('已保存') } catch (e) { toastError(e, '没保存上') }
 }
 const b64u = (s: string) => { const p = '='.repeat((4 - (s.length % 4)) % 4), b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, (c) => c.charCodeAt(0)) }
+const withTimeout = <T,>(p: Promise<T>, ms: number, msg: string) => Promise.race([p, new Promise<T>((_, no) => setTimeout(() => no(new Error(msg)), ms))])
+async function activeOf(reg: ServiceWorkerRegistration) {
+  if (reg.active) return
+  const w = reg.installing || reg.waiting
+  if (!w) return
+  await withTimeout(new Promise<void>((ok) => { const f = () => { if (w.state === 'activated') ok() }; w.addEventListener('statechange', f); f() }), 15000, '推送用的后台程序没装好，刷新一下再试')
+}
 async function enablePush() {
   if (!vapid.value) { pushToast('托管服务还没设置推送密钥（VAPID），推送用不了', 'danger'); return }
   busy.value = 'push'
   try {
     if ((await Notification.requestPermission()) !== 'granted') { pushToast('浏览器没允许通知：在浏览器的网站设置里允许通知再试', 'danger'); return }
+    // 不等 navigator.serviceWorker.ready：后台网址是 /admin（不带 /）时它永远等不到，按钮就一直转圈。直接等这次注册的后台程序装好
     const reg = await navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' })
-    await navigator.serviceWorker.ready
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(vapid.value) })
+    await activeOf(reg)
+    const old = await reg.pushManager.getSubscription()
+    const sub = old || (await withTimeout(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(vapid.value) }), 20000, '连不上浏览器的推送服务，换个网络或者稍后再试'))
     const label = (/iPhone|iPad/.test(navigator.userAgent) ? '苹果' : /Android/.test(navigator.userAgent) ? '安卓' : /Mac/.test(navigator.userAgent) ? 'Mac' : /Windows/.test(navigator.userAgent) ? 'Windows' : '设备') + ' · ' + new Date().toLocaleDateString('zh-CN')
     await post('push/sub', { sub: sub.toJSON(), label })
     await post('push/test').catch(() => {})

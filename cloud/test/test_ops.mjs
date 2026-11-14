@@ -105,7 +105,7 @@ ok('[对话] 打开大对话：拿最近 200 条，按顺序', j.msgs.length ===
 /* ---------- 统计：访问次数、访客 IP、国家 ---------- */
 const visit = (p, ip, ua = 'Mozilla/5.0 (Linux; Android 14) Chrome/120', cc) => mod.default.fetch(Object.assign(new Request('https://panel.example' + p, { headers: { 'cf-connecting-ip': ip, 'user-agent': ua } }), { cf: { country: cc || 'TW' } }), env);
 await visit('/', '5.5.5.5'); await visit('/', '5.5.5.5'); await visit('/app', '6.6.6.6', undefined, 'CN'); await visit('/r/ABCD2345', '7.7.7.7');
-await visit('/', '8.8.8.8', 'Googlebot/2.1'); await visit('/admin', '9.9.9.9'); await visit('/admin/old', '9.9.9.9');
+await visit('/', '8.8.8.8', 'Googlebot/2.1'); await visit('/admin/', '9.9.9.9'); await visit('/admin/old', '9.9.9.9');
 j = await (await adm('GET', '/stats?days=7')).json();
 const td = j.days[j.days.length - 1];
 ok('[统计] 按天：今天 7 天里的最后一天', j.days.length === 7 && td.d === mod.dayKey ? true : j.days.length === 7);
@@ -178,7 +178,7 @@ ok('[清理] 90 天前的登录记录删掉', (await H.loginList()).length === 0
 T += 100 * 86400e3; await H.opsGc(T);
 ok('[清理] 180 天前的统计删掉', !(await H.ctx.storage.get('st:' + mod.dayKey(T - 200 * 86400e3))));
 // 新管理后台页面：严格的安全头
-r = await api('GET', '/admin');
+r = await api('GET', '/admin/');
 const csp = r.headers.get('content-security-policy');
 ok('[页面] 新管理后台：只允许加载自己的脚本、不能被嵌入、不能连外网', r.status === 200 && /script-src 'self'/.test(csp) && !/unsafe-inline'[^;]*script|script-src[^;]*unsafe/.test(csp) && /connect-src 'self'/.test(csp) && /frame-ancestors 'none'/.test(csp) && r.headers.get('x-frame-options') === 'DENY');
 ok('[页面] 不存在的静态文件：404', (await api('GET', '/admin/assets/../hub.js')).status === 404 && (await api('GET', '/admin/assets/nope.js')).status === 404);

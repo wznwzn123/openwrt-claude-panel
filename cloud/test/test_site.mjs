@@ -49,7 +49,7 @@ for (const dark of [false, true]) {
 	await shot('home');
 	if (dark) { await ctx.close(); continue; }
 	// 注册
-	await page.goto(B + '/app'); await W(500);
+	await page.goto(B + '/app#login'); await W(500);
 	ok('没登录：显示登录表单', await page.isVisible('#fLogin'));
 	ok('没开邮件服务：注册不需要验证码', !(await page.isVisible('#fReg [data-mail]')));
 	await page.click('[data-tab="reg"]');
@@ -125,7 +125,7 @@ for (const dark of [false, true]) {
 	ok('解绑（先确认）', (await page.locator('#devs .dev').count()) === 1);
 	// 退出、未登录时 ?pair=
 	await page.click('#outBtn'); await W(500);
-	ok('退出：回到登录', await page.isVisible('#fLogin'));
+	ok('退出：回到登录页（欢迎页）', await page.isVisible('#lgWelcome') && !(await page.isVisible('#vDash')));
 	await page.goto(B + '/app?pair=' + (await pairOf(R2))); await W(600);
 	ok('没登录打开配对链接：提示登录后会自动绑定', /登录或注册后，会自动把这台路由器绑定/.test(await page.textContent('#vAuth')));
 	await page.fill('#fLogin [name=email]', 'alice@x.com'); await page.fill('#fLogin [name=password]', 'wrong-pass'); await page.click('#fLogin button.primary'); await W(500);
@@ -245,7 +245,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => errs.push(e.message));
-	await page.goto(B + '/app'); await W(500);
+	await page.goto(B + '/app#login'); await W(500);
 	await page.click('[data-tab="reg"]');
 	await page.fill('#fReg [name=email]', 'newbie@x.com'); await page.fill('#fReg [name=password]', 'newbie-pass-1'); await page.click('#fReg button.primary'); await W(900);
 	ok('[试用] 新注册的账号：最上面显示「免费试用 7 天」和领取按钮', await page.isVisible('#trialCard') && /免费试用 7 天/.test(await page.textContent('#trialCard')) && await page.isVisible('#trialGo'));
@@ -264,9 +264,9 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 // 账号页：登录过的设备（两台手机各登录一次，在其中一台上把另一台退出）
 {
 	const mk = async (ua) => { const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: ua, deviceScaleFactor: SHOTS ? 2 : 1 }); const p = await c.newPage(); const e = []; p.on('pageerror', (x) => e.push(x.message)); p.on('dialog', (d) => d.accept()); return { c, p, e }; };
-	const login = async (p) => { await p.goto(B + '/app'); await W(500); await p.fill('#fLogin [name=email]', 'sess@x.com'); await p.fill('#fLogin [name=password]', 'sess-pass-1'); await p.click('#fLogin button.primary'); await W(900); };
+	const login = async (p) => { await p.goto(B + '/app#login'); await W(500); await p.fill('#fLogin [name=email]', 'sess@x.com'); await p.fill('#fLogin [name=password]', 'sess-pass-1'); await p.click('#fLogin button.primary'); await W(900); };
 	const X = await mk('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0');
-	await X.p.goto(B + '/app'); await W(500);
+	await X.p.goto(B + '/app#login'); await W(500);
 	await X.p.click('[data-tab="reg"]').catch(() => {}); await W(200);
 	await X.p.fill('#fReg [name=email]', 'sess@x.com'); await X.p.fill('#fReg [name=password]', 'sess-pass-1'); await X.p.click('#fReg button.primary'); await W(1200);
 	const Y = await mk('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36');
@@ -279,13 +279,13 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await X.p.click('#sessList [data-out]'); await W(900);
 	ok('[登录设备] 点「退出」（确认后）：列表只剩这台，按钮藏起来', (await X.p.locator('#sessList [data-sess]').count()) === 1 && !(await X.p.isVisible('#sessAll')));
 	await Y.p.reload(); await W(900);
-	ok('[登录设备] 被退出的那台：回到登录页', await Y.p.isVisible('#fLogin') && !(await Y.p.isVisible('#vDash')));
+	ok('[登录设备] 被退出的那台：回到登录页', await Y.p.isVisible('#lgWelcome') && !(await Y.p.isVisible('#vDash')));
 	await login(Y.p); const Z = await mk('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'); await login(Z.p);
 	await X.p.reload(); await W(1200);
 	await X.p.click('#sessAll'); await W(900);
 	ok('[登录设备] 「退出其他所有设备」：只剩这台，提示退出了 2 台', (await X.p.locator('#sessList [data-sess]').count()) === 1 && /已退出 2 台设备/.test(await X.p.textContent('body')));
 	await Z.p.reload(); await W(900);
-	ok('[登录设备] 其他设备都回到登录页', await Z.p.isVisible('#fLogin'));
+	ok('[登录设备] 其他设备都回到登录页', await Z.p.isVisible('#lgWelcome') && !(await Z.p.isVisible('#vDash')));
 	ok('[登录设备] 页面没有报错', ![...X.e, ...Y.e, ...Z.e].length, [...X.e, ...Y.e, ...Z.e].join(' | '));
 	await X.c.close(); await Y.c.close(); await Z.c.close();
 }
@@ -388,7 +388,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	const page = await ctx.newPage(); const e2 = []; page.on('pageerror', (e) => e2.push(e.message));
 	await page.goto(B + '/'); await W(300);
 	ok('[隐私/安全] 首页底部有隐私政策、安全说明、报告问题的链接', await page.locator('footer a[href="/privacy"]').count() === 1 && await page.locator('footer a[href="/security"]').count() === 1 && await page.locator('footer a[href="/security#report"]').count() === 1);
-	await page.goto(B + '/app'); await W(300);
+	await page.goto(B + '/app#login'); await W(300);
 	ok('[隐私/安全] 账号页底部也有', await page.locator('a[href="/privacy"]').count() >= 1 && await page.locator('a[href="/security"]').count() >= 1);
 	let r = await page.goto(B + '/privacy'); await W(300);
 	let t = await page.textContent('body');
@@ -434,8 +434,8 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
 		const page = await ctx.newPage(); const e5 = []; page.on('pageerror', (x) => e5.push(x.message)); const T = dark ? '（深色）' : '';
 		await page.goto(B + '/'); await W(400);
-		ok('[查进度] 首页顶栏有「查进度」，首页有显眼的查询框' + T, await page.isVisible('.top a[href="/r"]') && await page.isVisible('#fbq') && /反馈过问题？查处理进度/.test(await page.textContent('#fbq')));
-		ok('[查进度] 手机宽度：顶栏和查询框不重叠、不横向超出' + T, (await lay(page, '.top .logo, .top .row > *:not(.ghbtn), .fbqt > *, .fbqr > *')) === '', await lay(page, '.top .logo, .top .row > *:not(.ghbtn), .fbqt > *, .fbqr > *'));
+		ok('[顶栏] 「查进度」换成了 GitHub 按钮（带 GitHub 图标，打开项目主页）；首页仍有显眼的查进度框' + T, !(await page.isVisible('.top a[href="/r"]')) && await page.isVisible('.top .ghbtn svg') && (await page.getAttribute('.top .ghbtn', 'href')) === 'https://github.com/wznwzn123/openwrt-claude-panel' && /GitHub/.test(await page.textContent('.top .ghbtn')) && await page.isVisible('#fbq') && /反馈过问题？查处理进度/.test(await page.textContent('#fbq')));
+		ok('[查进度] 手机宽度：顶栏和查询框不重叠、不横向超出' + T, (await lay(page, '.top .logo, .top .row > *, .fbqt > *, .fbqr > *')) === '', await lay(page, '.top .logo, .top .row > *, .fbqt > *, .fbqr > *'));
 		if (SHOTS) { await page.locator('#fbq').scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, -200)); await page.screenshot({ path: SHOTS + '/site-fbq' + (dark ? '-dark' : '') + '.png' }); }
 		if (dark) { ok('[查进度] 页面没有报错' + T, !e5.length, e5.join('|')); await ctx.close(); continue; }
 		await page.fill('#fbq [name=c]', 'k7f2q90b'); await page.click('#fbq button'); await W(300);
@@ -451,7 +451,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		const g = (await env.H.get('hub').feedbacks()).find((x) => /字太小了/.test(x.text));
 		ok('[报告邮箱] 填了邮箱：存下来，管理页能给他发邮件；显示受理编号', g && JSON.stringify(g.emails) === '["guest@x.com"]' && !g.uid && /受理编号 [A-Z2-9]{8}/.test(await page.textContent('#rpOk')));
 		// 登录：注册账号、绑定路由器；面板里发一条反馈；登录后在官网报告一条
-		await page.goto(B + '/app'); await W(500); await page.click('[data-tab="reg"]');
+		await page.goto(B + '/app#login'); await W(500); await page.click('[data-tab="reg"]');
 		await page.fill('#fReg [name=email]', 'fbuser@x.com'); await page.fill('#fReg [name=password]', 'fbuser-pass-1'); await page.click('#fReg button.primary'); await W(900);
 		await page.fill('#fBind [name=code]', await pairOf(R2)); await page.click('#fBind button'); await W(900); await page.click('.mask [data-x]').catch(() => {}); await W(300);
 		const pf = await api('/api/dev/feedback', { sub: R2.sub, rkey: R2.rkey, text: '面板里发的：首页流量一直是 0' });
@@ -466,7 +466,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		const ADMIN_LIST = (await api('/api/admin/feedback', null, ADM)).list, pid = ADMIN_LIST.find((x) => x.code === pf.code).id, lid = ADMIN_LIST.find((x) => x.id === lg.id).id;
 		await api('/api/admin/feedback/' + pid + '/ack', { on: true }, ADM);
 		await api('/api/admin/feedback/' + lid + '/done', { state: 'nofix', note: '城市是按 IP 粗略判断的，有时候判断不出来', mail: false }, ADM);
-		await page.goto(B + '/app'); await W(1200);
+		await page.goto(B + '/app#login'); await W(1200);
 		const rows = await page.$$eval('#fbList .fbrow', (e) => e.map((x) => ({ st: x.querySelector('.st').textContent, href: x.getAttribute('href'), stage: x.querySelector('.fsteps').dataset.stage || x.querySelectorAll('.fsteps .on').length, t: x.querySelector('.t').textContent })));
 		ok('[账号页] 我的反馈：有面板发的（开发人员已收到）、登录后报告的（无法修复），没有别人的', rows.length === 2 && rows.some((x) => x.st === '开发人员已收到' && /首页流量/.test(x.t)) && rows.some((x) => x.st === '无法修复' && /不显示城市/.test(x.t)) && !rows.some((x) => /字太小了/.test(x.t)), JSON.stringify(rows));
 		ok('[账号页] 点一条：到这条的处理进度页 /r/编号', rows.every((x) => /^\/r\/[A-Z2-9]{8}$/.test(x.href)));
@@ -479,6 +479,70 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		ok('[账号页] 输编号查：跳到处理进度页', new URL(page.url()).pathname === '/r/' + pf.code.toUpperCase() && /开发人员已收到，正在处理/.test(await page.textContent('#box')));
 		ok('[查进度] 页面没有报错', !e5.length, e5.join('|'));
 		await ctx.close();
+	}
+}
+// 登录页（欢迎页 → 账号登录 / 管理员登录 / 注册新账号）、用户须知、用户使用协议；各种屏幕、深浅色都不重叠、不超出
+{
+	const lay2 = (page, sel) => page.evaluate((sel) => {
+		const bad = [], els = [...document.querySelectorAll(sel)].filter((e) => e.getBoundingClientRect().height && getComputedStyle(e).visibility !== 'hidden');
+		for (const e of els) { const r = e.getBoundingClientRect(); if (r.right > innerWidth + 1 || r.left < -1) bad.push('超出 ' + e.textContent.trim().slice(0, 10)); }
+		for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) { if (els[i].contains(els[j]) || els[j].contains(els[i])) continue; const a = els[i].getBoundingClientRect(), c = els[j].getBoundingClientRect(); if (a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1) bad.push(els[i].textContent.trim().slice(0, 8) + '×' + els[j].textContent.trim().slice(0, 8)); }
+		if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('页面横向超出');
+		return bad.join('；');
+	}, sel);
+	const DEVS = [['iPhone SE', 320, 568], ['安卓', 390, 844], ['iPad', 820, 1180], ['电脑', 1280, 800]];
+	for (const [dn, w, h] of DEVS) for (const dark of [false, true]) {
+		const T = '［' + dn + (dark ? ' 深色' : '') + '］';
+		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
+		const page = await ctx.newPage(); const e6 = []; page.on('pageerror', (x) => e6.push(x.message));
+		await page.goto(B + '/'); await W(300);
+		ok('[顶栏] 首页顶栏不重叠、不超出、GitHub 图标看得到' + T, (await lay2(page, '.top .logo, .top .row > *')) === '' && await page.isVisible('.top .ghbtn svg'), await lay2(page, '.top .logo, .top .row > *'));
+		if (SHOTS && !dark) await page.screenshot({ path: SHOTS + '/site-top-' + w + '.png' });
+		await page.goto(B + '/app'); await W(700);
+		const st = await page.evaluate(() => ({ welcome: !document.getElementById('lgWelcome').classList.contains('hidden'), card: !document.getElementById('lgCard').classList.contains('hidden'), top: getComputedStyle(document.querySelector('.top')).display, h1: document.querySelector('.lgwelcome h1').textContent, logo: !!document.querySelector('.lgbiglogo svg'), foot: [...document.querySelectorAll('.lgfoot a')].map((a) => a.textContent + a.getAttribute('href')).join(','), admin: document.getElementById('goAdmin').getAttribute('href'), canvas: document.getElementById('lgbg').width > 0 }));
+		ok('[登录页] 打开是欢迎页：路由器面板的图标和名字、账号登录、管理员登录、注册新账号；顶栏收起' + T, st.welcome && !st.card && st.top === 'none' && st.h1 === '欢迎使用路由器面板' && st.logo && st.admin === '/admin' && st.canvas, JSON.stringify(st));
+		ok('[登录页] 下面是用户须知、用户使用协议、隐私政策（没有工作室名字）' + T, /用户须知\/notice/.test(st.foot) && /用户使用协议\/terms/.test(st.foot) && /隐私政策\/privacy/.test(st.foot) && !/工作室/.test(await page.textContent('body')), st.foot);
+		ok('[登录页] 欢迎页排版不重叠、不超出' + T, (await lay2(page, '.lgwelcome > *, .lgfoot a')) === '', await lay2(page, '.lgwelcome > *, .lgfoot a'));
+		if (SHOTS) await page.screenshot({ path: SHOTS + '/site-lgwelcome-' + w + (dark ? '-dark' : '') + '.png' });
+		await page.click('#goLogin'); await W(500);
+		ok('[登录页] 点「账号登录」：卡片里是登录表单，网址带 #login' + T, await page.isVisible('#fLogin') && !(await page.isVisible('#lgWelcome')) && page.url().endsWith('#login'));
+		ok('[登录页] 登录卡片排版不重叠、不超出' + T, (await lay2(page, '.lgcardtop > *, .lgcard .tabs button, #fLogin > *, .lgnote, .lgfoot a')) === '', await lay2(page, '.lgcardtop > *, .lgcard .tabs button, #fLogin > *, .lgnote, .lgfoot a'));
+		if (SHOTS) await page.screenshot({ path: SHOTS + '/site-lglogin-' + w + (dark ? '-dark' : '') + '.png' });
+		await page.click('#lgBack'); await W(500);
+		ok('[登录页] 返回按钮：回到欢迎页，网址里的 #login 去掉' + T, await page.isVisible('#lgWelcome') && !(await page.isVisible('#lgCard')) && !page.url().includes('#'));
+		await page.click('#goReg'); await W(500);
+		ok('[登录页] 点「注册新账号」：直接是注册表单' + T, await page.isVisible('#fReg') && !(await page.isVisible('#fLogin')) && (await page.getAttribute('[data-tab="reg"]', 'class')) === 'on');
+		await page.goBack(); await W(500);
+		ok('[登录页] 手机返回键：回到欢迎页（还在官网）' + T, await page.isVisible('#lgWelcome') && new URL(page.url()).pathname === '/app');
+		if (!dark && w === 390) {
+			await page.goto(B + '/app#reg'); await W(600);
+			ok('[登录页] 直接打开 /app#reg：注册表单', await page.isVisible('#fReg'));
+			await page.click('#lgBack'); await W(400);
+			ok('[登录页] 直接打开的再点返回：回欢迎页，不会退出官网', await page.isVisible('#lgWelcome') && new URL(page.url()).pathname === '/app');
+			await page.click('#goAdmin'); await W(800);
+			ok('[登录页] 点「管理员登录」：到管理后台登录页（跟以前一样）', new URL(page.url()).pathname === '/admin' || new URL(page.url()).pathname === '/admin/');
+		}
+		for (const [u, t] of [['/notice', '用户须知'], ['/terms', '用户使用协议']]) {
+			await page.goto(B + u); await W(300);
+			const tx = await page.textContent('body');
+			ok('[' + t + '] 页面能打开，内容是这个项目的（路由器面板、托管服务），没有别的项目的内容' + T, (await page.textContent('h1')) === t && /路由器/.test(tx) && /托管服务/.test(tx) && !/售后|抖店|工作室|1012968575/.test(tx));
+			ok('[' + t + '] 排版不超出' + T, (await lay2(page, '.top .logo, .top .row > *, .doc h1, .doc h2, footer')) === '', await lay2(page, '.top .logo, .top .row > *, .doc h1, .doc h2, footer'));
+			if (SHOTS && w === 390) await page.screenshot({ path: SHOTS + '/site' + u.replace('/', '-') + (dark ? '-dark' : '') + '.png' });
+		}
+		ok('[登录页] 页面没有报错' + T, !e6.length, e6.join('|'));
+		await ctx.close();
+	}
+	// 带绑定码从路由器跳过来：直接是登录卡片，写着登录后自动绑定
+	{
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+		const page = await ctx.newPage();
+		await page.goto(B + '/app?pair=ABCD2345'); await W(700);
+		ok('[登录页] 从路由器带绑定码来：直接是登录表单和「会自动绑定」的说明', await page.isVisible('#fLogin') && /自动把这台路由器绑定/.test(await page.textContent('#lgCard')));
+		await ctx.close();
+	}
+	for (const [u, k] of [['/notice', 'notice'], ['/terms', 'terms']]) {
+		const r = await realFetch(B + u);
+		ok('[' + u + '] 返回 200、带安全头', r.status === 200 && /frame-ancestors 'none'/.test(r.headers.get('content-security-policy') || ''));
 	}
 }
 await browser.close(); server.close();

@@ -24,12 +24,12 @@ pre.term{margin:10px 0 4px;padding:12px 14px;border-radius:14px;background:#1416
 pre.term b{color:#7cc4ff;font-weight:600}pre.term i{font-style:normal;color:#ffcf6b}pre.term u{text-decoration:none;color:#8a93a6}
 .demo{display:block;width:min(100%,260px);height:auto;margin:10px 0 2px;border-radius:18px;border:4px solid #16181f;box-shadow:0 8px 20px rgba(20,30,60,.16)}
 footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
-@media(max-width:480px){.ghbtn{display:none}}
+.ghbtn svg{flex:none;width:16px;height:16px}@media(max-width:340px){.ghbtn{padding:7px 10px}.ghbtn span{display:none}}
 .fbq{margin:14px 0 12px}.fbqt{display:flex;gap:12px;align-items:flex-start}.fbqt>span{flex:none;font-size:26px;line-height:1.2}.fbqt b{font-size:16.5px}.fbqt p{margin:4px 0 0;color:var(--muted);font-size:13.5px;line-height:1.6}
 .fbqr{display:flex;gap:8px;margin-top:12px}.fbqr input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.1em;font-size:16px}.fbqr button{flex:none}
 .faq details{border-bottom:.5px solid var(--line);padding:12px 2px}.faq details:last-child{border-bottom:0}.faq summary{cursor:pointer;font-weight:650;font-size:15px;list-style-position:outside}.faq p,.faq ul{margin:8px 0 0;font-size:14px;line-height:1.75;color:var(--text)}.faq ul{padding-left:20px}.faq li{margin:4px 0}.faq .muted{color:var(--muted);font-size:13px}
 </style></head><body><div class="wrap">
-<div class="top"><a class="logo" href="/"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</a><div class="row"><a class="btn sm ghbtn" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a><a class="btn sm" href="/r">查进度</a><a class="btn sm primary" href="/app">登录</a></div></div>
+<div class="top"><a class="logo" href="/"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</a><div class="row"><a class="btn sm ghbtn" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener" aria-label="GitHub 项目主页"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a><a class="btn sm primary" href="/app">登录</a></div></div>
 
 <section class="hero">
 	<h1>用手机管好家里的<br>OpenWrt 路由器</h1>
@@ -132,7 +132,7 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 <h2 class="sec">自己搭建</h2>
 <div class="card"><p style="margin:0">不想用托管服务？也可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本（AI 版 / 纯面板版 × 精简版 / 完整版）和教程都在 <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。开源，MIT 许可证。</p></div>
 
-<footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a> · <a href="/r">查处理进度</a></footer>
+<footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a> · <a href="/notice">用户须知</a> · <a href="/terms">用户使用协议</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a> · <a href="/r">查处理进度</a></footer>
 </div><script>document.getElementById('fbq').onsubmit = (e) => {
 	e.preventDefault(); const v = e.target.c.value.trim().toUpperCase().replace(/\s+/g, ''), er = document.getElementById('fbqErr');
 	if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { er.style.minHeight = '20px'; er.textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }

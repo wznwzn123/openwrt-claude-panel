@@ -168,10 +168,11 @@ export function installV5(Hub) {
 		},
 		async tfaDisable(code) { const t = await this.tfa(); if (!t) return { st: 200, ok: true }; if (!(await totpOk(t.sec, code))) return { st: 400, error: '验证码不对' }; await this.ctx.storage.delete('adm:2fa'); await this.ctx.storage.delete('adm:sess'); return { st: 200, ok: true }; },
 		// 开了两步验证：登录时输入验证码换一个 12 小时有效的通行证，之后每个请求带着它；GitHub 里的自动任务用 HUB_TOTP_SECRET 现算验证码
-		async tfaCheck(req) {
+		// 只收两个请求头的值：Durable Object 之间传 Request 会把请求内容（body）一起搬走，后面就读不到了
+		async tfaCheck(s = '', otp = '') {
 			const t = await this.tfa();
 			if (!t) return true;
-			const s = req.headers.get('x-adm-sess') || '', otp = req.headers.get('x-adm-otp') || '';
+			s = String(s || ''); otp = String(otp || '');
 			if (s) { const l = (await this.ctx.storage.get('adm:sess')) || {}, h = await sha(s); if (l[h] && l[h] > Date.now()) return true; }
 			if (otp && (await totpOk(t.sec, otp))) return true;
 			return false;

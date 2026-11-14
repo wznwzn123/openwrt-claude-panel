@@ -16,7 +16,7 @@ import { toastError } from '@/composables/toast'
 import { CC } from '@/utils/fmt'
 
 /* 访问统计：官网每一页每天打开多少次、多少个不同的访客（按 IP 算，不算机器人）、来自哪里；每天的访客 IP（留 30 天） */
-const PG: Record<string, string> = { home: '首页', app: '账号页', reply: '查进度', privacy: '隐私说明', security: '安全说明' }
+const PG: Record<string, string> = { home: '首页', app: '账号页', reply: '查进度', privacy: '隐私说明', security: '安全说明', notice: '用户须知', terms: '用户使用协议' }
 const N: Record<string, string> = { pv: '页面打开（含机器人）', bot: '机器人', login_ok: '登录成功', login_fail: '登录失败', reg: '注册', reset: '找回密码', adm_ok: '管理后台登录', adm_fail: '管理后台密钥错', dev_reg: '开通路由器', fb: '面板反馈', report: '官网报告', install_fail: '安装失败上报', chat_in: '收到对话消息', chat_out: '回复对话', mail_ok: '发出邮件', mail_fail: '邮件失败', err: '出错', uv_over: '访客太多没记 IP' }
 const range = ref<7 | 30 | 90>(30)
 const days = ref<DayStat[]>([])

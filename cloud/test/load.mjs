@@ -7,9 +7,17 @@ const SHIM = 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this
 export async function load() {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcp-w-'));
 	for (const f of ['worker.js', 'hub.js', 'ops.js', 'v5.js', 'site.js']) {
-		const src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')
+		let src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')
 			.replace("import { DurableObject } from 'cloudflare:workers';", SHIM)
 			.replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
+		// 真的 Cloudflare 上，调用 Durable Object 的方法是远程调用：传 Request / Response / 流过去，请求内容会被搬走（调用方再读就是空的）。
+		// 测试里也拦住这种写法，免得本地测试通过、上线后出问题（5.0.0 的两步验证、发公告就是这样坏的）
+		if (f === 'hub.js') {
+			const guard = 'const rpcGuard = (o) => new Proxy(o, { get(t, k) { const v = t[k]; if (typeof v !== "function") return v; return (...a) => { for (const x of a) if (x instanceof Request || x instanceof Response || (typeof ReadableStream !== "undefined" && x instanceof ReadableStream)) throw new Error("不能把 Request/Response/流 传给 Durable Object 的方法：" + String(k)); return v.apply(t, a); }; } });\n';
+			const before = src;
+			src = src.replace("const hubObj = (env) => env.H.get(env.H.idFromName('hub'));", guard + "const hubObj = (env) => rpcGuard(env.H.get(env.H.idFromName('hub')));");
+			if (src === before) throw new Error('load.mjs：hub.js 里找不到 hubObj，测试的远程调用检查没装上');
+		}
 		fs.writeFileSync(path.join(dir, f.replace('.js', '.mjs')), src);
 	}
 	return import(pathToFileURL(path.join(dir, 'worker.mjs')).href);

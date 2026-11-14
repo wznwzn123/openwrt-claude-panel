@@ -192,7 +192,7 @@ r = await call(D, '/api/account/delete', { password: 'alice-pass-3' });
 ok('注销账号：账号删除、会话作废、邮箱可以重新注册', r.st === 200 && (await call(D, '/api/account/me')).st === 401 && !(await hub().ctx.storage.get('e:alice@x.com')));
 
 // ---- 页面 ----
-for (const [p, t] of [['/', '路由器面板'], ['/app', '我的路由器'], ['/admin', '管理后台'], ['/admin/old', '托管服务管理']]) {
+for (const [p, t] of [['/', '路由器面板'], ['/app', '我的路由器'], ['/admin/', '管理后台'], ['/admin/old', '托管服务管理']]) {
 	const res = await mod.default.fetch(new Request('https://panel.example' + p), env);
 	const html = await res.text();
 	ok('页面 ' + p + ' 能打开，带安全响应头', res.status === 200 && html.includes(t) && /frame-ancestors 'none'/.test(res.headers.get('content-security-policy')) && res.headers.get('x-frame-options') === 'DENY');

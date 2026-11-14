@@ -2,7 +2,38 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22.5' fill='%23101C40'/><path d='M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z' fill='%23F4F1EA'/><path d='M62.6 21.4A17 17 0 0 1 78.6 37.4' stroke='%23FFB547' stroke-width='4' stroke-linecap='round' fill='none'/><circle cx='63' cy='37' r='7' fill='%23FFB547'/></svg>"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,viewport-fit=cover">
 <title>我的路由器 · 账号</title><meta name="robots" content="noindex">
 <style>/*COMMON_CSS*/
-.auth{max-width:420px;margin:6vh auto 0}
+/* 登录页：欢迎页（账号登录 / 管理员登录 / 注册新账号）→ 点进去是登录、注册卡片；背景是缓慢起伏的点阵 */
+body.authmode .top,body.authmode #footLinks{display:none}
+#vAuth{position:fixed;inset:0;z-index:20;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 48px) 16px calc(env(safe-area-inset-bottom) + 18px);background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
+@media(prefers-color-scheme:dark){#vAuth{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}}
+#lgbg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+@keyframes lgPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+.lgwelcome{position:relative;z-index:1;width:100%;max-width:360px;margin:auto 0;padding:10px 4px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;animation:lgPop .55s cubic-bezier(.2,.9,.3,1.2) both}
+.lgwelcome h1{font-size:27px;margin:20px 0 6px;letter-spacing:.3px;line-height:1.25}
+.lgwelcome>p{margin:0 0 28px;font-size:14px}
+.lgbiglogo{width:76px;height:76px;border-radius:22px;overflow:hidden;background:#101C40;box-shadow:0 16px 36px rgba(16,28,64,.35),inset 0 0 0 .5px rgba(255,255,255,.25)}.lgbiglogo svg{display:block;width:100%;height:100%}
+.lgbig{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;border-radius:15px;font-size:16px;font-weight:600;cursor:pointer;transition:transform .18s,opacity .18s;text-decoration:none}
+.lgbig:active{transform:scale(.97);opacity:.85}
+.lgbig svg{width:18px;height:18px;flex:none}
+.lgbig.dark{background:#0b0b0f;color:#fff;border:0;box-shadow:0 10px 24px rgba(0,0,0,.18)}
+.lgbig.light{background:rgba(255,255,255,.82);color:var(--text);border:1px solid rgba(60,60,67,.14);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+@media(prefers-color-scheme:dark){.lgbig.dark{background:#f5f5f7;color:#000}.lgbig.light{background:rgba(44,44,46,.72);border-color:rgba(255,255,255,.1)}}
+.lgor{display:flex;align-items:center;gap:12px;width:100%;margin:14px 0;color:var(--muted);font-size:12px}
+.lgor::before,.lgor::after{content:"";flex:1;height:1px;background:var(--line)}
+.lgreg{margin-top:22px;text-align:center;font-size:13px;color:var(--muted)}
+.lglink{border:0;background:none;padding:2px 0;color:var(--brand);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
+.lgcard{position:relative;z-index:1;width:100%;max-width:400px;margin:auto 0;background:rgba(255,255,255,.66);-webkit-backdrop-filter:blur(26px) saturate(1.7);backdrop-filter:blur(26px) saturate(1.7);border:1px solid rgba(255,255,255,.8);border-radius:28px;padding:20px 20px 18px;box-shadow:0 30px 70px rgba(20,24,40,.12),0 2px 6px rgba(0,0,0,.04);animation:lgPop .55s cubic-bezier(.2,.9,.3,1.2) both}
+@media(prefers-color-scheme:dark){.lgcard{background:rgba(30,30,33,.62);border-color:rgba(255,255,255,.09);box-shadow:0 30px 70px rgba(0,0,0,.5)}}
+.lgcardtop{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.lgback{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:0;background:var(--fill);color:var(--text);cursor:pointer;flex:none}
+.lgback svg{width:16px;height:16px}
+.lgbrand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.lgbrand i{width:24px;height:24px;border-radius:7px;overflow:hidden;background:#101C40;flex:none}.lgbrand i svg{display:block;width:100%;height:100%}
+.lgcard .tabs{margin-bottom:6px}
+.lgnote{font-size:12.5px;text-align:center;margin:14px 0 0;line-height:1.6;text-wrap:balance}.lgnote a{white-space:nowrap}
+.lgfoot{position:relative;z-index:1;margin-top:auto;padding-top:20px;font-size:12.5px;color:var(--muted);text-align:center}
+.lgfoot a{font-weight:600}.lgfoot span{margin:0 6px;opacity:.6}
+@media(prefers-reduced-motion:reduce){.lgwelcome,.lgcard{animation:none}}
 .tabs{display:flex;gap:6px;padding:4px;border-radius:99px;background:var(--fill);margin-bottom:14px}
 .tabs button{flex:1;padding:9px;border-radius:99px;background:transparent;font-weight:650}
 .tabs button.on{background:var(--card);box-shadow:var(--shadow)}
@@ -38,35 +69,49 @@
 </style></head><body><div class="wrap">
 <div class="top"><a class="logo" href="/"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</a><div class="row"><span class="muted hidden" id="who" style="font-size:13px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="btn sm hidden" id="outBtn">退出</button></div></div>
 
-<!-- 登录 / 注册 / 找回密码 -->
-<section class="auth hidden" id="vAuth">
-	<div class="tabs"><button data-tab="login" class="on">登录</button><button data-tab="reg">注册</button></div>
-	<div class="card">
+<!-- 登录 / 注册 / 找回密码：先是欢迎页，点「账号登录」「注册新账号」进卡片；「管理员登录」去管理后台 -->
+<section class="auth hidden" id="vAuth" data-view="welcome">
+	<canvas id="lgbg" aria-hidden="true"></canvas>
+	<div class="lgwelcome" id="lgWelcome">
+		<div class="lgbiglogo" role="img" aria-label="路由器面板"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+		<h1>欢迎使用路由器面板</h1>
+		<p class="muted">用手机管好家里的 OpenWrt 路由器</p>
+		<button type="button" class="lgbig dark" id="goLogin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>账号登录</span></button>
+		<div class="lgor"><span>或</span></div>
+		<a class="lgbig light" href="/admin" id="goAdmin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>管理员登录</span></a>
+		<div class="lgreg">还没有账号？<button type="button" class="lglink" id="goReg">注册新账号</button></div>
+	</div>
+	<div class="lgcard hidden" id="lgCard">
+		<div class="lgcardtop"><button type="button" class="lgback" id="lgBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="lgbrand"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</div></div>
+		<div class="tabs"><button data-tab="login" class="on">登录</button><button data-tab="reg">注册</button></div>
+		<div class="card" style="background:none;box-shadow:none;padding:0">
 		<form id="fLogin">
-			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" required>
-			<label class="f">密码</label><input class="input" name="password" type="password" autocomplete="current-password" required>
+			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="比如 name@qq.com" required>
+			<label class="f">密码</label><input class="input" name="password" type="password" autocomplete="current-password" placeholder="输入密码" required>
 			<div class="err" data-err></div>
 			<button class="btn primary" style="width:100%">登录</button>
 			<p style="text-align:center;margin:12px 0 0"><a href="#" id="toReset">忘记密码？</a></p>
 		</form>
 		<form id="fReg" class="hidden">
-			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" required>
-			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
-			<label class="f">密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="常用邮箱，找回密码要用" required>
+			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
+			<label class="f">密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位，字母加数字更安全" required>
 			<div class="err" data-err></div>
 			<button class="btn primary" style="width:100%">注册</button>
 		</form>
 		<form id="fReset" class="hidden">
 			<p class="muted" style="margin:0 0 4px">输入注册时的邮箱，我们会发一个验证码。</p>
-			<label class="f">邮箱</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="email" type="email" autocomplete="email" required><button type="button" class="btn" data-send="reset">发送</button></div>
-			<label class="f">验证码</label><input class="input" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required>
-			<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+			<label class="f">邮箱</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="email" type="email" autocomplete="email" placeholder="注册时用的邮箱" required><button type="button" class="btn" data-send="reset">发送</button></div>
+			<label class="f">验证码</label><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="邮件里的 6 位数字" autocomplete="one-time-code" required>
+			<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位" required>
 			<div class="err" data-err></div>
 			<button class="btn primary" style="width:100%">重置密码并登录</button>
 			<p style="text-align:center;margin:12px 0 0"><a href="#" data-back>返回登录</a></p>
 		</form>
+		</div>
+		<p class="muted lgnote">账号只记下你有哪几台路由器，不存它们的登录密钥。<br>注册即表示你已阅读并同意<a href="/notice">《用户须知》</a>和<a href="/terms">《用户使用协议》</a></p>
 	</div>
-	<p class="muted" style="font-size:13px;text-align:center;margin-top:14px">账号只记录你有哪几台路由器，不保存路由器的登录密钥。</p>
+	<div class="lgfoot"><a href="/notice">用户须知</a><span>·</span><a href="/terms">用户使用协议</a><span>·</span><a href="/privacy">隐私政策</a><span>·</span><a href="/">首页</a></div>
 </section>
 
 <!-- 我的路由器 -->
@@ -117,7 +162,7 @@
 	</div>
 </section>
 <div class="toast hide" id="toast"></div>
-<p style="margin:32px 0 8px;text-align:center;color:var(--muted);font-size:13px"><a href="/">首页</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a></p>
+<p id="footLinks" style="margin:32px 0 8px;text-align:center;color:var(--muted);font-size:13px"><a href="/">首页</a> · <a href="/notice">用户须知</a> · <a href="/terms">用户使用协议</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a></p>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -132,12 +177,50 @@ async function api(path, body) {
 }
 const pair = new URLSearchParams(location.search).get('pair') || '';
 let mailOn = false;
-function show(v) { $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
+function show(v) { document.body.classList.toggle('authmode', v === 'auth'); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
 	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
 	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset');
 }
 document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
+// 欢迎页 ↔ 登录 / 注册卡片：网址带 #login、#reg（手机上按返回键回到欢迎页；直接打开 /app#reg 就是注册）
+const LGV = { login: 1, reg: 1, reset: 1 }; let lgPushed = false;
+function lgView(v, push) {
+	v = LGV[v] ? v : 'welcome';
+	$('vAuth').dataset.view = v;
+	$('lgWelcome').classList.toggle('hidden', v !== 'welcome'); $('lgCard').classList.toggle('hidden', v === 'welcome');
+	if (v !== 'welcome') tab(v);
+	// 自己加的网址记录用返回键退回去；直接打开 /app#login 进来的没有上一条，就只把 # 去掉（不会退出官网）
+	if (push) { try { if (v === 'welcome') { if (lgPushed) history.back(); else if (location.hash) history.replaceState(null, '', location.pathname + location.search); lgPushed = false; } else if (lgPushed) history.replaceState(null, '', location.pathname + location.search + '#' + v); else { history.pushState(null, '', location.pathname + location.search + '#' + v); lgPushed = true; } } catch (e) {} }
+	$('vAuth').scrollTop = 0;
+}
+$('goLogin').onclick = () => lgView('login', true);
+$('goReg').onclick = () => lgView('reg', true);
+$('lgBack').onclick = () => lgView('welcome', true);
+window.addEventListener('popstate', () => { if (!LGV[location.hash.slice(1)]) lgPushed = false; if (!$('vAuth').classList.contains('hidden')) lgView(location.hash.slice(1)); });
+// 背景点阵：缓慢起伏；系统设了「减少动态效果」就不动；看不到登录页时不画（省电）
+(function lgBackground() {
+	const c = $('lgbg'); if (!c || !c.getContext) return; const g = c.getContext('2d'); if (!g) return;
+	const mq = (q) => { try { return matchMedia(q).matches; } catch (e) { return false; } };
+	const still = mq('(prefers-reduced-motion: reduce)'); let w = 0, h = 0; const t0 = performance.now();
+	function size() { const dpr = Math.min(window.devicePixelRatio || 1, 2); w = c.clientWidth; h = c.clientHeight; c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0); }
+	function draw(now) {
+		const t = (now - t0) / 1000, dark = mq('(prefers-color-scheme: dark)'); g.clearRect(0, 0, w, h);
+		const cols = Math.max(28, Math.round(w / 16)), rows = 26, cx = w * 0.5, horizon = h * 0.3;
+		for (let r = 0; r < rows; r++) { const z = r / (rows - 1), depth = 0.35 + z * 1.25, y0 = horizon + Math.pow(z, 1.35) * h * 0.82;
+			for (let k = 0; k < cols; k++) { const u = k / (cols - 1) - 0.5, x = cx + u * w * 1.6 * depth, y = y0 + Math.sin(u * 7 + t * 0.7 + z * 4) * Math.cos(z * 5 - t * 0.45) * 28 * depth + Math.sin(u * 3 - t * 0.3) * 14 * depth;
+				if (x < -10 || x > w + 10 || y < -10 || y > h + 10) continue;
+				const a = (0.08 + 0.3 * z) * (0.55 + 0.45 * Math.sin(u * 9 + z * 6 + t * 0.8)); if (a <= 0.01) continue;
+				g.fillStyle = (dark ? 'rgba(255,255,255,' : 'rgba(40,44,60,') + a.toFixed(3) + ')'; g.beginPath(); g.arc(x, y, 0.6 + 1.9 * z * depth * 0.6, 0, 6.283); g.fill(); } }
+	}
+	function loop(now) {
+		if ($('vAuth').classList.contains('hidden') || document.hidden) { setTimeout(() => requestAnimationFrame(loop), 300); return; }
+		if (c.clientWidth !== w || c.clientHeight !== h) size();
+		draw(now);
+		if (!still) requestAnimationFrame(loop); else setTimeout(() => requestAnimationFrame(loop), 1500);
+	}
+	try { size(); requestAnimationFrame(loop); } catch (e) {}
+})();
 $('toReset').onclick = (e) => { e.preventDefault(); if (!mailOn) return toast('还没有开通邮件服务，忘记密码请联系管理员'); tab('reset'); };
 document.querySelector('[data-back]').onclick = (e) => { e.preventDefault(); tab('login'); };
 // 表单通用：提交时按钮变灰，出错显示在表单里
@@ -168,11 +251,11 @@ document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () =>
 	try { await api('code', { email, kind: b.dataset.send }); toast('验证码已发到邮箱'); let n = 60; const t = setInterval(() => { b.textContent = --n + ' 秒'; if (n <= 0) { clearInterval(t); b.textContent = '发送'; b.disabled = false; } }, 1000); }
 	catch (x) { err.textContent = x.message; b.disabled = false; }
 }));
-$('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); show('auth'); tab('login'); };
+$('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); show('auth'); lgView('welcome'); };
 $('delBtn').onclick = async () => {
 	const pw = prompt('注销后马上登录不了，绑定的路由器也会解除（路由器本身不受影响）。30 天内反悔可以联系提供服务的人恢复，之后彻底删除。输入密码确认：');
 	if (!pw) return;
-	try { await api('delete', { password: pw }); toast('账号已注销'); show('auth'); tab('login'); } catch (x) { toast(x.message); }
+	try { await api('delete', { password: pw }); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message); }
 };
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
@@ -329,6 +412,7 @@ async function load() {
 		return me;
 	} catch (e) {
 		show('auth');
+		lgView(pair && !LGV[location.hash.slice(1)] ? 'login' : location.hash.slice(1));
 		if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
 	}
 }

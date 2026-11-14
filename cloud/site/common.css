@@ -19,6 +19,7 @@ button{border:0;cursor:pointer}
 .btn.primary{background:var(--brand);color:#fff}.btn.danger{color:var(--danger)}.btn.sm{padding:7px 13px;font-size:13.5px}
 .input{width:100%;padding:12px 14px;border-radius:14px;border:0;background:var(--fill);outline:0;font-size:16px;min-width:0}
 .input:focus{box-shadow:0 0 0 3px rgba(0,122,255,.25)}
+.input::placeholder{color:var(--muted);opacity:.7}
 label.f{display:block;margin:12px 0 6px;font-size:13px;font-weight:600;color:var(--muted)}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .notice{padding:11px 13px;border-radius:14px;background:var(--fill);font-size:13.5px;color:var(--muted);line-height:1.6}

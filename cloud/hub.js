@@ -8,7 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, ADMIN_APP, ADMIN_FILES } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, ADMIN_APP, ADMIN_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 
@@ -1182,7 +1182,7 @@ export async function hubFetch(req, env) {
 			await H.admTouch();
 			return J({ ok: true, sess: t.sess || '', ...(await H.stats()) });
 		}
-		if (!(await H.tfaCheck(req))) return J({ error: '要重新登录（两步验证）', need2fa: true }, 401);
+		if (!(await H.tfaCheck(req.headers.get('x-adm-sess') || '', req.headers.get('x-adm-otp') || ''))) return J({ error: '要重新登录（两步验证）', need2fa: true }, 401);
 		await H.admTouch();
 		const vx = await v5Admin(req, a, H, body, u, env);
 		if (vx) return vx;
@@ -1243,7 +1243,9 @@ export async function hubFetch(req, env) {
 	if (p.startsWith('/dl/cfd/') && (req.method === 'GET' || req.method === 'HEAD')) return dlCfd(p.slice(8));
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
 	// 管理后台（4.0 新版）：打包好的页面和静态文件都在 site.js 里，不从任何外部网站加载东西
-	if ((p === '/admin' || p === '/admin/') && (req.method === 'GET' || req.method === 'HEAD')) return adminPage(req.method === 'HEAD' ? null : ADMIN_APP);
+	// /admin 跳到 /admin/：手机推送的后台程序只管 /admin/ 下面的页面，不带 / 打开时推送开不了
+	if (p === '/admin' && (req.method === 'GET' || req.method === 'HEAD')) return new Response(null, { status: 301, headers: { location: '/admin/' + u.search } });
+	if (p === '/admin/' && (req.method === 'GET' || req.method === 'HEAD')) return adminPage(req.method === 'HEAD' ? null : ADMIN_APP);
 	// 管理后台的推送（5.0）：手机上收到「有人发来消息」，点开回到对话
 	if (p === '/admin/sw.js' && req.method === 'GET') return new Response(ADMIN_SW, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'service-worker-allowed': '/admin/', 'x-content-type-options': 'nosniff' } });
 	if (p.startsWith('/admin/assets/') && (req.method === 'GET' || req.method === 'HEAD')) {
@@ -1251,8 +1253,8 @@ export async function hubFetch(req, env) {
 		if (!f) return J({ error: 'not found' }, 404);
 		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } });
 	}
-	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security' };
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
+	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms' };
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
 	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {

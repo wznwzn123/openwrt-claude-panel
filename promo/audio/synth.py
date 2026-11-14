@@ -5,12 +5,14 @@
   sfx.wav        全部交互音效按 cue 表落位（cues.json 同步输出，供剪映/工作台拆轨）
   mix.wav        人声 + 配乐（-5 dB sidechain 闪避）+ 音效，两遍 loudnorm 到 -14 LUFS / TP ≤ -1 dBTP 在 master.sh 里做
 """
-import json
+import json, os
 import numpy as np
 import soundfile as sf
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 48000
+# 第十版：使用商用授权曲（audio/music_edit.py 剪辑）作为 11.8s 之后的配乐；设 SYNTH_ONLY=1 回到纯合成配乐
+MUSIC = None if os.environ.get('SYNTH_ONLY') else '../public/audio/music/main_edit.wav'
 DUR = 90.0
 N = int(SR * DUR)
 rng = np.random.default_rng(20261112)
@@ -315,6 +317,19 @@ fade[-int(SR * 2.2):] = np.linspace(1, 0, int(SR * 2.2)) ** 1.3   # 第六版：
 bgm *= fade[:, None]
 bgm /= np.percentile(np.abs(bgm), 99.7) + 1e-9
 bgm = np.tanh(bgm * 0.8) * 0.85
+if MUSIC:
+    # 0–11.8s 保留合成的暗场开场（痛点段），11.8s 起换成剪好的授权曲；新曲 12–90s 的均方根对齐原合成配乐，人声与音乐比例不变
+    mus, msr = sf.read(MUSIC, always_2d=True); assert msr == SR
+    mus = np.vstack([mus, np.zeros((max(0, N - len(mus)), 2))])[:N]
+    tt_ = np.arange(N) / SR
+    keep = np.clip((12.1 - tt_) / 0.3, 0, 1)[:, None]          # 合成开场在 11.8–12.1s 淡出（保住 11.8s 的下沉尾音）
+    sel = tt_ >= 12.5
+    mus *= np.sqrt(np.mean(bgm[sel] ** 2)) / (np.sqrt(np.mean(mus[sel] ** 2)) + 1e-12)
+    bgm = bgm * keep + mus
+    imp = np.zeros_like(bgm)
+    place(imp, sub_drop(1.6, 120, 32), 54.0, 0.55)              # AI 段登场重击（与新曲满能量回归同拍）
+    place(imp, sub_drop(2.5, 90, 28), 84.414, 0.4)              # 回车 → 徽标
+    bgm += imp * np.percentile(np.abs(mus[sel]), 99.7) / (np.percentile(np.abs(imp), 99.9) + 1e-9) * 0.5
 
 # ───────────────────────────── 音效 ─────────────────────────────
 def whoosh(d=0.7, lo=300, hi=4000):
@@ -337,7 +352,15 @@ def click():
     return (hp(rng.standard_normal(len(t)), 2500) * np.exp(-t * 400) + np.sin(2 * np.pi * 1800 * t) * np.exp(-t * 200)) * 0.4
 
 
+SCALE_PC = (9, 11, 1, 4, 6, 8)   # A B C# E F# G#：升 C 小调与升 F 小调共有的音
+def snap(f):
+    if not MUSIC: return f
+    m = 69 + 12 * np.log2(f / 440); cands = [n for n in range(int(m) - 3, int(m) + 4) if n % 12 in SCALE_PC]
+    return 440 * 2 ** ((min(cands, key=lambda n: abs(n - m)) - 69) / 12)
+
+
 def chime(f1=880, f2=1318.5):
+    f1, f2 = snap(f1), snap(f2)
     t = t_(1.4)
     a = sum(np.sin(2 * np.pi * f1 * h * t) * np.exp(-t * (3 + h)) / h for h in (1, 2, 3))
     b = np.zeros_like(t)

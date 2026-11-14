@@ -51,6 +51,13 @@ jobs:
           fi
           echo "CF_ZONE_ID=$ZID" >> "$GITHUB_ENV"
           echo "CLOUDFLARE_ACCOUNT_ID=$AID" >> "$GITHUB_ENV"
+      - name: 打包管理后台
+        working-directory: cloud/admin
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          # 打包出来的只能有 js / css，不能有任何外部网址的加载（检查一遍）
+          ! grep -lE '<script[^>]*src="https?://|<link[^>]*href="https?://' dist/index.html
       - name: 生成配置
         working-directory: cloud
         run: |

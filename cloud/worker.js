@@ -5,8 +5,9 @@
 // - 根据「谁还在报告」判断离线原因，变化时记一条事件
 // - 面板在路由器断线时也能从这里读到实时情况（路由 <你的面板域名>/cloud/*，在隧道之前就被 Cloudflare 接住）
 import { DurableObject } from 'cloudflare:workers';
-import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE } from './hub.js';
+import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE, hubObj } from './hub.js';
 export { Hub };
+export { dayKey } from './hub.js';
 
 const BEAT_GAP = 170e3; // 一切正常时，心跳最多每 3 分钟（隔 170 秒以上）交给 Durable Object 一次
 const STALE = 300e3; // 超过 5 分钟没收到交过来的心跳算失联（正常时最多隔 4 分钟交一次）
@@ -179,6 +180,13 @@ export class Watch extends DurableObject {
 	}
 	// 推送到所有订阅了的手机；同一类通知 30 秒内只推一次；手机取消订阅了就删掉
 	async push(msg) {
+		// 面板「通知」里要能翻到：云端和托管服务发的通知都记一份（最近 100 条）；
+		// 路由器自己发的（经 /n/）路由器上已经记了，测试通知也不记
+		if (!msg.nolog) {
+			const nl = (await this.ctx.storage.get('nlog')) || [];
+			nl.unshift({ t: Date.now(), title: String(msg.title || '').slice(0, 120), body: String(msg.body || '').slice(0, 500), tag: String(msg.tag || '').slice(0, 40), lvl: msg.lvl || 'info', url: msg.url || '' });
+			await this.ctx.storage.put('nlog', nl.slice(0, 100));
+		}
 		const subs = this.env.VAPID_PRIV ? (await this.ctx.storage.get('subs')) || [] : [];
 		const wx = await this.ctx.storage.get('wx');
 		if (!subs.length && !(wx && wx.token)) return 0;
@@ -223,7 +231,8 @@ export class Watch extends DurableObject {
 	}
 	async addEvents(ev) {
 		if (!ev.length) return;
-		for (const e of ev) { const m = pushFor(e); if (m) await this.push(m); }
+		// 断电/断网这些在「断线记录」里本来就有（events），通知记录里不重复记
+		for (const e of ev) { const m = pushFor(e); if (m) await this.push({ ...m, nolog: true }); }
 		const old = (await this.ctx.storage.get('ev')) || [];
 		await this.ctx.storage.put('ev', [...ev.reverse(), ...old].slice(0, MAX_EV));
 	}
@@ -301,7 +310,7 @@ export class Watch extends DurableObject {
 	async status() {
 		await this.ensureAlarm();
 		const db = await this.load();
-		return { now: Date.now(), s: db.s || { state: 'wait', since: Date.now(), msg: '还没收到路由器的报告' }, label: LABEL, r: db.r || null, t: db.t || null, probe: db.probe || null, events: (await this.ctx.storage.get('ev')) || [] };
+		return { now: Date.now(), s: db.s || { state: 'wait', since: Date.now(), msg: '还没收到路由器的报告' }, label: LABEL, r: db.r || null, t: db.t || null, probe: db.probe || null, events: (await this.ctx.storage.get('ev')) || [] , notes: ((await this.ctx.storage.get('nlog')) || []).slice(0, 50) };
 	}
 	async clear() {
 		await this.ctx.storage.put('ev', []);
@@ -408,7 +417,11 @@ export default {
 		try {
 			if (env.BASE_DOMAIN) {
 				const h = new URL(req.url).hostname;
-				if (h === env.BASE_DOMAIN || h === 'www.' + env.BASE_DOMAIN) return await hubFetch(req, env);
+				if (h === env.BASE_DOMAIN || h === 'www.' + env.BASE_DOMAIN) {
+					try { return await hubFetch(req, env); }
+					// 官网 / 开通中心出错：记到管理后台的「出错记录」里
+					catch (e) { try { await hubObj(env).errLog(new URL(req.url).pathname, (e && e.stack) || String(e)); } catch (x) {} return J({ error: '出错了，稍后再试' }, 500); }
+				}
 			}
 			return await handle(req, env);
 		} catch (e) { return J({ error: '云端出错：' + (e && e.message || e) }, 500); }
@@ -431,7 +444,7 @@ async function handle(req, env) {
 			try { b = await req.json(); } catch (e) {}
 			if (!b.title) return J({ error: 'no title' }, 400);
 			const icon = { err: '⚠️ ', warn: '', ok: '✅ ', info: '' }[b.lvl] ?? '';
-			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info' });
+			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info', nolog: true, ...(b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : {}) });
 			return J({ ok: true, sent });
 		}
 		// 云端备份（只有路由器拿着 RKEY 能用；面板经路由器转发）
@@ -470,7 +483,7 @@ async function handle(req, env) {
 			try { b = await req.json(); } catch (e) {}
 			if (!safeEq(b.token, T.pkey)) return J({ error: 'bad token' }, 403);
 			if (b.op === 'test') {
-				const sent = await w.push({ title: '测试通知 🔔', body: '能看到这条，说明路由器有情况时会推送到这台手机', tag: 'test', lvl: 'info', force: true });
+				const sent = await w.push({ title: '测试通知 🔔', body: '能看到这条，说明路由器有情况时会推送到这台手机', tag: 'test', lvl: 'info', force: true , nolog: true });
 				return J({ ok: true, sent, subs: await w.subs('list', b), wx: await w.wxInfo() });
 			}
 			// 微信推送：设置 / 删除 PushPlus 的 token，设置后马上发一条测试

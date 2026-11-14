@@ -11,5 +11,18 @@ for (const [k, f] of Object.entries(pages)) {
 		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => 'data:image/webp;base64,' + fs.readFileSync(new URL('img/' + n + '.webp', dir)).toString('base64'));
 	out += `export const ${k} = ${JSON.stringify(html)};\n`;
 }
+// 4.0 管理后台：cloud/admin 打包好的页面（cd cloud/admin && npm run build）；只有 js / css，全部放进 site.js，不从外部加载
+const ad = new URL('../cloud/admin/dist/', import.meta.url), files = {};
+let adminHtml = '<!doctype html><meta charset="utf-8"><title>管理后台</title><p>管理后台还没打包：cd cloud/admin && npm run build';
+if (fs.existsSync(new URL('index.html', ad))) {
+	adminHtml = fs.readFileSync(new URL('index.html', ad), 'utf8');
+	const T = { js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', svg: 'image/svg+xml' };
+	for (const f of fs.readdirSync(new URL('assets/', ad))) {
+		const ext = f.split('.').pop();
+		if (!T[ext]) throw new Error('管理后台里有不认识的文件：' + f);
+		files[f] = { type: T[ext], body: fs.readFileSync(new URL('assets/' + f, ad), 'utf8') };
+	}
+}
+out += `export const ADMIN_APP = ${JSON.stringify(adminHtml)};\nexport const ADMIN_FILES = ${JSON.stringify(files)};\n`;
 fs.writeFileSync(new URL('../cloud/site.js', import.meta.url), out);
 console.log('site.js', out.length, 'bytes');

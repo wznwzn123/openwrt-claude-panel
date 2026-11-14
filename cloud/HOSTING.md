@@ -116,7 +116,8 @@ GitHub 仓库 → **Settings → Secrets and variables → Actions → Variables
 |---|---|
 | `https://example.com/` | 官网首页（介绍、下载、教程） |
 | `https://example.com/app` | 用户账号：邮箱 + 密码登录，「我的路由器」列表，输入配对码绑定 |
-| `https://example.com/admin` | 你的管理页：看名额、生成/作废邀请码、封禁/解封/删除路由器（用 ADMIN_KEY 进入） |
+| `https://example.com/admin` | 你的管理后台（4.0 新版，用 ADMIN_KEY 登录），按区分类：工作台统计、实时对话、问题反馈、公告、路由器、账号、续期申请、邀请码、续期码、访问统计、登录记录、操作记录、邮件记录、出错记录、设置。手机和电脑都能用 |
+| `https://example.com/admin/old` | 4.0 以前的单页管理页（功能一样，留着备用） |
 
 - **账号只记录「谁有哪几台路由器」**，不保存任何路由器的登录密钥（云端备份另算，见上面）。账号里点「打开面板」会跳到那台路由器的专属网址；第一次在新手机上打开，要用已经能用的手机在面板里「添加新手机」扫码授权。
 - 路由器面板「系统操作 → 绑定到账号」会显示 8 位配对码（10 分钟有效），在官网账号里输入就绑定了。面板里也能看到、移除绑定了这台路由器的账号。
@@ -137,7 +138,7 @@ npx wrangler secret put RESEND_API_KEY -c wrangler.hosted.toml
 
 发件地址默认是 `noreply@example.com`，想换的话在 `wrangler.hosted.toml` 的 `[vars]` 里加 `MAIL_FROM = "你想要的地址"`。
 
-**新申请提醒：**在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 加 `ADMIN_EMAIL` = 你的邮箱，再部署一次。以后有人提交续期申请就会发邮件给你。设好后在管理页「续期申请」右边点「**发测试邮件**」（或者 **Actions → 发测试邮件**），确认能收到；发不出去的话会显示邮件服务给的原因。
+**新申请提醒：**在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 加 `ADMIN_EMAIL` = 你的邮箱，再部署一次。以后有人提交续期申请就会发邮件给你。设好后在管理后台「设置与工具」里点「**发测试邮件**」（或者 **Actions → 发测试邮件**），确认能收到；发不出去的话会显示邮件服务给的原因。
 
 ## 安卓 App
 
@@ -157,6 +158,11 @@ App 的签名密钥已经加密放在仓库里（`android/signing/router-panel.j
 
 | 请求 | 作用 |
 |---|---|
+| `GET /api/admin/overview` | 工作台：路由器、账号、反馈、对话、登录、近 30 天统计 |
+| `GET /api/admin/stats?days=30` / `GET /api/admin/visitors?day=YYYY-MM-DD` | 每天的访问次数、访客数、各项计数；某一天的访客 IP |
+| `GET /api/admin/logins` / `log` / `mails` / `errors` | 登录记录（带 IP）、操作记录、邮件记录、出错记录 |
+| `GET /api/admin/chat` / `GET /api/admin/chat/{对话}?read=1` / `POST /api/admin/chat/{对话}` | 实时对话：列表、看消息、回复（`{"text","img"}`） |
+| `GET/POST/DELETE /api/admin/ann[/{编号}]` | 公告：列表、发布 / 修改、删除 |
 | `GET /api/admin/devices` | 所有路由器、已用名额 |
 | `POST /api/admin/devices/{子域名}/off` | 封禁（网址立刻打不开） |
 | `POST /api/admin/devices/{子域名}/on` | 解封 |

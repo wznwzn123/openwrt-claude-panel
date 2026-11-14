@@ -96,6 +96,16 @@ ok('[查询] 不返回原文和日志（编号泄露也看不到内容）', !('t
 	const id3 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === c3).id;
 	await adm('POST', '/feedback/' + id3 + '/done', { state: 'nofix', note: '这个功能路由器不支持', mail: true });
 	await adm('POST', '/feedback/' + id3 + '/done', { state: 'note', note: '补充一句', mail: true });
+	// 终端安装失败上报带邮箱（4.0 起必填）：存下来、发「收到了」邮件（说的是安装问题）、管理页能回邮件
+	const ri = await (await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：闪存只剩 0 MB', email: 'inst@x.com', log: 'x' }, '5.5.7.1')).json();
+	const iMail = sent.filter((m) => m.to[0] === 'inst@x.com');
+	ok('[安装上报] 带邮箱：发「我们收到了你上报的安装问题」，有受理编号，内容说重新运行安装命令', ri.ok && ri.mailed === 1 && iMail.length === 1 && iMail[0].subject === '我们收到了你上报的安装问题（受理编号 ' + ri.code.toUpperCase() + '）' && /重新运行一次安装命令/.test(iMail[0].html), JSON.stringify(iMail[0] || {}).slice(0, 160));
+	const iL = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === ri.code);
+	ok('[安装上报] 管理页：能发邮件给他，回复方式写着邮件', JSON.stringify(iL.mailTo) === '["inst@x.com"]' && iL.kind === 'install' && !iL.uid);
+	r = await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：xx', email: 'bad mail' }, '5.5.7.2');
+	ok('[安装上报] 邮箱格式不对：400，说「邮箱格式不对」（终端会如实提示）', r.status === 400 && /邮箱格式不对/.test((await r.json()).error));
+	const rold = await (await rp({ kind: 'install', text: '面板版本：3.1.3\n错误：旧版本不带邮箱', log: 'x' }, '5.5.7.3')).json();
+	ok('[安装上报] 旧版本（不带邮箱）照样能上报', rold.ok && /^[a-z2-9]{8}$/.test(rold.code));
 	globalThis.fetch = of; delete env.RESEND_API_KEY; sent.splice(0, sent.length, ...sent.filter((m) => m.to[0] === 'u@x.com'));
 	ok('[邮件] 无法修复：标题「暂时没法修复」，内容写原因', sent[0] && sent[0].subject === '你反馈的问题暂时没法修复（受理编号 ' + c3.toUpperCase() + '）' && sent[0].html.includes('受理编号：<b style="letter-spacing:.06em">' + c3.toUpperCase()) && sent[0].html.includes('/r/' + c3.toUpperCase()) && /暂时没法修复/.test(sent[0].html) && /原因/.test(sent[0].html) && /路由器不支持/.test(sent[0].html), JSON.stringify(sent[0] || {}).slice(0, 200));
 	ok('[邮件] 补充说明：标题「有新的说明」', sent[1] && sent[1].subject === '你反馈的问题有新的说明（受理编号 ' + c3.toUpperCase() + '）' && /补充一句/.test(sent[1].html), JSON.stringify(sent[1] || {}).slice(0, 200));
@@ -211,7 +221,7 @@ const csp = async (p) => (await api('GET', p)).headers.get('content-security-pol
 ok('[统计] 官网各页放行 Cloudflare 网页统计（脚本和上报地址）', (await Promise.all(['/', '/app', '/r', '/security', '/privacy'].map(csp))).every((c) => c.includes("script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com") && c.includes("connect-src 'self' https://cloudflareinsights.com")));
 ok('[统计] 管理页不放行（管理页不统计），其他安全设置不变', !(await csp('/admin')).includes('cloudflareinsights') && /frame-ancestors 'none'/.test(await csp('/admin')) && /frame-ancestors 'none'/.test(await csp('/')));
 r = await api('GET', '/privacy'); const phtml = await r.text();
-ok('[隐私] 隐私政策如实写了官网用 Cloudflare 网页统计、不用 Cookie、面板和管理页没有', /Cloudflare 网页统计/.test(phtml) && /不用 Cookie/.test(phtml) && /管理页和你的面板里没有统计/.test(phtml) && !/没有广告、统计、跟踪代码/.test(phtml));
+ok('[隐私] 隐私政策如实写了：Cloudflare 网页统计不用 Cookie；4.0 起官网记登录 IP（90 天）、访客 IP（30 天）；面板里没有统计', /Cloudflare 网页统计/.test(phtml) && /不用 Cookie/.test(phtml) && /你的面板里没有任何统计/.test(phtml) && /IP 30 天后自动删除/.test(phtml) && /90 天后自动删除/.test(phtml) && !/没有广告、统计、跟踪代码/.test(phtml));
 // 页面把回复当文字显示（不会被当成网页代码执行）
 ok('[页面] 说明用 esc() 转义后再显示', /esc\(x\.note\)/.test(html) && !/\$\{d\.reply\}|\$\{x\.note\}/.test(html));
 

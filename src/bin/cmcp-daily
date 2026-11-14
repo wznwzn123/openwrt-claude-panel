@@ -85,8 +85,9 @@ if (length(nd)) add('warn', '24 小时内有 ' + length(nd) + ' 台新设备连�
 else add('ok', '没有陌生设备连上');
 
 // 6) 存储空间 / 温度
-let df = split(trim(L.sh("df -k /overlay | tail -n 1")), /\s+/);
-if (length(df) >= 5) { let free = int(+df[3] / 1024), tot = +df[1] / 1024; if (tot > 0 && free * 100 / tot < 10) add('warn', '存储空间快满了：只剩 ' + free + ' MB'); else add('ok', '存储空间充足（还剩 ' + free + ' MB）'); }
+// 分区名很长时 BusyBox df 会换行：把数据行拼起来、从后往前数（总共、已用、可用）
+let df = split(trim(L.sh("{ df -k /overlay 2>/dev/null || df -k /; } | awk 'NR > 1 { l = l \" \" $0 } END { n = split(l, f, \" \"); if (n >= 6) print f[n - 4], f[n - 3], f[n - 2] }'")), /\s+/);
+if (length(df) == 3 && match(df[2], /^[0-9]+$/)) { let free = int(+df[2] / 1024), tot = +df[0] / 1024; if (tot > 0 && free * 100 / tot < 10) add('warn', '存储空间快满了：只剩 ' + free + ' MB'); else add('ok', '存储空间充足（还剩 ' + free + ' MB）'); }
 let temp = +(trim(readfile('/sys/class/thermal/thermal_zone0/temp') ?? '0')) / 1000;
 if (temp >= 85) add('err', '温度过高：' + int(temp) + '°C', '检查通风');
 else if (temp >= 75) add('warn', '温度偏高：' + int(temp) + '°C');

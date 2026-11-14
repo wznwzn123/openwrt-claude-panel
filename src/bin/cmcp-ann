@@ -1,0 +1,40 @@
+#!/usr/bin/ucode
+// 公告（4.0）：定时任务每 30 分钟运行一次，问官网（托管版问自己的开通中心）有没有新公告，存起来给面板「通知」看。
+// 「重要」的公告推送到手机一次；只推这台路由器第一次运行这个脚本以后发布的（装好之前的旧公告不推，打开面板时会弹一次）
+// 自建版顺便看「实时联系开发者」有没有新回复，有就推送（托管版由官网直接推送）
+// 用法：cmcp-ann        先随机等 0–10 分钟再取（大家的路由器错开时间）
+//       cmcp-ann now    马上取
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile } from 'fs';
+
+if (ARGV[0] != 'now') {
+	let n = (+trim(L.sh('echo $RANDOM')) || 0) % 600;
+	if (n > 0) L.sh('sleep ' + n);
+}
+const ST = L.D + '/ann.state';
+let c = L.ann_fetch(15), st = L.readj(ST, null), changed = false;
+// 第一次运行：记下从现在开始，以前的不推
+if (type(st) != 'object' || !+st.since) { st = { since: L.now(), pushed: [] }; changed = true; }
+else if (!c.fail) {
+	let pushed = type(st.pushed) == 'array' ? st.pushed : [], n = 0;
+	for (let a in c.list) {
+		if (a.level != 'important' || a.at / 1000 < +st.since || index(pushed, a.id) >= 0) continue;
+		push(pushed, a.id);
+		// 一次最多推 2 条，多的在面板「通知」里看
+		if (++n > 2) continue;
+		L.sh(sprintf('CMCP_NOLOG=1 /usr/sbin/cmcp-notify info ann %s %s ann', L.shq('📢 ' + a.title), L.shq(a.body)));
+	}
+	if (n) { st.pushed = slice(pushed, -50); changed = true; }
+}
+// 自建版：开发者回复了没有
+let cc = readfile(L.D + '/hub.conf') == null ? L.readj(L.D + '/chat.conf', null) : null;
+if (type(cc) == 'object' && match(cc.cid ?? '', /^[a-z2-9]{12}$/) && match(cc.ckey ?? '', /^[a-z2-9]{32}$/) && match(cc.hub ?? '', /^https:\/\/[A-Za-z0-9.-]+(:[0-9]+)?$/)) {
+	let j = null;
+	try { j = json(L.sh(sprintf("curl -s -m 15 -X POST -H 'Content-Type: application/json' -d %s %s", L.shq(sprintf('%J', { op: 'get', cid: cc.cid, ckey: cc.ckey, after: 99999999 })), L.shq(cc.hub + '/api/chat')))); } catch (e) {}
+	if (type(j) == 'object' && +j.uu > 0 && +j.seq > +(st.cseq ?? 0)) {
+		L.sh(sprintf('CMCP_NOLOG=1 /usr/sbin/cmcp-notify info chat %s %s chat', L.shq('💬 开发者回复了你'), L.shq('有 ' + j.uu + ' 条新回复，打开面板「实时联系开发者」看看')));
+		st.cseq = +j.seq; changed = true;
+	}
+}
+if (changed) L.writej(ST, st);

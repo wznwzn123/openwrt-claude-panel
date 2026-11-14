@@ -39,6 +39,18 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 	<div class="card"><div id="aps"></div></div>
 	<div class="sech"><h2>问题反馈 <span class="pill" id="fbN" style="font-size:13px;vertical-align:middle"></span></h2></div>
 	<div class="card"><div id="fbs"></div></div>
+	<div class="sech"><h2>公告 <span class="pill" id="annN" style="font-size:13px;vertical-align:middle"></span></h2></div>
+	<div class="card">
+		<p class="muted" style="margin:0 0 6px;font-size:13px">发出去以后，所有人（托管版和自建版）打开面板的「通知」都能看到。选「重要」的，路由器还会推送到手机，打开面板时也会弹出来一次。</p>
+		<form id="fAnn" class="g3">
+			<div class="full"><label class="f">标题</label><input class="input" name="title" maxlength="80" required></div>
+			<div class="full"><label class="f">内容（可以不填）</label><textarea class="input" name="body" rows="3" maxlength="2000" style="resize:vertical"></textarea></div>
+			<div><label class="f">级别</label><select class="input" name="level"><option value="normal">普通</option><option value="important">重要（推送到手机）</option></select></div>
+			<div><label class="f">显示几天（0 = 一直显示）</label><input class="input" name="days" type="number" min="0" max="365" value="0" required></div>
+			<div class="full"><button class="btn primary" data-go>发布公告</button> <button class="btn hidden" type="button" data-cancel>不改了</button><span class="err" data-err></span></div>
+		</form>
+		<div id="anns" style="margin-top:8px"></div>
+	</div>
 	<div class="sech"><h2>邀请码</h2></div>
 	<div class="card">
 		<form id="fInv" class="g3">
@@ -366,7 +378,7 @@ $('users').onclick = async (e) => {
 };
 /* ---------- 操作记录 ---------- */
 let LOGS = [], LOGN = 30;
-const OPN = { off: '封禁', on: '解封', delete: '删除路由器', restore: '恢复路由器', purge: '彻底删除路由器', protect: '保护', unprotect: '取消保护', extend: '加天数', note: '改备注', invite: '生成邀请码', 'invite-del': '作废邀请码', renewal: '生成续期码', 'renewal-del': '作废续期码', approve: '通过续期', reject: '拒绝续期', unregister: '路由器卸载', idle: '长期没上线', 'user-delete': '删除账号', 'user-restore': '恢复账号', 'user-purge': '彻底删除账号' };
+const OPN = { off: '封禁', on: '解封', delete: '删除路由器', restore: '恢复路由器', purge: '彻底删除路由器', protect: '保护', unprotect: '取消保护', extend: '加天数', note: '改备注', invite: '生成邀请码', 'invite-del': '作废邀请码', renewal: '生成续期码', 'renewal-del': '作废续期码', approve: '通过续期', reject: '拒绝续期', unregister: '路由器卸载', idle: '长期没上线', 'user-delete': '删除账号', 'user-restore': '恢复账号', 'user-purge': '彻底删除账号', ann_new: '发布公告', ann_edit: '修改公告', ann_del: '删除公告' };
 const BYN = { admin: '管理员', system: '自动', router: '路由器', user: '用户' };
 function renderLogs() {
 	const t = (x) => { const d = new Date(x); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -374,6 +386,49 @@ function renderLogs() {
 		+ (LOGS.length > LOGN ? '<button class="btn sm" id="logMore" style="margin-top:8px;width:100%">再看 ' + Math.min(50, LOGS.length - LOGN) + ' 条</button>' : '') : '<p class="muted">还没有记录（从这个版本开始记）</p>';
 	const m = $('logMore'); if (m) m.onclick = () => { LOGN += 50; renderLogs(); };
 }
+/* ---------- 公告 ---------- */
+let ANNS = [], ANN_ED = '';
+function renderAnns() {
+	const now = Date.now(), live = ANNS.filter((a) => !a.exp || a.exp > now);
+	$('annN').textContent = live.length ? live.length + ' 条在显示' : '';
+	$('anns').innerHTML = ANNS.length ? ANNS.map((a) => {
+		const gone = a.exp && a.exp <= now;
+		return `<div class="item" data-ann="${esc(a.id)}" style="align-items:flex-start${gone ? ';opacity:.6' : ''}"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${a.level === 'important' ? '<span class="pill" style="background:rgba(255,149,0,.16);color:var(--warn);margin-right:6px">重要</span>' : ''}${esc(a.title)}</b>
+			${a.body ? `<span style="display:block;white-space:pre-wrap;color:var(--text);font-size:14px;margin:4px 0">${esc(a.body)}</span>` : ''}
+			<span>${new Date(a.at).toLocaleString('zh-CN', { hour12: false })} 发布${a.upd && a.upd !== a.at ? ' · ' + ago(a.upd) + '改过' : ''} · ${gone ? '已过期，大家看不到了' : a.exp ? day(a.exp) + ' 以后不再显示' : '一直显示'}</span></div>
+			<div style="display:flex;gap:6px;flex:none"><button class="btn sm" data-aed>修改</button><button class="btn sm" data-adel>删除</button></div></div>`;
+	}).join('') : '<p class="muted" style="margin:4px 0 0">还没发过公告</p>';
+}
+function annEdit(a) {
+	const f = $('fAnn'); ANN_ED = a ? a.id : '';
+	f.title.value = a ? a.title : ''; f.body.value = a ? a.body : ''; f.level.value = a ? a.level : 'normal';
+	f.days.value = a && a.exp ? Math.max(1, Math.ceil((a.exp - Date.now()) / 86400e3)) : 0;
+	f.querySelector('[data-go]').textContent = a ? '保存修改' : '发布公告';
+	f.querySelector('[data-cancel]').classList.toggle('hidden', !a);
+	f.querySelector('[data-err]').textContent = '';
+	if (a) f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('fAnn').querySelector('[data-cancel]').onclick = () => annEdit(null);
+$('fAnn').onsubmit = async (e) => {
+	e.preventDefault(); const f = e.target, b = f.querySelector('[data-go]'), er = f.querySelector('[data-err]');
+	if (f.level.value === 'important' && !ANN_ED && !confirm('「重要」公告会推送到所有人的手机，确定发布？')) return;
+	b.disabled = true; er.textContent = '';
+	try {
+		await api('POST', 'ann' + (ANN_ED ? '/' + ANN_ED : ''), { title: f.title.value, body: f.body.value, level: f.level.value, days: +f.days.value || 0 });
+		toast(ANN_ED ? '公告已修改' : '公告已发布'); annEdit(null);
+		ANNS = (await api('GET', 'ann')).list; renderAnns();
+	} catch (x) { er.textContent = x.message; }
+	b.disabled = false;
+};
+$('anns').onclick = async (e) => {
+	const row = e.target.closest('[data-ann]'); if (!row) return;
+	const a = ANNS.find((x) => x.id === row.dataset.ann); if (!a) return;
+	if (e.target.closest('[data-aed]')) return annEdit(a);
+	if (e.target.closest('[data-adel]')) {
+		if (!confirm('删除公告「' + a.title + '」？大家的面板里也会消失')) return;
+		try { await api('DELETE', 'ann/' + a.id); toast('已删除'); if (ANN_ED === a.id) annEdit(null); ANNS = (await api('GET', 'ann')).list; renderAnns(); } catch (x) { toast(x.message); }
+	}
+};
 let FBS = [], FB_ALL = false;
 function renderFbs() {
 	const todo = FBS.filter((f) => !f.done && !f.nofix), list = FB_ALL ? FBS : todo;
@@ -436,10 +491,10 @@ $('fbs').onclick = async (e) => {
 };
 async function load() {
 	try { LATEST = String((await (await fetch('/api/router/version', { cache: 'no-store' })).json()).version || ''); } catch (e) {}
-	const [d, i, k, ap, us, lg, fb] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications'), api('GET', 'users').catch(() => ({ list: [] })), api('GET', 'log').catch(() => ({ list: [] })), api('GET', 'feedback').catch(() => ({ list: [] }))]);
-	APS = ap.list; USERS = us.list; LOGS = lg.list; FBS = fb.list;
+	const [d, i, k, ap, us, lg, fb, an] = await Promise.all([api('GET', 'devices'), api('GET', 'invites'), api('GET', 'renewals'), api('GET', 'applications'), api('GET', 'users').catch(() => ({ list: [] })), api('GET', 'log').catch(() => ({ list: [] })), api('GET', 'feedback').catch(() => ({ list: [] })), api('GET', 'ann').catch(() => ({ list: [] }))]);
+	APS = ap.list; USERS = us.list; LOGS = lg.list; FBS = fb.list; ANNS = an.list;
 	DEVS = d.list; TRASH_DAYS = d.trashDays || 30; STATS = { count: d.count, max: d.max, dnsFull: d.dnsFull || null };
-	renderStats(); renderDevs(); renderInv(i.list); renderRen(k.list); renderAps(); renderUsers(); renderLogs(); renderFbs();
+	renderStats(); renderDevs(); renderInv(i.list); renderRen(k.list); renderAps(); renderUsers(); renderLogs(); renderFbs(); renderAnns();
 	$('vKey').classList.add('hidden'); $('vMain').classList.remove('hidden'); $('outBtn').classList.remove('hidden');
 }
 if (KEY) load().catch(() => logout()); else logout();

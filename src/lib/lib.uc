@@ -58,6 +58,41 @@ function notify(lvl, kind, title, body, tag) {
 	sh(sprintf('/usr/sbin/cmcp-notify %s %s %s %s %s', shq(lvl), shq(kind), shq(title), shq(body ?? ''), shq(tag ?? kind)));
 }
 
+/* 公告（4.0）：托管版问自己的开通中心，自建版问官网；自己搭的开通中心还没有公告接口时退回官网。
+   存到 /tmp/cmcp_ann.json 给面板看（定时任务每 30 分钟取一次）；取不到时保留上次的，5 分钟后再试 */
+const ANN_HUB = 'https://yrlove520.com', ANN_CACHE = '/tmp/cmcp_ann.json';
+function ann_hub() { let m = match(readfile(D + '/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/); return m ? replace(trim(m[2]), /\/+$/, '') : ANN_HUB; }
+function ann_get(url, tmo) {
+	let j = null;
+	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices')))); } catch (e) {}
+	return type(j) == 'object' && j.ok && type(j.list) == 'array' ? j.list : null;
+}
+function ann_fetch(tmo) {
+	let h = ann_hub(), l = ann_get(h, tmo);
+	if (l == null && h != ANN_HUB) l = ann_get(ANN_HUB, tmo);
+	let old = readj(ANN_CACHE, null);
+	if (l == null) {
+		let c = { at: now() - 3300, list: type(old?.list) == 'array' ? old.list : [], fail: true };
+		writej(ANN_CACHE, c);
+		return c;
+	}
+	let out = [];
+	for (let a in l) {
+		if (type(a) != 'object' || !match('' + a.id, /^[a-z2-9]{10}$/) || type(a.title) != 'string' || !length(a.title)) continue;
+		push(out, { id: a.id, title: a.title, body: type(a.body) == 'string' ? a.body : '', level: a.level == 'important' ? 'important' : 'normal', at: +a.at || 0, upd: +a.upd || +a.at || 0 });
+		if (length(out) >= 20) break;
+	}
+	let c = { at: now(), list: out };
+	writej(ANN_CACHE, c);
+	return c;
+}
+// 面板要看：缓存超过 1 小时（或没有，比如刚重启）就现取一次
+function ann_list(tmo) {
+	let c = readj(ANN_CACHE, null);
+	if (type(c) != 'object' || type(c.list) != 'array' || now() - (+c.at || 0) > 3600) c = ann_fetch(tmo);
+	return c;
+}
+
 // 局域网设备：IP → { mac, name }
 function lan_devices() {
 	let byip = {}, names = {};
@@ -117,4 +152,4 @@ function local_key() {
 	return k;
 }
 
-export { D, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key };
+export { D, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ANN_CACHE };

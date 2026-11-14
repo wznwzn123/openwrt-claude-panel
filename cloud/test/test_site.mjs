@@ -138,7 +138,7 @@ for (const dark of [false, true]) {
 	await page.fill('#fPw [name=old]', 'alice-pass-1'); await page.fill('#fPw [name=password]', 'alice-pass-2'); await page.click('#fPw button'); await W(600);
 	ok('修改密码成功', /密码已修改/.test(await page.textContent('#toast')));
 	// 管理员页面
-	await page.goto(B + '/admin'); await W(400);
+	await page.goto(B + '/admin/old'); await W(400);
 	await page.fill('#fKey [name=k]', 'wrong-key-1234567890'); await page.click('#fKey button'); await W(500);
 	ok('管理页：密钥不对进不去', /密钥不对/.test(await page.textContent('#vKey')));
 	await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(800);
@@ -146,6 +146,22 @@ for (const dark of [false, true]) {
 	ok('管理页：列出路由器和绑定的账号数', /Kwrt/.test(await page.textContent('#devs')) && /1 个账号/.test(await page.textContent('#devs')));
 	await page.fill('#fInv [name=note]', '给朋友'); await page.click('#fInv button'); await W(800);
 	ok('管理页：生成邀请码', /给朋友/.test(await page.textContent('#invs')));
+	// 公告：发布、修改、删除；公开接口能拿到
+	await page.fill('#fAnn [name=title]', '4.0 发布了' + (dark ? '（深色）' : '')); await page.fill('#fAnn [name=body]', '面板里新加了「通知」，所有消息都在一个地方。'); await page.selectOption('#fAnn [name=level]', 'important'); await page.fill('#fAnn [name=days]', '7');
+	await page.click('#fAnn [data-go]'); await W(800);
+	ok('管理页：发布重要公告', /4\.0 发布了/.test(await page.textContent('#anns')) && /重要/.test(await page.textContent('#anns')) && /以后不再显示/.test(await page.textContent('#anns')) && /条在显示/.test(await page.textContent('#annN')));
+	ok('管理页：公开接口拿得到这条公告', (await api('/api/notices')).list.some((x) => x.title.startsWith('4.0 发布了') && x.level === 'important'));
+	const annRow = page.locator('#anns [data-ann]', { hasText: '4.0 发布了' + (dark ? '（深色）' : '') }).first();
+	await annRow.locator('[data-aed]').click(); await W(300);
+	ok('管理页：点「修改」把内容填回表单，按钮变「保存修改」', (await page.inputValue('#fAnn [name=title]')).startsWith('4.0 发布了') && (await page.textContent('#fAnn [data-go]')) === '保存修改' && await page.isVisible('#fAnn [data-cancel]'));
+	await page.fill('#fAnn [name=title]', '4.0 已发布' + (dark ? '（深色）' : '')); await page.click('#fAnn [data-go]'); await W(800);
+	ok('管理页：保存修改后表单复原', /4\.0 已发布/.test(await page.textContent('#anns')) && (await page.inputValue('#fAnn [name=title]')) === '' && (await page.textContent('#fAnn [data-go]')) === '发布公告');
+	await page.fill('#fAnn [name=title]', '临时公告'); await page.click('#fAnn [data-go]'); await W(800);
+	await page.locator('#anns [data-ann]', { hasText: '临时公告' }).first().scrollIntoViewIfNeeded();
+	await shot('admin-ann');
+	await page.locator('#anns [data-ann]', { hasText: '临时公告' }).first().locator('[data-adel]').click(); await W(800);
+	ok('管理页：删除公告', !/临时公告/.test(await page.textContent('#anns')));
+	ok('管理页：公告区排版不重叠', await page.evaluate(() => { const els = [...document.querySelectorAll('#fAnn > div, #anns [data-ann] > *, #anns [data-ann] button')]; for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) { if (els[i].contains(els[j]) || els[j].contains(els[i])) continue; const a = els[i].getBoundingClientRect(), c = els[j].getBoundingClientRect(); if (a.width && c.width && a.left < c.right - 1 && c.left < a.right - 1 && a.top < c.bottom - 1 && c.top < a.bottom - 1) return false; } return document.documentElement.scrollWidth <= innerWidth; }));
 	await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="off"]'); await W(800);
 	ok('管理页：封禁', /已封禁/.test(await page.textContent('#devs [data-sub="' + R2.sub + '"]')));
 	await page.click('#devs [data-sub="' + R2.sub + '"] [data-op="on"]'); await W(800);
@@ -278,7 +294,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await realFetch(B + '/api/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'install', text: '面板版本：3.0.0\n错误：依赖安装失败', log: '==> 安装依赖\n ✗ 依赖安装失败：cloudflared 不在软件源里' }) });
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: SHOTS ? 2 : 1 });
 	const page = await ctx.newPage(); const e3 = []; page.on('pageerror', (x) => e3.push(x.message));
-	await page.goto(B + '/admin'); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(1200);
+	await page.goto(B + '/admin/old'); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890'); await page.click('#fKey button'); await W(1200);
 	{ // 版本号：路由器心跳报上来的面板版本，最新版（v1.3.2）以前的标「旧版」
 		for (const [R, v] of [[R1, '1.3.1'], [R2, 'v1.3.2']]) { const w = env.W.get('dev:' + R.sub); const r = (await w.ctx.storage.get('r')) || {}; r.last = Date.now(); r.rep = { ...(r.rep || {}), ver: v }; await w.ctx.storage.put('r', r); }
 		await page.reload(); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890').catch(() => {}); await page.click('#fKey button').catch(() => {}); await W(1500);

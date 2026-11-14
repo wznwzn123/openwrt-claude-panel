@@ -248,6 +248,75 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .fsteps b{display:block;font-size:12.5px;font-weight:600;margin-top:7px;line-height:1.3;word-break:keep-all}
 .fsteps .off b{color:var(--muted);font-weight:500}.fsteps .bad b{color:var(--danger)}
 /* 我的反馈 */
+.bell{width:36px;height:36px;border-radius:50%;border:0;padding:0;background:var(--fill);box-shadow:inset 0 0 0 .5px var(--line);color:var(--text);display:grid;place-items:center;position:relative;flex:none;cursor:pointer;transition:transform .18s var(--spring)}
+@media(max-width:359px){.toplogo{display:none}}
+.bell:active{transform:scale(.92)}.bell svg{width:19px;height:19px}
+.bell em{position:absolute;top:-4px;right:-5px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--danger);color:#fff;font:700 10.5px/18px system-ui,sans-serif;font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--bg)}
+.ntseg .chip{font-size:12.5px;padding:7px 0;min-width:0;overflow:hidden;text-overflow:ellipsis}.ntseg .chip small{font-size:11px;font-weight:600;opacity:.75;margin-left:2px}
+/* 通知页（4.0）：上面两个入口卡片，置顶重要公告，下面按天的时间线 */
+.nthead{display:flex;align-items:center;justify-content:space-between;gap:10px}.nthead h1{margin:0}
+.ntsub{margin:6px 0 0;line-height:1.55}
+.ntent{display:grid;grid-template-columns:1fr;gap:8px;margin-top:14px}@media(min-width:600px){.ntent{grid-template-columns:1fr 1fr}}
+.ntent button{display:flex;align-items:center;gap:10px;text-align:left;border:0;border-radius:18px;padding:12px;background:var(--fill);color:var(--text);cursor:pointer;min-width:0;position:relative;font:inherit;transition:transform .18s var(--spring)}
+.ntent button:active{transform:scale(.97)}
+.ntent i{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;flex:none;color:#fff}.ntent i svg{width:20px;height:20px}
+.ntent b{display:block;font-size:14px;line-height:1.3}.ntent span{display:block;font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntent div{min-width:0;flex:1}
+.ntent button::after{content:"›";font-size:20px;color:var(--muted);opacity:.6;margin-left:4px}
+.ntent em{position:static;flex:none;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--danger);color:#fff;font:700 10.5px/18px system-ui,sans-serif;font-style:normal;text-align:center}
+.ntpin{margin-top:14px;border-radius:22px;padding:14px 15px;background:linear-gradient(135deg,var(--wsoft),transparent 70%),var(--card);box-shadow:var(--shadow),inset 0 0 0 1px var(--wsoft);cursor:pointer}
+.ntpin .pt{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--warn)}
+.ntpin b{display:block;font-size:16px;margin-top:6px;line-height:1.4}
+.ntpin p{margin:4px 0 0;font-size:13.5px;line-height:1.6;color:var(--muted);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ntpin.open p{display:block;color:var(--text)}
+.ntpin .pm{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)}
+.ntday{font-size:12.5px;font-weight:700;color:var(--muted);margin:16px 6px 7px;display:flex;justify-content:space-between}
+.ntlist{padding:2px 14px}
+.ntit{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:.5px solid var(--line);cursor:pointer;position:relative}.ntit:last-child{border-bottom:0}
+.ntic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;margin-top:1px}.ntic svg{width:18px;height:18px}
+.ntic.err{background:var(--dsoft);color:var(--danger)}.ntic.ok{background:var(--oksoft);color:var(--ok)}.ntic.warn{background:var(--wsoft);color:var(--warn)}.ntic.info{background:var(--soft);color:var(--brand)}
+.ntb{flex:1;min-width:0}.ntb>b{display:block;font-size:14.5px;line-height:1.45;word-break:break-word;font-weight:600}
+.ntit.new .ntb>b{font-weight:800}
+.ntit.new::before{content:"";position:absolute;left:-9px;top:25px;width:6px;height:6px;border-radius:50%;background:var(--brand)}
+.ntb>p{margin:3px 0 0;font-size:13px;line-height:1.55;color:var(--muted);white-space:pre-line;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ntit.open .ntb>p{display:block;color:var(--text)}
+.ntm{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:5px;font-size:12px;color:var(--muted);align-items:center}.ntm i{font-style:normal;font-weight:600}
+.ntgo{flex:none;color:var(--muted);font-size:20px;line-height:1;margin-top:7px;opacity:.6}
+.ntempty{text-align:center;padding:34px 16px}.ntempty svg{width:40px;height:40px;color:var(--muted);opacity:.5}.ntempty b{display:block;margin-top:8px}.ntempty p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+@media(min-width:900px){.ntent{grid-template-columns:repeat(2,minmax(0,320px))}}
+/* 实时联系开发者（4.0） */
+body.chatp .dock{display:none}body.chatp main.wrap{padding-bottom:0}
+#p-chat.on{display:flex;flex-direction:column;min-height:calc(100dvh - var(--toph,64px) - 12px)}
+.chhero{padding:14px 16px}.chhero .chtop{display:flex;align-items:center;gap:12px}
+.chav{width:44px;height:44px;border-radius:15px;background:#101C40;display:grid;place-items:center;flex:none;position:relative}.chav svg{width:28px;height:28px}
+.chav::after{content:"";position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2.5px var(--card)}
+.chhero h1{font-size:19px;margin:0}.chhero .muted{font-size:12.5px;margin-top:2px}
+.chtips{margin:12px 0 0;padding:10px 12px;border-radius:14px;background:var(--fill);font-size:12.5px;line-height:1.6;color:var(--muted)}
+.chtips b{color:var(--text)}.chtips ul{margin:4px 0 0;padding-left:18px}.chtips li{margin:2px 0}
+.chtips.hide{display:none}
+.chlist{flex:1;padding:10px 2px 8px;display:flex;flex-direction:column;gap:4px}
+.chday{align-self:center;font-size:11.5px;color:var(--muted);background:var(--fill);padding:3px 10px;border-radius:99px;margin:10px 0 6px}
+.chrow{display:flex;flex-direction:column;max-width:82%;align-self:flex-start}
+.chrow.me{align-self:flex-end;align-items:flex-end}
+.chwho{font-size:11.5px;color:var(--muted);margin:6px 4px 3px}
+.chbub{padding:9px 13px;border-radius:18px 18px 18px 6px;background:var(--card);box-shadow:var(--shadow);font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+.chrow.me .chbub{border-radius:18px 18px 6px 18px;background:var(--brand);color:#fff;box-shadow:none}
+.chbub img{display:block;max-width:min(240px,62vw);max-height:300px;border-radius:12px;margin:2px 0;cursor:zoom-in;background:var(--fill)}
+.chbub .imgph{display:grid;place-items:center;width:160px;height:110px;border-radius:12px;background:var(--fill2);font-size:12px;color:var(--muted)}
+.chmeta{font-size:11px;color:var(--muted);margin:3px 6px 0}
+.chmeta.bad{color:var(--danger);cursor:pointer;font-weight:600}
+.chempty{margin:auto 0;text-align:center;padding:24px 8px;color:var(--muted);font-size:13.5px;line-height:1.6}
+.chempty .chips{justify-content:center;flex-wrap:wrap}
+.chbox{position:sticky;bottom:0;z-index:5;margin:0 -16px;padding:8px 12px max(10px,env(safe-area-inset-bottom));background:var(--glass);-webkit-backdrop-filter:saturate(160%) blur(16px);backdrop-filter:saturate(160%) blur(16px);border-top:.5px solid var(--line)}
+.chin{display:flex;align-items:flex-end;gap:8px}
+.chin textarea{flex:1;min-width:0;resize:none;border:0;border-radius:20px;padding:9px 14px;font:inherit;font-size:15px;line-height:1.45;max-height:132px;background:var(--card);color:var(--text);box-shadow:inset 0 0 0 .5px var(--line);outline:none}
+.chin textarea:focus{box-shadow:inset 0 0 0 1.5px var(--brand)}
+.chin button{width:40px;height:40px;border-radius:50%;border:0;display:grid;place-items:center;flex:none;cursor:pointer;background:var(--fill);color:var(--text);transition:transform .18s var(--spring)}
+.chin button:active{transform:scale(.9)}.chin button svg{width:20px;height:20px}
+.chin button.send{background:var(--brand);color:#fff}.chin button:disabled{opacity:.45}
+.chpre{display:flex;align-items:center;gap:8px;margin-bottom:8px}.chpre img{width:54px;height:54px;object-fit:cover;border-radius:10px}.chpre span{flex:1;font-size:12.5px;color:var(--muted)}
+.chnote{font-size:11.5px;color:var(--muted);text-align:center;margin-top:6px}
+@media(min-width:900px){.chbox{margin:0;border-radius:22px 22px 0 0;border:.5px solid var(--line);border-bottom:0}.chrow{max-width:68%}}
 .fbitem{margin:0 0 12px}.fbitem.hl{box-shadow:0 0 0 2px var(--brand),var(--shadow)}
 .fbhd{display:flex;justify-content:space-between;align-items:center;gap:10px}.fbhd>span{flex:none;font-size:12.5px;color:var(--muted)}
 .fbpill{display:inline-flex;align-items:center;gap:6px;min-width:0}.fbpill i{font-style:normal;padding:4px 9px;border-radius:99px;font-size:12px;font-weight:700;background:var(--soft);color:var(--brand);white-space:nowrap}
@@ -568,6 +637,7 @@ section.page{display:none}section.page.on{display:block}
 		</div>
 		<div class="actions">
 			<span class="pill hidden" id="jobPill"><i class="dot busy"></i><span id="jobText">后台任务</span></span>
+			<button class="bell" id="bellBtn" type="button" aria-label="通知" title="通知"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><em id="bellN" class="hidden"></em></button>
 			<div class="topcap"><span class="pill" id="statusPill"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
 		</div>
 	</div>
@@ -779,6 +849,42 @@ section.page{display:none}section.page.on{display:block}
 </section>
 
 <!-- 我的反馈：这台路由器发过的反馈和开发者的处理进度（托管版） -->
+<section class="page" id="p-notice">
+	<div class="hero">
+		<div class="nthead"><h1>通知</h1><span class="pill" id="ntPill">—</span></div>
+		<p class="muted ntsub">路由器出的问题和自动修复、云端监测、托管服务、开发者公告、版本更新、反馈进度都汇总在这里；重要的也会推送到手机。</p>
+		<div class="ntent">
+			<button type="button" data-goto="chat"><i style="background:#34c759"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z"/><path d="M9 9.5h6M9 12.5h3.5"/></svg></i><div><b>实时联系开发者</b><span id="ntChatSub">遇到问题直接问</span></div><em class="hidden" id="ntChatN"></em></button>
+			<button type="button" data-goto="myfb"><i style="background:#5e5ce6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M10 12l1.8 1.8L15 10.5"/></svg></i><div><b>我的反馈</b><span id="ntFbSub">处理到哪一步</span></div></button>
+		</div>
+		<div class="chips tfseg ntseg" id="ntChips" style="margin-top:14px"></div>
+	</div>
+	<div id="ntPin"></div>
+	<div id="ntList" style="margin-top:4px"><section class="card empty" style="margin-top:14px">读取中…</section></div>
+</section>
+<section class="page" id="p-chat">
+	<div class="hero chhero">
+		<div class="chtop"><div class="chav" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+			<div style="min-width:0;flex:1"><h1>实时联系开发者</h1><div class="muted" id="chSub">直接跟开发这个面板的人对话</div></div>
+			<button class="btn sm" id="chTipBtn" type="button">说明</button></div>
+		<div class="chtips" id="chTips"><b>这是干嘛的？</b>遇到问题、看不懂的提示、想要的新功能，都可以在这里直接跟开发者说，不用填表格。
+			<ul><li>开发者看到会尽快回复（一般当天），回复会<b>推送到手机</b>，打开这一页也能看到。</li>
+			<li>说清楚是<b>哪一页、做了什么、看到什么提示</b>；能<b>截图</b>就更快（点输入框左边的图片按钮）。</li>
+			<li><b>别发密码、密钥、订阅链接</b>这些敏感信息。开发者不会找你要。</li>
+			<li>路由器的型号和面板版本会自动带上，不用自己写。</li></ul></div>
+	</div>
+	<div class="chlist" id="chList"><div class="chempty">读取中…</div></div>
+	<div class="chbox">
+		<div class="chpre hidden" id="chPre"><img alt="要发的图片" id="chPreImg"><span>图片会跟这条消息一起发出去</span><button class="btn sm" id="chPreX" type="button">不发了</button></div>
+		<div class="chin">
+			<button type="button" id="chImgBtn" aria-label="发图片" title="发图片"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-5-5L7 19"/></svg></button>
+			<input type="file" id="chFile" accept="image/*" class="hidden">
+			<textarea id="chText" rows="1" maxlength="2000" placeholder="写下你的问题或建议…" aria-label="消息内容"></textarea>
+			<button type="button" class="send" id="chSend" aria-label="发送" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button>
+		</div>
+		<div class="chnote" id="chNote">开发者回复后会推送到手机</div>
+	</div>
+</section>
 <section class="page" id="p-myfb">
 	<div class="hero">
 		<div class="herohead"><h1>我的反馈</h1></div>
@@ -1186,7 +1292,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈' };
+const TITLES = { main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -1253,7 +1359,9 @@ const NAV = [
 		{ p: 'cbk', i: '☁', t: '云端备份' },
 		['admin/quickstart', 'LuCI 首页', '⌂'],
 	] },
-	{ g: '帮助', items: [
+	{ g: '消息与帮助', items: [
+		{ p: 'notice', i: '🔔', t: '通知' },
+		{ p: 'chat', i: '💬', t: '实时联系开发者' },
 		{ p: 'myfb', i: '✉', t: '我的反馈' },
 	] },
 ];
@@ -1353,7 +1461,7 @@ const pageTitle = (p) => TITLES[p] || NAVK[p]?.t || '';
 let navOpen;
 try { navOpen = JSON.parse(store.get('rp_nav') || 'null'); } catch (e) {}
 if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 1, '网络': 1, '工具': 1 };
-const NAV_IC = {"myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"]};
+const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"]};
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
@@ -1405,6 +1513,7 @@ async function go(p) {
 	if (p !== page && DIRTY[page] && DIRTY[page]() && !(await confirmBox('还有没保存的修改', '离开这一页会丢掉这些修改。', '不保存，离开', true))) return;
 	const prev = page;
 	page = p;
+	if (p === 'notice' && prev !== 'notice') NT.view = null;
 	const sec = p.startsWith('k:') ? 'luci' : p;
 	navMark();
 	$('pageTitle').textContent = pageTitle(p);
@@ -1416,6 +1525,8 @@ async function go(p) {
 		if (page !== p) return; // 又点了别的页面
 		$$('section.page').forEach((s) => s.classList.toggle('on', s.id === 'p-' + sec));
 		document.body.classList.toggle('luci', sec === 'luci');
+		document.body.classList.toggle('chatp', sec === 'chat');
+		if (sec !== 'chat') chStop();
 		if (sec !== 'luci' && prev && prev.startsWith('k:')) lfClose();
 		scrollTo({ top: 0 });
 		refresh();
@@ -3910,7 +4021,8 @@ const T = {
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
 // 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
 // 截图压缩成 JPEG（最长边 1600，太大再降画质），手机、电脑的浏览器和安卓 App 都能用
-function shrinkImg(file) {
+function shrinkImg(file, lim) {
+	lim = lim || 1.3e6;
 	return new Promise((ok, no) => {
 		if (!file || !/^image\//.test(file.type || 'image/')) return no(new Error('只能选图片'));
 		const url = URL.createObjectURL(file), img = new Image();
@@ -3921,8 +4033,8 @@ function shrinkImg(file) {
 				const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
 				URL.revokeObjectURL(url);
 				let q = 0.82, d = c.toDataURL('image/jpeg', q);
-				while (d.length > 1.3e6 && q > 0.4) { q -= 0.12; d = c.toDataURL('image/jpeg', q); }
-				if (d.length > 2e6) return no(new Error('图片太大了，换一张试试'));
+				while (d.length > lim && q > 0.3) { q -= 0.12; d = c.toDataURL('image/jpeg', q); }
+				if (d.length > Math.max(lim * 1.4, 1.2e6)) return no(new Error('图片太大了，换一张试试'));
 				ok(d);
 			} catch (e) { URL.revokeObjectURL(url); no(new Error('这张图片处理不了，换一张试试')); }
 		};
@@ -4182,7 +4294,7 @@ function fbSent(r) {
 	${fbSteps(1, false)}
 	<p class="muted" style="margin:12px 0 0;line-height:1.6">谢谢！${r.images ? r.images + ' 张截图也一起发过去了。' : ''}开发者回复以后，你打开面板时会自动弹出来，不用自己去查。</p>
 	${fbCodeRow(r.code)}
-	<p class="muted" style="font-size:13px;margin:10px 0 0;line-height:1.6">随时可以在侧边栏「帮助 → 我的反馈」里看处理到哪一步。</p>
+	<p class="muted" style="font-size:13px;margin:10px 0 0;line-height:1.6">随时可以在侧边栏「消息与帮助 → 我的反馈」里看处理到哪一步。</p>
 	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-track>查看处理进度</button><button class="btn primary" data-v="close">好的</button></div>`,
 	(m, close) => { m.dataset.fbsent = 1; fbCodeBind(m, r.code, close); if (page === 'myfb') refresh(true); });
 }
@@ -4239,6 +4351,233 @@ $('myfbList').onclick = (e) => {
 	const h = e.target.closest('[data-hist]');
 	if (h) { const b = it.querySelector('[data-histbox]'); const open = b.classList.toggle('hidden') === false; h.textContent = open ? '收起记录' : '完整记录（' + b.children.length + '）'; }
 };
+/* ---------- 通知（4.0）：路由器的故障/自动修复、云端监测、托管服务、公告、版本更新、反馈进度、开发者的回复，一个入口 ----------
+   路由器那边一次给：断线记录、公告、反馈进度、开发者有没有新回复、看到哪儿了（notices.seen，换手机也一样）；云端的面板自己去拿 */
+const NT = { d: null, at: 0, f: 'all', view: null, n: 0, more: 0 };
+try { NT.d = JSON.parse(store.get('rp_nt') || 'null'); } catch (e) {}
+const NT_CAT = [['all', '全部'], ['sys', '系统'], ['ann', '公告'], ['upd', '更新'], ['fb', '反馈']];
+const APP_VER = (navigator.userAgent.match(/RouterPanelApp\/([\d.]+)/) || [])[1] || '';
+const ntMs = (v) => typeof v === 'number' ? (v < 1e11 ? v * 1000 : v) : Date.parse(v || '') || 0;
+const verNewer = (a, b) => { const x = String(a || '').replace(/^v/, '').split('.').map((n) => +n || 0), y = String(b || '').replace(/^v/, '').split('.').map((n) => +n || 0); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+const NT_IC = {
+	sys: '<path d="M3 12h4l2.5-6 5 12 2.5-6h4"/>', ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', cloud: '<path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z"/>',
+	svc: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>', ann: '<path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/>',
+	upd: '<path d="M12 16V5M7.5 9.5 12 5l4.5 4.5"/><path d="M5 19h14"/>', fb: '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M10 12l1.8 1.8L15 10.5"/>',
+	chat: '<path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z"/><path d="M9 9.5h6M9 12.5h3.5"/>',
+	bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/>',
+};
+const ntSvg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NT_IC[k] || NT_IC.bell}</svg>`;
+function ntItems() {
+	const d = NT.d || {}, L = [];
+	for (const e of d.events || []) L.push({ c: 'sys', ic: e.lvl === 'ok' ? 'ok' : 'sys', t: ntMs(e.t), lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '路由器', go: 'wd', k: 'e' + e.t + e.kind });
+	if (cloud) {
+		for (const e of cloud.events || []) L.push({ c: 'sys', ic: 'cloud', t: e.t, lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '云端监测', go: 'wd', k: 'c' + e.t });
+		for (const x of cloud.notes || []) L.push({ c: 'sys', ic: 'svc', t: x.t, lvl: x.lvl || 'info', title: x.title || '', body: x.body || '', src: x.tag === 'svc' ? '托管服务' : '云端', k: 'n' + x.t });
+	}
+	for (const a of d.ann || []) L.push({ c: 'ann', ic: 'ann', t: a.upd || a.at, lvl: a.level === 'important' ? 'warn' : 'info', title: a.title, body: a.body || '', src: a.level === 'important' ? '重要公告' : '公告', imp: a.level === 'important', ann: a, k: 'a' + a.id });
+	if (UPD && UPD.newer) L.push({ c: 'upd', ic: 'upd', t: ntMs(UPD.rel), lvl: UPD.force ? 'warn' : 'info', title: '路由器面板有新版本 v' + UPD.latest + (UPD.force ? '（必须更新）' : ''), body: UPD.notes || '', src: '版本更新', upd: 'router', k: 'u' + UPD.latest });
+	if (APP_VER && d.app && d.app.version && verNewer(d.app.version, APP_VER)) L.push({ c: 'upd', ic: 'upd', t: ntMs(d.app.rel), lvl: 'info', title: '安卓 App 有新版本 ' + d.app.version + '（现在 ' + APP_VER + '）', body: d.app.notes || '', src: '版本更新', upd: 'app', k: 'p' + d.app.version });
+	for (const x of d.fb || []) {
+		const evs = (x.history || []).map((h) => ({ at: h.at, st: h.st, note: h.note || '' }));
+		if (x.ackAt) evs.push({ at: x.ackAt, st: 'ack', note: '' });
+		for (const e of evs) L.push({ c: 'fb', ic: 'fb', t: e.at, lvl: e.st === 'fixed' ? 'ok' : e.st === 'nofix' ? 'err' : 'info', title: '反馈 ' + x.code + '：' + (e.st === 'ack' ? '开发人员已收到' : FB_EV[e.st] || '有新进展'), body: e.note || x.text || '', src: '反馈进度', fb: x.code, k: 'f' + x.code + e.at });
+	}
+	const ch = d.chat;
+	if (ch && ch.uu > 0) L.push({ c: 'fb', ic: 'chat', t: ntMs(ch.at), lvl: 'info', title: '开发者回复了你（' + ch.uu + ' 条没看）', body: '点开「实时联系开发者」看看', src: '实时对话', go: 'chat', k: 'ch' + ch.seq });
+	return L.filter((x) => x.title).sort((a, b) => b.t - a.t);
+}
+const ntSeenT = () => +(NT.d && NT.d.seen && NT.d.seen.t) || 0;
+const chUnread = () => (page === 'chat' ? 0 : +(NT.d && NT.d.chat && NT.d.chat.uu) || 0);
+function ntBadge() {
+	const t = ntSeenT(), n = page === 'notice' ? 0 : ntItems().filter((x) => x.t > t && x.go !== 'chat').length + chUnread();
+	NT.n = n;
+	const b = $('bellN'); if (b) { b.textContent = n > 99 ? '99+' : String(n); b.classList.toggle('hidden', !n); $('bellBtn').setAttribute('aria-label', n ? '通知，' + n + ' 条新的' : '通知'); }
+	// 侧边栏「实时联系开发者」上的小红点
+	const cu = chUnread(), nb = document.querySelector('#sidenav button[data-p="chat"]');
+	if (nb) { let dot = nb.querySelector('.chdot'); if (cu && !dot) { dot = document.createElement('em'); dot.className = 'chdot'; dot.style.cssText = 'margin-left:auto;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--danger);color:#fff;font:700 10.5px/18px system-ui,sans-serif;font-style:normal;text-align:center;flex:none'; nb.appendChild(dot); } if (dot) { if (cu) dot.textContent = cu > 99 ? '99+' : cu; else dot.remove(); } }
+}
+async function ntFetch() {
+	const cp = cloudFetch(false).catch(() => null);
+	const d = await P('notices', APP_VER ? { app: 1 } : {}, 30000);
+	await cp;
+	NT.d = d; NT.at = Date.now(); store.set('rp_nt', JSON.stringify(d));
+	return d;
+}
+// 定时查：铃铛上的数字；重要公告没弹过的弹一次（有别的弹窗、正在更新时先不弹）
+async function ntCheck() {
+	if (!token || LK.on || document.hidden) return;
+	NT.at = Date.now();
+	try { await ntFetch(); } catch (e) { return; }
+	if (page === 'notice') return void ntRender();
+	ntBadge();
+	if (document.querySelector('.modal')) return;
+	const pop = (NT.d.seen && NT.d.seen.pop) || [];
+	const a = (NT.d.ann || []).find((x) => x.level === 'important' && !pop.includes(x.id));
+	if (a) ntAnnPop(a);
+}
+function ntAnnPop(a) {
+	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
+	<p class="muted" style="font-size:13px;margin:0">开发者发布的重要公告 · ${esc(fbWhen(a.at))}</p>
+	${a.body ? `<div class="notice" style="white-space:pre-wrap;line-height:1.65;margin-top:12px;max-height:50vh;overflow:auto">${esc(a.body)}</div>` : ''}
+	<p class="muted" style="font-size:12.5px;margin:10px 0 0">以后在「通知」里还能看到这条。</p>
+	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-nt>打开通知</button><button class="btn primary" data-v="close">知道了</button></div>`,
+	(m, close) => { m.dataset.ann = 1; m.querySelector('[data-nt]').onclick = () => { close(null); go('notice'); }; });
+	NT.d.seen.pop = [...((NT.d.seen && NT.d.seen.pop) || []), a.id];
+	P('notices_seen', { pop: a.id }).catch(() => {});
+}
+async function loadNotice(quiet) {
+	if (NT.d) ntRender();
+	await ntFetch();
+	// 进来时记下「看到哪儿了」：这次进来之前没看过的标「新」（在这一页上一直标着），铃铛清零
+	if (NT.view == null) NT.view = ntSeenT();
+	const top = Math.max(0, ...ntItems().filter((x) => x.go !== 'chat').map((x) => x.t));
+	if (top > ntSeenT()) { NT.d.seen.t = top; P('notices_seen', { t: top }).catch(() => {}); }
+	ntRender();
+	ntBadge();
+}
+const ntDay = (t) => { if (!t) return '更早'; const x = new Date(t), n = new Date(); return x.toDateString() === n.toDateString() ? '今天' : x.toDateString() === new Date(n - 864e5).toDateString() ? '昨天' : `${x.getMonth() + 1} 月 ${x.getDate()} 日`; };
+function ntRender() {
+	const box = $('ntList'); if (!box) return;
+	const all = ntItems(), seen = NT.view ?? ntSeenT(), d = NT.d || {};
+	const cnt = (c) => all.filter((x) => c === 'all' || x.c === c).length;
+	const fresh = all.filter((x) => x.t > seen).length;
+	$('ntPill').textContent = fresh ? fresh + ' 条新的' : '都看过了'; $('ntPill').className = 'pill' + (fresh ? ' warnc' : ' good');
+	// 两个入口卡片：对话（没看的回复数）、我的反馈（还在处理的条数）
+	const cu = +(d.chat && d.chat.uu) || 0;
+	$('ntChatN').textContent = cu > 99 ? '99+' : cu; $('ntChatN').classList.toggle('hidden', !cu);
+	$('ntChatSub').textContent = cu ? '开发者回复了你' : d.chat ? '接着聊' : '遇到问题直接问';
+	const fo = (d.fb || []).filter((x) => !x.done && !x.nofix).length;
+	$('ntFbSub').textContent = (d.fb || []).length ? (fo ? fo + ' 条还在处理' : '都处理好了') : '处理到哪一步';
+	$('ntChips').innerHTML = NT_CAT.map(([c, n]) => `<button class="chip${NT.f === c ? ' on' : ''}" data-ntf="${c}">${n}${cnt(c) ? '<small>' + (cnt(c) > 99 ? '99+' : cnt(c)) + '</small>' : ''}</button>`).join('');
+	// 置顶：还在显示期内的重要公告（最新一条）
+	const pin = (NT.f === 'all' || NT.f === 'ann') ? all.find((x) => x.c === 'ann' && x.imp) : null;
+	const popened = $('ntPin').querySelector('.ntpin.open');
+	$('ntPin').innerHTML = pin ? `<div class="ntpin${popened ? ' open' : ''}" data-k="${esc(pin.k)}" role="button" tabindex="0"><div class="pt">${ntSvg('ann').replace('<svg', '<svg style="width:15px;height:15px"')}置顶 · 重要公告</div><b>${esc(pin.title)}</b>${pin.body ? `<p>${esc(pin.body)}</p>` : ''}<div class="pm"><span>${esc(fbWhen(pin.t))}</span><span>${pin.body ? (popened ? '收起' : '点开看全文') : ''}</span></div></div>` : '';
+	const list = all.filter((x) => (NT.f === 'all' || x.c === NT.f) && x !== pin), lim = 60 + NT.more;
+	const opened = new Set([...box.querySelectorAll('.ntit.open')].map((x) => x.dataset.k));
+	const warn = [];
+	if (d.annFail) warn.push('暂时连不上官网，公告是上次取到的');
+	if (!noCloud() && cloudErr) warn.push('云端的记录读不到（' + cloudErr + '）');
+	const EMPTY = { all: ['都很安静', '路由器一切正常，也没有新公告'], sys: ['没有系统通知', '路由器、云端监测、托管服务的消息会出现在这里'], ann: ['没有公告', '开发者发布公告后会出现在这里'], upd: ['已经是最新版', '有新版本时会出现在这里'], fb: ['没有反馈进度', '你发的反馈有进展、开发者回复你时会出现在这里'] };
+	let html = warn.length ? `<div class="notice w" style="margin-top:14px">${esc(warn.join('；'))}</div>` : '';
+	if (!list.length) { box.innerHTML = html + (pin ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg(NT.f === 'all' ? 'bell' : NT.f === 'sys' ? 'sys' : NT.f)}<b>${EMPTY[NT.f][0]}</b><p>${EMPTY[NT.f][1]}</p></section>`); box._items = []; return; }
+	let cur = null, rows = [], nd = 0;
+	const flush = () => { if (rows.length) html += `<div class="ntday"><span>${esc(cur)}</span>${nd ? `<span style="color:var(--brand)">${nd} 条新的</span>` : ''}</div><section class="card ntlist">${rows.join('')}</section>`; rows = []; nd = 0; };
+	for (const x of list.slice(0, lim)) {
+		const dd = ntDay(x.t); if (dd !== cur) { flush(); cur = dd; }
+		const isNew = x.t > seen; if (isNew) nd++;
+		const tm = x.t ? new Date(x.t).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '';
+		const nav = x.go || x.fb || x.upd;
+		rows.push(`<div class="ntit${opened.has(x.k) ? ' open' : ''}${isNew ? ' new' : ''}" data-k="${esc(x.k)}" role="button" tabindex="0"><span class="ntic ${esc(x.lvl)}">${ntSvg(x.ic)}</span><div class="ntb"><b>${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}<span class="ntm"><i>${esc(x.src)}</i>${tm ? '<span>' + tm + '</span>' : ''}${isNew ? '<span style="color:var(--brand);font-weight:700">新</span>' : ''}</span></div>${nav ? '<span class="ntgo" aria-hidden="true">›</span>' : ''}</div>`);
+	}
+	flush();
+	if (list.length > lim) html += `<button class="btn" data-ntmore style="width:100%;margin-top:12px">再看 ${Math.min(60, list.length - lim)} 条（共 ${list.length} 条）</button>`;
+	box.innerHTML = html;
+	box._items = list;
+}
+$('ntChips').onclick = (e) => { const c = e.target.closest('[data-ntf]'); if (!c) return; NT.f = c.dataset.ntf; NT.more = 0; ntRender(); };
+$('p-notice').querySelector('.ntent').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
+$('ntPin').onclick = (e) => { const p = e.target.closest('.ntpin'); if (!p) return; p.classList.toggle('open'); const s = p.querySelector('.pm span:last-child'); if (s && s.textContent) s.textContent = p.classList.contains('open') ? '收起' : '点开看全文'; };
+$('ntList').onclick = (e) => {
+	if (e.target.closest('[data-ntmore]')) { NT.more += 60; return ntRender(); }
+	const it = e.target.closest('.ntit'); if (!it) return;
+	const x = ($('ntList')._items || []).find((y) => y.k === it.dataset.k); if (!x) return;
+	if (x.fb) { FB_FOCUS = x.fb; return go('myfb'); }
+	if (x.upd === 'router') return updSheet(false);
+	if (x.upd === 'app') return toast('回到 App 首页（路由器列表），会提示一键更新');
+	if (x.go) return go(x.go);
+	it.classList.toggle('open');
+};
+for (const id of ['ntList', 'ntPin']) $(id).onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && (e.target.classList.contains('ntit') || e.target.classList.contains('ntpin'))) { e.preventDefault(); e.target.click(); } };
+$('bellBtn').onclick = () => go('notice');
+
+/* ---------- 实时联系开发者（4.0）：开着这一页时每 4 秒拿一次新消息；回复会推送到手机 ---------- */
+const CH = { msgs: [], seq: 0, timer: 0, busy: false, img: '', hosted: true, none: false, blocked: false, pend: [], imgs: {}, at: 0 };
+try { if (store.get('rp_chtips') === '0') $('chTips').classList.add('hide'); } catch (e) {}
+$('chTipBtn').onclick = () => { const h = $('chTips').classList.toggle('hide'); store.set('rp_chtips', h ? '0' : '1'); };
+function chStop() { clearInterval(CH.timer); CH.timer = 0; }
+async function loadChat(quiet) {
+	if (!quiet) chRender();
+	await chPull(!quiet);
+	chStop(); CH.timer = setInterval(() => { if (page === 'chat' && !document.hidden) chPull(false).catch(() => {}); }, 4000);
+}
+async function chPull(full) {
+	if (CH.busy) return; CH.busy = true;
+	try {
+		const r = await P('chat', { op: 'get', after: full ? 0 : CH.seq, read: true }, 20000);
+		CH.hosted = r.hosted !== false; CH.none = !!r.none; CH.blocked = !!r.blocked; CH.adminSeen = r.adminSeen || 0;
+		if (full) CH.msgs = r.msgs || [];
+		else for (const m of r.msgs || []) if (!CH.msgs.some((x) => x.s === m.s)) CH.msgs.push(m);
+		CH.msgs.sort((a, b) => a.s - b.s);
+		const before = CH.seq;
+		CH.seq = Math.max(CH.seq, r.seq || 0, ...CH.msgs.map((m) => m.s));
+		if (NT.d) { NT.d.chat = { ...(NT.d.chat || {}), uu: 0, seq: CH.seq }; ntBadge(); }
+		CH.err = '';
+		chRender(full || CH.seq !== before);
+	} catch (e) { CH.err = e.message; chRender(false); if (full) throw e; }
+	finally { CH.busy = false; }
+}
+const chTime = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+function chRender(scroll) {
+	const box = $('chList'); if (!box) return;
+	const nearBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 140;
+	$('chSub').textContent = CH.blocked ? '暂时不能发消息' : CH.hosted ? '直接跟开发这个面板的人对话' : '自建版也能用：第一次发消息时自动建立对话';
+	$('chNote').textContent = CH.err ? '连不上：' + CH.err : CH.blocked ? '暂时不能发消息了，有问题可以在官网报告问题' : CH.hosted ? '开发者回复后会推送到手机' : '开发者回复后，路由器会在半小时内推送到手机';
+	$('chSend').disabled = CH.blocked; $('chText').disabled = CH.blocked; $('chImgBtn').disabled = CH.blocked;
+	const all = [...CH.msgs, ...CH.pend];
+	if (!all.length) {
+		box.innerHTML = `<div class="chempty">${CH.none || !CH.msgs.length ? '还没有消息。有什么想问的，直接写下来发送就行。' : ''}<div class="chips" style="margin-top:12px">${['面板打不开了', '安装失败了', '想要一个新功能', '某个提示看不懂'].map((x) => `<button class="chip" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`;
+		return;
+	}
+	let html = '', day = '';
+	for (const m of all) {
+		const dd = ntDay(m.t); if (dd !== day) { day = dd; html += `<div class="chday">${esc(dd)}</div>`; }
+		const me = m.f === 'u';
+		const img = m.img ? (m.local || CH.imgs[m.s] ? `<img src="${esc(m.local || CH.imgs[m.s])}" alt="图片" data-big="${m.s || ''}">` : `<span class="imgph" data-load="${m.s}">点开看图片</span>`) : '';
+		const st = m.pending ? '<div class="chmeta">发送中…</div>' : m.fail ? `<div class="chmeta bad" data-retry="${m.id}">没发出去：${esc(m.fail)} · 点这里重发</div>` : `<div class="chmeta">${chTime(m.t)}${me && CH.adminSeen >= m.s ? ' · 开发者已读' : ''}</div>`;
+		html += `<div class="chrow${me ? ' me' : ''}">${me ? '' : '<div class="chwho">开发者</div>'}<div class="chbub">${img}${m.x ? esc(m.x) : ''}</div>${st}</div>`;
+	}
+	box.innerHTML = html;
+	for (const ph of box.querySelectorAll('[data-load]')) chImg(+ph.dataset.load);
+	if (scroll && (nearBottom || CH.first !== false)) { CH.first = false; requestAnimationFrame(() => scrollTo({ top: document.documentElement.scrollHeight })); }
+}
+async function chImg(seq) {
+	if (CH.imgs[seq] || CH['ld' + seq]) return; CH['ld' + seq] = 1;
+	try { const r = await P('chat', { op: 'img', seq }, 30000); if (r.data) { CH.imgs[seq] = r.data; chRender(false); } } catch (e) {}
+}
+$('chList').onclick = (e) => {
+	const q = e.target.closest('[data-q]'); if (q) { $('chText').value = q.dataset.q + '：'; $('chText').focus(); return chGrow(); }
+	const im = e.target.closest('img[data-big]'); if (im) { const w = document.createElement('div'); w.className = 'modal'; w.style.cssText = 'display:grid;place-items:center;background:rgba(0,0,0,.85);z-index:90;position:fixed;inset:0;padding:16px'; w.innerHTML = `<img src="${im.src}" style="max-width:100%;max-height:92vh;border-radius:12px">`; w.onclick = () => w.remove(); document.body.appendChild(w); return; }
+	const rt = e.target.closest('[data-retry]'); if (rt) { const p = CH.pend.find((x) => String(x.id) === rt.dataset.retry); if (p) { CH.pend = CH.pend.filter((x) => x !== p); chSend(p.x, p.local); } }
+};
+const chGrow = () => { const t = $('chText'); t.style.height = 'auto'; t.style.height = Math.min(132, t.scrollHeight) + 'px'; };
+$('chText').oninput = chGrow;
+$('chText').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(hover:hover) and (pointer:fine)').matches) { e.preventDefault(); $('chSend').click(); } };
+$('chImgBtn').onclick = () => $('chFile').click();
+$('chFile').onchange = async () => {
+	const f = $('chFile').files[0]; $('chFile').value = ''; if (!f) return;
+	try { CH.img = await shrinkImg(f, 9e5); $('chPreImg').src = CH.img; $('chPre').classList.remove('hidden'); } catch (e) { toast(e.message, true); }
+};
+$('chPreX').onclick = () => { CH.img = ''; $('chPre').classList.add('hidden'); };
+$('chSend').onclick = () => {
+	const x = $('chText').value.trim(), img = CH.img;
+	if (!x && !img) return toast('写点什么再发吧');
+	if (/(密码|password|passwd)\s*[:：=]\s*\S{4,}|ss:\/\/|vmess:\/\/|trojan:\/\/|vless:\/\//i.test(x) && !confirm('看起来里面有密码或节点链接，开发者不需要这些。确定要发吗？')) return;
+	$('chText').value = ''; chGrow(); CH.img = ''; $('chPre').classList.add('hidden');
+	chSend(x, img);
+};
+let chPid = 0;
+async function chSend(x, img) {
+	const p = { id: ++chPid, f: 'u', t: Date.now(), x, img: img ? { type: 'image/jpeg' } : null, local: img || '', pending: true };
+	CH.pend.push(p); chRender(true); requestAnimationFrame(() => scrollTo({ top: document.documentElement.scrollHeight }));
+	try {
+		const r = await P('chat', { op: 'send', text: x, img: img || undefined, ua: navigator.userAgent }, 60000);
+		CH.pend = CH.pend.filter((y) => y !== p);
+		if (r.msg) { if (img) CH.imgs[r.msg.s] = img; if (!CH.msgs.some((m) => m.s === r.msg.s)) CH.msgs.push(r.msg); CH.seq = Math.max(CH.seq, r.msg.s); }
+		CH.none = false; CH.hosted = r.hosted !== false;
+		chRender(true);
+	} catch (e) { p.pending = false; p.fail = e.message; chRender(true); }
+}
 // 问题反馈有回复了：开发者在管理页标了已修复、或者写了回复，打开面板时提示一次（托管版；看过的不再提示）
 async function fbCheck() {
 	if (!token || LK.on || document.hidden || document.querySelector('.modal')) return;
@@ -4643,7 +4982,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -4812,9 +5151,11 @@ function start() {
 	updAt = Date.now(); setTimeout(() => updCheck(false), 4000);
 	// 反馈的新进展：打开 3 秒后查一次，开着的时候每分钟查一次（路由器那边缓存 45 秒）
 	setTimeout(fbCheck, 3000);
-	clearInterval(fbTimer); fbTimer = setInterval(() => { if (Date.now() - fbAt > 55000) fbCheck(); }, 15000);
+	clearInterval(fbTimer); fbTimer = setInterval(() => { if (Date.now() - fbAt > 55000) fbCheck(); if (Date.now() - NT.at > 60000) ntCheck(); }, 15000);
+	// 通知：打开 6 秒后查一次（铃铛上的数字、重要公告弹一次），之后每分钟一次
+	setTimeout(ntCheck, 6000);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 
 // 安卓：返回键要连续按两次才退出（第一次先关弹窗 / 侧边栏，或提示「再按一次返回键退出」）
 // 做法：在历史记录里多垫一层；按返回时先「吃掉」这一层。用户点过页面才垫（安卓 Chrome 不认没有点击过的历史记录）

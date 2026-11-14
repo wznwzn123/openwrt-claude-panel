@@ -1,0 +1,23 @@
+{
+  "name": "router-hub-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "路由器面板托管服务的管理后台（Vue 3 + Vite；界面改自 scaffold-master，MIT）",
+  "type": "module",
+  "scripts": {
+    "build": "vue-tsc --noEmit && vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7",
+    "vue-tsc": "^2.2.0"
+  },
+  "license": "MIT"
+}

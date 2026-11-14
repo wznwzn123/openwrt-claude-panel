@@ -1,0 +1,94 @@
+// 4.0「通知」：公告（管理页发、公开读）、云端/托管服务发的通知记录（面板里能翻到）
+import { load, memStorage } from './load.mjs';
+const mod = await load();
+const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
+globalThis.fetch = async () => new Response('{}', { status: 200 });
+const env = { BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 'cf-token', CF_ACCOUNT_ID: 'acc1', CF_ZONE_ID: 'zone1', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '20', VAPID_PUB: '', VAPID_PRIV: '', RKEY: 'rk', TKEY: 'tk', PANEL_TOKEN: 'pt' };
+const ns = (Cls) => { const objs = new Map(); return { objs, idFromName: (n) => n, get(id) { if (!objs.has(id)) objs.set(id, new Cls({ storage: memStorage() }, env)); return objs.get(id); } }; };
+env.W = ns(mod.Watch); env.H = ns(mod.Hub);
+const req = (method, url, body, headers = {}) => mod.default.fetch(new Request(url, { method, body: body == null ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers } }), env);
+const api = (m, p, b, h) => req(m, 'https://panel.example' + p, b, h);
+const adm = (m, p, b) => api(m, '/api/admin' + p, b, { authorization: 'Bearer admin-key-1234567890' });
+let T = Date.now(); Date.now = () => T;
+const DAY = 86400e3;
+
+/* ---------- 公告 ---------- */
+let r = await api('GET', '/api/notices'), j = await r.json();
+ok('[公告] 没有公告时返回空列表', r.status === 200 && j.ok && j.list.length === 0);
+ok('[公告] 公开接口缓存 5 分钟', r.headers.get('cache-control') === 'public, max-age=300');
+ok('[公告] 管理接口要管理密钥', (await api('GET', '/api/admin/ann')).status === 401 || (await api('GET', '/api/admin/ann')).status === 403);
+ok('[公告] 普通访问者不能发公告', [401, 403].includes((await api('POST', '/api/admin/ann', { title: 'x' })).status));
+r = await adm('POST', '/ann', { title: '  ', body: 'x' });
+ok('[公告] 标题空的不收', r.status === 400 && /标题/.test((await r.json()).error));
+r = await adm('POST', '/ann', { title: '4.0 发布了', body: '新加了「通知」', level: 'important', days: 7 }); j = await r.json();
+ok('[公告] 发一条重要公告（7 天）', r.status === 200 && j.ok && /^[a-z2-9]{10}$/.test(j.ann.id) && j.ann.level === 'important' && j.ann.exp === T + 7 * DAY, JSON.stringify(j));
+const a1 = j.ann.id;
+T += 1000;
+r = await adm('POST', '/ann', { title: '维护通知', body: '今晚 2 点维护', level: '乱填', days: 0 }); j = await r.json();
+ok('[公告] 级别乱填当普通，0 天 = 一直显示', j.ann.level === 'normal' && j.ann.exp === 0);
+const a2 = j.ann.id;
+r = await api('GET', '/api/notices'); j = await r.json();
+ok('[公告] 公开列表：新的在前，有标题、正文、级别、时间', j.list.length === 2 && j.list[0].id === a2 && j.list[1].title === '4.0 发布了' && j.list[1].body === '新加了「通知」' && j.list[1].level === 'important' && j.list[1].at > 0);
+ok('[公告] 公开列表不带多余字段', Object.keys(j.list[0]).sort().join() === 'at,body,exp,id,level,title,upd');
+T += 1000;
+r = await adm('POST', '/ann/' + a1, { title: '4.0 发布了（更新）', body: '改了', level: 'important', days: 1 }); j = await r.json();
+ok('[公告] 修改：标题、正文、过期时间都变，发布时间不变', j.ok && j.ann.title === '4.0 发布了（更新）' && j.ann.upd === T && j.ann.at < T && j.ann.exp === T + DAY);
+ok('[公告] 改一条不存在的 → 404', (await adm('POST', '/ann/abcdefghij', { title: 'x' })).status === 404);
+ok('[公告] 编号格式不对 → 不处理', (await adm('POST', '/ann/../x', { title: 'x' })).status >= 400);
+T += 2 * DAY;
+j = await (await api('GET', '/api/notices')).json();
+ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.list[0].id === a2);
+j = await (await adm('GET', '/ann')).json();
+ok('[公告] 管理页仍能看到过期的', j.list.length === 2);
+ok('[公告] 删除', (await (await adm('DELETE', '/ann/' + a2)).json()).ok === true);
+ok('[公告] 再删一次 → 404', (await adm('DELETE', '/ann/' + a2)).status === 404);
+j = await (await api('GET', '/api/notices')).json();
+ok('[公告] 删了就看不到了', j.list.length === 0);
+const log = (await env.H.get('hub').ctx.storage.get('alog')) || [];
+ok('[公告] 新建、修改、删除都记操作日志', ['ann_new', 'ann_edit', 'ann_del'].every((o) => JSON.stringify(log).includes(o)), JSON.stringify(log).slice(0, 300));
+for (let i = 0; i < 55; i++) await adm('POST', '/ann', { title: '第' + i + '条' });
+j = await (await adm('GET', '/ann')).json();
+ok('[公告] 最多留 50 条', j.list.length === 50 && j.list[0].title === '第54条');
+j = await (await api('GET', '/api/notices')).json();
+ok('[公告] 公开最多给 20 条', j.list.length === 20);
+r = await adm('POST', '/ann', { title: 'x'.repeat(300), body: 'y'.repeat(5000), days: 9999 }); j = await r.json();
+ok('[公告] 标题、正文、天数都有上限', j.ann.title.length === 80 && j.ann.body.length === 2000 && j.ann.exp === T + 365 * DAY);
+
+/* ---------- 云端通知记录 ---------- */
+const w = new mod.Watch({ storage: memStorage() }, env);
+await w.push({ title: '⚠️ 路由器断电或死机', body: '平板还在报告', tag: 'cloud', lvl: 'err' });
+await w.push({ title: '路由器发的', body: 'x', nolog: true });
+let nl = await w.ctx.storage.get('nlog');
+ok('[记录] 没订阅也记下云端通知', nl.length === 1 && nl[0].title === '⚠️ 路由器断电或死机' && nl[0].lvl === 'err' && nl[0].t === T);
+ok('[记录] 标了 nolog 的不记（路由器自己已经记了）', !nl.some((x) => x.title === '路由器发的'));
+for (let i = 0; i < 120; i++) await w.push({ title: 'n' + i, body: 'b'.repeat(900) });
+nl = await w.ctx.storage.get('nlog');
+ok('[记录] 最多留 100 条、新的在前、正文截到 500 字', nl.length === 100 && nl[0].title === 'n119' && nl[0].body.length === 500);
+const st = await w.status();
+ok('[记录] 状态里带最近 50 条通知', Array.isArray(st.notes) && st.notes.length === 50 && st.notes[0].title === 'n119');
+// 路由器经 /n/ 发来的：推送照常、但不进云端记录
+const env1 = { RKEY: 'rk', TKEY: 'tk', PANEL_TOKEN: 'pt', VAPID_PUB: '', VAPID_PRIV: '', PROBE_URL: 'https://x/p' };
+const W2 = new mod.Watch({ storage: memStorage() }, env1);
+env1.W = { idFromName: () => 'id', get: () => W2 };
+const call1 = (m, path, body) => mod.default.fetch(new Request('https://router.example' + path, { method: m, body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }), env1);
+r = await call1('POST', '/cloud/n/rk', { lvl: 'err', kind: 'dns', title: 'DNS 解析失败', body: '…' });
+ok('[记录] 路由器通知接口照常工作', r.status === 200, String(r.status));
+ok('[记录] 路由器通知不在云端重复记', !(await W2.ctx.storage.get('nlog')));
+r = await call1('POST', '/cloud/push', { token: 'pt', op: 'test' });
+ok('[记录] 测试通知不记', !(await W2.ctx.storage.get('nlog')));
+await W2.push({ title: '✅ 托管服务已续期', lvl: 'ok', tag: 'svc' });
+ok('[记录] 托管服务发的（续期、到期、停用）照常记', (await W2.ctx.storage.get('nlog')).length === 1);
+// 断电 → 恢复：断线记录里有，通知记录里不重复
+await call1('POST', '/cloud/beat/r/rk', { wan: 'ok', net: 'ok', dns: 'ok', tun: 'ok', panel: 'ok', clash: 'ok', ready: 4 });
+await W2.alarm();
+const st0 = await W2.ctx.storage.get('r'); st0.last = Date.now() - 320e3; await W2.ctx.storage.put('r', st0);
+globalThis.fetch = async () => new Response('', { status: 530 });
+await W2.alarm(); await W2.alarm();
+const s2 = await W2.status();
+ok('[记录] 断电/断网在断线记录（events）里有', (s2.events || []).some((e) => e.lvl === 'err'), JSON.stringify(s2).slice(0, 400));
+ok('[记录] 断电/断网不在通知记录里重复', (await W2.ctx.storage.get('nlog')).length === 1);
+
+console.log(results.map(([n, c, note]) => (c ? '✓ ' : '✗ ') + n + (!c && note ? '（' + note + '）' : '')).join('\n'));
+const pass = results.filter((r) => r[1]).length;
+console.log(`\n通过 ${pass}/${results.length}`);
+process.exit(pass === results.length ? 0 : 1);

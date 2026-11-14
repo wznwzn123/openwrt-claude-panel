@@ -62,7 +62,8 @@ for ai in ai noai; do
 		if [ "$ed" = lite ]; then
 			rm -f "$d/src/bin/cmcp-backup"
 		else
-			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
+			# worker.js 要用 hub.js、ops.js、site.js（自己部署 Worker 时 wrangler 会一起打包）
+			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
 		fi
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done

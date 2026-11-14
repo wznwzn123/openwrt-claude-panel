@@ -8,7 +8,8 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, ADMIN_APP, ADMIN_FILES } from './site.js';
+import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -208,6 +209,7 @@ export class Hub extends DurableObject {
 		}
 		await this.ctx.storage.put('d:' + sub, dv);
 		if (inv.uid) await this.alog('trial-used', sub, '用官网领的试用码开通' + (bound ? '，已自动加到账号里' : ''), 'router');
+		await this.track('dev_reg');
 		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, bound, ...keys };
 	}
 	// 删除一台：删子域名和隧道、清空它的云端数据、腾出名额
@@ -292,6 +294,14 @@ export class Hub extends DurableObject {
 		return true;
 	}
 	/* ---------- 操作记录：管理员做了什么、系统自动删了什么、路由器自己注销了，都记一笔（最近 500 条） ---------- */
+	// 发邮件，并记到「邮件记录」里（没配置发信服务时不发、不记）
+	async mail(to, subject, html) {
+		if (!this.env.RESEND_API_KEY || !to) return false;
+		let ok = false;
+		try { ok = await sendMail(this.env, to, subject, html); } catch (e) {}
+		try { await this.mailLog(to, subject, ok, ok ? '' : '发信服务没收下'); } catch (e) {}
+		return ok;
+	}
 	async alog(op, target, detail, by) {
 		const l = (await this.ctx.storage.get('alog')) || [];
 		l.unshift({ t: Date.now(), op, target: String(target || ''), detail: noteText(detail, 300), by: by || 'admin' });
@@ -397,7 +407,7 @@ export class Hub extends DurableObject {
 		let sent = false;
 		for (const uid of d.users || []) {
 			const u = await this.ctx.storage.get('u:' + uid);
-			if (u && u.email) { try { if (await sendMail(this.env, u.email, T[0], T[1])) sent = true; } catch (x) {} }
+			if (u && u.email) { try { if (await this.mail(u.email, T[0], T[1])) sent = true; } catch (x) {} }
 		}
 		return sent;
 	}
@@ -470,7 +480,7 @@ export class Hub extends DurableObject {
 		if (!this.env.RESEND_API_KEY || this.env.LOGIN_ALERT === '0') return;
 		const t = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
 		const e = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-		try { await sendMail(this.env, u.email, '新设备登录了你的路由器面板账号', `<p>你好，</p><p>你的账号刚刚在一台新设备上登录了：</p><p><b>${e(dev.ua)}</b>${dev.place ? '<br>大概位置：' + e(dev.place) : ''}<br>时间：${t}（北京时间）</p><p>是你自己就不用管。<b>不是你的话</b>：打开 <a href="https://${this.env.BASE_DOMAIN}/app">账号页</a>，在「登录过的设备」里把它退出，再改一下密码。</p>`); } catch (x) {}
+		try { await this.mail(u.email, '新设备登录了你的路由器面板账号', `<p>你好，</p><p>你的账号刚刚在一台新设备上登录了：</p><p><b>${e(dev.ua)}</b>${dev.place ? '<br>大概位置：' + e(dev.place) : ''}<br>时间：${t}（北京时间）</p><p>是你自己就不用管。<b>不是你的话</b>：打开 <a href="https://${this.env.BASE_DOMAIN}/app">账号页</a>，在「登录过的设备」里把它退出，再改一下密码。</p>`); } catch (x) {}
 	}
 	async dropSessions(u, keep) {
 		const del = (u.sids || []).filter((x) => x !== keep);
@@ -500,7 +510,7 @@ export class Hub extends DurableObject {
 		const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
 		await this.ctx.storage.put('c:' + kind + ':' + email, { code, exp: Date.now() + 600e3, tries: 0 });
 		const what = kind === 'reg' ? '注册账号' : '重置密码';
-		const sent = await sendMail(this.env, email, `验证码 ${code}（${what}）`, `<p>你正在${what}，验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。如果不是你本人操作，忽略这封邮件就行。</p>`);
+		const sent = await this.mail(email, `验证码 ${code}（${what}）`, `<p>你正在${what}，验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。如果不是你本人操作，忽略这封邮件就行。</p>`);
 		if (!sent) return { st: 502, error: '邮件没发出去，稍后再试' };
 		return { st: 200, ok: true };
 	}
@@ -522,18 +532,21 @@ export class Hub extends DurableObject {
 		const uid = rnd(12), salt = rnd(16);
 		const u = { uid, email, salt, pw: await pwHash(password, salt), created: Date.now(), devs: [], sids: [], verified: !!this.env.RESEND_API_KEY };
 		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + email]: uid });
+		await this.loginLog({ k: 'reg', who: email, ok: true, why: '注册', ip, place: dev && dev.place, ua: dev && dev.ua });
 		return { st: 200, sid: await this.newSession(u, dev) };
 	}
 	async userLogin({ email, password, ip, dev }) {
 		email = normEmail(email);
 		if (!email || typeof password !== 'string') return { st: 400, error: '邮箱或密码不对' };
-		if (!(await this.hit('li:' + ip, 30, 900e3))) return { st: 429, error: '尝试太多次了，15 分钟后再试' };
+		const L = (ok, why) => this.loginLog({ k: 'user', who: email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
+		if (!(await this.hit('li:' + ip, 30, 900e3))) { await L(false, '这个 IP 试太多次，被限制'); return { st: 429, error: '尝试太多次了，15 分钟后再试' }; }
 		const fk = 'lf:' + email, f = ((await this.ctx.storage.get('r:' + fk)) || []).filter((t) => t > Date.now() - 900e3);
-		if (f.length >= 10) return { st: 429, error: '这个账号密码错了太多次，15 分钟后再试' };
+		if (f.length >= 10) { await L(false, '这个账号密码错太多次，被限制'); return { st: 429, error: '这个账号密码错了太多次，15 分钟后再试' }; }
 		const uid = await this.ctx.storage.get('e:' + email), u = uid && (await this.ctx.storage.get('u:' + uid));
 		if (!u) { const xu = await this.ctx.storage.get('xe:' + email).then((x) => x && this.ctx.storage.get('xu:' + x)); if (xu) { const h0 = await pwHash(password, xu.salt); if (safeEq(h0, xu.pw)) return { st: 403, error: '这个账号已经' + (xu.delWhy === 'self' ? '注销' : '被停用') + '，' + ymd(xu.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复' }; } }
 		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
-		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); return { st: 401, error: '邮箱或密码不对' }; }
+		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); await L(false, u ? '密码不对' : '没有这个账号'); return { st: 401, error: '邮箱或密码不对' }; }
+		await L(true, '登录成功');
 		// 新设备登录提醒：账号里别的还在登录的设备都不是这种设备，就发邮件告诉本人
 		const seen = (await this.sessionList(u, '')).map((x) => x.ua);
 		const sid = await this.newSession(u, dev);
@@ -634,14 +647,16 @@ export class Hub extends DurableObject {
 		await this.ctx.storage.put('u:' + uid, u);
 		return { st: 200, ok: true };
 	}
-	async userReset({ email, code, password, dev }) {
+	async userReset({ email, code, password, dev, ip }) {
 		email = normEmail(email);
 		const uid = email && (await this.ctx.storage.get('e:' + email)), u = uid && (await this.ctx.storage.get('u:' + uid));
-		if (!u || !(await this.useCode(email, 'reset', code))) return { st: 400, error: '验证码不对或已过期' };
+		const L = (ok, why) => this.loginLog({ k: 'reset', who: email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
+		if (!u || !(await this.useCode(email, 'reset', code))) { if (email) await L(false, '验证码不对'); return { st: 400, error: '验证码不对或已过期' }; }
 		const pe = pwError(password); if (pe) return { st: 400, error: pe };
 		u.salt = rnd(16); u.pw = await pwHash(password, u.salt); u.verified = true;
 		await this.dropSessions(u, null);
 		await this.ctx.storage.put('u:' + uid, u);
+		await L(true, '找回密码成功');
 		return { st: 200, sid: await this.newSession(u, dev) };
 	}
 	delAccount(uid, password) { return this.lock(() => this._delAccount(uid, password)); }
@@ -799,7 +814,7 @@ export class Hub extends DurableObject {
 		const html = ap.status === 'ok'
 			? `<p>你好，</p><p>你给路由器「${e(ap.name)}」提交的续期申请<b>已通过</b>，续了 <b>${ap.days} 天</b>，到期时间 <b>${ymd(ap.newExp)}</b>。</p><p>路由器已经恢复，不用重新安装，也不用输入任何码，手机打开面板就能直接用。</p><p>到期时间可以在官网账号页查看：<a href="${url}">${url}</a></p>`
 			: `<p>你好，</p><p>你给路由器「${e(ap.name)}」提交的续期申请<b>没有通过</b>。${ap.reason ? '</p><p>原因：' + e(ap.reason) : ''}</p><p>可以在官网账号页重新申请：<a href="${url}">${url}</a></p><p>（家里上网和路由器上的设置一直不受影响。）</p>`;
-		return sendMail(this.env, ap.email, ap.status === 'ok' ? '续期申请已通过：' + ap.name + ' 到期时间 ' + ymd(ap.newExp) : '续期申请没有通过：' + ap.name, html);
+		return this.mail(ap.email, ap.status === 'ok' ? '续期申请已通过：' + ap.name + ' 到期时间 ' + ymd(ap.newExp) : '续期申请没有通过：' + ap.name, html);
 	}
 	// 管理页「发测试邮件」：确认 ADMIN_EMAIL 和邮件服务都能用，发不出去时把邮件服务的原话带回来
 	async testMail() {
@@ -810,16 +825,18 @@ export class Hub extends DurableObject {
 		try {
 			const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + this.env.RESEND_API_KEY, 'content-type': 'application/json' },
 				body: JSON.stringify({ from: this.env.MAIL_FROM || 'noreply@' + this.env.BASE_DOMAIN, to: [to], subject: '测试邮件：续期申请通知已经打开', html: `<p>这是一封测试邮件（${at}）。</p><p>以后有人在官网提交续期申请，会发邮件到这个邮箱提醒你，去管理页审核：<a href="https://${this.env.BASE_DOMAIN}/admin">https://${this.env.BASE_DOMAIN}/admin</a></p>` }) });
-			if (r.ok) return { ok: true, to };
+			if (r.ok) { await this.mailLog(to, '测试邮件', true, ''); return { ok: true, to }; }
 			let msg = ''; try { const j = await r.json(); msg = j.message || j.error || ''; } catch (e) {}
-			return { ok: false, to, error: '邮件服务没接受（' + r.status + '）' + (msg ? '：' + String(msg).slice(0, 200) : '') };
-		} catch (e) { return { ok: false, to, error: '连不上邮件服务：' + String(e?.message || e).slice(0, 120) }; }
+			const err = '邮件服务没接受（' + r.status + '）' + (msg ? '：' + String(msg).slice(0, 200) : '');
+			await this.mailLog(to, '测试邮件', false, err);
+			return { ok: false, to, error: err };
+		} catch (e) { const err = '连不上邮件服务：' + String(e?.message || e).slice(0, 120); await this.mailLog(to, '测试邮件', false, err); return { ok: false, to, error: err }; }
 	}
 	// 有新申请时发邮件给管理员（设置了 ADMIN_EMAIL 和邮件服务才发）
 	async notifyAdmin(subject, text) {
 		if (!this.env.ADMIN_EMAIL || !this.env.RESEND_API_KEY) return;
 		const html = String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]).replace(/\n/g, '<br>');
-		try { await sendMail(this.env, this.env.ADMIN_EMAIL, subject, html); } catch (e) {}
+		try { await this.mail(this.env.ADMIN_EMAIL, subject, html); } catch (e) {}
 	}
 	async accountRenew(uid, email, sub, code) {
 		const u = await this.ctx.storage.get('u:' + uid);
@@ -849,6 +866,7 @@ export class Hub extends DurableObject {
 		}
 		const drop = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || []; l.unshift(fb); await this.ctx.storage.put('fbl', l.slice(0, 300)); return l.slice(300); });
 		for (const x of drop) await this.fbImgRm(x);
+		await this.track('fb');
 		await this.notifyAdmin('问题反馈：' + fb.name, `受理编号：${fb.code.toUpperCase()}\n\n${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}${fb.imgs.length ? '\n\n附了 ' + fb.imgs.length + ' 张截图，在管理页看' : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 		return { st: 200, ok: true, code: fb.code };
 	}
@@ -873,7 +891,10 @@ export class Hub extends DurableObject {
 		for (const x of drop) await this.fbImgRm(x);
 		await this.notifyAdmin(kind === 'install' ? '有人安装失败了' : '官网报告（' + KIND[kind] + '）', `受理编号：${fb.code.toUpperCase()}\n\n${text}\n\n${email ? '邮箱：' + email + '\n' : ''}${contact ? '联系方式：' + contact : email ? '' : '没留联系方式'}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 		// 留了邮箱的：发一封「收到了」，带受理编号和查进度的网址
-		if (email) await this.fbMail(fb, email, '我们收到了你的报告', '<p>你好，</p><p>我们收到了你在官网提交的报告，会尽快处理。</p>');
+		if (email) await this.fbMail(fb, email, kind === 'install' ? '我们收到了你上报的安装问题' : '我们收到了你的报告', kind === 'install'
+			? '<p>你好，</p><p>我们收到了你在路由器上安装失败时上报的问题，会尽快查原因。处理好以后，重新运行一次安装命令就行，终端最上面也会显示处理结果。</p>'
+			: '<p>你好，</p><p>我们收到了你在官网提交的报告，会尽快处理。</p>');
+		await this.track(kind === 'install' ? 'install_fail' : 'report');
 		return { st: 200, ok: true, code: fb.code, mailed: email ? 1 : 0 };
 	}
 	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
@@ -926,12 +947,13 @@ export class Hub extends DurableObject {
 		const c = String(x.code || '').toUpperCase(), url = 'https://' + this.env.BASE_DOMAIN + '/r/' + c;
 		const html = body + `<p style="margin-top:16px;padding:10px 12px;background:#f4f5f7;border-radius:8px">受理编号：<b style="letter-spacing:.06em">${c}</b><br>查处理进度：<a href="${url}">${url}</a></p>`
 			+ `<p style="color:#999;font-size:13px">路由器面板 · <a href="https://${this.env.BASE_DOMAIN}">${this.env.BASE_DOMAIN}</a></p>`;
-		try { return await sendMail(this.env, to, subject + '（受理编号 ' + c + '）', html); } catch (e) { return false; }
+		try { return await this.mail(to, subject + '（受理编号 ' + c + '）', html); } catch (e) { return false; }
 	}
 	// 面板里发的反馈有新进展：推送到绑了这台路由器推送的手机（点开直接到面板「我的反馈」）
 	async fbPush(x, title, body) {
 		if (!x.sub) return;
-		try { await this.watch(x.sub).push({ title, body: body + '（编号 ' + String(x.code || '').toUpperCase() + '）', tag: 'fb', lvl: 'ok', url: './?p=myfb', force: true }); } catch (e) {}
+		// 反馈的进度在面板「通知」里另有一类（反馈进度），这里不重复记
+		try { await this.watch(x.sub).push({ title, body: body + '（编号 ' + String(x.code || '').toUpperCase() + '）', tag: 'fb', lvl: 'ok', url: './?p=myfb', force: true, nolog: true }); } catch (e) {}
 	}
 	fbMailTo(x) {
 		const to = [...(x.emails || [])], m = String(x.contact || '').match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
@@ -939,6 +961,24 @@ export class Hub extends DurableObject {
 		return to.slice(0, 3);
 	}
 	async feedbacksAdmin() { return (await this.feedbacks()).map((x) => ({ ...x, mailTo: this.fbMailTo(x) })); }
+	/* ---------- 公告：管理页发；托管版、自建版的面板都来拿（只读）；重要的由各自的路由器推送到手机 ---------- */
+	async anns(all) { const l = (await this.ctx.storage.get('ann')) || [], now = Date.now(); return all ? l : l.filter((a) => !a.exp || a.exp > now); }
+	// 新建（id 空）或修改；days：多少天后不再显示（0 = 一直显示）
+	async annSave(id, b) {
+		const title = String(b.title || '').trim().slice(0, 80), body = String(b.body || '').trim().slice(0, 2000);
+		if (!title) return { st: 400, error: '标题不能是空的' };
+		const level = b.level === 'important' ? 'important' : 'normal', days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
+		return this.lock(async () => {
+			const l = (await this.ctx.storage.get('ann')) || [], now = Date.now();
+			let a = id ? l.find((x) => x.id === id) : null;
+			if (id && !a) return { st: 404, error: '没有这条公告（可能已经删了）' };
+			if (!a) { a = { id: rnd(10), at: now }; l.unshift(a); }
+			Object.assign(a, { title, body, level, exp: days ? now + days * DAY : 0, upd: now });
+			await this.ctx.storage.put('ann', l.slice(0, 50));
+			return { st: 200, ok: true, ann: a };
+		});
+	}
+	annDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('ann')) || []; if (!l.some((x) => x.id === id)) return false; await this.ctx.storage.put('ann', l.filter((x) => x.id !== id)); return true; }); }
 	// 标为已收到 / 撤回（对方查进度时，第二段「开发人员已收到」亮起来）
 	async fbAck(id, on) {
 		const x = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return null; const was = x.ack; x.ack = on ? x.ack || Date.now() : 0; await this.ctx.storage.put('fbl', l); return { ...x, was }; });
@@ -1088,6 +1128,11 @@ export async function hubFetch(req, env) {
 		return J(rest, st);
 	}
 	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
+	// 公告（公开、只读；面板经路由器每 30 分钟来拿一次，缓存 5 分钟）
+	if (p === '/api/notices' && req.method === 'GET') {
+		const list = (await H.anns(false)).slice(0, 20).map((a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0 }));
+		return new Response(JSON.stringify({ ok: true, list }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
+	}
 	if (p.startsWith('/api/fb/') && req.method === 'GET') {
 		const { st, ...rest } = await H.fbStatus(p.slice(8), req.headers.get('cf-connecting-ip') || '');
 		return J(rest, st);
@@ -1105,10 +1150,19 @@ export async function hubFetch(req, env) {
 		const { st, ...rest } = await H.unregister({ sub: String(b.sub || ''), rkey: String(b.rkey || '') });
 		return J(rest, st);
 	}
+	// 实时对话（面板经路由器转发；托管版凭路由器钥匙，自建版凭匿名身份）
+	if (p === '/api/chat' && req.method === 'POST') return chatApi(req, env, H, body);
 	if (p.startsWith('/api/admin/')) {
-		const k = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-		if (!env.ADMIN_KEY || env.ADMIN_KEY.length < 16 || !safeEq(k, env.ADMIN_KEY)) return J({ error: '需要管理员密钥' }, 401);
+		const k = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), aip = req.headers.get('cf-connecting-ip') || '';
+		const aua = uaLabel(req.headers.get('user-agent')), apl = placeOf(req.cf);
+		// 同一个 IP 15 分钟内密钥错 10 次：先锁住（防猜密钥），错的每一次都记进登录记录
+		if (aip && (await H.admBlocked(aip))) return J({ error: '密钥错太多次了，15 分钟后再试' }, 429);
+		if (!env.ADMIN_KEY || env.ADMIN_KEY.length < 16 || !safeEq(k, env.ADMIN_KEY)) { if (k) await H.admFail(aip, aua, apl, p); return J({ error: '需要管理员密钥' }, 401); }
 		const a = p.slice('/api/admin/'.length).split('/');
+		// 管理后台登录：只在输入密钥进来时记一次（之后每个请求不记）
+		if (a[0] === 'login' && req.method === 'POST') { await H.loginLog({ k: 'admin', who: '管理后台', ok: true, why: '登录成功', ip: aip, ua: aua, place: apl }); return J({ ok: true, ...(await H.stats()) }); }
+		const ox = await opsAdmin(req, a, H, body, u);
+		if (ox) return ox;
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
 		if (a[0] === 'devices' && SUB_RE.test(a[1] || '') && req.method === 'POST') {
 			const op = a[2], sub = a[1], b = await body();
@@ -1143,6 +1197,10 @@ export async function hubFetch(req, env) {
 		}
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
 		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacksAdmin() });
+		// 公告：列表、新建、修改、删除
+		if (a[0] === 'ann' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.anns(true) });
+		if (a[0] === 'ann' && (!a[1] || /^[a-z2-9]{10}$/.test(a[1])) && req.method === 'POST') { const b = await body(), r = await H.annSave(a[1] || '', b); if (r.st === 200) await H.alog(a[1] ? 'ann_edit' : 'ann_new', '', r.ann.title); const { st, ...rest } = r; return J(rest, st); }
+		if (a[0] === 'ann' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') { const r = await H.annDel(a[1]); if (r) await H.alog('ann_del', '', a[1]); return J({ ok: r }, r ? 200 : 404); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') { const b = await body(); const r = await H.fbSet(a[1], b.state || (b.done ? 'fixed' : 'open'), b.note, !!b.mail); return J(r, r.error ? 400 : 200); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'ack' && req.method === 'POST') { const b = await body(); return J({ ok: await H.fbAck(a[1], b.on !== false) }); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
@@ -1159,16 +1217,30 @@ export async function hubFetch(req, env) {
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
 	if (p.startsWith('/dl/cfd/') && (req.method === 'GET' || req.method === 'HEAD')) return dlCfd(p.slice(8));
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
+	// 管理后台（4.0 新版）：打包好的页面和静态文件都在 site.js 里，不从任何外部网站加载东西
+	if ((p === '/admin' || p === '/admin/') && (req.method === 'GET' || req.method === 'HEAD')) return adminPage(req.method === 'HEAD' ? null : ADMIN_APP);
+	if (p.startsWith('/admin/assets/') && (req.method === 'GET' || req.method === 'HEAD')) {
+		const f = ADMIN_FILES[p.slice('/admin/assets/'.length)];
+		if (!f) return J({ error: 'not found' }, 404);
+		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } });
+	}
+	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security' };
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
 	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {
+		// 访问统计：只算官网各页的打开次数、访客 IP（留 30 天）和国家/地区；管理页不算
+		if (req.method === 'GET' && pg !== ADMIN) { const ua = req.headers.get('user-agent') || ''; try { await H.track('pv', { page: PGN[p] || 'reply', ip: req.headers.get('cf-connecting-ip') || '', cc: (req.cf && req.cf.country) || '', bot: isBot(ua) }); } catch (e) {} }
 		const ins = pg === ADMIN ? '' : ' https://static.cloudflareinsights.com', insc = pg === ADMIN ? '' : ' https://cloudflareinsights.com';
 		return new Response(req.method === 'HEAD' ? null : pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'" + ins + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:" + (pg === ADMIN ? ' blob:' : '') + "; connect-src 'self'" + insc + "; frame-ancestors 'none'" } });
 	}
 	return J({ error: 'not found' }, 404);
 }
 
+function adminPage(html) {
+	return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+		'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
+}
 /* ---------- 安卓 App：最新版本号和安装包（从 GitHub Release 转过来，走自己的域名，大陆也能下） ---------- */
 const repoOf = (env) => env.GITHUB_REPO || 'wznwzn123/openwrt-claude-panel';
 async function cached(key, ttl, make) {
@@ -1322,7 +1394,7 @@ async function accountApi(req, env, H, p, body) {
 	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev }));
 	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip, dev }));
-	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev }));
+	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev, ip }));
 	const sid = getSid(req);
 	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	const me = await H.who(sid);
@@ -1345,4 +1417,7 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	return J({ error: 'not found' }, 404);
 }
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); await H.gcRate(Date.now()); }
+export { dayKey } from './ops.js';
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} }
+installOps(Hub);
+export { hubObj };

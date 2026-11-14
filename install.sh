@@ -44,6 +44,23 @@ say()  { STEP="$*"; printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m ✓\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m !\033[0m %s\n' "$*"; }
 die()  { ERR="$*"; printf '\033[1;31m ✗ %s\033[0m\n' "$*"; exit 1; }
+# 某个目录所在分区还剩多少 MB。
+# BusyBox 的 df 遇到很长的分区名（超过 20 个字），会把名字单独放一行、数字挪到下一行，
+# 所以把数据行拼起来、从后往前数取「可用」那一列（不管换没换行都对）；
+# 读不出来或者读出来很小（不到 40 MB）时，再用 stat -f 查一次，取大的，免得读错了不让装
+avail_mb() {
+	local m s
+	m=$(df -k "$1" 2>/dev/null | awk 'NR > 1 { l = l " " $0 } END { n = split(l, f, " "); if (n >= 6 && f[n - 2] ~ /^[0-9]+$/) print int(f[n - 2] / 1024) }')
+	if [ -z "$m" ] || [ "$m" -lt 40 ]; then
+		s=$(stat -f -c '%a %S' "$1" 2>/dev/null | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { print int($1 * $2 / 1048576) }')
+		if [ -n "$s" ] && { [ -z "$m" ] || [ "$s" -gt "$m" ]; }; then m=$s; fi
+	fi
+	echo "${m:-0}"
+}
+# 闪存（/overlay，没有的话就是 /）还剩多少 MB
+free_mb() { if [ -d /overlay ]; then avail_mb /overlay; else avail_mb /; fi; }
+# 各分区的原始情况（空间不够时附在报错和上报里，开发者能看到真实情况）
+df_raw() { df -h / /overlay /tmp 2>/dev/null | awk '!s[$0]++' | head -n 8 | sed 's/^/    /'; }
 ask()  { # ask 变量名 提示 默认值 [必填]
 	local v n=0
 	if [ "$YES" = 1 ]; then eval "$1=\"\$3\""; return; fi
@@ -72,7 +89,7 @@ mask() { # 把邀请码、隧道令牌、域名、云端地址换成 ***，长�
 }
 fail_report() {
 	set +e
-	local rc=$1 url info yn r px logt bf
+	local rc=$1 url info yn r px logt bf em n
 	[ "$rc" = 0 ] && return 0
 	[ "$ABORT" = 1 ] && return 0
 	url=${PKG_REPORT:-${PKG_HUB:-$HUB}}
@@ -88,8 +105,10 @@ fail_report() {
 平台：$( (. /etc/openwrt_release 2>/dev/null; echo "${DISTRIB_TARGET:-?} · ${DISTRIB_ARCH:-?}") )
 型号：$( { ubus call system board 2>/dev/null | sed -n 's/.*"model": *"\([^"]*\)".*/\1/p'; cat /tmp/sysinfo/model 2>/dev/null; } | head -n1 )
 内核：$(uname -rm 2>/dev/null)
-闪存剩余：$( { df -k /overlay 2>/dev/null || df -k / 2>/dev/null; } | awk 'NR==2{print int($4/1024) " MB"}')
-内存：$(free 2>/dev/null | awk '/^Mem/{print "共 " int($2/1024) " MB，空闲 " int($4/1024) " MB"}')
+闪存剩余：$(free_mb) MB
+分区情况：
+$(df_raw)
+内存：$(free 2>/dev/null | awk '/^Mem/{print "共 " int($2/1024) " MB，可用 " int((NF >= 7 ? $7 : $4)/1024) " MB"}')
 有没有：ucode $(command -v ucode >/dev/null && echo 有 || echo 没有) · cloudflared $(command -v cloudflared >/dev/null && echo 有 || { [ "${CFD_RAM:-0}" = 1 ] && echo '没有（小闪存模式，下载到内存）' || echo 没有; }) · curl $(command -v curl >/dev/null && echo 有 || echo 没有) · $(command -v opkg >/dev/null && echo opkg || { command -v apk >/dev/null && echo apk || echo 没有软件包管理器; }) · 防火墙 $(command -v fw4 >/dev/null 2>&1 && echo fw4 || { command -v fw3 >/dev/null 2>&1 && echo fw3 || echo 不知道; })
 代理插件：${px:-没有}
 是不是升级：$( [ "${UPGRADE:-0}" = 1 ] && echo 是 || echo 不是（全新安装）)"
@@ -102,12 +121,28 @@ fail_report() {
 	printf '%s\n' "$info"
 	[ -n "$logt" ] && echo "（还有这次安装在上面显示的全部过程，共 $(printf '%s\n' "$logt" | wc -l) 行，同样遮住了邀请码、令牌和域名）"
 	echo "----------------------------------------"
-	[ -z "$CMCP_TTY" ] && while IFS= read -r -t 0.2 yn 2>/dev/null <"$TTY"; do :; done
+	# 输入只打开一次，所有回答都从这里按顺序读（「要不要上报」之后接着读邮箱）
+	exec 3<"$TTY" || { echo "没有上报（读不到输入）。可以把上面的内容截图发给开发者。"; return 0; }
+	[ -z "$CMCP_TTY" ] && while IFS= read -r -t 0.2 yn 2>/dev/null <&3; do :; done
 	printf '要上报吗？输入 y 上报，n 不上报 [n]：'
-	yn=""; read -r yn <"$TTY" || yn=""
-	case "$yn" in y|Y|yes|YES|是) ;; *) echo "没有上报。"; return 0 ;; esac
+	yn=""; read -r yn <&3 || yn=""
+	case "$yn" in y|Y|yes|YES|是) ;; *) exec 3<&-; echo "没有上报。"; return 0 ;; esac
+	# 上报必须留邮箱：开发者处理好了、写了说明，会发邮件告诉他（最多问 3 次；输入 n 取消；输入结束了就不再问）
+	em="" n=0
+	while [ $n -lt 3 ]; do
+		n=$((n + 1))
+		printf '你的邮箱（必填，处理进度和结果会发到这个邮箱；输入 n 取消上报）：'
+		if ! read -r em <&3; then em=""; echo; break; fi
+		em=$(printf '%s' "$em" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+		case "$em" in n|N|no|NO|否) exec 3<&-; echo "没有上报。"; return 0 ;; esac
+		if [ ${#em} -le 120 ] && printf '%s\n' "$em" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then break; fi
+		if [ -z "$em" ]; then echo "需要填邮箱才能上报（开发者处理好了会发邮件告诉你）。"; else echo "邮箱格式不对，再输一次（比如 name@example.com）。"; fi
+		em=""
+	done
+	exec 3<&-
+	if [ -z "$em" ]; then echo "没有上报（没填邮箱）。可以把上面的内容截图发给开发者。"; return 0; fi
 	bf=/tmp/cmcp-install-report.json
-	printf '{"kind":"install","text":"%s","log":"%s","contact":""}' "$(jesc "$info")" "$(jesc "$logt")" > "$bf"
+	printf '{"kind":"install","text":"%s","log":"%s","contact":"","email":"%s"}' "$(jesc "$info")" "$(jesc "$logt")" "$(jesc "$em")" > "$bf"
 	if command -v curl >/dev/null 2>&1; then r=$(curl -s -m 30 -X POST -H 'Content-Type: application/json' --data-binary "@$bf" "$url/api/report" 2>/dev/null)
 	elif command -v uclient-fetch >/dev/null 2>&1; then r=$(uclient-fetch -q -T 30 -O - --post-file="$bf" "$url/api/report" 2>/dev/null)
 	else r=$(wget -q -T 30 -O - --post-data="$(cat "$bf")" "$url/api/report" 2>/dev/null); fi
@@ -119,10 +154,12 @@ fail_report() {
 				# 编号存在路由器上：下次运行安装命令时，先告诉他开发者回复了什么（不用账号、不用邮箱）
 				printf '%s %s\n' "$code" "$url" > /etc/cmcp-report 2>/dev/null
 				echo "已上报，谢谢！上报编号：$code"
+				echo "确认邮件发到了 $em（收不到的话看看垃圾邮件），开发者处理好了也会发邮件告诉你。"
 				echo "过一阵子打开 $url/r/$code 看处理结果（建议截图或收藏这个网址），"
 				echo "也可以在官网底部「查处理进度」输入编号查；"
 				echo "以后重新运行安装命令时，最上面也会显示开发者的回复。"
 			else echo "已上报，谢谢！开发者会尽快看。"; fi ;;
+		*'邮箱格式不对'*) echo "上报没成功：托管服务说邮箱格式不对。可以把上面的内容截图发给开发者。" ;;
 		*) echo "上报没成功（可能网络不通）。可以把上面的内容截图发给开发者。" ;;
 	esac
 	return 0
@@ -225,7 +262,6 @@ say "安装 $NAME${PKG_VER:+（v$PKG_VER）}$( [ $UPGRADE = 1 ] && echo '，升�
 # ---------- 依赖 ----------
 need=""
 have_pkg() { [ -n "$(command -v "$1")" ]; }
-free_mb() { { df -k /overlay 2>/dev/null || df -k / 2>/dev/null; } | awk 'NR==2{print int($4/1024)}'; }
 mem_mb() { awk -v k="$1:" '$1 == k { print int($2 / 1024) }' "${CMCP_MEMINFO:-/proc/meminfo}" 2>/dev/null; }
 # 装软件包。opkg / apk 自己崩溃（Segmentation fault 这类，退出码 ≥ 128）时，清掉软件源列表重试一次
 PKGERR="" PKGFEEDS="" PKGNONE=""
@@ -356,7 +392,8 @@ cfd_ram_check() {
 have_pkg curl || need="$need curl"
 FREE=$(free_mb); FREE=${FREE:-0}
 # 面板本身加上面这几个小依赖，大约要 5 MB
-[ "$FREE" -lt 6 ] && die "闪存只剩 $FREE MB，装面板至少要 6 MB。先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），再装一次"
+[ "$FREE" -lt 6 ] && die "闪存只剩 $FREE MB，装面板至少要 6 MB。先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），再装一次。路由器上各分区的情况：
+$(df_raw)"
 if [ -n "$need" ]; then
 	say "安装依赖：$need"
 	if ! pkg_add $need; then
@@ -539,17 +576,19 @@ fi
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
 touch $CR
-sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route/d' $CR
+sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann/d' $CR
 echo '0 9 * * * /usr/sbin/cmcp-daily >/dev/null 2>&1' >> $CR
 # 面板走直连还是走代理，自动选能打开的那条
 echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
+# 公告：每 30 分钟取一次（脚本里再随机等 0–10 分钟，大家错开），重要的推送到手机
+echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
 [ "$ED" = full ] && echo '7 4 * * * /usr/sbin/cmcp-backup auto >/dev/null 2>&1' >> $CR
 /etc/init.d/cron enable >/dev/null 2>&1 || true
 /etc/init.d/cron restart >/dev/null 2>&1 || true
 
 # ---------- 升级系统时保留 ----------
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -574,6 +613,8 @@ say "启动服务"
 /etc/init.d/cmcp-watchdog restart
 # 换了网址（比如自建版换成托管版）后，OpenClash 规则集里的面板域名也要跟着更新
 /usr/sbin/cmcp-route --init >/dev/null 2>&1 || true
+# 公告：先取一次（记下从现在开始，以前的公告不推送到手机；面板「通知」里马上就能看到）
+( /usr/sbin/cmcp-ann now >/dev/null 2>&1 & ) 2>/dev/null || true
 sleep 3
 code=$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json || true)
 [ "$code" = 200 ] && ok "面板服务已运行" || warn "面板服务没响应（HTTP $code），看看 logread | grep uhttpd"
@@ -596,7 +637,8 @@ echo
 echo "已安装：$NAME"
 if [ -n "$HUB" ]; then
 	# 托管版：只给一个链接。手机打开后，面板会带着去官网绑定账号、拿登录码，不用再抄别的地址
-	PC=$(/usr/sbin/cmcp-pair --code 2>/dev/null)
+	# 拿配对码失败（比如官网一时连不上）不算安装失败：下面会告诉用户怎么手动拿
+	PC=$(/usr/sbin/cmcp-pair --code 2>/dev/null || true)
 	HUBN=${HUB#https://}
 	echo
 	echo "👉 接下来用手机做（10 分钟内）："

@@ -7,7 +7,11 @@ const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVAC
 let out = '// 自动生成，不要直接改：改 cloud/site/ 里的文件后运行 node tools/build-site.mjs\n';
 for (const [k, f] of Object.entries(pages)) {
 	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 cloud/site/img/名字.webp 的内容（页面只允许加载自己和 data: 图片）
-	const html = fs.readFileSync(new URL(f, dir), 'utf8').replace('/*COMMON_CSS*/', css)
+	// 新设计的页面共用的顶栏、页脚、样式和脚本：写成 <!--KIT_HEAD--> 这样，打包时换成 cloud/site/_kit_*.html 的内容
+	let html = fs.readFileSync(new URL(f, dir), 'utf8');
+	for (let i = 0; i < 3; i++) html = html.replace(/<!--KIT_(HEAD|NAV|FOOT|JS|DOC|ME)-->/g, (m, n) => fs.readFileSync(new URL('_kit_' + n.toLowerCase() + '.html', dir), 'utf8'));
+	if (/<!--KIT_/.test(html)) throw new Error(f + ' 里有不认识的 <!--KIT_...-->');
+	html = html.replace('/*COMMON_CSS*/', css)
 		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => 'data:image/webp;base64,' + fs.readFileSync(new URL('img/' + n + '.webp', dir)).toString('base64'));
 	out += `export const ${k} = ${JSON.stringify(html)};\n`;
 }

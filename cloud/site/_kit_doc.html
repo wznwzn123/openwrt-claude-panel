@@ -1,0 +1,67 @@
+<style>
+/* 四个文档页（须知、协议、隐私、安全）：左边目录跟着滚动亮起，右边正文 */
+.doc-body { padding-top: clamp(32px, 5vw, 64px); }
+.doc-body > .wrap { display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: clamp(40px, 6vw, 96px); align-items: start; }
+.toc { position: sticky; top: calc(var(--nav) + 28px); }
+.toc p { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.toc ol { list-style: none; margin: 0; padding: 0; position: relative; display: grid; gap: 2px; border-left: 1px solid var(--hair); }
+.toc a { display: block; padding: 8px 0 8px 18px; margin-left: -1px; border-left: 2px solid transparent; font-size: 14.5px; line-height: 1.45; color: var(--muted); text-decoration: none; transition: color .25s, border-color .25s; }
+.toc a:hover { color: var(--ink); }
+.toc a.is-on { color: var(--ink); border-left-color: var(--accent); }
+.doc-main { max-width: 780px; min-width: 0; }
+.ds { padding: 8px 0 44px; scroll-margin-top: calc(var(--nav) + 24px); }
+.ds + .ds { border-top: 1px solid var(--hair); padding-top: 44px; }
+.ds > h2 { display: flex; align-items: baseline; gap: 14px; margin: 0 0 20px; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.25; letter-spacing: -.02em; font-weight: 650; }
+.ds > h2 .n { flex: none; font: 600 13px/1 var(--font-mono); color: var(--accent); padding: 6px 9px; border-radius: 8px; background: color-mix(in oklab, var(--accent) 12%, transparent); transform: translateY(-4px); }
+.prose p, .prose li { font-size: 16px; line-height: 1.85; color: color-mix(in oklab, var(--ink) 80%, var(--bg)); }
+.prose p { margin: 0 0 14px; }
+.prose b { color: var(--ink); font-weight: 600; }
+.prose ul { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.prose ul > li { position: relative; padding-left: 22px; }
+.prose ul > li::before { content: ""; position: absolute; left: 4px; top: .78em; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px color-mix(in oklab, var(--accent) 60%, transparent); }
+.prose ol { list-style: none; margin: 0 0 14px; padding: 0; counter-reset: o; display: grid; gap: 12px; }
+.prose ol > li { counter-increment: o; position: relative; padding-left: 44px; }
+.prose ol > li::before { content: counter(o); position: absolute; left: 0; top: .2em; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 600 13px/1 var(--font-mono); color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent); }
+/* 数据卡片（隐私政策的表） */
+.dcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0 0 8px; }
+.dcard { display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-radius: 18px; background: var(--p-surface); border: 1px solid var(--hair); }
+.dcard h3 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.4; }
+.dcard p { margin: 0; font-size: 14.5px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 76%, var(--bg)); }
+.dcard p b { color: var(--ink); }
+.dcard .keep { margin-top: auto; display: flex; gap: 8px; align-items: flex-start; padding-top: 12px; border-top: 1px solid var(--hair); font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.dcard .keep svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--accent); }
+/* 措施卡片（安全说明） */
+.measures { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.measures > li { display: flex; gap: 14px; padding: 18px 20px; border-radius: 18px; background: var(--p-surface); border: 1px solid var(--hair); font-size: 15px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 76%, var(--bg)); }
+.measures > li > svg { width: 22px; height: 22px; flex: none; margin-top: 2px; color: var(--accent); }
+.measures > li b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 2px; }
+.measures a { color: var(--accent); }
+.risks > li::before { color: #fbbf24 !important; background: rgb(251 191 36 / .12) !important; box-shadow: inset 0 0 0 1px rgb(251 191 36 / .35) !important; }
+/* 报告表单 */
+.form-card { padding: clamp(20px, 3vw, 32px); border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); }
+.form-card > p { margin: 0 0 20px; font-size: 15px; line-height: 1.8; color: color-mix(in oklab, var(--ink) 78%, var(--bg)); }
+.form-card .after { margin: 16px 0 0; font-size: 14px; color: var(--muted); }
+.form-card .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+@media (max-width: 1023px) {
+  .doc-body > .wrap { grid-template-columns: minmax(0, 1fr); }
+  .toc { position: sticky; top: var(--nav); z-index: 20; margin: 0 calc(-1 * var(--gut, 16px)) 24px; padding: 10px var(--gut, 16px); background: color-mix(in oklab, var(--p-bg) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--hair); }
+  .toc p { display: none; }
+  .toc ol { display: flex; gap: 6px; overflow-x: auto; border: 0; scrollbar-width: none; }
+  .toc ol::-webkit-scrollbar { display: none; }
+  .toc a { white-space: nowrap; padding: 0 14px; min-height: 36px; display: flex; align-items: center; border: 1px solid var(--hair); border-radius: 999px; margin: 0; font-size: 13.5px; }
+  .toc a.is-on { border-color: transparent; background: var(--accent); color: var(--accent-ink); }
+  .dcards, .measures { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 639px) { .prose p, .prose li { font-size: 15.5px; } .ds { padding-bottom: 36px; } .ds + .ds { padding-top: 36px; } }
+</style>
+<script>
+// 目录：滚到哪一节，哪一节亮起；手机上目录条跟着滑到亮起的那一项
+addEventListener('DOMContentLoaded', () => {
+  const links = [...document.querySelectorAll('.toc a')], secs = links.map((a) => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  if (!secs.length) return;
+  let cur = null;
+  const on = (i) => { if (i === cur) return; cur = i; links.forEach((a, k) => a.classList.toggle('is-on', k === i)); const a = links[i], bar = a.closest('ol'); if (bar && bar.scrollWidth > bar.clientWidth) bar.scrollTo({ left: a.offsetLeft - 16, behavior: 'smooth' }); };
+  const pick = () => { const y = innerHeight * 0.3; let i = 0; secs.forEach((s, k) => { if (s.getBoundingClientRect().top < y) i = k; }); on(i); };
+  addEventListener('scroll', pick, { passive: true }); pick();
+});
+</script>

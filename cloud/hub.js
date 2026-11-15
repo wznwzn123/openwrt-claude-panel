@@ -378,7 +378,7 @@ export class Hub extends DurableObject {
 		const u = await this.ctx.storage.get('xu:' + uid);
 		if (!u) return { st: 400, error: '只能彻底删除回收站里的账号（先删除，进回收站）' };
 		if (String(confirm || '').trim().toLowerCase() !== u.email) return { st: 400, error: '要输入这个账号的邮箱 ' + u.email + ' 才能彻底删除' };
-		await this.ctx.storage.delete(['xu:' + uid, 'xe:' + u.email]);
+		await this.ctx.storage.delete(['xu:' + uid, 'xe:' + u.email, 'av:' + uid]);
 		await this.alog('user-purge', u.email, '彻底删除');
 		return { st: 200, ok: true };
 	}
@@ -568,7 +568,44 @@ export class Hub extends DurableObject {
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		const td = this.trialDays();
-		return { email: u.email, created: u.created, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: td ? { days: td, code: (u.trial && !u.trial.used && u.trial.code) || '', used: (u.trial && u.trial.used) || 0, got: !!(u.trial && u.trial.code) } : null };
+		return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: td ? { days: td, code: (u.trial && !u.trial.used && u.trial.code) || '', used: (u.trial && u.trial.used) || 0, got: !!(u.trial && u.trial.code) } : null };
+	}
+	// 个人主页：名字和头像。头像是浏览器里裁成正方形、压缩好的小图（data:image/...;base64），单独存一份，不放进账号记录里
+	async brief(uid) { const u = await this.ctx.storage.get('u:' + uid); if (!u) return null; return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '' }; }
+	setProfile(uid, p) { return this.lock(() => this._setProfile(uid, p)); }
+	async _setProfile(uid, { name, avatar, layout }) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		if (!(await this.hit('pf:' + uid, 30, 3600e3))) return { st: 429, error: '改得太频繁了，过一会儿再试' };
+		if (name !== undefined) {
+			const n = String(name || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+			if ([...n].length > 20) return { st: 400, error: '名字最多 20 个字' };
+			if (n) u.name = n; else delete u.name;
+			await this.ctx.storage.put('u:' + uid, u);
+		}
+		// 「我的路由器」页面的布局：板块顺序、宽窄、隐藏（只存这几样，最多 12 块）
+		if (layout !== undefined) {
+			if (!Array.isArray(layout) || layout.length > 12) return { st: 400, error: '布局不对' };
+			const L = [];
+			for (const x of layout) { const id = String((x && x.id) || ''); if (!/^[a-z]{2,10}$/.test(id) || L.some((y) => y.id === id)) return { st: 400, error: '布局不对' }; L.push({ id, w: x.w === 'full' ? 'full' : 'half', hide: !!x.hide }); }
+			if (L.length) u.layout = L; else delete u.layout;
+			await this.ctx.storage.put('u:' + uid, u);
+		}
+		if (avatar !== undefined) {
+			const a = String(avatar || '');
+			if (!a) await this.ctx.storage.delete('av:' + uid);
+			else {
+				const m = /^data:image\/(webp|jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/.exec(a);
+				if (!m) return { st: 400, error: '头像格式不对，请换一张图片' };
+				if (a.length > 60000) return { st: 400, error: '头像太大了，请换一张小一点的图片' };
+				let head = '';
+				try { head = atob(m[2].slice(0, 24)); } catch (e) { return { st: 400, error: '头像格式不对，请换一张图片' }; }
+				const ok = { webp: head.slice(0, 4) === 'RIFF' && head.slice(8, 12) === 'WEBP', jpeg: head.charCodeAt(0) === 0xff && head.charCodeAt(1) === 0xd8, png: head.slice(1, 4) === 'PNG' }[m[1]];
+				if (!ok) return { st: 400, error: '头像格式不对，请换一张图片' };
+				await this.ctx.storage.put('av:' + uid, a);
+			}
+		}
+		return { st: 200, ok: true, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [] };
 	}
 	// 路由器那边（凭 RKEY）要一个配对码，用户在官网输入配对码，就把这台路由器加到自己账号里
 	async pairStart({ sub, rkey }) {
@@ -674,7 +711,7 @@ export class Hub extends DurableObject {
 	async devAccounts({ sub, rkey }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		const d = await this.ctx.storage.get('d:' + sub), list = [];
-		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u) list.push({ uid, email: maskEmail(u.email), at: ((u.devs || []).find((x) => x.sub === sub) || {}).at || 0 }); }
+		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u) list.push({ uid, email: maskEmail(u.email), name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', at: ((u.devs || []).find((x) => x.sub === sub) || {}).at || 0 }); }
 		return { st: 200, list };
 	}
 	async devUnbind({ sub, rkey, uid }) {
@@ -1108,7 +1145,7 @@ export class Hub extends DurableObject {
 		// 回收站里满 30 天的账号：彻底删除
 		for (const [k, u] of await this.ctx.storage.list({ prefix: 'xu:' })) {
 			if (now - (u.delAt || 0) < TRASH_DAYS * DAY) continue;
-			await this.ctx.storage.delete([k, 'xe:' + u.email]);
+			await this.ctx.storage.delete([k, 'xe:' + u.email, 'av:' + u.uid]);
 			await this.alog('user-purge', u.email, '在回收站满 ' + TRASH_DAYS + ' 天，自动彻底删除', 'system');
 		}
 		// 过期没用的登录码、配对码
@@ -1433,7 +1470,7 @@ async function accountApi(req, env, H, p, body) {
 	const b = post ? await body() : {};
 	const s = (v) => String(v == null ? '' : v);
 	const out = (r) => { const { st, sid, ...rest } = r; const res = J(sid ? { ok: true, ...rest } : rest, st); if (sid) res.headers.append('set-cookie', sidCookie(sid, 30 * 86400)); return res; };
-	if (!post && p !== '/api/account/me') return J({ error: 'method not allowed' }, 405);
+	if (!post && p !== '/api/account/me' && p !== '/api/account/brief') return J({ error: 'method not allowed' }, 405);
 	// 路由器那边（凭 RKEY）
 	if (p === '/api/pair/start') return out(await H.pairStart({ sub: s(b.sub), rkey: s(b.rkey) }));
 	if (p === '/api/dev/accounts') return out(await H.devAccounts({ sub: s(b.sub), rkey: s(b.rkey) }));
@@ -1451,9 +1488,14 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev, ip }));
 	const sid = getSid(req);
 	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); return res; }
+	// 官网各页右上角问「登录了没有」：没登录也回 200，免得每个访客的浏览器控制台里都有一条红色报错
+	if (a === 'brief' && !sid) return J({ ok: false });
 	const me = await H.who(sid);
-	if (!me) return J({ error: '请先登录', login: true }, 401);
+	if (!me) return a === 'brief' ? J({ ok: false }) : J({ error: '请先登录', login: true }, 401);
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
+	// 官网各页右上角：登录了就显示头像和名字（很轻，只要名字和头像）
+	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
+	if (a === 'profile') return out(await H.setProfile(me.uid, { name: b.name === undefined ? undefined : s(b.name), avatar: b.avatar === undefined ? undefined : s(b.avatar), layout: b.layout === undefined ? undefined : b.layout }));
 	if (a === 'fb') return out(await H.accountFb(me.uid, me.email));
 	if (a === 'sessions') return out(await H.sessions(me.uid, sid));
 	if (a === 'session_out') return out(await H.sessionOut(me.uid, sid, s(b.id)));

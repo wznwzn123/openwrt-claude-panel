@@ -56,6 +56,33 @@ j = await (await adm('GET', '/chat')).json();
 ok('[自动回复] 对话列表最后一句还是用户说的', j.list[0].preview === '还在吗' && j.list[0].lastFrom === 'u', JSON.stringify(j.list[0]));
 r = await adm('POST', '/chat/' + tid, { text: '在的，我看看' });
 ok('[对话] 开发者回复', r.status === 200);
+/* ---------- 5.0.1：对话两边的头像和名字、「查看对方所有信息」 ---------- */
+{
+	const PNG = 'data:image/png;base64,' + Buffer.from('\x89PNG\r\n\x1a\n' + 'x'.repeat(40), 'binary').toString('base64');
+	const acc = async (path, body, sid) => { const r = await api('POST', '/api/account/' + path, body, { origin: 'https://panel.example', ...(sid ? { cookie: 'sid=' + sid } : {}) }); const m = /sid=([a-z2-9]+);/.exec(r.headers.get('set-cookie') || ''); return { st: r.status, j: await r.json().catch(() => ({})), sid: m ? m[1] : sid }; };
+	MAILS.length = 0; await acc('code', { email: 'ming@x.com', kind: 'reg' });
+	const vc = (/\b(\d{6})\b/.exec(JSON.stringify(MAILS[MAILS.length - 1] || {})) || [])[1];
+	const U = await acc('register', { email: 'ming@x.com', password: 'ming-pass-12', code: vc });
+	const P = await (await api('POST', '/api/pair/start', { sub: R1.sub, rkey: R1.rkey })).json();
+	await acc('bind', { code: P.code }, U.sid);
+	await acc('profile', { name: '小明', avatar: PNG }, U.sid);
+	let x = await (await adm('POST', '/devprofile', { name: '老王（开发者）', avatar: PNG })).json();
+	ok('[头像] 后台设置开发者的名字和头像', x.name === '老王（开发者）' && x.avatar === PNG, JSON.stringify(x).slice(0, 120));
+	ok('[头像] 开发者头像乱填：拒绝', (await adm('POST', '/devprofile', { avatar: 'data:image/png;base64,' + Buffer.from('<svg/>').toString('base64') })).status === 400);
+	x = await (await chat({ sub: R1.sub, rkey: R1.rkey, op: 'get' })).json();
+	ok('[头像] 面板第一次打开对话：拿到开发者的名字头像、自己账号的名字头像（邮箱打码）', x.dev && x.dev.name === '老王（开发者）' && x.dev.avatar === PNG && x.me && x.me.name === '小明' && x.me.avatar === PNG && x.me.email === 'mi***@x.com' && !JSON.stringify(x).includes('ming@x.com'), JSON.stringify({ dev: x.dev && x.dev.name, me: x.me && x.me.name, em: x.me && x.me.email }));
+	x = await (await chat({ sub: R1.sub, rkey: R1.rkey, op: 'get', after: 3 })).json();
+	ok('[头像] 之后每几秒拿新消息：不再带头像（省流量）', !('dev' in x) && !('me' in x));
+	x = await (await adm('GET', '/chatpeers')).json();
+	ok('[头像] 后台对话列表：看到对方的官网账号名字', x.map[tid] && x.map[tid].name === '小明' && x.map[tid].email === 'ming@x.com' && x.map[tid].av === true && !('avatar' in x.map[tid]), JSON.stringify(x.map));
+	x = await (await adm('GET', '/chat/' + tid + '/peer')).json();
+	ok('[头像] 后台点开对话：拿到对方的头像', x.peer && x.peer.avatar === PNG && x.peer.name === '小明');
+	await api('POST', '/api/feedback', { sub: R1.sub, rkey: R1.rkey, text: '首页的流量卡片显示不全，麻烦看看' }).catch(() => {});
+	x = await (await adm('GET', '/chat/' + tid + '/info')).json();
+	ok('[对方信息] 后台「查看对方所有信息」：账号（名字、头像、注册时间、登录着的设备）、路由器、对话、登录记录都有', x.ok && x.accounts.length === 1 && x.accounts[0].email === 'ming@x.com' && x.accounts[0].avatar === PNG && x.accounts[0].sessions.length >= 1 && x.router && x.router.sub === R1.sub && x.thread.tid === tid && Array.isArray(x.feedbacks) && Array.isArray(x.applications) && x.logins.some((l) => l.who === 'ming@x.com') && Array.isArray(x.ops), JSON.stringify(x).slice(0, 300));
+	ok('[对方信息] 没有的对话：404', (await adm('GET', '/chat/dzzzzzzzz/info')).status === 404);
+	ok('[对方信息] 不带管理密钥：拿不到', (await api('GET', '/api/admin/chat/' + tid + '/info')).status === 401);
+}
 T += 60e3; MAILS.length = 0; PUSHES.length = 0;
 await chat({ sub: R1.sub, rkey: R1.rkey, op: 'send', text: '好的谢谢' });
 j = await (await chat({ sub: R1.sub, rkey: R1.rkey, op: 'get' })).json();

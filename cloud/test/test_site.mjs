@@ -74,7 +74,7 @@ for (const dark of [false, true]) {
 	ok('每台托管版路由器下面有「获取登录码」，点了显示新的登录码', await page.isVisible('.mask') && /10 分钟内有效/.test(await page.textContent('.mask')));
 	await page.click('.mask', { position: { x: 5, y: 5 } }); await W(300);
 	ok('点弹窗外面也能关掉', !(await page.isVisible('.mask')));
-	ok('还没上线：显示离线', /离线/.test(await page.textContent('#devs')));
+	ok('还没上线：显示「还没上线」', /还没上线/.test(await page.textContent('#devs')));
 	await realFetch(B.replace('localhost', R1.host).replace(':8127', ':8127') + '/', {}).catch(() => {});
 	// 心跳后变在线（直接调云端）
 	await mod.default.fetch(new Request('https://' + R1.host + '/cloud/beat/r/' + R1.rkey, { method: 'POST', body: '{"ver":"1.3.1"}' }), env);
@@ -504,7 +504,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		ok('[首页] 没有报错' + T, !e6.length, e6.join(' | '));
 		if (SHOTS && !dark) await page.screenshot({ path: SHOTS + '/site-top-' + w + '.png' });
 		await page.goto(B + '/app'); await W(700);
-		const st = await page.evaluate(() => ({ welcome: !document.getElementById('lgWelcome').classList.contains('hidden'), card: !document.getElementById('lgCard').classList.contains('hidden'), top: getComputedStyle(document.querySelector('.top')).display, h1: document.querySelector('.lgwelcome h1').textContent, logo: !!document.querySelector('.lgbiglogo svg'), foot: [...document.querySelectorAll('.lgfoot a')].map((a) => a.textContent + a.getAttribute('href')).join(','), admin: document.getElementById('goAdmin').getAttribute('href'), canvas: document.getElementById('lgbg').width > 0 }));
+		const st = await page.evaluate(() => ({ welcome: !document.getElementById('lgWelcome').classList.contains('hidden'), card: !document.getElementById('lgCard').classList.contains('hidden'), top: getComputedStyle(document.querySelector('.nav')).display, h1: document.querySelector('.lgwelcome h1').textContent, logo: !!document.querySelector('.lgbiglogo svg'), foot: [...document.querySelectorAll('.lgfoot a')].map((a) => a.textContent + a.getAttribute('href')).join(','), admin: document.getElementById('goAdmin').getAttribute('href'), canvas: document.getElementById('lgbg').width > 0 }));
 		ok('[登录页] 打开是欢迎页：路由器面板的图标和名字、账号登录、管理员登录、注册新账号；顶栏收起' + T, st.welcome && !st.card && st.top === 'none' && st.h1 === '欢迎使用路由器面板' && st.logo && st.admin === '/admin' && st.canvas, JSON.stringify(st));
 		ok('[登录页] 下面是用户须知、用户使用协议、隐私政策（没有工作室名字）' + T, /用户须知\/notice/.test(st.foot) && /用户使用协议\/terms/.test(st.foot) && /隐私政策\/privacy/.test(st.foot) && !/工作室/.test(await page.textContent('body')), st.foot);
 		ok('[登录页] 欢迎页排版不重叠、不超出' + T, (await lay2(page, '.lgwelcome > *, .lgfoot a')) === '', await lay2(page, '.lgwelcome > *, .lgfoot a'));
@@ -531,7 +531,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 			await page.goto(B + u); await W(300);
 			const tx = await page.textContent('body');
 			ok('[' + t + '] 页面能打开，内容是这个项目的（路由器面板、托管服务），没有别的项目的内容' + T, (await page.textContent('h1')) === t && /路由器/.test(tx) && /托管服务/.test(tx) && !/售后|抖店|工作室|1012968575/.test(tx));
-			ok('[' + t + '] 排版不超出' + T, (await lay2(page, '.top .logo, .top .row > *, .doc h1, .doc h2, footer')) === '', await lay2(page, '.top .logo, .top .row > *, .doc h1, .doc h2, footer'));
+			ok('[' + t + '] 排版不超出' + T, (await lay2(page, '.nav__logo, .nav__actions > .btn, .nav__toggle, h1, .ds > h2, .doc-tabs a, .site-foot .legal > *')) === '', await lay2(page, '.nav__logo, .nav__actions > .btn, .nav__toggle, h1, .ds > h2, .doc-tabs a, .site-foot .legal > *'));
 			if (SHOTS && w === 390) await page.screenshot({ path: SHOTS + '/site' + u.replace('/', '-') + (dark ? '-dark' : '') + '.png' });
 		}
 		ok('[登录页] 页面没有报错' + T, !e6.length, e6.join('|'));

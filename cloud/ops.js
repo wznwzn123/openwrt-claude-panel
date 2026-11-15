@@ -214,7 +214,7 @@ export async function chatApi(req, env, H, body) {
 	if (op === 'anon') { const { st, ...r } = await H.chatAnon({ ip, name: s(b.name), model: s(b.model) }); return J(r, st); }
 	const who = await H.chatWho({ sub: s(b.sub), rkey: s(b.rkey), cid: s(b.cid), ckey: s(b.ckey) });
 	if (!who) return J({ error: '身份不对（路由器的钥匙对不上）', relogin: !!b.cid }, 403);
-	if (op === 'get') { const { st, ...r } = await H.chatGet(who, b.after, !!b.read); return J({ ...r, msgs: (r.msgs || []).map(pubMsg) }, st); }
+	if (op === 'get') { const { st, ...r } = await H.chatGet(who, b.after, !!b.read); const pf = !(+b.after) && st === 200 ? await H.chatProfiles(who) : {}; return J({ ...r, ...pf, msgs: (r.msgs || []).map(pubMsg) }, st); }
 	if (op === 'img') { const im = await H.chatImg(who.tid, Math.floor(+b.seq || 0)); if (!im) return J({ error: '图片没有了' }, 404); let bin = ''; for (let i = 0; i < im.buf.length; i += 0x8000) bin += String.fromCharCode(...im.buf.subarray(i, i + 0x8000)); return J({ ok: true, data: 'data:' + im.type + ';base64,' + btoa(bin) }); }
 	if (op === 'send') {
 		if (!(await H.hit('cs:' + who.tid, 20, 600e3)) || !(await H.hit('csd:' + who.tid, 200, DAY))) return J({ error: '发得太快了，歇一会儿再发' }, 429);

@@ -1,170 +1,431 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22.5' fill='%23101C40'/><path d='M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z' fill='%23F4F1EA'/><path d='M62.6 21.4A17 17 0 0 1 78.6 37.4' stroke='%23FFB547' stroke-width='4' stroke-linecap='round' fill='none'/><circle cx='63' cy='37' r='7' fill='%23FFB547'/></svg>"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,viewport-fit=cover">
-<title>我的路由器 · 账号</title><meta name="robots" content="noindex">
-<style>/*COMMON_CSS*/
-/* 登录页：欢迎页（账号登录 / 管理员登录 / 注册新账号）→ 点进去是登录、注册卡片；背景是缓慢起伏的点阵 */
-body.authmode .top,body.authmode #footLinks{display:none}
-#vAuth{position:fixed;inset:0;z-index:20;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 48px) 16px calc(env(safe-area-inset-bottom) + 18px);background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
-@media(prefers-color-scheme:dark){#vAuth{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}}
-#lgbg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
-@keyframes lgPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
-.lgwelcome{position:relative;z-index:1;width:100%;max-width:360px;margin:auto 0;padding:10px 4px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;animation:lgPop .55s cubic-bezier(.2,.9,.3,1.2) both}
-.lgwelcome h1{font-size:27px;margin:20px 0 6px;letter-spacing:.3px;line-height:1.25}
-.lgwelcome>p{margin:0 0 28px;font-size:14px}
-.lgbiglogo{width:76px;height:76px;border-radius:22px;overflow:hidden;background:#101C40;box-shadow:0 16px 36px rgba(16,28,64,.35),inset 0 0 0 .5px rgba(255,255,255,.25)}.lgbiglogo svg{display:block;width:100%;height:100%}
-.lgbig{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;border-radius:15px;font-size:16px;font-weight:600;cursor:pointer;transition:transform .18s,opacity .18s;text-decoration:none}
-.lgbig:active{transform:scale(.97);opacity:.85}
-.lgbig svg{width:18px;height:18px;flex:none}
-.lgbig.dark{background:#0b0b0f;color:#fff;border:0;box-shadow:0 10px 24px rgba(0,0,0,.18)}
-.lgbig.light{background:rgba(255,255,255,.82);color:var(--text);border:1px solid rgba(60,60,67,.14);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
-@media(prefers-color-scheme:dark){.lgbig.dark{background:#f5f5f7;color:#000}.lgbig.light{background:rgba(44,44,46,.72);border-color:rgba(255,255,255,.1)}}
-.lgor{display:flex;align-items:center;gap:12px;width:100%;margin:14px 0;color:var(--muted);font-size:12px}
-.lgor::before,.lgor::after{content:"";flex:1;height:1px;background:var(--line)}
-.lgreg{margin-top:22px;text-align:center;font-size:13px;color:var(--muted)}
-.lglink{border:0;background:none;padding:2px 0;color:var(--brand);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
-.lgcard{position:relative;z-index:1;width:100%;max-width:400px;margin:auto 0;background:rgba(255,255,255,.66);-webkit-backdrop-filter:blur(26px) saturate(1.7);backdrop-filter:blur(26px) saturate(1.7);border:1px solid rgba(255,255,255,.8);border-radius:28px;padding:20px 20px 18px;box-shadow:0 30px 70px rgba(20,24,40,.12),0 2px 6px rgba(0,0,0,.04);animation:lgPop .55s cubic-bezier(.2,.9,.3,1.2) both}
-@media(prefers-color-scheme:dark){.lgcard{background:rgba(30,30,33,.62);border-color:rgba(255,255,255,.09);box-shadow:0 30px 70px rgba(0,0,0,.5)}}
-.lgcardtop{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-.lgback{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;border:0;background:var(--fill);color:var(--text);cursor:pointer;flex:none}
-.lgback svg{width:16px;height:16px}
-.lgbrand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
-.lgbrand i{width:24px;height:24px;border-radius:7px;overflow:hidden;background:#101C40;flex:none}.lgbrand i svg{display:block;width:100%;height:100%}
-.lgcard .tabs{margin-bottom:6px}
-.lgnote{font-size:12.5px;text-align:center;margin:14px 0 0;line-height:1.6;text-wrap:balance}.lgnote a{white-space:nowrap}
-.lgfoot{position:relative;z-index:1;margin-top:auto;padding-top:20px;font-size:12.5px;color:var(--muted);text-align:center}
-.lgfoot a{font-weight:600}.lgfoot span{margin:0 6px;opacity:.6}
-@media(prefers-reduced-motion:reduce){.lgwelcome,.lgcard{animation:none}}
-.tabs{display:flex;gap:6px;padding:4px;border-radius:99px;background:var(--fill);margin-bottom:14px}
-.tabs button{flex:1;padding:9px;border-radius:99px;background:transparent;font-weight:650}
-.tabs button.on{background:var(--card);box-shadow:var(--shadow)}
-.dev{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center}
-.dev+.dev{margin-top:12px}
-.dev .ic{grid-row:span 2;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#6a7bff,#1fb5e6);color:#fff;font-size:22px}
-.dev b{font-size:16.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dev .meta{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.dev .acts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.sech{display:flex;justify-content:space-between;align-items:center;margin:22px 4px 10px}
-.sech h2{font-size:20px}
+<!doctype html>
+<html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="pill" data-ground="sage" data-motion>
+<head>
+<meta charset="utf-8">
+<title>我的路由器 · 账号</title>
+<meta name="robots" content="noindex">
+<!--KIT_HEAD-->
+<style>
+/* ================= 账号页：登录欢迎页 + 我的路由器 ================= */
+/* 旧页面脚本里用的按钮写法（btn primary / btn sm / btn danger）：换成新样式 */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 20px; border-radius: 999px; font: 600 15px/1 var(--font-text); white-space: nowrap; cursor: pointer; text-decoration: none; border: 1px solid transparent; transition: transform .15s, background .2s, border-color .2s, opacity .2s; }
+.btn:active { transform: scale(.97); }
+.btn:not(.primary):not(.btn--primary) { background: color-mix(in oklab, var(--ink) 7%, transparent); color: var(--ink); border-color: var(--hair); }
+.btn:not(.primary):not(.btn--primary):hover { background: color-mix(in oklab, var(--ink) 12%, transparent); }
+.btn.primary { background-color: var(--action); color: var(--action-ink); background-image: linear-gradient(110deg, transparent 38%, rgb(255 255 255 / .55) 50%, transparent 62%); background-size: 260% 100%; background-repeat: no-repeat; background-position: 160% 0; animation: shine 5.2s cubic-bezier(.4,0,.2,1) infinite; }
+.btn.primary:hover { background-color: color-mix(in oklab, var(--action) 86%, #fff); }
+.btn.danger { color: #fca5a5 !important; }
+.btn.danger:hover { border-color: rgb(248 113 113 / .45) !important; background: rgb(248 113 113 / .1) !important; }
+.btn.sm { min-height: 38px; padding: 0 15px; font-size: 14px; }
+.btn:disabled { opacity: .5; cursor: default; animation: none; }
+label.f { display: block; margin: 16px 0 8px; font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--ink) 75%, var(--bg)); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row > .input { flex: 1; min-width: 0; }
+.err:empty { display: none; }
+.notice { padding: 12px 14px; border-radius: 14px; background: color-mix(in oklab, var(--accent) 10%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent); font-size: 14px; line-height: 1.6; color: color-mix(in oklab, var(--ink) 86%, var(--bg)); }
+.toast { pointer-events: none; position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); z-index: 90; transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; padding: 12px 20px; border-radius: 999px; background: color-mix(in oklab, #1b2621 88%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent); color: var(--ink); font-size: 15px; font-weight: 500; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 40px -12px rgb(0 0 0 / .7), 0 0 30px -10px color-mix(in oklab, var(--accent) 50%, transparent); transition: opacity .3s, transform .4s cubic-bezier(.22,1.4,.36,1); }
+.toast.hide { opacity: 0; transform: translate(-50%, 16px) scale(.96); pointer-events: none; }
+pre.cmd { margin: 0 0 12px; padding: 14px 16px; border-radius: 14px; background: #050807; border: 1px solid var(--hair); color: #d7e3dc; font: 13px/1.65 var(--font-mono); white-space: pre-wrap; word-break: break-all; }
+
+/* ---------- 登录欢迎页（全屏，点阵起伏的背景） ---------- */
+body.authmode .nav, body.authmode #footLinks, body.authmode .site-foot { display: none; }
+body:not(.authmode) .nav__actions > .btn--primary { display: none; }
+#vAuth { position: fixed; inset: 0; z-index: 30; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; align-items: center; padding: calc(env(safe-area-inset-top) + 40px) 16px calc(env(safe-area-inset-bottom) + 18px);
+  background: radial-gradient(90% 60% at 50% 0%, color-mix(in oklab, var(--accent) 16%, #0b100e) 0%, #0b100e 60%, #050807 100%); }
+#lgbg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+#vAuth::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(40% 30% at 50% 38%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 70%); animation: breathe 6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .45; transform: scale(.94); } }
+@keyframes lgPop { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+.lgwelcome { position: relative; z-index: 1; width: 100%; max-width: 380px; margin: auto 0; padding: 10px 4px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.lgwelcome > * { animation: lgPop .7s cubic-bezier(.22,1,.36,1) both; }
+.lgwelcome > :nth-child(2) { animation-delay: .08s; } .lgwelcome > :nth-child(3) { animation-delay: .16s; } .lgwelcome > :nth-child(4) { animation-delay: .24s; } .lgwelcome > :nth-child(5) { animation-delay: .3s; } .lgwelcome > :nth-child(6) { animation-delay: .36s; } .lgwelcome > :nth-child(7) { animation-delay: .42s; }
+.lgbiglogo { position: relative; width: 84px; height: 84px; border-radius: 26px; overflow: visible; background: #1a2621; box-shadow: 0 0 0 1px rgb(255 255 255 / .08), 0 20px 50px -14px rgb(0 0 0 / .8), 0 0 60px -10px color-mix(in oklab, var(--accent) 55%, transparent); }
+.lgbiglogo svg { display: block; width: 100%; height: 100%; border-radius: 26px; }
+.lgbiglogo::after { content: ""; position: absolute; inset: -8px; border-radius: 32px; border: 1.5px solid color-mix(in oklab, var(--accent) 60%, transparent); opacity: 0; animation: ring 2.8s ease-out infinite; }
+@keyframes ring { 0% { opacity: .7; transform: scale(.92); } 80%, 100% { opacity: 0; transform: scale(1.18); } }
+.lgwelcome h1 { margin: 26px 0 8px; font-size: clamp(28px, 7vw, 36px); line-height: 1.2; letter-spacing: -.02em; font-weight: 650; }
+.lgwelcome > p { margin: 0 0 32px; font-size: 15.5px; color: var(--muted); }
+.lgbig { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 54px; padding: 0 20px; border-radius: 999px; font: 600 16px/1 var(--font-text); cursor: pointer; text-decoration: none; transition: transform .18s, background .2s; border: 1px solid transparent; }
+.lgbig:active { transform: scale(.97); }
+.lgbig svg { width: 19px; height: 19px; flex: none; }
+.lgbig.dark { background-color: var(--action); color: var(--action-ink); box-shadow: 0 14px 36px -12px color-mix(in oklab, var(--accent) 70%, transparent); background-image: linear-gradient(110deg, transparent 38%, rgb(255 255 255 / .55) 50%, transparent 62%); background-size: 260% 100%; background-repeat: no-repeat; background-position: 160% 0; animation: lgPop .7s cubic-bezier(.22,1,.36,1) .24s both, shine 5.2s cubic-bezier(.4,0,.2,1) 1s infinite; }
+.lgbig.light { background: color-mix(in oklab, #131a17 70%, transparent); color: var(--ink); border-color: color-mix(in oklab, var(--ink) 14%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.lgbig.light:hover { border-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+.lgor { display: flex; align-items: center; gap: 12px; width: 100%; margin: 16px 0; color: var(--muted); font-size: 13px; }
+.lgor::before, .lgor::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+.lgreg { margin-top: 26px; font-size: 14.5px; color: var(--muted); }
+.lglink { border: 0; background: none; padding: 6px 2px; color: var(--accent); font: 600 14.5px var(--font-text); cursor: pointer; white-space: nowrap; }
+.lgcard { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: auto 0; padding: 22px 22px 20px; border-radius: 28px; background: color-mix(in oklab, #131a17 74%, transparent); border: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); backdrop-filter: blur(26px) saturate(1.4); -webkit-backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 40px 80px -30px rgb(0 0 0 / .9), 0 0 0 1px rgb(255 255 255 / .02) inset; animation: lgPop .6s cubic-bezier(.22,1,.36,1) both; }
+.lgcardtop { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.lgback { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--hair); background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--ink); cursor: pointer; flex: none; }
+.lgback:hover { border-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+.lgback svg { width: 17px; height: 17px; }
+.lgbrand { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
+.lgbrand i { width: 26px; height: 26px; border-radius: 8px; overflow: hidden; background: #1a2621; flex: none; }
+.lgbrand i svg { display: block; width: 100%; height: 100%; }
+.tabs { position: relative; display: flex; gap: 0; padding: 4px; border-radius: 999px; background: color-mix(in oklab, var(--ink) 6%, transparent); border: 1px solid var(--hair); margin-bottom: 8px; }
+.tabs::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: var(--accent); box-shadow: 0 6px 20px -6px color-mix(in oklab, var(--accent) 70%, transparent); transition: transform .45s cubic-bezier(.22,1.2,.36,1), opacity .3s; }
+.tabs:has(> [data-tab="reg"].on)::before { transform: translateX(100%); }
+.tabs:not(:has(> button.on))::before { opacity: 0; }
+.tabs button { position: relative; z-index: 1; flex: 1; min-height: 42px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 600 15px var(--font-text); cursor: pointer; transition: color .3s; }
+.tabs button.on { color: var(--accent-ink); }
+.lgform { padding: 0; background: none; border: 0; box-shadow: none; }
+.lgform form { animation: lgPop .45s cubic-bezier(.22,1,.36,1) both; }
+.lgform .btn.primary { width: 100%; min-height: 50px; margin-top: 20px; font-size: 16px; }
+.lgform a { color: var(--accent); }
+.lgnote { font-size: 13px; text-align: center; margin: 16px 0 0; line-height: 1.7; color: var(--muted); text-wrap: balance; }
+.lgnote a { color: var(--accent); white-space: nowrap; }
+.lgfoot { position: relative; z-index: 1; margin-top: auto; padding-top: 24px; font-size: 13px; color: var(--muted); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; }
+.lgfoot a { color: color-mix(in oklab, var(--ink) 78%, var(--bg)); text-decoration: none; padding: 8px 4px; }
+.lgfoot a:hover { color: var(--accent); }
+.lgfoot span { opacity: .5; padding: 8px 2px; }
+
+/* ---------- 我的路由器 ---------- */
+.d-hero { position: relative; overflow: clip; padding: calc(var(--nav) + clamp(32px, 5vw, 64px)) 0 clamp(28px, 4vw, 44px); border-bottom: 1px solid var(--hair); }
+.d-hero > .pg-fx { position: absolute; inset: 0; z-index: 0; -webkit-mask: linear-gradient(to bottom, #000 30%, transparent); mask: linear-gradient(to bottom, #000 30%, transparent); opacity: .7; }
+.d-hero > .wrap { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; }
+.d-hero .hi { margin: 0; font-size: 15px; color: var(--muted); }
+.d-hero .hi b { color: var(--ink); font-weight: 600; }
+.d-hero h1 { margin: 8px 0 0; font-size: clamp(36px, 5vw, 60px); line-height: 1.1; letter-spacing: -.03em; font-weight: 650; }
+.d-stats { display: flex; gap: 12px; }
+.d-stat { min-width: 112px; padding: 14px 18px; border-radius: 18px; background: var(--glass); border: 1px solid var(--hair); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.d-stat b { display: block; font-size: 34px; line-height: 1.1; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.d-stat span { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+.d-stat.live b { color: var(--accent); text-shadow: 0 0 24px color-mix(in oklab, var(--accent) 50%, transparent); }
+.d-body { padding-top: clamp(24px, 4vw, 40px); }
+.sech { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 22px 2px 2px; }
+.sech h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+.sech .muted { font-size: 14px; }
+#vDash .card { padding: clamp(18px, 2.4vw, 24px); border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); box-shadow: none; }
+#vDash .card > p, #vDash .card li { font-size: 14.5px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); }
+#vDash .card b { color: var(--ink); }
+#vDash .card ul { margin: 0 0 14px; padding-left: 18px; }
+/* 路由器卡片 */
+#devs { display: grid; gap: 14px; }
+.dev { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 4px; align-items: center; animation: lgPop .55s cubic-bezier(.22,1,.36,1) both; }
+.dev:nth-child(2) { animation-delay: .07s; } .dev:nth-child(3) { animation-delay: .14s; } .dev:nth-child(n+4) { animation-delay: .2s; }
+.dev .ic { grid-row: span 2; position: relative; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: color-mix(in oklab, var(--ink) 7%, transparent); color: var(--muted); border: 1px solid var(--hair); }
+.dev .ic svg { width: 26px; height: 26px; }
+.dev.is-on .ic { color: #052e16; background: linear-gradient(135deg, #86efac, #22c55e); border-color: transparent; box-shadow: 0 0 34px -6px rgb(74 222 128 / .7); }
+.dev.is-on .ic::after { content: ""; position: absolute; inset: -6px; border-radius: 21px; border: 1.5px solid #4ade80; opacity: 0; animation: ring 2.6s ease-out infinite; }
+.dev > b { font-size: 18px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev .meta { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
+.dev .meta .dot { margin-right: 6px; vertical-align: 1px; }
+.dev .meta .pill { margin-left: 4px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7a72; display: inline-block; flex: none; }
+.dot.on { background: var(--accent); box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent); animation: dotp 2s ease-out infinite; }
+.dot.off { background: #f87171; }
+@keyframes dotp { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.dev .acts { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hair); }
+.expline { grid-column: 1 / -1; margin-top: 10px; padding: 11px 14px; border-radius: 14px; background: color-mix(in oklab, var(--ink) 5%, transparent); font-size: 14px; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); line-height: 1.65; }
+.expline a { color: var(--accent); }
+.expline.warn { background: rgb(251 191 36 / .1); color: #fcd34d; border: 1px solid rgb(251 191 36 / .25); }
+.expline.bad { background: rgb(248 113 113 / .1); color: #fca5a5; border: 1px solid rgb(248 113 113 / .25); }
+.pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
+.pill.up { background: rgb(251 191 36 / .14); color: #fcd34d; }
+.empty { text-align: center; padding: 34px 20px !important; }
+.empty .big { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 20px; display: grid; place-items: center; color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, transparent); animation: floaty 4s ease-in-out infinite; }
+.empty .big svg { width: 32px; height: 32px; }
+@keyframes floaty { 50% { transform: translateY(-6px); } }
+.empty p { margin: 0 auto; max-width: 34em; }
+/* 试用卡片 */
+.trialcard { position: relative; overflow: hidden; border-color: color-mix(in oklab, var(--accent) 40%, transparent) !important; background: radial-gradient(100% 140% at 0% 0%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 60%), var(--p-surface) !important; }
+.trialcard .trow { display: flex; align-items: center; gap: 16px; }
+.trialcard .trow > div { flex: 1; min-width: 0; }
+.trialcard b { display: block; font-size: 18px; }
+.trialcard .muted { display: block; font-size: 14px; margin-top: 6px; line-height: 1.65; }
+.trialcard code { color: var(--accent); font-size: 1em; }
 /* 我的反馈 */
-.fbq{display:flex;gap:8px;margin-top:10px}.fbq input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.1em}.fbq button{flex:none}
-.fbrow{display:block;color:inherit;font-weight:400;padding:12px 0;border-bottom:.5px solid var(--line)}.fbrow:last-child{border-bottom:0;padding-bottom:2px}
-.fbrow .h{display:flex;justify-content:space-between;align-items:center;gap:10px}.fbrow .h time{flex:none;font-size:12.5px;color:var(--muted)}
-.fbrow .st{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(0,122,255,.12);color:var(--brand)}
-.fbrow .st.ok{background:rgba(52,199,89,.15);color:var(--ok)}.fbrow .st.bad{background:rgba(255,59,48,.13);color:var(--danger)}.fbrow .st.wait{background:rgba(255,149,0,.15);color:var(--warn)}
-.fbrow .t{margin:6px 0 0;font-size:14px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
-.fbrow .m{display:block;margin-top:2px;font-size:12.5px;color:var(--muted)}.fbrow .m b{letter-spacing:.05em;color:var(--text)}
-.fbrow .fsteps{margin:10px 0 0;padding:10px 0 8px;border-radius:12px;background:var(--fill)}
-.empty{text-align:center;padding:26px 16px}
-.empty .big{font-size:40px}
-.expline{grid-column:1/-1;margin-top:6px;padding:8px 11px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--muted);line-height:1.6}.expline.warn{background:rgba(255,149,0,.14);color:var(--warn)}.expline.bad{background:rgba(255,59,48,.12);color:var(--danger)}
-.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:650;background:var(--fill)}.pill.up{background:rgba(255,149,0,.16);color:var(--warn)}
-.mask{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.35)}
-.mask .card{width:100%;max-width:400px;background:var(--bg);text-align:center;max-height:calc(100vh - 32px);overflow-y:auto}
-.mask .apcard{text-align:left}.apcard select.input{appearance:none;-webkit-appearance:none}.apcard .acts{justify-content:flex-end}.apcard input[readonly]{opacity:.7}
-.lcode{margin:14px 0 6px;font:700 34px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;user-select:all;-webkit-user-select:all}
-.mask .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
-.trialcard{margin-bottom:6px;border:1px solid rgba(0,122,255,.25);background:linear-gradient(135deg,rgba(0,122,255,.08),rgba(175,82,222,.06))}.trialcard .trow{display:flex;align-items:center;gap:12px}.trialcard .trow>div{flex:1;min-width:0}.trialcard b{display:block;font-size:16px}.trialcard .muted{display:block;font-size:13.5px;margin-top:4px;line-height:1.6}
-.trialcard pre.cmd{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--fill);font:12px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
-.sess{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line)}.sess:last-child{border-bottom:0}.sess .l{flex:1;min-width:0}.sess .l b{display:block;font-size:14.5px}.sess .l span{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}.sess .l b .pill{display:inline-block;margin:0 0 0 6px;vertical-align:2px;color:var(--brand,#007aff);background:rgba(0,122,255,.12)}
-</style></head><body><div class="wrap">
-<div class="top"><a class="logo" href="/"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</a><div class="row"><span class="muted hidden" id="who" style="font-size:13px;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button class="btn sm hidden" id="outBtn">退出</button></div></div>
+.fbq { display: flex; gap: 10px; margin-top: 12px; }
+.fbq .input { flex: 1; min-width: 0; text-transform: uppercase; letter-spacing: .12em; font-family: var(--font-mono); }
+.fbq .input::placeholder { text-transform: none; letter-spacing: 0; font-family: var(--font-text); }
+.fbrow { display: block; color: inherit; text-decoration: none; padding: 16px 0; border-bottom: 1px solid var(--hair); transition: background .2s; }
+.fbrow:first-child { padding-top: 2px; }
+.fbrow:last-child { border-bottom: 0; }
+.fbrow:hover .t { color: var(--ink); }
+.fbrow .h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.fbrow .h time { flex: none; font-size: 13px; color: var(--muted); }
+.fbrow .st { display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent); }
+.fbrow .st.ok { background: color-mix(in oklab, var(--accent) 18%, transparent); color: #86efac; }
+.fbrow .st.bad { background: rgb(248 113 113 / .14); color: #fca5a5; }
+.fbrow .st.wait { background: rgb(251 191 36 / .14); color: #fcd34d; }
+.fbrow .t { margin: 8px 0 0; font-size: 15px; line-height: 1.6; color: color-mix(in oklab, var(--ink) 82%, var(--bg)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.fbrow .m { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+.fbrow .m b { letter-spacing: .06em; color: var(--ink); font-family: var(--font-mono); font-weight: 500; }
+.fsteps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 12px 0 0; padding: 12px 0 10px; border-radius: 14px; background: color-mix(in oklab, var(--ink) 4%, transparent); }
+.fsteps > div { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
+.fsteps > div + div::before { content: ""; position: absolute; top: 11px; right: calc(50% + 16px); width: calc(100% - 32px); height: 2px; border-radius: 2px; background: var(--hair); }
+.fsteps > div.on::before { background: var(--accent); }
+.fsteps > div.bad::before { background: #f87171; }
+.fsteps i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 700 12px/1 var(--font-mono); font-style: normal; background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--muted); }
+.fsteps .on i { background: var(--accent); color: #052e16; }
+.fsteps .bad i { background: #f87171; color: #3b0606; }
+.fsteps .cur i { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent); }
+.fsteps b { display: block; margin-top: 7px; font-size: 12.5px; font-weight: 600; line-height: 1.3; word-break: keep-all; }
+.fsteps .off b { color: var(--muted); font-weight: 500; }
+.fsteps .bad b { color: #fca5a5; }
+.fbfoot { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--hair); }
+.fbfoot > b { font-size: 15px; }
+/* 登录过的设备 */
+.sess { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hair); }
+.sess:first-child { padding-top: 0; }
+.sess:last-child { border-bottom: 0; }
+.sess .l { flex: 1; min-width: 0; }
+.sess .l b { display: block; font-size: 15px; font-weight: 600; }
+.sess .l > span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
+.sess .l b .pill { margin-left: 6px; vertical-align: 1px; background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
+.fine { margin: 14px 0 0 !important; font-size: 13px !important; line-height: 1.65 !important; color: var(--muted) !important; }
+.danger-zone { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hair); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.danger-zone span { font-size: 13.5px; color: var(--muted); }
+
+/* ---------- 板块：默认布局 + 用户自己调整（顺序、宽窄、隐藏） ---------- */
+.d-body > .wrap { display: grid; gap: 18px; }
+.blks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(18px, 2.4vw, 28px); align-items: start; }
+.blk { display: grid; gap: 14px; min-width: 0; align-content: start; position: relative; scroll-margin-top: calc(var(--nav) + 16px); }
+.blk[data-w="full"] { grid-column: 1 / -1; }
+.blk .sech { margin: 0 2px; }
+.blk[data-blk="devs"] #devs { grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+.blk.is-hidden { display: none; }
+.seg { display: flex; padding: 4px; border-radius: 999px; background: color-mix(in oklab, var(--ink) 6%, transparent); border: 1px solid var(--hair); }
+.seg button { flex: 1; min-height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 600 14px var(--font-text); cursor: pointer; transition: background .3s, color .3s; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--accent) 70%, transparent); }
+[data-segp] { animation: lgPop .4s cubic-bezier(.22,1,.36,1) both; }
+/* 调整布局时 */
+.lay-bar { position: sticky; top: calc(var(--nav) + 10px); z-index: 25; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 18px; background: color-mix(in oklab, #13211b 92%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 20px 40px -20px #000; animation: lgPop .4s cubic-bezier(.22,1,.36,1) both; }
+.lay-bar b { display: block; font-size: 16px; }
+.lay-bar span { display: block; margin-top: 3px; font-size: 13.5px; color: var(--muted); }
+.lay-tools { display: none; }
+body.lay-edit .blk { padding: 54px 12px 12px; border-radius: 24px; outline: 1.5px dashed color-mix(in oklab, var(--accent) 45%, transparent); outline-offset: 0; background: color-mix(in oklab, var(--accent) 4%, transparent); transition: transform .35s cubic-bezier(.22,1,.36,1); }
+body.lay-edit .blk.is-hidden { display: grid; opacity: .45; }
+body.lay-edit .blk > :not(.lay-tools) { pointer-events: none; }
+body.lay-edit .blk.is-hidden > :not(.lay-tools) { filter: grayscale(1); }
+body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px; display: flex; align-items: center; gap: 6px; }
+.lay-tools b { flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lay-tools button { display: grid; place-items: center; min-width: 38px; height: 38px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--hair); background: #131a17; color: var(--ink); font: 600 13px var(--font-text); cursor: pointer; }
+.lay-tools button:hover { border-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+.lay-tools button:disabled { opacity: .35; cursor: default; }
+.lay-tools button svg { width: 17px; height: 17px; }
+.lay-tools [data-lw] { min-width: 64px; }
+.blk.moved { animation: lgPop .45s cubic-bezier(.22,1.3,.36,1) both; }
+.help2 { display: grid; gap: 18px; }
+.help2 h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.help2 p { margin: 0; max-width: 46ch; }
+@media (min-width: 1024px) { .blk[data-w="full"] .help2 { grid-template-columns: 1fr 1fr; gap: 40px; } }
+@media (max-width: 1023px) { .blks { grid-template-columns: minmax(0, 1fr); } .blk[data-w] { grid-column: 1 / -1; } .lay-tools [data-lw] { display: none; } }
+/* 弹窗 */
+.mask { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fadein .25s ease both; }
+@keyframes fadein { from { opacity: 0; } }
+.mask .card { width: 100%; max-width: 420px; padding: 26px 24px 22px; border-radius: 26px; background: #131a17; border: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); box-shadow: 0 40px 90px -30px #000, 0 0 60px -20px color-mix(in oklab, var(--accent) 40%, transparent); text-align: center; max-height: calc(100vh - 32px); overflow-y: auto; animation: lgPop .45s cubic-bezier(.22,1.3,.36,1) both; }
+.mask .card h3 { margin: 0; font-size: 20px; font-weight: 650; }
+.mask .card .muted { color: var(--muted); }
+.mask .apcard { text-align: left; }
+.mask .apcard .acts { justify-content: flex-end; }
+.apcard input[readonly] { opacity: .65; }
+.lcode { margin: 18px 0 10px; font: 700 40px/1.2 var(--font-mono); letter-spacing: .14em; color: var(--accent); text-shadow: 0 0 30px color-mix(in oklab, var(--accent) 45%, transparent); user-select: all; -webkit-user-select: all; }
+.mask .acts { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+
+/* ---------- 个人主页（我的路由器顶部） ---------- */
+.av { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(135deg, #4ade80, #0ea5e9) center / cover no-repeat; color: #04140a; font: 650 calc(var(--avs, 88px) * .42)/1 var(--font-text); display: grid; place-items: center; text-transform: uppercase; overflow: hidden; }
+.av.has-img { color: transparent; }
+.me { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: clamp(16px, 2.4vw, 28px); align-items: center; min-width: 0; }
+.me > .me-av { grid-row: 1 / span 2; }
+.me > .me-acts { grid-column: 2; }
+.me-av { --avs: 96px; position: relative; flex: none; width: var(--avs); height: var(--avs); padding: 0; border: 0; border-radius: 30px; background: none; cursor: pointer; box-shadow: 0 0 0 1px rgb(255 255 255 / .1), 0 20px 50px -18px rgb(0 0 0 / .9), 0 0 50px -12px color-mix(in oklab, var(--accent) 55%, transparent); animation: lgPop .7s cubic-bezier(.22,1,.36,1) both; }
+.me-av::after { content: ""; position: absolute; inset: -7px; border-radius: 36px; border: 1.5px solid color-mix(in oklab, var(--accent) 60%, transparent); opacity: 0; animation: ring 3s ease-out infinite; pointer-events: none; }
+.me-av > i { position: absolute; right: -6px; bottom: -6px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #04140a; border: 3px solid var(--p-bg); transition: transform .25s; }
+.me-av > i svg { width: 16px; height: 16px; }
+.me-av:hover > i { transform: scale(1.1) rotate(-8deg); }
+.me-t { min-width: 0; }
+.me-t h1 { margin: 6px 0 0; font-size: clamp(30px, 4.4vw, 52px); line-height: 1.12; letter-spacing: -.025em; font-weight: 650; overflow-wrap: anywhere; }
+.me-mail { margin: 8px 0 0; font-size: 15px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 8px; }
+.me-mail #who { color: color-mix(in oklab, var(--ink) 82%, var(--bg)); overflow-wrap: anywhere; }
+.me-dot { opacity: .5; }
+.me-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.me-acts .btn svg { width: 16px; height: 16px; }
+.me-out { color: var(--muted) !important; }
+@media (max-width: 639px) { .me > .me-av { grid-row: 1; } .me > .me-acts { grid-column: 1 / -1; margin-top: 16px; } .me-acts { flex-wrap: nowrap; } .me-acts .btn { flex: 1 1 auto; padding: 0 10px; } .me-out { flex: 0 0 auto !important; } }
+.d-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 1024px) { .d-stats { grid-template-columns: repeat(2, minmax(118px, 1fr)); } }
+.pf-av { --avs: 104px; width: var(--avs); height: var(--avs); margin: 6px auto 12px; border-radius: 32px; box-shadow: 0 0 0 1px rgb(255 255 255 / .1); }
+.pf-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.pf .f { text-align: left; }
+/* 顶栏：登录后的头像和名字 */
+@media (max-width: 639px) {
+  .me { align-items: flex-start; }
+  .me-mail { flex-direction: column; }
+  .me-dot { display: none; }
+  .me-av { --avs: 76px; border-radius: 24px; }
+  .me-av::after { border-radius: 30px; }
+  .d-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .d-stat { padding: 10px 8px; text-align: center; border-radius: 14px; }
+  .d-stat b { font-size: 22px; }
+  .d-stat span { font-size: 11.5px; }
+}
+@media (max-width: 380px) { .d-stat span { white-space: nowrap; font-size: 10.5px; letter-spacing: -.02em; } .d-stat { padding: 10px 4px; } }
+@media (min-width: 640px) and (max-width: 1023px) { .d-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1023px) {
+  .d-hero > .wrap { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 639px) {
+  .d-stats { gap: 8px; }
+  .d-stat { flex: 1; min-width: 0; padding: 12px 14px; }
+  .d-stat b { font-size: 26px; }
+  .dev .acts .btn { flex: 1 1 auto; }
+  .trialcard .trow { flex-direction: column; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) { .me-av, .me-av::after { animation: none; } .lgwelcome > *, .lgcard, .dev, .mask, .mask .card, .lgform form { animation: none; } .lgbig.dark, .btn.primary { animation: none; } #vAuth::before, .lgbiglogo::after, .dev.is-on .ic::after, .dot.on, .empty .big { animation: none; } }
+</style>
+</head>
+<body>
+<!--KIT_NAV-->
 
 <!-- 登录 / 注册 / 找回密码：先是欢迎页，点「账号登录」「注册新账号」进卡片；「管理员登录」去管理后台 -->
 <section class="auth hidden" id="vAuth" data-view="welcome">
 	<canvas id="lgbg" aria-hidden="true"></canvas>
 	<div class="lgwelcome" id="lgWelcome">
-		<div class="lgbiglogo" role="img" aria-label="路由器面板"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
+		<div class="lgbiglogo" role="img" aria-label="路由器面板"><svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" fill="#1a2621"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#e9eeeb"/><circle cx="63" cy="37" r="7" fill="#4ade80"/></svg></div>
 		<h1>欢迎使用路由器面板</h1>
-		<p class="muted">用手机管好家里的 OpenWrt 路由器</p>
+		<p>用手机管好家里的 OpenWrt 路由器</p>
 		<button type="button" class="lgbig dark" id="goLogin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>账号登录</span></button>
 		<div class="lgor"><span>或</span></div>
 		<a class="lgbig light" href="/admin" id="goAdmin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>管理员登录</span></a>
 		<div class="lgreg">还没有账号？<button type="button" class="lglink" id="goReg">注册新账号</button></div>
 	</div>
 	<div class="lgcard hidden" id="lgCard">
-		<div class="lgcardtop"><button type="button" class="lgback" id="lgBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="lgbrand"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</div></div>
+		<div class="lgcardtop"><button type="button" class="lgback" id="lgBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="lgbrand"><i><svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" fill="#1a2621"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#e9eeeb"/><circle cx="63" cy="37" r="7" fill="#4ade80"/></svg></i>路由器面板</div></div>
 		<div class="tabs"><button data-tab="login" class="on">登录</button><button data-tab="reg">注册</button></div>
-		<div class="card" style="background:none;box-shadow:none;padding:0">
+		<div class="card lgform">
 		<form id="fLogin">
 			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="比如 name@qq.com" required>
 			<label class="f">密码</label><input class="input" name="password" type="password" autocomplete="current-password" placeholder="输入密码" required>
 			<div class="err" data-err></div>
-			<button class="btn primary" style="width:100%">登录</button>
-			<p style="text-align:center;margin:12px 0 0"><a href="#" id="toReset">忘记密码？</a></p>
+			<button class="btn primary">登录</button>
+			<p style="text-align:center;margin:14px 0 0"><a href="#" id="toReset">忘记密码？</a></p>
 		</form>
 		<form id="fReg" class="hidden">
 			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="常用邮箱，找回密码要用" required>
 			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
 			<label class="f">密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位，字母加数字更安全" required>
 			<div class="err" data-err></div>
-			<button class="btn primary" style="width:100%">注册</button>
+			<button class="btn primary">注册</button>
 		</form>
 		<form id="fReset" class="hidden">
-			<p class="muted" style="margin:0 0 4px">输入注册时的邮箱，我们会发一个验证码。</p>
+			<p class="muted" style="margin:6px 0 0;font-size:14px">输入注册时的邮箱，我们会发一个验证码。</p>
 			<label class="f">邮箱</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="email" type="email" autocomplete="email" placeholder="注册时用的邮箱" required><button type="button" class="btn" data-send="reset">发送</button></div>
 			<label class="f">验证码</label><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="邮件里的 6 位数字" autocomplete="one-time-code" required>
 			<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位" required>
 			<div class="err" data-err></div>
-			<button class="btn primary" style="width:100%">重置密码并登录</button>
-			<p style="text-align:center;margin:12px 0 0"><a href="#" data-back>返回登录</a></p>
+			<button class="btn primary">重置密码并登录</button>
+			<p style="text-align:center;margin:14px 0 0"><a href="#" data-back>返回登录</a></p>
 		</form>
 		</div>
-		<p class="muted lgnote">账号只记下你有哪几台路由器，不存它们的登录密钥。<br>注册即表示你已阅读并同意<a href="/notice">《用户须知》</a>和<a href="/terms">《用户使用协议》</a></p>
+		<p class="lgnote">账号只记下你有哪几台路由器，不存它们的登录密钥。<br>注册即表示你已阅读并同意<a href="/notice">《用户须知》</a>和<a href="/terms">《用户使用协议》</a></p>
 	</div>
 	<div class="lgfoot"><a href="/notice">用户须知</a><span>·</span><a href="/terms">用户使用协议</a><span>·</span><a href="/privacy">隐私政策</a><span>·</span><a href="/">首页</a></div>
 </section>
 
-<!-- 我的路由器 -->
-<section class="hidden" id="vDash">
-	<div class="card trialcard hidden" id="trialCard"></div>
-	<div class="sech"><h2>我的路由器</h2><span class="muted" id="cnt" style="font-size:13px"></span></div>
-	<div id="devs"></div>
-	<div class="sech" id="fbSec"><h2>我的反馈</h2><span class="muted" id="fbCnt" style="font-size:13px"></span></div>
-	<div class="card">
-		<div id="fbList"><p class="muted" style="margin:0">读取中…</p></div>
-		<div style="margin-top:14px;padding-top:12px;border-top:.5px solid var(--line)">
-			<b style="font-size:14.5px">输入受理编号查进度</b>
-			<form class="fbq" id="fFbq" autocomplete="off"><input class="input" name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false"><button class="btn primary">查询</button></form>
-			<div class="err" id="fbqErr"></div>
+<!-- 我的路由器：顶部是个人主页 -->
+<main id="main">
+<div class="hidden" id="vDash">
+	<div class="d-hero">
+		<div class="pg-fx" data-fx="grid-pulse" data-fx-seed="27" aria-hidden="true"></div>
+		<div class="wrap">
+			<div class="me">
+				<button type="button" class="me-av" id="meAv" aria-label="换头像"><span class="av" id="meAvImg"></span><i aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></i></button>
+				<div class="me-t">
+					<p class="hi">我的主页</p>
+					<h1 id="meName">你好</h1>
+					<p class="me-mail"><span id="who"></span><span class="me-dot">·</span><span id="meSince"></span></p>
+				</div>
+
+				<div class="me-acts"><button type="button" class="btn sm" id="meEdit">编辑资料</button><button type="button" class="btn sm" id="layEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>调整布局</button><button type="button" class="btn sm me-out" id="outBtn" aria-label="退出登录" title="退出登录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg><span>退出</span></button></div>
+			</div>
+			<div class="d-stats">
+				<div class="d-stat"><b id="sRouters">0</b><span>路由器</span></div>
+				<div class="d-stat live"><b id="sOnline">0</b><span>在线</span></div>
+				<div class="d-stat"><b id="sFb">0</b><span>反馈</span></div>
+				<div class="d-stat"><b id="sSess">0</b><span>登录设备</span></div>
+			</div>
 		</div>
 	</div>
-	<div class="sech"><h2>添加路由器</h2></div>
-	<div class="card">
-		<p class="muted" style="margin:0 0 8px;font-size:14px">输入 8 位配对码（10 分钟内有效）。配对码从哪来：</p>
-		<ul class="muted" style="margin:0 0 12px;padding-left:20px;font-size:13.5px;line-height:1.75">
-			<li><b>刚装完托管版</b>：安装结束时终端里就显示了配对码和绑定链接</li>
-			<li><b>已经装好</b>：路由器面板「系统操作 → 绑定到账号」，或者在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH）运行 <code>cmcp-pair</code></li>
-			<li>配对码只有用<b>邀请码装的托管版</b>才有；自己用 Cloudflare 搭的<b>自建版</b>，用下面的「添加自建版路由器」</li>
-		</ul>
-		<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">绑定</button></form>
-		<div class="err" data-err></div>
+	<div class="d-body">
+		<div class="wrap">
+			<div class="card trialcard hidden" id="trialCard"></div>
+			<div class="lay-bar" id="layBar" hidden><div><b>调整布局</b><span>用箭头换顺序，「整行 / 半行」改宽窄（电脑上），眼睛图标隐藏不常用的。</span></div><div class="row"><button type="button" class="btn sm" id="layReset">恢复默认</button><button type="button" class="btn sm primary" id="layDone">完成</button></div></div>
+			<div class="blks" id="blks">
+				<section class="blk" data-blk="devs" data-w="full" data-name="我的路由器">
+					<div class="sech"><h2>我的路由器</h2><span class="muted" id="cnt"></span></div>
+					<div id="devs"></div>
+				</section>
+				<section class="blk" data-blk="add" data-w="half" data-name="添加路由器">
+					<div class="sech"><h2>添加路由器</h2></div>
+					<div class="seg" role="tablist" aria-label="添加哪种路由器"><button type="button" role="tab" class="on" data-seg="bind" aria-selected="true">托管版（配对码）</button><button type="button" role="tab" data-seg="link" aria-selected="false">自建版（网址）</button></div>
+					<div data-segp="bind">
+				<div class="card fxc">
+					<p style="margin:0 0 8px">输入 8 位配对码（10 分钟内有效）。配对码从哪来：</p>
+					<ul>
+						<li><b>刚装完托管版</b>：安装结束时终端里就显示了配对码和绑定链接</li>
+						<li><b>已经装好</b>：路由器面板「系统操作 → 绑定到账号」，或者在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH）运行 <code>cmcp-pair</code></li>
+						<li>配对码只有用<b>邀请码装的托管版</b>才有；自己用 Cloudflare 搭的<b>自建版</b>，点上面的「自建版（网址）」添加</li>
+					</ul>
+					<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">绑定</button></form>
+					<div class="err" data-err></div>
+				</div>
+					</div>
+					<div data-segp="link" hidden>
+				<div class="card fxc">
+					<p style="margin:0 0 12px">填面板网址（比如 <code>https://router.example.com/panel/</code>），账号里只记下网址，换手机时好找。粘贴登录地址也行，<b>里面的密钥会自动去掉，不会保存</b>；第一次在新手机上打开，还是要用旧手机「添加新手机」扫码。</p>
+					<form id="fLink" style="display:flex;flex-direction:column;gap:10px"><input class="input" name="name" placeholder="名字（比如：家里、公司）" maxlength="40" autocomplete="off"><div class="row" style="flex-wrap:nowrap"><input class="input" name="url" type="url" inputmode="url" placeholder="https://…/panel/" autocapitalize="off" spellcheck="false" required><button class="btn primary">添加</button></div></form>
+					<div class="err" data-err></div>
+				</div>
+					</div>
+				</section>
+				<section class="blk" data-blk="fb" data-w="half" data-name="我的反馈">
+					<div class="sech" id="fbSec"><h2>我的反馈</h2><span class="muted" id="fbCnt"></span></div>
+				<div class="card fxc">
+					<div id="fbList"><p class="muted" style="margin:0">读取中…</p></div>
+					<div class="fbfoot">
+						<b>输入受理编号查进度</b>
+						<form class="fbq" id="fFbq" autocomplete="off"><input class="input" name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false" aria-label="受理编号"><button class="btn primary">查询</button></form>
+						<div class="err" id="fbqErr"></div>
+					</div>
+				</div>
+
+				</section>
+				<section class="blk" data-blk="sess" data-w="half" data-name="登录过的设备">
+					<div class="sech"><h2>登录过的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
+				<div class="card fxc"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div>
+				</section>
+				<section class="blk" data-blk="acct" data-w="half" data-name="账号安全">
+					<div class="sech"><h2>账号安全</h2></div>
+				<div class="card fxc">
+					<form id="fPw">
+						<label class="f" style="margin-top:0">原密码</label><input class="input" name="old" type="password" autocomplete="current-password" required>
+						<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+						<div class="err" data-err></div>
+						<button class="btn" style="margin-top:16px">修改密码</button>
+					</form>
+					<div class="danger-zone"><span>注销后 30 天内可以联系恢复</span><button class="btn danger" id="delBtn">注销账号</button></div>
+				</div>
+				</section>
+				<section class="blk" data-blk="help" data-w="full" data-name="换手机怎么办">
+					<div class="sech"><h2>换手机怎么办</h2></div>
+				<div class="card fxc help2"><div><h3>第一次在新手机上打开</h3><p>账号里没有路由器的登录密钥，所以要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。</p></div><div><h3>托管版还要一个登录码</h3><p>为了安全，每台手机第一次打开面板还要输一次<b>登录码</b>：在上面这台路由器下面点「获取登录码」，填到新手机上就行，以后这台手机不用再输。</p></div></div>
+				</section>
+			</div>
+		</div>
 	</div>
-	<div class="sech"><h2>添加自建版路由器</h2></div>
-	<div class="card">
-		<p class="muted" style="margin:0 0 10px;font-size:13.5px;line-height:1.7">填面板网址（比如 <code>https://router.example.com/panel/</code>），账号里只记下网址，换手机时好找。<br>粘贴登录地址也行，<b>里面的密钥会自动去掉，不会保存</b>；第一次在新手机上打开，还是要用旧手机「添加新手机」扫码。</p>
-		<form id="fLink" style="display:flex;flex-direction:column;gap:8px"><input class="input" name="name" placeholder="名字（比如：家里、公司）" maxlength="40" autocomplete="off"><div class="row" style="flex-wrap:nowrap"><input class="input" name="url" type="url" inputmode="url" placeholder="https://…/panel/" autocapitalize="off" spellcheck="false" required><button class="btn primary">添加</button></div></form>
-		<div class="err" data-err></div>
-	</div>
-	<div class="sech"><h2>换手机怎么办</h2></div>
-	<div class="card"><p class="muted" style="margin:0;font-size:14px;line-height:1.7">账号里没有路由器的登录密钥，所以第一次在新手机上打开某台路由器时，要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。<br><b>托管版</b>为了安全，每台手机第一次打开面板还要输一次<b>登录码</b>：在上面这台路由器下面点「获取登录码」，填到新手机上就行，以后这台手机就不用再输了。</p></div>
-	<div class="sech" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h2>登录过的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
-	<div class="card"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div><p class="muted" style="margin:12px 0 0;font-size:12.5px;line-height:1.6">这里是登录着这个账号的设备（只记设备类型和大概城市，不记 IP）。看到不认识的，点「退出」，再改一下密码。有新设备登录时会给你发邮件提醒。</p></div>
-	<div class="sech"><h2>账号</h2></div>
-	<div class="card">
-		<form id="fPw">
-			<label class="f">原密码</label><input class="input" name="old" type="password" autocomplete="current-password" required>
-			<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
-			<div class="err" data-err></div>
-			<button class="btn">修改密码</button>
-		</form>
-		<hr style="border:0;border-top:.5px solid var(--line);margin:18px 0">
-		<button class="btn danger" id="delBtn">注销账号</button>
-	</div>
-</section>
-<div class="toast hide" id="toast"></div>
-<p id="footLinks" style="margin:32px 0 8px;text-align:center;color:var(--muted);font-size:13px"><a href="/">首页</a> · <a href="/notice">用户须知</a> · <a href="/terms">用户使用协议</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a></p>
 </div>
+</main>
+<div class="toast hide" id="toast" role="status"></div>
+<input type="file" id="avFile" accept="image/*" hidden>
+<div id="footLinks"><!--KIT_FOOT--></div>
+<!--KIT_JS-->
 <script>
+
+// 顶上的数字：从 0 数上去
+function roll(el, n) { if (!el) return; const to = +n || 0, from = +el.dataset.v || 0; el.dataset.v = to; if (matchMedia('(prefers-reduced-motion: reduce)').matches || from === to) { el.textContent = to; return; } const t0 = performance.now(); const f = (t) => { const k = Math.min(1, (t - t0) / 700), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(from + (to - from) * e); if (k < 1) requestAnimationFrame(f); }; requestAnimationFrame(f); }
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 let tt;
@@ -205,13 +466,13 @@ window.addEventListener('popstate', () => { if (!LGV[location.hash.slice(1)]) lg
 	const still = mq('(prefers-reduced-motion: reduce)'); let w = 0, h = 0; const t0 = performance.now();
 	function size() { const dpr = Math.min(window.devicePixelRatio || 1, 2); w = c.clientWidth; h = c.clientHeight; c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0); }
 	function draw(now) {
-		const t = (now - t0) / 1000, dark = mq('(prefers-color-scheme: dark)'); g.clearRect(0, 0, w, h);
+		const t = (now - t0) / 1000; g.clearRect(0, 0, w, h);
 		const cols = Math.max(28, Math.round(w / 16)), rows = 26, cx = w * 0.5, horizon = h * 0.3;
 		for (let r = 0; r < rows; r++) { const z = r / (rows - 1), depth = 0.35 + z * 1.25, y0 = horizon + Math.pow(z, 1.35) * h * 0.82;
 			for (let k = 0; k < cols; k++) { const u = k / (cols - 1) - 0.5, x = cx + u * w * 1.6 * depth, y = y0 + Math.sin(u * 7 + t * 0.7 + z * 4) * Math.cos(z * 5 - t * 0.45) * 28 * depth + Math.sin(u * 3 - t * 0.3) * 14 * depth;
 				if (x < -10 || x > w + 10 || y < -10 || y > h + 10) continue;
 				const a = (0.08 + 0.3 * z) * (0.55 + 0.45 * Math.sin(u * 9 + z * 6 + t * 0.8)); if (a <= 0.01) continue;
-				g.fillStyle = (dark ? 'rgba(255,255,255,' : 'rgba(40,44,60,') + a.toFixed(3) + ')'; g.beginPath(); g.arc(x, y, 0.6 + 1.9 * z * depth * 0.6, 0, 6.283); g.fill(); } }
+				g.fillStyle = (z > 0.55 && Math.sin(u * 13 + t * 1.3 + z * 9) > 0.92 ? 'rgba(74,222,128,' + Math.min(1, a * 2.6).toFixed(3) : 'rgba(170,220,190,' + a.toFixed(3)) + ')'; g.beginPath(); g.arc(x, y, 0.6 + 1.9 * z * depth * 0.6, 0, 6.283); g.fill(); } }
 	}
 	function loop(now) {
 		if ($('vAuth').classList.contains('hidden') || document.hidden) { setTimeout(() => requestAnimationFrame(loop), 300); return; }
@@ -278,9 +539,13 @@ function renderTrial(me) {
 }
 function render(me) {
 	$('who').textContent = me.email;
+	renderMe(me);
+	if (!document.body.classList.contains('lay-edit')) layApply(me.layout);
 	renderTrial(me);
 	const links = me.links || [], n = me.devs.length + links.length;
 	$('cnt').textContent = n ? n + ' 台' : '';
+	const onl = me.devs.filter((d) => !d.off && !d.expired && d.last && Date.now() - d.last < 360e3).length;
+	roll($('sRouters'), n); roll($('sOnline'), onl);
 	$('devs').innerHTML = n ? me.devs.map((d) => {
 		const on = !d.off && d.last && Date.now() - d.last < 360e3;
 		const left = d.exp ? Math.ceil((d.exp - Date.now()) / 86400e3) : null;
@@ -288,13 +553,13 @@ function render(me) {
 			: ap.status === 'no' ? `<br>续期申请没有通过（${esc(ymd(ap.decided))}）${ap.reason ? '：' + esc(ap.reason) : ''}，可以重新申请` : ap.decided && Date.now() - ap.decided < 7 * 86400e3 ? `<br>✅ 续期申请已通过，续了 ${ap.days} 天` : '';
 		const expTxt = d.trashed ? `<div class="expline bad">⚠️ 托管服务已被提供服务的人停用，专属网址暂时打不开（家里上网和路由器设置都不受影响）。<b>${esc(ymd(d.trashed))}</b> 前联系他可以恢复，恢复后什么都不用做。<a href="/#faq-restore">怎么恢复 ›</a></div>` : !d.exp ? '' : d.expired ? `<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。点下面「申请续期」填表，审核通过后马上恢复；有续期码的点「续期」输入${apTxt}</div>`
 			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，可以点「申请续期」' : ''}${apTxt}</div>`;
-		return `<div class="card dev" data-sub="${esc(d.sub)}"><div class="ic">⌂</div><b>${esc(d.name)}</b>
-		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : '离线 · 最后上线 ' + ago(d.last)}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(d.ver) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
+		return `<div class="card dev fxc${on && !d.expired && !d.off ? ' is-on' : ''}" data-sub="${esc(d.sub)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><b>${esc(d.name)}</b>
+		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : d.last ? '离线 · 最后上线 ' + ago(d.last) : '还没上线'}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(String(d.ver).replace(/^v/, '')) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
 		${expTxt}
 		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button>${d.exp && (d.expired || left <= 7) ? `<button class="btn sm${d.expired ? ' primary' : ''}" data-apply ${ap && ap.status === 'pending' ? 'disabled' : ''}>${ap && ap.status === 'pending' ? '审核中' : '申请续期'}</button>` : ''}${d.exp ? '<button class="btn sm" data-renew>续期码</button>' : ''}<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
-	}).join('') + links.map((l) => `<div class="card dev" data-link="${esc(l.id)}"><div class="ic">⌂</div><b>${esc(l.name)}</b>
+	}).join('') + links.map((l) => `<div class="card dev fxc" data-link="${esc(l.id)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg></div><b>${esc(l.name)}</b>
 		<div class="meta">自建版 · ${esc(l.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))}</div>
-		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty"><div class="big">📡</div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
+		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty fxc"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
 	$('devs').querySelectorAll('[data-lc]').forEach((b) => (b.onclick = async () => {
 		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub);
 		b.disabled = true;
@@ -314,6 +579,121 @@ function render(me) {
 	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub; if (!confirm('从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return; try { await api('unbind', { sub }); toast('已解绑'); await load(); } catch (x) { toast(x.message); } }));
 }
+
+// ===== 个人主页：头像、名字、注册时间；点头像换头像，「编辑资料」改名字 =====
+let ME = null;
+const avPaint = (el, me) => { if (!el) return; const a = me && me.avatar; el.classList.toggle('has-img', !!a); el.style.backgroundImage = a ? 'url("' + a + '")' : ''; el.textContent = a ? '' : ((me && (me.name || me.email)) || '?').trim().slice(0, 1); };
+function renderMe(me) {
+	ME = me;
+	$('meName').textContent = me.name || me.email.split('@')[0];
+	avPaint($('meAvImg'), me);
+	const d = new Date(me.created || Date.now());
+	$('meSince').textContent = '注册于 ' + d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
+	if (window.navMe) window.navMe(me);
+}
+// 图片裁成正方形、缩到 192×192、压缩（能用 webp 就用 webp），一般 10KB 左右
+function shrink(file) {
+	return new Promise((ok, no) => {
+		if (!file || !/^image\//.test(file.type)) return no(new Error('请选一张图片'));
+		// 网页只允许加载 data: 图片（不允许 blob:），所以先读成 data: 再画
+		const im = new Image(), fr = new FileReader();
+		im.onload = () => {
+			const S = 192, c = document.createElement('canvas'); c.width = c.height = S;
+			const g = c.getContext('2d'), m = Math.min(im.naturalWidth, im.naturalHeight);
+			g.fillStyle = '#131a17'; g.fillRect(0, 0, S, S);
+			g.drawImage(im, (im.naturalWidth - m) / 2, (im.naturalHeight - m) / 2, m, m, 0, 0, S, S);
+			let q = 0.86, out = c.toDataURL('image/webp', q);
+			if (!/^data:image\/webp/.test(out)) out = c.toDataURL('image/jpeg', q);
+			while (out.length > 58000 && q > 0.4) { q -= 0.12; out = out.startsWith('data:image/webp') ? c.toDataURL('image/webp', q) : c.toDataURL('image/jpeg', q); }
+			out.length > 58000 ? no(new Error('图片太复杂了，换一张试试')) : ok(out);
+		};
+		im.onerror = () => no(new Error('这张图片打不开，换一张试试'));
+		fr.onload = () => (im.src = fr.result); fr.onerror = () => no(new Error('这张图片读不出来，换一张试试'));
+		if (file.size > 25e6) return no(new Error('图片太大了（超过 25MB），换一张试试'));
+		fr.readAsDataURL(file);
+	});
+}
+let avTarget = null;
+$('avFile').onchange = async () => {
+	const f = $('avFile').files[0]; $('avFile').value = '';
+	if (!f) return;
+	try { const a = await shrink(f); if (avTarget) { avTarget(a); return; } const r = await api('profile', { avatar: a }); ME.avatar = r.avatar; renderMe(ME); toast('头像已更新'); } catch (x) { toast(x.message); }
+};
+$('meAv').onclick = () => { avTarget = null; $('avFile').click(); };
+$('meEdit').onclick = () => profBox(ME);
+function profBox(me) {
+	const m = document.createElement('div'); m.className = 'mask';
+	let av = me.avatar || '';
+	m.innerHTML = `<div class="card pf" role="dialog" aria-modal="true"><h3>编辑个人资料</h3>
+		<div class="pf-av"><span class="av" id="pfAv"></span></div>
+		<div class="pf-row"><button type="button" class="btn sm" data-pick>换头像</button><button type="button" class="btn sm danger" data-rm>不用头像</button></div>
+		<label class="f">名字（别人在对话里看到的就是这个，最多 20 个字）</label><input class="input" id="pfName" maxlength="20" placeholder="${esc(me.email.split('@')[0])}" value="${esc(me.name || '')}">
+		<div class="err" data-err></div>
+		<div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn primary" data-save>保存</button></div></div>`;
+	const paint = () => { avPaint(m.querySelector('#pfAv'), { avatar: av, name: m.querySelector('#pfName').value || me.name, email: me.email }); m.querySelector('[data-rm]').classList.toggle('hidden', !av); };
+	paint();
+	m.querySelector('#pfName').oninput = paint;
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) { avTarget = null; m.remove(); } };
+	m.querySelector('[data-pick]').onclick = () => { avTarget = (a) => { av = a; avTarget = null; paint(); }; $('avFile').click(); };
+	m.querySelector('[data-rm]').onclick = () => { av = ''; paint(); };
+	m.querySelector('[data-save]').onclick = async (e) => {
+		const b = e.currentTarget, err = m.querySelector('[data-err]'); b.disabled = true; err.textContent = '';
+		try { const r = await api('profile', { name: m.querySelector('#pfName').value, avatar: av }); ME.name = r.name; ME.avatar = r.avatar; renderMe(ME); m.remove(); toast('资料已保存'); }
+		catch (x) { err.textContent = x.message; b.disabled = false; }
+	};
+	document.body.appendChild(m);
+	setTimeout(() => m.querySelector('#pfName').focus(), 50);
+}
+
+// ===== 添加路由器：托管版（配对码）/ 自建版（网址）切换 =====
+document.querySelectorAll('.seg [data-seg]').forEach((b) => (b.onclick = () => {
+	document.querySelectorAll('.seg [data-seg]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); });
+	document.querySelectorAll('[data-segp]').forEach((x) => (x.hidden = x.dataset.segp !== b.dataset.seg));
+}));
+// ===== 布局：顺序、宽窄（电脑上）、隐藏；跟着账号走（换手机也一样），本机也存一份 =====
+const BLKS = $('blks'), DEF = [...BLKS.querySelectorAll('.blk')].map((b) => ({ id: b.dataset.blk, w: b.dataset.w, hide: false }));
+const icon = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+const EYE = icon('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'), EYE_OFF = icon('<path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.1 4M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.4 4.5-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2"/>');
+function layNow() { return [...BLKS.querySelectorAll('.blk')].map((b) => ({ id: b.dataset.blk, w: b.dataset.w, hide: b.classList.contains('is-hidden') })); }
+function layApply(L) {
+	if (!Array.isArray(L) || !L.length) L = DEF;
+	const seen = new Set();
+	for (const x of L) { const b = BLKS.querySelector('[data-blk="' + x.id + '"]'); if (!b || seen.has(x.id)) continue; seen.add(x.id); BLKS.appendChild(b); b.dataset.w = x.w === 'full' ? 'full' : 'half'; b.classList.toggle('is-hidden', !!x.hide); }
+	// 新加的板块（以后版本加的）排在最后
+	for (const d of DEF) if (!seen.has(d.id)) BLKS.appendChild(BLKS.querySelector('[data-blk="' + d.id + '"]'));
+	layTools();
+}
+function layTools() {
+	const L = [...BLKS.querySelectorAll('.blk')];
+	L.forEach((b, i) => {
+		let t = b.querySelector(':scope > .lay-tools');
+		if (!t) { t = document.createElement('div'); t.className = 'lay-tools'; b.prepend(t); }
+		const hid = b.classList.contains('is-hidden');
+		t.innerHTML = `<b>${esc(b.dataset.name)}${hid ? '（已隐藏）' : ''}</b><button type="button" data-lu aria-label="往前" ${i ? '' : 'disabled'}>${icon('<path d="M12 19V5M5 12l7-7 7 7"/>')}</button><button type="button" data-ld aria-label="往后" ${i < L.length - 1 ? '' : 'disabled'}>${icon('<path d="M12 5v14M5 12l7 7 7-7"/>')}</button><button type="button" data-lw>${b.dataset.w === 'full' ? '半行' : '整行'}</button><button type="button" data-lh aria-label="${hid ? '显示' : '隐藏'}">${hid ? EYE_OFF : EYE}</button>`;
+	});
+}
+BLKS.addEventListener('click', (e) => {
+	if (!document.body.classList.contains('lay-edit')) return;
+	const btn = e.target.closest('.lay-tools button'); if (!btn) return;
+	const b = btn.closest('.blk');
+	if (btn.matches('[data-lu]') && b.previousElementSibling) BLKS.insertBefore(b, b.previousElementSibling);
+	else if (btn.matches('[data-ld]') && b.nextElementSibling) BLKS.insertBefore(b.nextElementSibling, b);
+	else if (btn.matches('[data-lw]')) b.dataset.w = b.dataset.w === 'full' ? 'half' : 'full';
+	else if (btn.matches('[data-lh]')) b.classList.toggle('is-hidden');
+	b.classList.remove('moved'); void b.offsetWidth; b.classList.add('moved');
+	layTools();
+	if (btn.matches('[data-lu], [data-ld]')) b.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+});
+let layBefore = null;
+$('layEdit').onclick = () => { layBefore = layNow(); document.body.classList.add('lay-edit'); $('layBar').hidden = false; layTools(); $('layBar').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+$('layReset').onclick = () => { layApply(DEF); };
+$('layDone').onclick = async () => {
+	document.body.classList.remove('lay-edit'); $('layBar').hidden = true;
+	const L = layNow();
+	if (JSON.stringify(L) === JSON.stringify(layBefore)) return;
+	try { await api('profile', { layout: L }); if (ME) ME.layout = L; toast('布局已保存，换手机登录也一样'); } catch (x) { toast('布局没保存上：' + x.message); }
+};
+layTools();
 // 续期申请表：到期弹窗里填；提交后等管理员审核（审核完才能再提交）
 const applyShown = {};
 function applyBox(d, email, auto) {
@@ -367,7 +747,7 @@ const when = (t) => { if (!t) return '—'; const d = new Date(t); return (d.get
 async function loadSess() {
 	let r; try { r = await api('sessions', {}); } catch (e) { $('sessList').innerHTML = '<p class="muted" style="margin:0">' + esc(e.message) + '</p>'; return; }
 	const L = r.list || [], others = L.filter((x) => !x.cur).length;
-	$('sessAll').classList.toggle('hidden', !others);
+	$('sessAll').classList.toggle('hidden', !others); roll($('sSess'), L.length);
 	$('sessList').innerHTML = L.map((x) => `<div class="sess" data-sess="${esc(x.id)}"><div class="l"><b>${esc(x.ua || '以前登录的（没有记录设备信息）')}${x.cur ? ' <span class="pill">这台设备</span>' : ''}</b><span>${x.place ? esc(x.place) + ' · ' : ''}${x.at ? when(x.at) + ' 登录' : ''}${x.cur ? '' : ' · 最近使用 ' + ago(x.last)}</span></div>${x.cur ? '' : '<button class="btn sm danger" data-out>退出</button>'}</div>`).join('') || '<p class="muted" style="margin:0">没有别的设备</p>';
 }
 $('sessList').onclick = async (e) => {
@@ -387,7 +767,7 @@ $('sessAll').onclick = async () => {
 async function loadFb() {
 	let r; try { r = await api('fb', {}); } catch (e) { $('fbList').innerHTML = '<p class="muted" style="margin:0">' + esc(e.message) + '</p>'; return; }
 	const L = r.list || [];
-	$('fbCnt').textContent = L.length ? L.length + ' 条' : '';
+	$('fbCnt').textContent = L.length ? L.length + ' 条' : ''; roll($('sFb'), L.length);
 	$('fbList').innerHTML = L.length ? L.map((x) => {
 		const st = x.state || 'open', stage = Math.max(x.stage || 1, x.reply ? 2 : 1);
 		const pill = st === 'fixed' ? '<span class="st ok">已修复</span>' : st === 'nofix' ? '<span class="st bad">无法修复</span>' : stage >= 2 ? '<span class="st">开发人员已收到</span>' : '<span class="st wait">等开发人员查看</span>';
@@ -407,7 +787,7 @@ async function load() {
 		const me = await api('me');
 		loadSess(); loadFb();
 		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
-		render(me); show('dash');
+		render(me); show('dash'); if (window.fxCards) window.fxCards($('vDash'));
 		if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }
 		return me;
 	} catch (e) {
@@ -418,4 +798,6 @@ async function load() {
 }
 fetch('/api/ping').then((r) => r.json()).then((j) => { mailOn = !!j.mail; document.querySelector('#fReg [data-mail]').classList.toggle('hidden', !mailOn); }).catch(() => {});
 tab('login'); load();
-</script></body></html>
+</script>
+</body>
+</html>

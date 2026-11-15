@@ -38,6 +38,14 @@ const rnd = (n) => b64(crypto.getRandomValues(new Uint8Array(n))).replace(/[^A-Z
 
 /* ---------- 存储里的值转成能放进 JSON 的样子（图片是二进制） ---------- */
 const enc = (v) => (v instanceof Uint8Array ? { $u8: b64(v) } : v instanceof ArrayBuffer ? { $u8: b64(new Uint8Array(v)) } : v);
+// 头像（官网账号和开发者的）：浏览器里压缩好的 data:image/...;base64 小图；核对开头几个字节确实是这种图片
+export function avatarOk(a) {
+	const m = /^data:image\/(webp|jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/.exec(String(a || ''));
+	if (!m || a.length > 60000) return false;
+	let h = ''; try { h = atob(m[2].slice(0, 24)); } catch (e) { return false; }
+	return { webp: h.slice(0, 4) === 'RIFF' && h.slice(8, 12) === 'WEBP', jpeg: h.charCodeAt(0) === 0xff && h.charCodeAt(1) === 0xd8, png: h.slice(1, 4) === 'PNG' }[m[1]];
+}
+const maskMail = (e) => { const [a, d] = String(e || '').split('@'); return d ? a.slice(0, 2) + '***@' + d : ''; };
 const dec = (v) => (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v.$u8 === 'string' ? unb64(v.$u8) : v);
 
 /* ---------- 装到 Hub 上的方法 ---------- */
@@ -52,6 +60,63 @@ export function installV5(Hub) {
 			if ('pushOn' in b) c.pushOn = !!b.pushOn;
 			await this.ctx.storage.put('v5cfg', c);
 			return c;
+		},
+		/* ---------- 对话里的头像和名字（5.0.1） ---------- */
+		// 开发者的名字和头像：管理后台「设置」里改，用户在面板里和开发者对话时看到
+		async devProfile() { const c = await this.v5cfg(); return { name: c.devName || '开发者', avatar: (await this.ctx.storage.get('devav')) || '' }; },
+		async devProfileSet(b) {
+			const c = await this.v5cfg();
+			if ('name' in b) { const n = clip(String(b.name || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim(), 20); if (n) c.devName = n; else delete c.devName; await this.ctx.storage.put('v5cfg', c); }
+			if ('avatar' in b) { if (!b.avatar) await this.ctx.storage.delete('devav'); else if (avatarOk(b.avatar)) await this.ctx.storage.put('devav', b.avatar); else return { st: 400, error: '头像格式不对或太大，换一张图片' }; }
+			return { st: 200, ok: true, ...(await this.devProfile()) };
+		},
+		// 对话那头的人：托管版路由器绑定的官网账号（第一个绑定的），带名字和头像；自建版没有账号
+		async chatPeer(sub, withAv) {
+			if (!sub) return null;
+			const d = await this.ctx.storage.get('d:' + sub);
+			for (const uid of (d && d.users) || []) {
+				const u = await this.ctx.storage.get('u:' + uid);
+				if (!u) continue;
+				const p = { uid, email: u.email, name: u.name || '', more: Math.max(0, (d.users || []).length - 1) };
+				if (withAv) p.avatar = (await this.ctx.storage.get('av:' + uid)) || ''; else p.av = !!(await this.ctx.storage.get('av:' + uid));
+				return p;
+			}
+			return null;
+		},
+		// 面板第一次打开对话（after = 0）时一起给：开发者的名字头像、自己账号的名字头像（邮箱打码）
+		async chatProfiles(who) {
+			const me = who && who.sub ? await this.chatPeer(who.sub, true) : null;
+			return { dev: await this.devProfile(), me: me ? { name: me.name || me.email.split('@')[0], avatar: me.avatar, email: maskMail(me.email) } : null };
+		},
+		// 管理后台对话列表：每个对话对方的账号名字（不带头像，头像点开对话再拿）
+		async chatPeers() { const out = {}; for (const t of await this.chatThreads()) { const p = await this.chatPeer(t.sub, false); if (p) out[t.tid] = { name: p.name, email: p.email, av: p.av }; } return out; },
+		// 管理后台「查看对方所有信息」：对话、路由器、绑定的账号、登录过的设备、反馈、续期申请、登录记录、操作记录
+		async chatInfo(tid) {
+			const t = await this.chatThread(tid);
+			if (!t) return null;
+			const out = { thread: t, router: null, accounts: [], feedbacks: [], applications: [], logins: [], ops: [] };
+			const keys = new Set([tid]);
+			if (t.sub) {
+				keys.add(t.sub);
+				const d = await this.ctx.storage.get('d:' + t.sub);
+				if (d) {
+					let b = {}; try { b = await this.watch(t.sub).brief(); } catch (e) {}
+					out.router = { sub: t.sub, name: d.name || '', model: d.model || '', state: d.state, created: d.at || d.created || 0, exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', invite: d.invite || '', last: b.last || 0, ver: b.ver || '', online: b.state || '' };
+					for (const uid of d.users || []) {
+						const u = await this.ctx.storage.get('u:' + uid);
+						if (!u) continue;
+						keys.add(u.email);
+						let sess = []; try { sess = (await this.sessionList(u, null)).map((x) => ({ ua: x.ua || '', place: x.place || '', at: x.at || 0, last: x.last || 0 })); } catch (e) {}
+						out.accounts.push({ uid, email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', created: u.created || 0, lastAt: u.lastAt || 0, verified: !!u.verified, devs: (u.devs || []).length, links: (u.links || []).length, trial: u.trial ? { used: !!u.trial.used, got: !!u.trial.got || !!u.trial.code } : null, sessions: sess });
+					}
+				}
+			}
+			const emails = out.accounts.map((a) => a.email);
+			out.feedbacks = (await this.feedbacks()).filter((f) => (t.sub && f.sub === t.sub) || (f.emails || []).some((e) => emails.includes(String(e).toLowerCase())) || (f.uid && out.accounts.some((a) => a.uid === f.uid))).slice(0, 50).map((f) => ({ code: (f.code || '').toUpperCase(), at: f.at, kind: f.kind || '', text: clip(f.text, 300), done: !!f.done, nofix: !!f.nofix, ack: !!f.ackAt }));
+			if (t.sub) out.applications = (await this.applications()).filter((a) => a.sub === t.sub).slice(0, 30);
+			out.logins = (await this.loginList()).filter((l) => emails.includes(String(l.who || '').toLowerCase())).slice(0, 60);
+			out.ops = (await this.adminLog()).filter((l) => [...keys].some((k) => k && String(l.target || '').includes(k))).slice(0, 60);
+			return out;
 		},
 		// 管理员在不在线：后台开着时每个请求都会碰一下（30 秒内只写一次）
 		async admTouch() { const now = Date.now(); if (this._admSeen && now - this._admSeen < 30e3) return; this._admSeen = now; await this.ctx.storage.put('adm:seen', now); },
@@ -284,6 +349,13 @@ export async function v5Admin(req, a, H, body, u, env) {
 	const m = req.method;
 	if (a[0] === 'cerr' && m === 'POST') { const b = await body(); await H.clientErr('管理后台', b || {}, ''); return J({ ok: true }); }
 	if (a[0] === 'v5cfg' && m === 'GET') return J({ ok: true, cfg: await H.v5cfg(), vapid: env.VAPID_PUB || '', subs: (await H.admSubs()).map((s) => ({ label: s.label, at: s.at, ok: s.ok || 0, err: s.err || 0, end: s.endpoint.slice(-12) })), tfa: !!(await H.tfa()), mail: !!env.ADMIN_EMAIL });
+	// 开发者的名字和头像（对话里用户看到的）
+	if (a[0] === 'devprofile' && m === 'GET') return J({ ok: true, ...(await H.devProfile()) });
+	if (a[0] === 'devprofile' && m === 'POST') { const { st, ...r } = await H.devProfileSet((await body()) || {}); if (st === 200) await H.alog('settings', '', '开发者名字和头像'); return J(r, st); }
+	// 对话：每个对话对方的账号名字；点开对话拿对方的头像；「查看对方所有信息」
+	if (a[0] === 'chatpeers' && m === 'GET') return J({ ok: true, map: await H.chatPeers() });
+	if (a[0] === 'chat' && /^[ad][a-z0-9]{6,16}$/.test(a[1] || '') && a[2] === 'peer' && m === 'GET') { const t = await H.chatThread(a[1]); if (!t) return J({ error: '没有这个对话' }, 404); return J({ ok: true, peer: await H.chatPeer(t.sub, true) }); }
+	if (a[0] === 'chat' && /^[ad][a-z0-9]{6,16}$/.test(a[1] || '') && a[2] === 'info' && m === 'GET') { const r = await H.chatInfo(a[1]); return r ? J({ ok: true, ...r }) : J({ error: '没有这个对话' }, 404); }
 	if (a[0] === 'v5cfg' && m === 'POST') { const c = await H.v5cfgSet((await body()) || {}); await H.alog('settings', '', '对话提醒设置'); return J({ ok: true, cfg: c }); }
 	// 推送到这台设备
 	if (a[0] === 'push' && a[1] === 'sub' && m === 'POST') { const b = (await body()) || {}; const { st, ...r } = await H.admSubAdd(b.sub, b.label); return J(r, st); }

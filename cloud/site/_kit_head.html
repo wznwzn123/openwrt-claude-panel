@@ -1,0 +1,101 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b100e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%230b100e'/%3E%3Cpath d='M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z' fill='%23e9eeeb'/%3E%3Ccircle cx='63' cy='37' r='7' fill='%234ade80'/%3E%3C/svg%3E">
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="stylesheet" href="/k/system.css">
+<link rel="stylesheet" href="/k/ui/cards.css">
+<link rel="stylesheet" href="/k/motion/motion.css">
+<link rel="stylesheet" href="/k/layout/layout.css">
+<style>
+/* 官网各页（除首页）共用：和首页同一套颜色、字体、顶栏、页脚 */
+@font-face { font-family: "Geist"; src: url("/fonts/geist.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+:root {
+  --p-bg: #0b100e; --p-surface: #131a17; --p-ink: #e9eeeb; --p-muted: #93a19a;
+  --p-accent: #4ade80; --p-accent-ink: #03140a; --p-action: #4ade80; --p-action-ink: #03140a;
+  --p-inv-bg: #e9eeeb; --p-inv-surface: #dce4df; --p-inv-ink: #0b100e; --p-inv-muted: #4c5a53;
+  --p-inv-accent: #15803d; --p-inv-accent-ink: #ffffff; --p-inv-action: #0b100e; --p-inv-action-ink: #e9eeeb;
+  --font-display: "Geist", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-text: "Geist", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --display-weight: 600; --display-tracking: -0.02em; --display-tracking-xl: -0.03em;
+  --glass: color-mix(in oklab, #131a17 78%, transparent);
+  --hair: color-mix(in oklab, var(--p-ink) 9%, transparent);
+}
+html[data-ground="sage"]:root { --ground-bg: #13211b; --ground-surface: #1c2e26; --ground-ink: #e9eeeb; --ground-muted: #a3b3ab; --ground-accent: #4ade80; }
+body { background: var(--p-bg); }
+h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+.hidden, [hidden] { display: none !important; }
+.muted { color: var(--muted); }
+a.inline, .prose a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+code { font-family: var(--font-mono); font-size: .88em; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 9%, transparent); overflow-wrap: anywhere; }
+.gh-ic { width: 18px; height: 18px; flex: none; }
+.nav__gh { display: inline-flex; align-items: center; gap: 8px; }
+.nav { --np: 0; }
+.nav::after { content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%; transform-origin: 0 50%; transform: scaleX(var(--np)); background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 30%, transparent), var(--accent)); box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 60%, transparent); pointer-events: none; z-index: 5; }
+html .btn.btn--primary { background-image: linear-gradient(110deg, transparent 38%, rgb(255 255 255 / .55) 50%, transparent 62%); background-size: 260% 100%; background-repeat: no-repeat; background-position: 160% 0; animation: shine 5.2s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes shine { 0%, 62% { background-position: 160% 0; } 88%, 100% { background-position: -60% 0; } }
+.btn:disabled { opacity: .55; cursor: default; }
+
+/* 卡片：鼠标处的光和亮边（电脑），滑进屏幕扫过一道光（手机） */
+.fxc { --mx: 50%; --my: 0%; --mo: 0; position: relative; isolation: isolate; }
+.fxc::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; padding: 1px;
+  background: radial-gradient(320px circle at var(--mx) var(--my), color-mix(in oklab, var(--accent) 85%, transparent), transparent 62%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: var(--mo); transition: opacity .4s; }
+.fxc::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(420px circle at var(--mx) var(--my), color-mix(in oklab, var(--accent) 8%, transparent), transparent 65%); opacity: var(--mo); transition: opacity .4s; }
+.fxc.swept::after { opacity: 1; background: linear-gradient(105deg, transparent 30%, color-mix(in oklab, var(--accent) 15%, transparent) 50%, transparent 70%); background-size: 260% 100%; background-repeat: no-repeat; animation: sweep 1.3s cubic-bezier(.22,1,.36,1) forwards; }
+@keyframes sweep { from { background-position: 150% 0; } to { background-position: -50% 0; opacity: 0; } }
+.fxc > * { position: relative; z-index: 1; }
+
+/* 输入框、下拉框、多行文字 */
+.input, select.input, textarea.input { display: block; width: 100%; box-sizing: border-box; min-height: 48px; padding: 12px 16px; border-radius: 14px; font: 500 16px/1.5 var(--font-text); color: var(--ink);
+  background: color-mix(in oklab, var(--p-bg) 70%, transparent); border: 1px solid color-mix(in oklab, var(--ink) 15%, transparent); outline: none; transition: border-color .2s, box-shadow .2s; -webkit-appearance: none; appearance: none; }
+select.input { padding-right: 40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%2393a19a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 14px; }
+select.input option { background: #131a17; color: var(--ink); }
+textarea.input { min-height: 140px; resize: vertical; line-height: 1.65; }
+.input::placeholder { color: var(--muted); opacity: .75; }
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent); }
+.f { display: grid; gap: 8px; margin: 0 0 16px; font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--ink) 80%, var(--bg)); }
+.err { margin: 10px 0 0; font-size: 14px; color: #fca5a5; }
+.ok-box { padding: 16px 18px; border-radius: 14px; background: color-mix(in oklab, var(--accent) 12%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent); font-size: 15px; line-height: 1.7; }
+
+/* 页面顶部的标题区：背后是网格信号 */
+.pg-hero { position: relative; overflow: clip; padding: calc(var(--nav) + clamp(40px, 7vw, 88px)) 0 clamp(32px, 5vw, 56px); border-bottom: 1px solid var(--hair); }
+.pg-hero > .pg-fx { position: absolute; inset: 0; z-index: 0; -webkit-mask: linear-gradient(to bottom, #000 30%, transparent); mask: linear-gradient(to bottom, #000 30%, transparent); opacity: .75; }
+.pg-hero > .wrap { position: relative; z-index: 1; }
+.pg-fx > .loop-pause, .d-hero .pg-fx > .loop-pause { display: none; }
+.pg-hero::after { content: ""; position: absolute; inset: auto -10% -60% -10%; height: 90%; z-index: 0; pointer-events: none; background: radial-gradient(50% 60% at 50% 100%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%); }
+.pg-hero h1 { margin: 18px 0 0; font-size: clamp(38px, 5.4vw, 68px); line-height: 1.08; letter-spacing: -.03em; font-weight: 650; }
+.pg-hero .pg-sub { margin: 14px 0 0; font-size: 15px; color: var(--muted); max-width: 60ch; line-height: 1.7; }
+.pg-hero .pg-lead { margin: 22px 0 0; max-width: 760px; padding: 18px 22px; border-radius: 18px; background: var(--glass); border: 1px solid var(--hair); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-size: 16px; line-height: 1.8; color: color-mix(in oklab, var(--ink) 86%, var(--bg)); }
+.pg-hero .pg-lead b { color: var(--ink); }
+.pg-hero .pg-lead a { color: var(--accent); }
+
+/* 四个文档页之间切换 */
+.doc-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.doc-tabs a { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 500; color: var(--muted); border: 1px solid var(--hair); background: color-mix(in oklab, var(--p-bg) 60%, transparent); transition: color .2s, border-color .2s, background .2s; text-decoration: none; }
+.doc-tabs a:hover { color: var(--ink); border-color: color-mix(in oklab, var(--ink) 22%, transparent); }
+.doc-tabs a[aria-current="page"] { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.doc-tabs svg { width: 16px; height: 16px; }
+
+/* 页脚 */
+.site-foot { position: relative; overflow: clip; margin-top: clamp(64px, 10vw, 120px); padding: 72px 0 40px; border-top: 1px solid var(--hair); background: color-mix(in oklab, var(--p-bg) 72%, #000); }
+.site-foot > .aurora { position: absolute; inset: 0 0 auto 0; height: 100%; z-index: 0; opacity: .55; -webkit-mask: linear-gradient(to bottom, #000, transparent 85%); mask: linear-gradient(to bottom, #000, transparent 85%); }
+.site-foot > .wrap { position: relative; z-index: 1; }
+.site-foot .grid { row-gap: 32px; }
+.site-foot .nav__logo { font-size: 18px; }
+.site-foot .lede { margin: 12px 0 0; color: var(--muted); font-size: 15px; }
+.site-foot h3 { margin: 0 0 12px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.site-foot ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.site-foot ul a { display: inline-flex; align-items: center; min-height: 36px; font-size: 15px; color: color-mix(in oklab, var(--ink) 86%, var(--bg)); text-decoration: none; }
+.site-foot ul a:hover { color: var(--accent); }
+.site-foot .legal { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--hair); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+@media (min-width: 1024px) { .site-foot .c-brand { grid-column: 1 / span 4; } .site-foot .c-col { grid-column: auto / span 2; } }
+@media (min-width: 640px) and (max-width: 1023px) { .site-foot .c-brand { grid-column: 1 / -1; } .site-foot .c-col { grid-column: auto / span 3; } }
+@media (max-width: 639px) { .site-foot .c-col { grid-column: auto / span 6; } }
+@media (prefers-reduced-motion: reduce) { html .btn.btn--primary { animation: none; } }
+</style>
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>

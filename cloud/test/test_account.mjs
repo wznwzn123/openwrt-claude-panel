@@ -137,6 +137,36 @@ const bobUid = L.list.find((x) => x.email.startsWith('bo')).uid;
 await mod.default.fetch(new Request('https://panel.example/api/dev/unbind', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: R1.sub, rkey: R1.rkey, uid: bobUid }) }), env);
 ok('路由器移除某个账号后，那个账号里就没有这台了', !(await call(B, '/api/account/me')).j.devs.some((d) => d.sub === R1.sub));
 
+// ---- 个人主页：名字和头像 ----
+{
+	const PNG = 'data:image/png;base64,' + Buffer.from('\x89PNG\r\n\x1a\n' + 'x'.repeat(40), 'binary').toString('base64');
+	const WEBP = 'data:image/webp;base64,' + Buffer.from('RIFF\x10\x00\x00\x00WEBPVP8 ' + 'y'.repeat(30), 'binary').toString('base64');
+	let r = await call(A, '/api/account/profile', { name: '  小明\n<b>家里</b>  ' });
+	ok('[个人主页] 改名字：去掉换行和尖括号，前后空格去掉', r.st === 200 && r.j.name === '小明 b家里/b', JSON.stringify(r.j));
+	ok('[个人主页] 名字超过 20 个字：拒绝', (await call(A, '/api/account/profile', { name: '一'.repeat(21) })).st === 400);
+	ok('[个人主页] 头像不是图片：拒绝', (await call(A, '/api/account/profile', { avatar: 'data:text/html;base64,PHNjcmlwdD4=' })).st === 400);
+	ok('[个人主页] 头像说是 PNG 其实不是：拒绝', (await call(A, '/api/account/profile', { avatar: 'data:image/png;base64,' + Buffer.from('<svg onload=alert(1)>').toString('base64') })).st === 400);
+	ok('[个人主页] 头像太大：拒绝', (await call(A, '/api/account/profile', { avatar: 'data:image/png;base64,iVBORw0KGgo' + 'A'.repeat(61000) })).st === 400);
+	r = await call(A, '/api/account/profile', { avatar: WEBP });
+	ok('[个人主页] 换头像（webp）', r.st === 200 && r.j.avatar === WEBP);
+	ok('[个人主页] 换头像（png）', (await call(A, '/api/account/profile', { avatar: PNG })).j.avatar === PNG);
+	r = await call(A, '/api/account/me');
+	ok('[个人主页] 账号页能拿到名字、头像、注册时间', r.j.name === '小明 b家里/b' && r.j.avatar === PNG && r.j.created > 0);
+	r = await call(A, '/api/account/brief');
+	ok('[个人主页] 顶栏用的简要信息：只有邮箱、名字、头像（GET 就行）', r.st === 200 && r.j.email === 'alice@x.com' && r.j.avatar === PNG && !('devs' in r.j));
+	{ const r0 = await call(anon, '/api/account/brief'); ok('[个人主页] 没登录拿不到简要信息（回 200 + ok:false，不在访客控制台里报错）', r0.st === 200 && r0.j.ok === false && !r0.j.email, JSON.stringify(r0)); }
+	L = await (await devAcc(R1, R1.rkey)).json();
+	const al = L.list.find((x) => x.email.startsWith('al'));
+	ok('[个人主页] 路由器面板里看到绑定账号的名字和头像（邮箱仍然打码）', al && al.name === '小明 b家里/b' && al.avatar === PNG && !JSON.stringify(L).includes('alice@x.com'), JSON.stringify(L).slice(0, 200));
+	ok('[个人主页] 不用头像、名字清空：恢复默认', (await call(A, '/api/account/profile', { avatar: '', name: '' })).j.avatar === '' && (await call(A, '/api/account/me')).j.name === '');
+	ok('[个人主页] 头像不存在账号记录里（单独存）', !JSON.stringify(await hub().ctx.storage.get('u:' + (await hub().ctx.storage.get('e:alice@x.com')))).includes('base64'));
+	r = await call(A, '/api/account/profile', { layout: [{ id: 'fb', w: 'full', hide: false }, { id: 'devs', w: 'half', hide: false }, { id: 'help', w: 'half', hide: true }] });
+	ok('[布局] 保存板块顺序、宽窄、隐藏，账号页拿得到', r.st === 200 && JSON.stringify((await call(A, '/api/account/me')).j.layout) === JSON.stringify([{ id: 'fb', w: 'full', hide: false }, { id: 'devs', w: 'half', hide: false }, { id: 'help', w: 'half', hide: true }]));
+	ok('[布局] 乱写的布局：拒绝', (await call(A, '/api/account/profile', { layout: [{ id: '<x>' }] })).st === 400 && (await call(A, '/api/account/profile', { layout: 'abc' })).st === 400 && (await call(A, '/api/account/profile', { layout: [{ id: 'fb' }, { id: 'fb' }] })).st === 400);
+	ok('[布局] 恢复默认（空的）', (await call(A, '/api/account/profile', { layout: [] })).st === 200 && (await call(A, '/api/account/me')).j.layout.length === 0);
+	await call(A, '/api/account/profile', { name: '小明', avatar: PNG });
+}
+
 // ---- 登录、退出、改密码 ----
 const A2 = jar('A2');
 ok('密码错：拒绝', (await call(A2, '/api/account/login', { email: 'alice@x.com', password: 'wrong-pass' })).st === 401);

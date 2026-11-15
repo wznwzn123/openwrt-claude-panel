@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button.vue'
 import Switch from '@/components/ui/Switch.vue'
 import Segmented from '@/components/ui/Segmented.vue'
 import ChatAlertPanel from '@/components/hub/ChatAlertPanel.vue'
+import DevProfilePanel from '@/components/hub/DevProfilePanel.vue'
 import TwoFactorPanel from '@/components/hub/TwoFactorPanel.vue'
 import BackupPanel from '@/components/hub/BackupPanel.vue'
 import { get, post } from '@/api'
@@ -41,6 +42,7 @@ onMounted(async () => { try { ping.value = await (await fetch('/api/ping', { cac
       <Panel title="提醒" class="reveal">
         <div class="hub-row"><div class="hub-row-main"><div class="hub-row-title">有新的对话消息时响一声</div><div class="hub-row-meta">后台开着时每 15 秒看一次有没有新消息；侧边栏和顶栏上会显示红色数字，不在对话页时还会弹个提示。</div></div><div class="hub-row-acts"><Switch :model-value="sound" label="提示音" @update:model-value="setSound" /></div></div>
       </Panel>
+      <DevProfilePanel />
       <ChatAlertPanel />
       <Panel title="外观" class="reveal">
         <div class="hub-row"><div class="hub-row-main"><div class="hub-row-title">深色 / 浅色</div><div class="hub-row-meta">跟随系统时，手机或电脑切到深色模式，这里也跟着变。</div></div><div class="hub-row-acts"><Segmented v-model="appearance.theme" label="外观" :options="[{ label: '跟随系统', value: 'auto' }, { label: '浅色', value: 'light' }, { label: '深色', value: 'dark' }]" /></div></div>

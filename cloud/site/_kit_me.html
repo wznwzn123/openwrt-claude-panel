@@ -1,0 +1,37 @@
+<style>
+/* 顶栏：登录了官网账号，「登录」换成头像和名字，「免费试用 7 天」换成「进入我的路由器」 */
+.nav__me { display: inline-flex; align-items: center; gap: 9px; max-width: 200px; }
+.nav__me .av { --avs: 30px; flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #4ade80, #0ea5e9) center / cover no-repeat; color: #04140a; font: 650 13px/1 var(--font-text); text-transform: uppercase; box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 45%, transparent); }
+.nav__me .av.has-img { color: transparent; }
+.nav__me .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1023px) {
+  .nav:not(.is-open) .nav__actions > a.nav__me { display: inline-flex; }
+  .nav:not(.is-open) .nav__actions > a.nav__me .nm { display: none; }
+}
+@media (max-width: 639px) { .nav__cta-l { display: none; } }
+</style>
+<script>
+// 登录了：顶栏换成头像和名字；去注册的按钮换成「进入我的路由器」
+(() => {
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  let done = false;
+  window.navMe = (me) => {
+    if (!me || !me.email) return;
+    const name = me.name || me.email.split('@')[0], a = document.getElementById('navLogin');
+    if (a) {
+      a.className = 'nav__link nav__me'; a.href = '/app'; a.setAttribute('aria-label', '我的主页：' + name);
+      a.innerHTML = '<span class="av' + (me.avatar ? ' has-img' : '') + '"' + (me.avatar ? ' style="background-image:url(&quot;' + esc(me.avatar) + '&quot;)"' : '') + '>' + (me.avatar ? '' : esc(name.trim().slice(0, 1))) + '</span><span class="nm">' + esc(name) + '</span>';
+    }
+    if (done) return; done = true;
+    document.querySelectorAll('a.btn[href="/app#reg"]').forEach((b) => {
+      b.href = '/app';
+      const arrow = b.querySelector('svg');
+      b.textContent = '';
+      if (b.closest('.nav')) b.innerHTML = '<span class="nav__cta-l">进入</span>我的路由器'; else b.textContent = '进入我的路由器';
+      if (arrow) b.appendChild(arrow);
+    });
+    document.querySelectorAll('[data-guest]').forEach((e) => (e.hidden = true));
+  };
+  if (location.pathname !== '/app') fetch('/api/account/brief', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).then((j) => j && j.ok && window.navMe(j)).catch(() => {});
+})();
+</script>

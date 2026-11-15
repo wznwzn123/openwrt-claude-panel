@@ -278,6 +278,18 @@ document.addEventListener('click', e => {
 // The h1 gets its word masks for the length of the entrance and its own nodes back afterwards.
 const ENTER_MEDIA = '[data-enter-media], .hero__bg, .hero__media, .hero__stage, .hero__art, .hero__window, .hero-visual, .ly-collage';
 const ENTER_TEXT = 'h1 ~ *, :has(> h1) ~ *, :has(~ h1)';
+// 中文注：旧内核浏览器不认识 :has()，querySelectorAll 会出错：那就自己找同样的元素
+function enterText(root) {
+  try { return root.querySelectorAll(ENTER_TEXT); } catch (e) {}
+  const out = new Set();
+  for (const h of root.querySelectorAll('h1')) {
+    for (let n = h.nextElementSibling; n; n = n.nextElementSibling) out.add(n);
+    for (let n = h.previousElementSibling; n; n = n.previousElementSibling) out.add(n);
+    const p = h.parentElement;
+    if (p && p !== root && root.contains(p)) for (let n = p.nextElementSibling; n; n = n.nextElementSibling) out.add(n);
+  }
+  return [...out];
+}
 const ENTER_LEAF = 'p, dl, ul, ol, a, button, img, picture, video, figure, blockquote, h2, h3, .pill, .btn';
 function maskWords(h1) {
   // an h1 another script reworks (layout.js: a live word, letters, a picture in the line) rises whole
@@ -324,7 +336,7 @@ function enterSteps(hero, h1, media) {
     if (own || !el.children.length || el.matches(ENTER_LEAF)) out.push(el);
     else [...el.children].forEach(take);
   };
-  hero.querySelectorAll(ENTER_TEXT).forEach(take);
+  enterText(hero).forEach(take);
   return out.filter(el => !el.closest('[aria-hidden="true"]') && !out.some(o => o !== el && o.contains(el)))
     .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
 }

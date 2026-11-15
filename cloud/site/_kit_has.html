@@ -1,0 +1,39 @@
+<script>
+/* 旧内核浏览器（Chrome 105 以前，很多手机自带浏览器还是这个内核）不认识 CSS 的 :has()。
+   打包时把样式里的每个 :has(条件) 编了号，补了一条用 [data-h号] 的同样规则；这里把满足条件的元素标上 data-h号。
+   新浏览器认识 :has，这段直接退出，什么都不做。 */
+(function () {
+	try { document.querySelector(':has(*)'); return; } catch (e) {}
+	var A = /*HAS_ARGS*/[];
+	function split(s) { var r = [], d = 0, a = 0; for (var i = 0; i < s.length; i++) { var c = s[i]; if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d--; else if (c === ',' && !d) { r.push(s.slice(a, i).trim()); a = i + 1; } } r.push(s.slice(a).trim()); return r; }
+	var P = A.map(function (x) { return [x[0], split(x[1])]; });
+	function lastc(s) { var d = 0; for (var i = s.length - 1; i >= 0; i--) { var c = s[i]; if (c === ')' || c === ']') d++; else if (c === '(' || c === '[') d--; else if (!d && /[\s>+~]/.test(c)) return s.slice(i + 1); } return s; }
+	function q(root, s) { try { return root.querySelectorAll(s); } catch (e) { return []; } }
+	function test(el, a) {
+		var c = a.charAt(0);
+		if (c === '+') { var n = el.nextElementSibling; try { return !!n && n.matches(a.slice(1).trim()); } catch (e) { return false; } }
+		if (c === '~') { var s = a.slice(1).trim(); for (var m = el.nextElementSibling; m; m = m.nextElementSibling) { try { if (m.matches(s)) return true; } catch (e) { return false; } } return false; }
+		try { return !!el.querySelector(':scope ' + a); } catch (e) { return false; }
+	}
+	function run() {
+		for (var i = 0; i < P.length; i++) {
+			var id = 'data-h' + P[i][0], want = new Set();
+			P[i][1].forEach(function (a) {
+				var c = a.charAt(0), t = (c === '>' || c === '+' || c === '~') ? a.slice(1).trim() : a;
+				var last = lastc(t);
+				Array.prototype.forEach.call(q(document, last), function (x) {
+					if (c === '+') { var p = x.previousElementSibling; if (p && test(p, a)) want.add(p); }
+					else if (c === '~') { for (var p2 = x.previousElementSibling; p2; p2 = p2.previousElementSibling) if (!want.has(p2) && test(p2, a)) want.add(p2); }
+					else for (var u = x.parentElement; u; u = u.parentElement) if (!want.has(u) && test(u, a)) want.add(u);
+				});
+			});
+			Array.prototype.forEach.call(q(document, '[' + id + ']'), function (x) { if (!want.has(x)) x.removeAttribute(id); });
+			want.forEach(function (x) { if (!x.hasAttribute(id)) x.setAttribute(id, ''); });
+		}
+	}
+	var t = 0;
+	function later() { if (!t) t = setTimeout(function () { t = 0; run(); }, 60); }
+	function start() { run(); new MutationObserver(later).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'open', 'checked', 'selected', 'data-bar', 'data-step', 'aria-selected', 'aria-expanded'] }); }
+	if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>

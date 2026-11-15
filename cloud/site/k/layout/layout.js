@@ -269,7 +269,8 @@ function film(btn) {
 function init() {
   document.querySelectorAll('[data-ly-word]').forEach(liveWord);
   document.querySelectorAll('h1[data-ly-letters]').forEach(letters);
-  document.querySelectorAll('h1[data-ly-letters], h1:has(.ly-word)').forEach(lockLines);
+  // 中文注：旧内核浏览器不认识 :has()，原来这句会直接出错、后面的都不跑了，所以分开查
+  new Set([...document.querySelectorAll('h1[data-ly-letters]'), ...[...document.querySelectorAll('h1')].filter((h) => h.querySelector('.ly-word'))]).forEach(lockLines);
   document.querySelectorAll('.ly-collage').forEach(collage);
   document.querySelectorAll('[data-ly-steps]').forEach(steps);
   document.querySelectorAll('.ly-spot').forEach(spot);

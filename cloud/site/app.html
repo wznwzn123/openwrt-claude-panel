@@ -480,7 +480,7 @@ window.addEventListener('popstate', () => { if (!LGV[location.hash.slice(1)]) lg
 		draw(now);
 		if (!still) requestAnimationFrame(loop); else setTimeout(() => requestAnimationFrame(loop), 1500);
 	}
-	try { size(); requestAnimationFrame(loop); } catch (e) {}
+	try { size(); requestAnimationFrame(loop); new ResizeObserver(() => { if (c.clientWidth !== w || c.clientHeight !== h) size(); }).observe(c); } catch (e) {}
 })();
 $('toReset').onclick = (e) => { e.preventDefault(); if (!mailOn) return toast('还没有开通邮件服务，忘记密码请联系管理员'); tab('reset'); };
 document.querySelector('[data-back]').onclick = (e) => { e.preventDefault(); tab('login'); };

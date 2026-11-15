@@ -1,16 +1,27 @@
 // 把 cloud/site/*.html 打包成 cloud/site.js（Worker 直接把页面内容返回给浏览器）
 // 改了页面以后运行：node tools/build-site.mjs
 import fs from 'fs';
+import { applyLegacy, applyLegacyHtml, hasScan, styleBlocks } from './css-legacy.mjs';
 const dir = new URL('../cloud/site/', import.meta.url);
 const css = fs.readFileSync(new URL('common.css', dir), 'utf8');
+// 旧内核浏览器用的备用颜色（见 tools/css-legacy.mjs）
+const LEG = JSON.parse(fs.readFileSync(new URL('legacy-colors.json', dir), 'utf8')), legMiss = [];
 const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVACY: 'privacy.html', SECURITY: 'security.html', REPLY: 'reply.html', NOTICE: 'notice.html', TERMS: 'terms.html' };
+// 旧内核不认识 :has()：先把所有样式里的 :has(条件) 编好号（页面里的小脚本要用同一份编号）
+const HAS = { map: new Map(), list: [] };
+const expand = (html) => { for (let i = 0; i < 3; i++) html = html.replace(/<!--KIT_(HEAD|NAV|FOOT|JS|DOC|ME|HAS)-->/g, (m, n) => fs.readFileSync(new URL('_kit_' + n.toLowerCase() + '.html', dir), 'utf8')); return html; };
+const kitCss = []; const walkCss = (rel) => { for (const e of fs.readdirSync(new URL('k/' + rel, dir), { withFileTypes: true })) { const r = rel + e.name; if (e.isDirectory()) walkCss(r + '/'); else if (r.endsWith('.css')) kitCss.push(fs.readFileSync(new URL('k/' + r, dir), 'utf8')); } };
+walkCss('');
+for (const t of kitCss) hasScan(t, HAS);
+for (const f of Object.values(pages)) if (f !== 'admin.html') for (const t of styleBlocks(expand(fs.readFileSync(new URL(f, dir), 'utf8')))) hasScan(t, HAS);
 let out = '// 自动生成，不要直接改：改 cloud/site/ 里的文件后运行 node tools/build-site.mjs\n';
 for (const [k, f] of Object.entries(pages)) {
 	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 cloud/site/img/名字.webp 的内容（页面只允许加载自己和 data: 图片）
 	// 新设计的页面共用的顶栏、页脚、样式和脚本：写成 <!--KIT_HEAD--> 这样，打包时换成 cloud/site/_kit_*.html 的内容
 	let html = fs.readFileSync(new URL(f, dir), 'utf8');
-	for (let i = 0; i < 3; i++) html = html.replace(/<!--KIT_(HEAD|NAV|FOOT|JS|DOC|ME)-->/g, (m, n) => fs.readFileSync(new URL('_kit_' + n.toLowerCase() + '.html', dir), 'utf8'));
+	html = expand(html);
 	if (/<!--KIT_/.test(html)) throw new Error(f + ' 里有不认识的 <!--KIT_...-->');
+	if (f !== 'admin.html') html = applyLegacyHtml(html, LEG, legMiss, HAS).replace('/*HAS_ARGS*/[]', () => JSON.stringify(HAS.list));
 	html = html.replace('/*COMMON_CSS*/', css)
 		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => 'data:image/webp;base64,' + fs.readFileSync(new URL('img/' + n + '.webp', dir)).toString('base64'));
 	out += `export const ${k} = ${JSON.stringify(html)};\n`;
@@ -32,9 +43,11 @@ if (fs.existsSync(new URL('index.html', ad))) {
 // 官网首页的版式和动效组件（taste-skill，MIT，见 cloud/site/k/LICENSE-taste-skill.txt）：cloud/site/k/ 下的文件原样放进 site.js，
 // 由 /k/... 发给浏览器（组件按需互相加载，所以要按原来的目录结构发）
 const kit = {}, KT = { js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8', svg: 'image/svg+xml', txt: 'text/plain; charset=utf-8' };
-const walk = (rel) => { for (const e of fs.readdirSync(new URL('k/' + rel, dir), { withFileTypes: true })) { const r = rel + e.name; if (e.isDirectory()) walk(r + '/'); else { const ext = e.name.split('.').pop(); if (!KT[ext]) throw new Error('cloud/site/k 里有不认识的文件：' + r); kit[r] = { type: KT[ext], body: fs.readFileSync(new URL('k/' + r, dir), 'utf8') }; } } };
+const walk = (rel) => { for (const e of fs.readdirSync(new URL('k/' + rel, dir), { withFileTypes: true })) { const r = rel + e.name; if (e.isDirectory()) walk(r + '/'); else { const ext = e.name.split('.').pop(); if (!KT[ext]) throw new Error('cloud/site/k 里有不认识的文件：' + r); let body = fs.readFileSync(new URL('k/' + r, dir), 'utf8'); if (ext === 'css') body = applyLegacy(body, LEG, legMiss, HAS); kit[r] = { type: KT[ext], body }; } } };
 walk('');
 out += `export const KIT_FILES = ${JSON.stringify(kit)};\n`;
 out += `export const ADMIN_APP = ${JSON.stringify(adminHtml)};\nexport const ADMIN_FILES = ${JSON.stringify(files)};\n`;
+if (legMiss.length) console.warn('旧浏览器备用颜色缺 ' + new Set(legMiss).size + ' 条（样式改过了）：运行 node tools/gen-legacy-colors.mjs 重新算\n  ' + [...new Set(legMiss)].slice(0, 8).join('\n  '));
+if (out.includes('/*HAS_ARGS*/[]')) throw new Error('有页面没换掉 /*HAS_ARGS*/');
 fs.writeFileSync(new URL('../cloud/site.js', import.meta.url), out);
 console.log('site.js', out.length, 'bytes');

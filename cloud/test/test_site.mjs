@@ -117,9 +117,11 @@ for (const dark of [false, true]) {
 	await shot('dash');
 	// ?pair= 自动绑定
 	await page.goto(B + '/app?pair=' + (await pairOf(R2))); await W(1200);
+	await page.waitForFunction(() => document.querySelectorAll('#devs .dev').length === 2, null, { timeout: 5000 }).catch(() => {});
 	ok('打开带 ?pair= 的链接：已登录时自动绑定', /OpenWrt/.test(await page.textContent('#devs')) && (await page.locator('#devs .dev').count()) === 2);
 	ok('自动绑定后地址栏里的配对码去掉了', !(await page.evaluate(() => location.search)));
-	if (await page.isVisible('.mask')) { await page.click('.mask [data-x]'); await W(300); }
+	await page.waitForSelector('.mask', { timeout: 2500 }).catch(() => {});
+	if (await page.isVisible('.mask')) { await page.click('.mask [data-x]'); await W(400); }
 	// 解绑
 	await page.click('#devs .dev:last-child [data-unb]'); await W(800);
 	ok('解绑（先确认）', (await page.locator('#devs .dev').count()) === 1);
@@ -136,6 +138,7 @@ for (const dark of [false, true]) {
 	ok('不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
 	// 改密码
 	await page.fill('#fPw [name=old]', 'alice-pass-1'); await page.fill('#fPw [name=password]', 'alice-pass-2'); await page.click('#fPw button'); await W(600);
+	await page.waitForFunction(() => /密码已修改/.test(document.getElementById('toast').textContent), null, { timeout: 5000 }).catch(() => {});
 	ok('修改密码成功', /密码已修改/.test(await page.textContent('#toast')));
 	// 管理员页面
 	await page.goto(B + '/admin/old'); await W(400);
@@ -468,6 +471,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		await api('/api/admin/feedback/' + pid + '/ack', { on: true }, ADM);
 		await api('/api/admin/feedback/' + lid + '/done', { state: 'nofix', note: '城市是按 IP 粗略判断的，有时候判断不出来', mail: false }, ADM);
 		await page.goto(B + '/app#login'); await W(1200);
+		await page.waitForFunction(() => document.querySelectorAll('#fbList .fbrow').length >= 2, null, { timeout: 5000 }).catch(() => {});
 		const rows = await page.$$eval('#fbList .fbrow', (e) => e.map((x) => ({ st: x.querySelector('.st').textContent, href: x.getAttribute('href'), stage: x.querySelector('.fsteps').dataset.stage || x.querySelectorAll('.fsteps .on').length, t: x.querySelector('.t').textContent })));
 		ok('[账号页] 我的反馈：有面板发的（开发人员已收到）、登录后报告的（无法修复），没有别人的', rows.length === 2 && rows.some((x) => x.st === '开发人员已收到' && /首页流量/.test(x.t)) && rows.some((x) => x.st === '无法修复' && /不显示城市/.test(x.t)) && !rows.some((x) => /字太小了/.test(x.t)), JSON.stringify(rows));
 		ok('[账号页] 点一条：到这条的处理进度页 /r/编号', rows.every((x) => /^\/r\/[A-Z2-9]{8}$/.test(x.href)));

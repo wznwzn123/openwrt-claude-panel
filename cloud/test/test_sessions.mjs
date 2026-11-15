@@ -27,7 +27,7 @@ const call = async (c, path, b, { ua = UA.edgeAndroid, cf } = {}) => {
 };
 let T = Date.now(); Date.now = () => T;
 const A = jar(); await call(A, '/api/account/register', { email: 'alice@x.com', password: 'abcdefgh1' }, { cf: { city: 'Taipei', country: 'TW' } });
-env.RESEND_API_KEY = 're_x';
+env.RESEND_API_KEY = 're_x'; env.NEW_DEVICE_CODE = '0'; // 这里测的是会话和登录提醒；新设备验证码在 test_account 里测
 let L = (await call(A, '/api/account/sessions')).list;
 ok('注册后：列出这台设备（安卓手机 · Edge、台湾 · Taipei），标着「这台设备」', L.length === 1 && L[0].ua === '安卓手机 · Edge' && L[0].place === '台湾 · Taipei' && L[0].cur === true && L[0].at > 0, JSON.stringify(L));
 ok('列表里不会给出登录凭证（sid）', !JSON.stringify(L).includes(A.sid));

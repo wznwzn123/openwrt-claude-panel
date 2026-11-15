@@ -21,12 +21,12 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	res.writeHead(200, { 'content-type': p.endsWith('.html') ? 'text/html; charset=utf-8' : p.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' }); res.end(fs.readFileSync(f)); }); });
 const W = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-	await new Promise((r) => server.listen(8131, r));
+	await new Promise((r) => server.listen(8182, r));
 	const browser = await chromium.launch();
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 	await page.addInitScript((t) => { if (!sessionStorage.getItem('i')) { localStorage.setItem('rp_token', t); sessionStorage.setItem('i', '1'); } }, OLD);
-	await page.goto('http://localhost:8131/panel/?p=more'); await W(1500);
+	await page.goto('http://localhost:8182/panel/?p=more'); await W(1500);
 	ok('「系统操作」里有「换登录密钥」', await page.isVisible('[data-t="rotatekey"]'));
 	// 取消：什么都不发生
 	await page.click('[data-t="rotatekey"]'); await W(400);
@@ -43,13 +43,13 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'rotate-01.png') });
 	await page.click('.modal button:has-text("完成")'); await W(300);
 	calls.length = 0;
-	await page.goto('http://localhost:8131/panel/?p=home'); await W(1800);
+	await page.goto('http://localhost:8182/panel/?p=home'); await W(1800);
 	ok('之后的请求都用新密钥，不会掉线', calls.length > 0 && calls.every((c) => c.tok === NEW), JSON.stringify(calls.slice(0, 3)));
 	await page.reload(); await W(1500);
 	ok('刷新页面后还是登录状态（用的新密钥）', calls.some((c) => c.tok === NEW) && !(await page.isVisible('#login')));
 	// 自建完整版：提醒换 Worker 的 PANEL_TOKEN
 	selfcloud = true; cur = NEW;
-	await page.goto('http://localhost:8131/panel/?p=more'); await W(1200);
+	await page.goto('http://localhost:8182/panel/?p=more'); await W(1200);
 	await page.click('[data-t="rotatekey"]'); await W(400); await page.click('.modal button:has-text("换新密钥")'); await W(800);
 	ok('自建完整版：提醒把 Worker 的 PANEL_TOKEN 也换掉', /PANEL_TOKEN/.test(await page.textContent('.modal')));
 	await browser.close(); server.close();

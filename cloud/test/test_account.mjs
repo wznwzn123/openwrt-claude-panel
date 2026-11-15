@@ -23,17 +23,17 @@ const hub = () => env.H.get('hub');
 const jar = (name) => ({ name, sid: '' });
 async function call(c, path, body, extra = {}) {
 	const h = { 'content-type': 'application/json', origin: 'https://panel.example', 'cf-connecting-ip': extra.ip || '1.1.1.1', ...(extra.headers || {}) };
-	if (c && c.sid) h.cookie = 'sid=' + c.sid;
+	if (c && (c.sid || c.did)) h.cookie = [c.sid && 'sid=' + c.sid, c.did && 'did=' + c.did].filter(Boolean).join('; ');
 	const res = await mod.default.fetch(new Request('https://panel.example' + path, { method: body === undefined ? 'GET' : 'POST', headers: h, body: body === undefined ? undefined : JSON.stringify(body) }), env);
 	const sc = res.headers.get('set-cookie');
-	if (c && sc) { const m = /sid=([a-z2-9]*);/.exec(sc); c.sid = m ? m[1] : ''; c.cookie = sc; }
+	if (c && sc) { const m = /sid=([a-z2-9]*);/.exec(sc); if (m || !/did=/.test(sc)) c.sid = m ? m[1] : ''; const d = /did=([a-z2-9]{32});/.exec(sc); if (d) c.did = d[1]; c.cookie = sc; }
 	let j = {}; try { j = await res.json(); } catch (e) {}
 	return { st: res.status, j };
 }
 const A = jar('A'), B = jar('B'), anon = jar('x');
 
 // 开两台路由器
-const inv = (await (await mod.default.fetch(new Request('https://panel.example/api/admin/invites', { method: 'POST', headers: { authorization: 'Bearer admin-key-1234567890', 'content-type': 'application/json' }, body: JSON.stringify({ max: 5 }) }), env)).json()).invite.code;
+const inv = (await (await mod.default.fetch(new Request('https://panel.example/api/admin/invites', { method: 'POST', headers: { authorization: 'Bearer admin-key-1234567890', 'content-type': 'application/json' }, body: JSON.stringify({ max: 5, direct: true }) }), env)).json()).invite.code;
 const regDev = async (ip) => (await (await mod.default.fetch(new Request('https://panel.example/api/register', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip }, body: JSON.stringify({ invite: inv, name: 'R' + ip }) }), env)).json());
 const R1 = await regDev('9.0.0.1'), R2 = await regDev('9.0.0.2');
 
@@ -102,6 +102,8 @@ ok('过期的登录码：不对', (await lcOf(R1, LC.j.code)).st === 400);
 await hub().cleanup();
 ok('每天清理时删掉过期的登录码', !(await hub().ctx.storage.get('l:' + R1.sub + ':' + LC.j.code)));
 LC = await call(A, '/api/account/logincode', { sub: R1.sub });
+ok('[主账号] 主账号在官网解绑：要先确认是本人', (await call(A, '/api/account/unbind', { sub: R1.sub })).j.sudo === true);
+await call(A, '/api/account/sudo', { code: '' });
 await call(A, '/api/account/unbind', { sub: R1.sub });
 ok('拿码的账号解绑了这台路由器：登录码作废', (await lcOf(R1, LC.j.code)).st === 400);
 P = await pairOf(R1); await call(A, '/api/account/bind', { code: P.code }); await call(A, '/api/account/rename', { sub: R1.sub, alias: '客厅' });
@@ -128,7 +130,11 @@ ok('没登录不能添加', (await call(anon, '/api/account/link', { url: 'https
 ok('移除自建版路由器', (await call(A, '/api/account/unlink', { id: L1.j.id })).st === 200 && (await call(A, '/api/account/me')).j.links.length === 2);
 
 // ---- 路由器那边看/移除绑定的账号 ----
-P = await pairOf(R1); await call(B, '/api/account/bind', { code: P.code });
+P = await pairOf(R1);
+ok('[主账号] 已经有主账号的路由器：别人不能再用配对码绑定', /已经有主账号/.test((await call(B, '/api/account/bind', { code: P.code })).j.error || ''));
+const famDevCall = async (R, op, body) => { const r = await mod.default.fetch(new Request('https://panel.example/api/dev/fam/' + op, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: R.sub, rkey: R.rkey, ...body }) }), env); return { st: r.status, j: await r.json() }; };
+const aliceUid = await hub().ctx.storage.get('e:alice@x.com');
+{ const su = await famDevCall(R1, 'sudo', { uid: aliceUid, code: '' }); const jc = await famDevCall(R1, 'join_create', { uid: aliceUid, sudo: su.j.sudo, name: '鲍勃', perms: ['msg', 'node'] }); await call(B, '/api/account/fam/join', { code: jc.j.code }); }
 const devAcc = async (R, key) => (await mod.default.fetch(new Request('https://panel.example/api/dev/accounts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sub: R.sub, rkey: key }) }), env));
 let L = await (await devAcc(R1, R1.rkey)).json();
 ok('路由器看到绑定了它的账号（邮箱打码）', L.list.length === 2 && L.list.every((x) => /\*\*\*@|\*@/.test(x.email)) && !JSON.stringify(L).includes('alice@x.com'), JSON.stringify(L));
@@ -197,6 +203,45 @@ ok('1 分钟内不能再发', (await call(anon, '/api/account/code', { email: 'c
 ok('验证码错：注册失败', (await call(C, '/api/account/register', { email: 'carol@x.com', password: 'carol-pass-1', code: code1 === '111111' ? '222222' : '111111' })).st === 400);
 ok('验证码对：注册成功', (await call(C, '/api/account/register', { email: 'carol@x.com', password: 'carol-pass-1', code: code1 })).st === 200);
 ok('已注册的邮箱不发注册验证码', (await call(anon, '/api/account/code', { email: 'carol@x.com', kind: 'reg' })).st === 409);
+// ---- 新设备登录：密码 + 邮箱验证码 ----
+const lastCode = () => (MAIL.slice(-1)[0].html.match(/>(\d{6})</) || [])[1];
+ok('[新设备] 注册的这台设备记住了（浏览器拿到 did）', /^[a-z2-9]{32}$/.test(C.did || ''));
+await call(C, '/api/account/logout', {});
+r = await call(C, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-1' });
+ok('[新设备] 验证过的设备：只要密码就能登录', r.st === 200 && !r.j.need && !!C.sid);
+const C2 = jar('C2');
+r = await call(C2, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-1' }, { ua: 'Mozilla/5.0 (Linux; Android 14) Chrome/120 Mobile' });
+const tok = r.j.token;
+ok('[新设备] 没验证过的设备：密码对了也不登录，要验证码', r.st === 200 && r.j.need === 'code' && /^[a-z2-9]{24}$/.test(tok) && !C2.sid && r.j.mail === 'ca***@x.com', JSON.stringify(r.j));
+ok('[新设备] 验证码发到账号邮箱，邮件里提醒「不是本人就改密码」', MAIL.slice(-1)[0].to[0] === 'carol@x.com' && /新设备登录/.test(MAIL.slice(-1)[0].subject) && /改密码/.test(MAIL.slice(-1)[0].html));
+const lc = lastCode();
+ok('[新设备] 没登录时拿不到账号信息', (await call(C2, '/api/account/me')).st === 401);
+ok('[新设备] 1 分钟内不能重新发', (await call(C2, '/api/account/login2', { token: tok, op: 'resend' })).st === 429);
+r = await call(C2, '/api/account/login2', { token: tok, code: lc === '111111' ? '222222' : '111111' });
+ok('[新设备] 验证码错：不登录', r.st === 400 && r.j.error === '验证码不对' && !C2.sid);
+r = await call(C2, '/api/account/login2', { token: tok, code: lc });
+ok('[新设备] 验证码对：登录成功，这台设备记住了', r.st === 200 && !!C2.sid && /^[a-z2-9]{32}$/.test(C2.did || '') && (await call(C2, '/api/account/me')).st === 200);
+ok('[新设备] 同一个验证码不能再用', (await call(jar(), '/api/account/login2', { token: tok, code: lc })).j.again === true);
+await call(C2, '/api/account/logout', {});
+r = await call(C2, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-1' });
+ok('[新设备] 验证过以后，下次只要密码', r.st === 200 && !r.j.need && !!C2.sid);
+// 猜验证码：5 次就作废
+const C3 = jar('C3'); await hub().ctx.storage.delete('r:ml1:' + (await hub().ctx.storage.get('e:carol@x.com')));
+r = await call(C3, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-1' });
+const tok3 = r.j.token, c3 = lastCode(); const bad3 = [];
+for (let i = 0; i < 5; i++) bad3.push((await call(C3, '/api/account/login2', { token: tok3, code: String(100000 + i) === c3 ? '999999' : String(100000 + i) })).j);
+ok('[新设备] 验证码猜错 5 次就作废，要重新输密码', bad3.slice(0, 4).every((x) => x.error === '验证码不对') && bad3[4].again === true && (await call(C3, '/api/account/login2', { token: tok3, code: c3 })).j.again === true && !C3.sid);
+// 改密码：别的设备都要重新验证
+r = await call(C2, '/api/account/password', { old: 'carol-pass-1', password: 'carol-pass-2' });
+ok('[新设备] 改密码成功', r.st === 200);
+await call(C2, '/api/account/logout', {});
+ok('[新设备] 改密码的这台：再登录只要密码', (await call(C2, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-2' })).j.need === undefined && !!C2.sid);
+await hub().ctx.storage.delete('r:ml1:' + (await hub().ctx.storage.get('e:carol@x.com')));
+ok('[新设备] 改密码以后，以前验证过的别的设备也要重新收验证码', (await call(C, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-2' })).j.need === 'code');
+// 退出其他所有设备：同样
+await hub().ctx.storage.delete('r:ml1:' + (await hub().ctx.storage.get('e:carol@x.com')));
+ok('[新设备] 没开邮件服务时不要验证码', await (async () => { const RK = env.RESEND_API_KEY; delete env.RESEND_API_KEY; const X = jar(); const q = await call(X, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-2' }); env.RESEND_API_KEY = RK; return q.st === 200 && !q.j.need && !!X.sid; })());
+ok('[新设备] 设成 NEW_DEVICE_CODE=0 可以关掉', await (async () => { env.NEW_DEVICE_CODE = '0'; const X = jar(); const q = await call(X, '/api/account/login', { email: 'carol@x.com', password: 'carol-pass-2' }); delete env.NEW_DEVICE_CODE; return q.st === 200 && !q.j.need && !!X.sid; })());
 const n0 = MAIL.length;
 ok('找回密码：没注册的邮箱也返回成功，但不发邮件（不泄露谁注册了）', (await call(anon, '/api/account/code', { email: 'ghost@x.com', kind: 'reset' })).st === 200 && MAIL.length === n0);
 await hub().ctx.storage.delete('r:m1:alice@x.com');
@@ -212,6 +257,7 @@ const code3 = (MAIL.slice(-1)[0].html.match(/>(\d{6})</) || [])[1];
 const D = jar('D');
 r = await call(D, '/api/account/reset', { email: 'alice@x.com', code: code3, password: 'alice-pass-3' });
 ok('用验证码重置密码：成功并登录，旧登录全部退出', r.st === 200 && D.sid && (await call(A, '/api/account/me')).st === 401);
+ok('[新设备] 找回密码收过验证码，这台设备记住了', /^[a-z2-9]{32}$/.test(D.did || ''));
 ok('重置后账号里的路由器还在', (await call(D, '/api/account/me')).j.devs.some((x) => x.sub === R1.sub));
 
 // ---- 删除路由器、注销账号 ----

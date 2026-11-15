@@ -286,7 +286,7 @@ main > section.plans-ground { background: radial-gradient(80% 70% at 50% 0%, col
 #plans .grid { align-items: stretch; }
 #plans .card { min-height: 380px; }
 @media (max-width: 1023px) { #plans .card { min-height: 0; } }
-/* 安装第二屏：登录码页面截图 */
+/* 安装第二屏：官网「我的路由器」截图 */
 .pair-shot { margin: 18px 0 0 48px; display: flex; align-items: center; gap: 18px; }
 .pair-shot .phone { width: 150px; flex: none; border-radius: 26px; padding: 6px; }
 .pair-shot .phone img { border-radius: 21px; aspect-ratio: 390 / 633; }
@@ -324,7 +324,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
             <div class="menu-col span-3"><p class="t-label">管路由器</p><a href="#features">看门狗<span>30 秒查一次，断了先修</span></a><a href="#features">断网推送<span>手机和微信都能收</span></a><a href="#features">定时断网<span>给孩子的设备设时间</span></a></div>
             <div class="menu-col span-3"><p class="t-label">看界面</p><a href="#tour">界面导览<span>六个常用页面</span></a><a href="#how">怎么连起来<span>不用公网 IP、不用开端口</span></a><a href="#safety">安全<span>钥匙只在你手里</span></a></div>
             <a class="menu-card span-3 start-10" href="#start">
-              <div class="panel"><img class="frame__img" src="/*IMG:pair*/" alt="面板的输入登录码页面" loading="lazy" style="object-fit:cover;object-position:top"></div>
+              <div class="panel"><img class="frame__img" src="/*IMG:pair*/" alt="官网「我的路由器」里的「打开面板」按钮" loading="lazy" style="object-fit:cover;object-position:top"></div>
               <span class="t-card">5 分钟装好</span>
               <span class="t-small muted">只用手机，复制一条命令</span>
             </a>
@@ -525,7 +525,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
       <div class="stats" data-moment="counter-rolls">
         <div class="stat"><p class="t-stat">30<small>秒</small></p><p class="t-small muted">看门狗检查一次宽带、DNS、隧道和代理</p></div>
         <div class="stat"><p class="t-stat">6<small>种</small></p><p class="t-small muted">代理插件自动认出，换着用</p></div>
-        <div class="stat"><p class="t-stat">10<small>分钟</small></p><p class="t-small muted">登录码的有效时间，用一次就作废</p></div>
+        <div class="stat"><p class="t-stat">2<small>分钟</small></p><p class="t-small muted">官网打开面板的一次性票，用一次就作废</p></div>
         <div class="stat"><p class="t-stat">7<small>天</small></p><p class="t-small muted">注册账号送的免费试用</p></div>
       </div>
       <div class="mq">
@@ -543,32 +543,31 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         <div class="grid">
           <div class="s-left">
             <ol class="steps">
-              <li><div><h3>拿到试用码或邀请码</h3><p><a class="inline" href="/app#reg">注册账号</a>就能领 7 天免费试用码（装好后自动加到你的账号里）；也可以找提供服务的人要邀请码。</p></div></li>
+              <li><div><h3>注册账号，拿安装命令</h3><p><a class="inline" href="/app#reg">注册账号</a>后在「添加路由器 → 装新路由器」里领 7 天免费试用（有邀请码的填进去兑换），下面会给你一条<b>带着安装码</b>的命令，点「复制命令」。</p></div></li>
               <li><div><h3>打开路由器后台的终端</h3><p>手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（不是装好以后面板里的那个终端。）</p></div></li>
-              <li><div><h3>粘贴这条命令，回车</h3><p>装纯面板版就把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>，其他地方别动：</p>
-                <pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
-cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh</pre>
-                <div class="copy-row"><button class="btn btn--secondary" id="copyCmd" type="button">复制命令</button><span class="t-small">复制后到终端里长按粘贴</span></div></div></li>
+              <li><div><h3>粘贴命令，选版本</h3><p>命令长这样（最后是你的安装码）。终端问装哪个版本时，输 <b>1</b> 是 <b>AI 版</b>（手机面板 + 能在 Claude 里对话管路由器），输 <b>2</b> 是<b>纯面板版</b>（只有手机面板），回车等它装完：</p>
+                <pre class="cmd" id="cmd">cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh --invite 你的安装码</pre>
+                <div class="copy-row"><a class="btn btn--secondary" href="/app#reg">去官网拿我的命令</a><span class="t-small">已有账号的直接<a class="inline" href="/app">登录</a></span></div></div></li>
             </ol>
           </div>
           <article class="card term-card s-right">
             <h3>装的时候，屏幕上是这样</h3>
-            <p>装好一项勾一项，最后给你一个链接。</p>
+            <p>装好一项勾一项，最后告诉你回官网打开。</p>
             <div class="panel" data-fx="grid-pulse" data-fx-seed="44">
               <div class="stage"><div class="at-rise fit" style="--fit-max:460px;--ax:max(20px, 50% - 230px);--ay:32px;--ay-sm:16px" data-ui-loop>
                 <div class="ui ui-panel ui-term" data-ui="terminal-run">
                   <div class="ui-term__head"><span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="ui-term__title">root@OpenWrt</span><span class="ui-meta">ash</span><span class="ui-spacer"></span></div>
                   <div class="ui-term__screen" data-term-screen>
                     <div class="ui-term__track" data-term-track>
-                      <div class="ui-term__ln ui-term__cmd"><span class="ui-term__cwd">/tmp/<span class="ui-term__up">openwrt-claude-</span>panel</span><span class="ui-term__sig">#</span><span class="ui-term__typed" data-term-cmd>sh install.sh</span></div>
+                      <div class="ui-term__ln ui-term__cmd"><span class="ui-term__cwd">/tmp/<span class="ui-term__up">openwrt-claude-</span>panel</span><span class="ui-term__sig">#</span><span class="ui-term__typed" data-term-cmd>sh install.sh --invite …</span></div>
                       <div class="ui-term__ln ui-term__meter" data-term-out data-term-meter><span class="ui-term__bar" style="--p:1"><i></i></span><span class="ui-term__count" data-term-count>4 / 4 项</span></div>
                       <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">检查系统版本</span><span class="ui-term__n">OpenWrt 23.05</span><span class="ui-term__t">1 秒</span></div>
-                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">安装手机面板</span><span class="ui-term__n">v5.0.0</span><span class="ui-term__t">6 秒</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">安装手机面板</span><span class="ui-term__n">v5.2.0</span><span class="ui-term__t">6 秒</span></div>
                       <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">打开看门狗</span><span class="ui-term__n">30 秒一次</span><span class="ui-term__t">1 秒</span></div>
                       <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">连上加密隧道</span><span class="ui-term__n">Cloudflare</span><span class="ui-term__t">4 秒</span></div>
                       <div class="ui-term__ln ui-term__gap" data-term-out aria-hidden="true"></div>
                       <div class="ui-term__ln ui-term__sum" data-term-out><span class="ui-term__key">专属网址</span><span class="ui-term__val">已分配</span></div>
-                      <div class="ui-term__ln ui-term__done" data-term-out data-term-done><span class="ui-term__ok"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.4 2.4 4.6-5"/></svg></span><b>安装完成</b><span class="ui-term__dim">用手机打开链接</span></div>
+                      <div class="ui-term__ln ui-term__done" data-term-out data-term-done><span class="ui-term__ok"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.4 2.4 4.6-5"/></svg></span><b>安装完成</b><span class="ui-term__dim">回官网点「打开面板」</span></div>
                       <div class="ui-term__ln ui-term__cmd" data-term-next><span class="ui-term__cwd">/tmp/<span class="ui-term__up">openwrt-claude-</span>panel</span><span class="ui-term__sig">#</span><span class="ui-term__typed"></span><i class="ui-term__caret" aria-hidden="true"></i></div>
                     </div>
                   </div>
@@ -581,24 +580,22 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
       <div class="grid">
         <div class="s2a">
           <ol class="steps" start="4" style="counter-reset: s 3">
-            <li><div><h3>记下装完给的链接</h3><p>装完会显示<b>一个链接</b>，带着这台路由器的密钥：只在自己手机上打开，别发给别人。屏幕最后是这样的：</p>
-              <pre class="term"><u>================ 安装完成 ================</u>
+            <li><div><h3>装好自动加到账号里</h3><p>装完屏幕最后是这样的，这台路由器已经在你的官网账号里了，你是它的<b>主账号</b>：</p>
+              <pre class="term"><u>======== 安装完成 ========</u>
 
-<b>👉 接下来用手机做（10 分钟内）：</b>
+<b>✅ 这台路由器已经加到你的官网账号里，你是它的主账号。</b>
 
-  1. 手机打开这个链接：
-     <i>https://ab3cd4ef.yrlove520.com/panel/#login=…&amp;pair=…</i>
-  2. 页面上点「绑定官网账号」，登录或注册账号
-  3. 绑定好后官网会显示登录码，点「打开面板」</pre></div></li>
+👉 接下来：回到手机上的官网「我的路由器」，
+   点这台路由器的「打开面板」就进去了，不用输任何码。</pre></div></li>
           </ol>
         </div>
         <div class="s2b">
           <ol class="steps" style="counter-reset: s 4">
-            <li><div><h3>手机打开链接</h3><p>面板会提示输入<b>登录码</b>（为了安全，每台手机第一次要输一次），点上面的「绑定官网账号」。</p></div></li>
-            <li><div><h3>绑定账号，进面板</h3><p><a class="inline" href="/app">登录或注册</a>官网账号，路由器自动绑定，并自动显示登录码；点「打开面板」就自动填好进去了。之后「添加到主屏幕」，或者装下面的安卓 App。</p></div></li>
+            <li><div><h3>回官网，点「打开面板」</h3><p>官网「我的路由器」里会<b>自动出现</b>这台路由器（不用刷新），点「打开面板」就进去了，什么码都不用输。换手机也一样：登录官网，点「打开面板」。之后「添加到主屏幕」，或者装下面的安卓 App。</p></div></li>
+            <li><div><h3>家里人也能用</h3><p>他注册自己的账号；你在面板「我的主页 → 家人」里生成<b>加入码</b>发给他，他就是子账号。他能做什么、用到哪天，由你决定。</p></div></li>
             <li><div><h3>AI 版：连上 Claude</h3><p>把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里，就能用中文说「把奈飞切到新加坡节点」。</p></div></li>
           </ol>
-          <figure class="pair-shot"><div class="phone"><img src="/*IMG:pair*/" alt="面板第一次打开时的输入登录码页面，上面有「绑定官网账号」按钮" loading="lazy"></div><figcaption>第 5 步：手机打开链接后看到的页面</figcaption></figure>
+          <figure class="pair-shot"><div class="phone"><img src="/*IMG:pair*/" alt="官网「我的路由器」里刚装好的路由器，下面有「打开面板」按钮" loading="lazy"></div><figcaption>第 5 步：官网「我的路由器」里点「打开面板」</figcaption></figure>
           <p class="more-docs">每一步的详细说明：<a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">手机教程</a>；用电脑装：<a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>
         </div>
       </div>
@@ -680,14 +677,14 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
             <ul>
               <li><b>已到期暂停</b>：点「续期」输入续期码，或者点「申请续期」填表等审核。续上马上恢复。暂停超过 30 天会被彻底删除。</li>
               <li><b>已被停用，某日前可恢复</b>：在显示的日期前联系提供服务的人，他在管理页一键就能恢复，原来的网址、登录过的手机照常能用。</li>
-              <li><b>账号里已经没有这台路由器</b>（或收到「已被彻底删除」的邮件）：要一个新的邀请码，把安装命令再运行一次，最后的 <code>sh install.sh</code> 改成 <code>sh install.sh --invite 新邀请码</code>。设置都保留，网址会换成新的。</li>
+              <li><b>账号里已经没有这台路由器</b>（或收到「已被彻底删除」的邮件）：在<a class="inline" href="/app">账号页</a>「装新路由器」里重新领一个安装码（或用新的邀请码兑换），复制那里的命令再运行一次。设置都保留，网址会换成新的。</li>
             </ul>
           </div>
         </div>
       </div>
       <div class="faq-grid">
         <div class="qa"><h3>试用快到期了怎么办？</h3><p>到期前 3 天会推送提醒。在<a class="inline" href="/app">账号页</a>这台路由器下面点「申请续期」填个表，审核通过就自动续上；有续期码的点「续期」输入。不用重装。</p></div>
-        <div class="qa"><h3>换了手机、清了浏览器数据，怎么再登录面板？</h3><p>打开<a class="inline" href="/app">账号页</a>，在这台路由器下面点「获取登录码」，再点「打开面板」就自动填好了。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></div>
+        <div class="qa"><h3>换了手机、清了浏览器数据，怎么再登录面板？</h3><p>在新手机上登录<a class="inline" href="/app">账号页</a>，在「我的路由器」点「打开面板」就进去了，不用输码。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></div>
         <div class="qa"><h3>连着家里 Wi-Fi 时面板打不开，换成手机流量就好？</h3><p>多半是代理插件正在重启或者节点卡了。面板会自动改走直连，稍等一两分钟再刷新；急的话先用手机流量打开。</p></div>
         <div class="qa"><h3>装的不是 OpenClash，能用吗？</h3><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。没装也能用设备、流量、测速、断线记录。</p></div>
         <div class="qa"><h3>遇到问题、想要新功能？</h3><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。发完会给一个受理编号，处理到哪一步，在面板「帮助 → 我的反馈」、官网账号页，或者上面输入编号都能看到。</p></div>
@@ -739,8 +736,8 @@ cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-pane
 <script type="module" src="/k/layout/layout.js"></script>
 <script type="module" src="/k/diagrams/mount.js"></script>
 <script>
-// 复制安装命令
-document.getElementById('copyCmd').onclick = async (e) => { const b = e.currentTarget, t = document.getElementById('cmd').textContent; try { await navigator.clipboard.writeText(t); b.textContent = '已复制 ✓'; } catch (x) { const r = document.createRange(); r.selectNodeContents(document.getElementById('cmd')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = '已选中，长按复制'; } setTimeout(() => (b.textContent = '复制命令'), 2500); };
+
+
 // 安卓 App 版本号
 fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j.version) document.getElementById('apkBtn').textContent = '下载安卓 App（' + j.version + '）'; }).catch(() => {});
 // 查处理进度

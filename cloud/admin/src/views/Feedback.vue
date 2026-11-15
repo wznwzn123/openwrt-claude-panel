@@ -14,6 +14,7 @@ import { confirm } from '@/composables/confirm'
 import { pushToast, toastError } from '@/composables/toast'
 import { copy, full } from '@/utils/fmt'
 import { viewImage } from '@/utils/img'
+import FileList from '@/components/hub/FileList.vue'
 
 /* 问题反馈：面板里发的、官网报告的、终端安装失败上报的都在这里。进度只有三段：反馈成功 → 开发人员已收到 → 已修复 / 无法修复 */
 const list = ref<any[]>([])
@@ -107,6 +108,7 @@ onBeforeUnmount(() => { clearInterval(timer); Object.values(imgs.value).forEach(
                 <span v-else>{{ imgs[x.id + ':' + i] === 'bad' ? '读不出来' : '截图 ' + (i + 1) }}</span>
               </button>
             </div>
+            <FileList v-if="(x.files || []).length" :files="x.files" />
             <details v-if="x.diag"><summary class="hub-row-meta" style="cursor: pointer">路由器信息</summary><pre class="log-pre" style="margin-top: 6px">{{ x.diag }}</pre></details>
             <details v-if="(x.acts || []).length"><summary class="hub-row-meta" style="cursor: pointer">处理记录（{{ x.acts.length }}）</summary>
               <div v-for="(a, i) in x.acts" :key="i" class="hub-row-meta" style="margin-top: 6px"><b>{{ full(a.at) }}</b> {{ FB_ST[a.st || (a.done ? 'fixed' : 'open')] }}{{ (a.mailed || []).length ? ' · 已发邮件给 ' + a.mailed.join('、') : ' · 没发邮件' }}<div v-if="a.note" class="hub-row-text" style="font-size: 13px">{{ a.note }}</div></div>

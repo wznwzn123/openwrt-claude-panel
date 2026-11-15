@@ -22,19 +22,19 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	res.writeHead(200, { 'content-type': p.endsWith('.html') ? 'text/html; charset=utf-8' : p.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' }); res.end(fs.readFileSync(f)); }); });
 const W = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-	await new Promise((r) => server.listen(8133, r));
+	await new Promise((r) => server.listen(8183, r));
 	const browser = await chromium.launch();
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 	const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 	await page.addInitScript((t) => { if (!sessionStorage.getItem('i')) { localStorage.setItem('rp_token', t); sessionStorage.setItem('i', '1'); } }, TOK);
-	await page.goto('http://localhost:8133/panel/'); await W(6000);
+	await page.goto('http://localhost:8183/panel/'); await W(6000);
 	ok('有新版本：首页顶部出现提示（版本号、现在的版本、更新内容）', await page.isVisible('#rUpd') && /v1\.3\.1/.test(await page.textContent('#rUpd')) && /现在是 v1\.3\.0/.test(await page.textContent('#rUpd')) && /配对码更醒目/.test(await page.textContent('#rUpd')));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'update-01-banner.png') });
 	await page.click('#rUpdLater'); await W(200);
 	ok('「以后再说」：提示收起', !(await page.isVisible('#rUpd')));
 	await page.reload(); await W(6000);
 	ok('当天再打开：不再提示', !(await page.isVisible('#rUpd')));
-	await page.goto('http://localhost:8133/panel/?p=more'); await W(5500);
+	await page.goto('http://localhost:8183/panel/?p=more'); await W(5500);
 	ok('「系统操作 → 检查更新」写着有新版本', /有新版本 v1\.3\.1/.test(await page.textContent('#updState')));
 	await page.click('[data-t="update"]'); await W(800);
 	ok('检查更新：显示现在的版本、最新版本、更新内容', /v1\.3\.0/.test(await page.textContent('.modal')) && /v1\.3\.1/.test(await page.textContent('.modal')) && /一键更新/.test(await page.textContent('.modal')) && /不会断网/.test(await page.textContent('.modal')));
@@ -54,7 +54,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	ok('点「完成」刷新面板：已经是最新版，没有提示', !(await page.isVisible('#rUpd')));
 	// 失败：自动退回
 	U.cur = '1.3.0'; U.latest = '1.3.2';
-	await page.goto('http://localhost:8133/panel/?p=more'); await W(2500);
+	await page.goto('http://localhost:8183/panel/?p=more'); await W(2500);
 	U.seq = [{ state: 'downloading', msg: '下载中' }, { state: 'rollback', msg: '新版没能正常启动，正在退回 v1.3.0' }, { state: 'rolledback', msg: '更新没成功，已经退回 v1.3.0，一切照旧。原因：xxx' }];
 	await page.click('[data-t="update"]'); await W(800); await page.click('.modal [data-go]'); await W(8000);
 	ok('更新失败：说明已经自动退回旧版本', /已经退回 v1\.3\.0/.test(await page.textContent('.modal')));
@@ -62,7 +62,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	// 必须更新
 	U.force = true; U.latest = '1.4.0'; U.cur = '1.3.0';
 	await page.evaluate(() => localStorage.removeItem('rp_upd_later'));
-	await page.goto('http://localhost:8133/panel/'); await W(6500);
+	await page.goto('http://localhost:8183/panel/'); await W(6500);
 	ok('必须更新：自动弹窗，没有「以后再说」和「关闭」', (await page.locator('.modal[data-upd]').count()) === 1 && !/以后再说|关闭/.test(await page.textContent('.modal[data-upd]')) && /必须更新/.test(await page.textContent('.modal[data-upd]')));
 	await page.mouse.click(10, 10); await W(500);
 	ok('必须更新：点背景关不掉', (await page.locator('.modal[data-upd]').count()) === 1);
@@ -70,7 +70,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'update-04-force.png') });
 	// 已经是最新版
 	U.force = false; U.latest = U.cur = '1.4.0';
-	await page.goto('http://localhost:8133/panel/?p=more'); await W(2500);
+	await page.goto('http://localhost:8183/panel/?p=more'); await W(2500);
 	await page.click('[data-t="update"]'); await W(800);
 	ok('已经是最新版：检查更新说明是最新', /已经是最新版/.test(await page.textContent('.modal')) && !(await page.isVisible('.modal [data-go]')));
 	await browser.close(); server.close();

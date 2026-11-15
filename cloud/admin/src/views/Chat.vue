@@ -9,6 +9,8 @@ import Segmented from '@/components/ui/Segmented.vue'
 import Tag from '@/components/ui/Tag.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import Drawer from '@/components/ui/Drawer.vue'
+import FileAttach from '@/components/hub/FileAttach.vue'
+import FileList from '@/components/hub/FileList.vue'
 import { blobUrl, del, get, post, type ChatMsg, type ChatThread } from '@/api'
 import { badges, refreshBadges } from '@/composables/auth'
 import { confirm } from '@/composables/confirm'
@@ -28,6 +30,8 @@ const msgs = ref<ChatMsg[]>([])
 const seq = ref(0)
 const text = ref('')
 const img = ref('')
+const att = ref<InstanceType<typeof FileAttach> | null>(null)
+const canFile = ref(false)
 const sending = ref(false)
 const imgs = ref<Record<number, string>>({})
 const box = ref<HTMLElement | null>(null)
@@ -69,7 +73,8 @@ async function loadMsgs(fullLoad = false) {
   if (!cur.value) return
   const tid = cur.value
   try {
-    const r = await get<{ thread: ChatThread; msgs: ChatMsg[] }>(`chat/${tid}?read=1&after=${fullLoad ? 0 : seq.value}`)
+    const r = await get<{ thread: ChatThread; msgs: ChatMsg[]; files?: boolean }>(`chat/${tid}?read=1&after=${fullLoad ? 0 : seq.value}`)
+    canFile.value = !!r.files
     if (tid !== cur.value) return
     const before = seq.value
     if (fullLoad) msgs.value = r.msgs
@@ -89,7 +94,7 @@ function scrollDown(force: boolean) {
 }
 function open(tid: string) {
   if (cur.value === tid) return
-  cur.value = tid; msgs.value = []; seq.value = 0; text.value = ''; img.value = ''; infoOpen.value = false; loadPeer(tid)
+  cur.value = tid; msgs.value = []; seq.value = 0; text.value = ''; img.value = ''; att.value?.clear(); infoOpen.value = false; loadPeer(tid)
   router.replace({ query: { t: tid } })
   loadMsgs(true)
 }
@@ -102,10 +107,13 @@ async function pick() {
 }
 async function send() {
   const x = text.value.trim()
-  if ((!x && !img.value) || !cur.value || sending.value) return
+  const ids = att.value?.ids() || []
+  if ((!x && !img.value && !ids.length) || !cur.value || sending.value) return
+  if (att.value?.busy) return pushToast('文件还在上传，传完再发', 'danger')
   sending.value = true
   try {
-    const r = await post<{ msg: ChatMsg }>(`chat/${cur.value}`, { text: x, img: img.value || undefined })
+    const r = await post<{ msg: ChatMsg }>(`chat/${cur.value}`, { text: x, img: img.value || undefined, files: ids.length ? ids : undefined })
+    att.value?.clear()
     if (img.value) imgs.value = { ...imgs.value, [r.msg.s]: img.value }
     msgs.value.push(r.msg); seq.value = Math.max(seq.value, r.msg.s)
     text.value = ''; img.value = ''
@@ -200,6 +208,7 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); clearInterval(t3);
                 <div class="chat-bub">
                   <img v-if="r.m.img && imgs[r.m.s]" :src="imgs[r.m.s]" alt="图片" @click="viewImage(imgs[r.m.s])">
                   <span v-else-if="r.m.img" class="soft2">图片加载中…</span>
+                  <FileList v-if="r.m.files?.length" :files="r.m.files" />
                   <span v-if="r.m.x" class="chat-tx">{{ r.m.x }}</span>
                 </div>
                 <span class="chat-meta" :title="full(r.m.t)">{{ tm(r.m.t) }}</span>
@@ -210,11 +219,12 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); clearInterval(t3);
           <div class="chat-box">
             <div class="chat-quick"><button v-for="x in QUICK" :key="x" type="button" class="hub-chip" @click="text = text ? text + ' ' + x : x">{{ x }}</button></div>
             <div v-if="img" class="chat-pre"><img :src="img" alt="要发的图片"><span>图片会跟这条一起发</span><Button size="sm" variant="ghost" @click="img = ''">不发了</Button></div>
+            <FileAttach ref="att" ctx="chat" class="chat-att" />
             <div class="chat-in">
-              <IconButton name="image" label="发图片" @click="file?.click()" />
+              <div class="chat-tools"><IconButton name="image" label="发图片" @click="file?.click()" /><IconButton v-if="canFile" name="clip" label="发文件（视频、文档等，最大 200MB）" @click="att?.pick()" /></div>
               <input ref="file" type="file" accept="image/*" hidden @change="pick">
               <textarea v-model="text" rows="2" maxlength="2000" :placeholder="desk ? '回复…（回车发送，Shift+回车换行）' : '回复…'" @keydown="onKey" />
-              <Button variant="primary" icon="send" :loading="sending" :disabled="!text.trim() && !img" @click="send">发送</Button>
+              <Button variant="primary" icon="send" :loading="sending" :disabled="!text.trim() && !img && !att?.count" @click="send">发送</Button>
             </div>
           </div>
         </template>

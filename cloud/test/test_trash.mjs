@@ -53,7 +53,7 @@ const me = async (s) => (await (await api('GET', '/api/account/me', null, { cook
 const bind = async (uid, sub) => { const u = await hub().ctx.storage.get('u:' + uid), d = await dev(sub); u.devs = [...(u.devs || []), { sub, at: T }]; d.users = [...(d.users || []), uid]; await hub().ctx.storage.put({ ['u:' + uid]: u, ['d:' + sub]: d }); };
 const dnsOf = async (sub) => (await dev(sub)).dns;
 const tunOf = async (sub) => (await dev(sub)).tunnel;
-let r = await (await adm('POST', '/invites', { max: 20 })).json();
+let r = await (await adm('POST', '/invites', { direct: true, max: 20 })).json();
 const INV = r.invite.code;
 const A = await (await reg(INV, '3.3.3.1')).json(), B = await (await reg(INV, '3.3.3.2')).json(), Cc = await (await reg(INV, '3.3.3.3')).json(), O = await (await reg(INV, '3.3.3.4')).json();
 await bind('u1', A.sub); await bind('u1', B.sub); await bind('u2', Cc.sub);

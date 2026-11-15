@@ -90,7 +90,15 @@ function ann_fetch(tmo) {
 	let out = [];
 	for (let a in l) {
 		if (type(a) != 'object' || !match('' + a.id, /^[a-z2-9]{10}$/) || type(a.title) != 'string' || !length(a.title)) continue;
-		push(out, { id: a.id, title: a.title, body: type(a.body) == 'string' ? a.body : '', level: a.level == 'important' ? 'important' : 'normal', at: +a.at || 0, upd: +a.upd || +a.at || 0 });
+		// 5.2：公告附件（图片、视频、文件），只认托管服务给的下载地址
+		let fs = [];
+		for (let f in (type(a.files) == 'array' ? slice(a.files, 0, 5) : [])) {
+			if (type(f) != 'object' || !match('' + f.url, /^https:\/\/[a-z0-9.-]+\/api\/f\/[a-z2-9]{16}\/[^\s"'<>]*\?e=[0-9]+&s=[A-Za-z0-9_-]{32}$/)) continue;
+			push(fs, { id: '' + f.id, name: substr('' + (f.name ?? '文件'), 0, 100), size: +f.size || 0, type: substr('' + (f.type ?? ''), 0, 60), k: index(['img', 'video', 'audio', 'file'], f.k) >= 0 ? f.k : 'file', url: f.url });
+		}
+		let it = { id: a.id, title: a.title, body: type(a.body) == 'string' ? a.body : '', level: a.level == 'important' ? 'important' : 'normal', at: +a.at || 0, upd: +a.upd || +a.at || 0 };
+		if (length(fs)) it.files = fs;
+		push(out, it);
 		if (length(out) >= 20) break;
 	}
 	let c = { at: now(), list: out };

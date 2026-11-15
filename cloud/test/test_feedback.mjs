@@ -65,7 +65,7 @@ const uidOf = async (email) => hub().ctx.storage.get('e:' + email);
 const uA = await uidOf('alice@x.com'), uB = await uidOf('bob@x.com'), uM = await uidOf('boss@x.com');
 ok('三个账号都建好了', uA && uB && uM, [uA, uB, uM].join());
 const bind = async (uid, sub) => { const u = await hub().ctx.storage.get('u:' + uid), d = await dev(sub); u.devs = [...(u.devs || []), { sub, at: T }]; d.users = [...(d.users || []), uid]; await hub().ctx.storage.put({ ['u:' + uid]: u, ['d:' + sub]: d }); };
-let r = await (await adm('POST', '/invites', { max: 20, svc: 7, note: '给阿明' })).json();
+let r = await (await adm('POST', '/invites', { direct: true, max: 20, svc: 7, note: '给阿明' })).json();
 const INV = r.invite.code;
 const A = await (await reg(INV, '3.3.3.1')).json(), B = await (await reg(INV, '3.3.3.2')).json(), C = await (await reg(INV, '3.3.3.3')).json();
 await bind(uA, A.sub); await bind(uA, B.sub); await bind(uB, C.sub);

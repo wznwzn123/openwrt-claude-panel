@@ -25,6 +25,32 @@ label.f { display: block; margin: 16px 0 8px; font-size: 14px; font-weight: 500;
 .notice { padding: 12px 14px; border-radius: 14px; background: color-mix(in oklab, var(--accent) 10%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent); font-size: 14px; line-height: 1.6; color: color-mix(in oklab, var(--ink) 86%, var(--bg)); }
 .toast { pointer-events: none; position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); z-index: 90; transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; padding: 12px 20px; border-radius: 999px; background: color-mix(in oklab, #1b2621 88%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent); color: var(--ink); font-size: 15px; font-weight: 500; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 40px -12px rgb(0 0 0 / .7), 0 0 30px -10px color-mix(in oklab, var(--accent) 50%, transparent); transition: opacity .3s, transform .4s cubic-bezier(.22,1.4,.36,1); }
 .toast.hide { opacity: 0; transform: translate(-50%, 16px) scale(.96); pointer-events: none; }
+.oldpair { margin-top: 16px; border-top: 1px solid var(--hair); padding-top: 12px; }
+.oldpair summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.oldpair p { font-size: 13.5px; line-height: 1.7; margin: 10px 0; }
+.trialrow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 0 0 12px; border-radius: 14px; background: color-mix(in oklab, var(--accent) 12%, transparent); }
+.trialrow > div { flex: 1; min-width: 0; }
+.trialrow b { display: block; font-size: 15px; }
+.trialrow span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.inst { margin-top: 14px; padding: 14px; border-radius: 16px; border: 1px solid var(--hair); background: color-mix(in oklab, var(--p-surface) 70%, transparent); }
+.inst .ih { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inst .ih b { font-size: 15px; }
+.inst .ih code { color: var(--accent); letter-spacing: 1px; }
+.inst .steps { margin: 10px 0; padding-left: 22px; font-size: 13.5px; line-height: 1.75; color: var(--muted); list-style: decimal; }
+.inst .steps li { display: list-item; padding-left: 2px; }
+.inst .steps li::marker { color: var(--accent); font-weight: 700; }
+.inst .steps b { color: var(--ink); }
+.inst .pickv { display: grid; gap: 8px; margin: 0 0 4px 22px; }
+.inst .pickv > div { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--hair); }
+.inst .pickv .k { flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font: 700 15px var(--font-mono); background: var(--accent); color: var(--accent-ink); }
+.inst .pickv b { display: block; font-size: 14px; }
+.inst .pickv span:not(.k) { display: block; font-size: 12.5px; color: var(--muted); }
+.inst .seg.mini { margin: 0 0 10px; max-width: 320px; }
+.inst .seg.mini button { min-height: 34px; font-size: 13px; }
+.inst .wait { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+.inst .wait i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: instPulse 1.4s ease-in-out infinite; flex: none; }
+@keyframes instPulse { 50% { opacity: .25; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .inst .wait i { animation: none; } }
 pre.cmd { margin: 0 0 12px; padding: 14px 16px; border-radius: 14px; background: #050807; border: 1px solid var(--hair); color: #d7e3dc; font: 13px/1.65 var(--font-mono); white-space: pre-wrap; word-break: break-all; }
 
 /* ---------- 登录欢迎页（全屏，点阵起伏的背景） ---------- */
@@ -32,6 +58,16 @@ body.authmode .nav, body.authmode #footLinks, body.authmode .site-foot { display
 body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 #vAuth { position: fixed; inset: 0; z-index: 30; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; align-items: center; padding: calc(env(safe-area-inset-top) + 40px) 16px calc(env(safe-area-inset-bottom) + 18px);
   background: radial-gradient(90% 60% at 50% 0%, color-mix(in oklab, var(--accent) 16%, #0b100e) 0%, #0b100e 60%, #050807 100%); }
+.dgroup { margin: 18px 4px 8px; grid-column: 1 / -1; } #devs > .dgroup:first-child { margin-top: 0; } .dgroup b { display: block; font-size: 15px; } .dgroup span { color: var(--muted); font-size: 12.5px; }
+.pill.sub { background: color-mix(in oklab, #38bdf8 18%, transparent); color: #7dd3fc; } .pill.bad { background: color-mix(in oklab, #f87171 16%, transparent); color: #fca5a5; } .pill.warn { background: color-mix(in oklab, #facc15 16%, transparent); color: #fde68a; }
+.pick .pk { display: grid; gap: 8px; text-align: left; } .pick .pk.locked { pointer-events: none; opacity: .6; }
+.pku { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--hair); cursor: pointer; } .pku:has(input:checked) { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.pku input { accent-color: var(--accent); } .pku .t { min-width: 0; } .pku b { display: block; font-size: 15px; } .pku small { color: var(--muted); }
+.pku .av { --avs: 40px; } .mask .av.big { --avs: 64px; }
+.pku .av, .mask .av.big { width: 40px; height: 40px; border-radius: 14px; display: inline-grid; place-items: center; flex: none; background: linear-gradient(135deg, #4ade80, #0ea5e9) center / cover no-repeat; color: #04140a; font-weight: 700; }
+.mask .av.big { width: 64px; height: 64px; border-radius: 22px; font-size: 26px; }
+.jperm { text-align: left; margin: 16px 0 0; padding: 12px 14px; border-radius: 16px; background: color-mix(in oklab, var(--ink) 5%, transparent); } .jperm b { font-size: 13.5px; } .jperm ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.8; }
+.codehd b { display: block; font-size: 17px; margin: 2px 0 6px; } .codehd p { margin: 0 0 4px; font-size: 13.5px; line-height: 1.7; } .codehd p b { display: inline; font-size: inherit; color: var(--ink); }
 #lgbg { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 #vAuth::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(40% 30% at 50% 38%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 70%); animation: breathe 6s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: .45; transform: scale(.94); } }
@@ -112,6 +148,7 @@ body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 .dev .meta { font-size: 13.5px; color: var(--muted); line-height: 1.6; }
 .dev .meta .dot { margin-right: 6px; vertical-align: 1px; }
 .dev .meta .pill { margin-left: 4px; }
+.dev .meta .frole { display: block; margin-top: 4px; } .dev .meta .frole .pill { margin-left: 0; white-space: normal; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7a72; display: inline-block; flex: none; }
 .dot.on { background: var(--accent); box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent); animation: dotp 2s ease-out infinite; }
 .dot.off { background: #f87171; }
@@ -302,6 +339,14 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 			<button class="btn primary">登录</button>
 			<p style="text-align:center;margin:14px 0 0"><a href="#" id="toReset">忘记密码？</a></p>
 		</form>
+		<form id="fCode" class="hidden">
+			<div class="codehd"><b>新设备登录，验证一下</b><p class="muted">密码对了。这台设备以前没在这个账号上登录过，验证码已经发到 <b data-mail></b>（收不到看看垃圾邮件）。</p></div>
+			<label class="f">邮箱验证码</label><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code" required>
+			<div class="err" data-err></div>
+			<button class="btn primary">验证并登录</button>
+			<p style="text-align:center;margin:14px 0 0"><a href="#" data-resend>重新发送</a><span class="muted" aria-hidden="true">　·　</span><a href="#" data-codeback>换个账号</a></p>
+			<p class="fine" style="text-align:center">验证过以后，这台设备 30 天内登录只要密码。</p>
+		</form>
 		<form id="fReg" class="hidden">
 			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="常用邮箱，找回密码要用" required>
 			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
@@ -350,7 +395,6 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 	</div>
 	<div class="d-body">
 		<div class="wrap">
-			<div class="card trialcard hidden" id="trialCard"></div>
 			<div class="lay-bar" id="layBar" hidden><div><b>调整布局</b><span>用箭头换顺序，「整行 / 半行」改宽窄（电脑上），眼睛图标隐藏不常用的。</span></div><div class="row"><button type="button" class="btn sm" id="layReset">恢复默认</button><button type="button" class="btn sm primary" id="layDone">完成</button></div></div>
 			<div class="blks" id="blks">
 				<section class="blk" data-blk="devs" data-w="full" data-name="我的路由器">
@@ -359,16 +403,25 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 				</section>
 				<section class="blk" data-blk="add" data-w="half" data-name="添加路由器">
 					<div class="sech"><h2>添加路由器</h2></div>
-					<div class="seg" role="tablist" aria-label="添加哪种路由器"><button type="button" role="tab" class="on" data-seg="bind" aria-selected="true">托管版（配对码）</button><button type="button" role="tab" data-seg="link" aria-selected="false">自建版（网址）</button></div>
-					<div data-segp="bind">
+					<div class="seg" role="tablist" aria-label="添加哪种路由器"><button type="button" role="tab" class="on" data-seg="new" aria-selected="true">装新路由器</button><button type="button" role="tab" data-seg="join" aria-selected="false">加入家人</button><button type="button" role="tab" data-seg="link" aria-selected="false">自建版</button></div>
+					<div data-segp="new">
 				<div class="card fxc">
-					<p style="margin:0 0 8px">输入 8 位配对码（10 分钟内有效）。配对码从哪来：</p>
-					<ul>
-						<li><b>刚装完托管版</b>：安装结束时终端里就显示了配对码和绑定链接</li>
-						<li><b>已经装好</b>：路由器面板「系统操作 → 绑定到账号」，或者在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH）运行 <code>cmcp-pair</code></li>
-						<li>配对码只有用<b>邀请码装的托管版</b>才有；自己用 Cloudflare 搭的<b>自建版</b>，点上面的「自建版（网址）」添加</li>
-					</ul>
-					<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">绑定</button></form>
+					<p style="margin:0 0 12px">在路由器上装托管版：先在这里拿一个<b>安装码</b>，下面会给你一条带着它的安装命令。复制到路由器上运行，装好自动加到你的账号里（你就是主账号），什么码都不用再输。</p>
+					<div id="trialRow"></div>
+					<form id="fRedeem" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="有邀请码？填在这里" autocapitalize="characters" autocomplete="off" maxlength="20" required aria-label="邀请码"><button class="btn primary">兑换</button></form>
+					<div class="err" data-err></div>
+					<div id="instList"></div>
+					<details class="oldpair"><summary>路由器已经装好了，但还没加到账号里？</summary>
+						<p class="muted">以前装的托管版：在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH）运行 <code>cmcp-pair</code>，把显示的 8 位配对码填在下面（10 分钟内有效）。</p>
+						<form id="fBind" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位配对码" autocapitalize="characters" autocomplete="off" maxlength="12" required aria-label="配对码"><button class="btn">绑定</button></form>
+						<div class="err" data-err></div>
+					</details>
+				</div>
+					</div>
+					<div data-segp="join" hidden>
+				<div class="card fxc">
+					<p style="margin:0 0 10px">家里人的路由器：让主账号在面板「我的主页 → 子账号」里给你发一个 <b>8 位加入码</b>（或者直接发链接给你点），填在下面就能加入，成为他的子账号。</p>
+					<form id="fJoin" class="row" style="flex-wrap:nowrap"><input class="input" name="code" placeholder="8 位加入码" autocapitalize="characters" autocomplete="off" maxlength="12" required><button class="btn primary">看看</button></form>
 					<div class="err" data-err></div>
 				</div>
 					</div>
@@ -410,7 +463,7 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 				</section>
 				<section class="blk" data-blk="help" data-w="full" data-name="换手机怎么办">
 					<div class="sech"><h2>换手机怎么办</h2></div>
-				<div class="card fxc help2"><div><h3>第一次在新手机上打开</h3><p>账号里没有路由器的登录密钥，所以要用<b>已经能用的手机</b>打开面板，点「系统操作 → 添加新手机」，再用新手机扫码。</p></div><div><h3>托管版还要一个登录码</h3><p>为了安全，每台手机第一次打开面板还要输一次<b>登录码</b>：在上面这台路由器下面点「获取登录码」，填到新手机上就行，以后这台手机不用再输。</p></div></div>
+				<div class="card fxc help2"><div><h3>新手机、清了浏览器</h3><p>在新手机上登录这个官网，在「我的路由器」里点「<b>打开面板</b>」就进去了，不用输任何码。面板里点浏览器菜单「添加到主屏幕」，以后像 App 一样打开。</p></div><div><h3>家里人也要用</h3><p>让他注册自己的官网账号；你在面板「我的主页 → 家人」里生成<b>加入码</b>发给他，他在「添加路由器 → 加入家人」里填上。他能做什么由你决定。</p></div></div>
 				</section>
 			</div>
 		</div>
@@ -433,15 +486,16 @@ function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove(
 async function api(path, body) {
 	const r = await fetch('/api/account/' + path, body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 	let j = {}; try { j = await r.json(); } catch (e) {}
-	if (!r.ok) { const e = new Error(j.error || '出错了（' + r.status + '）'); e.login = j.login; throw e; }
+	if (!r.ok) { const e = new Error(j.error || '出错了（' + r.status + '）'); e.login = j.login; e.again = j.again; throw e; }
 	return j;
 }
 const pair = new URLSearchParams(location.search).get('pair') || '';
+const joinCode = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
 let mailOn = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
-	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
-	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset');
+	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'code' ? 'login' : t)));
+	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code');
 }
 document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
 // 欢迎页 ↔ 登录 / 注册卡片：网址带 #login、#reg（手机上按返回键回到欢迎页；直接打开 /app#reg 就是注册）
@@ -494,15 +548,28 @@ function form(id, fn) {
 		finally { btn.disabled = false; }
 	};
 }
-form('fLogin', async (d) => { await api('login', d); await load('login'); });
+// 新设备登录：密码对了以后还要邮箱验证码
+let codeTok = '';
+form('fLogin', async (d) => {
+	const r = await api('login', d);
+	if (r.need === 'code') { codeTok = r.token; $('fCode').querySelector('[data-mail]').textContent = r.mail || '你的邮箱'; $('fCode').reset(); tab('code'); setTimeout(() => $('fCode').code.focus(), 50); return; }
+	await load('login');
+});
+form('fCode', async (d, f) => {
+	try { await api('login2', { token: codeTok, code: d.code }); } catch (e) { if (e.again) { codeTok = ''; tab('login'); $('fLogin').querySelector('[data-err]').textContent = e.message; return; } throw e; }
+	f.reset(); codeTok = ''; await load('login');
+});
+$('fCode').querySelector('[data-resend]').onclick = async (e) => { e.preventDefault(); try { await api('login2', { token: codeTok, op: 'resend' }); toast('验证码已重新发送'); } catch (x) { if (x.again) { codeTok = ''; tab('login'); } toast(x.message); } };
+$('fCode').querySelector('[data-codeback]').onclick = (e) => { e.preventDefault(); codeTok = ''; tab('login'); };
 form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load('reg'); });
 form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load('reset'); });
 form('fBind', async (d, f) => {
 	const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app');
 	const me = await load(), dv = me && me.devs.find((x) => x.sub === r.sub);
-	// 刚绑定好：顺手把登录码拿出来（托管版每台手机第一次打开面板要输）
-	if (dv) { try { const c = await api('logincode', { sub: r.sub }); codeBox(c.code, dv, true); } catch (e) {} }
+	// 刚绑定好的老路由器（5.2 以前）：顺手把登录码拿出来；5.2 以后的直接点「打开面板」
+	if (dv && !ticketOk(dv)) { try { const c = await api('logincode', { sub: r.sub }); codeBox(c.code, dv, true); } catch (e) {} }
 });
+form('fJoin', async (d, f) => { await joinBox(d.code.trim().toUpperCase()); f.reset(); });
 form('fLink', async (d, f) => { const r = await api('link', { name: d.name, url: d.url }); f.reset(); toast(r.stripped ? '已添加「' + r.name + '」（登录地址里的密钥已去掉，没有保存）' : '已添加「' + r.name + '」'); await load(); });
 form('fPw', async (d, f) => { await api('password', d); f.reset(); toast('密码已修改，其他设备上的登录已退出'); });
 document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () => {
@@ -520,46 +587,148 @@ $('delBtn').onclick = async () => {
 };
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
-// 新账号免费试用：领一个只能用一次的试用码，装好后路由器自动加到这个账号里（不用配对）
-const DL = 'cd /tmp && wget -O p.tar.gz https://' + location.host + '/dl/openwrt-claude-panel-hosted-ai.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh --invite ';
-function renderTrial(me) {
-	const t = me.trial, el = $('trialCard');
-	if (!t || t.used || (me.devs.length && !t.got)) { el.classList.add('hidden'); return; }
-	el.classList.remove('hidden');
-	el.innerHTML = !t.code
-		? `<div class="trow"><div><b>🎁 免费试用 ${t.days} 天</b><span class="muted">新账号送的：领一个试用码，在路由器上装托管版，装好自动加到这个账号里。</span></div><button class="btn primary" id="trialGo">领取</button></div>`
-		: `<b>🎁 你的 ${t.days} 天试用码：<code>${esc(t.code)}</code></b>
-		<p class="muted" style="margin:6px 0 8px;font-size:13.5px;line-height:1.7">手机连家里 Wi-Fi，打开路由器后台「服务 → 终端」，粘贴下面这条命令回车（纯面板版把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>）。装好后路由器自动加到这个账号里，不用再输配对码。试用码 7 天内有效、只能用一次。</p>
-		<pre class="cmd" id="trialCmd">${esc(DL + t.code)}</pre>
-		<div class="row"><button class="btn sm primary" id="trialCopy">复制命令</button><a class="btn sm" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">看详细教程</a></div>`;
+// 5.2 装新路由器：安装码（试用领的、邀请码兑换的）+ 带着它的安装命令；装好自动加到账号里
+// 托管版只有一条命令：装 AI 版还是纯面板版，运行后在终端里输 1 或 2 选
+const cmdOf = (code) => 'cd /tmp && wget -O p.tar.gz https://' + location.host + '/dl/openwrt-claude-panel-hosted.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh --invite ' + code;
+function renderInst(me) {
+	const t = me.trial, tr = $('trialRow');
+	tr.innerHTML = t && t.left > 0 ? `<div class="trialrow"><div><b>🎁 免费试用 ${t.days} 天</b><span>${t.max > 1 ? '每个账号能领 ' + t.max + ' 次，还剩 ' + t.left + ' 次' : '每个账号能领一次'}</span></div><button class="btn primary sm" id="trialGo">领取</button></div>` : '';
 	const go = $('trialGo');
-	if (go) go.onclick = async () => { go.disabled = true; try { await api('trial', {}); render(await api('me')); toast('领好了，照着下面的步骤装'); } catch (e) { toast(e.message); go.disabled = false; } };
-	const cp = $('trialCopy');
-	if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText($('trialCmd').textContent); toast('已复制'); } catch (e) { prompt('复制命令：', $('trialCmd').textContent); } };
+	if (go) go.onclick = async () => { go.disabled = true; try { await api('trial', {}); await load(); toast('领好了：复制下面的安装命令到路由器上运行'); } catch (e) { toast(e.message); go.disabled = false; } };
+	const L = me.inst || [];
+	$('instList').innerHTML = L.map((x) => {
+		const days = Math.max(1, Math.ceil((x.exp - Date.now()) / 86400e3));
+		return `<div class="inst" data-ic="${esc(x.code)}"><div class="ih"><b>安装码 <code>${esc(x.code)}</code></b><span class="pill">${x.kind === 'trial' ? '免费试用 ' + x.svc + ' 天' : x.svc ? '开通后用 ' + x.svc + ' 天' : '不限期'}</span><span class="muted" style="font-size:13px">${days} 天内有效 · 只能装一台</span></div>
+		<ol class="steps"><li><b>打开路由器的终端：</b>手机连上家里的 Wi-Fi，打开路由器后台「服务 → 终端」（或者用电脑 SSH 登录路由器）</li><li><b>粘贴这条命令，回车：</b></li></ol>
+		<pre class="cmd">${esc(cmdOf(x.code))}</pre>
+		<div class="row"><button class="btn sm primary" data-cp>复制命令</button><a class="btn sm" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">看详细教程</a></div>
+		<ol class="steps" start="3"><li><b>选版本：</b>终端问「装哪个版本？」时，输一个数字回车：</li></ol>
+		<div class="pickv"><div><span class="k">1</span><div><b>AI 版</b><span>手机面板 + 能在 Claude 里用中文对话管理路由器</span></div></div><div><span class="k">2</span><div><b>纯面板版</b><span>只有手机面板，自己动手管理，不接 AI</span></div></div></div>
+		<ol class="steps" start="4"><li><b>等它装完，回到这个页面：</b>路由器会自动出现在「我的路由器」里，点「打开面板」就进去了</li></ol>
+		<div class="wait"><i></i>等你装好，这里会自动刷新</div></div>`;
+	}).join('');
+	$('instList').querySelectorAll('.inst').forEach((el) => {
+		const code = el.dataset.ic;
+		el.querySelector('[data-cp]').onclick = async () => { const c = cmdOf(code); try { await navigator.clipboard.writeText(c); toast('已复制，粘贴到路由器终端里运行'); } catch (e) { prompt('复制命令：', c); } };
+	});
+	instWatch(me);
+}
+// 有没用的安装码：每 6 秒看一次，装好的路由器一出现就刷新、提示
+let instT = 0, instN = -1;
+function instWatch(me) {
+	const n = me.devs.length, has = (me.inst || []).length > 0;
+	if (instN >= 0 && n > instN) { const d = me.devs.find((x) => Date.now() - (x.bound || 0) < 600e3) || me.devs[me.devs.length - 1]; toast('「' + (d ? d.name : '新路由器') + '」装好了，已经加到你的账号里'); }
+	instN = n;
+	clearTimeout(instT);
+	if (has) instT = setTimeout(async () => { if (document.hidden || $('vDash').classList.contains('hidden')) return instWatch(me); try { render(await api('me')); } catch (e) { instWatch(me); } }, 6000);
+}
+form('fRedeem', async (d) => { const r = await api('redeem', { code: d.code }); $('fRedeem').reset(); await load(); toast('兑换好了：安装码 ' + r.code + '，复制下面的安装命令'); });
+// 5.2：主账号 / 子账号
+// 5.2 以后的路由器从官网直接打开（带一次性票）；还没报过版本的（刚装好）按新的算
+const ticketOk = (d) => !d.ver || !newer('5.2.0', String(d.ver).replace(/^v/, ''));
+const isSub = (d) => ['sub', 'off', 'expired'].includes(d.role);
+const famSort = (L) => [...L].sort((a, b) => isSub(a) - isSub(b));
+const famHead = (d, i, L) => (isSub(d) && (i === 0 || !isSub(L[i - 1])) ? `<div class="dgroup"><b>家人的路由器</b><span>你是子账号，能做什么由主账号决定</span></div>` : '');
+function famPill(d) {
+	if (d.role === 'main') return d.nsub ? ` <span class="pill">主账号 · ${d.nsub} 个子账号</span>` : ' <span class="pill">主账号</span>';
+	if (d.role === 'sub') return ` <span class="pill sub">子账号${d.owner ? ' · 主账号：' + esc(d.owner.name) : ''}</span>`;
+	if (d.role === 'off') return ' <span class="pill bad">子账号 · 已被主账号停用</span>';
+	if (d.role === 'expired') return ' <span class="pill bad">子账号 · 已到期</span>';
+	if (d.role === 'pick') return ' <span class="pill warn">还没选主账号</span>';
+	return '';
+}
+function devActs(d, left, ap) {
+	const open = ticketOk(d) ? '<button class="btn sm primary" data-open>打开面板</button>' : `<a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a>`;
+	if (d.role === 'sub' || d.role === 'off' || d.role === 'expired') return open + '<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-leave>退出</button>';
+	return open + (ticketOk(d) ? '' : '<button class="btn sm" data-lc>获取登录码</button>')
+		+ (d.exp && (d.expired || left <= 7) ? `<button class="btn sm${d.expired ? ' primary' : ''}" data-apply ${ap && ap.status === 'pending' ? 'disabled' : ''}>${ap && ap.status === 'pending' ? '审核中' : '申请续期'}</button>` : '')
+		+ (d.exp ? '<button class="btn sm" data-renew>续期码</button>' : '') + '<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button>';
+}
+// 确认是本人（邮箱验证码）：主账号解绑之类的操作前要做一次，10 分钟内有效
+function sudoBox(next) {
+	const m = document.createElement('div'); m.className = 'mask';
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>先确认是你本人</h3><p class="muted" style="font-size:13.5px;line-height:1.7;margin:8px 0 0">这个操作比较重要，要输一次邮箱验证码。确认以后 10 分钟内不用再输。</p>
+		<label class="f" style="text-align:left">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" data-c inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send>发送</button></div>
+		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn primary" data-ok>确认</button></div></div>`;
+	const er = m.querySelector('[data-err]');
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
+	m.querySelector('[data-send]').onclick = async (e) => { const b = e.currentTarget; b.disabled = true; try { const r = await api('sudo_code', {}); er.textContent = ''; toast(r.mail ? '验证码已发到 ' + r.mail : '已发送'); } catch (x) { er.textContent = x.message; } setTimeout(() => (b.disabled = false), 60e3); };
+	m.querySelector('[data-ok]').onclick = async () => { try { await api('sudo', { code: m.querySelector('[data-c]').value.trim() }); m.remove(); await next(); } catch (x) { er.textContent = x.message; } };
+	document.body.appendChild(m);
+}
+// 打开面板：官网发一张两分钟有效的票，跳到面板，面板凭它认出你是谁
+async function openPanel(d, btn) {
+	if (btn) btn.disabled = true;
+	try {
+		const r = await api('fam/open', { sub: d.sub });
+		if (r.pick) return pickBox(d, r);
+		location.assign(r.url);
+	} catch (x) { toast(x.message); } finally { if (btn) setTimeout(() => (btn.disabled = false), 1500); }
+}
+// 老路由器绑了好几个账号：先选一个当主账号（只有这一次），被选的人收验证码确认
+function pickBox(d, r) {
+	const m = document.createElement('div'); m.className = 'mask';
+	m.innerHTML = `<div class="card pick" role="dialog" aria-modal="true"><h3>先选一个主账号</h3>
+		<p class="muted" style="font-size:13.5px;line-height:1.7;margin:8px 0 12px">「${esc(d.name)}」以前绑了 ${r.users.length} 个账号。现在一台路由器只有一个主账号（权限最大），其他人变成他的子账号，能做什么由主账号决定。<b>只需要选这一次。</b></p>
+		<div class="pk">${r.users.map((u) => `<label class="pku"><input type="radio" name="pk" value="${esc(u.uid)}"><span class="av"${u.avatar ? ` style="background-image:url('${esc(u.avatar)}')"` : ''}>${u.avatar ? '' : esc(u.name.slice(0, 1))}</span><span class="t"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></span></label>`).join('')}</div>
+		<div class="pk2 hidden"><p class="muted" style="font-size:13.5px;margin:12px 0 0">验证码已发到 <b data-mail></b>，请这个账号的主人把验证码告诉你，或者他自己来输。</p><input class="input" data-c inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" style="margin-top:8px"></div>
+		<div class="err" data-err></div>
+		<div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn primary" data-go>发验证码给他</button></div></div>`;
+	const er = m.querySelector('[data-err]'), go = m.querySelector('[data-go]');
+	let step = 1;
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
+	go.onclick = async () => {
+		er.textContent = '';
+		try {
+			if (step === 1) {
+				const t = m.querySelector('input[name=pk]:checked'); if (!t) { er.textContent = '先选一个人'; return; }
+				const x = await api('fam/pick_code', { sub: d.sub, target: t.value });
+				m.querySelector('[data-mail]').textContent = x.mail || ''; m.querySelector('.pk2').classList.remove('hidden'); m.querySelector('.pk').classList.add('locked'); go.textContent = '确认'; step = 2;
+			} else {
+				await api('fam/pick', { sub: d.sub, code: m.querySelector('[data-c]').value.trim() });
+				m.remove(); toast('选好了，其他人都收到了邮件通知'); await load();
+			}
+		} catch (x) { er.textContent = x.message; }
+	};
+	document.body.appendChild(m);
+}
+// 加入家人的路由器：先看一眼（谁邀请的、什么权限），再加入
+const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、拉黑设备', proxy: '改代理规则、订阅、配置', net: '网络设置', sys: '重启、服务管理、更新面板' };
+async function joinBox(code) {
+	let r; try { r = await api('fam/join_info', { code }); } catch (x) { toast(x.message); return; }
+	const m = document.createElement('div'); m.className = 'mask';
+	const perms = ['看状态、设备、流量、断线记录', ...r.perms.map((k) => PERM_NAMES[k]).filter(Boolean)];
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><span class="av big"${r.ownerAvatar ? ` style="background-image:url('${esc(r.ownerAvatar)}')"` : ''}>${r.ownerAvatar ? '' : esc(r.owner.slice(0, 1))}</span>
+		<h3 style="margin-top:12px">${esc(r.owner)} 邀请你加入</h3><p class="muted" style="margin:6px 0 0;font-size:14px">路由器「${esc(r.router)}」 · 你会成为子账号</p>
+		<div class="jperm"><b>你能做的</b><ul>${perms.map((x) => '<li>' + esc(x) + '</li>').join('')}</ul>${r.subExp ? '<p class="muted" style="margin:6px 0 0;font-size:13px">' + esc(ymd(r.subExp)) + ' 到期</p>' : ''}</div>
+		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-x>先不加入</button><button type="button" class="btn primary" data-ok>加入</button></div></div>`;
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
+	m.querySelector('[data-ok]').onclick = async () => { try { const x = await api('fam/join', { code }); m.remove(); toast('已加入「' + x.name + '」'); history.replaceState(null, '', '/app'); await load(); } catch (e) { m.querySelector('[data-err]').textContent = e.message; } };
+	document.body.appendChild(m);
 }
 function render(me) {
 	$('who').textContent = me.email;
 	renderMe(me);
 	if (!document.body.classList.contains('lay-edit')) layApply(me.layout);
-	renderTrial(me);
+	renderInst(me);
 	const links = me.links || [], n = me.devs.length + links.length;
 	$('cnt').textContent = n ? n + ' 台' : '';
 	const onl = me.devs.filter((d) => !d.off && !d.expired && d.last && Date.now() - d.last < 360e3).length;
 	roll($('sRouters'), n); roll($('sOnline'), onl);
-	$('devs').innerHTML = n ? me.devs.map((d) => {
+	$('devs').innerHTML = n ? famSort(me.devs).map((d, i, L) => {
 		const on = !d.off && d.last && Date.now() - d.last < 360e3;
 		const left = d.exp ? Math.ceil((d.exp - Date.now()) / 86400e3) : null;
 		const ap = d.apply, apTxt = !ap ? '' : ap.status === 'pending' ? `<br>📝 续期申请已提交（${esc(ymd(ap.at))}），等待审核`
 			: ap.status === 'no' ? `<br>续期申请没有通过（${esc(ymd(ap.decided))}）${ap.reason ? '：' + esc(ap.reason) : ''}，可以重新申请` : ap.decided && Date.now() - ap.decided < 7 * 86400e3 ? `<br>✅ 续期申请已通过，续了 ${ap.days} 天` : '';
 		const expTxt = d.trashed ? `<div class="expline bad">⚠️ 托管服务已被提供服务的人停用，专属网址暂时打不开（家里上网和路由器设置都不受影响）。<b>${esc(ymd(d.trashed))}</b> 前联系他可以恢复，恢复后什么都不用做。<a href="/#faq-restore">怎么恢复 ›</a></div>` : !d.exp ? '' : d.expired ? `<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。点下面「申请续期」填表，审核通过后马上恢复；有续期码的点「续期」输入${apTxt}</div>`
 			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，可以点「申请续期」' : ''}${apTxt}</div>`;
-		return `<div class="card dev fxc${on && !d.expired && !d.off ? ' is-on' : ''}" data-sub="${esc(d.sub)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><b>${esc(d.name)}</b>
-		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : d.last ? '离线 · 最后上线 ' + ago(d.last) : '还没上线'}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(String(d.ver).replace(/^v/, '')) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}</div>
+		return `${famHead(d, i, L)}<div class="card dev fxc${on && !d.expired && !d.off ? ' is-on' : ''}" data-sub="${esc(d.sub)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><b>${esc(d.name)}</b>
+		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : d.last ? '离线 · 最后上线 ' + ago(d.last) : '还没上线'}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(String(d.ver).replace(/^v/, '')) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}${famPill(d) ? '<span class="frole">' + famPill(d) + '</span>' : ''}</div>
 		${expTxt}
-		<div class="acts"><a class="btn sm primary" href="https://${esc(d.host)}/panel/" rel="noopener">打开面板</a><button class="btn sm" data-lc>获取登录码</button>${d.exp && (d.expired || left <= 7) ? `<button class="btn sm${d.expired ? ' primary' : ''}" data-apply ${ap && ap.status === 'pending' ? 'disabled' : ''}>${ap && ap.status === 'pending' ? '审核中' : '申请续期'}</button>` : ''}${d.exp ? '<button class="btn sm" data-renew>续期码</button>' : ''}<button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-unb>解绑</button></div></div>`;
+		<div class="acts">${devActs(d, left, ap)}</div></div>`;
 	}).join('') + links.map((l) => `<div class="card dev fxc" data-link="${esc(l.id)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg></div><b>${esc(l.name)}</b>
 		<div class="meta">自建版 · ${esc(l.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))}</div>
-		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty fxc"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><p class="muted">还没有绑定路由器。把托管版路由器的配对码填到下面就行（装完时终端里显示的那个，或者面板「系统操作 → 绑定到账号」里拿）。</p></div>`;
+		<div class="acts"><a class="btn sm primary" href="${esc(l.url)}" rel="noopener">打开面板</a><button class="btn sm danger" data-unl>移除</button></div></div>`).join('') : `<div class="card empty fxc"><div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><p class="muted">还没有路由器。在下面「添加路由器 → 装新路由器」里领试用或兑换邀请码，复制安装命令到路由器上运行，装好会自动出现在这里。</p></div>`;
 	$('devs').querySelectorAll('[data-lc]').forEach((b) => (b.onclick = async () => {
 		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub);
 		b.disabled = true;
@@ -577,7 +746,14 @@ function render(me) {
 	}));
 	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
 	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));
-	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub; if (!confirm('从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return; try { await api('unbind', { sub }); toast('已解绑'); await load(); } catch (x) { toast(x.message); } }));
+	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => {
+		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub), main = d.role === 'main';
+		if (!confirm(main ? '你是主账号：解绑以后，这台路由器会从你和所有子账号的账号里移除（路由器本身和家里上网不受影响，以后可以重新绑定）。确定？' : '从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return;
+		const go = async () => { await api('unbind', { sub }); toast('已解绑'); await load(); };
+		try { await go(); } catch (x) { if (/确认是你本人/.test(x.message)) sudoBox(() => go().catch((e) => toast(e.message))); else toast(x.message); }
+	}));
+	$('devs').querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => openPanel(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub), b)));
+	$('devs').querySelectorAll('[data-leave]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub); if (!confirm('退出「' + d.name + '」？退出以后你的手机就打不开这台路由器的面板了，要主账号重新发加入码才能回来。')) return; try { await api('fam/leave', { sub }); toast('已退出'); await load(); } catch (x) { toast(x.message); } }));
 }
 
 // ===== 个人主页：头像、名字、注册时间；点头像换头像，「编辑资料」改名字 =====
@@ -805,7 +981,8 @@ async function load(after) {
 			if (v === 'reg' && e.login) { tab('login'); const le = $('fLogin').querySelector('[data-err]'); if (le) le.innerHTML = err.innerHTML; }
 			report(e.login ? '登录成功但读不到账号（' + v + '）' : '读账号失败（' + v + '）', e);
 		} else {
-			lgView((pair && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+			lgView(((pair || joinCode) && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+			if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
 			if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
 			if (!e.login) report('打开账号页时读账号失败', e);
 		}
@@ -818,7 +995,8 @@ async function load(after) {
 		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
 		render(me); if (window.fxCards) window.fxCards($('vDash'));
 	} catch (e) { report('显示「我的路由器」出错', e); toast('页面有一部分没显示出来，刷新一下试试'); }
-	if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }
+	if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').closest('details').open = true; $('fBind').code.value = pair; $('fBind').requestSubmit(); }
+	if (joinCode && !sessionStorage.getItem('joined:' + joinCode) && !document.querySelector('.mask')) { sessionStorage.setItem('joined:' + joinCode, '1'); joinBox(joinCode); }
 	return me;
 }
 // 浏览器关掉了 Cookie：登录不了，先说清楚

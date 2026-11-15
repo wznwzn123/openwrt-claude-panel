@@ -38,7 +38,7 @@ const api = async (path, body, hdr = {}, method) => (await realFetch(B + path, {
 const ADM = { authorization: 'Bearer admin-key-1234567890' };
 const H = env.H.get('hub');
 /* ---------- 准备数据 ---------- */
-const inv = (await api('/api/admin/invites', { max: 5, svc: 7, note: '给朋友' }, ADM)).invite.code;
+const inv = (await api('/api/admin/invites', { direct: true,  max: 5, svc: 7, note: '给朋友' }, ADM)).invite.code;
 const R1 = await api('/api/register', { invite: inv, name: '客厅 Kwrt', model: 'JDCloud AX1800 Pro' });
 const R2 = await api('/api/register', { invite: inv, name: 'OpenWrt', model: 'Xiaomi AX3000T' });
 await api('/api/admin/renewals', { days: 90, count: 2, note: '阿明' }, ADM);

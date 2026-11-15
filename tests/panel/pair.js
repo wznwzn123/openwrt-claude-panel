@@ -1,4 +1,4 @@
-// 添加新手机（二维码登录）、托管版绑定到账号（配对码、已绑定账号、移除）
+// 添加新手机（二维码登录）；5.2 起托管版的「绑定到账号」不在系统操作里了（家里人用加入码，见我的主页）
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const { respond } = require('./mock');
@@ -29,7 +29,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 	await page.addInitScript((t) => { if (!sessionStorage.getItem('i')) { localStorage.setItem('rp_token', t); sessionStorage.setItem('i', '1'); } }, LOGIN);
 	await page.goto('http://localhost:8126/panel/?p=more'); await W(1500);
-	ok('自建版：「绑定到账号」不显示', await page.evaluate(() => document.getElementById('hubBindBtn').classList.contains('hidden')));
+	ok('自建版：没有「绑定到账号」', !(await page.evaluate(() => !!document.getElementById('hubBindBtn'))) && !/绑定到账号/.test(await page.textContent('#p-more')));
 	ok('二维码组件还没加载（用到才加载）', !(await page.evaluate(() => !!window.qrcode)));
 	await page.click('[data-t="addphone"]'); await W(800);
 	ok('添加新手机：显示二维码', (await page.locator('.modal .qrbox svg').count()) === 1);
@@ -53,19 +53,10 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await p3.goto('http://localhost:8126/panel/#login=bad'); await W(800);
 	ok('格式不对的 #login 不会覆盖已有密钥', (await p3.evaluate(() => localStorage.getItem('rp_token'))) === LOGIN);
 	await ctx2.close();
-	// 托管版：绑定到账号
+	// 托管版（5.2）：系统操作里也没有「绑定到账号」，家里人用加入码
 	hosted = true;
 	await page.goto('http://localhost:8126/panel/?p=more'); await W(1500);
-	ok('托管版：「绑定到账号」显示出来', !(await page.evaluate(() => document.getElementById('hubBindBtn').classList.contains('hidden'))));
-	await page.click('#hubBindBtn'); await W(1200);
-	const t = await page.textContent('.modal');
-	ok('显示配对码（分两段好读）', /ABCD 2345/.test(t), t.slice(0, 120));
-	ok('配对二维码直接显示（不打码，它不是密钥）', (await page.locator('.modal .qrbox:not(.blur) svg').count()) === 1);
-	ok('「打开官网」链接带配对码', (await page.getAttribute('.modal a.btn.primary', 'href')) === 'https://panel.example/app?pair=ABCD2345');
-	ok('列出已绑定的账号（邮箱打码）', /al\*\*\*@x\.com/.test(t) && /bo\*\*\*@y\.com/.test(t));
-	await page.click('.modal [data-unb="bcdefghijk23"]'); await W(500);
-	await page.click('.modal:last-of-type [data-v="true"]'); await W(1200);
-	ok('移除一个账号（先确认），列表更新', calls.some((c) => c.m === 'hub_unbind' && c.p.uid === 'bcdefghijk23') && !/bo\*\*\*@y\.com/.test(await page.textContent('.modal')));
+	ok('托管版：系统操作里没有「绑定到账号」（5.2 家里人用「我的主页 → 家人」的加入码）', !/绑定到账号/.test(await page.textContent('#p-more')));
 	const w = await page.evaluate(() => document.documentElement.scrollWidth);
 	ok('不横向滚动', w <= 390, w);
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'pair.png') });

@@ -29,7 +29,7 @@ env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const api = (method, path, body, h = {}) => mod.default.fetch(new Request('https://panel.example' + path, { method, body: body == null ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json', ...h } }), env);
 const adm = (method, path, body) => api(method, '/api/admin' + path, body, { authorization: 'Bearer admin-key-1234567890' });
 let T = Date.now(); Date.now = () => T; const DAY = 86400e3;
-const inv = (await (await adm('POST', '/invites', { max: 50, svc: 0 })).json()).invite.code;
+const inv = (await (await adm('POST', '/invites', { direct: true, max: 50, svc: 0 })).json()).invite.code;
 let ip = 0; const reg = async () => { const r = await api('POST', '/api/register', { invite: inv, name: 'R', model: 'M' }, { 'cf-connecting-ip': '10.0.0.' + ++ip }); return { st: r.status, ...(await r.json()) }; };
 const subs = [];
 for (let i = 0; i < 3; i++) { const r = await reg(); subs.push(r.sub); }

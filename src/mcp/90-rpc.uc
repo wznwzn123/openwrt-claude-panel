@@ -11,15 +11,31 @@ function handle(msg) {
 	// 连接器地址：只给 AI 用，不能调面板接口
 	if (MODE == 'ai' && substr(msg.method, 0, 6) == 'panel/')
 		return is_notification ? null : rpc_error(id, -32001, '这是 Claude 连接器地址，不能用来打开面板');
-	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（输对登录码以后拿到的）
+	// 官网「打开面板」的入口：只能拿票换手机钥匙
+	if (MODE == 'open') {
+		if (msg.method != 'panel/open_login') return is_notification ? null : rpc_error(id, -32601, 'not found');
+		try { return rpc_result(id, P.open_login(p)); }
+		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
+	}
+	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（从官网打开面板时拿到的）
 	if (MODE == 'token' && NEED_DEV && msg.method != 'panel/device_approve' && !dev_ok(msg.dev)) {
 		if (is_notification) return null;
 		let h = hub_conf(true)?.HUB ?? null;
 		return { jsonrpc: '2.0', id, error: { code: -32010,
 			message: msg.client == 'panel'
-				? '这台手机还没登录：托管版每台手机第一次打开面板要输一次登录码'
+				? '这台手机还没登录：从官网「我的路由器」点「打开面板」进来'
 				: '托管版的 Claude 连接器要用单独的「Claude 连接器地址」：在手机面板「系统操作 → Claude 连接器地址」里复制，然后在 Claude 里把这个连接器删掉，用新地址重新添加',
 			data: { need_code: true, hub: h } } };
+	}
+	// 主账号 / 子账号：按这台手机属于哪个账号检查权限
+	if (MODE == 'token' && NEED_DEV && DEV) {
+		let why = fam_check();
+		if (why) {
+			if (is_notification) return null;
+			return { jsonrpc: '2.0', id, error: { code: DEV ? -32011 : -32010, message: why, data: { need_code: !DEV, hub: hub_conf(true)?.HUB ?? null } } };
+		}
+		let m = msg.method == 'tools/call' ? 'tools:' + (p.name ?? '') : substr(msg.method, 0, 6) == 'panel/' ? substr(msg.method, 6) : null;
+		if (m && !fam_allowed(m)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m));
 	}
 	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')
@@ -95,6 +111,8 @@ function main() {
 
 	if (c.ai !== false && length(ckey) >= 16 && path == '/' + ckey)
 		MODE = 'ai';
+	else if (path == '/open' && is_hosted())
+		MODE = 'open';
 	else if (length(token) < 16 || path != '/' + token) {
 		reply('404 Not Found', { error: 'not found' });
 		return;

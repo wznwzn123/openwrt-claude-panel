@@ -70,6 +70,29 @@ jobs:
               wrangler.hosted.toml > wrangler.ci.toml
           cat wrangler.ci.toml
           node ../tools/build-site.mjs
+      - name: 文件存储（R2，5.2 发图片、视频、文件用）
+        working-directory: cloud
+        run: |
+          # 没开通 R2、或者部署令牌没有「Workers R2 存储 · 编辑」权限：只是先不开发文件的功能，照常部署
+          B=router-hub-files
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets"
+          R=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API?per_page=100" || true)
+          if [ "$(echo "$R" | jq -r '.success // false')" != true ]; then
+            echo "::warning::用不了 R2（没开通，或者部署令牌没有「Workers R2 存储 · 编辑」权限），这次先不开发文件的功能：$(echo "$R" | jq -c '.errors // .' 2>/dev/null | head -c 300)"
+            exit 0
+          fi
+          if ! echo "$R" | jq -e --arg b "$B" '.result.buckets[]? | select(.name == $b)' >/dev/null; then
+            C=$(curl -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' -d "{\"name\":\"$B\"}" "$API" || true)
+            if [ "$(echo "$C" | jq -r '.success // false')" != true ]; then echo "::warning::建存储桶 $B 没成功，这次先不开发文件的功能：$(echo "$C" | jq -c '.errors' 2>/dev/null)"; exit 0; fi
+            echo "::notice::建好了存储桶 $B"
+          fi
+          # 自动删除：u/ 下面是用户在对话、反馈里发的文件，30 天后删；传了一半放弃的分块上传，1 天后清掉（公告的文件在 a/ 下面，不删）
+          L='{"rules":[{"id":"user-files-30d","enabled":true,"conditions":{"prefix":"u/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":2592000}}},{"id":"abort-uploads-1d","enabled":true,"conditions":{"prefix":""},"abortMultipartUploadsTransition":{"condition":{"type":"Age","maxAge":86400}}}]}'
+          LR=$(curl -sS -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' -d "$L" "$API/$B/lifecycle" || true)
+          if [ "$(echo "$LR" | jq -r '.success // false')" = true ]; then echo "::notice::自动删除规则设好了（用户文件 30 天、没传完的 1 天）"
+          else echo "::warning::自动删除规则没设上（托管服务每天的清理也会删到期文件，不影响使用）：$(echo "$LR" | jq -c '.errors' 2>/dev/null)"; fi
+          printf '\n[[r2_buckets]]\nbinding = "F"\nbucket_name = "%s"\n' "$B" >> wrangler.ci.toml
+          echo "::notice::发文件的功能已开启（存储桶 $B）"
       - name: 部署
         working-directory: cloud
         run: |

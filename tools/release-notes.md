@@ -1,9 +1,38 @@
 OpenWrt 路由器的手机控制面板，可选接入 Claude 用对话管理路由器。
 
-最低版本：v5.0.0【必须更新】（这次所有人都要更新到 5.0：面板会弹出更新窗口，点「一键更新」就行，设置都保留、不断网）
+最低版本：v5.2.0【必须更新】（这次所有人都要更新到 5.2：面板会弹出更新窗口，点「一键更新」就行，设置都保留、不断网）
 
 ## 这个版本的更新
 
+**家里人一起用（主账号 + 子账号）：**
+- 每台托管版路由器有一个**主账号**（最先绑定的那个）。主账号可以在面板「我的主页 → 子账号」里给家里人发**加入码**，家里人用自己的账号加入，成为子账号
+- 每个子账号能看哪些页面、能改哪些设置，由主账号一项一项勾选；还能设到期时间、随时停用或移除。子账号没有权限的页面看不到，路由器那边也会拦住
+- 主账号可以把主账号转给别人；子账号可以自己退出
+- 每台路由器的「账号记录」：谁绑定、谁加入、谁改了权限都记下来
+
+**新的「我的主页」：**
+- 点面板右上角或侧边栏里自己的头像进去：改头像和名字、看登录记录、管理登录过面板的手机和登录过官网的设备（不认识的可以一键移除）
+- 解绑、换主账号、看敏感信息这类操作，要先用邮箱验证码确认是你本人
+- **有新手机登录面板时，会推送提醒到你已经登录的手机**
+
+**装新路由器更简单：**
+- 官网「我的路由器 → 装新路由器」领一个**安装码**（新账号可以免费试用），复制那里的一条命令，到路由器终端里粘贴、回车
+- 终端会问「装哪个版本？」，**输 1 是 AI 版，输 2 是纯面板版**；装好后路由器自动加到你的账号里，不用再输配对码
+- 托管版和自建版各只有**一个安装包**（自建版还会问精简版还是完整版，同样输 1 或 2）。只是把几个版本放在一个包里，装到路由器上的东西跟以前一样，不会多占闪存和内存
+- 邀请码要先在官网兑换成安装码才能装
+
+**能发文件了：**
+- 「实时联系开发者」里点输入框旁边的回形针，可以发**视频、文档、压缩包**等文件，一次最多 5 个，每个最大 **200MB**；图片和视频直接在对话里看
+- 托管版的「问题反馈」也能带视频和文件
+- 开发者的公告可以带图片、视频和附件，在「通知」里直接看
+- 你发的文件 **30 天后自动删除**；文件通过加密链接传给托管服务，只有你和开发者能打开
+
+**其它：**
+- 实时联系开发者：图片、视频加载出来后页面会停在最新一条，不会被输入框挡住；正在看的视频不会被新消息打断
+- 小屏手机（320 宽）上对话输入框的提示字不再折行
+- 开发者这边：管理后台能看每台路由器的「账号和权限」（主账号、子账号、权限），账号页能一键让某个账号所有设备退出、改登录邮箱；邀请码 / 安装码 / 免费试用次数都能在后台管理；对话、公告、反馈里能发和看文件
+
+v5.0.0 的更新：
 **更省闪存、更省内存，所有路由器、所有安装包都一样，功能一个不少：**
 - **面板压缩存放**：面板网页在闪存里只放压缩过的一份，发给手机也是压缩的（浏览器自己解开），打开更快；面板装好后占的闪存从约 0.9 MB 降到约 0.6 MB。万一哪台路由器用不了压缩方式，安装时会自己发现、照旧存原来的
 - 面板网页、二维码组件、图标都精简过（显示效果一样）
@@ -113,32 +142,33 @@ v2.0.4 的更新：OpenClash 重启、节点卡住时面板和 Claude 不再跟�
 
 ## 下载哪个？
 
-有邀请码就装**托管版**（最省事）；想用自己的 Cloudflare 和域名就装**自建版**（先选要不要 AI，再选精简还是完整）。
+**用手机装最简单：** 托管版在官网「我的路由器 → 装新路由器」复制命令；自建版用下面的命令。两种都是在终端里**按 1 或 2 选版本**。
 
-### 托管版
+### 托管版（有安装码就装这个）
 
-| 版本 | 下载 | 安装教程 |
+| 安装包 | 终端里怎么选 | 安装教程 |
 |---|---|---|
-| **托管版 · AI 版** | `openwrt-claude-panel-hosted-ai.tar.gz` | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md) |
-| **托管版 · 纯面板版** | `openwrt-claude-panel-hosted-noai.tar.gz` | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md) |
+| `openwrt-claude-panel-hosted.tar.gz` | 1 = AI 版，2 = 纯面板版 | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md) |
 
-### 自建版
+### 自建版（用自己的 Cloudflare 和域名）
 
-| 版本 | 下载 | 包含 | 安装教程 |
-|---|---|---|---|
-| **AI 版 · 精简版** | `openwrt-claude-panel-ai-lite.tar.gz` | 在 Claude 里对话管理路由器 + 手机面板 + 本地看门狗。不需要 Cloudflare 账号也能装 | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-ai-lite.md) |
-| **AI 版 · 完整版** | `openwrt-claude-panel-ai-full.tar.gz` | AI 版全部功能 + 手机/微信推送、每天云端备份、断电断网判断。需要 Cloudflare 账号和自己的域名 | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-ai-full.md) |
-| **纯面板版 · 精简版** | `openwrt-claude-panel-noai-lite.tar.gz` | 不接 AI，只有手机面板 + 本地看门狗，自己动手管理。不需要 Cloudflare 账号也能装 | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-noai-lite.md) |
-| **纯面板版 · 完整版** | `openwrt-claude-panel-noai-full.tar.gz` | 不接 AI，手机面板 + 本地看门狗 + 推送、云端备份、断电断网判断。需要 Cloudflare 账号和自己的域名 | [📖 教程](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-noai-full.md) |
+| 安装包 | 终端里怎么选 | 安装教程 |
+|---|---|---|
+| `openwrt-claude-panel.tar.gz` | 先选 1 = AI 版 / 2 = 纯面板版，再选 1 = 精简版 / 2 = 完整版 | [AI · 精简](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-ai-lite.md) · [AI · 完整](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-ai-full.md) · [纯面板 · 精简](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-noai-lite.md) · [纯面板 · 完整](https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-noai-full.md) |
 
-拿不准就先装**精简版**。每个安装包里也带着对应版本的教程 `INSTALL.md`。以后换版本，登录地址和设置都会保留。
+- **AI 版**：在 Claude 里用中文对话管理路由器 + 手机面板；**纯面板版**：只有手机面板，不接 AI
+- **精简版**：不需要 Cloudflare 账号也能装；**完整版**：再加手机推送、每天云端备份、断电断网判断，需要 Cloudflare 账号和自己的域名。拿不准就先装精简版
+
+其它几个带版本代号的安装包（`-ai-lite`、`-hosted-ai` 等）是给「一键更新」用的，不用下载。以后换版本，登录地址和设置都会保留。
 
 ## 快速安装（只用手机）
 
-手机连家里 Wi-Fi → 路由器后台「服务 → 终端」→ 粘贴（把 `hosted-ai` 换成你要的版本代号：`hosted-noai`、`ai-lite`、`ai-full`、`noai-lite`、`noai-full`）：
+**托管版**：官网「我的路由器 → 装新路由器」领安装码，复制那里的命令（已经带着你的安装码）。
+
+**自建版**：手机连家里 Wi-Fi → 路由器后台「服务 → 终端」→ 粘贴：
 
 ```sh
-cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh
+cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh
 ```
 
 用电脑装：下载安装包后 `scp` 到路由器 `/tmp`，解压后运行 `sh install.sh`，见各版本教程。

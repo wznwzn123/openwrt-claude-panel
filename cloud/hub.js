@@ -11,6 +11,9 @@ import { DurableObject } from 'cloudflare:workers';
 import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
+import { installFam, famAccount, famDev, famAdmin, famAdminUser } from './fam.js';
+import { installInst, instAccount, instAdmin } from './inst.js';
+import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } from './files.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -100,6 +103,8 @@ export async function deprovision(env, { tunnel, dns }) {
 
 /* ---------- 账号用的小工具 ---------- */
 const SESSION_DAYS = 30;
+const TRUST_DAYS = 30; // 新设备验证过一次，这个浏览器记住多少天
+const sha256hex = async (t) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))].map((b) => b.toString(16).padStart(2, '0')).join('');
 // 登录过的设备：只从浏览器信息里认出「什么设备 · 什么浏览器」，不存原始字符串，也不存 IP
 export function uaLabel(ua) {
 	ua = String(ua || '');
@@ -163,8 +168,10 @@ export class Hub extends DurableObject {
 		const now = Date.now();
 		const code = String(invite || '').trim().toUpperCase();
 		const inv = code && (await this.ctx.storage.get('i:' + code));
-		if (!inv || inv.off) return { st: 403, error: '邀请码不对' };
-		if (inv.exp && now > inv.exp) return { st: 403, error: '邀请码已经过期' };
+		if (!inv || inv.off) return { st: 403, error: '邀请码（安装码）不对' };
+		// 5.2：托管版要先在官网注册账号。管理后台发的邀请码要在官网兑换成安装码，才能在路由器上装（装好自动加到账号里）
+		if (!inv.uid && !inv.direct) return { st: 403, error: '邀请码要先在官网兑换成安装码：手机打开 https://' + this.env.BASE_DOMAIN + '/app 注册账号，在「添加路由器 → 装新路由器」里输入邀请码，复制那里给的安装命令到路由器上运行' };
+		if (inv.exp && now > inv.exp) return { st: 403, error: inv.uid ? '安装码已经过期了：回官网「添加路由器 → 装新路由器」重新拿一个' : '邀请码已经过期' };
 		if (inv.used >= inv.max) return { st: 403, error: '邀请码已经用完了' };
 		if ((await this.count()) >= this.max()) return { st: 403, error: '名额已满，暂时不能开通' };
 		// 上次开通时 Cloudflare 的子域名名额满了：一天内、路由器数量没减少之前直接说名额已满，不再去建隧道（过一天再试一次，升级了套餐也能自己恢复）
@@ -205,11 +212,16 @@ export class Hub extends DurableObject {
 		let bound = false;
 		if (inv.uid) {
 			const u = await this.ctx.storage.get('u:' + inv.uid);
-			if (u && !(u.devs || []).some((x) => x.sub === sub)) { u.devs = [...(u.devs || []), { sub, at: now }]; dv.users = [inv.uid]; await this.ctx.storage.put('u:' + inv.uid, u); bound = true; }
-			if (u) { u.trial = { ...(u.trial || {}), used: now, sub }; await this.ctx.storage.put('u:' + inv.uid, u); }
+			if (u && !(u.devs || []).some((x) => x.sub === sub)) { u.devs = [...(u.devs || []), { sub, at: now }]; dv.users = [inv.uid]; dv.owner = inv.uid; await this.ctx.storage.put('u:' + inv.uid, u); bound = true; }
+			if (u) {
+				if (inv.trial) { u.trialUsed = Math.max(u.trialUsed || 0, u.trial && u.trial.used ? 1 : 0) + 1; u.trial = { ...(u.trial || {}), used: now, sub }; }
+				u.inst = (u.inst || []).filter((x) => x !== code);
+				await this.ctx.storage.put('u:' + inv.uid, u);
+			}
 		}
 		await this.ctx.storage.put('d:' + sub, dv);
-		if (inv.uid) await this.alog('trial-used', sub, '用官网领的试用码开通' + (bound ? '，已自动加到账号里' : ''), 'router');
+		await this.rlog(sub, '✨', '开通托管服务' + (dv.exp ? '（' + Math.round((dv.exp - now) / DAY) + ' 天）' : '') + (bound ? '，自动加到 ' + (await this.rname(inv.uid)) + ' 的账号里，他是主账号' : ''));
+		if (inv.uid) await this.alog(inv.trial ? 'trial-used' : 'inst-used', sub, (inv.trial ? '用官网领的试用码开通' : '用安装码开通（邀请码 ' + (inv.from || '?') + '）') + (bound ? '，已自动加到账号里' : ''), 'router');
 		await this.track('dev_reg');
 		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, bound, ...keys };
 	}
@@ -399,11 +411,10 @@ export class Hub extends DurableObject {
 		if (!d || !this.env.RESEND_API_KEY) return false;
 		const e = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 		const name = e(d.name || d.sub), site = 'https://' + this.env.BASE_DOMAIN;
-		const cmd = 'cd /tmp && wget -O p.tar.gz ' + site + '/dl/openwrt-claude-panel-hosted-ai.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh --invite 新邀请码';
 		const T = {
-			trash: ['路由器「' + (d.name || d.sub) + '」的托管服务已被停用', `<p>你好，</p><p>你的路由器「${name}」的托管服务已被提供服务的人停用：专属网址暂时打不开，推送和云端备份也暂停了。<b>家里上网和路由器上的设置都不受影响。</b></p><p><b>${ymd((d.delAt || Date.now()) + TRASH_DAYS * DAY)} 前</b>联系提供服务的人可以恢复，恢复以后什么都不用做，原来的网址、登录过的手机都照常能用。</p><p>超过这个日期没恢复的话会被彻底删除，到时候可以用新的邀请码重新开通（设置会保留）。</p>`],
+			trash: ['路由器「' + (d.name || d.sub) + '」的托管服务已被停用', `<p>你好，</p><p>你的路由器「${name}」的托管服务已被提供服务的人停用：专属网址暂时打不开，推送和云端备份也暂停了。<b>家里上网和路由器上的设置都不受影响。</b></p><p><b>${ymd((d.delAt || Date.now()) + TRASH_DAYS * DAY)} 前</b>联系提供服务的人可以恢复，恢复以后什么都不用做，原来的网址、登录过的手机都照常能用。</p><p>超过这个日期没恢复的话会被彻底删除，到时候可以在官网拿一个新的安装码重新开通（设置会保留）。</p>`],
 			restore: ['路由器「' + (d.name || d.sub) + '」的托管服务恢复了', `<p>你好，</p><p>你的路由器「${name}」的托管服务已经恢复${d.off ? '（不过它已经到期了，要续期以后才能用：在官网账号页这台路由器下面「申请续期」）' : '，专属网址可以正常打开了，什么都不用做'}。</p><p>官网：<a href="${site}/app">${site}/app</a></p>`],
-			purge: ['路由器「' + (d.name || d.sub) + '」的托管服务已被删除', `<p>你好，</p><p>你的路由器「${name}」的托管服务已被删除，原来的专属网址不能再用了。<b>家里上网和路由器上的设置都不受影响。</b></p><p><b>想继续用，这样重新开通（设置都会保留）：</b></p><ol><li>找提供服务的人要一个新的邀请码</li><li>手机连上家里 Wi-Fi，打开路由器后台「服务 → 终端」，用 root 登录</li><li>粘贴下面的命令，把最后的「新邀请码」换成你拿到的邀请码，回车：<br><code style="word-break:break-all">${e(cmd)}</code><br>（纯面板版把命令里的 hosted-ai 改成 hosted-noai）</li><li>装好会显示新的网址和配对码：在官网账号页「添加路由器」输入配对码，再用新网址打开面板</li></ol><p>详细步骤：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md">安装教程 · 托管网址被删除了怎么办</a></p>`],
+			purge: ['路由器「' + (d.name || d.sub) + '」的托管服务已被删除', `<p>你好，</p><p>你的路由器「${name}」的托管服务已被删除，原来的专属网址不能再用了。<b>家里上网和路由器上的设置都不受影响。</b></p><p><b>想继续用，这样重新开通（设置都会保留）：</b></p><ol><li>打开官网 <a href="${site}/app">${site}/app</a>，在「添加路由器 → 装新路由器」里领试用，或者用提供服务的人给的邀请码兑换一个安装码</li><li>点「复制命令」</li><li>手机连上家里 Wi-Fi，打开路由器后台「服务 → 终端」，用 root 登录，粘贴命令回车</li><li>装好后路由器自动加到你的账号里，回官网「我的路由器」点「打开面板」</li></ol><p>详细步骤：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md">安装教程 · 托管网址被删除了怎么办</a></p>`],
 		}[kind];
 		let sent = false;
 		for (const uid of d.users || []) {
@@ -470,12 +481,59 @@ export class Hub extends DurableObject {
 		}
 		return { st: 404, error: '这台设备已经退出了' };
 	}
-	async sessionsOutOthers(uid, mine) {
+	async sessionsOutOthers(uid, mine, did) {
 		const u = await this.ctx.storage.get('u:' + uid);
 		if (!u) return { st: 401, error: '请先登录' };
 		const n = (u.sids || []).filter((x) => x !== mine).length;
-		await this.dropSessions(u, mine); await this.ctx.storage.put('u:' + uid, u);
+		await this.dropSessions(u, mine); await this.trustOnly(u, did); await this.ctx.storage.put('u:' + uid, u);
 		return { st: 200, ok: true, n };
+	}
+	/* ---------- 新设备登录要邮箱验证码：验证过的浏览器记住 30 天（did 记在浏览器的 cookie 里，账号里只存它的摘要） ---------- */
+	newDeviceCode() { return !!this.env.RESEND_API_KEY && this.env.NEW_DEVICE_CODE !== '0'; }
+	async trusted(u, did) {
+		if (!did) return false;
+		const h = await sha256hex(did + ':' + u.uid), now = Date.now();
+		return (u.trust || []).some((t) => t.h === h && t.exp > now);
+	}
+	// 记住这个浏览器（调用的地方负责把 u 存回去）；没有 did 就新发一个，返回给前面写进 cookie
+	async trust(u, did) {
+		did = did || rnd(32);
+		const h = await sha256hex(did + ':' + u.uid), now = Date.now();
+		u.trust = [...(u.trust || []).filter((t) => t.exp > now && t.h !== h), { h, exp: now + TRUST_DAYS * DAY, at: now }].slice(-20);
+		return did;
+	}
+	// 只留这个浏览器（改密码、退出其他所有设备以后，别的设备再登录都要重新验证）
+	async trustOnly(u, did) { const keep = did ? await sha256hex(did + ':' + u.uid) : ''; u.trust = (u.trust || []).filter((t) => t.h === keep && t.exp > Date.now()); }
+	async sendLoginCode(u, pl) {
+		if (!(await this.hit('ml1:' + u.uid, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
+		if (!(await this.hit('mld:' + u.uid, 10, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
+		pl.code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000)); pl.tries = 0;
+		const e = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+		const sent = await this.mail(u.email, `验证码 ${pl.code}（新设备登录）`, `<p>你的账号正在一台新设备上登录：</p><p><b>${e((pl.dev && pl.dev.ua) || '没认出是什么设备')}</b>${pl.dev && pl.dev.place ? '<br>大概位置：' + e(pl.dev.place) : ''}</p><p>验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${pl.code}</p><p>10 分钟内有效。<b>如果不是你本人在登录，说明密码可能泄露了，请马上登录官网改密码。</b></p>`);
+		if (!sent) return { st: 502, error: '验证码邮件没发出去，稍后再试' };
+		return null;
+	}
+	userLogin2(a) { return this.lock(() => this._userLogin2(a)); }
+	async _userLogin2({ token, code, op, did, dev, ip }) {
+		const k = 'pl:' + String(token || ''), pl = /^[a-z2-9]{24}$/.test(String(token || '')) && (await this.ctx.storage.get(k));
+		if (!pl || pl.exp < Date.now()) { if (pl) await this.ctx.storage.delete(k); return { st: 400, error: '验证码过期了，请重新输入密码登录', again: true }; }
+		const u = await this.ctx.storage.get('u:' + pl.uid);
+		if (!u) { await this.ctx.storage.delete(k); return { st: 400, error: '这个账号已经不在了', again: true }; }
+		const L = (ok, why) => this.loginLog({ k: 'user', who: u.email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
+		if (op === 'resend') { const er = await this.sendLoginCode(u, pl); if (er) return er; await this.ctx.storage.put(k, pl); return { st: 200, ok: true }; }
+		if (!safeEq(String(code || '').trim(), pl.code)) {
+			pl.tries = (pl.tries || 0) + 1;
+			if (pl.tries >= 5) { await this.ctx.storage.delete(k); await L(false, '新设备验证码错了 5 次'); return { st: 400, error: '验证码错太多次了，请重新输入密码登录', again: true }; }
+			await this.ctx.storage.put(k, pl); await L(false, '新设备验证码不对');
+			return { st: 400, error: '验证码不对' };
+		}
+		await this.ctx.storage.delete(k);
+		await L(true, '新设备验证通过，登录成功');
+		const seen = (await this.sessionList(u, '')).map((x) => x.ua);
+		const nd = await this.trust(u, did);
+		const sid = await this.newSession(u, dev); // newSession 会把 u（连同 trust）存回去
+		if (dev && dev.ua && seen.length && !seen.includes(dev.ua)) await this.loginAlert(u, dev);
+		return { st: 200, sid, did: nd };
 	}
 	async loginAlert(u, dev) {
 		if (!this.env.RESEND_API_KEY || this.env.LOGIN_ALERT === '0') return;
@@ -523,7 +581,7 @@ export class Hub extends DurableObject {
 		return true;
 	}
 	userRegister(a) { return this.lock(() => this._registerUser(a)); }
-	async _registerUser({ email, password, code, ip, dev }) {
+	async _registerUser({ email, password, code, ip, dev, did }) {
 		email = normEmail(email);
 		if (!email) return { st: 400, error: '邮箱格式不对' };
 		const pe = pwError(password); if (pe) return { st: 400, error: pe };
@@ -534,9 +592,10 @@ export class Hub extends DurableObject {
 		const u = { uid, email, salt, pw: await pwHash(password, salt), created: Date.now(), devs: [], sids: [], verified: !!this.env.RESEND_API_KEY };
 		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + email]: uid });
 		await this.loginLog({ k: 'reg', who: email, ok: true, why: '注册', ip, place: dev && dev.place, ua: dev && dev.ua });
-		return { st: 200, sid: await this.newSession(u, dev) };
+		const nd = this.newDeviceCode() ? await this.trust(u, did) : ''; // 注册时邮箱验证过了，这台设备就算验证过
+		return { st: 200, sid: await this.newSession(u, dev), did: nd };
 	}
-	async userLogin({ email, password, ip, dev }) {
+	async userLogin({ email, password, ip, dev, did }) {
 		email = normEmail(email);
 		if (!email || typeof password !== 'string') return { st: 400, error: '邮箱或密码不对' };
 		const L = (ok, why) => this.loginLog({ k: 'user', who: email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
@@ -547,6 +606,14 @@ export class Hub extends DurableObject {
 		if (!u) { const xu = await this.ctx.storage.get('xe:' + email).then((x) => x && this.ctx.storage.get('xu:' + x)); if (xu) { const h0 = await pwHash(password, xu.salt); if (safeEq(h0, xu.pw)) return { st: 403, error: '这个账号已经' + (xu.delWhy === 'self' ? '注销' : '被停用') + '，' + ymd(xu.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复' }; } }
 		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
 		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); await L(false, u ? '密码不对' : '没有这个账号'); return { st: 401, error: '邮箱或密码不对' }; }
+		if (this.newDeviceCode() && !(await this.trusted(u, did))) {
+			// 密码对了，但这是没验证过的设备：先发邮箱验证码，输对了才登录
+			const token = rnd(24), pl = { uid: u.uid, exp: Date.now() + 600e3, dev, ip };
+			const er = await this.sendLoginCode(u, pl); if (er) return er;
+			await this.ctx.storage.put('pl:' + token, pl);
+			await L(false, '密码对了，新设备要输邮箱验证码');
+			return { st: 200, ok: true, need: 'code', token, mail: maskEmail(u.email) };
+		}
 		await L(true, '登录成功');
 		// 新设备登录提醒：账号里别的还在登录的设备都不是这种设备，就发邮件告诉本人
 		const seen = (await this.sessionList(u, '')).map((x) => x.ua);
@@ -564,11 +631,13 @@ export class Hub extends DurableObject {
 			if (!d || d.state !== 'ok') continue;
 			let b = { last: 0, state: 'wait', ver: '' };
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
-			devs.push({ sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
+			const role = this.famRole(d, uid), fo = this.famOf(d), sx = fo.subs[uid];
+			const fam = { role, owner: role === 'main' || !fo.owner ? null : await this.famPerson(fo.owner), perms: sx ? sx.perms || [] : null, subExp: sx ? sx.exp || 0 : 0, nsub: Object.keys(fo.subs).length };
+			devs.push({ ...fam, sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
-		const td = this.trialDays();
-		return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: td ? { days: td, code: (u.trial && !u.trial.used && u.trial.code) || '', used: (u.trial && u.trial.used) || 0, got: !!(u.trial && u.trial.code) } : null };
+		const td = this.trialDays(), ts = td ? await this.trialState(u) : null, inst = await this.instList(u);
+		return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: ts && ts.max ? { days: td, max: ts.max, used: ts.used, left: ts.left, open: ts.open } : null, inst };
 	}
 	// 个人主页：名字和头像。头像是浏览器里裁成正方形、压缩好的小图（data:image/...;base64），单独存一份，不放进账号记录里
 	async brief(uid) { const u = await this.ctx.storage.get('u:' + uid); if (!u) return null; return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '' }; }
@@ -626,19 +695,31 @@ export class Hub extends DurableObject {
 		const d = await this.ctx.storage.get('d:' + p.sub), u = await this.ctx.storage.get('u:' + uid);
 		if (!d || d.state !== 'ok' || !u) return { st: 400, error: '这台路由器已经不在了' };
 		if (!(u.devs || []).some((x) => x.sub === p.sub)) {
-			if ((u.devs || []).length >= 20) return { st: 400, error: '一个账号最多绑定 20 台路由器' };
-			if ((d.users || []).length >= 20) return { st: 400, error: '这台路由器绑定的账号太多了（最多 20 个）' };
+			// 5.2：一台路由器只有一个主账号。已经有人绑定了，别人只能用主账号发的加入码当子账号
+			const f = this.famOf(d);
+			if (f.owner || f.pick) return { st: 400, error: '这台路由器已经有主账号了。想一起用的话，请主账号在面板「我的主页 → 子账号」里给你发一个加入码' };
+			if ((u.devs || []).length >= 40) return { st: 400, error: '你的账号里路由器太多了' };
 			u.devs = [...(u.devs || []), { sub: p.sub, at: Date.now() }];
-			d.users = [...(d.users || []), uid];
+			d.users = [uid]; d.owner = uid; d.subs = {};
 			await this.ctx.storage.put({ ['u:' + uid]: u, ['d:' + p.sub]: d });
+			await this.rlog(p.sub, '🔗', '绑定到 ' + (await this.rname(uid)) + ' 的账号，他是主账号');
 		}
 		return { st: 200, ok: true, sub: p.sub, name: d.name || p.sub };
 	}
-	unbind(uid, sub) { return this.lock(() => this._unbind(uid, sub)); }
-	async _unbind(uid, sub) {
+	unbind(uid, sub, opt) { return this.lock(() => this._unbind(uid, sub, opt)); }
+	async _unbind(uid, sub, opt = {}) {
 		const u = await this.ctx.storage.get('u:' + uid), d = await this.ctx.storage.get('d:' + sub);
+		// 主账号解绑：整台路由器从所有人的账号里拿掉（子账号也一起），官网上要先确认是本人
+		if (d && this.famRole(d, uid) === 'main') {
+			if (opt.web && !opt.sudo) return { st: 403, error: '你是主账号：解绑要先确认是你本人（邮箱验证码）', sudo: true };
+			for (const x of [...(d.users || [])]) { const xu = await this.ctx.storage.get('u:' + x); if (xu) { xu.devs = (xu.devs || []).filter((y) => y.sub !== sub); await this.ctx.storage.put('u:' + x, xu); } this.famKick(d, x); }
+			d.users = []; delete d.owner; d.subs = {};
+			await this.ctx.storage.put('d:' + sub, d);
+			await this.rlog(sub, '✂️', '主账号 ' + (await this.rname(uid)) + ' 解绑了这台路由器，所有账号都移除了');
+			return { st: 200, ok: true, all: true };
+		}
 		if (u) { u.devs = (u.devs || []).filter((x) => x.sub !== sub); await this.ctx.storage.put('u:' + uid, u); }
-		if (d) { d.users = (d.users || []).filter((x) => x !== uid); await this.ctx.storage.put('d:' + sub, d); }
+		if (d) { await this.famDrop(d, uid); await this.ctx.storage.put('d:' + sub, d); }
 		return { st: 200, ok: true };
 	}
 	// 自建版路由器：账号里只记名字和面板网址，方便换手机时找到（不记密钥；粘贴了登录地址也只留网址部分）
@@ -675,17 +756,18 @@ export class Hub extends DurableObject {
 		await this.ctx.storage.put('u:' + uid, u);
 		return { st: 200, ok: true };
 	}
-	async userPassword(uid, sid, old, pw) {
+	async userPassword(uid, sid, old, pw, did) {
 		const u = await this.ctx.storage.get('u:' + uid);
 		if (!u) return { st: 401, error: '请先登录' };
 		if (!safeEq(await pwHash(String(old || ''), u.salt), u.pw)) return { st: 403, error: '原密码不对' };
 		const pe = pwError(pw); if (pe) return { st: 400, error: pe };
 		u.salt = rnd(16); u.pw = await pwHash(pw, u.salt);
 		await this.dropSessions(u, sid); // 其他设备上的登录全部退出
+		await this.trustOnly(u, did); // 别的设备再登录要重新收验证码
 		await this.ctx.storage.put('u:' + uid, u);
 		return { st: 200, ok: true };
 	}
-	async userReset({ email, code, password, dev, ip }) {
+	async userReset({ email, code, password, dev, ip, did }) {
 		email = normEmail(email);
 		const uid = email && (await this.ctx.storage.get('e:' + email)), u = uid && (await this.ctx.storage.get('u:' + uid));
 		const L = (ok, why) => this.loginLog({ k: 'reset', who: email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
@@ -693,9 +775,11 @@ export class Hub extends DurableObject {
 		const pe = pwError(password); if (pe) return { st: 400, error: pe };
 		u.salt = rnd(16); u.pw = await pwHash(password, u.salt); u.verified = true;
 		await this.dropSessions(u, null);
+		await this.trustOnly(u, ''); // 找回密码：以前记住的设备都作废，只记住这一台（刚收过邮箱验证码）
+		const nd = this.newDeviceCode() ? await this.trust(u, did) : '';
 		await this.ctx.storage.put('u:' + uid, u);
 		await L(true, '找回密码成功');
-		return { st: 200, sid: await this.newSession(u, dev) };
+		return { st: 200, sid: await this.newSession(u, dev), did: nd };
 	}
 	delAccount(uid, password) { return this.lock(() => this._delAccount(uid, password)); }
 	async _delAccount(uid, password) {
@@ -739,17 +823,18 @@ export class Hub extends DurableObject {
 		await this.ctx.storage.delete(k);
 		const u = await this.ctx.storage.get('u:' + x.uid);
 		if (!u || !(u.devs || []).some((y) => y.sub === sub)) return { st: 400, error: '拿这个登录码的账号已经解绑了这台路由器' };
-		return { st: 200, ok: true, email: maskEmail(u.email) };
+		return { st: 200, ok: true, email: maskEmail(u.email), uid: x.uid, now: Date.now() };
 	}
 	// 杂项小数据（比如最后一次查到的最新版本）
 	async meta(k) { return (await this.ctx.storage.get('m:' + k)) || null; }
 	async setMeta(k, v) { const old = await this.ctx.storage.get('m:' + k); if (JSON.stringify(old) !== JSON.stringify(v)) await this.ctx.storage.put('m:' + k, v); }
 	async devices() { return [...(await this.ctx.storage.list({ prefix: 'd:' })).values()]; }
 	async invites() { return [...(await this.ctx.storage.list({ prefix: 'i:' })).entries()].map(([k, v]) => ({ code: k.slice(2), ...v })); }
-	async addInvite({ max, days, note, svc }) {
+	// direct：可以不经官网兑换、直接在路由器上用（只有接口能设，给自动化测试和特殊情况用；管理后台生成的默认都要先兑换）
+	async addInvite({ max, days, note, svc, direct }) {
 		let code;
 		do { code = rnd(10).toUpperCase(); } while (await this.ctx.storage.get('i:' + code));
-		const inv = { max: Math.max(1, Math.min(1000, +max || 1)), used: 0, created: Date.now(), exp: +days > 0 ? Date.now() + days * DAY : 0, note: clean(note, 60), svc: Math.max(0, Math.min(3650, Math.round(+svc || 0))) };
+		const inv = { max: Math.max(1, Math.min(1000, +max || 1)), used: 0, created: Date.now(), exp: +days > 0 ? Date.now() + days * DAY : 0, note: clean(note, 60), svc: Math.max(0, Math.min(3650, Math.round(+svc || 0))), ...(direct === true ? { direct: true } : {}) };
 		await this.ctx.storage.put('i:' + code, inv);
 		return { code, ...inv };
 	}
@@ -883,7 +968,7 @@ export class Hub extends DurableObject {
 	}
 	// 路由器那边（凭 RKEY）看自己的到期时间
 	/* ---------- 问题反馈：路由器面板里发来（凭 RKEY），管理页看，发邮件提醒管理员 ---------- */
-	async feedback({ sub, rkey, text, contact, diag, images }) {
+	async feedback({ sub, rkey, text, contact, diag, images, files }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		text = String(text || '').trim().slice(0, 2000); contact = String(contact || '').trim().slice(0, 80); diag = String(diag || '').trim().slice(0, 1500);
 		if (text.length < 4) return { st: 400, error: '写几句遇到的问题或者建议吧' };
@@ -891,6 +976,8 @@ export class Hub extends DurableObject {
 		const d = await this.ctx.storage.get('d:' + sub), emails = [];
 		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u && u.email) emails.push(u.email); }
 		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
+		// 5.2：附带的文件（视频、日志等，先传好的）
+		if (Array.isArray(files) && files.length) { const c = await this.fileClaim(files, 'd' + sub, 'fb'); if (c.error) return { st: 400, error: c.error }; fb.files = c.files; }
 		// 截图：最多 3 张，每张 1.5MB 以内的 JPEG / PNG / WebP（手机上已经压缩过）
 		for (const im of (Array.isArray(images) ? images : []).slice(0, 3)) {
 			const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(im || ''));
@@ -1010,6 +1097,9 @@ export class Hub extends DurableObject {
 		let start = Math.round(+b.start || 0);
 		if (start && start <= Date.now() + 60e3) start = 0;
 		if (start && start > Date.now() + 90 * DAY) return { st: 400, error: '定时发布最多提前 90 天' };
+		// 5.2：附件（图片、视频、文件），公告的文件一直留着，删公告时一起删
+		let files;
+		if (Array.isArray(b.files)) { const c = await this.fileClaim(b.files, 'admin', 'ann'); if (c.error) return { st: 400, error: c.error }; files = c.files; }
 		return this.lock(async () => {
 			const l = (await this.ctx.storage.get('ann')) || [], now = Date.now();
 			let a = id ? l.find((x) => x.id === id) : null;
@@ -1017,13 +1107,14 @@ export class Hub extends DurableObject {
 			if (!a) { a = { id: rnd(10), at: now }; l.unshift(a); }
 			const from = start || (a.start && a.start > now ? now : 0) || now;
 			Object.assign(a, { title, body, level, exp: days ? Math.max(now, start || 0) + days * DAY : 0, upd: start || now });
+			if (files) { const drop = (a.files || []).filter((x) => !files.some((y) => y.id === x.id)).map((x) => x.id); if (drop.length) await this.fileGone(drop); if (files.length) a.files = files; else delete a.files; }
 			if (start) { a.start = start; a.at = start; } else if (a.start && a.start > now) { delete a.start; a.at = now; }
 			void from;
 			await this.ctx.storage.put('ann', l.slice(0, 50));
 			return { st: 200, ok: true, ann: a };
 		});
 	}
-	annDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('ann')) || []; if (!l.some((x) => x.id === id)) return false; await this.ctx.storage.put('ann', l.filter((x) => x.id !== id)); return true; }); }
+	annDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('ann')) || [], a = l.find((x) => x.id === id); if (!a) return false; await this.ctx.storage.put('ann', l.filter((x) => x.id !== id)); if (a.files && a.files.length) await this.fileGone(a.files.map((x) => x.id)); return true; }); }
 	// 标为已收到 / 撤回（对方查进度时，第二段「开发人员已收到」亮起来）
 	async fbAck(id, on) {
 		const x = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return null; const was = x.ack; x.ack = on ? x.ack || Date.now() : 0; await this.ctx.storage.put('fbl', l); return { ...x, was }; });
@@ -1077,23 +1168,26 @@ export class Hub extends DurableObject {
 		const days = this.trialDays();
 		if (!days) return { st: 403, error: '现在没有开放免费试用，找提供服务的人要邀请码' };
 		if (this.env.RESEND_API_KEY && !u.verified) return { st: 403, error: '先验证邮箱才能领试用' };
-		if (u.trial && u.trial.code) {
-			const inv = await this.ctx.storage.get('i:' + u.trial.code);
-			return { st: 200, ok: true, days, code: u.trial.code, exp: inv ? inv.exp : 0, used: u.trial.used || 0 };
-		}
+		const open = (await this.instList(u)).find((x) => x.kind === 'trial');
+		if (open) return { st: 200, ok: true, days, code: open.code, exp: open.exp };
+		const ts = await this.trialState(u);
+		if (!ts.max) return { st: 403, error: '现在没有开放免费试用，找提供服务的人要邀请码' };
+		if (ts.left <= 0) return { st: 403, error: ts.max > 1 ? `每个账号最多领 ${ts.max} 次试用，你已经领完了。想继续用，找提供服务的人要邀请码` : '这个账号已经领过试用了。想继续用，找提供服务的人要邀请码' };
 		if (!(await this.hit('tr:' + (ip || '?'), 5, DAY))) return { st: 429, error: '领得太频繁了，明天再试' };
 		let code;
 		do { code = rnd(10).toUpperCase(); } while ((await this.ctx.storage.get('i:' + code)) || (await this.ctx.storage.get('k:' + code)));
-		const now = Date.now(), inv = { max: 1, used: 0, created: now, exp: now + 7 * DAY, note: ('试用：' + u.email).slice(0, 60), svc: days, uid, trial: 1 };
-		u.trial = { code, at: now };
+		const now = Date.now(), inv = { max: 1, used: 0, created: now, exp: now + 7 * DAY, note: ('试用：' + u.email).slice(0, 60), svc: days, uid, trial: 1, kind: 'trial' };
+		u.trial = { ...(u.trial || {}), code, at: now, got: 1 }; delete u.trial.used;
+		if (u.trialUsed == null && ts.used) u.trialUsed = ts.used;
+		u.inst = [...(u.inst || []), code].slice(-20);
 		await this.ctx.storage.put({ ['i:' + code]: inv, ['u:' + uid]: u });
-		await this.alog('trial', u.email, `领了 ${days} 天免费试用（试用码 7 天内有效）`, 'user');
-		return { st: 200, ok: true, days, code, exp: inv.exp, used: 0 };
+		await this.alog('trial', u.email, `领了 ${days} 天免费试用（第 ${ts.used + 1} 次，安装码 7 天内有效）`, 'user');
+		return { st: 200, ok: true, days, code, exp: inv.exp };
 	}
 	async devInfo({ sub, rkey }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		const d = await this.ctx.storage.get('d:' + sub);
-		return { st: 200, exp: (d && d.exp) || 0, off: !!(d && d.off), offWhy: (d && d.offWhy) || null };
+		return { st: 200, exp: (d && d.exp) || 0, off: !!(d && d.off), offWhy: (d && d.offWhy) || null, files: !!this.env.F };
 	}
 	async devRenew({ sub, rkey, code }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
@@ -1166,7 +1260,9 @@ export async function hubFetch(req, env) {
 	if (u.hostname === 'www.' + env.BASE_DOMAIN) return new Response(null, { status: 301, headers: { location: 'https://' + env.BASE_DOMAIN + p + u.search, 'cache-control': 'max-age=3600' } });
 	const body = async () => { try { return await req.json(); } catch (e) { return {}; } };
 	const H = hubObj(env);
-	if (p === '/api/ping') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY });
+	// 5.2 发文件：上传（分块）、下载（带签名）
+	{ const fx = await filesRoute(req, env, H, p); if (fx) return fx; }
+	if (p === '/api/ping') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY, files: !!env.F });
 	if (p === '/api/register' && req.method === 'POST') {
 		const b = await body();
 		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, ip: req.headers.get('cf-connecting-ip') || '' });
@@ -1180,7 +1276,7 @@ export async function hubFetch(req, env) {
 		// 路由器带着匿名编号来拿：记下「这台收到了」（公告统计用；编号是路由器随机生成的，跟账号、IP 都没关系）
 		const rid = u.searchParams.get('r') || '';
 		if (rid && anns.length) { try { await H.annGot(rid, anns.slice(0, 20).map((a) => a.id)); } catch (e) {} }
-		const list = anns.slice(0, 20).map((a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0 }));
+		const list = await Promise.all(anns.slice(0, 20).map(async (a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0, ...(a.files && a.files.length ? { files: await signFiles(env, H, a.files, 30 * DAY) } : {}) })));
 		return new Response(JSON.stringify({ ok: true, list }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 	}
 	if (p.startsWith('/api/fb/') && req.method === 'GET') {
@@ -1224,7 +1320,11 @@ export async function hubFetch(req, env) {
 		await H.admTouch();
 		const vx = await v5Admin(req, a, H, body, u, env);
 		if (vx) return vx;
-		const ox = await opsAdmin(req, a, H, body, u);
+		const fx = (await famAdmin(a, H, body, req.method)) || (await famAdminUser(a, H, body, req.method)) || (await instAdmin(a, H, body, req.method));
+		if (fx) return fx;
+		// 管理后台传文件（公告附件、回复里的文件）：先领上传票
+		if (a[0] === 'up' && req.method === 'POST') { const b = await body(), r = await fileStartFor(env, H, 'admin', b.ctx === 'ann' ? 'ann' : 'chat', b); const { st, ...rest } = r; return J(rest, st); }
+		const ox = await opsAdmin(req, a, H, body, u, env);
 		if (ox) return ox;
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
 		if (a[0] === 'devices' && SUB_RE.test(a[1] || '') && req.method === 'POST') {
@@ -1246,7 +1346,7 @@ export async function hubFetch(req, env) {
 			return J(r.st === 200 ? r : { error: r.error }, r.st);
 		}
 		if (a[0] === 'log' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminLog() });
-		if (a[0] === 'invites' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.invites() });
+		if (a[0] === 'invites' && !a[1] && req.method === 'GET') { await H.instSweep(); return J({ ok: true, list: await H.invites() }); }
 		if (a[0] === 'invites' && !a[1] && req.method === 'POST') { const inv = await H.addInvite(await body()); await H.alog('invite', inv.code, `能开通 ${inv.max} 台 · ${inv.svc ? '试用 ' + inv.svc + ' 天' : '不限期'}${inv.note ? ' · ' + inv.note : ''}`); return J({ ok: true, invite: inv }); }
 		if (a[0] === 'invites' && a[1] && req.method === 'DELETE') { const ok = await H.delInvite(a[1]); if (ok) await H.alog('invite-del', String(a[1]).toUpperCase(), '作废'); return J({ ok }); }
 		if (a[0] === 'renewals' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.renewals() });
@@ -1259,9 +1359,9 @@ export async function hubFetch(req, env) {
 			return J(r.st === 200 ? r : { error: r.error }, r.st);
 		}
 		if (a[0] === 'cleanup' && req.method === 'POST') return J({ ok: true, removed: await H.cleanup() });
-		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.feedbacksAdmin() });
+		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, files: !!env.F, list: await Promise.all((await H.feedbacksAdmin()).map(async (x) => (x.files ? { ...x, files: await signFiles(env, H, x.files) } : x))) });
 		// 公告：列表、新建、修改、删除
-		if (a[0] === 'ann' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.anns(true) });
+		if (a[0] === 'ann' && !a[1] && req.method === 'GET') return J({ ok: true, files: !!env.F, list: await Promise.all((await H.anns(true)).map(async (x) => (x.files ? { ...x, files: await signFiles(env, H, x.files, DAY) } : x))) });
 		if (a[0] === 'ann' && (!a[1] || /^[a-z2-9]{10}$/.test(a[1])) && req.method === 'POST') { const b = await body(), r = await H.annSave(a[1] || '', b); if (r.st === 200) await H.alog(a[1] ? 'ann_edit' : 'ann_new', '', r.ann.title); const { st, ...rest } = r; return J(rest, st); }
 		if (a[0] === 'ann' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') { const r = await H.annDel(a[1]); if (r) await H.alog('ann_del', '', a[1]); return J({ ok: r }, r ? 200 : 404); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') { const b = await body(); const r = await H.fbSet(a[1], b.state || (b.done ? 'fixed' : 'open'), b.note, !!b.mail); return J(r, r.error ? 400 : 200); }
@@ -1330,7 +1430,7 @@ self.addEventListener('notificationclick', (e) => {
 `;
 function adminPage(html) {
 	return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-		'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
+		'content-security-policy': "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" } });
 }
 /* ---------- 安卓 App：最新版本号和安装包（从 GitHub Release 转过来，走自己的域名，大陆也能下） ---------- */
 const repoOf = (env) => env.GITHUB_REPO || 'wznwzn123/openwrt-claude-panel';
@@ -1421,10 +1521,14 @@ async function appApk(env) {
 }
 
 // 安装包也从官网下载（从 GitHub 最新发布转过来）：大陆的路由器直连 GitHub 常常很慢或者下不动
-export const DL_RE = /^(openwrt-claude-panel-(?:(?:ai|noai)-(?:lite|full)|hosted-(?:ai|noai))\.tar\.gz|SHA256SUMS)$/;
+export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hosted(?:-(?:ai|noai))?))?\.tar\.gz|SHA256SUMS)$/;
+// 通用安装包（5.2 起，安装时在终端里选版本）：还没发布的旧版本里没有，就用能问版本的那个具体包顶上
+const DL_FALLBACK = { 'openwrt-claude-panel.tar.gz': 'openwrt-claude-panel-ai-full.tar.gz', 'openwrt-claude-panel-hosted.tar.gz': 'openwrt-claude-panel-hosted-ai.tar.gz' };
 async function dlFile(env, name) {
 	if (!DL_RE.test(name)) return J({ error: '没有这个文件' }, 404);
-	const r = await fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/' + name, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	const get = (n) => fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/' + n, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	let r = await get(name);
+	if (!r.ok && DL_FALLBACK[name]) r = await get(DL_FALLBACK[name]);
 	if (!r.ok) return J({ error: '还没有发布这个安装包' }, 404);
 	const gz = name.endsWith('.gz');
 	return new Response(r.body, { headers: { 'content-type': gz ? 'application/gzip' : 'text/plain; charset=utf-8', 'content-disposition': 'attachment; filename="' + name + '"', 'cache-control': 'public, max-age=600' } });
@@ -1447,6 +1551,9 @@ async function dlCfd(rest) {
 /* ---------- 账号接口（官网）和路由器配对接口 ---------- */
 const getSid = (req) => (/(?:^|;\s*)sid=([a-z2-9]{32})(?:;|$)/.exec(req.headers.get('cookie') || '') || [])[1] || '';
 const sidCookie = (sid, age) => `sid=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+// 新设备验证用：这个浏览器的编号（验证过一次以后，30 天内登录只要密码）
+const getDid = (req) => (/(?:^|;\s*)did=([a-z2-9]{32})(?:;|$)/.exec(req.headers.get('cookie') || '') || [])[1] || '';
+const didCookie = (did) => `did=${did}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TRUST_DAYS * 86400}`;
 // 自建版路由器的面板网址：只认 https；登录地址（/cgi-bin/mcp/密钥）和 #login=密钥 都只取网址部分，密钥丢掉
 export function panelUrl(raw) {
 	let u;
@@ -1469,7 +1576,8 @@ async function accountApi(req, env, H, p, body) {
 	}
 	const b = post ? await body() : {};
 	const s = (v) => String(v == null ? '' : v);
-	const out = (r) => { const { st, sid, ...rest } = r; const res = J(sid ? { ok: true, ...rest } : rest, st); if (sid) res.headers.append('set-cookie', sidCookie(sid, 30 * 86400)); return res; };
+	const out = (r) => { const { st, sid, did: nd, ...rest } = r; const res = J(sid ? { ok: true, ...rest } : rest, st); if (sid) res.headers.append('set-cookie', sidCookie(sid, 30 * 86400)); if (nd) res.headers.append('set-cookie', didCookie(nd)); return res; };
+	const did = getDid(req);
 	if (!post && p !== '/api/account/me' && p !== '/api/account/brief') return J({ error: 'method not allowed' }, 405);
 	// 路由器那边（凭 RKEY）
 	if (p === '/api/pair/start') return out(await H.pairStart({ sub: s(b.sub), rkey: s(b.rkey) }));
@@ -1478,14 +1586,17 @@ async function accountApi(req, env, H, p, body) {
 	if (p === '/api/dev/logincode') return out(await H.devLoginCode({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	if (p === '/api/dev/info') return out(await H.devInfo({ sub: s(b.sub), rkey: s(b.rkey) }));
 	if (p === '/api/dev/fb') return out(await H.devFb({ sub: s(b.sub), rkey: s(b.rkey) }));
-	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [] }));
+	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [], files: Array.isArray(b.files) ? b.files.slice(0, 5).map(s) : [] }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
+	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
+	{ const fx = await famDev(p, H, b); if (fx) return fx; }
 	const a = p.slice('/api/account/'.length);
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
-	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev }));
-	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip, dev }));
-	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev, ip }));
+	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev, did }));
+	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip, dev, did }));
+	if (a === 'login2') return out(await H.userLogin2({ token: s(b.token), code: s(b.code), op: s(b.op), ip, dev, did }));
+	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev, ip, did }));
 	const sid = getSid(req);
 	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	// 官网各页右上角问「登录了没有」：没登录也回 200，免得每个访客的浏览器控制台里都有一条红色报错
@@ -1493,15 +1604,16 @@ async function accountApi(req, env, H, p, body) {
 	const me = await H.who(sid);
 	if (!me) return a === 'brief' ? J({ ok: false }) : J({ error: '请先登录', login: true }, 401);
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
+	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)); if (fx) return fx; }
 	// 官网各页右上角：登录了就显示头像和名字（很轻，只要名字和头像）
 	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
 	if (a === 'profile') return out(await H.setProfile(me.uid, { name: b.name === undefined ? undefined : s(b.name), avatar: b.avatar === undefined ? undefined : s(b.avatar), layout: b.layout === undefined ? undefined : b.layout }));
 	if (a === 'fb') return out(await H.accountFb(me.uid, me.email));
 	if (a === 'sessions') return out(await H.sessions(me.uid, sid));
 	if (a === 'session_out') return out(await H.sessionOut(me.uid, sid, s(b.id)));
-	if (a === 'sessions_out_others') return out(await H.sessionsOutOthers(me.uid, sid));
+	if (a === 'sessions_out_others') return out(await H.sessionsOutOthers(me.uid, sid, did));
 	if (a === 'bind') return out(await H.bind(me.uid, s(b.code), ip));
-	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub)));
+	if (a === 'unbind') return out(await H.unbind(me.uid, s(b.sub), { web: true, sudo: await H.webSudoOk(sid) }));
 	if (a === 'rename') return out(await H.rename(me.uid, s(b.sub), s(b.alias)));
 	if (a === 'logincode') return out(await H.loginCode(me.uid, s(b.sub)));
 	if (a === 'renew') return out(await H.accountRenew(me.uid, me.email, s(b.sub), s(b.code)));
@@ -1509,12 +1621,15 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'apply') return out(await H.apply(me.uid, me.email, { sub: s(b.sub), source: s(b.source), contact: s(b.contact), note: s(b.note) }));
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
-	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password)));
+	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password), did));
 	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) res.headers.append('set-cookie', sidCookie('', 0)); return res; }
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); }
 installOps(Hub);
 installV5(Hub);
+installFam(Hub);
+installInst(Hub);
+installFiles(Hub);
 export { hubObj };

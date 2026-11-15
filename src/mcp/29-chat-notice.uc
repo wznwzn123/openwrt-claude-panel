@@ -17,11 +17,11 @@ function chat_post(url, b, tmo) {
 }
 P.chat = function(a) {
 	let op = '' + (a?.op ?? 'get');
-	if (index(['get', 'send', 'img', 'peek'], op) < 0) die('不认识的操作');
+	if (index(['get', 'send', 'img', 'peek', 'up'], op) < 0) die('不认识的操作');
 	let id = chat_id();
 	if (!id) {
 		// 自建版还没说过话：看的时候不建身份，发第一条时才建
-		if (op != 'send') return { ok: true, msgs: [], uu: 0, seq: 0, hosted: false, none: true };
+		if (op != 'send' && op != 'up') return { ok: true, msgs: [], uu: 0, seq: 0, hosted: false, none: true };
 		let hub = CL.ann_hub();
 		let host = trim(readfile('/proc/sys/kernel/hostname') ?? '') || 'OpenWrt', model = trim(readfile('/tmp/sysinfo/model') ?? '');
 		let r = chat_post(hub, { op: 'anon', name: substr(host, 0, 40), model: substr(model, 0, 60) }, 15);
@@ -37,9 +37,12 @@ P.chat = function(a) {
 	if (op == 'get') { b.after = +(a?.after ?? 0) || 0; b.read = !!a?.read; }
 	if (op == 'peek') b.after = 99999999;
 	if (op == 'img') b.seq = +(a?.seq ?? 0) || 0;
+	// 5.2 发文件：先领上传票（手机直接把文件传给托管服务，不经过路由器），发消息时带上文件编号
+	if (op == 'up') { b.name = substr('' + (a?.name ?? ''), 0, 200); b.size = +(a?.size ?? 0) || 0; b.type = substr('' + (a?.type ?? ''), 0, 100); b.ctx = a?.ctx == 'fb' ? 'fb' : 'chat'; }
 	if (op == 'send') {
 		b.text = substr('' + (a?.text ?? ''), 0, 8000);
 		if (a?.img) b.img = '' + a.img;
+		if (type(a?.files) == 'array') b.files = filter(map(slice(a.files, 0, 5), (x) => '' + x), (x) => match(x, /^[a-z2-9]{16}$/));
 		b.ver = ver_info().cur; b.ua = substr('' + (a?.ua ?? ''), 0, 300);
 	}
 	let r = chat_post(id.url, b, op == 'send' ? 45 : 15);
@@ -47,6 +50,7 @@ P.chat = function(a) {
 	if (r.relogin && !id.hosted) sh('rm -f ' + shq(CHAT_CONF));
 	if (r.error) die(r.error);
 	r.hosted = id.hosted;
+	if (op == 'up') return r;
 	if (op != 'img') writefile(CHAT_PEEK, sprintf('%J', { at: time(), uu: r.uu ?? 0, seq: r.seq ?? 0, blocked: !!r.blocked }));
 	return r;
 };

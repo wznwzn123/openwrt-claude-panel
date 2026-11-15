@@ -15,7 +15,7 @@ const H = env.H.get('hub');
 let T = Date.now(); Date.now = () => T;
 
 /* ---------- 开一台托管路由器 ---------- */
-const inv = (await (await adm('POST', '/invites', { max: 5 })).json()).invite.code;
+const inv = (await (await adm('POST', '/invites', { direct: true, max: 5 })).json()).invite.code;
 const R1 = await (await api('POST', '/api/register', { invite: inv, name: 'Kwrt', model: 'JD RE-SS-01' }, { 'cf-connecting-ip': '1.1.1.1' })).json();
 ok('[准备] 开通了一台路由器', !!R1.sub, JSON.stringify(R1).slice(0, 200));
 const chat = (b, ip = '2.2.2.2') => api('POST', '/api/chat', b, { 'cf-connecting-ip': ip });

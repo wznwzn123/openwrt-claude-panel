@@ -111,7 +111,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, notice: loadNotice, chat: loadChat };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -194,24 +194,52 @@ function loginDevName() {
 	return (os + ' · ' + b).slice(0, 40);
 }
 function lcErr(t) { $('lcErr').textContent = t || ''; $('lcErr').classList.toggle('hidden', !t); }
-function needCode(data) {
+function needCode(data, why, force) {
 	const w = $('needcode');
-	if (!token) return; // 已经退出了（退出前发出去的请求晚回来）
-	const hub = (data && /^https:\/\/[a-z0-9.-]+$/i.test(data.hub || '')) ? data.hub : 'https://yrlove520.com';
+	if (!token && !force) return; // 已经退出了（退出前发出去的请求晚回来）
+	const hub = (data && /^https:\/\/[a-z0-9.-]+$/i.test(data.hub || '')) ? data.hub : (store.get('rp_hub') || 'https://yrlove520.com');
+	if (data && data.hub) store.set('rp_hub', hub);
 	$('lcHub').href = hub + '/app';
-	$('lcHubName').textContent = hub.replace(/^https:\/\//, '');
-	// 刚装好（链接里带着配对码，10 分钟内）：先去官网绑定账号
-	let pr = null; try { pr = JSON.parse(localStorage.getItem('rp_pair') || 'null'); } catch (e) {}
-	const pairOk = pr && pr.code && pr.exp > Date.now();
-	if (pr && !pairOk) store.del('rp_pair');
-	$('lcPair').classList.toggle('hidden', !pairOk);
-	$('lcSteps').classList.toggle('hidden', !!pairOk);
-	if (pairOk) $('lcPairBtn').href = hub + '/app?pair=' + encodeURIComponent(pr.code);
+	$('lcOpening').classList.add('hidden'); $('lcBody').classList.remove('hidden'); $('lcTitle').textContent = '从官网打开面板';
+	$('lcWhy').textContent = why && !/还没登录/.test(why) ? why : ''; $('lcWhy').classList.toggle('hidden', !why || /还没登录/.test(why));
 	if (!w.classList.contains('hidden')) return;
+	$('app').classList.add('hidden'); $('login').classList.add('hidden');
 	w.classList.remove('hidden');
 	lcErr('');
-	if (pendCode) { $('lcInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
-	else setTimeout(() => { try { $('lcInput').focus(); } catch (e) {} }, 300);
+	if (pendCode) { $('lcEmerg').open = true; $('lcInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
+}
+// 官网「打开面板」带来的票：换这台手机的钥匙
+async function openTicket(t) {
+	const w = $('needcode');
+	$('login').classList.add('hidden'); $('app').classList.add('hidden');
+	w.classList.remove('hidden'); $('lcTitle').textContent = '正在打开面板'; $('lcOpening').classList.remove('hidden'); $('lcBody').classList.add('hidden');
+	let msg = '';
+	try {
+		const r = await fetch('../cgi-bin/mcp/open', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, cache: 'no-store',
+			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'panel/open_login', params: { ticket: t, name: loginDevName(), old: store.get('rp_dev') || undefined }, client: 'panel' }) });
+		if (r.status === 404) msg = '这台路由器的面板版本太旧，还不支持从官网直接打开：先在路由器上升级到 5.2';
+		else if (r.status === 530 || r.status === 502 || r.status === 503) msg = '连不上路由器：可能断电或家里断网了，过一会儿再从官网打开';
+		else {
+			const j = await r.json();
+			if (j.error) msg = j.error.message;
+			else {
+				token = j.result.token; store.set('rp_token', token); store.set('rp_dev', j.result.dev); store.del('rp_role');
+				w.classList.add('hidden'); start(); return;
+			}
+		}
+	} catch (e) { msg = '连不上路由器，检查一下手机网络，再从官网打开一次'; }
+	needCode(null, msg, true);
+}
+// 我是主账号还是子账号、能用哪些功能（侧边栏按这个显示）
+async function loadRole() {
+	try {
+		const r = await P('whoami');
+		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg };
+		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
+		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
+		if (r.hub) store.set('rp_hub', r.hub);
+		if (ch) { renderNav(); if (!canPage(page)) go('main'); }
+	} catch (e) {}
 }
 async function ncGo() {
 	const code = $('lcInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -220,7 +248,7 @@ async function ncGo() {
 	const btn = $('lcBtn'); btn.disabled = true; btn.textContent = '核对中…';
 	try {
 		const r = await rpcOnce('panel/device_approve', { code, name: loginDevName() }, 30000);
-		store.set('rp_dev', r.dev); store.del('rp_pair');
+		store.set('rp_dev', r.dev); store.del('rp_role');
 		btn.textContent = '✓ 登录成功';
 		setTimeout(() => location.reload(), 400);
 	} catch (e) {
@@ -248,6 +276,7 @@ function start() {
 	// 先用上次读到的菜单，把新装的插件放进侧边栏（这样上次停在插件页面也能直接打开）
 	try { navExtra(JSON.parse(store.get('rp_menu') || '[]'), false); renderNav(); } catch (e) {}
 	setTimeout(loadMenu, 2500);
+	if (store.get('rp_dev')) setTimeout(loadRole, 400);
 	const qp = new URLSearchParams(location.search).get('p');
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}
@@ -522,5 +551,5 @@ async function lockSettings() {
 
 try { lgBackground(); } catch (e) {}
 try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch (e) {}
-token ? start() : logout();
+if (pendOpen) openTicket(pendOpen); else token ? start() : logout();
 })();

@@ -79,5 +79,5 @@ export interface Overview {
   days: DayStat[]
 }
 export interface ChatThread { done?: number; autoAt?: number; tid: string; kind: 'hosted' | 'self'; sub?: string; name?: string; model?: string; ver?: string; place?: string; dev?: string; at: number; last?: number; lastFrom?: 'u' | 'a'; preview?: string; ua?: number; uu?: number; n?: number; seq?: number; blocked?: boolean; adminSeen?: number }
-export interface ChatMsg { s: number; f: 'u' | 'a'; t: number; x: string; img: { type: string; size: number } | null; auto?: number }
+export interface ChatMsg { s: number; f: 'u' | 'a'; t: number; x: string; img: { type: string; size: number } | null; auto?: number; files?: import('@/composables/upload').UpFile[] }
 export interface LoginRow { t: number; k: 'user' | 'admin' | 'reg' | 'reset'; who: string; ok: boolean; why: string; ip: string; place: string; ua: string }

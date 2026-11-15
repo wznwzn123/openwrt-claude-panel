@@ -347,7 +347,7 @@ let wdData = null;
 /* 云端监测（Cloudflare）：路由器断线时也能读到，因为 /cloud/ 在隧道之前就被 Cloudflare 接住了 */
 let cloud = null, cloudAt = 0, cloudErr = null, cinfo = null;
 // 托管版才有「绑定到账号」
-const hubBtn = () => { const b = $('hubBindBtn'); if (b) b.classList.toggle('hidden', !(cinfo && cinfo.hub)); };
+const hubBtn = () => {}; // 5.2：「绑定到账号」「托管服务」搬到「我的主页」了
 try { cloud = JSON.parse(store.get('rp_cloud') || 'null'); cinfo = JSON.parse(store.get('rp_cinfo') || 'null'); } catch (e) {}
 // 精简版没有 Cloudflare 云端：路由器说没配置云端，就不去请求 /cloud/，也不显示云端相关卡片
 const noCloud = () => !!cinfo && cinfo.enabled === false;
@@ -909,17 +909,22 @@ function shrinkImg(file, lim) {
 async function feedbackSheet() {
 	let dg = '', hosted = true;
 	try { const r = await P('feedback_diag', {}, 15000); dg = r.text || ''; hosted = r.hosted !== false; } catch (e) {}
+	// 5.2：托管服务开了文件存储才显示「添加视频或文件」（老的缓存里没有这一项，就问一次）
+	if (hosted && !(SVC && 'files' in SVC)) await svcLoad(false);
 	const IM = [];
 	modal(`<div class="sheethead"><h3>问题反馈 / 建议</h3><button class="btn sm" data-v="close">关闭</button></div>
 		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。</p>
 		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px"></textarea>
 		<div class="fbims" data-ims></div>
 		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
+		${hosted && SVC && SVC.files ? `<div class="atts hidden" data-atts style="margin-top:8px"></div><label class="btn fbadd"><input type="file" multiple data-any style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加视频或文件（200MB 以内）</span></label>` : ''}
 		<input class="input" data-ct maxlength="80" placeholder="联系方式（可以不填）：微信、QQ、邮箱" style="margin-top:8px" autocapitalize="off" spellcheck="false">
 		<label class="kv aswon" style="margin-top:6px"><span><b>附上路由器信息</b><span class="muted">方便查问题，只有下面这些，不含密钥和网址</span></span><span class="sw"><input type="checkbox" data-dg checked><i></i></span></label>
 		${dg ? `<pre class="out" style="font-size:11.5px;max-height:120px;overflow:auto;margin:6px 0 0">${esc(dg)}</pre>` : ''}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn primary" data-go>发送</button></div>`, (m, close) => {
 		const go = m.querySelector('[data-go]'), tx = m.querySelector('[data-tx]'), box = m.querySelector('[data-ims]'), fi = m.querySelector('[data-file]'), aw = m.querySelector('[data-addw]');
+		const FA = m.querySelector('[data-atts]') ? attList(m.querySelector('[data-atts]'), 'fb', 5) : null, fa = m.querySelector('[data-any]');
+		if (fa) fa.onchange = () => { if (fa.files && fa.files.length) FA.add(fa.files); fa.value = ''; };
 		const draw = () => {
 			box.innerHTML = IM.map((d, i) => `<div class="fbim"><img src="${d}" alt="截图 ${i + 1}"><button type="button" data-rm="${i}" aria-label="删掉这张">×</button></div>`).join('');
 			if (aw) { aw.classList.toggle('hidden', IM.length >= 3); aw.querySelector('[data-addt]').textContent = IM.length ? `＋ 再加一张（已添加 ${IM.length} / 3 张）` : '＋ 添加截图（最多 3 张）'; }
@@ -936,7 +941,9 @@ async function feedbackSheet() {
 		};
 		setTimeout(() => tx.focus(), 80);
 		go.onclick = () => busy(go, async () => {
-			const r = await P('feedback', { text: tx.value, contact: m.querySelector('[data-ct]').value, diag: m.querySelector('[data-dg]').checked, images: hosted ? IM : [] }, 90000);
+			if (FA && FA.busy()) await FA.wait();
+			if (FA && FA.bad()) throw new Error('有文件没传上：点 × 去掉它再发');
+			const r = await P('feedback', { text: tx.value, contact: m.querySelector('[data-ct]').value, diag: m.querySelector('[data-dg]').checked, images: hosted ? IM : [], files: FA ? FA.ids() : [] }, 90000);
 			close(true);
 			if (r.sent === 'github') { window.open(r.url, '_blank', 'noopener'); toast('已打开 GitHub，登录后点「Submit」就发出去了'); }
 			else if (r.code) fbSent(r);
@@ -947,7 +954,7 @@ async function feedbackSheet() {
 // 退出登录：清掉这台手机上的密钥；托管版顺便让路由器忘掉这台手机（下次要重新输登录码）
 async function signOut() {
 	const dev = !!store.get('rp_dev');
-	if (!(await confirmBox('退出登录', '这台手机退出面板，下次打开要重新粘贴登录地址' + (dev ? '，还要重新输登录码' : '') + '。路由器上的设置不受影响。', '退出登录', true))) return;
+	if (!(await confirmBox('退出登录', (dev ? '这台手机退出面板，下次要从官网「我的路由器」重新打开' : '这台手机退出面板，下次打开要重新粘贴登录地址') + '。路由器上的设置不受影响。', '退出登录', true))) return;
 	if (dev) { try { await rpcOnce('panel/device_remove', { self: true }, 8000); } catch (e) {} }
 	store.del('rp_dev');
 	sideOpen(false);
@@ -1061,6 +1068,17 @@ function qrSvg(text) { const q = window.qrcode(0, 'M'); q.addData(text); q.make(
 // 二维码先打码，点一下才显示，免得旁边的人或截图看到
 function qrReveal(m) { m.querySelectorAll('.qrbox.blur').forEach((b) => (b.onclick = () => b.classList.remove('blur'))); }
 async function addPhone() {
+	// 托管版 5.2：新手机都从官网账号打开（扫码只是打开官网）；家里人用加入码
+	if (store.get('rp_dev')) {
+		const hub = store.get('rp_hub') || 'https://yrlove520.com', url = hub + '/app';
+		try { await loadQr(); } catch (e) { return toast(e.message, true); }
+		return modal(`<div class="sheethead"><h3>在新手机上打开</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<p class="muted" style="margin:0 0 12px">新手机扫这个码打开官网，登录<b>你自己的</b>官网账号，在「我的路由器」里点这台路由器的「打开面板」就行，不用输任何码。</p>
+		<div class="qrbox">${qrSvg(url)}</div>
+		<div class="notice" style="margin-top:12px">家里人要用：让他注册自己的官网账号，${ME_ROLE.role === 'sub' ? '找主账号要一个加入码。' : '你在「我的主页 → 家人」里生成加入码发给他，他加入后能做什么由你决定。'}</div>
+		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制官网地址</button><button class="btn primary" data-v="close">完成</button></div>`,
+		(m) => { m.querySelector('[data-copy]').onclick = () => copyText(url); });
+	}
 	const url = location.origin + location.pathname.replace(/[^/]*$/, '') + '#login=' + token;
 	try { await loadQr(); } catch (e) { return toast(e.message, true); }
 	modal(`<div class="sheethead"><h3>添加新手机</h3><button class="btn sm" data-v="close">关闭</button></div>
@@ -1282,6 +1300,7 @@ function ntAnnPop(a) {
 	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
 	<p class="muted" style="font-size:13px;margin:0">开发者发布的重要公告 · ${esc(fbWhen(a.at))}</p>
 	${a.body ? `<div class="notice" style="white-space:pre-wrap;line-height:1.65;margin-top:12px;max-height:50vh;overflow:auto">${esc(a.body)}</div>` : ''}
+	${a.files && a.files.length ? `<div style="margin-top:12px">${filesHtml(a.files)}</div>` : ''}
 	<p class="muted" style="font-size:12.5px;margin:10px 0 0">以后在「通知」里还能看到这条。</p>
 	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-nt>打开通知</button><button class="btn primary" data-v="close">知道了</button></div>`,
 	(m, close) => { m.dataset.ann = 1; m.querySelector('[data-nt]').onclick = () => { close(null); go('notice'); }; });
@@ -1315,7 +1334,7 @@ function ntRender() {
 	// 置顶：还在显示期内的重要公告（最新一条）
 	const pin = (NT.f === 'all' || NT.f === 'ann') ? all.find((x) => x.c === 'ann' && x.imp) : null;
 	const popened = $('ntPin').querySelector('.ntpin.open');
-	$('ntPin').innerHTML = pin ? `<div class="ntpin${popened ? ' open' : ''}" data-k="${esc(pin.k)}" role="button" tabindex="0"><div class="pt">${ntSvg('ann').replace('<svg', '<svg style="width:15px;height:15px"')}置顶 · 重要公告</div><b>${esc(pin.title)}</b>${pin.body ? `<p>${esc(pin.body)}</p>` : ''}<div class="pm"><span>${esc(fbWhen(pin.t))}</span><span>${pin.body ? (popened ? '收起' : '点开看全文') : ''}</span></div></div>` : '';
+	$('ntPin').innerHTML = pin ? `<div class="ntpin${popened ? ' open' : ''}" data-k="${esc(pin.k)}" role="button" tabindex="0"><div class="pt">${ntSvg('ann').replace('<svg', '<svg style="width:15px;height:15px"')}置顶 · 重要公告</div><b>${esc(pin.title)}</b>${pin.body ? `<p>${esc(pin.body)}</p>` : ''}${pin.ann && pin.ann.files ? filesHtml(pin.ann.files) : ''}<div class="pm"><span>${esc(fbWhen(pin.t))}</span><span>${pin.body ? (popened ? '收起' : '点开看全文') : ''}</span></div></div>` : '';
 	const list = all.filter((x) => (NT.f === 'all' || x.c === NT.f) && x !== pin), lim = 60 + NT.more;
 	const opened = new Set([...box.querySelectorAll('.ntit.open')].map((x) => x.dataset.k));
 	const warn = [];
@@ -1331,7 +1350,7 @@ function ntRender() {
 		const isNew = x.t > seen; if (isNew) nd++;
 		const tm = x.t ? new Date(x.t).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '';
 		const nav = x.go || x.fb || x.upd;
-		rows.push(`<div class="ntit${opened.has(x.k) ? ' open' : ''}${isNew ? ' new' : ''}" data-k="${esc(x.k)}" role="button" tabindex="0"><span class="ntic ${esc(x.lvl)}">${ntSvg(x.ic)}</span><div class="ntb"><b>${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}<span class="ntm"><i>${esc(x.src)}</i>${tm ? '<span>' + tm + '</span>' : ''}${isNew ? '<span style="color:var(--brand);font-weight:700">新</span>' : ''}</span></div>${nav ? '<span class="ntgo" aria-hidden="true">›</span>' : ''}</div>`);
+		rows.push(`<div class="ntit${opened.has(x.k) ? ' open' : ''}${isNew ? ' new' : ''}" data-k="${esc(x.k)}" role="button" tabindex="0"><span class="ntic ${esc(x.lvl)}">${ntSvg(x.ic)}</span><div class="ntb"><b>${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}${x.ann && x.ann.files ? filesHtml(x.ann.files) : ''}<span class="ntm"><i>${esc(x.src)}</i>${tm ? '<span>' + tm + '</span>' : ''}${isNew ? '<span style="color:var(--brand);font-weight:700">新</span>' : ''}</span></div>${nav ? '<span class="ntgo" aria-hidden="true">›</span>' : ''}</div>`);
 	}
 	flush();
 	if (list.length > lim) html += `<button class="btn" data-ntmore style="width:100%;margin-top:12px">再看 ${Math.min(60, list.length - lim)} 条（共 ${list.length} 条）</button>`;
@@ -1340,8 +1359,9 @@ function ntRender() {
 }
 $('ntChips').onclick = (e) => { const c = e.target.closest('[data-ntf]'); if (!c) return; NT.f = c.dataset.ntf; NT.more = 0; ntRender(); };
 $('p-notice').querySelector('.ntent').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
-$('ntPin').onclick = (e) => { const p = e.target.closest('.ntpin'); if (!p) return; p.classList.toggle('open'); const s = p.querySelector('.pm span:last-child'); if (s && s.textContent) s.textContent = p.classList.contains('open') ? '收起' : '点开看全文'; };
+$('ntPin').onclick = (e) => { if (e.target.closest('.files')) return; const p = e.target.closest('.ntpin'); if (!p) return; p.classList.toggle('open'); const s = p.querySelector('.pm span:last-child'); if (s && s.textContent) s.textContent = p.classList.contains('open') ? '收起' : '点开看全文'; };
 $('ntList').onclick = (e) => {
+	if (e.target.closest('.files')) return; // 点公告里的文件：直接打开 / 下载，不折叠
 	if (e.target.closest('[data-ntmore]')) { NT.more += 60; return ntRender(); }
 	const it = e.target.closest('.ntit'); if (!it) return;
 	const x = ($('ntList')._items || []).find((y) => y.k === it.dataset.k); if (!x) return;
@@ -1353,6 +1373,76 @@ $('ntList').onclick = (e) => {
 };
 for (const id of ['ntList', 'ntPin']) $(id).onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && (e.target.classList.contains('ntit') || e.target.classList.contains('ntpin'))) { e.preventDefault(); e.target.click(); } };
 $('bellBtn').onclick = () => go('notice');
+
+/* ---------- 5.2 发文件：先经路由器领上传票，再从手机直接分块传给托管服务（不经过路由器）；最大 200MB ---------- */
+const FILE_MAX = 200 * 1024 * 1024;
+const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(n >= 10485760 ? 0 : 1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
+const IC_FILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/></svg>';
+function upPart(url, blob, onp) {
+	return new Promise((ok, no) => {
+		const x = new XMLHttpRequest(); x.open('PUT', url);
+		x.upload.onprogress = (e) => onp(e.loaded);
+		x.onload = () => { if (x.status === 200) return ok(); let m = ''; try { m = JSON.parse(x.responseText).error; } catch (e) {} no(Object.assign(new Error(m || '上传失败（' + x.status + '）'), { fatal: x.status === 400 || x.status === 403 })); };
+		x.onerror = () => no(new Error('网络断了，没传上'));
+		x.send(blob);
+	});
+}
+async function upFile(f, ctx, onp) {
+	if (!f.size) throw new Error('这是个空文件');
+	if (f.size > FILE_MAX) throw new Error('太大了：最大 200MB');
+	const t = await P('chat', { op: 'up', name: f.name, size: f.size, type: f.type || '', ctx }, 30000);
+	let off = 0;
+	for (let k = 1; k <= t.n; k++) {
+		const blob = f.slice(off, off + t.part);
+		for (let tries = 1; ; tries++) {
+			try { await upPart(t.url + '/' + k, blob, (l) => onp((off + l) / f.size)); break; }
+			catch (e) { if (e.fatal || tries >= 3) throw e; await new Promise((z) => setTimeout(z, 1500 * tries)); }
+		}
+		off += blob.size; onp(off / f.size);
+	}
+	const r = await fetch(t.url + '/done', { method: 'POST' }), j = await r.json().catch(() => ({}));
+	if (!r.ok) throw new Error(j.error || '上传失败');
+	return j;
+}
+// 一组要发的文件：选了就开始传，显示进度；发送时拿文件编号
+function attList(box, ctx, max) {
+	const L = [];
+	const draw = () => {
+		box.classList.toggle('hidden', !L.length);
+		box.innerHTML = L.map((a, i) => `<div class="att"><span class="ai">${IC_FILE}</span><div class="at"><b>${esc(a.f.name)}</b><small class="${a.err ? 'bad' : ''}">${a.err ? '没传上：' + esc(a.err) : a.id ? fmtSize(a.f.size) + ' · 传好了' : fmtSize(a.f.size) + ' · 正在上传 ' + Math.floor(a.p * 100) + '%'}</small>${a.id || a.err ? '' : `<div class="bar"><i style="width:${Math.floor(a.p * 100)}%"></i></div>`}</div><button type="button" data-rm="${i}" aria-label="不发这个文件">×</button></div>`).join('');
+	};
+	box.onclick = (e) => { const b = e.target.closest('[data-rm]'); if (b) { const a = L[+b.dataset.rm]; if (a) a.gone = true; L.splice(+b.dataset.rm, 1); draw(); } };
+	return {
+		add(files) {
+			for (const f of [...files]) {
+				if (L.length >= max) { toast('一次最多 ' + max + ' 个文件', true); break; }
+				if (f.size > FILE_MAX) { toast('「' + f.name + '」太大了：最大 200MB', true); continue; }
+				const a = { f, p: 0, id: '', err: '' }; L.push(a);
+				a.job = upFile(f, ctx, (p) => { a.p = p; draw(); }).then((r) => { a.id = r.id; draw(); }, (e) => { a.err = e.message; draw(); });
+			}
+			draw();
+		},
+		busy: () => L.some((a) => !a.id && !a.err),
+		bad: () => L.some((a) => a.err),
+		ids: () => L.filter((a) => a.id).map((a) => a.id),
+		names: () => L.filter((a) => a.id).map((a) => ({ name: a.f.name, size: a.f.size })),
+		wait: () => Promise.all(L.map((a) => a.job)),
+		clear() { L.length = 0; draw(); },
+		get n() { return L.length; },
+	};
+}
+// 消息、公告里的文件：图片、视频、音频直接显示；其他的是一张可以点的文件卡片（都带下载）
+function filesHtml(fs) {
+	if (!fs || !fs.length) return '';
+	return '<div class="files">' + fs.map((f) => {
+		const u = esc(f.url || ''), dl = esc((f.url || '') + '&dl=1');
+		if (!f.url) return `<span class="ff">${IC_FILE}<span><b>${esc(f.name)}</b><small>${fmtSize(f.size || 0)}</small></span></span>`;
+		if (f.k === 'img') return `<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="${esc(f.name)}" loading="lazy"></a><a class="fcap" href="${dl}" target="_blank" rel="noopener">${esc(f.name)} · 下载</a>`;
+		if (f.k === 'video') return `<video src="${u}" controls preload="metadata" playsinline></video><a class="fcap" href="${dl}" target="_blank" rel="noopener">${esc(f.name)} · ${fmtSize(f.size)} · 下载</a>`;
+		if (f.k === 'audio') return `<audio src="${u}" controls preload="none"></audio><a class="fcap" href="${dl}" target="_blank" rel="noopener">${esc(f.name)} · 下载</a>`;
+		return `<a class="ff" href="${dl}" target="_blank" rel="noopener">${IC_FILE}<span><b>${esc(f.name)}</b><small>${fmtSize(f.size)} · 点一下下载</small></span></a>`;
+	}).join('') + '</div>';
+}
 
 /* ---------- 实时联系开发者（4.0）：开着这一页时每 4 秒拿一次新消息；回复会推送到手机 ---------- */
 const CH = { msgs: [], seq: 0, timer: 0, busy: false, img: '', hosted: true, none: false, blocked: false, pend: [], imgs: {}, at: 0 };
@@ -1369,6 +1459,8 @@ async function chPull(full) {
 	try {
 		const r = await P('chat', { op: 'get', after: full ? 0 : CH.seq, read: true }, 20000);
 		CH.hosted = r.hosted !== false; CH.none = !!r.none; CH.blocked = !!r.blocked; CH.adminSeen = r.adminSeen || 0;
+		if ('files' in r) CH.files = !!r.files;
+		if (r.dev) CH.dev = r.dev; if ('me' in r) CH.me = r.me;
 		if (full) CH.msgs = r.msgs || [];
 		else for (const m of r.msgs || []) if (!CH.msgs.some((x) => x.s === m.s)) CH.msgs.push(m);
 		CH.msgs.sort((a, b) => a.s - b.s);
@@ -1387,20 +1479,35 @@ function chRender(scroll) {
 	$('chSub').textContent = CH.blocked ? '暂时不能发消息' : CH.hosted ? '直接跟开发这个面板的人对话' : '自建版也能用：第一次发消息时自动建立对话';
 	$('chNote').textContent = CH.err ? '连不上：' + CH.err : CH.blocked ? '暂时不能发消息了，有问题可以在官网报告问题' : CH.hosted ? '开发者回复后会推送到手机' : '开发者回复后，路由器会在半小时内推送到手机';
 	$('chSend').disabled = CH.blocked; $('chText').disabled = CH.blocked; $('chImgBtn').disabled = CH.blocked;
+	$('chAttBtn').classList.toggle('hidden', !(CH.files || (SVC && SVC.files))); $('chAttBtn').disabled = CH.blocked;
 	const all = [...CH.msgs, ...CH.pend];
 	if (!all.length) {
+		CH.html = '';
 		box.innerHTML = `<div class="chempty">${CH.none || !CH.msgs.length ? '还没有消息。有什么想问的，直接写下来发送就行。' : ''}<div class="chips" style="margin-top:12px">${['面板打不开了', '安装失败了', '想要一个新功能', '某个提示看不懂'].map((x) => `<button class="chip" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`;
 		return;
 	}
-	let html = '', day = '';
+	let html = '', day = '', prev = null;
+	const devN = (CH.dev && CH.dev.name) || '开发者';
 	for (const m of all) {
-		const dd = ntDay(m.t); if (dd !== day) { day = dd; html += `<div class="chday">${esc(dd)}</div>`; }
+		const dd = ntDay(m.t); if (dd !== day) { day = dd; html += `<div class="chday">${esc(dd)}</div>`; prev = null; }
+		const first = !prev || prev.f !== m.f || !!prev.auto !== !!m.auto; prev = m;
 		const me = m.f === 'u';
 		const img = m.img ? (m.local || CH.imgs[m.s] ? `<img src="${esc(m.local || CH.imgs[m.s])}" alt="图片" data-big="${m.s || ''}">` : `<span class="imgph" data-load="${m.s}">点开看图片</span>`) : '';
 		const st = m.pending ? '<div class="chmeta">发送中…</div>' : m.fail ? `<div class="chmeta bad" data-retry="${m.id}">没发出去：${esc(m.fail)} · 点这里重发</div>` : `<div class="chmeta">${chTime(m.t)}${me && CH.adminSeen >= m.s ? ' · 开发者已读' : ''}</div>`;
-		html += `<div class="chrow${me ? ' me' : ''}">${me ? '' : `<div class="chwho">${m.auto ? '自动回复' : '开发者'}</div>`}<div class="chbub">${img}${m.x ? esc(m.x) : ''}</div>${st}</div>`;
+		const who = !first ? '' : me ? (CH.me ? `<div class="chwho">${avHtml(CH.me)}<span>${esc(meName(CH.me))}</span></div>` : '') : `<div class="chwho">${m.auto ? '' : avHtml(CH.dev || { name: devN })}<span>${m.auto ? '自动回复' : esc(devN)}</span></div>`;
+		html += `<div class="chrow${me ? ' me' : ''}">${who}<div class="chbub">${img}${filesHtml(m.files)}${m.x ? esc(m.x) : ''}</div>${st}</div>`;
 	}
-	box.innerHTML = html;
+	// 每 4 秒拉一次新消息都会走到这里：内容没变就不动页面；变了也把已经加载的图片、视频、音频原样留下（正在看的视频不会被打断）
+	if (html !== CH.html) {
+		const keep = new Map(); for (const v of box.querySelectorAll('.files img, .files video, .files audio')) keep.set(v.tagName + v.getAttribute('src'), v);
+		box.innerHTML = html; CH.html = html;
+		for (const v of box.querySelectorAll('.files img, .files video, .files audio')) {
+			const o = keep.get(v.tagName + v.getAttribute('src'));
+			if (o) { v.replaceWith(o); continue; }
+			// 新的图片、视频加载出来以后页面变高了：本来在最下面的，继续停在最下面（不被输入框挡住）
+			v.addEventListener(v.tagName === 'IMG' ? 'load' : 'loadedmetadata', () => { if (innerHeight + scrollY >= document.documentElement.scrollHeight - v.getBoundingClientRect().height - 160) scrollTo({ top: document.documentElement.scrollHeight }); }, { once: true });
+		}
+	}
 	for (const ph of box.querySelectorAll('[data-load]')) chImg(+ph.dataset.load);
 	if (scroll && (nearBottom || CH.first !== false)) { CH.first = false; requestAnimationFrame(() => scrollTo({ top: document.documentElement.scrollHeight })); }
 }
@@ -1411,7 +1518,7 @@ async function chImg(seq) {
 $('chList').onclick = (e) => {
 	const q = e.target.closest('[data-q]'); if (q) { $('chText').value = q.dataset.q + '：'; $('chText').focus(); return chGrow(); }
 	const im = e.target.closest('img[data-big]'); if (im) { const w = document.createElement('div'); w.className = 'modal'; w.style.cssText = 'display:grid;place-items:center;background:rgba(0,0,0,.85);z-index:90;position:fixed;inset:0;padding:16px'; w.innerHTML = `<img src="${im.src}" style="max-width:100%;max-height:92vh;border-radius:12px">`; w.onclick = () => w.remove(); document.body.appendChild(w); return; }
-	const rt = e.target.closest('[data-retry]'); if (rt) { const p = CH.pend.find((x) => String(x.id) === rt.dataset.retry); if (p) { CH.pend = CH.pend.filter((x) => x !== p); chSend(p.x, p.local); } }
+	const rt = e.target.closest('[data-retry]'); if (rt) { const p = CH.pend.find((x) => String(x.id) === rt.dataset.retry); if (p) { CH.pend = CH.pend.filter((x) => x !== p); chSend(p.x, p.local, p.fids, p.files); } }
 };
 const chGrow = () => { const t = $('chText'); t.style.height = 'auto'; t.style.height = Math.min(132, t.scrollHeight) + 'px'; };
 $('chText').oninput = chGrow;
@@ -1422,19 +1529,25 @@ $('chFile').onchange = async () => {
 	try { CH.img = await shrinkImg(f, 9e5); $('chPreImg').src = CH.img; $('chPre').classList.remove('hidden'); } catch (e) { toast(e.message, true); }
 };
 $('chPreX').onclick = () => { CH.img = ''; $('chPre').classList.add('hidden'); };
-$('chSend').onclick = () => {
+const CHA = attList($('chAtts'), 'chat', 5);
+$('chAttBtn').onclick = () => $('chAny').click();
+$('chAny').onchange = () => { const fs = $('chAny').files; if (fs && fs.length) CHA.add(fs); $('chAny').value = ''; };
+$('chSend').onclick = async () => {
 	const x = $('chText').value.trim(), img = CH.img;
-	if (!x && !img) return toast('写点什么再发吧');
+	if (CHA.busy()) return toast('文件还在上传，传完再发');
+	if (CHA.bad()) return toast('有文件没传上：点 × 去掉它再发', true);
+	const files = CHA.ids(), names = CHA.names();
+	if (!x && !img && !files.length) return toast('写点什么再发吧');
 	if (/(密码|password|passwd)\s*[:：=]\s*\S{4,}|ss:\/\/|vmess:\/\/|trojan:\/\/|vless:\/\//i.test(x) && !confirm('看起来里面有密码或节点链接，开发者不需要这些。确定要发吗？')) return;
-	$('chText').value = ''; chGrow(); CH.img = ''; $('chPre').classList.add('hidden');
-	chSend(x, img);
+	$('chText').value = ''; chGrow(); CH.img = ''; $('chPre').classList.add('hidden'); CHA.clear();
+	chSend(x, img, files, names);
 };
 let chPid = 0;
-async function chSend(x, img) {
-	const p = { id: ++chPid, f: 'u', t: Date.now(), x, img: img ? { type: 'image/jpeg' } : null, local: img || '', pending: true };
+async function chSend(x, img, files, names) {
+	const p = { id: ++chPid, f: 'u', t: Date.now(), x, img: img ? { type: 'image/jpeg' } : null, local: img || '', pending: true, files: names && names.length ? names : undefined, fids: files };
 	CH.pend.push(p); chRender(true); requestAnimationFrame(() => scrollTo({ top: document.documentElement.scrollHeight }));
 	try {
-		const r = await P('chat', { op: 'send', text: x, img: img || undefined, ua: navigator.userAgent }, 60000);
+		const r = await P('chat', { op: 'send', text: x, img: img || undefined, files: files && files.length ? files : undefined, ua: navigator.userAgent }, 60000);
 		CH.pend = CH.pend.filter((y) => y !== p);
 		if (r.msg) { if (img) CH.imgs[r.msg.s] = img; if (!CH.msgs.some((m) => m.s === r.msg.s)) CH.msgs.push(r.msg); CH.seq = Math.max(CH.seq, r.msg.s); }
 		CH.none = false; CH.hosted = r.hosted !== false;
@@ -1535,20 +1648,266 @@ const svcExpired = () => !!(SVC && SVC.hosted && SVC.exp && SVC.exp <= Date.now(
 const SVC_EXP_MSG = () => '托管服务 ' + ymd(SVC.exp) + ' 到期，专属网址暂停了，所以连不上路由器；家里上网和路由器上的设置都不受影响。去官网账号页点「申请续期」填个表，审核通过后马上恢复，不用重装（刚续过的话，等一两分钟再刷新）。';
 function svcRender() {
 	const s = SVC;
-	$('svcBtn').classList.toggle('hidden', !s || !s.hosted);
 	if (!s || !s.hosted) { $('mSvc').classList.add('hidden'); return; }
 	const left = s.exp ? Math.ceil((s.exp - Date.now()) / 86400e3) : null;
-	$('svcState').textContent = s.exp == null ? '查不到到期时间' : !s.exp ? '不限期' : left <= 0 ? '已到期' : '到期 ' + ymd(s.exp) + '（还剩 ' + left + ' 天）';
 	const warn = s.exp && left <= 3;
 	$('mSvc').classList.toggle('hidden', !warn);
 	if (warn) { $('mSvcT').textContent = left <= 0 ? '托管服务已到期' : '托管服务还剩 ' + left + ' 天到期'; $('mSvcD').textContent = left <= 0 ? SVC_EXP_MSG() : '到期时间 ' + ymd(s.exp) + '。去官网账号页点「申请续期」填个表，审核通过自动续上，不用重装'; }
 }
+/* ---------- 我的主页（5.2）：我是谁、托管服务、这台路由器、家人（主账号 / 子账号）、敏感信息（要邮箱验证码）、操作记录、我的反馈 ---------- */
+let ME = null;
+try { ME = JSON.parse(store.get('rp_me') || 'null'); if (ME && !ME.me) ME = null; } catch (e) {}
+const AV_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
+function avHtml(p, cls) { const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; const n = (p && (p.name || (p.email || '').split('@')[0])) || '?'; return `<span class="av${a ? ' img' : ''}${cls ? ' ' + cls : ''}"${a ? ` style="background-image:url('${a}')"` : ''}>${a ? '' : esc(n.trim().slice(0, 1))}</span>`; }
+function avPaint(el, p) { if (!el) return; const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; el.classList.toggle('img', !!a); el.style.backgroundImage = a ? `url('${a}')` : ''; el.textContent = a ? '' : ((p && (p.name || (p.email || '').split('@')[0])) || '?').trim().slice(0, 1); }
+const meName = (p) => (p && (p.name || (p.email || '').split('@')[0])) || '';
+const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '网络设置', sys: '系统操作' };
+const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys']] };
+const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
+function meRender() {
+	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
+	$('meBtn').classList.toggle('hidden', !on); $('sideMe').classList.toggle('hidden', !on);
+	if (!on) return;
+	avPaint($('meAv'), p); avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p);
+}
+async function meLoad(force) {
+	if (!SVC || !SVC.hosted || !store.get('rp_dev') || ME_ROLE.emerg) { if (!store.get('rp_dev')) ME = null; meRender(); return ME; }
+	if (!force && ME && Date.now() - (ME.at || 0) < 3600e3) { meRender(); return ME; }
+	try { const r = await P('fam', { op: 'me' }, 30000); ME = { at: Date.now(), ...r }; store.set('rp_me', JSON.stringify(ME)); } catch (e) {}
+	meRender();
+	return ME;
+}
+$('meBtn').onclick = () => go('me');
+$('sideMe').onclick = () => go('me');
+// 确认是本人：发邮箱验证码，10 分钟内有效（只记在这个浏览器标签页里）
+let SUDO = (() => { try { const x = JSON.parse(sessionStorage.getItem('rp_sudo') || 'null'); return x && x.exp > Date.now() ? x : null; } catch (e) { return null; } })();
+const sudoOn = () => !!(SUDO && SUDO.exp > Date.now() + 3000);
+function sudoSet(x) { SUDO = x; try { if (x) sessionStorage.setItem('rp_sudo', JSON.stringify(x)); else sessionStorage.removeItem('rp_sudo'); } catch (e) {} }
+async function sudoCode(btn, box) {
+	return busy(btn, async () => {
+		const r = await P('fam', { op: 'sudo_code' }, 30000);
+		if (r.nomail) { const x = await P('fam', { op: 'sudo', code: '' }, 30000); sudoSet({ tok: x.sudo, exp: x.exp }); return 'ok'; }
+		box.classList.remove('hidden'); box.querySelector('.mphint').textContent = '验证码发到了 ' + (r.mail || '你的邮箱') + '，10 分钟内有效';
+		setTimeout(() => { try { box.querySelector('input').focus(); } catch (e) {} }, 60);
+		return 'sent';
+	}, '发送中');
+}
+async function sudoCheck(btn, input) {
+	const code = input.value.replace(/\D/g, '');
+	if (code.length !== 6) { toast('验证码是 6 位数字', true); return false; }
+	return busy(btn, async () => { const x = await P('fam', { op: 'sudo', code }, 30000); sudoSet({ tok: x.sudo, exp: x.exp }); return true; }, '核对中');
+}
+// 弹一个框确认本人，成功返回凭证
+function needSudo(why) {
+	if (sudoOn()) return Promise.resolve(SUDO.tok);
+	return modal(`<div class="sheethead"><h3>先确认是你本人</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 12px;line-height:1.7">${esc(why || '这个操作要先确认是你本人')}：发一个验证码到你的官网账号邮箱，输进来就行。10 分钟内不用再输。</p>
+	<button class="btn primary" data-send style="width:100%">发验证码到 ${esc((ME && ME.me && ME.me.email) || '我的邮箱')}</button>
+	<div class="mpcode hidden" data-cbox><p class="mphint muted"></p><input class="input nccode" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code"><button class="btn primary" data-ok style="width:100%;margin-top:10px">确认</button></div>`,
+	(m, close) => {
+		const box = m.querySelector('[data-cbox]'), inp = box.querySelector('input');
+		m.querySelector('[data-send]').onclick = async (e) => { const r = await sudoCode(e.currentTarget, box); if (r === 'ok') close(SUDO.tok); else if (r === 'sent') e.target.closest('button').textContent = '重新发一个'; };
+		const go2 = async () => { if (await sudoCheck(box.querySelector('[data-ok]'), inp)) close(SUDO.tok); };
+		box.querySelector('[data-ok]').onclick = go2; inp.onkeydown = (e) => { if (e.key === 'Enter') go2(); };
+	});
+}
+// 调要确认本人的接口：凭证过期了自动再确认一次
+async function famSudo(op, args, why) {
+	let tok = await needSudo(why); if (!tok) return null;
+	try { return await P('fam', { op, sudo: tok, ...args }, 30000); }
+	catch (e) { if (/确认是你本人/.test(e.message)) { sudoSet(null); tok = await needSudo(why); if (!tok) return null; return P('fam', { op, sudo: tok, ...args }, 30000); } throw e; }
+}
+const MP = { sec: null, log: null, logAll: false, mem: null };
+let mpTimer = 0;
+async function loadMe() {
+	const box = $('meBox');
+	await svcLoad(false);
+	if (!SVC || !SVC.hosted) { box.innerHTML = '<section class="card empty">这台路由器没有用托管服务，没有官网账号信息。</section>'; return; }
+	if (!store.get('rp_dev') || ME_ROLE.emerg) { box.innerHTML = '<section class="card empty" style="line-height:1.7">你是用路由器终端的应急登录码进来的，看不到官网账号的信息。<br>从官网「我的路由器」点「打开面板」进来以后，这里会显示你的主页。</section>'; return; }
+	await meLoad(true);
+	if (!ME || !ME.me) { box.innerHTML = '<section class="card empty">读不到账号信息，检查一下路由器能不能连上官网，稍后再试。</section>'; return; }
+	try { MP.mem = await P('fam', { op: 'members' }, 30000); } catch (e) { MP.mem = null; }
+	try { MP.log = (await P('fam', { op: 'log' }, 30000)).list || []; } catch (e) { MP.log = null; }
+	if (sudoOn() && !MP.sec) { try { MP.sec = await P('fam', { op: 'secret', sudo: SUDO.tok }, 30000); } catch (e) { MP.sec = null; } }
+	if (!sudoOn()) MP.sec = null;
+	mpDraw();
+}
+const ymdhm = (t) => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const ymdz = (t) => { const d = new Date(t); return d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日'; };
+function mpDraw() {
+	const box = $('meBox'), me = ME.me, main = ME.role === 'main', s = SVC || {}, left = s.exp ? Math.ceil((s.exp - Date.now()) / 86400e3) : null;
+	const cam = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+	const pen = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+	const roleP = main ? '<span class="pill mpok">主账号</span>' : ME.role === 'sub' ? '<span class="pill blue">子账号 · ' + esc(tplName(ME.perms)) + '</span>' : '<span class="pill">' + esc({ off: '已被停用', expired: '使用期限到了', pick: '还没选主账号' }[ME.role] || '成员') + '</span>';
+	let h = `<section class="hero mp-head"><button class="mp-avw" type="button" data-mp="av" aria-label="换头像">${avHtml(me, 'mp-av')}<span class="mp-cam">${cam}</span></button>
+	<h1 class="mp-name"><span>${esc(meName(me))}</span><button class="mp-pen" type="button" data-mp="name" aria-label="改名字">${pen}</button></h1>
+	<div class="m">${esc(me.email || '')}${me.created ? ' · ' + esc(ymdz(me.created)) + '注册' : ''}</div>
+	<div class="mp-badges"><span class="pill">托管版</span>${roleP}</div>
+	<p class="mp-tip">点头像换头像，点名字旁边的笔改名字；官网和跟开发者对话时也跟着变</p></section>`;
+	// 托管服务
+	h += `<div class="sectitle"><b>托管服务</b></div><section class="card"><dl class="mp-kv">
+	<dt>到期时间</dt><dd class="${left != null && left <= 7 ? 'mp-warn' : ''}">${s.exp == null ? '查不到' : !s.exp ? '不限期' : esc(ymd(s.exp)) + (left > 0 ? '（还剩 ' + left + ' 天）' : '（已到期）')}</dd>
+	<dt>专属网址</dt><dd>${esc(location.host)}</dd>${ME.router && ME.router.created ? `<dt>开通时间</dt><dd>${esc(ymd(ME.router.created))}</dd>` : ''}</dl>
+	${s.exp ? (main ? `<div class="mp-acts"><button class="btn" data-mp="renew">输入续期码</button><a class="btn primary" href="${esc((s.hub || '') + '/app')}" target="_blank" rel="noopener">去官网申请续期</a></div>` : '<p class="mp-note">续期由主账号在官网申请</p>') : ''}</section>`;
+	// 这台路由器
+	h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">
+	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>
+	${ME.role === 'sub' && ME.subExp ? `<dt>你能用到</dt><dd>${esc(ymd(ME.subExp))}</dd>` : ''}</dl>
+	${ME.role === 'sub' ? `<div class="mp-perm">${Object.keys(PERM_N).map((k) => `<span class="${(ME.perms || []).includes(k) ? 'on' : ''}">${(ME.perms || []).includes(k) ? '✓' : '✕'} ${esc(PERM_N[k])}</span>`).join('')}</div><p class="mp-note" style="text-align:left">你是子账号：上面打勾的你能用，其他的由主账号决定。</p>` : ''}</section>`;
+	// 家人
+	const mm = MP.mem;
+	h += `<div class="sectitle"><b>${main ? '家人（子账号）' : '这台路由器的主账号'}</b>${main && mm ? `<span class="muted" style="font-size:13px">${(mm.subs || []).length} / 10</span>` : ''}</div><section class="card">`;
+	if (!mm) h += '<p class="muted" style="margin:0">读不到，稍后再试</p>';
+	else if (main) {
+		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms))}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span></div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
+		h += (mm.joins || []).map((j) => `<div class="mp-fb"><div><b>加入码 <span class="mono">${esc(j.code)}</span></b><span>给「${esc(j.name || '家人')}」 · ${esc(tplName(j.perms))} · ${esc(ymdhm(j.exp))} 过期 · 还没人用</span></div><button class="btn sm" data-mp="jcancel" data-c="${esc(j.code)}">撤回</button></div>`).join('');
+		h += `<div class="mp-acts"><button class="btn primary" data-mp="join"${(mm.subs || []).length + (mm.joins || []).length >= 10 ? ' disabled' : ''}>添加家人</button><button class="btn" data-mp="transfer"${(mm.subs || []).length ? '' : ' disabled'}>转让主账号</button></div>`;
+	} else {
+		const o = mm.owner;
+		h += o ? `<div class="mp-fb"><div class="mp-acc">${avHtml(o, 'mp-av sm')}<div><b>${esc(meName(o))}</b><span>${esc(o.email || '')}</span></div></div><span class="pill mpok">主账号</span></div>` : '<p class="muted" style="margin:0">还没有主账号</p>';
+		h += `<p class="mp-note" style="text-align:left">想多开一些功能，找主账号在「我的主页 → 家人」里改。</p><button class="btn danger" data-mp="leave" style="width:100%;margin-top:10px">退出这台路由器</button>`;
+	}
+	h += '</section>';
+	// 敏感信息
+	if (!sudoOn() || !MP.sec) {
+		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">
+		<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+		<h3>验证一下才能看</h3>
+		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机电脑登录着你的官网账号，能退出</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录，成功还是失败</span></li></ul>
+		<button class="btn primary" data-mp="unlock" style="width:100%">发验证码到 ${esc(me.email || '我的邮箱')}</button>
+		<div class="mpcode hidden" id="mpCode"><p class="mphint muted"></p><input class="input nccode" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" aria-label="验证码"><button class="btn primary" data-mp="unlock2" style="width:100%;margin-top:10px">确认</button></div>
+		<p class="mp-note">验证一次，这个页面 10 分钟内不用再输</p></section>`;
+	} else {
+		const x = MP.sec, mins = Math.max(0, Math.ceil((SUDO.exp - Date.now()) / 1000));
+		h += `<div class="sectitle mp-sec-h"><b>敏感信息</b><span class="pill mpok" id="mpLeft">已验证 · ${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} 后自动锁上</span></div>
+		<div class="mp-sub">联系方式</div><section class="card"><dl class="mp-kv"><dt>登录邮箱</dt><dd>${esc(x.email)} <span class="${x.verified ? 'mp-ok' : 'mp-warn'}" style="font-size:12px">${x.verified ? '已验证' : '没验证'}</span></dd></dl></section>
+		<div class="mp-sub">官网上登录着的设备 · ${(x.sessions || []).length} 台</div><section class="card">${(x.sessions || []).map((d) => `<div class="mp-fb"><div><b>${esc(d.ua || '没记录设备')}</b><span>${esc([d.place, ymdhm(d.at) + ' 登录', d.last && d.last !== d.at ? '最近 ' + esc(ago(d.last)) : ''].filter(Boolean).join(' · '))}</span></div><button class="btn sm" data-mp="sout" data-i="${esc(d.id)}">退出</button></div>`).join('') || '<p class="muted" style="margin:0">没有设备登录着官网</p>'}
+		${(x.sessions || []).length ? '<button class="btn sm" data-mp="soutall" style="width:100%;margin-top:6px">全部退出</button>' : ''}</section>
+		<div class="mp-sub">登录记录 · 最近 30 天</div><section class="card"><ul class="mp-tl">${(x.logins || []).slice(0, 20).map((l) => `<li><div class="d"${l.ok ? '' : ' style="color:#ff3b30"'}>${l.ok ? '✓' : '✕'}</div><div><b>${esc(l.ok ? ({ reg: '注册账号', reset: '重设密码' }[l.k] || '登录成功') : (l.why || '登录失败'))}</b><span>${esc([ymdhm(l.t), l.place, l.ua].filter(Boolean).join(' · '))}</span></div></li>`).join('') || '<li style="display:block"><span>最近 30 天没有登录记录</span></li>'}</ul></section>
+		<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>`;
+	}
+	// 操作记录
+	const L = MP.log || [];
+	h += `<div class="sectitle"><b>操作记录</b><span class="muted" style="font-size:13px">这台路由器</span></div><section class="card"><ul class="mp-tl">${(MP.logAll ? L : L.slice(0, 6)).map((l) => `<li><div class="d">${esc(l.ic || '•')}</div><div><b>${esc(l.x)}</b><span>${esc(ymdhm(l.t))}</span></div></li>`).join('') || '<li style="display:block"><span>还没有记录</span></li>'}</ul>
+	${!MP.logAll && L.length > 6 ? '<button class="btn sm" data-mp="logall" style="width:100%;margin-top:8px">看更多</button>' : ''}</section>`;
+	// 我的反馈
+	if (canPage('myfb')) h += `<section class="card list" style="margin-top:14px;padding:4px 12px"><button class="file" data-mp="fb" style="background:none;margin:4px 0"><div><b>我的反馈</b><span class="muted">处理到哪一步、开发者的回复</span></div><span class="muted">›</span></button></section>`;
+	box.innerHTML = h;
+	clearInterval(mpTimer);
+	if (sudoOn() && MP.sec) mpTimer = setInterval(() => {
+		const el = $('mpLeft'); if (!el || page !== 'me') { clearInterval(mpTimer); return; }
+		const t = Math.ceil((SUDO.exp - Date.now()) / 1000);
+		if (t <= 0) { clearInterval(mpTimer); sudoSet(null); MP.sec = null; mpDraw(); return; }
+		el.textContent = '已验证 · ' + Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') + ' 后自动锁上';
+	}, 1000);
+}
+// 头像：裁成正方形、缩小、压缩（小于 60 KB）
+async function mpAvatar(f) {
+	const url = URL.createObjectURL(f);
+	try {
+		const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('这张图片打不开，换一张试试')); i.src = url; });
+		const c = document.createElement('canvas'), n = 160, sz = Math.min(img.naturalWidth, img.naturalHeight);
+		c.width = c.height = n;
+		c.getContext('2d').drawImage(img, (img.naturalWidth - sz) / 2, (img.naturalHeight - sz) / 2, sz, sz, 0, 0, n, n);
+		for (const [t, q] of [['image/webp', 0.85], ['image/jpeg', 0.85], ['image/jpeg', 0.6]]) { const d = c.toDataURL(t, q); if (d.startsWith('data:' + t) && d.length < 60000) return d; }
+		throw new Error('图片太大了，换一张小一点的');
+	} finally { URL.revokeObjectURL(url); }
+}
+// 添加家人：选能做什么、用多久，生成加入码
+function mpPermForm(perms, exp) {
+	return `<div class="mp-tpls">${Object.keys(TPLS).map((k) => `<button type="button" class="chip" data-tpl="${k}">${esc(TPLS[k][0])}</button>`).join('')}</div>
+	<div class="mp-perms">${Object.keys(PERM_N).map((k) => `<label class="mp-chk"><input type="checkbox" value="${k}"${perms.includes(k) ? ' checked' : ''}> ${esc(PERM_N[k])}</label>`).join('')}</div>
+	<p class="muted" style="font-size:12.5px;margin:6px 0 12px">看首页、网速、设备这些人人都能看；终端、文件管理、换密钥、托管服务设置只有主账号能用。</p>
+	<label class="lglabel" style="margin-top:0">能用多久</label><select class="input" data-exp><option value="0">一直能用</option><option value="7">7 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">一年</option>${exp ? `<option value="keep" selected>到 ${esc(ymd(exp))}（不变）</option>` : ''}</select>`;
+}
+function mpPermBind(m) {
+	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', TPLS[b.dataset.tpl][1].slice().sort().join() === p.slice().sort().join())); };
+	m.querySelectorAll('[data-tpl]').forEach((b) => (b.onclick = () => { const want = TPLS[b.dataset.tpl][1]; m.querySelectorAll('.mp-perms input').forEach((x) => (x.checked = want.includes(x.value))); sync(); }));
+	m.querySelectorAll('.mp-perms input').forEach((x) => (x.onchange = sync)); sync();
+	return () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value), e = m.querySelector('[data-exp]').value; return { perms: p, subExp: e === 'keep' ? undefined : +e ? Date.now() + +e * 86400e3 : 0 }; };
+}
+async function mpJoin() {
+	const v = await modal(`<div class="sheethead"><h3>添加家人</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 10px;line-height:1.7">生成一个加入码（24 小时内有效，只能用一次）发给他。他注册官网账号以后用这个码加入，就能从官网打开这个面板。</p>
+	<label class="lglabel" style="margin-top:0">怎么称呼他</label><input class="input" data-n maxlength="20" placeholder="比如：爸爸、小明">
+	<label class="lglabel">他能做什么</label>${mpPermForm(TPLS.family[1], 0)}
+	<button class="btn primary" data-ok style="width:100%;margin-top:14px">生成加入码</button>`, (m, close) => {
+		const get = mpPermBind(m);
+		m.querySelector('[data-ok]').onclick = () => close({ name: m.querySelector('[data-n]').value.trim(), ...get() });
+	});
+	if (!v || typeof v !== 'object') return;
+	let r; try { r = await famSudo('join_create', v, '添加家人'); } catch (e) { return toast(e.message, true); }
+	if (!r) return;
+	try { await loadQr(); } catch (e) {}
+	await modal(`<div class="sheethead"><h3>加入码</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<div class="paircode">${esc(r.code.slice(0, 4) + ' ' + r.code.slice(4))}</div>
+	${window.qrcode ? `<div class="qrbox">${qrSvg(r.link)}</div>` : ''}
+	<p class="muted" style="margin:10px 0 0;line-height:1.7;font-size:13.5px">发给他：用手机扫码或打开链接，注册（或登录）官网账号，就会看到加入的确认。也可以在官网「我的路由器 → 添加路由器 → 加入家人」里输这个码。24 小时内有效，只能用一次。</p>
+	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><button class="btn primary" data-v="close">完成</button></div>`, (m) => { m.querySelector('[data-copy]').onclick = () => copyText(r.link); });
+	loadMe();
+}
+async function mpSub(uid) {
+	const x = ((MP.mem && MP.mem.subs) || []).find((y) => y.uid === uid); if (!x) return;
+	const v = await modal(`<div class="sheethead"><h3>${esc(meName(x))}</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 10px">${esc(x.email || '')} · ${esc(ymd(x.at))} 加入${x.off ? ' · <b>已停用</b>' : ''}</p>
+	${mpPermForm(x.perms || [], x.exp)}
+	<button class="btn primary" data-ok style="width:100%;margin-top:14px">保存</button>
+	<div class="btngrid three" style="margin:10px 0 0"><button class="btn" data-v="${x.off ? 'on' : 'off'}">${x.off ? '恢复' : '停用'}</button><button class="btn" data-v="owner">设为主账号</button><button class="btn danger" data-v="rm">移除</button></div>`, (m, close) => {
+		const get = mpPermBind(m);
+		m.querySelector('[data-ok]').onclick = () => close({ save: get() });
+	});
+	if (!v) return;
+	try {
+		if (v.save) { if (await famSudo('sub_set', { target: uid, ...v.save }, '改家人的权限')) toast('已保存'); }
+		else if (v === 'off' || v === 'on') { if (v === 'off' && !(await confirmBox('停用 ' + meName(x), '停用后他的手机马上打不开面板；恢复以后他要从官网重新打开。', '停用', true))) return; if (await famSudo('sub_set', { target: uid, off: v === 'off' }, v === 'off' ? '停用家人' : '恢复家人')) toast(v === 'off' ? '已停用' : '已恢复'); }
+		else if (v === 'rm') { if (!(await confirmBox('移除 ' + meName(x), '这台路由器会从他的官网账号里拿掉，他的手机马上打不开面板。', '移除', true))) return; if (await famSudo('sub_remove', { target: uid }, '移除家人')) toast('已移除'); }
+		else if (v === 'owner') return mpTransfer(uid);
+	} catch (e) { toast(e.message, true); }
+	loadMe();
+}
+async function mpTransfer(uid) {
+	const L = (MP.mem && MP.mem.subs) || [];
+	if (!uid) {
+		uid = await modal(`<div class="sheethead"><h3>转让主账号</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<p class="muted" style="margin:0 0 10px;line-height:1.7">选一个家人当主账号。转让以后他权限最大，你变成子账号（权限「几乎全部」），你的手机要从官网重新打开面板。</p>
+		${L.map((x) => `<button class="mp-fb mp-pick" data-v="${esc(x.uid)}"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')}</span></div></div><span class="muted">›</span></button>`).join('')}`);
+		if (!uid || uid === 'close') return;
+	}
+	const x = L.find((y) => y.uid === uid); if (!x) return;
+	if (!(await confirmBox('把主账号转给 ' + meName(x) + '？', '转让后你变成子账号，不能自己改回来（要他再转给你）。', '转让', true))) return;
+	try { if (await famSudo('transfer', { target: uid }, '转让主账号')) { toast('已转让，从官网重新打开面板'); setTimeout(() => location.reload(), 1200); } } catch (e) { toast(e.message, true); }
+}
+$('meBox').addEventListener('click', async (e) => {
+	const b = e.target.closest('[data-mp]'); if (!b) return;
+	const k = b.dataset.mp;
+	if (k === 'av') { const f = await pickFile('image/*'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
+	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
+	else if (k === 'renew') svcSheet();
+	else if (k === 'unlock') { const r = await sudoCode(b, $('mpCode')); if (r === 'ok') loadMe(); else if (r === 'sent') b.textContent = '重新发一个'; }
+	else if (k === 'unlock2') { if (await sudoCheck(b, $('mpCode').querySelector('input'))) loadMe(); }
+	else if (k === 'lock') { sudoSet(null); MP.sec = null; mpDraw(); toast('已锁上'); }
+	else if (k === 'sout' || k === 'soutall') {
+		if (k === 'soutall' && !(await confirmBox('官网全部退出', '所有登录着你官网账号的设备都要重新登录（新设备还要收邮箱验证码）。这个面板不受影响。', '全部退出', true))) return;
+		busy(b, async () => { await famSudo('sess_out', k === 'sout' ? { id: b.dataset.i } : { all: true }, '退出官网的设备'); MP.sec = await P('fam', { op: 'secret', sudo: SUDO.tok }, 30000); mpDraw(); toast('已退出'); });
+	}
+	else if (k === 'logall') { MP.logAll = true; mpDraw(); }
+	else if (k === 'fb') go('myfb');
+	else if (k === 'join') mpJoin();
+	else if (k === 'sub') mpSub(b.dataset.u);
+	else if (k === 'transfer') mpTransfer();
+	else if (k === 'jcancel') { busy(b, async () => { await famSudo('join_cancel', { code: b.dataset.c }, '撤回加入码'); toast('已撤回'); loadMe(); }); }
+	else if (k === 'leave') {
+		if (!(await confirmBox('退出这台路由器', '退出以后这台路由器从你的官网账号里拿掉，你的手机都打不开它的面板了。想再用要找主账号要新的加入码。', '退出', true))) return;
+		busy(b, async () => { await P('fam', { op: 'leave' }, 30000); store.del('rp_dev'); store.del('rp_me'); store.del('rp_role'); toast('已退出'); setTimeout(() => location.reload(), 900); });
+	}
+});
 async function svcLoad(force) {
 	try { SVC = await P('svc_info', { force: !!force }); store.set('rp_svc', JSON.stringify(SVC)); } catch (e) {}
-	svcRender();
+	svcRender(); meLoad(false);
 	return SVC;
 }
 try { SVC = JSON.parse(store.get('rp_svc') || 'null'); } catch (e) {}
+meRender();
 $('mSvcGo').onclick = () => { if (SVC && SVC.hub) window.open(SVC.hub + '/app', '_blank', 'noopener'); };
 async function svcSheet() {
 	const s = await svcLoad(true);
@@ -1575,16 +1934,16 @@ function devList() {
 		const draw = async () => {
 			try {
 				const r = await P('device_list');
-				box.innerHTML = `<p class="muted" style="margin:0 0 8px;font-size:13.5px">这些手机输过登录码，能打开面板。不认识的马上移除：移除后它要重新输登录码才能进来。</p>
+				box.innerHTML = `<p class="muted" style="margin:0 0 8px;font-size:13.5px">${ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开面板。'}不认识的马上移除：移除后它要从官网重新打开才能进来。</p>
 				${r.list.map((d) => `<div class="devrow"><div class="devtx"><b>${esc(d.name)}</b>${d.me ? ' <span class="pill blue">这台</span>' : ''}<div class="muted">${esc(new Date(d.at * 1000).toLocaleDateString('zh-CN'))} 登录 · ${esc(d.via || '')}${d.me ? '' : ' · 最近使用：' + esc(d.seen ? agoS(d.seen) : '路由器重启后还没用过')}</div></div>${d.me ? '' : `<button class="btn sm danger" data-rm="${esc(d.id)}">移除</button>`}</div>`).join('') || '<div class="muted">没有记录</div>'}
 				${r.list.length > 1 ? '<div class="btngrid" style="margin:12px 0 0"><button class="btn danger" data-all>除了这台，全部移除</button></div>' : ''}`;
 				box.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = async () => {
-					if (!(await confirmBox('移除这台手机', '「' + b.closest('.devrow').querySelector('b').textContent + '」要重新输登录码才能打开面板。', '移除', true))) return;
+					if (!(await confirmBox('移除这台手机', '「' + b.closest('.devrow').querySelector('b').textContent + '」要从官网重新打开才能进来。', '移除', true))) return;
 					busy(b, async () => { await P('device_remove', { id: b.dataset.rm }); toast('已移除'); await draw(); });
 				}));
 				const all = box.querySelector('[data-all]');
 				if (all) all.onclick = async () => {
-					if (!(await confirmBox('移除其他所有手机', '除了这台，其他手机都要重新输登录码才能打开面板。', '全部移除', true))) return;
+					if (!(await confirmBox('移除其他所有手机', '除了这台，其他手机都要从官网重新打开才能进来。', '全部移除', true))) return;
 					busy(all, async () => { await P('device_remove', { all_others: true }); toast('已移除'); await draw(); });
 				};
 			} catch (e) { box.innerHTML = `<div class="notice w">${esc(e.message)}</div>`; }

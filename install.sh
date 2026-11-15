@@ -11,7 +11,7 @@
 #
 # 托管版（用别人提供的托管服务，自动拿到专属网址，不用自己弄 Cloudflare）：
 #   --hub https://托管服务网址   托管安装包里已经写好，一般不用填
-#   --invite 邀请码              找提供托管服务的人要
+#   --invite 安装码              托管版：官网注册账号后在「装新路由器」里拿（领试用或用邀请码兑换），官网给的命令里已经带着；装 AI 版还是纯面板版在终端里输 1 或 2 选
 #
 # 其他可选参数（不填就交互询问）：
 #   --domain router.example.com    面板域名（用 Cloudflare 命名隧道时填）
@@ -37,7 +37,7 @@ fi
 SRC=$(cd "$(dirname "$0")" && pwd)/src
 WWW=/www-claude-mcp
 D=/etc/claude-mcp
-ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0; HUB=""; INV=""
+ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0; HUB=""; INV=""; BOUND=0
 
 STEP="开始安装"; ERR=""; ABORT=0
 say()  { STEP="$*"; printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -230,7 +230,8 @@ UPGRADE=0
 # 发布的安装包里有 EDITION 文件，写着这个包是哪个版本；参数可以覆盖它
 PKG_AI=""; PKG_ED=""; PKG_HUB=""; PKG_VER=""; PKG_CODE=""
 [ -f "$SRC/../EDITION" ] && . "$SRC/../EDITION"
-[ -n "$AI" ] || AI=$PKG_AI
+# 托管版：安装包都一样，AI 版还是纯面板版在终端里选（输 1 或 2）；再装一次（升级）时默认原来那个，一键更新不问
+[ -n "$AI" ] || [ -n "$PKG_HUB" ] || AI=$PKG_AI
 [ -n "$ED" ] || ED=$PKG_ED
 [ -n "$HUB" ] || HUB=$PKG_HUB
 [ -z "$HUB" ] && [ -s "$D/hub.conf" ] && HUB=$(sed -n 's/^HUB=//p' "$D/hub.conf")
@@ -240,20 +241,24 @@ if [ -n "$HUB" ]; then
 	ED=full   # 托管版自带云端（推送、云端备份、断电断网判断）
 fi
 if [ -z "$AI" ]; then
-	def=1; [ $UPGRADE = 1 ] && grep -q '"ai": *false' "$D/config.json" && def=2
+	def=1; [ "$PKG_AI" = 0 ] && def=2
+	[ $UPGRADE = 1 ] && { grep -q '"ai": *false' "$D/config.json" && def=2 || def=1; }
 	echo
-	echo "  1) AI 版：可以在 Claude 里用对话管理路由器，也带手机面板"
+	echo "  装哪个版本？"
+	echo "  1) AI 版：手机面板 + 能在 Claude 里用对话管理路由器"
 	echo "  2) 纯面板版：只有手机面板，自己动手管理，不接 AI"
-	ask n "选择 1 或 2" "$def"
-	case "$n" in 2) AI=0 ;; *) AI=1 ;; esac
+	echo "  （以后想换，再运行一次安装命令选另一个就行，网址和设置都保留）"
+	ask PICK "输入 1 或 2，回车" "$def"
+	case "$PICK" in 2) AI=0 ;; *) AI=1 ;; esac
 fi
 if [ -z "$ED" ]; then
 	if [ -s "$D/cloud.conf" ]; then def=2; else def=1; fi
 	echo
+	echo "  装精简版还是完整版？"
 	echo "  1) 精简版：手机面板 + 本地看门狗（不需要 Cloudflare 账号）"
 	echo "  2) 完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断，需要先部署 Worker）"
-	ask n "选择版本 1 或 2" "$def"
-	case "$n" in 2) ED=full ;; *) ED=lite ;; esac
+	ask PICK "输入 1 或 2，回车" "$def"
+	case "$PICK" in 2) ED=full ;; *) ED=lite ;; esac
 fi
 [ "$ED" = full ] && [ ! -f "$SRC/bin/cmcp-backup" ] && die "这个安装包是精简版，装完整版请下载 full 包"
 NAME="$( [ "$AI" = 1 ] && echo AI版 || echo 纯面板版 )·$( [ -n "$HUB" ] && echo 托管版 || { [ "$ED" = full ] && echo 完整版 || echo 精简版; } )"
@@ -454,7 +459,11 @@ cp -f "$SRC/www/cgi-bin/mcp" $WWW/cgi-bin/mcp.new && chmod 755 $WWW/cgi-bin/mcp.
 cp -f "$SRC"/www/panel/*.* $WWW/panel/
 cp -f "$SRC"/www/panel/sc2/* $WWW/panel/sc2/
 cp -f "$SRC/lib/lib.uc" /usr/share/ucode/cmcp/lib.uc
-for f in "$SRC"/bin/cmcp-*; do cp -f "$f" /usr/sbin/; chmod 755 "/usr/sbin/${f##*/}"; done
+for f in "$SRC"/bin/cmcp-*; do
+	# 精简版用不到云端备份：通用安装包里有也不装，不占闪存
+	[ "$ED" = lite ] && [ "${f##*/}" = cmcp-backup ] && { rm -f /usr/sbin/cmcp-backup; continue; }
+	cp -f "$f" /usr/sbin/; chmod 755 "/usr/sbin/${f##*/}"
+done
 cp -f "$SRC/init.d/claude-mcp" "$SRC/init.d/cmcp-watchdog" /etc/init.d/
 chmod 755 /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog
 cp -f "$SRC/hotplug/90-cmcp-synced" /etc/hotplug.d/ntp/
@@ -511,10 +520,10 @@ if [ -n "$HUB" ]; then
 		R0=$(curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB0\",\"rkey\":\"$RK0\"}" "$HUB/api/dev/info" 2>/dev/null || true)
 		case "$R0" in
 			*钥匙不对*|*没有这台路由器*)
-				warn "这台路由器原来的托管网址（$SUB0）已经被删除了，要用新的邀请码重新开通（路由器上的设置都会保留，网址会换成新的）"
+				warn "这台路由器原来的托管网址（$SUB0）已经被删除了，要在官网拿一个新的安装码重新开通（路由器上的设置都会保留，网址会换成新的）"
 				# 一键更新这类不问问题、又没给邀请码的：先什么都不动，免得删了开通信息又开通不了
 				if [ -n "$INV" ] || [ "$YES" != 1 ]; then rm -f $D/hub.conf
-				else warn "这次没有邀请码，先保留原来的设置。拿到新邀请码后在这个目录运行：sh install.sh --invite 新邀请码"; fi ;;
+				else warn "这次没有安装码，先保留原来的设置。在官网「装新路由器」里拿到安装码后，复制那里的安装命令运行"; fi ;;
 		esac
 	fi
 	if [ -s $D/hub.conf ] && grep -q '^PKEY=' $D/cloud.conf 2>/dev/null; then
@@ -524,18 +533,30 @@ if [ -n "$HUB" ]; then
 		md=$(cat /tmp/sysinfo/model 2>/dev/null | tr -cd 'A-Za-z0-9 ._()-' | cut -c1-60 || true)
 		jf() { jsonfilter -s "$R" -e "@.$1" 2>/dev/null || true; }
 		SUB=""; try=0
+		# 5.2：托管版要先在官网注册账号，在官网拿「安装码」（领试用，或者用邀请码兑换），官网给的安装命令里已经带着它
+		if [ -z "$INV" ]; then
+			echo
+			echo "  托管版要先在官网注册账号（免费）：用手机打开"
+			echo
+			echo "     $HUB/app"
+			echo
+			echo "  注册后在「添加路由器 → 装新路由器」里领免费试用，或者填邀请码兑换，"
+			echo "  那里会给你一条带着安装码的安装命令：复制到这里运行，装好自动加到你的账号里。"
+			echo "  已经拿到安装码的，也可以直接粘贴到下面。"
+			echo
+		fi
 		while [ -z "$SUB" ]; do
 			try=$((try+1))
-			[ -n "$INV" ] || ask INV "邀请码（找提供托管服务的人要）" "" 1
+			[ -n "$INV" ] || ask INV "安装码（官网「装新路由器」里拿）" "" 1
 			inv=$(printf '%s' "$INV" | tr -cd 'A-Za-z0-9')
-			[ -n "$inv" ] || die "托管版需要邀请码。拿到邀请码后，在这个目录重新运行：sh install.sh --invite 邀请码"
+			[ -n "$inv" ] || die "托管版需要安装码：手机打开 $HUB/app 注册账号，在「添加路由器 → 装新路由器」里拿，复制那里的安装命令运行"
 			say "向托管服务申请专属网址"
 			R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\"}" "$HUB/api/register" || true)
 			SUB=$(jf sub)
 			[ -n "$SUB" ] && break
 			e=$(jf error)
 			# 邀请码输错了（或者过期、用完）：一共给三次机会
-			case "$e" in 邀请码*) if [ "$YES" != 1 ] && [ $try -lt 3 ]; then warn "$e，请检查后再输入一次"; INV=""; continue; fi ;; esac
+			case "$e" in 邀请码*|安装码*) if [ "$YES" != 1 ] && [ $try -lt 3 ]; then warn "$e"; INV=""; continue; fi ;; esac
 			die "开通失败：${e:-连不上托管服务 $HUB}"
 		done
 		HOST=$(jf host)
@@ -545,7 +566,7 @@ if [ -n "$HUB" ]; then
 		 printf 'HUB=%s\nSUB=%s\n' "$HUB" "$SUB" > $D/hub.conf)
 		printf '%s\n' "$HOST" > $D/hostname
 		ok "开通成功：https://$HOST"
-		[ "$(jf bound)" = true ] && ok "这个试用码是官网账号领的：路由器已经自动加到你的账号里"
+		[ "$(jf bound)" = true ] && { BOUND=1; ok "路由器已经自动加到你的官网账号里，你是它的主账号"; }
 		EXP=$(jf exp); [ "${EXP:-0}" -gt 0 ] 2>/dev/null && SVC_END=$(date -d "@$((EXP / 1000))" '+%Y-%m-%d' 2>/dev/null || echo "")
 	fi
 fi
@@ -662,42 +683,37 @@ echo "================ 安装完成 ================"
 echo
 echo "已安装：$NAME"
 if [ -n "$HUB" ]; then
-	# 托管版：只给一个链接。手机打开后，面板会带着去官网绑定账号、拿登录码，不用再抄别的地址
-	# 拿配对码失败（比如官网一时连不上）不算安装失败：下面会告诉用户怎么手动拿
-	PC=$(/usr/sbin/cmcp-pair --code 2>/dev/null || true)
-	HUBN=${HUB#https://}
+	# 5.2 托管版：路由器已经在官网账号里了（用官网给的安装码装的），回官网点「打开面板」就行，不用抄任何地址和码
 	echo
-	echo "👉 接下来用手机做（10 分钟内）："
-	echo
-	echo "  1. 手机打开这个链接（复制到手机浏览器，或者直接在手机上点）："
-	echo
-	echo "     https://$H/panel/#login=$TOKEN${PC:+&pair=$PC}"
-	echo
-	if [ -n "$PC" ]; then
-		echo "  2. 页面上点「绑定官网账号」，登录或注册 $HUBN 的账号"
-		echo "  3. 绑定好后官网会显示登录码，点「打开面板」就进去了"
+	if [ "$BOUND" = 1 ]; then
+		echo "✅ 这台路由器已经加到你的官网账号里，你是它的主账号。"
+		echo
+		echo "👉 接下来：回到手机上的官网「我的路由器」（页面会自动刷新），"
+		echo "   点这台路由器的「打开面板」就进去了，不用输任何码。"
 	else
-		echo "  2. 页面会提示输入登录码：打开 $HUB/app 登录账号，在「添加路由器」里输入配对码绑定"
-		echo "     （配对码在这个终端运行 cmcp-pair 拿）；绑定好点「获取登录码」→「打开面板」"
+		echo "👉 接下来：手机打开官网，在「我的路由器」里点这台路由器的「打开面板」。"
+		echo
+		echo "   官网里还没有这台路由器的话：在这里运行 cmcp-pair 拿一个配对码，"
+		echo "   在官网「添加路由器 → 装新路由器 → 路由器已经装好了」里填上，就加到你的账号里了。"
 	fi
 	echo
-	echo "  以后换手机、清了浏览器：打开 $HUBN 账号页，在这台路由器下面点「获取登录码」。"
-	echo "  面板里点浏览器菜单「添加到主屏幕」，以后就像 App 一样打开。"
+	echo "  官网账号页：$HUB/app"
+	echo "  （打开面板、申请续期、加家里人、查反馈都在这里，建议收藏）"
 	echo
-	echo "⚠️  这个链接带着密钥：只在自己的手机上打开，不要发给别人，也不要截图分享。"
+	echo "  换手机、清了浏览器：在新手机上登录官网，点「打开面板」就行。"
+	echo "  家里人也要用：在面板「我的主页 → 家人」里给他生成加入码。"
+	echo "  面板打开后点浏览器菜单「添加到主屏幕」，以后就像 App 一样打开。"
 	if [ -n "$SVC_END" ]; then
 		echo
-		echo "⏳ 这是试用，用到 $SVC_END。快到期时在官网账号页点「申请续期」，审核通过自动续上，不用重装。"
+		echo "⏳ 托管服务用到 $SVC_END。快到期时在官网账号页点「申请续期」，审核通过自动续上，不用重装。"
 	fi
 	echo
 	echo "托管版的推送、云端备份、断电断网判断都已经开通，不用另外设置。"
 	echo
 	echo "---------- 备用信息（一般用不到） ----------"
-	echo "面板地址：https://$H/panel/"
-	echo "登录地址（面板要求粘贴时用）：https://$H/cgi-bin/mcp/$TOKEN"
-	[ "$AI" = 1 ] && echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填）：https://$H/cgi-bin/mcp/$CKEY"
-	[ -n "$PC" ] && echo "配对码：$PC（在官网「添加路由器」里手动输入也行；过期了运行 cmcp-pair 再拿）"
-	echo "官网打不开、急着用：运行 cmcp-logincode 拿一个应急登录码"
+	echo "面板地址：https://$H/panel/（要从官网「打开面板」进去才能登录）"
+	[ "$AI" = 1 ] && echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填，只有你自己能看）：https://$H/cgi-bin/mcp/$CKEY"
+	echo "官网打不开、急着用：在这里运行 cmcp-logincode 拿一个应急登录码，在面板「官网打不开、急着用？」里输入"
 else
 	echo
 	echo "手机面板：https://$H/panel/"
@@ -708,6 +724,13 @@ else
 	echo "或者在手机上直接打开这个链接，自动登录（同样不要发给别人）："
 	echo "  https://$H/panel/#login=$TOKEN"
 	echo "以后添加别的手机：面板里「系统操作 → 添加新手机」扫码就行。"
+	# 官方发布的安装包里写着官网地址（PKG_REPORT）：自建版也告诉用户去哪看教程、反馈问题
+	OFF=${PKG_REPORT%/}
+	case "$OFF" in https://*)
+		echo
+		echo "官网（使用教程、反馈问题、查处理进度）：$OFF"
+		echo "  也可以在官网注册账号，在「添加路由器 → 自建版（网址）」里记下这个面板网址，换手机时好找。" ;;
+	esac
 	if [ "$AI" = 1 ]; then
 		echo
 		echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）："

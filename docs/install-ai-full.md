@@ -2,7 +2,7 @@
 
 > AI 版的全部功能，再加 Cloudflare 云端：手机 / 微信推送、每天自动云端备份、路由器断电断网时也能知道原因。需要 Cloudflare 账号和一个自己的域名。
 
-安装包：**`openwrt-claude-panel-ai-full.tar.gz`**（在 [Releases](https://github.com/wznwzn123/openwrt-claude-panel/releases/latest) 页面下载）
+安装包：**`openwrt-claude-panel.tar.gz`**（所有版本通用，在 [Releases](https://github.com/wznwzn123/openwrt-claude-panel/releases/latest) 页面下载，安装时在终端里选版本）
 
 其他版本的教程：[AI 版 · 精简版](install-ai-lite.md) · [纯面板版 · 精简版](install-noai-lite.md) · [纯面板版 · 完整版](install-noai-full.md)
 
@@ -16,18 +16,17 @@
 - 电脑上装好 **Node.js 18 或更新**（https://nodejs.org 下载 LTS 版安装），用来部署云端
 - 一个 **Claude 账号**，并且能使用「自定义连接器」功能
 
-> **只用手机装：** 手机连上家里 Wi-Fi，打开路由器后台「服务 → 终端」（或手机 SSH 软件），粘贴下面这条命令，然后从第 3 步接着看。详细步骤见 [📱 手机教程](install-phone.md)。
+> **只用手机装：** 手机连上家里 Wi-Fi，打开路由器后台「服务 → 终端」（或手机 SSH 软件），粘贴下面这条命令（**所有版本都是这一条，不用改**），选版本时第一个问题输 **1**、第二个问题输 **2**，然后从第 3 步接着看。详细步骤见 [📱 手机教程](install-phone.md)。
 >
 > ```sh
-> # 下载并安装「AI 版 · 完整版」（代号 ai-full）
-> cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-ai-full.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh
+> cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh
 > ```
 
 下面的命令里，`192.168.1.1` 换成你路由器的地址，`router.example.com` 换成你自己的域名。
 
 ## 第 1 步：下载安装包
 
-打开 [Releases](https://github.com/wznwzn123/openwrt-claude-panel/releases/latest)，在 **Assets** 里下载 **`openwrt-claude-panel-ai-full.tar.gz`**，放到电脑的「下载」文件夹。
+打开 [Releases](https://github.com/wznwzn123/openwrt-claude-panel/releases/latest)，在 **Assets** 里下载 **`openwrt-claude-panel.tar.gz`**（所有自建版都是这一个包，版本在安装时选），放到电脑的「下载」文件夹。
 
 ## 第 2 步：传到路由器并安装
 
@@ -40,18 +39,35 @@ cd ~/Downloads
 把安装包传到路由器（会让你输入路由器的 root 密码，和登录 LuCI 的密码一样）：
 
 ```sh
-scp openwrt-claude-panel-ai-full.tar.gz root@192.168.1.1:/tmp/
+scp openwrt-claude-panel.tar.gz root@192.168.1.1:/tmp/
 ```
 
-> 如果提示 `scp: ... sftp-server: not found`，在 scp 后面加 `-O`：`scp -O openwrt-claude-panel-ai-full.tar.gz root@192.168.1.1:/tmp/`
+> 如果提示 `scp: ... sftp-server: not found`，在 scp 后面加 `-O`：`scp -O openwrt-claude-panel.tar.gz root@192.168.1.1:/tmp/`
 
 登录路由器，解压并运行安装脚本：
 
 ```sh
 ssh root@192.168.1.1
-cd /tmp && tar xzf openwrt-claude-panel-ai-full.tar.gz && cd openwrt-claude-panel
+cd /tmp && tar xzf openwrt-claude-panel.tar.gz && cd openwrt-claude-panel
 sh install.sh
 ```
+
+安装开始后终端会问两个问题，装「AI 版 · 完整版」这样选：
+
+```
+  装哪个版本？
+  1) AI 版：手机面板 + 能在 Claude 里用对话管理路由器
+  2) 纯面板版：只有手机面板，自己动手管理，不接 AI
+输入 1 或 2，回车 [1]：1
+
+  装精简版还是完整版？
+  1) 精简版：手机面板 + 本地看门狗（不需要 Cloudflare 账号）
+  2) 完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断，需要先部署 Worker）
+输入 1 或 2，回车 [1]：2
+```
+
+- 第一个问题输 **1**（AI 版），第二个问题输 **2**（完整版）
+- 输错了也没关系：再运行一次安装命令，重新选就行，设置都保留
 
 安装脚本会自动补装缺少的软件（ucode、uhttpd、curl、cloudflared），然后问你隧道的设置，见下一步。
 
@@ -125,7 +141,7 @@ Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义�
 
 ## 第 7 步：部署 Cloudflare 云端
 
-在**电脑**上操作。完整版安装包里带着云端的代码（`cloud` 文件夹），在电脑的终端里把第 1 步下载的安装包解压，进入 `cloud` 文件夹（Windows 10/11 的 PowerShell 也自带 `tar`）：
+在**电脑**上操作。云端的代码（`cloud` 文件夹）在 [Releases](https://github.com/wznwzn123/openwrt-claude-panel/releases/latest) 的 **`openwrt-claude-panel-ai-full.tar.gz`** 里（装路由器用的通用包里没有，省路由器内存），下载后在电脑的终端里解压，进入 `cloud` 文件夹（Windows 10/11 的 PowerShell 也自带 `tar`）：
 
 ```sh
 cd ~/Downloads
@@ -186,13 +202,14 @@ npx wrangler secret put VAPID_PUB
 
 ## 升级 / 卸载
 
-**升级**：面板首页提示有新版时点「一键更新」（v2.0.2 起；v2.0.1 及更早的版本先用下面的办法手动升级一次）；或者下载新版的 `openwrt-claude-panel-ai-full.tar.gz`，按第 2 步重新传上去运行 `sh install.sh`，登录地址和所有设置都会保留。
+**升级**：面板首页提示有新版时点「一键更新」（v2.0.2 起；v2.0.1 及更早的版本先用下面的办法手动升级一次）；或者把上面那条安装命令再运行一次（选版本时直接回车，默认就是现在装的），登录地址和所有设置都会保留。
 
 **卸载**：
 
 ```sh
-cmcp-uninstall           # 保留设置和记录，以后重装还能接着用（5.0 起；更早的版本在安装包目录里运行 sh uninstall.sh）
-cmcp-uninstall --purge   # 全部删掉
+cd /tmp/openwrt-claude-panel
+sh uninstall.sh          # 保留设置和记录，以后重装还能接着用
+sh uninstall.sh --purge  # 全部删掉
 ```
 
 （`/tmp` 重启后会清空，到时候重新解压一次安装包即可。）
@@ -209,5 +226,5 @@ cmcp-uninstall --purge   # 全部删掉
 
 **没装 OpenClash 能用吗？** 能。节点、订阅、规则这些 OpenClash 功能用不了，其他功能都正常。
 
-**以后不想用 AI 了？** 重新运行 `sh install.sh --no-ai`，就变成纯面板版，Claude 连不上了，面板照常用。
+**以后不想用 AI 了？** 把安装命令再运行一次，第一个问题输 **2**（纯面板版），Claude 就连不上了，面板照常用。
 

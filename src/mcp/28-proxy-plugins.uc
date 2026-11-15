@@ -48,7 +48,8 @@ P.feedback = function(a) {
 		if (type(im) == 'string' && length(im) < 2100000 && match(im, /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/)) push(imgs, im);
 	}
 	if (hub_conf(true)?.HUB) {
-		let o = hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs }, 60);
+		let files = type(a?.files) == 'array' ? filter(map(slice(a.files, 0, 5), (x) => '' + x), (x) => match(x, /^[a-z2-9]{16}$/)) : [];
+		let o = hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs, files }, 60);
 		// 托管服务给的编号存在路由器上：开发者回复以后，打开面板时能看到（不用邮箱）
 		if (match(o.code ?? '', /^[a-z2-9]{8}$/)) {
 			let l = fb_codes(); push(l, { code: o.code, at: time() });

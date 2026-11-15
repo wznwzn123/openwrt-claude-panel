@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import FamDrawer from '@/components/hub/FamDrawer.vue'
 import { get, post } from '@/api'
 import { ask } from '@/composables/ask'
 import { askDays } from '@/composables/days'
@@ -19,6 +20,7 @@ const st = ref<any>({ count: 0, max: 0 })
 const trashDays = ref(30)
 const latest = ref('')
 const loading = ref(true)
+const fam = ref<{ sub: string; name: string }>({ sub: '', name: '' })
 const q = ref('')
 const f = ref('all')
 const live = (d: any) => d.state === 'ok' && d.offWhy !== 'deleted'
@@ -105,13 +107,14 @@ onMounted(load)
                 <Tag v-if="d.off && d.offWhy !== 'deleted'" tone="danger" dot>{{ d.offWhy === 'exp' ? '到期暂停' : '已封禁' }}</Tag>
               </div>
               <div v-if="d.offWhy === 'deleted'" class="hub-row-meta">{{ day(d.delAt) }} {{ d.delWhy === 'idle' ? '因为 90 天没上线被放进回收站' : '删除' }} · <b class="bad">{{ day(d.purgeAt) }} 彻底删除</b> · {{ (d.users || []).length }} 个账号</div>
-              <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号 · 邀请码 {{ d.invite || '—' }}</div>
+              <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号{{ d.owner ? '' : (d.users || []).length > 1 ? '（还没选主账号）' : '' }} · 邀请码 {{ d.invite || '—' }}</div>
               <div v-if="d.anote" class="hub-note">📝 {{ d.anote }}</div>
             </div>
             <div class="hub-row-acts">
               <template v-if="d.offWhy === 'deleted'"><Button size="sm" variant="primary" @click="op(d, 'restore')">恢复</Button><Button size="sm" variant="danger" @click="op(d, 'purge')">彻底删除</Button></template>
               <template v-else>
                 <Button v-if="d.exp && d.state === 'ok'" size="sm" variant="primary" @click="op(d, 'extend')">加天数</Button>
+                <Button v-if="d.state === 'ok'" size="sm" @click="fam = { sub: d.sub, name: d.name || d.sub }">账号和权限</Button>
                 <Button size="sm" @click="op(d, 'note')">备注</Button>
                 <Button size="sm" @click="op(d, d.off ? 'on' : 'off')">{{ d.off ? '解封' : '封禁' }}</Button>
                 <Button size="sm" @click="op(d, d.protect ? 'unprotect' : 'protect')">{{ d.protect ? '取消保护' : '保护' }}</Button>
@@ -123,5 +126,6 @@ onMounted(load)
         </div>
       </Panel>
     </div>
+    <FamDrawer :sub="fam.sub" :name="fam.name" @close="fam = { sub: '', name: '' }" @changed="load" />
   </div>
 </template>

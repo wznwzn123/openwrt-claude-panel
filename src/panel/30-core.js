@@ -18,7 +18,14 @@ const PX_LUCI = { openclash: 'admin/services/openclash', nikki: 'admin/services/
 const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', enabled: true, running: true } : (PXS.list || []).find((x) => x.id === PXS.active) || null;
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
+// 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
+const PAGE_PERM = { term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
+function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
+function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
+function roleShow(it) { if (ME_ROLE.role !== 'sub') return true; if (Array.isArray(it)) return canPerm('net'); if (it.kids) return it.kids.some((k) => (Array.isArray(k) ? canPerm('net') : canPage(k.p))); return canPage(it.p); }
 function pxShow(it) {
+	if (!roleShow(it)) return false;
 	if (!it || !it.px || !PXS) return true;
 	const a = pxAct();
 	if (it.px === 'oc') return (PXS.list || []).some((x) => x.id === 'openclash');
@@ -27,10 +34,13 @@ function pxShow(it) {
 }
 // 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
 // 托管版安装完终端里给的链接还带着配对码（#login=密钥&pair=配对码）：输登录码那一页会带着去官网绑定账号
-try { const m = /^#login=([A-Za-z0-9]{16,64})(?:&pair=([A-Za-z0-9]{8}))?$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); if (m[2]) localStorage.setItem('rp_pair', JSON.stringify({ code: m[2].toUpperCase(), exp: Date.now() + 10 * 60e3 })); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+try { const m = /^#login=([A-Za-z0-9]{16,64})(?:&pair=([A-Za-z0-9]{8}))?$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); localStorage.removeItem('rp_pair'); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 // 官网「获取登录码 → 打开面板」：网址带 #code=登录码，自动填好
 let pendCode = '';
 try { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (m) { pendCode = m[1].toUpperCase(); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+// 5.2 官网「我的路由器 → 打开面板」：网址带 #open=一次性票，路由器拿票去官网核对，发这台手机的钥匙
+let pendOpen = '';
+try { const m = /^#open=([a-z2-9]{24})$/.exec(location.hash); if (m) { pendOpen = m[1]; history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 let token = store.get('rp_token') || store.get('cmcp_token');
 let seq = 0;
 class AuthError extends Error {}
@@ -79,7 +89,7 @@ async function rpcOnce(method, params, timeoutMs) {
 	if (r.status === 504 || r.status === 524) throw new OfflineError('路由器处理超时，可能正忙或卡住了', '超时');
 	if (!r.ok) throw new Error('路由器返回 ' + r.status);
 	const j = await r.json();
-	if (j.error && j.error.code === -32010) { needCode(j.error.data); throw new NeedCodeError(j.error.message); }
+	if (j.error && (j.error.code === -32010 || j.error.code === -32011)) { if (j.error.code === -32010) store.del('rp_dev'); needCode(j.error.data, j.error.message); throw new NeedCodeError(j.error.message); }
 	if (j.error) throw new Error(j.error.message);
 	return j.result;
 }
@@ -270,7 +280,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { me: '我的主页', main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -464,7 +474,7 @@ function renderNav() {
 		if ('首页 主页 home'.includes(q)) hits.unshift(navBtn(NAV_TOP, false, false));
 		nav.innerHTML = hits.length ? hits.join('') : '<div class="empty">没有找到这个功能</div>';
 	} else {
-		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
+		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.filter((g) => !g.items.length || g.items.some(pxShow)).map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
 			!g.items.length && g.empty ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:${PKG_PAGE}">去安装 ›</button></div>` :
 			g.items.filter(pxShow).map((it) => {
 				if (!it.kids) return navBtn(it, false, g.noic);
@@ -488,6 +498,7 @@ function navReveal(p) {
 let page = 'home';
 const DIRTY = {};
 async function go(p) {
+	if (!canPage(p)) { toast(PAGE_PERM[p] === 'owner' ? '只有主账号能用这个功能' : '主账号没有给你开这个功能'); p = 'main'; }
 	if (p !== page && DIRTY[page] && DIRTY[page]() && !(await confirmBox('还有没保存的修改', '离开这一页会丢掉这些修改。', '不保存，离开', true))) return;
 	const prev = page;
 	page = p;

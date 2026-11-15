@@ -136,7 +136,7 @@ j = await (await st(j.code)).json();
 ok('[查询] 官网报告查到的类型是「官网报告」', j.kind === '官网报告', JSON.stringify(j));
 
 // 面板里发的反馈（托管版）也有编号：用邀请码开通一台路由器，用它的钥匙发
-const INV = (await (await adm('POST', '/invites', { max: 5, svc: 7, note: '测试' })).json()).invite.code;
+const INV = (await (await adm('POST', '/invites', { direct: true, max: 5, svc: 7, note: '测试' })).json()).invite.code;
 const A = await (await reg(INV, '3.3.3.1')).json();
 r = await api('POST', '/api/dev/feedback', { sub: A.sub, rkey: A.rkey, text: '面板里反馈的问题：首页打不开' }); j = await r.json();
 ok('[面板反馈] 返回编号', r.status === 200 && j.ok && /^[a-z2-9]{8}$/.test(j.code || ''), JSON.stringify(j));

@@ -80,7 +80,7 @@ for ai in ai noai; do
 			rm -f "$d/src/bin/cmcp-backup"
 		else
 			# worker.js 要用 hub.js、ops.js、site.js（自己部署 Worker 时 wrangler 会一起打包）
-			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/v5.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
+			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/v5.js cloud/fam.js cloud/inst.js cloud/files.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
 		fi
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done
@@ -102,6 +102,23 @@ if [ -n "$HUB_URL" ]; then
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done
 fi
+# 5.2 通用安装包：教程里只有一条命令，装哪个版本在终端里输 1 或 2 选
+#   openwrt-claude-panel.tar.gz         自建版（问 AI 版 / 纯面板版、精简版 / 完整版；包里是完整版的文件）
+#   openwrt-claude-panel-hosted.tar.gz  托管版（问 AI 版 / 纯面板版）
+# 一键更新照旧下载对应的那个具体版本的包
+for k in any hosted; do
+	src=dist/openwrt-claude-panel-$( [ $k = any ] && echo ai-full || echo hosted-ai ).tar.gz
+	[ -f "$src" ] || continue
+	t=dist/tmp/u-$k; mkdir -p "$t" && tar -C "$t" -xzf "$src"
+	sed -i '/^PKG_AI=/d; /^PKG_CODE=/d' "$t/openwrt-claude-panel/EDITION"
+	# 不带部署 Worker 用的 cloud/ 目录（约 1 MB）：路由器上用不到，省下载流量和安装时占的内存；要部署 Worker 的从 GitHub 仓库拿
+	rm -rf "$t/openwrt-claude-panel/cloud"
+	[ $k = any ] && sed -i '/^PKG_ED=/d' "$t/openwrt-claude-panel/EDITION"
+	sed -i "1s/.*/# 通用安装包（$( [ $k = any ] && echo 自建版 || echo 托管版 )，装的时候选版本）（$V）/" "$t/openwrt-claude-panel/EDITION"
+	[ $k = hosted ] && cp docs/install-hosted.md "$t/openwrt-claude-panel/INSTALL.md"
+	[ $k = any ] && cp docs/install-phone.md "$t/openwrt-claude-panel/INSTALL.md"
+	tar -C "$t" -czf "dist/openwrt-claude-panel$( [ $k = hosted ] && echo -hosted ).tar.gz" openwrt-claude-panel
+done
 rm -rf dist/tmp dist/cfd.sums dist/ucode.sums
 (cd dist && sha256sum *.tar.gz > SHA256SUMS)
 ls -la dist

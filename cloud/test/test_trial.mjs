@@ -50,10 +50,10 @@ await hub().ctx.storage.put({ ['u:u1']: { uid: 'u1', email: 'alice@x.com', devs:
 const acc = (s, path, b) => api('POST', '/api/account/' + path, b, { cookie: 'sid=' + s, origin: 'https://panel.example' });
 const me = async (s) => (await (await api('GET', '/api/account/me', null, { cookie: 'sid=' + s })).json());
 
-let r = await (await adm('POST', '/invites', { max: 20, days: 7, note: '酷安', svc: 7 })).json();
+let r = await (await adm('POST', '/invites', { direct: true, max: 20, days: 7, note: '酷安', svc: 7 })).json();
 const TRIAL = r.invite.code;
 ok('生成试用邀请码：7 天内能用来开通，开通后能用 7 天', r.ok && r.invite.svc === 7 && r.invite.exp > T, JSON.stringify(r.invite));
-const PERM = (await (await adm('POST', '/invites', { max: 5 })).json()).invite.code;
+const PERM = (await (await adm('POST', '/invites', { direct: true, max: 5 })).json()).invite.code;
 const A = await (await reg(TRIAL, '2.2.2.1')).json();
 ok('用试用码开通：到期时间 = 7 天后', A.sub && A.exp && Math.abs(A.exp - (T + 7 * DAY)) < 5000, JSON.stringify({ exp: A.exp }));
 const P = await (await reg(PERM, '2.2.2.2')).json();
@@ -118,7 +118,7 @@ ok('管理员封禁的：续期只加天数，不会自动解封', (await dev(A.
 await adm('POST', '/devices/' + A.sub + '/on');
 
 // 暂停 30 天还没续：删掉，腾出名额
-const TRIAL2 = (await (await adm('POST', '/invites', { max: 1, days: 1, svc: 7 })).json()).invite.code;
+const TRIAL2 = (await (await adm('POST', '/invites', { direct: true, max: 1, days: 1, svc: 7 })).json()).invite.code;
 const B = await (await reg(TRIAL2, '2.2.2.9')).json();
 T = B.exp + 60e3; await hub().cleanup();
 ok('另一台试用到期：暂停', (await dev(B.sub)).off);
@@ -127,7 +127,7 @@ ok('暂停超过 30 天还没续：删掉，腾出名额', !(await dev(B.sub)) &
 ok('作废续期码', (await adm('DELETE', '/renewals/' + K3)).status === 200 && !(await (await adm('GET', '/renewals')).json()).list.some((x) => x.code === K3));
 
 // ---- 续期申请表 ----
-const TRIAL3 = (await (await adm('POST', '/invites', { max: 2, days: 1, svc: 7 })).json()).invite.code;
+const TRIAL3 = (await (await adm('POST', '/invites', { direct: true, max: 2, days: 1, svc: 7 })).json()).invite.code;
 const C = await (await reg(TRIAL3, '2.2.3.1')).json(), D2 = await (await reg(TRIAL3, '2.2.3.2')).json();
 await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }, { sub: C.sub, at: T }, { sub: D2.sub, at: T }] });
 T = C.exp + 60e3; await hub().cleanup();

@@ -18,16 +18,21 @@
 <div id="needcode" class="lgwrap hidden" role="dialog" aria-modal="true" aria-labelledby="lcTitle">
 <main class="lgcard">
 	<div class="logo lgbiglogo" aria-hidden="true" style="font-size:30px">🔐</div>
-	<h2 id="lcTitle">输入登录码</h2>
-	<div class="muted" style="font-size:14px;line-height:1.7">为了安全，托管版每台手机第一次打开面板要输一次登录码，输对以后这台手机就不用再输了。</div>
-	<div id="lcPair" class="ncpair hidden"><b>第一次用：先绑定官网账号</b><span>点下面的按钮，登录或注册官网账号，这台路由器会自动绑定；绑定好官网会显示登录码，点「打开面板」就自动填好回到这里。</span><a id="lcPairBtn" class="lgmain" href="#">绑定官网账号</a></div>
-	<ol class="ncsteps muted" id="lcSteps"><li>打开官网 <b id="lcHubName">yrlove520.com</b>，登录账号</li><li>在这台路由器下面点「<b>获取登录码</b>」</li></ol>
-	<label class="lglabel" for="lcInput">登录码</label>
-	<input id="lcInput" class="input nccode" placeholder="8 位登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false">
-	<div id="lcErr" class="formerr hidden"></div>
-	<button id="lcBtn" class="lgmain">确定</button>
-	<a id="lcHub" class="nchub" href="https://yrlove520.com/app" target="_blank" rel="noopener">打开官网拿登录码</a>
-	<div class="ncmore muted">官网账号里还没有这台路由器：用安装时终端里显示的配对码绑定（过期了在路由器后台终端运行 <code>cmcp-pair</code> 再拿一个）。<br>官网打不开、急着用：在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH，不是这个面板里的终端）运行 <code>cmcp-logincode</code>，拿一个应急登录码。<br><a href="#" id="lcOut">换一个登录地址</a></div>
+	<h2 id="lcTitle">从官网打开面板</h2>
+	<div id="lcOpening" class="muted hidden" style="font-size:14px;line-height:1.7"><span class="spin" aria-hidden="true" style="color:var(--brand)">⟳</span> 正在核对你的官网账号，马上就好…</div>
+	<div id="lcBody">
+	<div id="lcWhy" class="ncwhy hidden"></div>
+	<div class="muted" style="font-size:14px;line-height:1.7">为了安全，托管版的面板要从官网账号里打开：登录官网，在「我的路由器」里点这台路由器的「<b>打开面板</b>」，这台手机就自动登录了，以后不用再登录。</div>
+	<a id="lcHub" class="lgmain nclink" href="https://yrlove520.com/app" rel="noopener">去官网打开</a>
+	<div class="ncmore muted">家里人也要用：主账号在官网「我的路由器」或面板「我的主页 → 家人」里生成加入码发给他，他注册官网账号、加入以后，同样从官网打开。</div>
+	<details class="ncemerg" id="lcEmerg"><summary>官网打不开、急着用？</summary>
+		<div class="ncmore muted" style="margin-top:8px">在<b>路由器后台的终端</b>（LuCI「服务 → 终端」或 SSH，不是这个面板里的终端）运行 <code>cmcp-logincode</code>，拿一个应急登录码，输在下面：</div>
+		<input id="lcInput" class="input nccode" placeholder="8 位应急登录码" maxlength="12" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="应急登录码">
+		<div id="lcErr" class="formerr hidden"></div>
+		<button id="lcBtn" class="nchub" style="border:0">用应急登录码登录</button>
+	</details>
+	<div class="ncmore muted" style="text-align:center"><a href="#" id="lcOut">换一个登录地址</a></div>
+	</div>
 </main>
 </div>
 
@@ -41,6 +46,7 @@
 		</div>
 		<div class="actions">
 			<span class="pill hidden" id="jobPill"><i class="dot busy"></i><span id="jobText">后台任务</span></span>
+			<button class="mebtn hidden" id="meBtn" type="button" aria-label="我的主页" title="我的主页"><span class="av" id="meAv"></span></button>
 			<button class="bell" id="bellBtn" type="button" aria-label="通知" title="通知"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><em id="bellN" class="hidden"></em></button>
 			<div class="topcap"><span class="pill" id="statusPill"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
 		</div>
@@ -52,6 +58,7 @@
 		<div class="logo" role="img" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 		<div style="min-width:0"><b>我的路由器</b><div class="sub" id="sideSub">OpenWrt 管理面板</div></div>
 	</div>
+	<button class="sideme hidden" id="sideMe" type="button"><span class="av" id="sideMeAv"></span><span class="t"><b id="sideMeName"></b><small>我的主页 · 官网账号</small></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
 	<input class="sideq" id="sideQ" type="search" placeholder="搜索功能，如 DHCP、端口转发" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索功能">
 	<nav class="sidenav" id="sidenav">
 	</nav>
@@ -273,22 +280,27 @@
 			<button class="btn sm" id="chTipBtn" type="button">说明</button></div>
 		<div class="chtips" id="chTips"><b>这是干嘛的？</b>遇到问题、看不懂的提示、想要的新功能，都可以在这里直接跟开发者说，不用填表格。
 			<ul><li>开发者看到会尽快回复（一般当天），回复会<b>推送到手机</b>，打开这一页也能看到。</li>
-			<li>说清楚是<b>哪一页、做了什么、看到什么提示</b>；能<b>截图</b>就更快（点输入框左边的图片按钮）。</li>
+			<li>说清楚是<b>哪一页、做了什么、看到什么提示</b>；能<b>截图</b>就更快（点输入框左边的图片按钮）；录屏、日志这类文件点旁边的回形针发，最大 200MB。</li>
 			<li><b>别发密码、密钥、订阅链接</b>这些敏感信息。开发者不会找你要。</li>
 			<li>路由器的型号和面板版本会自动带上，不用自己写。</li></ul></div>
 	</div>
 	<div class="chlist" id="chList"><div class="chempty">读取中…</div></div>
 	<div class="chbox">
+		<div class="atts hidden" id="chAtts"></div>
 		<div class="chpre hidden" id="chPre"><img alt="要发的图片" id="chPreImg"><span>图片会跟这条消息一起发出去</span><button class="btn sm" id="chPreX" type="button">不发了</button></div>
 		<div class="chin">
 			<button type="button" id="chImgBtn" aria-label="发图片" title="发图片"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-5-5L7 19"/></svg></button>
 			<input type="file" id="chFile" accept="image/*" class="hidden">
+			<button type="button" id="chAttBtn" class="hidden" aria-label="发文件（视频、文件，最大 200MB）" title="发文件（视频、文件，最大 200MB）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.4 3.4 0 0 1 4.8 4.8l-8.1 8.1a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/></svg></button>
+			<input type="file" id="chAny" multiple class="hidden">
 			<textarea id="chText" rows="1" maxlength="2000" placeholder="写下你的问题或建议…" aria-label="消息内容"></textarea>
 			<button type="button" class="send" id="chSend" aria-label="发送" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button>
 		</div>
 		<div class="chnote" id="chNote">开发者回复后会推送到手机</div>
 	</div>
 </section>
+<section class="page" id="p-me"><div id="meBox"><section class="card empty">读取中…</section></div></section>
+
 <section class="page" id="p-myfb">
 	<div class="hero">
 		<div class="herohead"><h1>我的反馈</h1></div>
@@ -413,11 +425,9 @@
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
-		<button class="file hidden" data-t="svc" id="svcBtn"><div><b>托管服务</b><span class="muted" id="svcState">—</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="devices" id="devsBtn"><div><b>已登录的手机</b><span class="muted">看看哪些手机能打开面板，把不认识的移除</span></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="ckey" id="ckeyBtn"><div><b>Claude 连接器地址</b><span class="muted">在 Claude 里添加连接器用（打不开面板）</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
-		<button class="file hidden" data-t="hubbind" id="hubBindBtn"><div><b>绑定到账号</b><span class="muted">把这台路由器加到官网账号里，换手机时好找</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="feedback"><div><b>问题反馈 / 建议</b><span class="muted">遇到问题、想要什么功能，直接告诉开发者</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="logout"><div><b>退出登录</b><span class="muted">这台手机退出面板，下次要重新登录</span></div><span class="muted">›</span></button>

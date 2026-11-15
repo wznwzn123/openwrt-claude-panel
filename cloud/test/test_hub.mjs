@@ -41,7 +41,7 @@ const dev = async (sub) => (await hub().ctx.storage.get('d:' + sub));
 // 管理接口要密钥
 ok('管理接口没有密钥：拒绝', (await api('GET', '/api/admin/devices')).status === 401);
 ok('管理接口密钥不对：拒绝', (await api('GET', '/api/admin/devices', null, { authorization: 'Bearer admin-key-1234567899' })).status === 401);
-let r = await (await adm('POST', '/invites', { max: 2, days: 30, note: '朋友' })).json();
+let r = await (await adm('POST', '/invites', { direct: true, max: 2, days: 30, note: '朋友' })).json();
 const INV = r.invite.code;
 ok('管理员生成邀请码（10 位、可用 2 次、30 天）', /^[A-Z2-9]{10}$/.test(INV) && r.invite.max === 2 && r.invite.exp > Date.now() + 29 * 86400e3, JSON.stringify(r));
 
@@ -88,7 +88,7 @@ ok('别的域名冒充：404', (await req('POST', 'https://' + A.sub + '.evil.ex
 ok('主域名下的 /cloud 不对应任何路由器', (await api('POST', '/cloud/s', { token: A.pkey })).status === 404);
 
 // 名额上限（这里设成 3 台）
-const inv2 = (await (await adm('POST', '/invites', { max: 10 })).json()).invite.code;
+const inv2 = (await (await adm('POST', '/invites', { direct: true, max: 10 })).json()).invite.code;
 const C = await (await reg(inv2, '4.4.4.4')).json();
 ok('第三台开通成功', !!C.sub);
 r = await reg(inv2, '5.5.5.5');
@@ -109,7 +109,7 @@ ok('失败后已建的隧道被删掉、名额和邀请码次数都退回', CF.t
 CF.fail = null;
 
 // 限流：同一个 IP 一小时最多 5 次
-const inv3 = (await (await adm('POST', '/invites', { max: 50 })).json()).invite.code;
+const inv3 = (await (await adm('POST', '/invites', { direct: true, max: 50 })).json()).invite.code;
 env.MAX_DEVICES = '100';
 let codes = [];
 for (let i = 0; i < 6; i++) codes.push((await reg(inv3, '9.9.9.9')).status);

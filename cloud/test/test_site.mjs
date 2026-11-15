@@ -31,7 +31,7 @@ await new Promise((z) => server.listen(8127, z));
 const B = 'http://localhost:8127';
 const api = async (path, body, hdr = {}) => (await realFetch(B + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...hdr }, body: body ? JSON.stringify(body) : undefined })).json();
 const ADM = { authorization: 'Bearer admin-key-1234567890' };
-const inv = (await api('/api/admin/invites', { max: 5 }, ADM)).invite.code;
+const inv = (await api('/api/admin/invites', { direct: true,  max: 5 }, ADM)).invite.code;
 const R1 = await api('/api/register', { invite: inv, name: 'Kwrt', model: 'JDCloud AX1800' });
 const R2 = await api('/api/register', { invite: inv, name: 'OpenWrt', model: 'Xiaomi AX3000T' });
 const pairOf = async (R) => (await api('/api/pair/start', { sub: R.sub, rkey: R.rkey })).code;
@@ -58,9 +58,11 @@ for (const dark of [false, true]) {
 	ok('密码太短：浏览器先拦住（不提交）', await page.isVisible('#fReg'));
 	await page.fill('#fReg [name=password]', 'alice-pass-1'); await page.click('#fReg button.primary'); await W(800);
 	ok('注册后进入「我的路由器」，显示邮箱', await page.isVisible('#vDash') && (await page.textContent('#who')) === 'alice@x.com');
-	ok('还没有路由器：提示怎么绑定', /还没有绑定路由器/.test(await page.textContent('#devs')));
+	ok('还没有路由器：提示去「装新路由器」', /还没有路由器/.test(await page.textContent('#devs')) && /装新路由器/.test(await page.textContent('#devs')));
 	await shot('empty');
-	// 绑定
+	// 绑定（5.2 以前装的老路由器：用配对码，收在「路由器已经装好了」里）
+	await mod.default.fetch(new Request('https://' + R1.host + '/cloud/beat/r/' + R1.rkey, { method: 'POST', body: '{"ver":"1.3.1"}' }), env);
+	if (!(await page.isVisible('#fBind [name=code]'))) await page.click('.oldpair summary');
 	await page.fill('#fBind [name=code]', 'WRONG123'); await page.click('#fBind button'); await W(500);
 	ok('配对码不对：提示', /配对码不对/.test(await page.textContent('#vDash')));
 	await page.fill('#fBind [name=code]', await pairOf(R1)); await page.click('#fBind button'); await W(800);
@@ -74,7 +76,7 @@ for (const dark of [false, true]) {
 	ok('每台托管版路由器下面有「获取登录码」，点了显示新的登录码', await page.isVisible('.mask') && /10 分钟内有效/.test(await page.textContent('.mask')));
 	await page.click('.mask', { position: { x: 5, y: 5 } }); await W(300);
 	ok('点弹窗外面也能关掉', !(await page.isVisible('.mask')));
-	ok('还没上线：显示「还没上线」', /还没上线/.test(await page.textContent('#devs')));
+
 	await realFetch(B.replace('localhost', R1.host).replace(':8127', ':8127') + '/', {}).catch(() => {});
 	// 心跳后变在线（直接调云端）
 	await mod.default.fetch(new Request('https://' + R1.host + '/cloud/beat/r/' + R1.rkey, { method: 'POST', body: '{"ver":"1.3.1"}' }), env);
@@ -124,6 +126,9 @@ for (const dark of [false, true]) {
 	if (await page.isVisible('.mask')) { await page.click('.mask [data-x]'); await W(400); }
 	// 解绑
 	await page.click('#devs .dev:last-child [data-unb]'); await W(800);
+	// 5.2：主账号解绑要先确认是本人（没开邮件服务时验证码留空就行）
+	ok('主账号解绑：先确认是本人', await page.isVisible('.mask [data-c]'));
+	if (await page.isVisible('.mask [data-c]')) { await page.click('.mask [data-ok]'); await W(1200); }
 	ok('解绑（先确认）', (await page.locator('#devs .dev').count()) === 1);
 	// 退出、未登录时 ?pair=
 	await page.click('#outBtn'); await W(500);
@@ -251,16 +256,16 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await page.goto(B + '/app#login'); await W(500);
 	await page.click('[data-tab="reg"]');
 	await page.fill('#fReg [name=email]', 'newbie@x.com'); await page.fill('#fReg [name=password]', 'newbie-pass-1'); await page.click('#fReg button.primary'); await W(900);
-	ok('[试用] 新注册的账号：最上面显示「免费试用 7 天」和领取按钮', await page.isVisible('#trialCard') && /免费试用 7 天/.test(await page.textContent('#trialCard')) && await page.isVisible('#trialGo'));
+	ok('[试用] 新注册的账号：「装新路由器」里显示「免费试用 7 天」和领取按钮', await page.isVisible('#trialRow .trialrow') && /免费试用 7 天/.test(await page.textContent('#trialRow')) && await page.isVisible('#trialGo'));
 	await page.click('#trialGo'); await W(900);
-	const tc = await page.textContent('#trialCard');
-	const m = /试用码：([A-Z2-9]{10})/.exec(tc);
-	ok('[试用] 点领取：显示试用码和带着这个码的安装命令，可以复制', !!m && (await page.textContent('#trialCmd')).includes('--invite ' + m[1]) && await page.isVisible('#trialCopy'), tc.slice(0, 120));
+	const tc = await page.locator('.inst').first().textContent();
+	const m = /安装码\s*([A-Z2-9]{10})/.exec(tc);
+	ok('[试用] 点领取：显示安装码和带着这个码的安装命令，可以复制', !!m && (await page.locator('.inst pre.cmd').first().textContent()).includes('--invite ' + m[1]) && await page.locator('.inst [data-cp]').first().isVisible(), tc.slice(0, 120));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
 	await page.goto(B + '/#faq-restore'); await W(500);
 	{ const body = await page.textContent('body');
 	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、可以开启加密、没开启的仍原样存着，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /没开启加密的备份仍然原样存在云端/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
-	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，答案直接展开，从链接进来滚到这一条', await page.evaluate(() => { const e = document.getElementById('faq-restore'), r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && e.offsetHeight > 100; }) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
+	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，答案直接展开，从链接进来滚到这一条', await page.evaluate(() => { const e = document.getElementById('faq-restore'), r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && e.offsetHeight > 100; }) && /重新领一个安装码/.test(await page.textContent("#faq-restore")));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();
 }
@@ -418,7 +423,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await page.goto(B + '/security#report'); await page.reload(); await W(300);
 	await page.evaluate(() => { document.querySelector('#rpForm [name=website]').value = 'http://spam'; });
 	await page.fill('#rpForm [name=text]', '机器人提交的垃圾内容垃圾内容'); const n1 = (await env.H.get('hub').feedbacks()).length;
-	await page.click('#rpGo'); await W(600);
+	await page.click('#rpGo'); await W(600); await page.waitForSelector('#rpOk', { state: 'visible', timeout: 4000 }).catch(() => {});
 	ok('[报告] 陷阱字段被填（机器人）：页面显示成功，但不存', await page.isVisible('#rpOk') && (await env.H.get('hub').feedbacks()).length === n1);
 	ok('[隐私/安全] 页面没有报错', !e2.length, e2.join(' | '));
 	await ctx.close();
@@ -457,8 +462,11 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		// 登录：注册账号、绑定路由器；面板里发一条反馈；登录后在官网报告一条
 		await page.goto(B + '/app#login'); await W(500); await page.click('[data-tab="reg"]');
 		await page.fill('#fReg [name=email]', 'fbuser@x.com'); await page.fill('#fReg [name=password]', 'fbuser-pass-1'); await page.click('#fReg button.primary'); await W(900);
-		await page.fill('#fBind [name=code]', await pairOf(R2)); await page.click('#fBind button'); await W(900); await page.click('.mask [data-x]').catch(() => {}); await W(300);
-		const pf = await api('/api/dev/feedback', { sub: R2.sub, rkey: R2.rkey, text: '面板里发的：首页流量一直是 0' });
+		// 5.2：R2 已经有主账号（alice）了，别人绑不上；这里用一台还没人绑的新路由器
+		const R3 = await api('/api/register', { invite: (await api('/api/admin/invites', { direct: true, max: 1 }, ADM)).invite.code, name: '书房', model: 'x86' });
+		if (!(await page.isVisible('#fBind [name=code]'))) await page.click('.oldpair summary');
+		await page.fill('#fBind [name=code]', await pairOf(R3)); await page.click('#fBind button'); await W(900); await page.click('.mask [data-x]').catch(() => {}); await W(300);
+		const pf = await api('/api/dev/feedback', { sub: R3.sub, rkey: R3.rkey, text: '面板里发的：首页流量一直是 0' });
 		await page.goto(B + '/security#report'); await W(700);
 		ok('[报告邮箱] 登录了：邮箱自动填账号邮箱，写着会显示在账号页', (await page.inputValue('#rpForm [name=email]')) === 'fbuser@x.com' && /账号页「我的反馈」/.test(await page.textContent('#rpMe')));
 		if (SHOTS) { await page.locator('#rpForm').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-rpmail.png' }); }
@@ -548,6 +556,34 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		await page.goto(B + '/app?pair=ABCD2345'); await W(700);
 		ok('[登录页] 从路由器带绑定码来：直接是登录表单和「会自动绑定」的说明', await page.isVisible('#fLogin') && /自动把这台路由器绑定/.test(await page.textContent('#lgCard')));
 		await ctx.close();
+	}
+	// 新设备登录：密码对了还要邮箱验证码，输对才进
+	{
+		delete env.RESEND_API_KEY;
+		await api('/api/account/register', { email: 'newdev@x.com', password: 'newdev-pass-1' });
+		env.RESEND_API_KEY = 're_test';
+		for (const [w, h] of [[390, 844], [1280, 800]]) {
+			const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
+			const page = await ctx.newPage(); const e7 = []; page.on('pageerror', (x) => e7.push(x.message));
+			await page.goto(B + '/app#login'); await W(800);
+			await page.fill('#fLogin [name=email]', 'newdev@x.com'); await page.fill('#fLogin [name=password]', 'newdev-pass-1'); await page.click('#fLogin button.primary'); await W(1200);
+			ok('[新设备] 密码对了：出现验证码页，写着发到哪个邮箱（打码）［' + w + '］', await page.isVisible('#fCode') && !(await page.isVisible('#fLogin')) && /ne\*\*\*@x\.com/.test(await page.textContent('#fCode')));
+			ok('[新设备] 还没进账号页［' + w + '］', !(await page.isVisible('#vDash')));
+			if (SHOTS) await page.screenshot({ path: SHOTS + '/site-newdev-' + w + '.png' });
+			const pl = [...(await env.H.get('hub').ctx.storage.list({ prefix: 'pl:' })).values()].sort((a, b) => b.exp - a.exp)[0];
+			await page.fill('#fCode [name=code]', pl.code === '111111' ? '222222' : '111111'); await page.click('#fCode button.primary'); await W(800);
+			ok('[新设备] 验证码错：提示，还在这一页［' + w + '］', /验证码不对/.test(await page.textContent('#fCode [data-err]')) && await page.isVisible('#fCode'));
+			await page.fill('#fCode [name=code]', pl.code); await page.click('#fCode button.primary'); await W(1500);
+			ok('[新设备] 验证码对：进了账号页［' + w + '］', await page.isVisible('#vDash') && /newdev@x\.com/.test(await page.textContent('#who')));
+			await page.click('#outBtn'); await W(1200);
+			await page.goto(B + '/app#login'); await W(800);
+			await page.fill('#fLogin [name=email]', 'newdev@x.com'); await page.fill('#fLogin [name=password]', 'newdev-pass-1'); await page.click('#fLogin button.primary'); await W(1500);
+			ok('[新设备] 验证过的设备再登录：只要密码［' + w + '］', await page.isVisible('#vDash'));
+			ok('[新设备] 页面没有报错［' + w + '］', !e7.length, e7.join(' | '));
+			await env.H.get('hub').ctx.storage.delete('r:ml1:' + (await env.H.get('hub').ctx.storage.get('e:newdev@x.com')));
+			await ctx.close();
+		}
+		delete env.RESEND_API_KEY;
 	}
 	// 浏览器没记住登录状态（关了 Cookie、无痕、微信里打开）：不再跳回注册页，直接说清楚怎么办，并报给开发者
 	for (const [w, h] of [[390, 844], [1280, 800]]) {

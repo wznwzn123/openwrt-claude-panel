@@ -28,7 +28,7 @@ globalThis.fetch = async (input, init = {}) => {
 };
 
 /* ---------- 模拟 Durable Object ---------- */
-const env = { BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 'cf-token', CF_ACCOUNT_ID: 'acc1', CF_ZONE_ID: 'zone1', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '20', VAPID_PUB: '', VAPID_PRIV: '' };
+const env = { NEW_DEVICE_CODE: '0', BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 'cf-token', CF_ACCOUNT_ID: 'acc1', CF_ZONE_ID: 'zone1', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '20', VAPID_PUB: '', VAPID_PRIV: '' };
 const ns = (Cls) => { const objs = new Map(), st = new Map(); return { objs, st, idFromName: (n) => n, get(id) { if (!objs.has(id)) { const s = memStorage(); st.set(id, s); objs.set(id, new Cls({ storage: s }, env)); } return objs.get(id); } }; };
 env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const req = (method, url, body, headers = {}) => mod.default.fetch(new Request(url, { method, body: body == null ? undefined : (typeof body === 'string' || body instanceof Uint8Array ? body : JSON.stringify(body)), headers: { 'content-type': 'application/json', ...headers } }), env);
@@ -65,7 +65,7 @@ const uidOf = async (email) => hub().ctx.storage.get('e:' + email);
 const uA = await uidOf('alice@x.com'), uB = await uidOf('bob@x.com'), uM = await uidOf('boss@x.com');
 ok('三个账号都建好了', uA && uB && uM, [uA, uB, uM].join());
 const bind = async (uid, sub) => { const u = await hub().ctx.storage.get('u:' + uid), d = await dev(sub); u.devs = [...(u.devs || []), { sub, at: T }]; d.users = [...(d.users || []), uid]; await hub().ctx.storage.put({ ['u:' + uid]: u, ['d:' + sub]: d }); };
-let r = await (await adm('POST', '/invites', { max: 20, svc: 7, note: '给阿明' })).json();
+let r = await (await adm('POST', '/invites', { direct: true, max: 20, svc: 7, note: '给阿明' })).json();
 const INV = r.invite.code;
 const A = await (await reg(INV, '3.3.3.1')).json(), B = await (await reg(INV, '3.3.3.2')).json(), C = await (await reg(INV, '3.3.3.3')).json();
 await bind(uA, A.sub); await bind(uA, B.sub); await bind(uB, C.sub);

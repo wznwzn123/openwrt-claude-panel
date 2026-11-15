@@ -65,7 +65,7 @@ const uidOf = async (email) => hub().ctx.storage.get('e:' + email);
 const uA = await uidOf('alice@x.com'), uB = await uidOf('bob@x.com'), uM = await uidOf('boss@x.com');
 ok('三个账号都建好了', uA && uB && uM, [uA, uB, uM].join());
 const bind = async (uid, sub) => { const u = await hub().ctx.storage.get('u:' + uid), d = await dev(sub); u.devs = [...(u.devs || []), { sub, at: T }]; d.users = [...(d.users || []), uid]; await hub().ctx.storage.put({ ['u:' + uid]: u, ['d:' + sub]: d }); };
-let r = await (await adm('POST', '/invites', { max: 20, svc: 7, note: '给阿明' })).json();
+let r = await (await adm('POST', '/invites', { direct: true, max: 20, svc: 7, note: '给阿明' })).json();
 const INV = r.invite.code;
 const A = await (await reg(INV, '3.3.3.1')).json(), B = await (await reg(INV, '3.3.3.2')).json(), C = await (await reg(INV, '3.3.3.3')).json();
 await bind(uA, A.sub); await bind(uA, B.sub); await bind(uB, C.sub);
@@ -74,14 +74,14 @@ const LOG = async () => (await (await adm('GET', '/log')).json()).list;
 /* ---------- 新账号领试用 ---------- */
 await hub().ctx.storage.put('u:' + uA, { ...(await hub().ctx.storage.get('u:' + uA)), verified: true });
 let me = await call(UA, '/api/account/me', null, 'GET');
-ok('[试用] 账号页能看到「免费试用 7 天」，还没领', me.trial && me.trial.days === 7 && !me.trial.got && !me.trial.code, JSON.stringify(me.trial));
+ok('[试用] 账号页能看到「免费试用 7 天」，能领 1 次，还没领', me.trial && me.trial.days === 7 && me.trial.max === 1 && me.trial.left === 1 && !me.inst.length, JSON.stringify(me.trial));
 r = await call(UA, '/api/account/trial', {});
 ok('[试用] 领到试用码：7 天内有效', r.st === 200 && /^[A-Z2-9]{10}$/.test(r.code) && Math.abs(r.exp - (T + 7 * DAY)) < 5, JSON.stringify(r));
 const code = r.code;
 r = await call(UA, '/api/account/trial', {});
 ok('[试用] 再点一次：还是同一个码，不会多领', r.st === 200 && r.code === code);
 me = await call(UA, '/api/account/me', null, 'GET');
-ok('[试用] 账号页显示这个码', me.trial.code === code && me.trial.got);
+ok('[试用] 账号页「我的安装码」里有这个码（试用的）', me.inst.length === 1 && me.inst[0].code === code && me.inst[0].kind === 'trial' && me.trial.open === 1 && me.trial.left === 0, JSON.stringify(me.inst));
 const inv = await hub().ctx.storage.get('i:' + code);
 ok('[试用] 码只能开通 1 台，开通后用 7 天，管理页标着「官网自助试用」', inv.max === 1 && inv.svc === 7 && inv.trial === 1 && inv.uid === uA && /alice@x\.com/.test(inv.note));
 const before = (await hub().ctx.storage.get('u:' + uA)).devs.length;
@@ -90,9 +90,21 @@ ok('[试用] 用这个码开通：成功，告诉安装程序已经自动加到�
 const uu = await hub().ctx.storage.get('u:' + uA), dd = await dev(D.sub);
 ok('[试用] 路由器自动加到这个账号里（不用配对）', uu.devs.length === before + 1 && uu.devs.some((x) => x.sub === D.sub) && dd.users.includes(uA));
 me = await call(UA, '/api/account/me', null, 'GET');
-ok('[试用] 开通以后账号页不再显示试用码', me.trial.used > 0 && !me.trial.code && me.devs.some((x) => x.sub === D.sub));
+ok('[试用] 开通以后账号页不再显示这个码，记着用过 1 次', me.trial.used === 1 && !me.inst.length && me.devs.some((x) => x.sub === D.sub) && (await dev(D.sub)).owner === uA);
 r = await call(UA, '/api/account/trial', {});
-ok('[试用] 用过了还点领取：返回原来的码、标着用过了，不会再发新的', r.st === 200 && r.code === code && r.used > 0);
+ok('[试用] 用过了还点领取（每个账号 1 次）：说已经领过了，不发新的', r.st === 403 && /领过试用/.test(r.error), JSON.stringify(r));
+// 管理后台改成每个账号最多领 2 次：还能再领一次
+let tm = await (await adm('POST', '/trialmax', { max: 2 })).json();
+ok('[试用] 管理后台改成每个账号最多领 2 次', tm.ok && tm.max === 2 && (await (await adm('GET', '/trialmax')).json()).max === 2);
+r = await call(UA, '/api/account/trial', {});
+ok('[试用] 改成 2 次以后：能再领一个新的码', r.st === 200 && r.code && r.code !== code, JSON.stringify(r));
+const code2 = r.code;
+// 过期没用：清掉，名额回来
+{ const i = await hub().ctx.storage.get('i:' + code2); i.exp = Date.now() - 1000; await hub().ctx.storage.put('i:' + code2, i); }
+await hub().instSweep();
+me = await call(UA, '/api/account/me', null, 'GET');
+ok('[试用] 第二个码 7 天没用、过期了：清掉，又能领（还剩 1 次）', !(await hub().ctx.storage.get('i:' + code2)) && me.trial.left === 1 && !me.inst.length, JSON.stringify(me.trial));
+await adm('POST', '/trialmax', { max: 1 });
 ok('[试用] 这个码不能再开通第二台', (await reg(code, '4.4.4.5')).status === 403);
 ok('[试用] 记进操作记录', (await LOG()).some((x) => x.op === 'trial') && (await LOG()).some((x) => x.op === 'trial-used'));
 // 邮箱没验证（开了邮件验证时）不能领

@@ -257,7 +257,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await page.goto(B + '/#faq-restore'); await W(500);
 	{ const body = await page.textContent('body');
 	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、可以开启加密、没开启的仍原样存着，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /没开启加密的备份仍然原样存在云端/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
-	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，从链接进来自动展开', await page.evaluate(() => document.getElementById('faq-restore').open) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
+	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，答案直接展开，从链接进来滚到这一条', await page.evaluate(() => { const e = document.getElementById('faq-restore'), r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && e.offsetHeight > 100; }) && /sh install.sh --invite 新邀请码/.test(await page.textContent('#faq-restore')));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();
 }
@@ -434,8 +434,9 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
 		const page = await ctx.newPage(); const e5 = []; page.on('pageerror', (x) => e5.push(x.message)); const T = dark ? '（深色）' : '';
 		await page.goto(B + '/'); await W(400);
-		ok('[顶栏] 「查进度」换成了 GitHub 按钮（带 GitHub 图标，打开项目主页）；首页仍有显眼的查进度框' + T, !(await page.isVisible('.top a[href="/r"]')) && await page.isVisible('.top .ghbtn svg') && (await page.getAttribute('.top .ghbtn', 'href')) === 'https://github.com/wznwzn123/openwrt-claude-panel' && /GitHub/.test(await page.textContent('.top .ghbtn')) && await page.isVisible('#fbq') && /反馈过问题？查处理进度/.test(await page.textContent('#fbq')));
-		ok('[查进度] 手机宽度：顶栏和查询框不重叠、不横向超出' + T, (await lay(page, '.top .logo, .top .row > *, .fbqt > *, .fbqr > *')) === '', await lay(page, '.top .logo, .top .row > *, .fbqt > *, .fbqr > *'));
+		ok('[顶栏] 没有「查进度」，有 GitHub 按钮（官方图标，打开项目主页；手机上在菜单里）；首页下面仍有查进度框' + T, !(await page.locator('.nav a[href="/r"]').count()) && (await page.locator('.nav .nav__gh svg').count()) === 1 && (await page.getAttribute('.nav .nav__gh', 'href')) === 'https://github.com/wznwzn123/openwrt-claude-panel' && (await page.locator('#fbq').count()) === 1 && /反馈过问题/.test(await page.textContent('.fbq')));
+		await page.locator('#fbq').scrollIntoViewIfNeeded(); await W(400);
+		ok('[查进度] 手机宽度：顶栏和查询框不重叠、不横向超出' + T, (await lay(page, '.nav__logo, .nav__actions > .btn, .nav__toggle, #fbq > *')) === '', await lay(page, '.nav__logo, .nav__actions > .btn, .nav__toggle, #fbq > *'));
 		if (SHOTS) { await page.locator('#fbq').scrollIntoViewIfNeeded(); await page.evaluate(() => scrollBy(0, -200)); await page.screenshot({ path: SHOTS + '/site-fbq' + (dark ? '-dark' : '') + '.png' }); }
 		if (dark) { ok('[查进度] 页面没有报错' + T, !e5.length, e5.join('|')); await ctx.close(); continue; }
 		await page.fill('#fbq [name=c]', 'k7f2q90b'); await page.click('#fbq button'); await W(300);
@@ -496,7 +497,11 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900, colorScheme: dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 });
 		const page = await ctx.newPage(); const e6 = []; page.on('pageerror', (x) => e6.push(x.message));
 		await page.goto(B + '/'); await W(300);
-		ok('[顶栏] 首页顶栏不重叠、不超出、GitHub 图标看得到' + T, (await lay2(page, '.top .logo, .top .row > *')) === '' && await page.isVisible('.top .ghbtn svg'), await lay2(page, '.top .logo, .top .row > *'));
+		const NAV = '.nav__logo, .nav__links > .nav__item, .nav__actions > *, .nav__toggle';
+		ok('[顶栏] 首页顶栏不重叠、不超出；电脑上 GitHub 按钮看得到，手机和平板上是菜单按钮' + T, (await lay2(page, NAV)) === '' && (w > 1023 ? await page.isVisible('.nav .nav__gh svg') : await page.isVisible('.nav__toggle')), await lay2(page, NAV));
+		if (w <= 1023) { await page.click('.nav__toggle'); await W(700); const vis = await page.isVisible('.nav__item > a.nav__link[href="#start"]') && await page.isVisible('.nav .nav__gh'); ok('[顶栏] 菜单：打开后能点「怎么装」，GitHub 也在里面' + T, vis && (await page.getAttribute('.nav__toggle', 'aria-expanded')) === 'true', vis); await page.click('.nav__item > a.nav__link[href="#start"]'); await W(1200); ok('[顶栏] 菜单点完收起，到了「怎么装」' + T, (await page.getAttribute('.nav__toggle', 'aria-expanded')) === 'false' && await page.evaluate(() => Math.abs(document.getElementById('start').getBoundingClientRect().top) < 120), ''); }
+		{ const r = await page.evaluate(async () => { const f = [...document.fonts].find((x) => x.family.includes('Geist')); try { await f.load(); } catch (e) {} await new Promise((z) => setTimeout(z, 1500)); return { font: f && f.status, sw: document.documentElement.scrollWidth, cta: document.querySelectorAll('.hero a[href="/app#reg"]').length, kit: [...document.querySelectorAll('[data-ui]')].every((e) => e.dataset.uiReady !== undefined || e.closest('[data-ui-mounted],[data-ui-started]') || e.querySelector('*')), moments: document.documentElement.dataset.momentsReady, fx: document.querySelectorAll('[data-fx-mounted]').length, dg: document.querySelectorAll('.dg svg, .dg .dg-node').length }; }); ok('[首页] 字体从本站加载、没有横向超出、首屏一个主按钮；动效组件都加载了（小界面、滚动动画、背景效果、连线图）' + T, r.font === 'loaded' && r.sw <= w && r.cta === 1 && +r.moments > 5 && r.fx >= 1 && r.dg > 0, JSON.stringify(r)); }
+		ok('[首页] 没有报错' + T, !e6.length, e6.join(' | '));
 		if (SHOTS && !dark) await page.screenshot({ path: SHOTS + '/site-top-' + w + '.png' });
 		await page.goto(B + '/app'); await W(700);
 		const st = await page.evaluate(() => ({ welcome: !document.getElementById('lgWelcome').classList.contains('hidden'), card: !document.getElementById('lgCard').classList.contains('hidden'), top: getComputedStyle(document.querySelector('.top')).display, h1: document.querySelector('.lgwelcome h1').textContent, logo: !!document.querySelector('.lgbiglogo svg'), foot: [...document.querySelectorAll('.lgfoot a')].map((a) => a.textContent + a.getAttribute('href')).join(','), admin: document.getElementById('goAdmin').getAttribute('href'), canvas: document.getElementById('lgbg').width > 0 }));

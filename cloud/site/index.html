@@ -1,141 +1,809 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22.5' fill='%23101C40'/><path d='M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z' fill='%23F4F1EA'/><path d='M62.6 21.4A17 17 0 0 1 78.6 37.4' stroke='%23FFB547' stroke-width='4' stroke-linecap='round' fill='none'/><circle cx='63' cy='37' r='7' fill='%23FFB547'/></svg>"><meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,viewport-fit=cover">
-<title>路由器面板 · 手机管理你的 OpenWrt 路由器</title>
-<meta name="description" content="OpenWrt 路由器的手机控制面板：OpenClash、设备、流量、测速、断线记录、推送、云端备份，可选接入 Claude 用对话管理路由器。">
-<style>/*COMMON_CSS*/
-.hero{text-align:center;padding:34px 8px 26px}
-.hero h1{font-size:clamp(30px,7vw,46px);line-height:1.15}
-.hero p{font-size:17px;color:var(--muted);max-width:560px;margin:14px auto 22px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-.feat b{display:block;font-size:16px;margin:6px 0 4px}.feat .ic{font-size:26px}
-.feat p{margin:0;color:var(--muted);font-size:14px}
-.sec{margin:34px 0 12px;font-size:22px}
-.steps{counter-reset:s;display:grid;gap:10px;margin:0;padding:0;list-style:none}
-.steps li{counter-increment:s;display:flex;gap:12px;align-items:flex-start}
-.steps li::before{content:counter(s);flex:none;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
-table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:9px 6px;border-bottom:.5px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}
-pre.cmd{margin:10px 0 8px;padding:12px 14px;border-radius:14px;background:var(--fill);font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all;color:var(--text)}
-.shots{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 2px 12px;margin:0 -2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.shots::-webkit-scrollbar{display:none}
-.shots figure{flex:none;width:min(46vw,210px);margin:0;scroll-snap-align:start;text-align:center}
-.shots img{display:block;width:100%;height:auto;aspect-ratio:1/2;object-fit:cover;object-position:top;border-radius:22px;border:5px solid #16181f;box-shadow:0 10px 26px rgba(20,30,60,.18);background:#eef1f8}
-.shots figcaption{margin-top:8px;font-size:13.5px;font-weight:600}.shots figcaption span{display:block;font-weight:400;color:var(--muted);font-size:12.5px;margin-top:2px}
-.hint{font-size:12.5px;color:var(--muted);text-align:center;margin:2px 0 0}
-pre.term{margin:10px 0 4px;padding:12px 14px;border-radius:14px;background:#14161c;color:#d8dde8;font:11.5px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
-pre.term b{color:#7cc4ff;font-weight:600}pre.term i{font-style:normal;color:#ffcf6b}pre.term u{text-decoration:none;color:#8a93a6}
-.demo{display:block;width:min(100%,260px);height:auto;margin:10px 0 2px;border-radius:18px;border:4px solid #16181f;box-shadow:0 8px 20px rgba(20,30,60,.16)}
-footer{margin-top:40px;text-align:center;color:var(--muted);font-size:13px}
-.ghbtn svg{flex:none;width:16px;height:16px}@media(max-width:340px){.ghbtn{padding:7px 10px}.ghbtn span{display:none}}
-.fbq{margin:14px 0 12px}.fbqt{display:flex;gap:12px;align-items:flex-start}.fbqt>span{flex:none;font-size:26px;line-height:1.2}.fbqt b{font-size:16.5px}.fbqt p{margin:4px 0 0;color:var(--muted);font-size:13.5px;line-height:1.6}
-.fbqr{display:flex;gap:8px;margin-top:12px}.fbqr input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.1em;font-size:16px}.fbqr button{flex:none}
-.faq details{border-bottom:.5px solid var(--line);padding:12px 2px}.faq details:last-child{border-bottom:0}.faq summary{cursor:pointer;font-weight:650;font-size:15px;list-style-position:outside}.faq p,.faq ul{margin:8px 0 0;font-size:14px;line-height:1.75;color:var(--text)}.faq ul{padding-left:20px}.faq li{margin:4px 0}.faq .muted{color:var(--muted);font-size:13px}
-</style></head><body><div class="wrap">
-<div class="top"><a class="logo" href="/"><i><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</a><div class="row"><a class="btn sm ghbtn" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener" aria-label="GitHub 项目主页"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a><a class="btn sm primary" href="/app">登录</a></div></div>
+<!doctype html>
+<!-- 路由器面板官网首页：按 taste-skill（github.com/Leonxlnx/taste-skill，MIT）的版式和动效组件做的。
+     组件文件在 /k/ 下（原样拷贝，几处为「手机上也播放」和「中文按词切」改过，改的地方有中文注释）。 -->
+<html lang="zh-CN" data-type="software" data-radius="soft" data-ground="sage" data-buttons="pill" data-motion>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>路由器面板：用手机管好家里的 OpenWrt 路由器</title>
+<meta name="description" content="OpenClash 节点、在线设备、流量、断线记录、定时断网都在一个手机面板里；断网自动修好再推送给你。不用公网 IP、不用开端口，注册送 7 天试用。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="路由器面板：用手机管好家里的 OpenWrt 路由器">
+<meta property="og:description" content="节点、设备、流量、看门狗和推送，一个手机面板全管了。">
+<meta name="theme-color" content="#0b100e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%230b100e'/%3E%3Cpath d='M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z' fill='%23e9eeeb'/%3E%3Ccircle cx='63' cy='37' r='7' fill='%234ade80'/%3E%3C/svg%3E">
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="stylesheet" href="/k/system.css">
+<link rel="stylesheet" href="/k/ui/cards.css">
+<link rel="stylesheet" href="/k/motion/motion.css">
+<link rel="stylesheet" href="/k/backgrounds/backgrounds.css">
+<link rel="stylesheet" href="/k/layout/layout.css">
+<link rel="stylesheet" href="/k/icons/icon.css">
+<style>
+@font-face { font-family: "Geist"; src: url("/fonts/geist.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+:root {
+  --p-bg: #0b100e; --p-surface: #131a17; --p-ink: #e9eeeb; --p-muted: #93a19a;
+  --p-accent: #4ade80; --p-accent-ink: #03140a; --p-action: #4ade80; --p-action-ink: #03140a;
+  --p-inv-bg: #e9eeeb; --p-inv-surface: #dce4df; --p-inv-ink: #0b100e; --p-inv-muted: #4c5a53;
+  --p-inv-accent: #15803d; --p-inv-accent-ink: #ffffff; --p-inv-action: #0b100e; --p-inv-action-ink: #e9eeeb;
+  --font-display: "Geist", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-text: "Geist", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --display-weight: 600; --display-tracking: -0.02em; --display-tracking-xl: -0.03em; --ly-scale: 1;
+}
+/* 深色页面上的「亮底」：换成墨绿玻璃色，卡片里的小界面和效果都在这上面 */
+html[data-ground="sage"]:root { --ground-bg: #13211b; --ground-surface: #1c2e26; --ground-ink: #e9eeeb; --ground-muted: #a3b3ab; --ground-accent: #4ade80; }
+body { background: var(--p-bg); }
+h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+h2 .muted { color: var(--muted); }
+@media (max-width: 639px) { h2 .muted { display: block; } }
+.section-head { max-width: 1000px; }
+.t-lead, .hero__lead { color: color-mix(in oklab, var(--ink) 82%, var(--bg)); }
+a.inline { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 9%, transparent); }
+.gh-ic { width: 18px; height: 18px; flex: none; }
+.nav__gh { display: inline-flex; align-items: center; gap: 8px; }
 
-<section class="hero">
-	<h1>用手机管好家里的<br>OpenWrt 路由器</h1>
-	<p>OpenClash 节点、设备、流量、测速、断线记录、定时断网……全在一个好看的手机面板里。出门在外也能用，不用公网 IP、不用开端口。</p>
-	<div class="row" style="justify-content:center"><a class="btn primary" href="#start">开始使用</a><a class="btn" href="/app">登录账号</a></div>
-</section>
+/* ------------------------------------------------ 首屏：手机截图 + 看门狗卡片 + 实时网速 */
+.hero__art { background:
+    radial-gradient(70% 60% at 20% 10%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%),
+    radial-gradient(60% 60% at 90% 100%, color-mix(in oklab, #22d3ee 10%, transparent), transparent 70%), var(--ground-bg);
+  border: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); }
+.hero__art > .hero-fx { position: absolute; inset: 0; z-index: 0; }
+.hero__art > .ly-piece, .hero__art.mo-cs > .ly-piece { position: absolute; z-index: 2; }
+.hero__art.mo-cs > .hero-fx { position: absolute; z-index: 0; }
+/* 首屏只留一个暂停按钮（网格效果自己的那个藏起来，右下角那个同时管网格和小卡片） */
+.hero-fx > .loop-pause { display: none; }
+.hero__art > .ly-piece--main.phone { left: auto; right: 12%; top: 8%; width: min(46%, 300px); }
+.phone { border-radius: 38px; padding: 9px; background: linear-gradient(160deg, #2b3631, #0d1311 60%); box-shadow: 0 0 0 1px rgb(255 255 255 / .08), 0 40px 80px -30px rgb(0 0 0 / .8), 0 0 80px -20px color-mix(in oklab, var(--accent) 35%, transparent); }
+.phone img { display: block; width: 100%; aspect-ratio: 1 / 2; object-fit: cover; object-position: top; border-radius: 30px; }
+.d-card { border-radius: 16px; padding: 14px 16px; background: color-mix(in oklab, #0f1714 82%, transparent); color: var(--ink);
+  border: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); box-shadow: 0 20px 40px -20px rgb(0 0 0 / .7); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.d-card__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.d-card h5 { margin: 0; font-size: 14px; font-weight: 600; }
+.d-chip { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent); }
+.d-line { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; color: color-mix(in oklab, var(--ink) 80%, transparent); border-top: 1px solid rgb(255 255 255 / .06); }
+.d-line:first-of-type { border-top: 0; }
+.d-line i { width: 20px; height: 20px; border-radius: 50%; flex: none; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 700; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent); }
+.d-line i.warn { background: rgb(251 191 36 / .16); color: #fbbf24; }
+.d-line b { font-weight: 600; color: var(--ink); }
+.hero__art > .ly-piece--note { left: 7%; bottom: 9%; width: 292px; }
+.hero__art > .ly-piece--speed { left: 7%; top: 9%; width: 212px; }
+.speed__num { font-size: 30px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.speed__num small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+.speed__bars { display: flex; align-items: end; gap: 3px; height: 34px; margin-top: 8px; }
+.speed__bars i { flex: 1; border-radius: 2px; background: color-mix(in oklab, var(--accent) 70%, transparent); height: 30%; transition: height .6s cubic-bezier(.22,1,.36,1); }
+.speed__row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.hero__proof { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hero__proof .ly-live { color: var(--ink); }
+.hero h1 .mo-wr { color: var(--accent); }
+@media (max-width: 1023px) {
+  .hero__art > .ly-piece--main.phone { right: 50%; width: min(58%, 250px); top: 24px; }
+  .hero__art > .ly-piece--speed { left: 16px; top: 16px; width: 176px; }
+  .hero__art > .ly-piece--note { left: auto; right: 16px; bottom: 16px; width: 250px; }
+}
+@media (max-width: 639px) {
+  .proof__more { display: none; }
+  .hero .btn-row { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+  .d-card h5 { white-space: nowrap; } .d-card h5 .t { display: none; }
+  .hero .btn-row > .btn { flex: 1 1 140px; width: auto; min-width: 0; padding-inline: 12px; }
+  .hero__lead { font-size: 16px; line-height: 1.6; }
+  .hero__art > .ly-piece--main.phone { width: min(56%, 210px); top: 18px; border-radius: 30px; padding: 7px; }
+  .phone img { border-radius: 24px; }
+  .hero__art > .ly-piece:not(.ly-piece--main) { display: block; }
+  .hero__art > .ly-piece--speed { left: 10px; top: auto; bottom: 12px; width: 150px; padding: 10px 12px; }
+  .speed__num { font-size: 22px; }
+  .speed__bars { height: 22px; }
+  .hero__art > .ly-piece--note { right: 10px; bottom: 56px; width: min(50%, 180px); padding: 10px 12px; }
+  .hero__art > .ly-piece--note .d-line:nth-of-type(n+3) { display: none; }
+  .d-line .t { display: none; }
+  .d-line { font-size: 12px; gap: 8px; }
+}
 
-<!-- 查反馈处理进度：显眼一点，有编号就能查，不用登录 -->
-<form class="card fbq" id="fbq" action="/r" autocomplete="off">
-	<div class="fbqt"><span>📮</span><div><b>反馈过问题？查处理进度</b><p>输入上报时拿到的 8 位受理编号，不用登录。登录账号后，在账号页也能看到自己的全部反馈。</p></div></div>
-	<div class="fbqr"><input class="input" name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false" aria-label="受理编号"><button class="btn primary">查询</button></div>
-	<div class="err" id="fbqErr" style="min-height:0"></div>
-</form>
+/* ------------------------------------------------ 功能四宫格 */
+#features .panel { --p-h: 300px; }
+@media (min-width: 640px) and (max-width: 1023px) { #features .panel { min-height: 300px; } }
+#features .card { background: color-mix(in oklab, var(--p-surface) 92%, transparent); }
+@media (max-width: 639px) { #features .panel { --p-h: 236px; } #features .stage { --fade-h: 48px; } }
 
-<div class="grid">
-	<div class="card feat"><div class="ic">🌐</div><b>代理插件都能管</b><p>自动认出 OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+：开关、换节点、测延迟；OpenClash 还能管订阅、配置文件、覆写和规则，节点挂了自动换。没装也能用。</p></div>
-	<div class="card feat"><div class="ic">📱</div><b>设备和流量</b><p>谁在线、谁在占网速、每台设备用了多少流量；给孩子的设备设定时断网。</p></div>
-	<div class="card feat"><div class="ic">🛟</div><b>看门狗</b><p>每 30 秒检查宽带、DNS、隧道、OpenClash，出问题自动修复，每次断线都记下原因。</p></div>
-	<div class="card feat"><div class="ic">🔔</div><b>推送和云端备份</b><p>断电、断网、出问题马上推到手机或微信；每天自动把设置备份到云端，一键还原。</p></div>
-	<div class="card feat"><div class="ic">✨</div><b>好看又好用</b><p>磨砂玻璃界面，可换背景；添加到主屏幕像 App 一样用；指纹或密码锁。</p></div>
-	<div class="card feat"><div class="ic">🤖</div><b>可选：接入 Claude</b><p>AI 版可以在 Claude 里用中文说「把奈飞切到新加坡节点」，它就直接帮你操作。</p></div>
-</div>
+/* ------------------------------------------------ 界面导览：滚动时手机里的截图跟着换（手机和电脑都一样） */
+main > section.tour { padding: 0; }
+.tour > .wrap { display: block; }
+.tour__stick { position: sticky; top: 0; height: 100vh; height: 100svh; padding: calc(var(--nav) + 40px) 0 40px; display: flex; flex-direction: column; box-sizing: border-box; }
+.tour__body { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--gutter); align-items: center; }
+.tour__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: t; }
+.tour__item { position: relative; padding: 14px 18px 14px 22px; border-radius: 14px; cursor: pointer; transition: background .4s, opacity .4s; opacity: .5; }
+.tour__item::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; border-radius: 2px; background: color-mix(in oklab, var(--ink) 14%, transparent); }
+.tour__item::after { content: ""; position: absolute; left: 0; top: 14px; width: 2px; height: 0; border-radius: 2px; background: var(--accent); }
+.tour__item.is-on { opacity: 1; background: color-mix(in oklab, var(--ink) 5%, transparent); }
+.tour__item.is-on::after { height: calc((100% - 28px) * var(--tp, 0)); }
+.tour__item h3 { margin: 0; font-size: 19px; line-height: 1.35; font-weight: 600; }
+.tour__item p { margin: 4px 0 0; font-size: 15px; line-height: 1.6; color: var(--muted); }
+.tour__phone { position: relative; height: 100%; max-height: 640px; aspect-ratio: 1 / 2; justify-self: center; }
+.tour__phone .phone { position: absolute; inset: 0; }
+.tour__phone .phone > div { position: relative; width: 100%; height: 100%; border-radius: 30px; overflow: hidden; }
+.tour__phone img { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; opacity: 0; transform: scale(1.04); transition: opacity .55s ease, transform .9s cubic-bezier(.22,1,.36,1); }
+.tour__phone img.is-on { opacity: 1; transform: none; }
+.tour__glow { position: absolute; inset: 10% -30%; z-index: -1; background: radial-gradient(closest-side, color-mix(in oklab, var(--accent) 22%, transparent), transparent); filter: blur(10px); animation: breathe 5s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .5; transform: scale(.92); } }
+.tour__dots { display: none; }
+.tour__note { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+@media (max-width: 1023px) {
+  .tour__stick { padding: calc(var(--nav) + 20px) 0 20px; }
+  .tour__body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 16px; }
+  .tour__phone { grid-row: 1; max-height: none; }
+  .tour__list { grid-row: 2; display: block; min-height: 96px; }
+  .tour__item { display: none; padding: 0 0 0 16px; background: none !important; opacity: 1; }
+  .tour__item.is-on { display: block; animation: tin .5s cubic-bezier(.22,1,.36,1); }
+  .tour__item h3 { font-size: 18px; }
+  .tour__item p { font-size: 14px; }
+  .tour__dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
+  .tour__dots i { width: 6px; height: 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 22%, transparent); transition: width .3s, background .3s; }
+  .tour__dots i.is-on { width: 22px; background: var(--accent); }
+  .tour .section-head { margin-bottom: 14px; }
+}
+@keyframes tin { from { opacity: 0; transform: translateY(10px); } }
 
-<h2 class="sec">看看长什么样</h2>
-<div class="shots">
-	<figure><img src="/*IMG:home*/" alt="首页：实时网速、今日流量、在线设备" loading="lazy" width="390" height="780"><figcaption>首页<span>实时网速、今日流量、在线设备</span></figcaption></figure>
-	<figure><img src="/*IMG:dev*/" alt="设备：谁在线、在看什么" loading="lazy" width="390" height="780"><figcaption>设备<span>谁在线、走代理还是直连</span></figcaption></figure>
-	<figure><img src="/*IMG:pause*/" alt="暂停上网和定时断网" loading="lazy" width="390" height="780"><figcaption>暂停上网<span>给孩子的设备定时断网</span></figcaption></figure>
-	<figure><img src="/*IMG:traf*/" alt="流量统计" loading="lazy" width="390" height="780"><figcaption>流量统计<span>每台设备用了多少</span></figcaption></figure>
-	<figure><img src="/*IMG:wd*/" alt="断线记录" loading="lazy" width="390" height="780"><figcaption>断线记录<span>出问题自动修，记下原因</span></figcaption></figure>
-	<figure><img src="/*IMG:dark*/" alt="深色模式" loading="lazy" width="390" height="780"><figcaption>深色模式<span>跟着手机自动切换</span></figcaption></figure>
-</div>
-<p class="hint">← 左右滑动看更多（截图里是演示数据）</p>
+/* ------------------------------------------------ 连接图 + 地球 */
+#how .grid { flex: 1 1 0; min-height: 0; }
+#how .card { background: var(--p-surface); }
+#how .panel { --p-h: 100%; min-height: 300px; background: var(--ground-bg); }
+.globe-card .panel.globe { margin-top: 20px; min-height: 220px; }
+.facts3 { display: grid; gap: 8px; margin-top: 14px; }
+.facts3 span { display: flex; gap: 8px; align-items: center; font-size: 15px; }
+.facts3 svg { width: 16px; height: 16px; color: var(--accent); flex: none; }
+@media (min-width: 1024px) { #how .dg-card { grid-column: 1 / span 8; } #how .globe-card { grid-column: 9 / span 4; } }
+@media (max-width: 1023px) { #how .panel { min-height: 280px; } #how .grid { flex: none; } }
+.dg .dg-cap { word-break: keep-all; width: max-content; max-width: 104px; }
+@media (max-width: 639px) { #how .dg-card .panel { min-height: 380px; } }
 
-<h2 class="sec" id="start">怎么开始（只用手机，5 分钟）</h2>
-<div class="card">
-	<ol class="steps">
-		<li><div><b>拿到试用码或邀请码</b><div class="muted"><a href="/app">注册账号</a>就能领 7 天免费试用码（装好后自动加到你的账号里）；也可以找提供服务的人要邀请码。</div></div></li>
-		<li><div><b>打开路由器后台的终端</b><div class="muted">手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（不是装好以后面板里的那个终端。）</div></div></li>
-		<li><div><b>粘贴这条命令，回车</b><div class="muted">装纯面板版就把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>，其他地方别动：</div>
-			<pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
+/* ------------------------------------------------ 一句话 + 数字 + 滚动的插件名 */
+.statement .mo-wh__text { font-size: clamp(26px, 3.4vw, 52px); line-height: 1.32; font-weight: 600; letter-spacing: -.02em; max-width: 22em; margin: 0; }
+.statement .wrap { justify-content: center; gap: 0; }
+.statement .stats { margin-top: clamp(32px, 6vh, 64px); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gutter); }
+.stats .stat { border-top: 1px solid var(--line); padding-top: 18px; }
+.stats .t-stat { color: var(--ink); }
+.stats .t-stat small { font-size: .42em; margin-left: 4px; color: var(--muted); font-weight: 500; letter-spacing: 0; }
+.mq { margin-top: clamp(28px, 5vh, 56px); }
+.mq [data-moment="marquee-row"] li { font-size: clamp(20px, 2vw, 30px); font-weight: 600; color: color-mix(in oklab, var(--ink) 70%, transparent); }
+@media (max-width: 639px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; } }
+
+/* ------------------------------------------------ 安装步骤 */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; counter-reset: s; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; }
+.steps > li::before { content: counter(s); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 15px; background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent); }
+.steps h3 { margin: 4px 0 0; font-size: 17px; line-height: 1.4; font-weight: 600; }
+.steps p { margin: 6px 0 0; font-size: 15px; line-height: 1.7; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); }
+.steps b { color: var(--ink); }
+pre.cmd, pre.term { margin: 10px 0 0; padding: 14px 16px; border-radius: 12px; font: 13px/1.65 var(--font-mono); white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; background: #050807; border: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); color: #d7e3dc; }
+pre.term u { text-decoration: none; color: var(--accent); } pre.term b { color: #fff; } pre.term i { font-style: normal; color: #7dd3fc; }
+.copy-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.copy-row .t-small { color: var(--muted); }
+.steps img.demo { display: block; width: min(100%, 260px); margin-top: 10px; border-radius: 16px; border: 1px solid var(--line); }
+#start .panel { --p-h: 100%; min-height: 330px; }
+#start .term-card { align-self: stretch; }
+.more-docs { margin-top: 18px; font-size: 14px; color: var(--muted); }
+@media (min-width: 1024px) { #start .s-left { grid-column: 1 / span 6; } #start .s-right { grid-column: 7 / span 6; } #start .s2a { grid-column: 1 / span 6; } #start .s2b { grid-column: 7 / span 6; } }
+
+/* ------------------------------------------------ 两种用法 + App */
+#plans .card { background: var(--p-surface); }
+#plans .card .t-label { color: var(--accent); }
+#plans .card ul { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+#plans .card li { display: flex; gap: 9px; font-size: 15px; line-height: 1.55; color: color-mix(in oklab, var(--ink) 80%, var(--bg)); }
+#plans .card li svg { width: 16px; height: 16px; margin-top: 4px; flex: none; color: var(--accent); }
+#plans .card .btn-row { margin-top: auto; padding-top: 22px; }
+#plans .card.is-featured { border-color: color-mix(in oklab, var(--accent) 40%, transparent); }
+#plans .apk-note { margin-top: 12px; font-size: 13px; color: var(--muted); }
+@media (min-width: 1024px) { #plans .card { grid-column: auto / span 4; } }
+@media (min-width: 640px) and (max-width: 1023px) { #plans .card { grid-column: auto / span 6; } #plans .card:last-child { grid-column: 1 / -1; } }
+
+/* ------------------------------------------------ 安全 */
+.safe-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--card-gap, 16px); flex: 1 1 auto; align-content: stretch; }
+.sc { grid-column: auto / span 4; position: relative; display: flex; flex-direction: column; gap: 8px; padding: 22px 24px; border-radius: 20px; background: var(--p-surface); border: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); overflow: clip; }
+.sc--8 { grid-column: auto / span 8; } .sc--6 { grid-column: auto / span 6; } .sc--3 { grid-column: auto / span 3; }
+.sc .si { width: 26px; height: 26px; color: var(--accent); margin-bottom: 4px; }
+.sc h3 { margin: 0; font-size: 17px; line-height: 1.4; font-weight: 600; }
+.sc p { margin: 0; font-size: 15px; line-height: 1.7; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); }
+.sc b { color: var(--ink); font-weight: 600; }
+@media (max-width: 1023px) { .sc, .sc--8, .sc--6, .sc--3 { grid-column: auto / span 6; } .sc--8 { grid-column: 1 / -1; } }
+@media (max-width: 1023px) { .safe-grid { flex: none; align-content: start; } }
+@media (max-width: 639px) { .safe-grid { grid-template-columns: minmax(0, 1fr); } .sc, .sc--8, .sc--6, .sc--3 { grid-column: 1 / -1; padding: 18px 20px; } }
+
+/* ------------------------------------------------ 常见问题 + 查进度 */
+.faq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gutter); align-content: start; }
+.qa { padding: 20px 0 0; border-top: 1px solid var(--line); }
+.qa h3 { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 600; }
+.qa p, .qa li { font-size: 14.5px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 76%, var(--bg)); }
+.qa p { margin: 8px 0 0; } .qa ul { margin: 8px 0 0; padding-left: 18px; } .qa li { margin: 4px 0; } .qa b { color: var(--ink); }
+.fbq { background: var(--p-surface); align-self: start; }
+.fbq form { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.fbq input { flex: 1 1 180px; min-width: 0; height: 48px; padding: 0 16px; border-radius: 999px; font: 500 16px var(--font-text); letter-spacing: .08em; background: var(--p-bg); color: var(--ink); border: 1px solid color-mix(in oklab, var(--ink) 16%, transparent); outline: none; transition: border-color .2s, box-shadow .2s; }
+.fbq input::placeholder { color: var(--muted); letter-spacing: 0; opacity: .8; }
+.fbq input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent); }
+.fbq .err { min-height: 0; margin-top: 8px; font-size: 14px; color: #fca5a5; }
+.fbq .err:empty { display: none; }
+@media (min-width: 1024px) { #faq .fbq { grid-column: 1 / span 5; } #faq .q-first { grid-column: 6 / span 7; } }
+@media (max-width: 1023px) { .faq-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ------------------------------------------------ 大字拼句 + 页脚 */
+.la .mo-la__type { font-size: clamp(44px, 7.4vw, 120px); line-height: 1.08; font-weight: 700; letter-spacing: -.03em; margin: 0; }
+.la .mo-la__sub { font-size: var(--t-lead); color: var(--muted); margin-top: 22px; max-width: 34em; }
+.la .wrap { justify-content: center; }
+.la .la__in { margin: auto 0; }
+.la .mo-la__type .acc, .la .mo-la__type .acc .mo-c { color: var(--accent); }
+footer.closing { overflow: hidden; }
+footer.closing > .aurora { position: absolute; inset: 0 0 auto 0; height: 70%; z-index: 0; opacity: .9; -webkit-mask: linear-gradient(to bottom, #000 40%, transparent); mask: linear-gradient(to bottom, #000 40%, transparent); }
+.footer__col a { word-break: keep-all; }
+
+/* ================================================ 第二轮：动效和排版 */
+/* 顶部阅读进度线 */
+.nav { --np: 0; }
+.nav::after { content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%; transform-origin: 0 50%; transform: scaleX(var(--np)); background: linear-gradient(90deg, color-mix(in oklab, var(--accent) 30%, transparent), var(--accent)); box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 60%, transparent); pointer-events: none; z-index: 5; }
+/* 主按钮：隔几秒扫过一道高光 */
+html .btn.btn--primary { background-image: linear-gradient(110deg, transparent 38%, rgb(255 255 255 / .55) 50%, transparent 62%); background-size: 260% 100%; background-repeat: no-repeat; background-position: 160% 0; animation: shine 5.2s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes shine { 0%, 62% { background-position: 160% 0; } 88%, 100% { background-position: -60% 0; } }
+/* 卡片：鼠标处的光 + 发亮的边；手机上滑进屏幕时扫过一道光 */
+.fxc { --mx: 50%; --my: 0%; --mo: 0; position: relative; isolation: isolate; transition: transform .5s cubic-bezier(.22,1,.36,1); will-change: transform; }
+.fxc::before { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit; padding: 1px;
+  background: radial-gradient(320px circle at var(--mx) var(--my), color-mix(in oklab, var(--accent) 85%, transparent), transparent 62%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: var(--mo); transition: opacity .4s; }
+.fxc::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(420px circle at var(--mx) var(--my), color-mix(in oklab, var(--accent) 9%, transparent), transparent 65%); opacity: var(--mo); transition: opacity .4s; }
+.fxc.swept::after { opacity: 1; background: linear-gradient(105deg, transparent 30%, color-mix(in oklab, var(--accent) 16%, transparent) 50%, transparent 70%); background-size: 260% 100%; background-repeat: no-repeat; animation: sweep 1.3s cubic-bezier(.22,1,.36,1) forwards; }
+@keyframes sweep { from { background-position: 150% 0; } to { background-position: -50% 0; opacity: 0; } }
+/* 首屏手机：跟着鼠标或手机倾斜微微转 */
+.hero { --rx: 0deg; --ry: 0deg; }
+.hero__art > .ly-piece--main.phone { transform: perspective(1000px) rotateX(var(--rx)) rotateY(var(--ry)); transition: transform .6s cubic-bezier(.22,1,.36,1); }
+.hero-phone-float { animation: floaty 7s ease-in-out infinite; }
+@keyframes floaty { 0%, 100% { translate: 0 0; } 50% { translate: 0 -12px; } }
+.hero__art > .ly-piece--speed, .hero__art > .ly-piece--note { transform: translate(calc(var(--ry) * -1.2px / 1deg), calc(var(--rx) * 1.2px / 1deg)); transition: transform .6s cubic-bezier(.22,1,.36,1); }
+@media (max-width: 1023px) { .hero__art > .ly-piece--main.phone { transform: translateX(50%) perspective(1000px) rotateX(var(--rx)) rotateY(var(--ry)); } }
+@media (max-width: 1023px) { .hero-phone-float { animation: floaty 7s ease-in-out infinite; } }
+/* 看门狗卡片：没弹出来的行不占地方 */
+.hero__art .d-card .d-line[data-step] { max-height: 44px; overflow: hidden; transition: max-height .45s cubic-bezier(.22,1,.36,1), padding .45s, opacity .35s, transform .35s; }
+.hero__art .d-card .d-line[data-step].is-off { max-height: 0; padding-block: 0; border-top-color: transparent; }
+.hero__art > .ly-piece--note { top: auto; }
+/* 界面导览：换页时手机带一点立体转动 */
+.tour__phone .phone { transform: perspective(1200px) rotateY(var(--tr, 0deg)) rotateX(2deg); transition: transform .5s cubic-bezier(.22,1,.36,1); }
+/* 两种用法：墨绿底，光圈打开 */
+main > section.plans-ground { background: radial-gradient(80% 70% at 50% 0%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%), #0e1c15; }
+#plans .card { background: color-mix(in oklab, #0b100e 70%, transparent); backdrop-filter: blur(6px); }
+#plans > .wrap { justify-content: center; }
+#plans .grid { align-items: stretch; }
+#plans .card { min-height: 380px; }
+@media (max-width: 1023px) { #plans .card { min-height: 0; } }
+/* 安装第二屏：登录码页面截图 */
+.pair-shot { margin: 18px 0 0 48px; display: flex; align-items: center; gap: 18px; }
+.pair-shot .phone { width: 150px; flex: none; border-radius: 26px; padding: 6px; }
+.pair-shot .phone img { border-radius: 21px; aspect-ratio: 390 / 633; }
+.pair-shot figcaption { font-size: 14px; color: var(--muted); max-width: 14em; }
+@media (min-width: 1024px) { #start .s2b { display: grid; align-content: start; } }
+@media (max-width: 639px) { .pair-shot { margin-left: 48px; } .pair-shot .phone { width: 120px; } }
+/* 页脚大标题更大，鼠标划过会起水波 */
+footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height: 1.05; letter-spacing: -.03em; }
+@media (prefers-reduced-motion: reduce) { html .btn.btn--primary { animation: none; } .fxc, .hero__art > .ly-piece, .tour__phone .phone { transition: none; transform: none !important; } .hero-phone-float { animation: none; } }
+</style>
+<link rel="stylesheet" href="/k/ui/base.css">
+<link rel="stylesheet" href="/k/ui/checklist/fragment.css">
+<link rel="stylesheet" href="/k/ui/notify/fragment.css">
+<link rel="stylesheet" href="/k/ui/toggles/fragment.css">
+<link rel="stylesheet" href="/k/ui/stat/fragment.css">
+<link rel="stylesheet" href="/k/ui/terminal-run/fragment.css">
+<link rel="stylesheet" href="/k/diagrams/diagram.css">
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<script src="/k/backgrounds/backgrounds.js"></script>
+<script>document.documentElement.classList.add('mo-js');setTimeout(()=>document.documentElement.classList.add('mo-safe'),2500)</script>
+<link rel="modulepreload" href="/k/moments/moments.js">
+<link rel="modulepreload" href="/k/moments/lib.js">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav__bar">
+    <a class="skip-link" href="#top">跳到正文</a>
+    <a class="nav__logo" href="/"><svg class="mark" viewBox="0 0 100 100" width="26" height="26" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#1a2621"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#e9eeeb"/><circle cx="63" cy="37" r="7" fill="#4ade80"/></svg>路由器面板</a>
+    <nav class="nav__links" aria-label="主菜单">
+      <div class="nav__item">
+        <a class="nav__link" href="#features">功能 <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <div class="nav__menu">
+          <div class="wrap grid">
+            <div class="menu-col span-3"><p class="t-label">管路由器</p><a href="#features">看门狗<span>30 秒查一次，断了先修</span></a><a href="#features">断网推送<span>手机和微信都能收</span></a><a href="#features">定时断网<span>给孩子的设备设时间</span></a></div>
+            <div class="menu-col span-3"><p class="t-label">看界面</p><a href="#tour">界面导览<span>六个页面，滑着看</span></a><a href="#how">怎么连起来<span>不用公网 IP、不用开端口</span></a><a href="#safety">安全<span>钥匙只在你手里</span></a></div>
+            <a class="menu-card span-3 start-10" href="#start">
+              <div class="panel"><img class="frame__img" src="/*IMG:pair*/" alt="面板的输入登录码页面" loading="lazy" style="object-fit:cover;object-position:top"></div>
+              <span class="t-card">5 分钟装好</span>
+              <span class="t-small muted">只用手机，复制一条命令</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="nav__item"><a class="nav__link" href="#tour">界面</a></div>
+      <div class="nav__item"><a class="nav__link" href="#start">怎么装</a></div>
+      <div class="nav__item"><a class="nav__link" href="#plans">版本和 App</a></div>
+      <div class="nav__item"><a class="nav__link" href="#faq">常见问题</a></div>
+    </nav>
+    <div class="nav__actions">
+      <a class="nav__link nav__gh" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener" aria-label="GitHub 项目主页"><svg class="gh-ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+      <a class="nav__link" href="/app" id="navLogin">登录</a>
+      <a class="btn btn--primary" href="/app#reg">免费试用 7 天</a>
+    </div>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-label="菜单"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 13h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero hero--collage" data-enter aria-labelledby="hero-h">
+    <div class="wrap"><div class="hero-text grid hero__grid">
+      <div class="hero__text span-5">
+        <h1 id="hero-h">用手机<wbr>管好<wbr>家里的 <span data-moment="word-rotate" data-moment-opts='{"words":["OpenWrt","ImmortalWrt","Kwrt"],"every":2200,"cycles":0}'>OpenWrt</span> 路由器</h1>
+        <p class="hero__lead">节点切换、在线设备、流量、测速、断线记录、定时断网，一个手机面板全管了。人在外面也能打开，不用公网 IP，也不用开端口。</p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="/app#reg" id="heroMain">注册领 7 天试用<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+          <a class="btn btn--secondary" href="#start">看怎么装</a>
+        </div>
+        <p class="hero__proof"><span class="ly-live">看门狗在线</span><span class="proof__more">支持 OpenWrt 18.06 到 25.12，开源，MIT 许可证</span></p>
+      </div>
+      <div class="hero__art span-6 start-7" role="img" aria-label="手机上的路由器面板首页，旁边是实时网速和看门狗自动修复的记录" data-moment="cursor-spotlight" data-moment-opts='{"rest":[0.7,0.3],"radius":360}'>
+        <div class="hero-fx" data-fx="grid-pulse" data-fx-seed="11" aria-hidden="true"></div>
+        <div class="ly-piece ly-piece--main phone hero-phone-float" aria-hidden="true"><img src="/*IMG:home*/" alt="" fetchpriority="high"></div>
+        <div class="ly-piece ly-piece--speed d-card" aria-hidden="true">
+          <div class="speed__row"><span>实时网速</span><span class="ly-live">下行</span></div>
+          <div class="speed__num" id="spNum">42.6<small>Mbps</small></div>
+          <div class="speed__bars" id="spBars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="ly-piece ly-piece--note d-card" aria-hidden="true" data-ly-steps="800">
+          <div class="d-card__row"><h5>看门狗<span class="t"> · 03:12</span></h5><span class="d-chip" data-step data-step-at="3">已修好</span></div>
+          <div class="d-line" data-step><i class="warn">!</i><span><b>宽带断线</b><span class="t">，PPPoE 掉了</span></span></div>
+          <div class="d-line" data-step><i>✓</i><span>重新拨号，<b>18 秒</b>恢复</span></div>
+          <div class="d-line" data-step><i>✓</i><span>已推送到你的手机</span></div>
+        </div>
+      </div>
+    </div></div>
+  </section>
+
+  <section class="section g2" id="features" aria-labelledby="features-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head" data-moment="lines-rise">
+          <h2 id="features-h">你睡觉，它值班。<span class="muted">家里网络的事，它先处理，再告诉你。</span></h2>
+        </div>
+        <div class="grid">
+          <article class="card card--row card--open span-6">
+            <h3>看门狗每&nbsp;30&nbsp;秒查一遍</h3>
+            <p>宽带、DNS、隧道、OpenClash 挨个检查，出问题自动修，每次断线都记下原因。</p>
+            <div class="panel" data-fx="grid-pulse" data-fx-seed="21">
+              <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:40px;--ay-sm:18px" data-ui-loop>
+                <div class="ui ui-panel ui-checks" data-ui="checklist">
+                  <div class="ui-checks__head"><div class="ui-title">看门狗检查</div><span class="ui-spacer"></span><div class="ui-meta" data-checks-count>2 / 5 项</div></div>
+                  <div class="ui-checks__bar"><i data-checks-bar style="--k:0.4"></i></div>
+                  <ul class="ui-checks__list">
+                    <li class="ui-check is-done"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">宽带拨号正常</span></li>
+                    <li class="ui-check is-done"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">DNS 能解析</span></li>
+                    <li class="ui-check"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">Cloudflare 隧道已连上</span></li>
+                    <li class="ui-check"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">OpenClash 在运行</span></li>
+                    <li class="ui-check"><span class="ui-check__box"><svg viewBox="0 0 16 16"><path d="m4.5 8.2 2.3 2.3 4.7-5"/></svg></span><span class="ui-check__label">当前节点延迟正常</span></li>
+                  </ul>
+                </div>
+              </div></div>
+            </div>
+          </article>
+          <article class="card card--row card--open span-6">
+            <h3>出了事，马上推到手机</h3>
+            <p>断电、断网、节点挂了，推送到手机或微信；每天自动把设置备份到云端，一键还原。</p>
+            <div class="panel" data-fx="caustics" data-fx-seed="5">
+              <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:48px;--ay-sm:20px" data-ui-loop>
+                <div class="ui ui-notify" data-ui="notify">
+                  <ul class="ui-notify__list" data-notify-list>
+                    <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg></span><span class="ui-note__text"><span class="ui-note__title">宽带已自动恢复<time>刚刚</time></span><span class="ui-note__body">断了 18 秒，原因：PPPoE 掉线</span></span><span class="ui-btn ui-btn--sm ui-note__btn">查看</span></li>
+                    <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="M8 2.5v6M8 11.5v.5"/></svg></span><span class="ui-note__text"><span class="ui-note__title">香港节点超时，已换到新加坡<time>6 分钟</time></span><span class="ui-note__body">OpenClash 自动切换</span></span></li>
+                    <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="M3 9.5 8 4.5l5 5M8 4.5v8"/></svg></span><span class="ui-note__text"><span class="ui-note__title">今天的设置已备份到云端<time>4:00</time></span><span class="ui-note__body">在路由器上加密后才上传</span></span></li>
+                  </ul>
+                </div>
+              </div></div>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="grid">
+        <article class="card card--row card--open span-6">
+          <h3>给孩子的设备定时断网</h3>
+          <p>谁在线、谁在占网速一眼看到；按设备设时间段，到点自动暂停上网。</p>
+          <div class="panel" data-fx="gradient-mesh" data-fx-seed="9">
+            <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:40px;--ay-sm:18px" data-ui-loop>
+              <div class="ui ui-panel ui-toggles" data-ui="toggles">
+                <div class="ui-head">
+                  <svg class="ui-icon ui-toggles__ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 13 4v3.6c0 3-2.1 5.4-5 6.6-2.9-1.2-5-3.6-5-6.6V4z"/><path d="m5.8 8 1.6 1.6 3-3.2"/></svg>
+                  <div class="ui-title">定时断网</div><span class="ui-spacer"></span><div class="ui-meta" data-tg-count>开了 3 项，共 4 项</div>
+                </div>
+                <ul class="ui-toggles__list">
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">小明的平板</span><span class="ui-tg__sub">每天 21:30 到 7:00 断网</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="小明的平板"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">客厅的游戏机</span><span class="ui-tg__sub">周一到周五 22:00 断网</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="客厅的游戏机"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">书房电脑</span><span class="ui-tg__sub">不限制</span></span><button class="ui-switch" type="button" role="switch" aria-checked="false" aria-label="书房电脑"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">小红的手机</span><span class="ui-tg__sub">每天 22:00 到 6:30 断网</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="小红的手机"><i></i></button></li>
+                </ul>
+              </div>
+            </div></div>
+          </div>
+        </article>
+        <article class="card card--row card--open span-6">
+          <h3>每台设备用了多少，一清二楚</h3>
+          <p>今天、这个月，每台设备的流量和网速都记着；也能直接在面板里测速。</p>
+          <div class="panel" data-fx="grid-pulse" data-fx-seed="33">
+            <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:400px;--ax:max(24px, 50% - 200px);--ay:40px;--ay-sm:18px" data-ui-loop>
+              <div class="ui ui-panel ui-stat" data-ui="stat" data-from="9.8" data-to="12.6" data-suffix=" GB">
+                <div class="ui-stat__head">
+                  <div class="ui-stat__top"><span class="ui-stat__label">今日流量（演示数据）</span><span class="ui-stat__range">最近 14 天<svg class="ui-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3.5 3.5-3.5"/></svg></span></div>
+                  <div class="ui-stat__line"><span class="ui-stat__num" data-stat-num>12.6 GB</span><span class="ui-chip ui-chip--plain ui-stat__delta"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 9.5v-7M3 5.5l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>2.8 GB</span><span class="ui-stat__sub">比昨天</span></div>
+                </div>
+                <div class="ui-stat__chart">
+                  <svg class="ui-stat__svg" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true">
+                    <path class="ui-stat__grid" d="M0 30.5H400M0 60.5H400M0 90.5H400"/>
+                    <path class="ui-stat__cover" fill-rule="evenodd" d=""/>
+                    <g class="ui-stat__bars"><rect rx="3" x="0.00" y="49.04" width="21.14" height="70.96"/><rect rx="3" x="29.14" y="40.86" width="21.14" height="79.14"/><rect rx="3" x="58.29" y="44.95" width="21.14" height="75.05"/><rect rx="3" x="87.43" y="36.76" width="21.14" height="83.24"/><rect rx="3" x="116.57" y="42.22" width="21.14" height="77.78"/><rect rx="3" x="145.71" y="34.04" width="21.14" height="85.96"/><rect rx="3" x="174.86" y="38.13" width="21.14" height="81.87"/><rect rx="3" x="204.00" y="29.94" width="21.14" height="90.06"/><rect rx="3" x="233.14" y="35.40" width="21.14" height="84.60"/><rect rx="3" x="262.29" y="25.85" width="21.14" height="94.15"/><rect rx="3" x="291.43" y="31.31" width="21.14" height="88.69"/><rect rx="3" x="320.57" y="23.12" width="21.14" height="96.88"/><rect rx="3" x="349.71" y="27.21" width="21.14" height="92.79"/><rect rx="3" x="378.86" y="16.30" width="21.14" height="103.70"/></g>
+                  </svg>
+                  <div class="ui-stat__axis" aria-hidden="true"><span>两周前</span><span>上周</span><span>今天</span></div>
+                </div>
+              </div>
+            </div></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tour" id="tour" style="--h:3;--hm:3" aria-labelledby="tour-h">
+    <div class="wrap"><div class="tour__stick">
+      <div class="section-head" data-moment="lines-rise"><h2 id="tour-h">打开就是这样。<span class="muted">往下滑，一页一页<wbr>看过去。</span></h2></div>
+      <div class="tour__body">
+        <ol class="tour__list" id="tourList">
+          <li class="tour__item is-on"><h3>首页</h3><p>实时网速、今日流量、在线设备，打开就看到。</p></li>
+          <li class="tour__item"><h3>设备</h3><p>谁在线、在用多少网速，走代理还是直连。</p></li>
+          <li class="tour__item"><h3>暂停上网</h3><p>一键暂停某台设备，或者给它设定时断网。</p></li>
+          <li class="tour__item"><h3>流量统计</h3><p>每台设备今天、这个月各用了多少。</p></li>
+          <li class="tour__item"><h3>断线记录</h3><p>每次断网的时间、原因、怎么修好的。</p></li>
+          <li class="tour__item"><h3>深色模式</h3><p>跟着手机自动切换，磨砂玻璃界面，背景可以换。</p></li>
+        </ol>
+        <div class="tour__phone" aria-hidden="true">
+          <div class="tour__glow"></div>
+          <div class="phone"><div>
+            <img class="is-on" src="/*IMG:home*/" alt="" loading="lazy">
+            <img src="/*IMG:dev*/" alt="" loading="lazy">
+            <img src="/*IMG:pause*/" alt="" loading="lazy">
+            <img src="/*IMG:traf*/" alt="" loading="lazy">
+            <img src="/*IMG:wd*/" alt="" loading="lazy">
+            <img src="/*IMG:dark*/" alt="" loading="lazy">
+          </div></div>
+        </div>
+      </div>
+      <div class="tour__dots" id="tourDots" aria-hidden="true"><i class="is-on"></i><i></i><i></i><i></i><i></i><i></i></div>
+      <p class="tour__note">截图里是演示数据。</p>
+    </div></div>
+  </section>
+
+  <section class="section" id="how" aria-labelledby="how-h">
+    <div class="wrap">
+      <div class="section-head" data-moment="lines-rise"><h2 id="how-h">在哪都能<wbr>连回家。<span class="muted">路由器主动<wbr>连出去，家里<wbr>一个端口都不用开。</span></h2></div>
+      <div class="grid">
+        <article class="card dg-card">
+          <h3>一条加密隧道，连回家里</h3>
+          <p>路由器主动连上 Cloudflare。你在公司、在路上，打开专属网址就能管节点、设备和看门狗。</p>
+          <div class="panel" data-dg-phone="loop" data-icon-base="/k/icons/demo/">
+            <div class="dg" data-diagram><script type="application/json">{"layout":"lanes","alt":"你的手机通过 Cloudflare 隧道连到家里的路由器，再管 OpenClash 节点、在线设备和看门狗。","curve":"curve","input":{"label":"你的手机","icon":"ui:smartphone","meta":"在哪都行"},"core":{"label":"家里的路由器","icon":"ui:router"},"lanes":[{"label":"OpenClash 节点","icon":"ui:globe","meta":"换节点","done":true},{"label":"在线设备","icon":"ui:wifi","meta":"12 台","done":true},{"label":"看门狗","icon":"ui:shield-check","meta":"30 秒","done":true}]}</script></div>
+          </div>
+        </article>
+        <article class="card globe-card">
+          <h3>出门在外也能用</h3>
+          <div class="facts3">
+            <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>不用公网 IP</span>
+            <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>不用开端口</span>
+            <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>流量经 Cloudflare 加密转发</span>
+          </div>
+          <div class="panel globe" data-fx="dotted-globe" data-fx-seed="4" data-fx-params='{"calm":0,"calmX":0.5,"calmY":1,"size":0.95,"sea":0.3,"glow":0.8,"dot":1.3,"arcs":3}' aria-hidden="true"></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section statement" id="numbers" aria-labelledby="num-h">
+    <div class="wrap">
+      <h2 class="sr-only" id="num-h">它每天在做什么</h2>
+      <div data-moment="word-highlight"><p class="mo-wh__text">半夜宽带掉线，它 30 秒内就发现，自己重新拨号；节点挂了，它换一个能用的；修好以后，再把<strong>发生了什么</strong>推到你的手机上。</p></div>
+      <div class="stats" data-moment="counter-rolls">
+        <div class="stat"><p class="t-stat">30<small>秒</small></p><p class="t-small muted">看门狗检查一次宽带、DNS、隧道和代理</p></div>
+        <div class="stat"><p class="t-stat">6<small>种</small></p><p class="t-small muted">代理插件自动认出，换着用</p></div>
+        <div class="stat"><p class="t-stat">10<small>分钟</small></p><p class="t-small muted">登录码的有效时间，用一次就作废</p></div>
+        <div class="stat"><p class="t-stat">7<small>天</small></p><p class="t-small muted">注册账号送的免费试用</p></div>
+      </div>
+      <div class="mq">
+        <div data-moment="marquee-row" data-moment-opts='{"speed": 40}'>
+          <ul class="mo-mq__track"><li>OpenClash</li><li>Nikki</li><li>PassWall</li><li>PassWall2</li><li>HomeProxy</li><li>SSR Plus+</li><li>OpenWrt 18.06 到 25.12</li><li>ImmortalWrt</li><li>Kwrt</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section g2" id="start" aria-labelledby="start-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head" data-moment="lines-rise"><h2 id="start-h">5&nbsp;分钟装好。<span class="muted">全程只用手机，复制一条命令。</span></h2></div>
+        <div class="grid">
+          <div class="s-left">
+            <ol class="steps">
+              <li><div><h3>拿到试用码或邀请码</h3><p><a class="inline" href="/app#reg">注册账号</a>就能领 7 天免费试用码（装好后自动加到你的账号里）；也可以找提供服务的人要邀请码。</p></div></li>
+              <li><div><h3>打开路由器后台的终端</h3><p>手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（不是装好以后面板里的那个终端。）</p></div></li>
+              <li><div><h3>粘贴这条命令，回车</h3><p>装纯面板版就把 <code>hosted-ai</code> 改成 <code>hosted-noai</code>，其他地方别动：</p>
+                <pre class="cmd" id="cmd"># ⚠️ hosted-ai = AI 版；纯面板版改成 hosted-noai
 cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted-ai.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh</pre>
-			<button class="btn sm" id="copyCmd" type="button">复制命令</button></div></li>
-		<li><div><b>输入邀请码</b><div class="muted">装完会显示<b>一个链接</b>，带着这台路由器的密钥：只在自己手机上打开，别发给别人。屏幕最后是这样的：</div>
-			<pre class="term"><u>================ 安装完成 ================</u>
+                <div class="copy-row"><button class="btn btn--secondary" id="copyCmd" type="button">复制命令</button><span class="t-small">复制后到终端里长按粘贴</span></div></div></li>
+            </ol>
+          </div>
+          <article class="card term-card s-right">
+            <h3>装的时候，屏幕上是这样</h3>
+            <p>装好一项勾一项，最后给你一个链接。</p>
+            <div class="panel" data-fx="grid-pulse" data-fx-seed="44">
+              <div class="stage"><div class="at-rise fit" style="--fit-max:460px;--ax:max(20px, 50% - 230px);--ay:32px;--ay-sm:16px" data-ui-loop>
+                <div class="ui ui-panel ui-term" data-ui="terminal-run">
+                  <div class="ui-term__head"><span class="ui-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="ui-term__title">root@OpenWrt</span><span class="ui-meta">ash</span><span class="ui-spacer"></span></div>
+                  <div class="ui-term__screen" data-term-screen>
+                    <div class="ui-term__track" data-term-track>
+                      <div class="ui-term__ln ui-term__cmd"><span class="ui-term__cwd">/tmp/<span class="ui-term__up">openwrt-claude-</span>panel</span><span class="ui-term__sig">#</span><span class="ui-term__typed" data-term-cmd>sh install.sh</span></div>
+                      <div class="ui-term__ln ui-term__meter" data-term-out data-term-meter><span class="ui-term__bar" style="--p:1"><i></i></span><span class="ui-term__count" data-term-count>4 / 4 项</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">检查系统版本</span><span class="ui-term__n">OpenWrt 23.05</span><span class="ui-term__t">1 秒</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">安装手机面板</span><span class="ui-term__n">v5.0.0</span><span class="ui-term__t">6 秒</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">打开看门狗</span><span class="ui-term__n">30 秒一次</span><span class="ui-term__t">1 秒</span></div>
+                      <div class="ui-term__ln ui-term__log" data-term-out data-term-step><svg class="ui-term__tick" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg><span class="ui-term__path">连上加密隧道</span><span class="ui-term__n">Cloudflare</span><span class="ui-term__t">4 秒</span></div>
+                      <div class="ui-term__ln ui-term__gap" data-term-out aria-hidden="true"></div>
+                      <div class="ui-term__ln ui-term__sum" data-term-out><span class="ui-term__key">专属网址</span><span class="ui-term__val">已分配</span></div>
+                      <div class="ui-term__ln ui-term__done" data-term-out data-term-done><span class="ui-term__ok"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 8.3 2.4 2.4 4.6-5"/></svg></span><b>安装完成</b><span class="ui-term__dim">用手机打开链接</span></div>
+                      <div class="ui-term__ln ui-term__cmd" data-term-next><span class="ui-term__cwd">/tmp/<span class="ui-term__up">openwrt-claude-</span>panel</span><span class="ui-term__sig">#</span><span class="ui-term__typed"></span><i class="ui-term__caret" aria-hidden="true"></i></div>
+                    </div>
+                  </div>
+                </div>
+              </div></div>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="s2a">
+          <ol class="steps" start="4" style="counter-reset: s 3">
+            <li><div><h3>记下装完给的链接</h3><p>装完会显示<b>一个链接</b>，带着这台路由器的密钥：只在自己手机上打开，别发给别人。屏幕最后是这样的：</p>
+              <pre class="term"><u>================ 安装完成 ================</u>
 
 <b>👉 接下来用手机做（10 分钟内）：</b>
 
   1. 手机打开这个链接：
-
      <i>https://ab3cd4ef.yrlove520.com/panel/#login=…&amp;pair=…</i>
-
   2. 页面上点「绑定官网账号」，登录或注册账号
   3. 绑定好后官网会显示登录码，点「打开面板」</pre></div></li>
-		<li><div><b>手机打开链接</b><div class="muted">面板会提示输入<b>登录码</b>（为了安全，每台手机第一次要输一次），点上面的「绑定官网账号」。</div><img class="demo" src="/*IMG:pair*/" alt="输入登录码页：上面有「绑定官网账号」按钮" loading="lazy" width="390" height="633"></div></li>
-		<li><div><b>绑定账号，进面板</b><div class="muted"><a href="/app">登录或注册</a>官网账号，路由器自动绑定，并自动显示登录码；点「打开面板」就自动填好进去了。之后「添加到主屏幕」，或者装下面的安卓 App。</div></div></li>
-		<li><div><b>AI 版：连上 Claude</b><div class="muted">把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里。</div></div></li>
-	</ol>
-	<p class="muted" style="margin:14px 0 0;font-size:13.5px">每一步的详细说明：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">📱 手机教程</a> · 用电脑装：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>
-</div>
-<script>document.getElementById('copyCmd').onclick = async (e) => { const t = document.getElementById('cmd').textContent; try { await navigator.clipboard.writeText(t); e.target.textContent = '已复制 ✓'; } catch (x) { const r = document.createRange(); r.selectNodeContents(document.getElementById('cmd')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); e.target.textContent = '已选中，长按复制'; } setTimeout(() => (e.target.textContent = '复制命令'), 2500); };</script>
+          </ol>
+        </div>
+        <div class="s2b">
+          <ol class="steps" style="counter-reset: s 4">
+            <li><div><h3>手机打开链接</h3><p>面板会提示输入<b>登录码</b>（为了安全，每台手机第一次要输一次），点上面的「绑定官网账号」。</p></div></li>
+            <li><div><h3>绑定账号，进面板</h3><p><a class="inline" href="/app">登录或注册</a>官网账号，路由器自动绑定，并自动显示登录码；点「打开面板」就自动填好进去了。之后「添加到主屏幕」，或者装下面的安卓 App。</p></div></li>
+            <li><div><h3>AI 版：连上 Claude</h3><p>把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里，就能用中文说「把奈飞切到新加坡节点」。</p></div></li>
+          </ol>
+          <figure class="pair-shot"><div class="phone"><img src="/*IMG:pair*/" alt="面板第一次打开时的输入登录码页面，上面有「绑定官网账号」按钮" loading="lazy"></div><figcaption>第 5 步：手机打开链接后看到的页面</figcaption></figure>
+          <p class="more-docs">每一步的详细说明：<a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">手机教程</a>；用电脑装：<a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<h2 class="sec" id="app">安卓 App</h2>
-<div class="card"><div class="row" style="justify-content:space-between;gap:14px">
-	<div style="flex:1;min-width:220px"><b style="font-size:16px">路由器面板 App</b><p class="muted" style="margin:6px 0 0;font-size:14px">扫码、相册识别二维码、粘贴或手动添加路由器，几台一键切换；有新版本打开就提醒。安卓 7.0 以上可用。</p></div>
-	<a class="btn primary" href="/app/router-panel.apk" id="apkBtn">下载安卓 App</a>
-</div><p class="muted" style="font-size:12.5px;margin:12px 0 0" id="apkVer">安装时如果提示「未知来源」，允许一次就行。苹果手机直接用浏览器打开面板，「添加到主屏幕」即可。</p></div>
-<script>fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j.version) document.getElementById('apkBtn').textContent = '下载安卓 App（' + j.version + '）'; }).catch(() => {});</script>
+  <section class="section plans-ground" id="plans" data-moment="iris-opens" data-moment-opts='{"from":"base"}' aria-labelledby="plans-h">
+    <div class="wrap">
+      <div class="section-head" data-moment="lines-rise"><h2 id="plans-h">挑一种用法。<span class="muted">先免费试&nbsp;7&nbsp;天，不合适<wbr>随时卸载。</span></h2></div>
+      <div class="grid" id="app">
+        <article class="card is-featured" data-glow="edge-glow">
+          <p class="t-label">托管版 · 推荐</p>
+          <h3>装上就有专属网址</h3>
+          <ul>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>不用自己的域名和 Cloudflare 账号</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>推送、云端备份、一键更新都有</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>AI 版和纯面板版任选</li>
+          </ul>
+          <div class="btn-row"><a class="btn btn--primary" href="/app#reg">注册领 7 天试用</a></div>
+        </article>
+        <article class="card">
+          <p class="t-label">自建版</p>
+          <h3>用自己的域名，或只在家里用</h3>
+          <ul>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>自己的 Cloudflare 账号和域名</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>AI 版 / 纯面板版 × 精简版 / 完整版</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>开源，MIT 许可证</li>
+          </ul>
+          <div class="btn-row"><a class="btn btn--secondary" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">去 GitHub 看教程</a></div>
+        </article>
+        <article class="card">
+          <p class="t-label">安卓 App</p>
+          <h3>几台路由器一键切换</h3>
+          <ul>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>扫码、相册识别二维码、粘贴或手动添加</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>有新版本，打开就提醒</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>安卓 7.0 以上可用</li>
+          </ul>
+          <div class="btn-row"><a class="btn btn--secondary" href="/app/router-panel.apk" id="apkBtn">下载安卓 App</a></div>
+          <p class="apk-note" id="apkVer">提示「未知来源」时允许一次就行。苹果手机用浏览器打开面板，「添加到主屏幕」即可。</p>
+        </article>
+      </div>
+    </div>
+  </section>
 
-<h2 class="sec" id="faq">常见问题</h2>
-<div class="card faq">
-	<details id="faq-restore"><summary>托管网址打不开了，提示被停用、到期或者删除了，怎么恢复？</summary>
-		<p>家里上网和路由器上的设置都不受影响，只是专属网址、推送、云端备份停了。先打开<a href="/app">账号页</a>看这台路由器显示的是哪种情况：</p>
-		<ul>
-			<li><b>已到期暂停</b>：点「续期」输入续期码，或者点「申请续期」填表等审核。续上马上恢复，什么都不用做。暂停超过 30 天会被彻底删除。</li>
-			<li><b>已被停用，某日前可恢复</b>：被提供服务的人停用了（可能是误删）。在显示的日期前联系他，他在管理页一键就能恢复，恢复后原来的网址、登录过的手机都照常能用。</li>
-			<li><b>账号里已经没有这台路由器</b>（或者收到了「已被彻底删除」的邮件）：要一个新的邀请码，手机连家里 Wi-Fi，打开路由器后台「服务 → 终端」，把安装命令再运行一次，最后的 <code>sh install.sh</code> 改成 <code>sh install.sh --invite 新邀请码</code>。路由器上的设置都保留，网址会换成新的；装完照着屏幕上的链接重新绑定账号就行。</li>
-		</ul>
-		<p class="muted">详细步骤：<a href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">📱 手机教程 · 常见问题</a></p>
-	</details>
-	<details><summary>试用快到期了怎么办？</summary><p>到期前 3 天会推送提醒。在<a href="/app">账号页</a>这台路由器下面点「申请续期」填个表，审核通过就自动续上；有续期码的点「续期」输入。不用重装。</p></details>
-	<details><summary>换了手机、清了浏览器数据，怎么再登录面板？</summary><p>打开<a href="/app">账号页</a>，在这台路由器下面点「获取登录码」，再点「打开面板」就自动填好了。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></details>
-	<details><summary>连着家里 Wi-Fi 时面板打不开，换成手机流量就好？</summary><p>多半是代理插件正在重启或者节点卡了。面板会自动改走直连，稍等一两分钟再刷新；急的话先用手机流量打开。路由器上的「自动任务」里可以看到这些自动处理开没开。</p></details>
-	<details><summary>装的不是 OpenClash，能用吗？</summary><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。没装代理插件也能用设备、流量、测速、断线记录这些功能。</p></details>
-	<details><summary>遇到问题、想要新功能？</summary><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。发完会给一个受理编号，开发者处理到哪一步，在面板侧边栏「帮助 → 我的反馈」、官网账号页，或者这一页上面输入编号都能看到。</p></details>
-</div>
+  <section class="section" id="safety" aria-labelledby="safety-h">
+    <div class="wrap">
+      <div class="section-head" data-moment="lines-rise"><h2 id="safety-h">钥匙只在<wbr>你手里。<span class="muted">账号里没有密钥，拿到账号<wbr>也打不开面板。</span></h2></div>
+      <div class="safe-grid">
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z"/></svg><h3>登录密钥</h3><p>在你的路由器上生成，只存在路由器和你自己的手机上。</p></article>
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z"/></svg><h3>新手机要登录码</h3><p>登录码只有绑定了这台路由器的账号能拿，<b>10 分钟有效、用一次作废</b>。登录地址泄露了也打不开。</p></article>
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg><h3>账号</h3><p>只记录你有哪几台路由器，用来拿登录码。账号里没有密钥。</p></article>
+        <article class="sc sc--8"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M178.34,165.66,160,147.31V208a8,8,0,0,1-16,0V147.31l-18.34,18.35a8,8,0,0,1-11.32-11.32l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32ZM160,40A88.08,88.08,0,0,0,81.29,88.68,64,64,0,1,0,72,216h40a8,8,0,0,0,0-16H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.12A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,100.8,66,8,8,0,0,0,3.2,15.34,7.9,7.9,0,0,0,3.2-.68A88,88,0,0,0,160,40Z"/></svg><h3>云端备份</h3><p>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。开启加密后，备份<b>在路由器上加密后才上传</b>，密钥只在你的路由器上；<b>没开启加密的备份仍然原样存在云端</b>。不想用，可以在「自动任务」里关掉。</p></article>
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z"/></svg><h3>Claude 连接器</h3><p>AI 版给 Claude 单独一把钥匙，只能给 Claude 用、打不开面板，泄露了可以单独换。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><h3>要说明的风险</h3><p>一键更新来自我们在 GitHub 发布的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节出问题，理论上会影响路由器。发现安全问题请用<a class="inline" href="/security#report">报告表单</a>告诉我们。</p></article>
+        <article class="sc sc--3"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M120,128V48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Zm60.37-78.7a8,8,0,0,0-8.74,13.4C194.74,77.77,208,101.57,208,128a80,80,0,0,1-160,0c0-26.43,13.26-50.23,36.37-65.3a8,8,0,0,0-8.74-13.4C47.9,67.38,32,96.06,32,128a96,96,0,0,0,192,0C224,96.06,208.1,67.38,180.37,49.3Z"/></svg><h3>不想用了</h3><p>运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</p></article>
+        <article class="sc sc--3"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M232,48H160a40,40,0,0,0-32,16A40,40,0,0,0,96,48H24a8,8,0,0,0-8,8V200a8,8,0,0,0,8,8H96a24,24,0,0,1,24,24,8,8,0,0,0,16,0,24,24,0,0,1,24-24h72a8,8,0,0,0,8-8V56A8,8,0,0,0,232,48ZM96,192H32V64H96a24,24,0,0,1,24,24V200A39.81,39.81,0,0,0,96,192Zm128,0H160a39.81,39.81,0,0,0-24,8V88a24,24,0,0,1,24-24h64Z"/></svg><h3>想看细节</h3><p>措施和没覆盖的风险见<a class="inline" href="/security">安全说明</a>；存了什么、存多久、怎么删见<a class="inline" href="/privacy">隐私政策</a>。</p></article>
+      </div>
+    </div>
+  </section>
 
-<h2 class="sec">安全</h2>
-<div class="card"><table>
-	<tr><th style="width:34%">登录密钥</th><td>在你的路由器上生成，保存在路由器和你自己的手机上。</td></tr>
-	<tr><th>云端备份</th><td>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。v2.0.8 起可以开启加密：路由器上有 openssl 的自动加密，没有的在面板「云端备份」页点「开启加密」装一下；开启后备份<b>在路由器上加密后才上传</b>，密钥只在你的路由器上，托管服务只存看不懂的密文。<b>没开启加密的备份仍然原样存在云端</b>。不想用云端备份，可以在「自动任务」里关掉。</td></tr>
-	<tr><th>新手机</th><td>新手机要有登录地址（或者用已经能用的手机「添加新手机」扫码），还要输一次<b>登录码</b>。登录码只有绑定了这台路由器的账号才能拿，10 分钟有效、用一次就作废。就算登录地址泄露了，没有登录码也打不开面板。</td></tr>
-	<tr><th>账号</th><td>账号记录「你有哪几台路由器」，用来拿登录码。账号里没有密钥，不能直接打开面板。</td></tr>
-	<tr><th>Claude 连接器</th><td>AI 版给 Claude 单独一把钥匙，只能给 Claude 用、打不开面板，泄露了可以单独换。</td></tr>
-	<tr><th>要说明的风险</th><td>面板的一键更新来自我们在 GitHub 发布的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节如果出了问题，理论上会影响到路由器。发现安全问题请用<a href="/security#report">报告表单</a>告诉我们。</td></tr>
-	<tr><th>更多</th><td>做了哪些措施、没覆盖的风险、觉得被入侵了怎么办，见<a href="/security">安全说明</a>；存了哪些数据、存多久、怎么删，见<a href="/privacy">隐私政策</a>。</td></tr>
-	<tr><th>不想用了</th><td>路由器上运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</td></tr>
-</table></div>
+  <section class="section g2" id="faq" aria-labelledby="faq-h">
+    <div class="wrap">
+      <div class="group">
+        <div class="section-head" data-moment="lines-rise"><h2 id="faq-h">常见问题。<span class="muted">大部分情况<wbr>都不用重装。</span></h2></div>
+        <div class="grid">
+          <article class="card fbq">
+            <h3>反馈过问题？查处理进度</h3>
+            <p>输入上报时拿到的 8 位受理编号，不用登录。登录账号后，在账号页也能看到自己的全部反馈。</p>
+            <form id="fbq" action="/r" autocomplete="off">
+              <input name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false" aria-label="受理编号">
+              <button class="btn btn--primary" type="submit">查询</button>
+            </form>
+            <div class="err" id="fbqErr" role="alert"></div>
+          </article>
+          <div class="qa q-first" id="faq-restore">
+            <h3>托管网址打不开了，提示被停用、到期或者删除了，怎么恢复？</h3>
+            <p>家里上网和路由器上的设置都不受影响，只是专属网址、推送、云端备份停了。先打开<a class="inline" href="/app">账号页</a>看这台路由器显示的是哪种情况：</p>
+            <ul>
+              <li><b>已到期暂停</b>：点「续期」输入续期码，或者点「申请续期」填表等审核。续上马上恢复。暂停超过 30 天会被彻底删除。</li>
+              <li><b>已被停用，某日前可恢复</b>：在显示的日期前联系提供服务的人，他在管理页一键就能恢复，原来的网址、登录过的手机照常能用。</li>
+              <li><b>账号里已经没有这台路由器</b>（或收到「已被彻底删除」的邮件）：要一个新的邀请码，把安装命令再运行一次，最后的 <code>sh install.sh</code> 改成 <code>sh install.sh --invite 新邀请码</code>。设置都保留，网址会换成新的。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="faq-grid">
+        <div class="qa"><h3>试用快到期了怎么办？</h3><p>到期前 3 天会推送提醒。在<a class="inline" href="/app">账号页</a>这台路由器下面点「申请续期」填个表，审核通过就自动续上；有续期码的点「续期」输入。不用重装。</p></div>
+        <div class="qa"><h3>换了手机、清了浏览器数据，怎么再登录面板？</h3><p>打开<a class="inline" href="/app">账号页</a>，在这台路由器下面点「获取登录码」，再点「打开面板」就自动填好了。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></div>
+        <div class="qa"><h3>连着家里 Wi-Fi 时面板打不开，换成手机流量就好？</h3><p>多半是代理插件正在重启或者节点卡了。面板会自动改走直连，稍等一两分钟再刷新；急的话先用手机流量打开。</p></div>
+        <div class="qa"><h3>装的不是 OpenClash，能用吗？</h3><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。没装也能用设备、流量、测速、断线记录。</p></div>
+        <div class="qa"><h3>遇到问题、想要新功能？</h3><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。发完会给一个受理编号，处理到哪一步，在面板「帮助 → 我的反馈」、官网账号页，或者上面输入编号都能看到。</p></div>
+        <div class="qa"><h3>不想用托管服务？</h3><p>可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本和教程都在 <a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。</p></div>
+      </div>
+    </div>
+  </section>
 
-<h2 class="sec">自己搭建</h2>
-<div class="card"><p style="margin:0">不想用托管服务？也可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本（AI 版 / 纯面板版 × 精简版 / 完整版）和教程都在 <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。开源，MIT 许可证。</p></div>
+  <section class="section la" data-moment="letters-assemble" aria-label="结尾的一句话">
+    <div class="wrap">
+      <div class="la__in"><h2 class="mo-la__type">断网了，它先修好。</h2>
+      <p class="mo-la__sub">修好了再告诉你。你只管上网。</p></div>
+    </div>
+  </section>
+</main>
 
-<footer>路由器面板 · <a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a> · <a href="/app">账号</a> · <a href="/notice">用户须知</a> · <a href="/terms">用户使用协议</a> · <a href="/privacy">隐私政策</a> · <a href="/security">安全说明</a> · <a href="/security#report">报告问题</a> · <a href="/r">查处理进度</a></footer>
-</div><script>document.getElementById('fbq').onsubmit = (e) => {
-	e.preventDefault(); const v = e.target.c.value.trim().toUpperCase().replace(/\s+/g, ''), er = document.getElementById('fbqErr');
-	if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { er.style.minHeight = '20px'; er.textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }
-	location.href = '/r/' + v;
-};</script><script>const faqOpen = () => { const d = location.hash.startsWith('#faq') && document.getElementById(location.hash.slice(1)); if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView({ block: 'start' }); } }; faqOpen(); addEventListener('hashchange', faqOpen);</script>
-</body></html>
+<footer class="footer closing footer--dark" id="contact" aria-labelledby="close-h">
+  <div class="aurora" data-fx="aurora-curtains" data-fx-seed="3" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="closing__cta close--type">
+      <div class="section-head">
+        <h2 id="close-h" class="mo-lt__type" data-moment="liquid-type" data-moment-opts='{"strength":1.2}'>今晚就让它值班</h2>
+        <p>注册账号就送 7 天试用码，装好后自动加到你的账号里。</p>
+      </div>
+      <a class="btn btn--primary btn--xl btn--wide" href="/app#reg">注册领 7 天试用<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
+    </div>
+    <div class="closing__links">
+      <div class="grid">
+        <div class="span-4 stack-4">
+          <a class="nav__logo" href="#top"><svg class="mark" viewBox="0 0 100 100" width="26" height="26" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#1a2621"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#e9eeeb"/><circle cx="63" cy="37" r="7" fill="#4ade80"/></svg>路由器面板</a>
+          <p class="footer__lede">用手机管好家里的 OpenWrt 路由器。</p>
+        </div>
+        <div class="span-2 footer__col"><h3>产品</h3><ul><li><a href="#features">功能</a></li><li><a href="#tour">界面</a></li><li><a href="#start">怎么装</a></li><li><a href="#plans">安卓 App</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>账号</h3><ul><li><a href="/app">登录</a></li><li><a href="/app#reg">注册</a></li><li><a href="/r">查处理进度</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>帮助</h3><ul><li><a href="#faq">常见问题</a></li><li><a href="/security#report">报告问题</a></li><li><a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>条款</h3><ul><li><a href="/notice">用户须知</a></li><li><a href="/terms">用户使用协议</a></li><li><a href="/privacy">隐私政策</a></li><li><a href="/security">安全说明</a></li></ul></div>
+      </div>
+      <div class="footer__legal">
+        <span>&copy; 2026 路由器面板 · 开源项目，MIT 许可证</span>
+        <span class="t-small muted">页面版式和动效组件来自 taste-skill（MIT）</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="/k/system.js"></script>
+<script type="module" src="/k/motion/motion.js"></script>
+<script type="module" src="/k/layout/layout.js"></script>
+<script type="module" src="/k/diagrams/mount.js"></script>
+<script>
+// 复制安装命令
+document.getElementById('copyCmd').onclick = async (e) => { const b = e.currentTarget, t = document.getElementById('cmd').textContent; try { await navigator.clipboard.writeText(t); b.textContent = '已复制 ✓'; } catch (x) { const r = document.createRange(); r.selectNodeContents(document.getElementById('cmd')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = '已选中，长按复制'; } setTimeout(() => (b.textContent = '复制命令'), 2500); };
+// 安卓 App 版本号
+fetch('/api/app/version').then((r) => r.json()).then((j) => { if (j.version) document.getElementById('apkBtn').textContent = '下载安卓 App（' + j.version + '）'; }).catch(() => {});
+// 查处理进度
+document.getElementById('fbq').onsubmit = (e) => {
+  e.preventDefault(); const v = e.target.c.value.trim().toUpperCase().replace(/\s+/g, ''), er = document.getElementById('fbqErr');
+  if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { er.textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }
+  location.href = '/r/' + v;
+};
+// 首屏的实时网速：演示数字，在屏幕上才跳
+(() => {
+  const n = document.getElementById('spNum'), bars = [...document.querySelectorAll('#spBars i')];
+  if (!n || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const hs = bars.map(() => 20 + Math.random() * 70); let on = true;
+  new IntersectionObserver((es) => (on = es[0].isIntersecting)).observe(n);
+  const tick = () => { if (on && !document.hidden) { hs.shift(); hs.push(18 + Math.random() * 80); bars.forEach((b, i) => (b.style.height = hs[i] + '%')); n.firstChild.textContent = (24 + hs[hs.length - 1] * 0.5).toFixed(1); } };
+  tick(); setInterval(tick, 900);
+})();
+
+// ===== 第二轮动效 =====
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches, fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  // 顶部阅读进度线
+  const nav = document.querySelector('.nav');
+  const prog = () => { const h = document.documentElement.scrollHeight - innerHeight; nav.style.setProperty('--np', h > 0 ? (scrollY / h).toFixed(4) : 0); };
+  addEventListener('scroll', prog, { passive: true }); addEventListener('resize', prog); prog();
+  if (reduce) return;
+  // 卡片：鼠标光 + 倾斜（电脑），滑进屏幕扫光（手机）
+  const cards = [...document.querySelectorAll('main .card, main .sc, footer .closing__cta .btn--xl')];
+  cards.forEach((c) => c.classList.add('fxc'));
+  if (fine) {
+    cards.forEach((c) => {
+      const tilt = !c.matches('.btn');
+      c.addEventListener('pointermove', (e) => {
+        const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        c.style.setProperty('--mx', (x * 100).toFixed(1) + '%'); c.style.setProperty('--my', (y * 100).toFixed(1) + '%'); c.style.setProperty('--mo', 1);
+        if (tilt) c.style.transform = `perspective(1100px) rotateX(${((0.5 - y) * 4).toFixed(2)}deg) rotateY(${((x - 0.5) * 5).toFixed(2)}deg) translateY(-2px)`;
+      });
+      c.addEventListener('pointerleave', () => { c.style.setProperty('--mo', 0); c.style.transform = ''; });
+    });
+  } else {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('swept'); io.unobserve(e.target); } }), { threshold: 0.35 });
+    cards.forEach((c) => io.observe(c));
+  }
+  // 首屏手机：跟着鼠标（电脑）或手机倾斜（安卓）转动
+  const hero = document.querySelector('.hero');
+  const setTilt = (x, y) => { hero.style.setProperty('--ry', (x * 14).toFixed(2) + 'deg'); hero.style.setProperty('--rx', (-y * 10).toFixed(2) + 'deg'); };
+  if (fine) {
+    hero.addEventListener('pointermove', (e) => setTilt(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
+    hero.addEventListener('pointerleave', () => setTilt(0, 0));
+  } else if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+    let base = null;
+    addEventListener('deviceorientation', (e) => {
+      if (e.gamma == null || scrollY > innerHeight) return;
+      if (!base) base = { g: e.gamma, b: e.beta };
+      const cl = (v) => Math.max(-0.5, Math.min(0.5, v));
+      setTilt(cl((e.gamma - base.g) / 40), cl((e.beta - base.b) / 40));
+    }, { passive: true });
+  }
+})();
+// 界面导览：按滚动位置换截图（点左边的项也能跳过去）
+(() => {
+  const sec = document.getElementById('tour'), items = [...document.querySelectorAll('#tourList .tour__item')], imgs = [...sec.querySelectorAll('.tour__phone img')], dots = [...document.querySelectorAll('#tourDots i')];
+  let cur = -1; const N = items.length, ph = sec.querySelector('.tour__phone .phone');
+  const set = (i, f) => {
+    if (i !== cur) { cur = i; [items, imgs, dots].forEach((l) => l.forEach((el, k) => el.classList.toggle('is-on', k === i))); }
+    items[i].style.setProperty('--tp', f.toFixed(3));
+    if (ph) ph.style.setProperty('--tr', ((f - 0.5) * -14).toFixed(2) + 'deg');
+  };
+  const onScroll = () => {
+    const r = sec.getBoundingClientRect(), span = Math.max(1, r.height - innerHeight), p = Math.min(0.9999, Math.max(0, -r.top / span));
+    const x = p * N, i = Math.floor(x); set(i, x - i);
+  };
+  addEventListener('scroll', onScroll, { passive: true }); addEventListener('resize', onScroll); onScroll();
+  items.forEach((it, i) => it.addEventListener('click', () => { const top = sec.getBoundingClientRect().top + scrollY, span = sec.offsetHeight - innerHeight; scrollTo({ top: top + span * ((i + 0.5) / N), behavior: 'smooth' }); }));
+})();
+</script>
+</body>
+</html>

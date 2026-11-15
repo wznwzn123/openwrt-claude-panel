@@ -7,9 +7,9 @@ const SHIM = 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this
 export async function load() {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcp-w-'));
 	for (const f of ['worker.js', 'hub.js', 'ops.js', 'v5.js', 'site.js']) {
-		let src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8')
-			.replace("import { DurableObject } from 'cloudflare:workers';", SHIM)
-			.replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
+		let src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+		// site.js 只有页面和文件内容（里面官网组件的 import 是给浏览器的，不能改）
+		if (f !== 'site.js') src = src.replace("import { DurableObject } from 'cloudflare:workers';", SHIM).replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
 		// 真的 Cloudflare 上，调用 Durable Object 的方法是远程调用：传 Request / Response / 流过去，请求内容会被搬走（调用方再读就是空的）。
 		// 测试里也拦住这种写法，免得本地测试通过、上线后出问题（5.0.0 的两步验证、发公告就是这样坏的）
 		if (f === 'hub.js') {

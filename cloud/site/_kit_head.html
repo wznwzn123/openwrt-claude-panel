@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="/k/motion/motion.css">
 <link rel="stylesheet" href="/k/layout/layout.css">
 <style>
+/* 手机上点哪里都会闪一个半透明方框（浏览器默认的点按高亮）：去掉，按钮自己有按下的效果 */
+html, html * { -webkit-tap-highlight-color: transparent; }
 /* 官网各页（除首页）共用：和首页同一套颜色、字体、顶栏、页脚 */
 @font-face { font-family: "Geist"; src: url("/fonts/geist.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
 :root {

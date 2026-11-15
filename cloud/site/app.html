@@ -494,9 +494,9 @@ function form(id, fn) {
 		finally { btn.disabled = false; }
 	};
 }
-form('fLogin', async (d) => { await api('login', d); await load(); });
-form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load(); });
-form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load(); });
+form('fLogin', async (d) => { await api('login', d); await load('login'); });
+form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load('reg'); });
+form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load('reset'); });
 form('fBind', async (d, f) => {
 	const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app');
 	const me = await load(), dv = me && me.devs.find((x) => x.sub === r.sub);
@@ -782,20 +782,47 @@ $('fFbq').onsubmit = (e) => {
 	if (!/^[A-Z2-9]{8}$/.test(v) || /[01OL]/.test(v)) { er.textContent = /[01OL]/.test(v) ? '编号里没有 0、1、O、L 这几个字，看看是不是认错了' : '编号是 8 位字母和数字'; return; }
 	er.textContent = ''; location.href = '/r/' + v;
 };
-async function load() {
+// 出错时把原因发给开发者（后台「出错记录」里能看到是什么浏览器、哪一步）；同一条只报一次
+const repSent = new Set();
+function report(where, e) {
+	const msg = String((e && e.message) || e || '').slice(0, 200) + ' · ' + navigator.userAgent.slice(0, 160) + (navigator.cookieEnabled === false ? ' · Cookie 被关掉了' : '');
+	if (repSent.has(where + msg)) return; repSent.add(where + msg);
+	try { fetch('/api/cerr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ msg, where: '官网账号页：' + where, stack: String((e && e.stack) || '').slice(0, 600), ua: navigator.userAgent, w: innerWidth, h: innerHeight, page: 'app' }) }).catch(() => {}); } catch (x) {}
+}
+// 读账号、显示「我的路由器」。after = 'login' / 'reg' / 'reset'：刚登录或注册成功
+async function load(after) {
+	let me;
+	try { me = await api('me'); }
+	catch (e) {
+		show('auth');
+		if (after) {
+			// 刚登录 / 注册成功，却读不到账号：多半是这个浏览器没有记住登录状态（关了 Cookie、无痕模式、在微信或 QQ 里打开）
+			const v = after === 'reg' ? 'reg' : after === 'reset' ? 'reset' : 'login';
+			lgView(v);
+			const err = $(v === 'reg' ? 'fReg' : v === 'reset' ? 'fReset' : 'fLogin').querySelector('[data-err]');
+			const cookieOff = navigator.cookieEnabled === false;
+			if (err) err.innerHTML = e.login ? (v === 'reg' ? '账号已经注册好了，' : '密码是对的，') + '但这个浏览器没有记住登录状态，所以进不去。<br>' + (cookieOff ? '浏览器关掉了 Cookie，请在设置里打开，' : '可能开了无痕 / 隐私模式，或者是在微信、QQ 里打开的。') + '请用手机自带的浏览器或 Chrome、Edge 打开 <b>' + esc(location.host) + '/app</b> 再登录。' : esc(e.message);
+			if (v === 'reg' && e.login) { tab('login'); const le = $('fLogin').querySelector('[data-err]'); if (le) le.innerHTML = err.innerHTML; }
+			report(e.login ? '登录成功但读不到账号（' + v + '）' : '读账号失败（' + v + '）', e);
+		} else {
+			lgView((pair && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+			if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
+			if (!e.login) report('打开账号页时读账号失败', e);
+		}
+		return null;
+	}
+	// 已经登录了：后面就算哪一块显示出错，也留在账号页（不再退回登录页），把错误报给开发者
+	show('dash');
 	try {
-		const me = await api('me');
 		loadSess(); loadFb();
 		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
-		render(me); show('dash'); if (window.fxCards) window.fxCards($('vDash'));
-		if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }
-		return me;
-	} catch (e) {
-		show('auth');
-		lgView(pair && !LGV[location.hash.slice(1)] ? 'login' : location.hash.slice(1));
-		if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
-	}
+		render(me); if (window.fxCards) window.fxCards($('vDash'));
+	} catch (e) { report('显示「我的路由器」出错', e); toast('页面有一部分没显示出来，刷新一下试试'); }
+	if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').code.value = pair; $('fBind').requestSubmit(); }
+	return me;
 }
+// 浏览器关掉了 Cookie：登录不了，先说清楚
+if (navigator.cookieEnabled === false) { const n = $('vAuth').querySelector('.lgcard'); if (n) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">这个浏览器关掉了 Cookie，登录不了。请在浏览器设置里打开 Cookie，或者换手机自带的浏览器。</div>'); }
 fetch('/api/ping').then((r) => r.json()).then((j) => { mailOn = !!j.mail; document.querySelector('#fReg [data-mail]').classList.toggle('hidden', !mailOn); }).catch(() => {});
 tab('login'); load();
 </script>

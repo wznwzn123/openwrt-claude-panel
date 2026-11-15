@@ -4,6 +4,7 @@
    新浏览器认识 :has，这段直接退出，什么都不做。 */
 (function () {
 	try { document.querySelector(':has(*)'); return; } catch (e) {}
+	document.documentElement.setAttribute('data-nohas', '');
 	var A = /*HAS_ARGS*/[];
 	function split(s) { var r = [], d = 0, a = 0; for (var i = 0; i < s.length; i++) { var c = s[i]; if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d--; else if (c === ',' && !d) { r.push(s.slice(a, i).trim()); a = i + 1; } } r.push(s.slice(a).trim()); return r; }
 	var P = A.map(function (x) { return [x[0], split(x[1])]; });

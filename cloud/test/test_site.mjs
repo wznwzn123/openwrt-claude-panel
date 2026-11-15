@@ -549,6 +549,39 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		ok('[登录页] 从路由器带绑定码来：直接是登录表单和「会自动绑定」的说明', await page.isVisible('#fLogin') && /自动把这台路由器绑定/.test(await page.textContent('#lgCard')));
 		await ctx.close();
 	}
+	// 浏览器没记住登录状态（关了 Cookie、无痕、微信里打开）：不再跳回注册页，直接说清楚怎么办，并报给开发者
+	for (const [w, h] of [[390, 844], [1280, 800]]) {
+		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
+		const page = await ctx.newPage(); const e8 = []; page.on('pageerror', (x) => e8.push(x.message));
+		// 模拟浏览器不保存 Cookie：读账号总是「请先登录」
+		await ctx.route(/\/api\/account\/me$/, (r) => r.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: '请先登录', login: true }) }));
+		const n0 = ((await env.H.get('hub').ctx.storage.get('el')) || []).length;
+		await page.goto(B + '/app#reg'); await W(800);
+		const em = 'nocookie' + w + '@x.com';
+		await page.fill('#fReg [name=email]', em); await page.fill('#fReg [name=password]', 'nocookie-pass-1'); await page.click('#fReg button.primary'); await W(1500);
+		const t1 = await page.textContent('#fLogin [data-err]');
+		ok('[进不去] 注册成功但浏览器没记住登录：转到登录页，说清楚原因和怎么办（不是又回到注册页）［' + w + '］', await page.isVisible('#fLogin') && !(await page.isVisible('#fReg')) && /没有记住登录状态/.test(t1) && /\/app/.test(t1), t1);
+		await page.fill('#fLogin [name=email]', em); await page.fill('#fLogin [name=password]', 'nocookie-pass-1'); await page.click('#fLogin button.primary'); await W(1500);
+		ok('[进不去] 再登录：还停在登录页，提示同样的原因［' + w + '］', await page.isVisible('#fLogin') && !(await page.isVisible('#fReg')) && /没有记住登录状态/.test(await page.textContent('#fLogin [data-err]')));
+		const el = (await env.H.get('hub').ctx.storage.get('el')) || [];
+		ok('[进不去] 报给了开发者（后台出错记录里有浏览器信息）［' + w + '］', el.some((x) => /登录成功但读不到账号/.test(JSON.stringify(x))), JSON.stringify(el.slice(0, 2)).slice(0, 300));
+		if (SHOTS) await page.screenshot({ path: SHOTS + '/site-nocookie-' + w + '.png' });
+		ok('[进不去] 页面没有报错［' + w + '］', !e8.length, e8.join(' | '));
+		await ctx.close();
+	}
+	// 显示「我的路由器」时哪一块出错：留在账号页，不退回登录页
+	{
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+		const page = await ctx.newPage();
+		await page.goto(B + '/app#reg'); await W(800);
+		await page.fill('#fReg [name=email]', 'renderbug@x.com'); await page.fill('#fReg [name=password]', 'renderbug-pass-1');
+		await page.evaluate(() => { window.layApply = () => { throw new Error('测试：显示出错'); }; });
+		await page.evaluate(() => { const o = window.renderTrial; window.__bad = true; });
+		await page.route('**/api/account/me', async (r) => { const res = await r.fetch(); const j = await res.json(); j.devs = null; await r.fulfill({ response: res, body: JSON.stringify(j) }); });
+		await page.click('#fReg button.primary'); await W(2000);
+		ok('[进不去] 账号页某一块显示出错：还是进了账号页（不退回登录 / 注册页）', await page.isVisible('#vDash') && !(await page.isVisible('#vAuth')));
+		await ctx.close();
+	}
 	for (const [u, k] of [['/notice', 'notice'], ['/terms', 'terms']]) {
 		const r = await realFetch(B + u);
 		ok('[' + u + '] 返回 200、带安全头', r.status === 200 && /frame-ancestors 'none'/.test(r.headers.get('content-security-policy') || ''));

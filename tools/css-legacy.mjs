@@ -73,6 +73,15 @@ function hasArgs(sel, has, out) {
 	return res;
 }
 export const hasRewrite = (sel, has) => hasArgs(sel, has);
+// 补的规则只在不认识 :has 的浏览器里生效：那时小脚本会给 <html> 加 data-nohas。
+// 不然像 :not(:has(…)) 换成 :not([data-hN]) 以后，新浏览器里永远成立，会把原来的样式盖掉
+function splitList(s) { const r = []; let d = 0, a = 0; for (let i = 0; i < s.length; i++) { const c = s[i]; if (c === '(' || c === '[') d++; else if (c === ')' || c === ']') d--; else if (c === ',' && !d) { r.push(s.slice(a, i)); a = i + 1; } } r.push(s.slice(a)); return r.map((x) => x.trim()).filter(Boolean); }
+export function noHasOnly(sel) {
+	return splitList(sel).map((x) => {
+		const m = /^(:root|html)(?![\w-])/.exec(x);
+		return m ? ':root[data-nohas]' + x.slice(m[0].length) : ':root[data-nohas] ' + x;
+	}).join(', ');
+}
 export function hasScan(css, has) { for (const r of rules(parse(css))) if (r.sel.includes(':has(')) hasArgs(r.sel, has); }
 
 // 按算好的表改写一段 CSS；misses 收集表里没有的（CSS 改了以后要重新算）
@@ -80,7 +89,7 @@ export function applyLegacy(css, table, misses, has) {
 	css = applyColors(css, table, misses);
 	if (!has) return css;
 	const edits = [];
-	for (const r of rules(parse(css))) if (r.sel.includes(':has(')) edits.push([r.end, `\n${hasArgs(r.sel, has)} ${css.slice(r.start, r.end)}\n`]);
+	for (const r of rules(parse(css))) if (r.sel.includes(':has(')) edits.push([r.end, `\n${noHasOnly(hasArgs(r.sel, has))} ${css.slice(r.start, r.end)}\n`]);
 	edits.sort((a, b) => b[0] - a[0]);
 	for (const [at, text] of edits) css = css.slice(0, at) + text + css.slice(at);
 	return css;

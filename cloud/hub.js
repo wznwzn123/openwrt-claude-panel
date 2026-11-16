@@ -8,7 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser } from './fam.js';
@@ -1264,6 +1264,7 @@ export class Hub extends DurableObject {
 
 /* ---------- 开通中心的网址：主域名下的 /api/… ---------- */
 let FONT_BIN = null;
+const IMG_BIN = new Map();
 const hubObj = (env) => env.H.get(env.H.idFromName('hub'));
 export async function hubFetch(req, env) {
 	const u = new URL(req.url), p = u.pathname;
@@ -1404,6 +1405,13 @@ export async function hubFetch(req, env) {
 	}
 	// 官网字体（只有拉丁字母和数字，中文用手机自带字体）
 	if (p === '/fonts/geist.woff2' && (req.method === 'GET' || req.method === 'HEAD')) { if (!FONT_BIN) FONT_BIN = Uint8Array.from(atob(FONT_GEIST), (c) => c.charCodeAt(0)); return new Response(req.method === 'HEAD' ? null : FONT_BIN, { headers: { 'content-type': 'font/woff2', 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } }); }
+	// 官网首页的截图（/img/名字-内容摘要.webp）：内容变了网址跟着变，浏览器可以一直缓存
+	if (p.startsWith('/img/') && (req.method === 'GET' || req.method === 'HEAD')) {
+		const fn = p.slice(5);
+		if (!Object.prototype.hasOwnProperty.call(IMG_FILES, fn) || typeof IMG_FILES[fn] !== 'string') return J({ error: 'not found' }, 404);
+		if (!IMG_BIN.has(fn)) IMG_BIN.set(fn, Uint8Array.from(atob(IMG_FILES[fn]), (c) => c.charCodeAt(0)));
+		return new Response(req.method === 'HEAD' ? null : IMG_BIN.get(fn), { headers: { 'content-type': 'image/webp', 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } });
+	}
 	// 官网首页的版式和动效组件（/k/...）：只有 site.js 里打包好的这些文件，没有就 404
 	if (p.startsWith('/k/') && (req.method === 'GET' || req.method === 'HEAD')) {
 		const f = Object.prototype.hasOwnProperty.call(KIT_FILES, p.slice(3)) ? KIT_FILES[p.slice(3)] : null;
@@ -1539,7 +1547,9 @@ export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hos
 const DL_FALLBACK = { 'openwrt-claude-panel.tar.gz': 'openwrt-claude-panel-ai-full.tar.gz', 'openwrt-claude-panel-hosted.tar.gz': 'openwrt-claude-panel-hosted-ai.tar.gz' };
 async function dlFile(env, name) {
 	if (!DL_RE.test(name)) return J({ error: '没有这个文件' }, 404);
-	const get = (n) => fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/' + n, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	const get0 = (n) => fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/' + n, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } }).catch(() => ({ ok: false, status: 0 }));
+	// GitHub 偶尔会失败一次（十几次里有一次）：不行就马上再试一次，免得路由器一键更新时官网这条路白走
+	const get = async (n) => { const r = await get0(n); return r.ok ? r : get0(n); };
 	let r = await get(name);
 	if (!r.ok && DL_FALLBACK[name]) r = await get(DL_FALLBACK[name]);
 	if (!r.ok) return J({ error: '还没有发布这个安装包' }, 404);

@@ -1,6 +1,7 @@
 // 把 cloud/site/*.html 打包成 cloud/site.js（Worker 直接把页面内容返回给浏览器）
 // 改了页面以后运行：node tools/build-site.mjs
 import fs from 'fs';
+import { createHash } from 'crypto';
 import { applyLegacy, applyLegacyHtml, hasScan, styleBlocks } from './css-legacy.mjs';
 const dir = new URL('../cloud/site/', import.meta.url);
 const css = fs.readFileSync(new URL('common.css', dir), 'utf8');
@@ -15,15 +16,18 @@ walkCss('');
 for (const t of kitCss) hasScan(t, HAS);
 for (const f of Object.values(pages)) if (f !== 'admin.html') for (const t of styleBlocks(expand(fs.readFileSync(new URL(f, dir), 'utf8')))) hasScan(t, HAS);
 let out = '// 自动生成，不要直接改：改 cloud/site/ 里的文件后运行 node tools/build-site.mjs\n';
+// 页面里的截图单独由 /img/名字-内容摘要.webp 发（浏览器长期缓存；内容变了摘要跟着变），不再塞进页面：页面小一半，打开更快
+const IMG = {};
+const imgUrl = (n) => { const b = fs.readFileSync(new URL('img/' + n + '.webp', dir)), f = n + '-' + createHash('sha256').update(b).digest('hex').slice(0, 10) + '.webp'; IMG[f] = b.toString('base64'); return '/img/' + f; };
 for (const [k, f] of Object.entries(pages)) {
-	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 cloud/site/img/名字.webp 的内容（页面只允许加载自己和 data: 图片）
+	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 /img/名字-摘要.webp（cloud/site/img/名字.webp，见上面的 imgUrl）
 	// 新设计的页面共用的顶栏、页脚、样式和脚本：写成 <!--KIT_HEAD--> 这样，打包时换成 cloud/site/_kit_*.html 的内容
 	let html = fs.readFileSync(new URL(f, dir), 'utf8');
 	html = expand(html);
 	if (/<!--KIT_/.test(html)) throw new Error(f + ' 里有不认识的 <!--KIT_...-->');
 	if (f !== 'admin.html') html = applyLegacyHtml(html, LEG, legMiss, HAS).replace('/*HAS_ARGS*/[]', () => JSON.stringify(HAS.list));
 	html = html.replace('/*COMMON_CSS*/', css)
-		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => 'data:image/webp;base64,' + fs.readFileSync(new URL('img/' + n + '.webp', dir)).toString('base64'));
+		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => imgUrl(n));
 	out += `export const ${k} = ${JSON.stringify(html)};\n`;
 }
 // 官网字体 Geist（SIL OFL 1.1，见 cloud/site/img/geist-OFL.txt）：从本站 /fonts/geist.woff2 发，页面不从外部加载东西
@@ -46,6 +50,7 @@ const kit = {}, KT = { js: 'text/javascript; charset=utf-8', css: 'text/css; cha
 const walk = (rel) => { for (const e of fs.readdirSync(new URL('k/' + rel, dir), { withFileTypes: true })) { const r = rel + e.name; if (e.isDirectory()) walk(r + '/'); else { const ext = e.name.split('.').pop(); if (!KT[ext]) throw new Error('cloud/site/k 里有不认识的文件：' + r); let body = fs.readFileSync(new URL('k/' + r, dir), 'utf8'); if (ext === 'css') body = applyLegacy(body, LEG, legMiss, HAS); kit[r] = { type: KT[ext], body }; } } };
 walk('');
 out += `export const KIT_FILES = ${JSON.stringify(kit)};\n`;
+out += `export const IMG_FILES = ${JSON.stringify(IMG)};\n`;
 out += `export const ADMIN_APP = ${JSON.stringify(adminHtml)};\nexport const ADMIN_FILES = ${JSON.stringify(files)};\n`;
 if (legMiss.length) console.warn('旧浏览器备用颜色缺 ' + new Set(legMiss).size + ' 条（样式改过了）：运行 node tools/gen-legacy-colors.mjs 重新算\n  ' + [...new Set(legMiss)].slice(0, 8).join('\n  '));
 if (out.includes('/*HAS_ARGS*/[]')) throw new Error('有页面没换掉 /*HAS_ARGS*/');

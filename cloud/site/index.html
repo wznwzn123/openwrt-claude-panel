@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="/k/backgrounds/backgrounds.css">
 <link rel="stylesheet" href="/k/layout/layout.css">
 <link rel="stylesheet" href="/k/icons/icon.css">
+<link rel="stylesheet" href="/k/moments/pinned-chapters/moment.css">
 <style>
 /* 手机上点哪里都会闪一个半透明方框（浏览器默认的点按高亮）：去掉，按钮自己有按下的效果 */
 html, html * { -webkit-tap-highlight-color: transparent; }
@@ -42,6 +43,7 @@ h2 .muted { color: var(--muted); }
 @media (max-width: 639px) { h2 .muted { display: block; } }
 .section-head { max-width: 1000px; }
 .t-lead, .hero__lead { color: color-mix(in oklab, var(--ink) 82%, var(--bg)); }
+.hero__lead, .section-head h2, .card p { text-wrap: pretty; }
 a.inline { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--accent) 45%, transparent); }
 code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 9%, transparent); }
 .gh-ic { width: 18px; height: 18px; flex: none; }
@@ -49,10 +51,16 @@ code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-
 
 /* ------------------------------------------------ 首屏：手机截图 + 看门狗卡片 + 实时网速 */
 .hero__art { background:
-    radial-gradient(70% 60% at 20% 10%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 70%),
-    radial-gradient(60% 60% at 90% 100%, color-mix(in oklab, #22d3ee 10%, transparent), transparent 70%), var(--ground-bg);
+    radial-gradient(34% 30% at 92% 6%, rgb(244 241 234 / .14), transparent 72%),
+    radial-gradient(70% 60% at 12% 100%, rgb(74 222 128 / .14), transparent 70%),
+    linear-gradient(180deg, #0d1d27 0%, #0b1813 62%, #0a1510 100%);
   border: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); }
-.hero__art > .hero-fx { position: absolute; inset: 0; z-index: 0; }
+.hero__art > .hero-fx { position: absolute; inset: 0; z-index: 0; opacity: .7; }
+/* 首屏的夜空：几颗星星和一弯月亮（跟图标里的月亮一样），网格在上面淡淡地闪 */
+.hero__art > .hero-sky, .hero__art.mo-cs > .hero-sky { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.hero-sky .night__stars { z-index: 0; opacity: .7; }
+.hero-sky .night__moon { z-index: 0; top: 7%; right: 5%; width: clamp(34px, 7%, 56px); }
+@media (max-width: 639px) { .hero-sky .night__moon { top: 14px; right: 14px; width: 30px; } }
 .hero__art > .ly-piece, .hero__art.mo-cs > .ly-piece { position: absolute; z-index: 2; }
 .hero__art.mo-cs > .hero-fx { position: absolute; z-index: 0; }
 /* 首屏只留一个暂停按钮（网格效果自己的那个藏起来，右下角那个同时管网格和小卡片） */
@@ -80,6 +88,27 @@ code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-
 .hero__proof { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hero__proof .ly-live { color: var(--ink); }
 .hero h1 .mo-wr { color: var(--accent); }
+/* 标题排成两行：「用手机管好家里的」一行，「OpenWrt 路由器」一行；换词时框跟着词的宽度走，后面的「路由器」靠过来，
+   字号按最长的 ImmortalWrt 算，换词时不会换行跳动。很窄的手机（430 以下）照旧：词占最长的位置，「路由器」在下一行 */
+@media (min-width: 430px) {
+  .hero h1 .h1-a, .hero h1 .h1-b { display: block; white-space: nowrap; }
+}
+@media (min-width: 430px) and (max-width: 1023px) {
+  .hero h1 { font-size: min(52px, calc((100vw - 64px) / 9.7)); }
+}
+/* 首屏左下：三个实打实的数字，跟右边画面的底边对齐（左边不再空一大块） */
+.hero__facts { display: none; margin: 0; }
+@media (min-width: 1024px) {
+  .hero--collage .hero__text { align-self: stretch; display: flex; flex-direction: column; }
+  .hero__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: auto; padding-top: 22px; border-top: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); }
+  .hero__facts > div { grid-column: auto; min-width: 0; }
+  .hero__facts dt { font-size: 30px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .hero__facts dd { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+}
+@media (min-width: 1024px) {
+  .hero h1 { font-size: clamp(40px, 4.3vw, 60px); line-height: 1.08; }
+  .hero__text .hero__lead { max-width: 30em; }
+}
 @media (max-width: 1023px) {
   .hero__art > .ly-piece--main.phone { right: 50%; width: min(58%, 250px); top: 24px; }
   .hero__art > .ly-piece--speed { left: 16px; top: 16px; width: 176px; }
@@ -103,11 +132,86 @@ code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-
   .d-line { font-size: 12px; gap: 8px; }
 }
 
+/* ------------------------------------------------ 一夜值班：四个时间点，右边的画面从深夜换到早上（电脑上滚动时固定在屏幕上，一步一步换） */
+.night .mo-pc__step h3 { display: flex; align-items: baseline; gap: 12px; }
+.night__t { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); letter-spacing: -.01em; min-width: 3.2em; }
+#night .night__v { overflow: hidden; isolation: isolate; border-radius: var(--r-lg, 20px); color: #eef3f0;
+  background: radial-gradient(120% 90% at 80% 0%, #17324a 0%, #0b1a24 45%, #050c0f 100%); }
+#night .night__v--2 { background: radial-gradient(70% 60% at 70% 75%, rgb(251 191 36 / .22), transparent 70%), radial-gradient(120% 90% at 80% 0%, #132838 0%, #08141c 50%, #040a0d 100%); }
+#night .night__v--3 { background: radial-gradient(120% 90% at 80% 0%, #1b3a52 0%, #0e2230 50%, #071117 100%); }
+#night .night__v--4 { color: #1b1408; background: radial-gradient(90% 80% at 78% 92%, #ffd98c 0%, #f7b267 26%, transparent 60%), linear-gradient(180deg, #8fc3e8 0%, #cfe3ea 48%, #f6dcae 100%); }
+.night__stars { position: absolute; inset: 0; z-index: -1; opacity: .9; background-image:
+  radial-gradient(1.4px 1.4px at 8% 14%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 22% 38%, #fff 50%, transparent 52%),
+  radial-gradient(1.2px 1.2px at 35% 9%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 47% 27%, #dfe9ff 50%, transparent 52%),
+  radial-gradient(1.6px 1.6px at 61% 12%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 74% 31%, #fff 50%, transparent 52%),
+  radial-gradient(1.2px 1.2px at 88% 8%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 93% 44%, #dfe9ff 50%, transparent 52%),
+  radial-gradient(1px 1px at 15% 62%, #fff 50%, transparent 52%), radial-gradient(1.3px 1.3px at 30% 78%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 54% 66%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 82% 70%, #fff 50%, transparent 52%); }
+.night__v--3 .night__stars { opacity: .55; }
+.night__moon { position: absolute; z-index: -1; top: 9%; right: 9%; width: clamp(54px, 9%, 96px); fill: #f4f1ea; filter: drop-shadow(0 0 22px rgb(244 241 234 / .45)) drop-shadow(0 0 60px rgb(244 241 234 / .18)); }
+.night__v--3 .night__moon { top: 22%; right: 4%; opacity: .75; }
+.night__sun { position: absolute; z-index: -1; right: 14%; bottom: -12%; width: 34%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, #fff6dc 0%, #ffd27a 40%, rgb(255 190 92 / 0) 70%); }
+.night__clock { position: absolute; left: 7%; top: 8%; font-size: clamp(56px, 7.4vw, 124px); line-height: 1; font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: currentColor; opacity: .92; }
+.night__v--4 .night__clock { color: #3b2a12; opacity: .85; }
+.night__card { position: absolute; right: 7%; bottom: 9%; width: min(300px, 70%); display: grid; gap: 6px; }
+.night__h { font-size: 14px; font-weight: 600; }
+.night__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 13px; margin-top: 4px; }
+.night__grid span { display: flex; align-items: center; gap: 8px; }
+.night__grid i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.night__bar { display: block; height: 4px; border-radius: 4px; background: rgb(255 255 255 / .08); overflow: hidden; margin-top: 6px; }
+.night__bar i { display: block; height: 100%; width: 35%; border-radius: inherit; background: var(--accent); }
+.night__bar--full i { width: 100%; }
+.night__meta { font-size: 12px; color: var(--muted); }
+.night__file { display: grid; gap: 2px; font-size: 13px; margin-top: 4px; }
+.night__file small { font-size: 12px; color: var(--muted); }
+.night__card .d-line { font-size: 13px; }
+.night__push { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); width: min(340px, 82%); display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 20px;
+  background: rgb(255 255 255 / .72); color: #10140f; box-shadow: 0 20px 50px -20px rgb(80 50 10 / .45); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); }
+.night__app svg { width: 40px; height: 40px; display: block; border-radius: 10px; }
+.night__msg { display: grid; gap: 1px; font-size: 13px; min-width: 0; }
+.night__msg b { font-size: 14px; }
+.night__from { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #5a5f58; }
+/* 电脑上：画面换到这一步时，卡片从下面升上来，断线那张的三行一行一行出来 */
+.night.is-live .night__card, .night.is-live .night__push { opacity: 0; transform: translateY(16px); transition: opacity .5s ease .15s, transform .7s cubic-bezier(.16,1,.3,1) .15s; }
+.night.is-live .night__push { transform: translate(-50%, 16px); }
+.night.is-live .mo-pc__visual.is-on .night__card { opacity: 1; transform: none; }
+.night.is-live .mo-pc__visual.is-on .night__push { opacity: 1; transform: translate(-50%, 0); }
+.night.is-live .night__v--2 .d-line { opacity: 0; transition: opacity .4s ease; }
+.night.is-live .night__v--2.is-on .d-line { opacity: 1; }
+.night.is-live .night__v--2.is-on .d-line:nth-of-type(2) { transition-delay: .5s; }
+.night.is-live .night__v--2.is-on .d-line:nth-of-type(3) { transition-delay: 1.1s; }
+.night.is-live .night__v--1.is-on .night__bar i { animation: nightbar 1.8s ease-in-out 2 alternate both; }
+@keyframes nightbar { from { width: 18%; } to { width: 92%; } }
+.night .mo-pc__visual--lit { padding: 0; display: block; }
+/* 电脑上固定在屏幕上的那一层：只有一屏高（页面别的规则会把它拉长到整节，那样就固定不住了） */
+main > #night.is-live > .mo-pc__grid { flex: 0 0 auto; height: 100vh; height: 100svh; min-height: 0; }
+.night.is-live .mo-pc__visuals { border-radius: var(--r-lg, 20px); overflow: hidden; box-shadow: 0 40px 90px -40px rgb(0 0 0 / .8), 0 0 0 1px rgb(255 255 255 / .06); }
+/* 手机、平板、矮屏幕：四个时间点一个接一个，画面放在文字下面 */
+#night:not(.is-live) .night__v { position: relative; aspect-ratio: 1 / 1; max-height: 420px; }
+#night:not(.is-live) .night__clock { font-size: clamp(40px, 7vw, 56px); left: 20px; top: 18px; }
+#night:not(.is-live) .night__card { right: 16px; bottom: 16px; width: min(280px, calc(100% - 32px)); }
+@media (max-width: 639px) {
+  .night__clock { font-size: 44px; left: 18px; top: 16px; }
+  .night__card { right: 14px; bottom: 14px; width: min(250px, 78%); padding: 10px 12px; }
+  .night__moon { width: 44px; top: 16px; right: 18px; }
+  .night__push { bottom: 14px; width: calc(100% - 28px); }
+}
+@media (prefers-reduced-motion: reduce) { .night .night__bar i { animation: none !important; } }
+
+/* ------------------------------------------------ 一家人一起用（5.2）：两张卡片铺到这一屏底下，小界面整个露出来 */
+#family .card { background: color-mix(in oklab, var(--p-surface) 92%, transparent); }
+#family .panel { --p-h: 340px; }
+@media (min-width: 640px) { #family .panel { min-height: 340px; } }
+@media (min-width: 1024px) {
+  main > #family > .wrap > .grid:last-child { align-self: stretch; flex: 1 1 auto; min-height: 0; }
+}
+@media (max-width: 639px) { #family .panel { --p-h: 330px; } #family .stage { --fade-h: 40px; } }
+
 /* ------------------------------------------------ 功能四宫格 */
 #features .panel { --p-h: 300px; }
 @media (min-width: 640px) and (max-width: 1023px) { #features .panel { min-height: 300px; } }
 #features .card { background: color-mix(in oklab, var(--p-surface) 92%, transparent); }
-@media (max-width: 639px) { #features .panel { --p-h: 236px; } #features .stage { --fade-h: 48px; } }
+@media (max-width: 639px) { #features .panel { --p-h: 292px; } #features .stage { --fade-h: 40px; } }
 
 /* ------------------------------------------------ 界面导览：滚动时手机里的截图跟着换（手机和电脑都一样） */
 .tour__stick { display: flex; flex-direction: column; min-height: 100%; }
@@ -209,6 +313,7 @@ pre.term u { text-decoration: none; color: var(--accent); } pre.term b { color: 
 .sc { grid-column: auto / span 4; position: relative; display: flex; flex-direction: column; gap: 8px; padding: 22px 24px; border-radius: 20px; background: var(--p-surface); border: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); overflow: clip; }
 .sc--8 { grid-column: auto / span 8; } .sc--6 { grid-column: auto / span 6; } .sc--3 { grid-column: auto / span 3; }
 .sc .si { width: 26px; height: 26px; color: var(--accent); margin-bottom: 4px; }
+.sc .si--line { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .sc h3 { margin: 0; font-size: 17px; line-height: 1.4; font-weight: 600; }
 .sc p { margin: 0; font-size: 15px; line-height: 1.7; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); }
 .sc b { color: var(--ink); font-weight: 600; }
@@ -236,6 +341,9 @@ pre.term u { text-decoration: none; color: var(--accent); } pre.term b { color: 
 .la .mo-la__type { font-size: clamp(44px, 7.4vw, 120px); line-height: 1.08; font-weight: 700; letter-spacing: -.03em; margin: 0; }
 .la .mo-la__sub { font-size: var(--t-lead); color: var(--muted); margin-top: 22px; max-width: 34em; }
 .la .wrap { justify-content: center; }
+/* 结尾这句话：不再占满一整屏（以前大半是空的），上下留够呼吸的空间就行 */
+.la { --h: .62; padding-block: clamp(72px, 9vw, 128px); }
+.la .nw { display: inline-block; white-space: nowrap; }
 .la .la__in { margin: auto 0; }
 .la .mo-la__type .acc, .la .mo-la__type .acc .mo-c { color: var(--accent); }
 footer.closing { overflow: hidden; }
@@ -321,7 +429,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         <a class="nav__link" href="#features">功能 <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
         <div class="nav__menu">
           <div class="wrap grid">
-            <div class="menu-col span-3"><p class="t-label">管路由器</p><a href="#features">看门狗<span>30 秒查一次，断了先修</span></a><a href="#features">断网推送<span>手机和微信都能收</span></a><a href="#features">定时断网<span>给孩子的设备设时间</span></a></div>
+            <div class="menu-col span-3"><p class="t-label">管路由器</p><a href="#features">看门狗<span>30 秒查一次，断了先修</span></a><a href="#features">断网推送<span>手机和微信都能收</span></a><a href="#features">定时断网<span>给孩子的设备设时间</span></a><a href="#family">一家人一起用<span>各用各的账号，权限你定</span></a></div>
             <div class="menu-col span-3"><p class="t-label">看界面</p><a href="#tour">界面导览<span>六个常用页面</span></a><a href="#how">怎么连起来<span>不用公网 IP、不用开端口</span></a><a href="#safety">安全<span>钥匙只在你手里</span></a></div>
             <a class="menu-card span-3 start-10" href="#start">
               <div class="panel"><img class="frame__img" src="/*IMG:pair*/" alt="官网「我的路由器」里的「打开面板」按钮" loading="lazy" style="object-fit:cover;object-position:top"></div>
@@ -348,17 +456,23 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 <main id="top">
   <section class="hero hero--collage" data-enter aria-labelledby="hero-h">
     <div class="wrap"><div class="hero-text grid hero__grid">
-      <div class="hero__text span-5">
-        <h1 id="hero-h">用手机<wbr>管好<wbr>家里的 <span data-moment="word-rotate" data-moment-opts='{"words":["OpenWrt","ImmortalWrt","Kwrt"],"every":2200,"cycles":0}'>OpenWrt</span> 路由器</h1>
+      <div class="hero__text span-6">
+        <h1 id="hero-h"><span class="h1-a">用手机<wbr>管好<wbr>家里的</span> <span class="h1-b"><span data-moment="word-rotate" data-moment-opts='{"words":["OpenWrt","ImmortalWrt","Kwrt"],"every":2200,"cycles":0,"fit":"(min-width: 430px)"}'>OpenWrt</span> 路由器</span></h1>
         <p class="hero__lead">节点切换、在线设备、流量、测速、断线记录、定时断网，一个手机面板全管了。人在外面也能打开，不用公网 IP，也不用开端口。</p>
         <div class="btn-row">
           <a class="btn btn--primary" href="/app#reg" id="heroMain">注册领 7 天试用<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
           <a class="btn btn--secondary" href="#start">看怎么装</a>
         </div>
-        <p class="hero__proof"><span class="ly-live">看门狗在线</span><span class="proof__more">支持 OpenWrt 18.06 到 25.12，开源，MIT 许可证</span></p>
+        <p class="hero__proof"><span class="ly-live">看门狗在线</span><span class="proof__more">支持 OpenWrt 18.06 到 25.12</span></p>
+        <dl class="hero__facts">
+          <div><dt>0 个</dt><dd>家里要开的端口</dd></div>
+          <div><dt>1 部手机</dt><dd>就能装好、管好</dd></div>
+          <div><dt>开源</dt><dd>MIT 许可证</dd></div>
+        </dl>
       </div>
       <div class="hero__art span-6 start-7" role="img" aria-label="手机上的路由器面板首页，旁边是实时网速和看门狗自动修复的记录" data-moment="cursor-spotlight" data-moment-opts='{"rest":[0.7,0.3],"radius":360}'>
         <div class="hero-fx" data-fx="grid-pulse" data-fx-seed="11" aria-hidden="true"></div>
+        <span class="hero-sky" aria-hidden="true"><span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg></span>
         <div class="ly-piece ly-piece--main phone hero-phone-float" aria-hidden="true"><img src="/*IMG:home*/" alt="" fetchpriority="high"></div>
         <div class="ly-piece ly-piece--speed d-card" aria-hidden="true">
           <div class="speed__row"><span>实时网速</span><span class="ly-live">下行</span></div>
@@ -457,6 +571,113 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
                   </svg>
                   <div class="ui-stat__axis" aria-hidden="true"><span>两周前</span><span>上周</span><span>今天</span></div>
                 </div>
+              </div>
+            </div></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section night" id="night" style="--h: 2" data-moment="pinned-chapters" aria-labelledby="night-h">
+    <div class="wrap mo-pc__grid">
+      <div class="mo-pc__text">
+        <h2 id="night-h">一夜值班。<span class="muted">你睡着的时候，它在做这些。</span></h2>
+        <ol class="mo-pc__steps">
+          <li class="mo-pc__step">
+            <h3><span class="night__t">23:30</span>你睡了，它开始值班</h3>
+            <p>每 30 秒把宽带、DNS、隧道、代理挨个查一遍。都正常的时候，它不打扰你。</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--1" aria-hidden="true">
+              <span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg>
+              <span class="night__clock">23:30</span>
+              <span class="d-card night__card">
+                <span class="d-card__row"><span class="night__h">看门狗 · 值班中</span><span class="d-chip">正常</span></span>
+                <span class="night__grid"><span><i></i>宽带</span><span><i></i>DNS</span><span><i></i>隧道</span><span><i></i>代理</span></span>
+                <span class="night__bar"><i></i></span>
+                <span class="night__meta">30 秒后再查一次</span>
+              </span>
+            </figure>
+          </li>
+          <li class="mo-pc__step">
+            <h3><span class="night__t">03:12</span>宽带掉了，18 秒修好</h3>
+            <p>PPPoE 掉线，它自己重新拨号；节点超时，就换一个能用的。每次断线的原因都记下来。</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--2" aria-hidden="true">
+              <span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg>
+              <span class="night__clock">03:12</span>
+              <span class="d-card night__card">
+                <span class="d-card__row"><span class="night__h">断线记录</span><span class="d-chip">已修好</span></span>
+                <span class="d-line"><i class="warn">!</i><span><b>宽带断线</b>，PPPoE 掉了</span></span>
+                <span class="d-line"><i>↻</i><span>重新拨号</span></span>
+                <span class="d-line"><i>✓</i><span><b>18 秒</b>恢复，原因已记下</span></span>
+              </span>
+            </figure>
+          </li>
+          <li class="mo-pc__step">
+            <h3><span class="night__t">04:00</span>设置备份到云端</h3>
+            <p>每天自动备份一次；开了加密，就先在路由器上加密，再上传。</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--3" aria-hidden="true">
+              <span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg>
+              <span class="night__clock">04:00</span>
+              <span class="d-card night__card">
+                <span class="d-card__row"><span class="night__h">云端备份</span><span class="d-chip">完成</span></span>
+                <span class="night__file"><b>今天的设置</b><small>在路由器上加密后上传</small></span>
+                <span class="night__bar night__bar--full"><i></i></span>
+              </span>
+            </figure>
+          </li>
+          <li class="mo-pc__step">
+            <h3><span class="night__t">09:00</span>一份体检推到你手机</h3>
+            <p>每天早上自动体检一次，结果推送到手机或微信。醒来看一眼，就知道家里网络怎么样。</p>
+            <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--4" aria-hidden="true">
+              <span class="night__sun"></span>
+              <span class="night__clock">09:00</span>
+              <span class="night__push">
+                <span class="night__app"><svg viewBox="0 0 100 100"><rect width="100" height="100" rx="22.5" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></span>
+                <span class="night__msg"><span class="night__from">路由器面板<time>现在</time></span><b>每日体检完成</b><span>宽带、DNS、隧道、代理都正常</span></span>
+              </span>
+            </figure>
+          </li>
+        </ol>
+      </div>
+      <div class="mo-pc__visuals frame"></div>
+    </div>
+  </section>
+
+  <section class="section" id="family" aria-labelledby="family-h">
+    <div class="wrap">
+      <div class="section-head" data-moment="lines-rise"><h2 id="family-h">一家人一起用。<span class="muted">各用各的账号，能做什么<wbr>由你定。</span></h2></div>
+      <div class="grid">
+        <article class="card card--row card--open span-6">
+          <h3>给家人开权限，一项一项勾</h3>
+          <p>给家人发个加入码，他用自己的账号就能打开面板。能设到期时间，随时停用；改代理、改网络这种大权限，勾之前会提醒你。</p>
+          <div class="panel" data-fx="gradient-mesh" data-fx-seed="17">
+            <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:40px;--ay-sm:18px" data-ui-loop>
+              <div class="ui ui-panel ui-toggles" data-ui="toggles">
+                <div class="ui-head">
+                  <svg class="ui-icon ui-toggles__ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.2c.6-2.3 2.2-3.5 4.2-3.5s3.6 1.2 4.2 3.5"/><circle cx="11.6" cy="6.2" r="1.8"/><path d="M11.2 9.8c1.6 0 2.7.9 3.1 2.6"/></svg>
+                  <div class="ui-title">爸爸的权限</div><span class="ui-spacer"></span><div class="ui-meta" data-tg-count>开了 3 项，共 4 项</div>
+                </div>
+                <ul class="ui-toggles__list">
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">切换节点</span><span class="ui-tg__sub">节点页点一下就换</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="切换节点"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">测速</span><span class="ui-tg__sub">走代理和宽带直连各测一次</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="测速"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">定时断网、拉黑设备</span><span class="ui-tg__sub">管孩子的平板和游戏机</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="定时断网、拉黑设备"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">代理设置</span><span class="ui-tg__sub">能改动整个路由器，勾之前会先提醒</span></span><button class="ui-switch" type="button" role="switch" aria-checked="false" aria-label="代理设置"><i></i></button></li>
+                </ul>
+              </div>
+            </div></div>
+          </div>
+        </article>
+        <article class="card card--row card--open span-6">
+          <h3>有问题，直接问开发者</h3>
+          <p>面板里就能跟开发者对话。截图、录屏、日志直接发，一个文件最大 200MB；开发者回复了，推送到你手机。</p>
+          <div class="panel" data-fx="caustics" data-fx-seed="13">
+            <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:48px;--ay-sm:20px" data-ui-loop>
+              <div class="ui ui-notify" data-ui="notify">
+                <ul class="ui-notify__list" data-notify-list>
+                  <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg></span><span class="ui-note__text"><span class="ui-note__title">开发者回复了你<time>刚刚</time></span><span class="ui-note__body">看了你的录屏，是订阅过期了，点「更新订阅」就好</span></span><span class="ui-btn ui-btn--sm ui-note__btn">查看</span></li>
+                  <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="M9.5 2.5h-5v11h7v-9zM9.5 2.5v2h2"/></svg></span><span class="ui-note__text"><span class="ui-note__title">你发了 2 个文件<time>3 分钟</time></span><span class="ui-note__body">录屏.mp4 · 18 MB，日志.txt · 40 KB</span></span></li>
+                  <li class="ui-note"><span class="ui-note__ico"><svg class="ui-icon" viewBox="0 0 16 16"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg></span><span class="ui-note__text"><span class="ui-note__title">反馈处理好了<time>昨天</time></span><span class="ui-note__body">受理编号 K7F2Q9AB，结果也发到了你的邮箱</span></span></li>
+                </ul>
               </div>
             </div></div>
           </div>
@@ -650,9 +871,10 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg><h3>账号</h3><p>只记录你有哪几台路由器，用来拿登录码。账号里没有密钥。</p></article>
         <article class="sc sc--8"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M178.34,165.66,160,147.31V208a8,8,0,0,1-16,0V147.31l-18.34,18.35a8,8,0,0,1-11.32-11.32l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32ZM160,40A88.08,88.08,0,0,0,81.29,88.68,64,64,0,1,0,72,216h40a8,8,0,0,0,0-16H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.12A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,100.8,66,8,8,0,0,0,3.2,15.34,7.9,7.9,0,0,0,3.2-.68A88,88,0,0,0,160,40Z"/></svg><h3>云端备份</h3><p>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。开启加密后，备份<b>在路由器上加密后才上传</b>，密钥只在你的路由器上；<b>没开启加密的备份仍然原样存在云端</b>。不想用，可以在「自动任务」里关掉。</p></article>
         <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z"/></svg><h3>Claude 连接器</h3><p>AI 版给 Claude 单独一把钥匙，只能给 Claude 用、打不开面板，泄露了可以单独换。</p></article>
-        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><h3>要说明的风险</h3><p>一键更新来自我们在 GitHub 发布的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节出问题，理论上会影响路由器。发现安全问题请用<a class="inline" href="/security#report">报告表单</a>告诉我们。</p></article>
-        <article class="sc sc--3"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M120,128V48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Zm60.37-78.7a8,8,0,0,0-8.74,13.4C194.74,77.77,208,101.57,208,128a80,80,0,0,1-160,0c0-26.43,13.26-50.23,36.37-65.3a8,8,0,0,0-8.74-13.4C47.9,67.38,32,96.06,32,128a96,96,0,0,0,192,0C224,96.06,208.1,67.38,180.37,49.3Z"/></svg><h3>不想用了</h3><p>运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</p></article>
-        <article class="sc sc--3"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M232,48H160a40,40,0,0,0-32,16A40,40,0,0,0,96,48H24a8,8,0,0,0-8,8V200a8,8,0,0,0,8,8H96a24,24,0,0,1,24,24,8,8,0,0,0,16,0,24,24,0,0,1,24-24h72a8,8,0,0,0,8-8V56A8,8,0,0,0,232,48ZM96,192H32V64H96a24,24,0,0,1,24,24V200A39.81,39.81,0,0,0,96,192Zm128,0H160a39.81,39.81,0,0,0-24,8V88a24,24,0,0,1,24-24h64Z"/></svg><h3>想看细节</h3><p>措施和没覆盖的风险见<a class="inline" href="/security">安全说明</a>；存了什么、存多久、怎么删见<a class="inline" href="/privacy">隐私政策</a>。</p></article>
+        <article class="sc sc--6"><svg class="si si--line" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><h3>安装包签名</h3><p>每次发布都用开发者的密钥签名，一键更新<b>先验签名再安装</b>。下载的中转站被人改了，路由器也不会装上改过的安装包。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><h3>要说明的风险</h3><p>一键更新装的是我们在 GitHub 发布、签过名的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节出问题，理论上会影响路由器。发现安全问题请用<a class="inline" href="/security#report">报告表单</a>告诉我们。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M120,128V48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Zm60.37-78.7a8,8,0,0,0-8.74,13.4C194.74,77.77,208,101.57,208,128a80,80,0,0,1-160,0c0-26.43,13.26-50.23,36.37-65.3a8,8,0,0,0-8.74-13.4C47.9,67.38,32,96.06,32,128a96,96,0,0,0,192,0C224,96.06,208.1,67.38,180.37,49.3Z"/></svg><h3>不想用了</h3><p>运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M232,48H160a40,40,0,0,0-32,16A40,40,0,0,0,96,48H24a8,8,0,0,0-8,8V200a8,8,0,0,0,8,8H96a24,24,0,0,1,24,24,8,8,0,0,0,16,0,24,24,0,0,1,24-24h72a8,8,0,0,0,8-8V56A8,8,0,0,0,232,48ZM96,192H32V64H96a24,24,0,0,1,24,24V200A39.81,39.81,0,0,0,96,192Zm128,0H160a39.81,39.81,0,0,0-24,8V88a24,24,0,0,1,24-24h64Z"/></svg><h3>想看细节</h3><p>措施和没覆盖的风险见<a class="inline" href="/security">安全说明</a>；存了什么、存多久、怎么删见<a class="inline" href="/privacy">隐私政策</a>。</p></article>
       </div>
     </div>
   </section>
@@ -695,7 +917,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section la" data-moment="letters-assemble" aria-label="结尾的一句话">
     <div class="wrap">
-      <div class="la__in"><h2 class="mo-la__type">断网了，它先修好。</h2>
+      <div class="la__in"><h2 class="mo-la__type"><span class="nw">断网了，</span><span class="nw">它先修好。</span></h2>
       <p class="mo-la__sub">修好了再告诉你。你只管上网。</p></div>
     </div>
   </section>

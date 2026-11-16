@@ -3,13 +3,14 @@ import { load, memStorage } from './load.mjs';
 const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
 let rel = null, gh = 0, apiDown = false, allDown = false; const dl = [], raw = [];
+let flaky = 0;
 globalThis.fetch = async (input) => {
 	const url = typeof input === 'string' ? input : input.url;
 	if (url.includes('api.github.com/repos/wznwzn123/openwrt-claude-panel/releases/latest')) { gh++; if (apiDown) return new Response('{"message":"API rate limit exceeded"}', { status: 403 }); return rel ? new Response(JSON.stringify(rel)) : new Response('{}', { status: 404 }); }
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest') { if (allDown) throw new Error('down'); return rel ? new Response('', { status: 302, headers: { location: 'https://github.com/wznwzn123/openwrt-claude-panel/releases/tag/' + rel.tag_name } }) : new Response('nf', { status: 404 }); }
 	if (url.startsWith('https://raw.githubusercontent.com/wznwzn123/openwrt-claude-panel/')) { raw.push(url); return rel ? new Response(rel.body) : new Response('nf', { status: 404 }); }
 	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/download/')) return rel && rel.assets.some((a) => url.endsWith('/' + a.name)) ? new Response(null, { status: 302, headers: { location: 'https://objects.example/x' } }) : new Response('nf', { status: 404 });
-	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/openwrt-claude-panel-') || url.endsWith('/latest/download/SHA256SUMS') || url.endsWith('/latest/download/SHA256SUMS.sig')) { dl.push(url); return rel ? new Response(new Uint8Array([31, 139, 8, 0]), { status: 200 }) : new Response('nf', { status: 404 }); }
+	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/openwrt-claude-panel-') || url.endsWith('/latest/download/SHA256SUMS') || url.endsWith('/latest/download/SHA256SUMS.sig')) { dl.push(url); if (flaky > 0) { flaky--; return new Response('busy', { status: 502 }); } return rel ? new Response(new Uint8Array([31, 139, 8, 0]), { status: 200 }) : new Response('nf', { status: 404 }); }
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/app-version.json') return rel && rel.appver ? new Response(typeof rel.appver === 'string' ? rel.appver : JSON.stringify(rel.appver)) : new Response('Not Found', { status: 404 });
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/router-panel.apk') return rel ? new Response(new Uint8Array([80, 75, 3, 4, 1, 2]), { status: 200 }) : new Response('nf', { status: 404 });
 	return new Response('{}');
@@ -46,6 +47,16 @@ for (const n of ['openwrt-claude-panel-hosted-ai.tar.gz', 'openwrt-claude-panel-
 	const x = await get('/dl/' + n); const bb = new Uint8Array(await x.arrayBuffer());
 	ok('官网下载安装包：' + n, x.status === 200 && (n.startsWith('SHA256SUMS') || (bb[0] === 31 && bb[1] === 139 && x.headers.get('content-type') === 'application/gzip')) && dl.some((u) => u.endsWith('/' + n)));
 }
+// GitHub 偶尔失败一次：官网马上再试一次，路由器拿到的照样是对的
+{ let n0 = dl.length; flaky = 1; const x = await get('/dl/SHA256SUMS.sig'); ok('GitHub 偶尔失败一次：官网自己再试一次，照样下得到', x.status === 200 && dl.length - n0 === 2 && flaky === 0, x.status + ' ' + (dl.length - n0));
+  n0 = dl.length; flaky = 5; const y = await get('/dl/SHA256SUMS'); ok('GitHub 一直不行：只多试一次，然后告诉路由器没拿到（路由器会改从 GitHub 直接下）', y.status === 404 && dl.length - n0 === 2, y.status + ' ' + (dl.length - n0)); flaky = 0; }
+// 官网首页的截图：单独由 /img/名字-摘要.webp 发（不塞进页面里），浏览器长期缓存；乱写的名字 404
+{ const home = await (await get('/')).text(), imgs = [...new Set(home.match(/\/img\/[a-z0-9_-]+-[0-9a-f]{10}\.webp/g) || [])];
+  let good = imgs.length >= 7;
+  for (const u of imgs) { const x = await get(u); const b = new Uint8Array(await x.arrayBuffer()); if (!(x.status === 200 && x.headers.get('content-type') === 'image/webp' && /immutable/.test(x.headers.get('cache-control')) && b[0] === 0x52 && b[8] === 0x57)) good = false; }
+  ok('官网首页的截图单独发（webp、长期缓存），页面里不再塞图片内容', good && !/data:image\/webp;base64/.test(home) && home.length < 200000, imgs.length + ' 张，页面 ' + home.length + ' 字节');
+  let bad404 = true; for (const u of ['/img/__proto__', '/img/toString', '/img/home.webp', '/img/home-0000000000.webp', '/img/../site.js']) if ((await get(u)).status !== 404) bad404 = false;
+  ok('乱写的图片名字：404', bad404); }
 for (const bad of ['../etc/passwd', 'router-panel.apk', 'openwrt-claude-panel-hosted-x.tar.gz', 'openwrt-claude-panel-ai-lite.tar.gz.exe', '%2e%2e%2fsecret'])
 	ok('不认识的文件名不转发：' + bad, (await get('/dl/' + bad)).status === 404);
 rel = { tag_name: 'v1.3.1', body: '## 这个版本的更新\n\n- **只用手机就能装**：见 [📱 手机教程](https://x/y.md)，运行 `cmcp-pair`', assets: [{ name: 'router-panel.apk' }] };

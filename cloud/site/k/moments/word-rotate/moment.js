@@ -32,7 +32,8 @@ export default function (root, opts, lib) {
   const fitTo = (anim) => {
     if (!opts.fit) return;
     if (!fitOn()) { root.style.transition = 'none'; root.style.width = ''; return; }
-    root.style.transition = anim ? 'width 640ms cubic-bezier(.16, 1, .3, 1)' : 'none';
+    // 换成更短的词：等旧词淡出以后再收窄（不压到后面的字）；换成更长的词时，框已经在换词前撑开了（见 step）
+    root.style.transition = anim ? 'width 460ms cubic-bezier(.2, .7, .2, 1) 260ms' : 'none';
     root.style.width = cells[i].offsetWidth + 'px';
   };
   fitTo(false);
@@ -44,8 +45,7 @@ export default function (root, opts, lib) {
   const every = Math.max(1200, opts.every || 2200), cycles = opts.cycles ?? 3;
   let timer = 0, visible = false, shown = 0;
   const rests = () => cycles && shown >= cycles * cells.length;
-  const step = () => {
-    if (!visible || rests()) return;
+  const swap = () => {
     const out = cells[i];
     i = (i + 1) % cells.length;
     const inn = cells[i];
@@ -53,8 +53,18 @@ export default function (root, opts, lib) {
     inn.classList.remove('is-out'); inn.classList.add('is-on');
     fitTo(true);
     setTimeout(() => out.classList.remove('is-out'), 700);
+  };
+  const step = () => {
+    if (!visible || rests()) return;
     shown++;
     if (!rests()) timer = setTimeout(step, every);
+    // 改：下一个词更长时，先把框撑开（220ms），再换词，新词升上来时右边不会被截掉
+    const next = cells[(i + 1) % cells.length];
+    if (opts.fit && fitOn() && next.offsetWidth > root.getBoundingClientRect().width + 0.5) {
+      root.style.transition = 'width 220ms cubic-bezier(.2, .7, .2, 1)';
+      root.style.width = next.offsetWidth + 'px';
+      setTimeout(swap, 230);
+    } else swap();
   };
   const io = new IntersectionObserver(es => {
     visible = es[es.length - 1].isIntersecting;

@@ -451,7 +451,22 @@ export async function famDev(p, H, b) {
 	if (op === 'log') { const r = await H.famDevMe(sub, uid); if (r.st !== 200) return out(r); return J({ ok: true, list: await H.famRlog(sub) }); }
 	if (op === 'leave') return out(await H.famLeave(uid, sub));
 	if (op === 'sudo_code') return out(await H.famSudoCode(sub, uid));
-	if (op === 'sudo') return out(await H.famSudo(sub, uid, s(b.code)));
+	if (op === 'sudo') {
+		// 面板「敏感信息」验证码对了，顺便把敏感信息带回去（省一次路由器转发）
+		const r = await H.famSudo(sub, uid, s(b.code));
+		if (r.st === 200 && b.want === 'secret') { const x = await H.famDevSecret(sub, uid); if (x.st === 200) { const { st, ...y } = x; r.secret = y; } }
+		return out(r);
+	}
+	// 面板「我的主页」一次拿全：我是谁、家人、操作记录；带着有效的确认凭证时再加上敏感信息（原来要分 4 次经路由器转发，慢）
+	if (op === 'page') {
+		const r = await H.famDevMe(sub, uid);
+		if (r.st !== 200) return out(r);
+		const { st, ...me } = r;
+		const [m, log] = await Promise.all([H.famMembers(sub), H.famRlog(sub)]);
+		let secret = null;
+		if (b.sudo && (await H.famSudoOk(sub, uid, s(b.sudo)))) { const x = await H.famDevSecret(sub, uid); if (x.st === 200) { const { st: _st, ...y } = x; secret = y; } }
+		return J({ ok: true, me, members: m ? { ok: true, ...m, me: uid } : null, log, secret });
+	}
 	// 下面这些都要先确认是本人
 	if (!(await H.famSudoOk(sub, uid, s(b.sudo)))) return J({ error: '要先确认是你本人（邮箱验证码）', sudo: true }, 403);
 	if (op === 'secret') return out(await H.famDevSecret(sub, uid));

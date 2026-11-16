@@ -56,6 +56,27 @@ ok('验证码错：不给凭证', (await fam(R1, 'sudo', { uid: ua, code: lastCo
 let SU = (await fam(R1, 'sudo', { uid: ua, code: lastCode() })).j.sudo;
 ok('验证码对：拿到 10 分钟的凭证', /^[a-z2-9]{24}$/.test(SU || ''));
 ok('凭证不能拿去给别的账号用', (await fam(R1, 'join_create', { uid: ub, sudo: SU, name: 'x' })).j.sudo === true);
+// 面板「我的主页」一次拿全（5.2.2）：我是谁、家人、操作记录；带着有效凭证再加上敏感信息
+{
+	const pg = (await fam(R1, 'page', { uid: ua })).j;
+	ok('「我的主页」一次拿全：我是谁（打码邮箱）、家人、操作记录；没带凭证不给敏感信息', pg.ok && pg.me && pg.me.role === 'main' && pg.me.me.email === 'al***@x.com' && pg.me.st === undefined && pg.members && pg.members.ok && Array.isArray(pg.members.subs) && Array.isArray(pg.log) && pg.secret === null, JSON.stringify(pg).slice(0, 300));
+	const pg2 = (await fam(R1, 'page', { uid: ua, sudo: SU })).j;
+	ok('「我的主页」带着有效凭证：加上敏感信息（完整邮箱、官网设备、登录记录）', pg2.secret && pg2.secret.email === 'alice@x.com' && Array.isArray(pg2.secret.sessions) && Array.isArray(pg2.secret.logins) && pg2.secret.st === undefined, JSON.stringify(pg2.secret).slice(0, 200));
+	ok('「我的主页」凭证是乱写的：不给敏感信息', (await fam(R1, 'page', { uid: ua, sudo: 'a'.repeat(24) })).j.secret === null);
+	ok('「我的主页」不是这台路由器的成员：什么都不给', (await fam(R1, 'page', { uid: ub, sudo: SU })).j.error && !(await fam(R1, 'page', { uid: ub })).j.me);
+	ok('「我的主页」钥匙不对：不给', (await post('/api/dev/fam/page', { sub: R1.sub, rkey: 'x'.repeat(32), uid: ua })).st === 403);
+	await S().delete('r:su1:' + ua);
+	await fam(R1, 'sudo_code', { uid: ua });
+	const v = (await fam(R1, 'sudo', { uid: ua, code: lastCode(), want: 'secret' })).j;
+	ok('验证码对、要敏感信息：凭证和敏感信息一起回来（少转发一次）', /^[a-z2-9]{24}$/.test(v.sudo || '') && v.secret && v.secret.email === 'alice@x.com' && v.secret.st === undefined, JSON.stringify(v).slice(0, 200));
+	await S().delete('r:su1:' + ua);
+	await fam(R1, 'sudo_code', { uid: ua });
+	const w = (await fam(R1, 'sudo', { uid: ua, code: lastCode() === '111111' ? '222222' : '111111', want: 'secret' })).j;
+	ok('验证码错、要敏感信息：不给凭证也不给敏感信息', w.error === '验证码不对' && !w.secret && !w.sudo);
+	const w2 = (await fam(R1, 'sudo', { uid: ua, code: lastCode() })).j;
+	ok('没要敏感信息：照旧只回凭证', /^[a-z2-9]{24}$/.test(w2.sudo || '') && w2.secret === undefined);
+	SU = w2.sudo;
+}
 // 加入码
 let jc = (await fam(R1, 'join_create', { uid: ua, sudo: SU, name: '妈妈', perms: ['msg', 'node', 'speed', 'bogus'] })).j;
 ok('主账号发加入码：8 位、24 小时、带链接', /^[A-Z2-9]{8}$/.test(jc.code || '') && jc.link === 'https://panel.example/app?join=' + jc.code && jc.exp - Date.now() > 23 * 3600e3, JSON.stringify(jc));

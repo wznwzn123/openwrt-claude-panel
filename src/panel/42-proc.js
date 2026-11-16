@@ -329,6 +329,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && to
 		if (!armed) return;
 		armed = false;
 		if (document.body.classList.contains('locked')) { lkMsg('再按一次返回键退出'); return; }
+		// 正在输入（键盘开着）：侧滑返回只收起键盘，不关弹窗、不退出（比如输验证码时想先把键盘收起来）
+		const ae = document.activeElement;
+		if (ae && (ae.tagName === 'TEXTAREA' || (ae.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|file|color)$/.test(ae.type)) || ae.isContentEditable)) { ae.blur(); return; }
 		const m = document.querySelector('.modal:not(.closing)');
 		// 下一次点页面时再垫回去
 		if (m) { if (!m.dataset.lock) m.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }

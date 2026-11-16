@@ -1639,7 +1639,7 @@ async function rotateKey() {
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制新地址</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
 }
-// 「系统操作」里按版本显示的项：已登录的手机（托管版）、Claude 连接器地址（AI 版）
+// 「系统操作」里按版本显示的项：已登录的手机（应急登录码进来的）、Claude 连接器地址（AI 版）
 // 托管服务的到期时间：系统操作里显示；还剩 3 天以内首页提示去申请续期
 const ymd = (ms) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
 let SVC = null;
@@ -1691,32 +1691,96 @@ $('sideMe').onclick = () => go('me');
 let SUDO = (() => { try { const x = JSON.parse(sessionStorage.getItem('rp_sudo') || 'null'); return x && x.exp > Date.now() ? x : null; } catch (e) { return null; } })();
 const sudoOn = () => !!(SUDO && SUDO.exp > Date.now() + 3000);
 function sudoSet(x) { SUDO = x; try { if (x) sessionStorage.setItem('rp_sudo', JSON.stringify(x)); else sessionStorage.removeItem('rp_sudo'); } catch (e) {} }
-async function sudoCode(btn, box) {
+// 发过验证码：10 分钟内一直显示输入框（去邮箱复制验证码再回来、页面刷新、侧滑返回都不会丢）；1 分钟内不能重发（官网也这么限制）
+const SENT_MS = 600e3, RESEND_S = 60;
+const devTag = () => (store.get('rp_dev') || '').slice(0, 8);
+const CODE = { val: '', tried: '' }; // 输到一半的验证码（只在内存里）
+function sentGet() { try { const x = JSON.parse(store.get('rp_sudo_sent') || 'null'); return x && x.dev === devTag() && Date.now() >= x.at && Date.now() - x.at < SENT_MS ? x : null; } catch (e) { return null; } }
+function sentSet(x) { if (x) store.set('rp_sudo_sent', JSON.stringify({ ...x, dev: devTag() })); else store.del('rp_sudo_sent'); CODE.val = ''; CODE.tried = ''; }
+const resendLeft = () => { const s = sentGet(); return s ? Math.max(0, RESEND_S - Math.floor((Date.now() - s.at) / 1000)) : 0; };
+let rsTimer = 0;
+function resendTick() {
+	clearInterval(rsTimer);
+	const upd = () => {
+		const l = resendLeft(), bs = document.querySelectorAll('[data-resend]');
+		bs.forEach((b) => { if (b.querySelector('.spin')) return; b.disabled = l > 0; b.textContent = l > 0 ? '重新发一个（' + l + ' 秒后）' : '没收到？重新发一个'; });
+		if (!l || !bs.length) clearInterval(rsTimer);
+	};
+	rsTimer = setInterval(upd, 1000); upd();
+}
+// 验证码这一块（敏感信息里、「先确认是你本人」弹窗里共用）：没发过显示「发验证码」，发过了显示输入框
+function codeHtml(email) {
+	const s = sentGet();
+	if (!s) return `<button class="btn primary" data-send style="width:100%">发验证码到 ${esc(email || '我的邮箱')}</button>`;
+	return `<div class="mpcode"><p class="mphint muted">验证码发到了 ${esc(s.mail || email || '你的邮箱')}，10 分钟内有效</p>
+	<input class="input nccode" data-code inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" aria-label="验证码">
+	<button class="btn primary" data-ok style="width:100%;margin-top:10px">确认</button>
+	<button class="btn" data-send data-resend style="width:100%;margin-top:8px">没收到？重新发一个</button></div>`;
+}
+// 发验证码：官网没开邮件服务时直接确认（返回 ok）；发出去了返回 sent；出错已经提示过，返回 undefined
+async function sudoSend(btn, want) {
 	return busy(btn, async () => {
 		const r = await P('fam', { op: 'sudo_code' }, 30000);
-		if (r.nomail) { const x = await P('fam', { op: 'sudo', code: '' }, 30000); sudoSet({ tok: x.sudo, exp: x.exp }); return 'ok'; }
-		box.classList.remove('hidden'); box.querySelector('.mphint').textContent = '验证码发到了 ' + (r.mail || '你的邮箱') + '，10 分钟内有效';
-		setTimeout(() => { try { box.querySelector('input').focus(); } catch (e) {} }, 60);
-		return 'sent';
+		if (r.nomail) { const x = await P('fam', { op: 'sudo', code: '', want: want ? 'secret' : undefined }, 30000); sudoSet({ tok: x.sudo, exp: x.exp }); sentSet(null); return { ok: true, secret: x.secret }; }
+		sentSet({ at: Date.now(), mail: r.mail || '' });
+		return { sent: true };
 	}, '发送中');
 }
-async function sudoCheck(btn, input) {
-	const code = input.value.replace(/\D/g, '');
-	if (code.length !== 6) { toast('验证码是 6 位数字', true); return false; }
-	return busy(btn, async () => { const x = await P('fam', { op: 'sudo', code }, 30000); sudoSet({ tok: x.sudo, exp: x.exp }); return true; }, '核对中');
+// 核对验证码：对了返回 ok（want 时顺带敏感信息）；过期了返回 expired（要重新发）；其他错误已经提示过
+async function sudoVerify(btn, code, want) {
+	return busy(btn, async () => {
+		try {
+			const x = await P('fam', { op: 'sudo', code, want: want ? 'secret' : undefined }, 30000);
+			sudoSet({ tok: x.sudo, exp: x.exp }); sentSet(null);
+			return { ok: true, secret: x.secret };
+		} catch (e) { if (/过期/.test(e.message)) { sentSet(null); return { expired: true, msg: e.message }; } throw e; }
+	}, '核对中');
 }
+// 绑定验证码这一块：输满 6 位自动确认（同一串不重复提交）；opts.done(结果) 确认成功后；opts.redraw(要不要聚焦) 发出 / 过期后重画
+function codeBind(root, opts) {
+	const inp = root.querySelector('[data-code]');
+	if (inp && CODE.val) inp.value = CODE.val; // 输到一半的（不写进 HTML，内容不变时整块就不用重画）
+	const check = async () => {
+		const b = root.querySelector('[data-ok]'); if (!b || b.disabled) return;
+		const v = ((inp && inp.value) || '').replace(/\D/g, '');
+		if (v.length !== 6) { toast('验证码是 6 位数字', true); return; }
+		CODE.tried = v;
+		if (opts.before) opts.before();
+		const r = await sudoVerify(b, v, opts.want);
+		if (r && r.ok) opts.done(r);
+		else if (r && r.expired) { toast(r.msg, true); opts.redraw(false); }
+		else if (inp && inp.isConnected && document.activeElement === inp) inp.select();
+	};
+	if (inp) {
+		inp.oninput = () => {
+			const v = inp.value.replace(/\D/g, '').slice(0, 6);
+			if (inp.value !== v) inp.value = v;
+			CODE.val = v;
+			if (v.length === 6 && v !== CODE.tried) check();
+		};
+		inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); check(); } };
+	}
+	const okb = root.querySelector('[data-ok]'); if (okb) okb.onclick = check;
+	const sb = root.querySelector('[data-send]');
+	if (sb) sb.onclick = async () => {
+		const r = await sudoSend(sb, opts.want);
+		if (r && r.ok) opts.done(r);
+		else if (r && r.sent) opts.redraw(true);
+	};
+	resendTick();
+}
+const codeFocus = (root) => setTimeout(() => { const i = root.querySelector('[data-code]'); if (i && i.isConnected) i.focus(); }, 60);
 // 弹一个框确认本人，成功返回凭证
 function needSudo(why) {
 	if (sudoOn()) return Promise.resolve(SUDO.tok);
+	const email = (ME && ME.me && ME.me.email) || '';
 	return modal(`<div class="sheethead"><h3>先确认是你本人</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<p class="muted" style="margin:0 0 12px;line-height:1.7">${esc(why || '这个操作要先确认是你本人')}：发一个验证码到你的官网账号邮箱，输进来就行。10 分钟内不用再输。</p>
-	<button class="btn primary" data-send style="width:100%">发验证码到 ${esc((ME && ME.me && ME.me.email) || '我的邮箱')}</button>
-	<div class="mpcode hidden" data-cbox><p class="mphint muted"></p><input class="input nccode" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code"><button class="btn primary" data-ok style="width:100%;margin-top:10px">确认</button></div>`,
+	<div data-cwrap>${codeHtml(email)}</div>`,
 	(m, close) => {
-		const box = m.querySelector('[data-cbox]'), inp = box.querySelector('input');
-		m.querySelector('[data-send]').onclick = async (e) => { const r = await sudoCode(e.currentTarget, box); if (r === 'ok') close(SUDO.tok); else if (r === 'sent') e.target.closest('button').textContent = '重新发一个'; };
-		const go2 = async () => { if (await sudoCheck(box.querySelector('[data-ok]'), inp)) close(SUDO.tok); };
-		box.querySelector('[data-ok]').onclick = go2; inp.onkeydown = (e) => { if (e.key === 'Enter') go2(); };
+		const w = m.querySelector('[data-cwrap]');
+		const opts = { done: () => close(SUDO.tok), redraw: (f) => { w.innerHTML = codeHtml(email); codeBind(w, opts); if (f) codeFocus(w); } };
+		codeBind(w, opts);
 	});
 }
 // 调要确认本人的接口：凭证过期了自动再确认一次
@@ -1725,21 +1789,66 @@ async function famSudo(op, args, why) {
 	try { return await P('fam', { op, sudo: tok, ...args }, 30000); }
 	catch (e) { if (/确认是你本人/.test(e.message)) { sudoSet(null); tok = await needSudo(why); if (!tok) return null; return P('fam', { op, sudo: tok, ...args }, 30000); } throw e; }
 }
-const MP = { sec: null, log: null, logAll: false, mem: null };
-let mpTimer = 0;
-async function loadMe() {
-	const box = $('meBox');
-	await svcLoad(false);
-	if (!SVC || !SVC.hosted) { box.innerHTML = '<section class="card empty">这台路由器没有用托管服务，没有官网账号信息。</section>'; return; }
-	if (!store.get('rp_dev') || ME_ROLE.emerg) { box.innerHTML = '<section class="card empty" style="line-height:1.7">你是用路由器终端的应急登录码进来的，看不到官网账号的信息。<br>从官网「我的路由器」点「打开面板」进来以后，这里会显示你的主页。</section>'; return; }
-	await meLoad(true);
-	if (!ME || !ME.me) { box.innerHTML = '<section class="card empty">读不到账号信息，检查一下路由器能不能连上官网，稍后再试。</section>'; return; }
-	try { MP.mem = await P('fam', { op: 'members' }, 30000); } catch (e) { MP.mem = null; }
-	try { MP.log = (await P('fam', { op: 'log' }, 30000)).list || []; } catch (e) { MP.log = null; }
-	if (sudoOn() && !MP.sec) { try { MP.sec = await P('fam', { op: 'secret', sudo: SUDO.tok }, 30000); } catch (e) { MP.sec = null; } }
-	if (!sudoOn()) MP.sec = null;
+const MP = { sec: null, log: null, logAll: false, mem: null, devs: null, h: '' };
+let mpTimer = 0, mpSeq = 0, mpDevP = null;
+// 上次读到的家人、操作记录（只存在这台手机上）：再打开「我的主页」先显示这些，后台再拿最新的
+try { const c = JSON.parse(store.get('rp_mp') || 'null'); if (c && c.dev && c.dev === devTag()) { MP.mem = c.mem || null; MP.log = c.log || null; } } catch (e) {}
+function mpSave() {
+	let t = JSON.stringify({ dev: devTag(), mem: MP.mem, log: (MP.log || []).slice(0, 30) });
+	if (t.length > 300e3 && MP.mem) t = JSON.stringify({ dev: devTag(), mem: { ...MP.mem, subs: (MP.mem.subs || []).map((x) => ({ ...x, avatar: '' })), owner: MP.mem.owner && { ...MP.mem.owner, avatar: '' } }, log: (MP.log || []).slice(0, 30) });
+	store.set('rp_mp', t);
+}
+function mpEmpty(html) { MP.h = ''; $('meBox').innerHTML = html; }
+// 一次拿全（我是谁、家人、操作记录，确认过本人的再加敏感信息）；官网还没更新的话照旧分开拿（同时发出去）
+async function mpFetch() {
+	const tok = sudoOn() ? SUDO.tok : undefined, mine = () => tok && sudoOn() && SUDO.tok === tok;
+	let r;
+	try { r = await P('fam', { op: 'page', sudo: tok }, 30000); }
+	catch (e) {
+		if (!/not found|不支持/.test(e.message)) return false;
+		const q = (op, a) => P('fam', { op, ...a }, 30000).catch(() => null);
+		const [me, mem, log, sec] = await Promise.all([q('me'), q('members'), q('log'), tok ? q('secret', { sudo: tok }) : null]);
+		if (!me) return false;
+		r = { me, members: mem, log: log ? log.list || [] : null, secret: sec };
+	}
+	ME = { at: Date.now(), ...r.me }; store.set('rp_me', JSON.stringify(ME)); meRender();
+	MP.mem = r.members || null; MP.log = r.log || null;
+	if (mine()) { if (r.secret) MP.sec = r.secret; else { sudoSet(null); MP.sec = null; MP.devs = null; } }
+	mpSave();
+	return true;
+}
+async function loadMe(quiet) {
+	const my = ++mpSeq;
+	const why = () => (!SVC || !SVC.hosted ? 'nohost' : !store.get('rp_dev') || ME_ROLE.emerg ? 'emerg' : '');
+	const showWhy = () => mpEmpty(why() === 'nohost' ? '<section class="card empty">这台路由器没有用托管服务，没有官网账号信息。</section>' : '<section class="card empty" style="line-height:1.7">你是用路由器终端的应急登录码进来的，看不到官网账号的信息。<br>从官网「我的路由器」点「打开面板」进来以后，这里会显示你的主页。</section>');
+	if (!sudoOn()) { MP.sec = null; MP.devs = null; }
+	// 先把上次的显示出来（打开就有内容），后台再拿最新的
+	if (SVC && !why() && ME && ME.me) mpDraw();
+	else if (!(SVC && why())) mpEmpty('<section class="card empty">读取中…</section>');
+	const sv = svcLoad(false, true);
+	if (!SVC || why()) { await sv; if (my !== mpSeq) return; if (why()) return showWhy(); }
+	const [ok, devs] = await Promise.all([mpFetch(), sudoOn() ? P('device_list').catch(() => null) : null, sv]);
+	if (my !== mpSeq) return;
+	if (why()) return showWhy();
+	if (devs && sudoOn()) MP.devs = devs;
+	if (!ME || !ME.me) return mpEmpty('<section class="card empty">读不到账号信息，检查一下路由器能不能连上官网，稍后再试。</section>');
+	if (!ok && !quiet) toast('读不到最新的，下面是上次的', true);
 	mpDraw();
 }
+// 敏感信息里验证码对了：凭证和敏感信息一起回来，能打开面板的手机在核对的同时读
+const mpCodeOpts = {
+	want: true,
+	before: () => { mpDevP = P('device_list').catch(() => null); },
+	done: async (r) => {
+		const dp = mpDevP || P('device_list').catch(() => null); mpDevP = null;
+		let sec = r.secret || null;
+		if (!sec) sec = await P('fam', { op: 'secret', sudo: SUDO.tok }, 30000).catch((e) => { toast(e.message, true); return null; });
+		MP.sec = sec; MP.devs = await dp;
+		mpDraw();
+	},
+	redraw: (f) => { mpDraw(); if (f) codeFocus($('meBox')); },
+};
+const agoSec = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 const ymdhm = (t) => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const ymdz = (t) => { const d = new Date(t); return d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日'; };
 function mpDraw() {
@@ -1776,22 +1885,24 @@ function mpDraw() {
 		h += `<p class="mp-note" style="text-align:left">想多开一些功能，找主账号在「我的主页 → 家人」里改。</p><button class="btn danger" data-mp="leave" style="width:100%;margin-top:10px">退出这台路由器</button>`;
 	}
 	h += '</section>';
-	// 敏感信息
+	// 敏感信息：联系方式、能打开这个面板的手机、登录记录（官网的密码、官网上登录的设备在官网「账号设置」里管）
 	if (!sudoOn() || !MP.sec) {
 		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">
 		<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
 		<h3>验证一下才能看</h3>
-		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机电脑登录着你的官网账号，能退出</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录，成功还是失败</span></li></ul>
-		<button class="btn primary" data-mp="unlock" style="width:100%">发验证码到 ${esc(me.email || '我的邮箱')}</button>
-		<div class="mpcode hidden" id="mpCode"><p class="mphint muted"></p><input class="input nccode" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" aria-label="验证码"><button class="btn primary" data-mp="unlock2" style="width:100%;margin-top:10px">确认</button></div>
+		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机能打开这个面板，不认识的马上移除</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录官网，成功还是失败</span></li></ul>
+		<div data-cwrap>${codeHtml(me.email)}</div>
 		<p class="mp-note">验证一次，这个页面 10 分钟内不用再输</p></section>`;
 	} else {
-		const x = MP.sec, mins = Math.max(0, Math.ceil((SUDO.exp - Date.now()) / 1000));
+		const x = MP.sec, D = MP.devs, mins = Math.max(0, Math.ceil((SUDO.exp - Date.now()) / 1000)), hub = s.hub || '';
+		const dl = D && D.list ? D.list : null;
 		h += `<div class="sectitle mp-sec-h"><b>敏感信息</b><span class="pill mpok" id="mpLeft">已验证 · ${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} 后自动锁上</span></div>
 		<div class="mp-sub">联系方式</div><section class="card"><dl class="mp-kv"><dt>登录邮箱</dt><dd>${esc(x.email)} <span class="${x.verified ? 'mp-ok' : 'mp-warn'}" style="font-size:12px">${x.verified ? '已验证' : '没验证'}</span></dd></dl></section>
-		<div class="mp-sub">官网上登录着的设备 · ${(x.sessions || []).length} 台</div><section class="card">${(x.sessions || []).map((d) => `<div class="mp-fb"><div><b>${esc(d.ua || '没记录设备')}</b><span>${esc([d.place, ymdhm(d.at) + ' 登录', d.last && d.last !== d.at ? '最近 ' + esc(ago(d.last)) : ''].filter(Boolean).join(' · '))}</span></div><button class="btn sm" data-mp="sout" data-i="${esc(d.id)}">退出</button></div>`).join('') || '<p class="muted" style="margin:0">没有设备登录着官网</p>'}
-		${(x.sessions || []).length ? '<button class="btn sm" data-mp="soutall" style="width:100%;margin-top:6px">全部退出</button>' : ''}</section>
+		<div class="mp-sub">登录着的设备${dl ? ' · ' + dl.length + ' 台' : ''}</div><section class="card">${!dl ? '<p class="muted" style="margin:0">读不到，稍后刷新再试</p>' : dl.map((d) => `<div class="mp-fb"><div><b>${esc(d.name)}${d.me ? ' <span class="pill blue">这台</span>' : ''}</b><span>${esc([new Date(d.at * 1000).toLocaleDateString('zh-CN') + ' 登录', d.via || '', d.me ? '' : '最近使用：' + (d.seen ? agoSec(d.seen) : '路由器重启后还没用过')].filter(Boolean).join(' · '))}</span></div>${d.me ? '' : `<button class="btn sm danger" data-mp="drm" data-i="${esc(d.id)}">移除</button>`}</div>`).join('') || '<p class="muted" style="margin:0">没有记录</p>'}
+		${dl && dl.length > 1 ? '<button class="btn sm danger" data-mp="drmall" style="width:100%;margin-top:6px">除了这台，全部移除</button>' : ''}</section>
+		<p class="mp-note" style="text-align:left;margin:7px 4px 0!important">${ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开这个面板。'}不认识的马上移除：移除后它要从官网重新打开才能进来。</p>
 		<div class="mp-sub">登录记录 · 最近 30 天</div><section class="card"><ul class="mp-tl">${(x.logins || []).slice(0, 20).map((l) => `<li><div class="d"${l.ok ? '' : ' style="color:#ff3b30"'}>${l.ok ? '✓' : '✕'}</div><div><b>${esc(l.ok ? ({ reg: '注册账号', reset: '重设密码' }[l.k] || '登录成功') : (l.why || '登录失败'))}</b><span>${esc([ymdhm(l.t), l.place, l.ua].filter(Boolean).join(' · '))}</span></div></li>`).join('') || '<li style="display:block"><span>最近 30 天没有登录记录</span></li>'}</ul></section>
+		${hub ? `<div class="mp-sub">官网账号</div><section class="card list" style="padding:4px 12px"><a class="file" href="${esc(hub + '/app#settings')}" target="_blank" rel="noopener" style="background:none;margin:4px 0"><div><b>官网账号设置</b><span class="muted">修改密码、官网上登录着的 ${(x.sessions || []).length} 台设备、注销账号</span></div><span class="muted">›</span></a></section>` : ''}
 		<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>`;
 	}
 	// 操作记录
@@ -1800,12 +1911,19 @@ function mpDraw() {
 	${!MP.logAll && L.length > 6 ? '<button class="btn sm" data-mp="logall" style="width:100%;margin-top:8px">看更多</button>' : ''}</section>`;
 	// 我的反馈
 	if (canPage('myfb')) h += `<section class="card list" style="margin-top:14px;padding:4px 12px"><button class="file" data-mp="fb" style="background:none;margin:4px 0"><div><b>我的反馈</b><span class="muted">处理到哪一步、开发者的回复</span></div><span class="muted">›</span></button></section>`;
-	box.innerHTML = h;
+	// 内容没变就不重画（比如从邮箱切回来时的自动刷新）：输到一半的验证码、键盘都保持原样
+	if (h !== MP.h || !box.firstElementChild) {
+		const ae = document.activeElement, foc = !!(ae && ae.matches && ae.matches('#meBox [data-code]')), sel = foc ? [ae.selectionStart, ae.selectionEnd] : null;
+		box.innerHTML = h; MP.h = h;
+		const cw = box.querySelector('[data-cwrap]');
+		if (cw) codeBind(cw, mpCodeOpts);
+		if (foc) { const i = box.querySelector('[data-code]'); if (i) { i.focus(); try { i.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+	}
 	clearInterval(mpTimer);
 	if (sudoOn() && MP.sec) mpTimer = setInterval(() => {
 		const el = $('mpLeft'); if (!el || page !== 'me') { clearInterval(mpTimer); return; }
 		const t = Math.ceil((SUDO.exp - Date.now()) / 1000);
-		if (t <= 0) { clearInterval(mpTimer); sudoSet(null); MP.sec = null; mpDraw(); return; }
+		if (t <= 0) { clearInterval(mpTimer); sudoSet(null); MP.sec = null; MP.devs = null; mpDraw(); return; }
 		el.textContent = '已验证 · ' + Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') + ' 后自动锁上';
 	}, 1000);
 }
@@ -1893,12 +2011,12 @@ $('meBox').addEventListener('click', async (e) => {
 	if (k === 'av') { const f = await pickFile('image/*'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
-	else if (k === 'unlock') { const r = await sudoCode(b, $('mpCode')); if (r === 'ok') loadMe(); else if (r === 'sent') b.textContent = '重新发一个'; }
-	else if (k === 'unlock2') { if (await sudoCheck(b, $('mpCode').querySelector('input'))) loadMe(); }
-	else if (k === 'lock') { sudoSet(null); MP.sec = null; mpDraw(); toast('已锁上'); }
-	else if (k === 'sout' || k === 'soutall') {
-		if (k === 'soutall' && !(await confirmBox('官网全部退出', '所有登录着你官网账号的设备都要重新登录（新设备还要收邮箱验证码）。这个面板不受影响。', '全部退出', true))) return;
-		busy(b, async () => { await famSudo('sess_out', k === 'sout' ? { id: b.dataset.i } : { all: true }, '退出官网的设备'); MP.sec = await P('fam', { op: 'secret', sudo: SUDO.tok }, 30000); mpDraw(); toast('已退出'); });
+	else if (k === 'lock') { sudoSet(null); MP.sec = null; MP.devs = null; mpDraw(); toast('已锁上'); }
+	// 能打开这个面板的手机：移除一台 / 除了这台全部移除（原来在「系统操作 → 已登录的手机」）
+	else if (k === 'drm' || k === 'drmall') {
+		const one = k === 'drm', nm = one ? (b.closest('.mp-fb').querySelector('b').firstChild || {}).textContent || '这台手机' : '';
+		if (!(await confirmBox(one ? '移除这台手机' : '移除其他所有手机', one ? '「' + nm.trim() + '」要从官网重新打开才能进来。' : '除了这台，其他手机都要从官网重新打开才能进来。', one ? '移除' : '全部移除', true))) return;
+		busy(b, async () => { await P('device_remove', one ? { id: b.dataset.i } : { all_others: true }); MP.devs = await P('device_list').catch(() => MP.devs); mpDraw(); toast('已移除'); });
 	}
 	else if (k === 'logall') { MP.logAll = true; mpDraw(); }
 	else if (k === 'fb') go('myfb');
@@ -1911,9 +2029,9 @@ $('meBox').addEventListener('click', async (e) => {
 		busy(b, async () => { await P('fam', { op: 'leave' }, 30000); store.del('rp_dev'); store.del('rp_me'); store.del('rp_role'); toast('已退出'); setTimeout(() => location.reload(), 900); });
 	}
 });
-async function svcLoad(force) {
+async function svcLoad(force, noMe) {
 	try { SVC = await P('svc_info', { force: !!force }); store.set('rp_svc', JSON.stringify(SVC)); } catch (e) {}
-	svcRender(); meLoad(false);
+	svcRender(); moreBtns(); if (!noMe) meLoad(false);
 	return SVC;
 }
 try { SVC = JSON.parse(store.get('rp_svc') || 'null'); } catch (e) {}
@@ -1936,7 +2054,8 @@ async function svcSheet() {
 		};
 	});
 }
-function moreBtns() { $('devsBtn').classList.toggle('hidden', !store.get('rp_dev')); $('ckeyBtn').classList.toggle('hidden', store.get('rp_ai') !== '1'); }
+// 「已登录的手机」：从官网打开面板的，挪到了「我的主页 → 敏感信息」；用应急登录码进来的（看不到我的主页）、不是托管版的，还在系统操作里
+function moreBtns() { $('devsBtn').classList.toggle('hidden', !store.get('rp_dev') || !!(SVC && SVC.hosted && !ME_ROLE.emerg)); $('ckeyBtn').classList.toggle('hidden', store.get('rp_ai') !== '1'); }
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 function devList() {
 	modal(`<div class="sheethead"><h3>已登录的手机</h3><button class="btn sm" data-v="close">关闭</button></div><div data-dl><div class="muted" style="padding:20px 0;text-align:center">读取中…</div></div>`, (m, close) => {

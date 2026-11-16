@@ -49,6 +49,17 @@ const AND = 'Mozilla/5.0 (Linux; Android 15; 23127PN0CC) AppleWebKit/537.36 Chro
 	ok('弹窗打开了', (await page.locator('.modal').count()) === 1);
 	await back(page);
 	ok('安卓：返回键先关弹窗，不退出', onPanel(page) && (await page.locator('.modal').count()) === 0);
+	// 正在输入（键盘开着）：返回只收起键盘，不关弹窗、不退出（5.2.2：输验证码时想先收起键盘）
+	await page.goto('http://localhost:8090/panel/?p=main'); await page.waitForTimeout(1800);
+	await page.click('#menuBtn'); await page.waitForTimeout(500); await page.click('#sideFb'); await page.waitForTimeout(700);
+	const fld = '.modal:not(.closing) textarea';
+	ok('反馈弹窗打开了（有输入框）', (await page.locator(fld).count()) >= 1);
+	await page.locator(fld).first().click(); await page.keyboard.type('12'); await page.waitForTimeout(200);
+	await back(page);
+	ok('安卓：输入框里正在打字时按返回：只收起键盘，弹窗还在、打的字还在', onPanel(page) && (await page.locator('.modal:not(.closing)').count()) === 1 && (await page.locator(fld).first().inputValue()) === '12' && !(await page.evaluate(() => document.activeElement && document.activeElement.matches('.modal textarea'))));
+	await page.locator('.modal:not(.closing) h3').first().click(); await page.waitForTimeout(200);
+	await back(page);
+	ok('安卓：键盘收起后再按返回：关弹窗', onPanel(page) && (await page.locator('.modal:not(.closing)').count()) === 0);
 	// 电脑 / 苹果手机：不拦
 	page = await mk('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1');
 	await page.click('#pageTitle'); await page.waitForTimeout(200);

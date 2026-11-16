@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="pill" data-ground="sage" data-motion>
+<head>
+<meta charset="utf-8">
+<title>更新日志 · 路由器面板</title>
+<meta name="description" content="路由器面板每个版本更新了什么。内容是 GitHub 上每次发布的说明原文，新版本发布后几分钟内自动同步。">
+<!--KIT_HEAD-->
+<style>
+/* ---------- 更新日志：上面是发布节奏图（每根柱子一个版本，越高改动越多），下面是每个版本的发布说明原文 ---------- */
+.cl-hero { padding-bottom: clamp(28px, 4vw, 44px); }
+.cl-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 28px; flex-wrap: wrap; }
+.cl-top h1 { margin: 0 !important; }
+.cl-live { display: inline-flex; align-items: center; gap: 9px; margin: 0 0 6px; padding: 7px 14px 7px 12px; border-radius: 99px; background: var(--glass); border: 1px solid var(--hair); font-size: 13.5px; color: var(--muted); white-space: nowrap; }
+.cl-live i { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.cl-live i::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: clPing 2.4s ease-out infinite; }
+.cl-live b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cl-live.off i { background: #f59e0b; } .cl-live.off i::after { display: none; }
+@keyframes clPing { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.6); opacity: 0; } }
+
+/* 发布节奏图 */
+.cl-pulse { position: relative; margin: clamp(26px, 4vw, 40px) 0 0; height: clamp(150px, 20vw, 210px); }
+.cl-pulse svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.cl-bar { fill: color-mix(in oklab, var(--accent) 38%, var(--p-surface)); transition: fill .2s; cursor: pointer; }
+.cl-bar.major { fill: color-mix(in oklab, var(--accent) 72%, var(--p-surface)); }
+.cl-bar.last { fill: var(--accent); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--accent) 70%, transparent)); }
+.cl-bar:hover, .cl-bar.hot { fill: var(--ink); }
+.cl-cap { fill: var(--accent); }
+.cl-halo { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; animation: clHalo 2.4s ease-out infinite; }
+@keyframes clHalo { 0% { opacity: .9; transform: scale(.5); } 100% { opacity: 0; transform: scale(2.4); } }
+.cl-base { stroke: var(--hair); stroke-width: 1; }
+.cl-lab { fill: var(--muted); font: 500 11.5px/1 var(--font-text); }
+.cl-lab.v { fill: color-mix(in oklab, var(--ink) 80%, var(--bg)); font-weight: 600; }
+.cl-scan { fill: url(#clScanG); pointer-events: none; }
+.cl-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 12px)); padding: 7px 11px; border-radius: 12px; background: #1c2723; border: 1px solid var(--hair); box-shadow: 0 12px 30px -12px #000; font-size: 13px; white-space: nowrap; pointer-events: none; }
+.cl-tip b { color: var(--accent); font-weight: 650; margin-right: 6px; }
+
+.cl-stats { display: flex; gap: 10px; margin: clamp(22px, 3vw, 30px) 0 0; }
+.cl-stats > div { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column-reverse; justify-content: flex-end; padding: 14px 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--hair); }
+.cl-stats dd { margin: 0; font-size: clamp(24px, 3vw, 34px); line-height: 1.1; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cl-stats dt { margin: 5px 0 0; font-size: 13px; color: var(--muted); }
+.cl-stats > div:first-child dd { color: var(--accent); }
+
+/* 筛选 */
+.cl-body { padding: clamp(28px, 4vw, 44px) 0 clamp(56px, 8vw, 96px); }
+.cl-filter { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 clamp(22px, 3vw, 34px); }
+.cl-filter button { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px; border-radius: 99px; border: 1px solid var(--hair); background: none; color: var(--muted); font: 500 14px/1 var(--font-text); cursor: pointer; transition: color .2s, background-color .2s, border-color .2s; }
+.cl-filter button span { font-variant-numeric: tabular-nums; opacity: .7; }
+.cl-filter button:hover { color: var(--ink); }
+.cl-filter button[aria-pressed="true"] { color: var(--p-accent-ink); background: var(--accent); border-color: var(--accent); }
+
+/* 时间线：左边一条线，读到哪亮到哪 */
+.cl-list { --prog: 0px; position: relative; list-style: none; margin: 0; padding: 0 0 0 30px; }
+.cl-list::before, .cl-list::after { content: ""; position: absolute; left: 7px; top: 10px; width: 2px; border-radius: 2px; }
+.cl-list::before { bottom: 10px; background: var(--hair); }
+.cl-list::after { height: var(--prog); max-height: calc(100% - 20px); background: linear-gradient(to bottom, var(--accent), color-mix(in oklab, var(--accent) 35%, transparent)); box-shadow: 0 0 12px color-mix(in oklab, var(--accent) 60%, transparent); }
+.cl-rel { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 0 0 clamp(30px, 4vw, 44px); scroll-margin-top: calc(var(--nav) + 20px); }
+.cl-rel[hidden] { display: none; }
+.cl-dot { position: absolute; left: -30px; top: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--p-bg); border: 2px solid color-mix(in oklab, var(--ink) 22%, transparent); transition: border-color .3s, box-shadow .3s, background-color .3s; }
+.cl-rel.on .cl-dot { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 30%, var(--p-bg)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 14%, transparent); }
+.cl-rel.major .cl-dot { width: 20px; height: 20px; left: -32px; top: 4px; }
+.cl-when { min-width: 0; }
+.cl-v { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.cl-v a { color: inherit; text-decoration: none; }
+.cl-meta { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin-top: 8px; font-size: 13.5px; color: var(--muted); }
+.cl-meta time { color: color-mix(in oklab, var(--ink) 78%, var(--bg)); }
+.cl-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 99px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.cl-tag.must { color: #fbbf24; background: rgb(251 191 36 / .12); }
+.cl-tag.sec { color: #60a5fa; background: rgb(96 165 250 / .12); }
+.cl-tag.major { color: var(--accent); background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.cl-tag.first { color: var(--ink); background: color-mix(in oklab, var(--ink) 10%, transparent); }
+.cl-tag.new { color: var(--p-accent-ink); background: var(--accent); }
+.cl-card { min-width: 0; padding: clamp(18px, 2.4vw, 24px); border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); }
+.cl-g + .cl-g { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hair); }
+.cl-g h3 { margin: 0 0 10px; font-size: 15.5px; font-weight: 650; color: var(--ink); }
+.cl-g ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.cl-g li { position: relative; padding-left: 16px; font-size: 15px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 76%, var(--bg)); overflow-wrap: anywhere; }
+.cl-g li::before { content: ""; position: absolute; left: 1px; top: .78em; width: 5px; height: 5px; border-radius: 50%; background: color-mix(in oklab, var(--accent) 70%, transparent); }
+.cl-g li b { color: var(--ink); font-weight: 650; }
+.cl-g li code { font: 13.5px/1 var(--font-mono); padding: 2px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
+.cl-g li.x, .cl-g.x { display: none; }
+.cl-card.open .cl-g li.x, .cl-card.open .cl-g.x { display: block; }
+.cl-note { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
+.cl-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--hair); background: none; color: var(--ink); font: 500 14px/1 var(--font-text); cursor: pointer; }
+.cl-more:hover { border-color: color-mix(in oklab, var(--accent) 50%, var(--hair)); }
+.cl-more svg { width: 15px; height: 15px; transition: transform .25s; }
+.cl-card.open .cl-more svg { transform: rotate(180deg); }
+.cl-rel.is-new .cl-card { animation: clNew 2.4s ease-out 1; border-color: color-mix(in oklab, var(--accent) 60%, var(--hair)); }
+@keyframes clNew { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent); transform: translateY(-8px); opacity: 0; } 25% { opacity: 1; transform: none; } 100% { box-shadow: 0 0 0 14px transparent; } }
+.cl-empty { padding: 28px 0; color: var(--muted); font-size: 15px; }
+.cl-src { margin: 8px 0 0 30px; font-size: 13.5px; color: var(--muted); }
+.cl-src a { color: inherit; }
+.cl-toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 50; transform: translate(-50%, 20px); opacity: 0; padding: 11px 18px; border-radius: 99px; background: var(--accent); color: var(--p-accent-ink); font-weight: 600; font-size: 14.5px; box-shadow: 0 16px 40px -14px #000; transition: opacity .3s, transform .3s; pointer-events: none; }
+.cl-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* 电脑：版本号和日期在左边一栏，往下读的时候跟着停在上面 */
+@media (min-width: 900px) {
+  .cl-list { padding-left: 40px; }
+  .cl-list::before, .cl-list::after { left: 9px; }
+  .cl-dot { left: -40px; } .cl-rel.major .cl-dot { left: -42px; }
+  .cl-rel { grid-template-columns: 210px minmax(0, 1fr); gap: 32px; }
+  .cl-when { position: sticky; top: calc(var(--nav) + 24px); align-self: start; }
+  .cl-meta { flex-direction: column; align-items: flex-start; }
+  .cl-src { margin-left: 40px; }
+}
+@media (max-width: 639px) {
+  .cl-stats { gap: 6px; }
+  .cl-stats > div { padding: 10px 8px; text-align: center; border-radius: 14px; }
+  .cl-stats dd { font-size: 20px; }
+  .cl-stats dt { font-size: 11.5px; }
+  .cl-live { margin: 0; }
+  .cl-g li { font-size: 14.5px; }
+}
+@media (max-width: 379px) {
+  .cl-stats { flex-wrap: wrap; }
+  .cl-stats > div { flex: 1 1 calc(50% - 3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-live i::after, .cl-halo { animation: none; }
+  .cl-rel.is-new .cl-card { animation: none; }
+}
+</style>
+</head>
+<body>
+<!--KIT_NAV-->
+<main id="main">
+  <div class="pg-hero cl-hero">
+    <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="11" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="cl-top">
+        <div>
+          <h1>更新日志。</h1>
+          <p class="pg-sub" id="clSub">每个版本更新了什么。内容是 GitHub 上每次发布的说明原文，新版本发布后几分钟内自动出现在这里。</p>
+        </div>
+        <p class="cl-live" id="clLive" role="status"><i aria-hidden="true"></i><span>实时同步</span></p>
+      </div>
+      <figure class="cl-pulse" id="clPulse" aria-label="发布节奏：每根柱子是一个版本，柱子越高改动越多" hidden>
+        <svg id="clSvg" role="img" aria-hidden="true"></svg>
+        <div class="cl-tip" id="clTip" hidden></div>
+      </figure>
+      <dl class="cl-stats" id="clStats" hidden>
+        <div><dt>当前版本</dt><dd id="stV">—</dd></div>
+        <div><dt>版本数</dt><dd id="stN">—</dd></div>
+        <div><dt>改动条目</dt><dd id="stI">—</dd></div>
+        <div><dt>开发天数</dt><dd id="stD">—</dd></div>
+      </dl>
+    </div>
+  </div>
+  <div class="cl-body">
+    <div class="wrap">
+      <div class="cl-filter" id="clFilter" role="group" aria-label="只看" hidden>
+        <button type="button" data-f="all" aria-pressed="true">全部<span id="fAll"></span></button>
+        <button type="button" data-f="major" aria-pressed="false">大版本<span id="fMajor"></span></button>
+        <button type="button" data-f="sec" aria-pressed="false">安全<span id="fSec"></span></button>
+        <button type="button" data-f="must" aria-pressed="false">必须更新<span id="fMust"></span></button>
+      </div>
+      <ol class="cl-list" id="clList"><li class="cl-empty">正在读取更新日志…</li></ol>
+      <p class="cl-src">内容来自 <a href="https://github.com/wznwzn123/openwrt-claude-panel/releases" rel="noopener">GitHub 发布页</a>。</p>
+    </div>
+  </div>
+</main>
+<div class="cl-toast" id="clToast" role="status" aria-live="polite"></div>
+<!--KIT_FOOT-->
+<!--KIT_JS-->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // 发布说明里只保留加粗和代码两种标记：先转义，再换成标签
+  const rich = (s) => esc(s).replace(/\*\*([^*]+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+?)`/g, '<code>$1</code>');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DAY = 864e5;
+  const md = (t) => { const d = new Date(t); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日'; };
+  const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < DAY / 1000 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+  const count = (r) => r.groups.reduce((n, g) => n + g.items.length, 0);
+  const SHOW = 5; // 每个版本先显示 5 条，多的点「展开」
+  let L = [], known = new Set(), filter = 'all', first = true;
+
+  function relHtml(r, isNew) {
+    const n = count(r), tags = [];
+    if (isNew) tags.push('<span class="cl-tag new">刚刚发布</span>');
+    if (r.first) tags.push('<span class="cl-tag first">首个版本</span>');
+    else if (r.major) tags.push('<span class="cl-tag major">大版本</span>');
+    if (r.must) tags.push('<span class="cl-tag must">必须更新</span>');
+    if (r.sec) tags.push('<span class="cl-tag sec">安全</span>');
+    let shown = 0;
+    const gs = r.groups.map((g) => {
+      const hideG = shown >= SHOW;
+      const items = g.items.map((x) => { const cls = shown++ >= SHOW ? ' class="x"' : ''; return '<li' + cls + '>' + rich(x) + '</li>'; }).join('');
+      return '<section class="cl-g' + (hideG ? ' x' : '') + '">' + (g.t ? '<h3>' + esc(g.t) + '</h3>' : '') + '<ul>' + items + '</ul></section>';
+    }).join('');
+    const more = n > SHOW ? '<button type="button" class="cl-more" aria-expanded="false"><span>展开全部 ' + n + ' 条</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>' : '';
+    const id = r.v.replace(/\./g, '-');
+    return '<li class="cl-rel' + (r.major ? ' major' : '') + (isNew ? ' is-new' : '') + '" id="' + id + '" data-v="' + esc(r.v) + '">'
+      + '<span class="cl-dot" aria-hidden="true"></span>'
+      + '<div class="cl-when"><h2 class="cl-v"><a href="#' + id + '">' + esc(r.v) + '</a></h2><div class="cl-meta">'
+      + (r.at ? '<time datetime="' + new Date(r.at).toISOString() + '">' + md(r.at) + '</time><span class="cl-ago" data-t="' + r.at + '">' + ago(r.at) + '</span>' : '<span>最新</span>')
+      + (tags.length ? '<span class="cl-tags">' + tags.join(' ') + '</span>' : '') + '</div></div>'
+      + '<div class="cl-card">' + gs + (r.note ? '<p class="cl-note">' + esc(r.note) + '</p>' : '') + more + '</div></li>';
+  }
+  const keep = (r) => filter === 'all' || !!r[filter];
+  function applyFilter() {
+    document.querySelectorAll('#clList .cl-rel').forEach((li) => { const r = L.find((x) => x.v === li.dataset.v); li.hidden = !r || !keep(r); });
+    document.querySelectorAll('#clFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
+    rail();
+  }
+  function stats() {
+    const last = L[0], firstR = L[L.length - 1];
+    $('stV').textContent = last ? last.v : '—';
+    $('stN').textContent = L.length;
+    $('stI').textContent = L.reduce((n, r) => n + count(r), 0);
+    $('stD').textContent = firstR && firstR.at ? Math.max(1, Math.ceil((Date.now() - firstR.at) / DAY)) : '—';
+    $('fAll').textContent = L.length; $('fMajor').textContent = L.filter((r) => r.major).length; $('fSec').textContent = L.filter((r) => r.sec).length; $('fMust').textContent = L.filter((r) => r.must).length;
+    const ls = L.filter((r) => r.at);
+    $('clSub').textContent = L.length + ' 个版本' + (ls.length ? '，' + Math.max(1, Math.ceil((Date.now() - ls[ls.length - 1].at) / DAY)) + ' 天' : '') + '。内容是 GitHub 上每次发布的说明原文，新版本发布后几分钟内自动出现在这里。';
+  }
+  // 数字从 0 滚到真实的值（只在第一次显示时）
+  function roll() {
+    if (reduced) return;
+    ['stN', 'stI', 'stD'].forEach((id, k) => {
+      const el = $(id), to = +el.textContent; if (!(to > 0)) return;
+      const t0 = performance.now() + k * 90, dur = 1100;
+      const step = (now) => { const p = Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(to * e); if (p < 1) requestAnimationFrame(step); };
+      el.textContent = '0'; requestAnimationFrame(step);
+    });
+  }
+
+  // 发布节奏图：按时间先后从左到右，一个版本一根柱子；柱子高低按改动条数（开平方，免得大版本把别的压扁）
+  function chart(anim) {
+    const svg = $('clSvg'), box = $('clPulse');
+    const R = L.slice().reverse(), W = box.clientWidth, H = box.clientHeight;
+    if (!R.length || !W) return;
+    const top = 26, bot = 24, n = R.length, gap = W / n, bw = Math.max(4, Math.min(16, gap * 0.46));
+    const max = Math.max(...R.map((r) => Math.sqrt(count(r))));
+    const h = (r) => Math.max(10, (Math.sqrt(count(r)) / max) * (H - top - bot));
+    const x = (i) => gap * i + gap / 2;
+    let s = '<defs><linearGradient id="clScanG" x1="0" x2="1"><stop offset="0" stop-color="#4ade80" stop-opacity="0"/><stop offset=".5" stop-color="#4ade80" stop-opacity=".22"/><stop offset="1" stop-color="#4ade80" stop-opacity="0"/></linearGradient></defs>';
+    s += '<line class="cl-base" x1="0" x2="' + W + '" y1="' + (H - bot + .5) + '" y2="' + (H - bot + .5) + '"/>';
+    R.forEach((r, i) => {
+      const hh = h(r), last = i === n - 1;
+      s += '<rect class="cl-bar' + (r.major ? ' major' : '') + (last ? ' last' : '') + '" data-i="' + i + '" x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + (H - bot - hh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="' + (bw / 2).toFixed(1) + '" style="transform-origin:' + x(i).toFixed(1) + 'px ' + (H - bot) + 'px"/>';
+      if (last) s += '<circle class="cl-halo" cx="' + x(i).toFixed(1) + '" cy="' + (H - bot - hh).toFixed(1) + '" r="' + (bw * .9).toFixed(1) + '"/>';
+      // 大版本、第一版、最新一版在柱子上方写版本号（电脑上写全，手机上只写大版本号）
+      if ((r.major && (n - 1 - i) * gap >= (W < 560 ? 52 : 70)) || last) { const lab = W < 560 && !last ? r.v.replace(/\.0\.0$/, '') : r.v; s += '<text class="cl-lab v" x="' + x(i).toFixed(1) + '" y="' + (H - bot - hh - (last ? 12 + bw : 9)).toFixed(1) + '" text-anchor="' + (last ? 'end' : i === 0 ? 'start' : 'middle') + '" dx="' + (last ? bw / 2 : i === 0 ? -bw / 2 : 0) + '">' + esc(lab) + '</text>'; }
+    });
+    // 下面的日期：第一天、每个大版本那天、最后一天（挤不下就不写）
+    let lastX = -999, lastLab = '';
+    const endX = x(n - 1);
+    R.forEach((r, i) => {
+      if (!r.at || !(i === 0 || i === n - 1 || r.major)) return;
+      const xx = x(i), lab = (new Date(r.at).getMonth() + 1) + '/' + new Date(r.at).getDate();
+      if (lab === lastLab || xx - lastX < 44) return;
+      if (i !== n - 1 && endX - xx < 44) return; // 给最后一天留位置
+      s += '<text class="cl-lab" x="' + xx.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle') + '" dx="' + (i === 0 ? -bw / 2 : i === n - 1 ? bw / 2 : 0) + '">' + lab + '</text>';
+      lastX = xx; lastLab = lab;
+    });
+    s += '<rect class="cl-scan" x="-120" y="' + top + '" width="120" height="' + (H - top - bot) + '" opacity="0"/>';
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.innerHTML = s;
+    if (anim && !reduced) {
+      const bars = [...svg.querySelectorAll('.cl-bar')];
+      bars.forEach((b, i) => b.animate([{ transform: 'scaleY(0)', opacity: .2 }, { transform: 'scaleY(1.06)', opacity: 1, offset: .75 }, { transform: 'scaleY(1)', opacity: 1 }], { duration: 640, delay: 120 + i * 34, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }));
+      const scan = svg.querySelector('.cl-scan');
+      scan.animate([{ transform: 'translateX(0)', opacity: 0 }, { opacity: 1, offset: .15 }, { opacity: 1, offset: .85 }, { transform: 'translateX(' + (W + 120) + 'px)', opacity: 0 }], { duration: 1500, delay: 120 + n * 34 + 200, easing: 'ease-in-out' });
+      svg.querySelectorAll('.cl-lab').forEach((t) => t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, delay: 300 + n * 34, fill: 'backwards' }));
+    }
+  }
+  // 柱子：碰一下显示版本、日期、几条；点了跳到那个版本
+  function tipAt(i) {
+    const R = L.slice().reverse(), r = R[i], tip = $('clTip'), svg = $('clSvg');
+    svg.querySelectorAll('.cl-bar.hot').forEach((b) => b.classList.remove('hot'));
+    if (!r) { tip.hidden = true; return; }
+    const b = svg.querySelector('.cl-bar[data-i="' + i + '"]'); b.classList.add('hot');
+    const bx = +b.getAttribute('x') + +b.getAttribute('width') / 2, by = +b.getAttribute('y'), W = $('clPulse').clientWidth;
+    tip.innerHTML = '<b>' + esc(r.v) + '</b>' + (r.at ? md(r.at) + ' · ' : '') + count(r) + ' 条改动';
+    tip.hidden = false;
+    const tw = tip.offsetWidth; tip.style.left = Math.min(W - tw / 2, Math.max(tw / 2, bx)) + 'px'; tip.style.top = by + 'px';
+  }
+  const pulse = $('clPulse');
+  pulse.addEventListener('pointermove', (e) => { const b = e.target.closest('.cl-bar'); if (b) tipAt(+b.dataset.i); });
+  pulse.addEventListener('pointerleave', () => tipAt(-1));
+  pulse.addEventListener('click', (e) => {
+    const b = e.target.closest('.cl-bar'); if (!b) return;
+    const r = L.slice().reverse()[+b.dataset.i]; if (!r) return;
+    if (!keep(r)) { filter = 'all'; applyFilter(); }
+    const li = document.getElementById(r.v.replace(/\./g, '-')); if (li) li.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  });
+
+  // 左边的线：读到哪亮到哪；经过的版本圆点亮起来
+  let railQ = false;
+  function rail() {
+    if (railQ) return; railQ = true;
+    requestAnimationFrame(() => {
+      railQ = false;
+      const list = $('clList'), r = list.getBoundingClientRect(), mid = innerHeight * 0.55;
+      list.style.setProperty('--prog', Math.max(0, Math.min(r.height, mid - r.top)) + 'px');
+      list.querySelectorAll('.cl-rel:not([hidden])').forEach((li) => li.classList.toggle('on', li.getBoundingClientRect().top + 14 < mid));
+    });
+  }
+  addEventListener('scroll', rail, { passive: true });
+  addEventListener('resize', () => { chart(false); rail(); });
+
+  $('clList').addEventListener('click', (e) => {
+    const b = e.target.closest('.cl-more'); if (!b) return;
+    const card = b.closest('.cl-card'), open = card.classList.toggle('open'), n = count(L.find((r) => r.v === card.closest('.cl-rel').dataset.v) || { groups: [] });
+    b.setAttribute('aria-expanded', String(open)); b.querySelector('span').textContent = open ? '收起' : '展开全部 ' + n + ' 条';
+    if (!open) { const li = card.closest('.cl-rel'); if (li.getBoundingClientRect().top < 0) li.scrollIntoView({ block: 'start' }); }
+    rail();
+  });
+  $('clFilter').addEventListener('click', (e) => { const b = e.target.closest('button[data-f]'); if (!b) return; filter = b.dataset.f; applyFilter(); });
+
+  function toast(t) { const el = $('clToast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 3200); }
+  function live(ok, at) {
+    const el = $('clLive');
+    el.classList.toggle('off', !ok);
+    el.querySelector('span').innerHTML = ok ? '实时同步 · 最近一次发布 <b>' + (at ? ago(at) : '刚刚') + '</b>' : '暂时连不上，稍后自动重试';
+  }
+
+  async function load() {
+    let j = null;
+    try { const r = await fetch('/api/changelog', { cache: 'no-store' }); j = await r.json(); } catch (e) {}
+    if (!j || !j.ok || !Array.isArray(j.list) || !j.list.length) {
+      live(false);
+      if (first) $('clList').innerHTML = '<li class="cl-empty">暂时读不到更新日志，稍后刷新试试；也可以直接看 <a href="https://github.com/wznwzn123/openwrt-claude-panel/releases" rel="noopener">GitHub 发布页</a>。</li>';
+      return;
+    }
+    const fresh = j.list.filter((r) => !known.has(r.v));
+    L = j.list; L.forEach((r) => known.add(r.v));
+    live(true, L[0] && L[0].at);
+    if (first) {
+      $('clList').innerHTML = L.map((r) => relHtml(r, false)).join('');
+      $('clPulse').hidden = false; $('clStats').hidden = false; $('clFilter').hidden = false;
+      stats(); chart(true); roll();
+      first = false;
+      if (location.hash) { const li = document.getElementById(location.hash.slice(1)); if (li) setTimeout(() => li.scrollIntoView({ block: 'start' }), 60); }
+    } else if (fresh.length) {
+      // 打开着页面时发布了新版本：新的从最上面滑进来
+      const list = $('clList');
+      fresh.slice().reverse().forEach((r) => list.insertAdjacentHTML('afterbegin', relHtml(r, true)));
+      stats(); chart(true);
+      toast(fresh[0].v + ' 刚刚发布');
+    }
+    applyFilter();
+  }
+  load();
+  // 开着页面的时候每分钟同步一次；相对时间跟着走
+  setInterval(() => {
+    if (document.hidden) return;
+    load();
+    document.querySelectorAll('.cl-ago[data-t]').forEach((x) => { x.textContent = ago(+x.dataset.t); });
+  }, 60e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !first) load(); });
+})();
+</script>
+</body>
+</html>

@@ -46,7 +46,7 @@ for (const [w, h] of [[390, 844], [1280, 860]]) {
 	ok('「我的路由器」空的时候说去「装新路由器」' + T, /装新路由器/.test(await p.textContent('#devs')));
 	ok('老的配对码收在「已经装好了」里，默认不展开' + T, !(await p.isVisible('#fBind input')));
 	if (SHOTS) { await add.scrollIntoViewIfNeeded(); await p.screenshot({ path: `${SHOTS}/inst-new-${w}.png` }); }
-	await p.click('#trialGo'); await W(1500);
+	await p.click('#trialGo'); await p.waitForFunction(() => /install\.sh --invite/.test((document.querySelector('.inst pre.cmd') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {}); await W(300); // 测试机忙的时候要一两秒
 	let card = p.locator('.inst').first();
 	ok('领试用：出现安装码卡片，带步骤和安装命令（命令里带着安装码）' + T, await card.isVisible() && /免费试用 7 天/.test(await card.textContent()) && /sh install\.sh --invite [A-Z2-9]{10}$/.test((await card.locator('pre.cmd').textContent()).trim()) && /openwrt-claude-panel-hosted\.tar\.gz/.test(await card.locator('pre.cmd').textContent()));
 	ok('领完试用：试用按钮没了（每个账号一次）' + T, !(await p.isVisible('#trialGo')));

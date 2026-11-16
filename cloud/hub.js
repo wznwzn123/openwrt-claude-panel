@@ -8,12 +8,13 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser } from './fam.js';
 import { installInst, instAccount, instAdmin } from './inst.js';
 import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } from './files.js';
+import { changelogOf } from './changelog.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -1388,6 +1389,7 @@ export async function hubFetch(req, env) {
 	// 路由器面板查新版本用 /api/router/version。v2.0.2–v2.0.4 的路由器问的还是 /api/app/version（用 curl），
 	// 那时它返回的是路由器的版本；后来 App 有了自己的版本号，这些路由器就再也看不到更新了。所以 curl 来问的照旧回答路由器的版本
 	if (p === '/api/router/version') return routerVersion(env);
+	if (p === '/api/changelog' && req.method === 'GET') return changelogApi(env);
 	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
 	if (p.startsWith('/dl/cfd/') && (req.method === 'GET' || req.method === 'HEAD')) return dlCfd(p.slice(8));
@@ -1418,10 +1420,10 @@ export async function hubFetch(req, env) {
 		if (!f) return J({ error: 'not found' }, 404);
 		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff' } });
 	}
-	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms' };
+	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog' };
 	// 安全加固：旧版管理页默认下线（新版在 /admin/），只在设了 OLD_ADMIN=1 时打开（测试用）；下线后打开它跳到新版
 	if (p === '/admin/old' && env.OLD_ADMIN !== '1') return new Response(null, { status: 301, headers: { location: '/admin/' } });
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
 	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {
@@ -1521,6 +1523,27 @@ async function appVersion(env) {
 	} catch (e) { return out({ ok: false, error: '检查更新失败' }, 502); }
 }
 // 路由器的最新版本：就是最新发布的版本号和更新说明
+// 官网「更新日志」：GitHub 上每次发布的说明（每个版本自己的「这个版本的更新」），新的在前。缓存 5 分钟，所以新版本几分钟内出现；
+// GitHub 接口被限流（Cloudflare 出口 IP 大家共用）时，用上一次存下的，再把最新一版补上（最新一版走不限流的那条路）
+async function changelogApi(env) {
+	try {
+		const v = await cached('changelog-1', 300, async () => {
+			try {
+				const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
+				if (r.ok) { const list = changelogOf(await r.json()); if (list.length) { const o = { list, at: Date.now() }; try { await hubObj(env).setMeta('clog', o); } catch (e) {} return o; } }
+			} catch (e) {}
+			let o = null;
+			try { o = await hubObj(env).meta('clog'); } catch (e) {}
+			const x = await latestRelease(env).catch(() => null);
+			if (x && x.tag && !(o && o.list || []).some((y) => y.v === x.tag)) {
+				const n = changelogOf([{ tag_name: x.tag, body: x.body, published_at: x.at || '' }]);
+				if (n.length) o = { list: [...n, ...((o && o.list) || [])], at: Date.now() };
+			}
+			return o && o.list && o.list.length ? o : null;
+		});
+		return v ? J({ ok: true, list: v.list, at: v.at }) : J({ ok: false, error: '暂时读不到更新日志' }, 502);
+	} catch (e) { return J({ ok: false, error: '暂时读不到更新日志' }, 502); }
+}
 async function routerVersion(env) {
 	try {
 		const v = await cached('router-version', 600, async () => {

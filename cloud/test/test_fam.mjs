@@ -20,7 +20,7 @@ const jar = (name) => ({ name, sid: '' });
 let ipn = 0;
 async function call(c, path, body) {
 	const h = { 'content-type': 'application/json', origin: 'https://panel.example', 'cf-connecting-ip': '1.1.1.' + (++ipn % 200) };
-	if (c && (c.sid || c.did)) h.cookie = [c.sid && 'sid=' + c.sid, c.did && 'did=' + c.did].filter(Boolean).join('; ');
+	if (c && (c.sid || c.did)) h.cookie = [c.sid && '__Host-sid=' + c.sid, c.did && '__Host-did=' + c.did].filter(Boolean).join('; ');
 	const res = await mod.default.fetch(new Request('https://panel.example' + path, { method: body === undefined ? 'GET' : 'POST', headers: h, body: body === undefined ? undefined : JSON.stringify(body) }), env);
 	const sc = res.headers.get('set-cookie');
 	if (c && sc) { const m = /sid=([a-z2-9]*);/.exec(sc); if (m || !/did=/.test(sc)) c.sid = m ? m[1] : ''; const d = /did=([a-z2-9]{32});/.exec(sc); if (d) c.did = d[1]; }
@@ -60,13 +60,13 @@ ok('凭证不能拿去给别的账号用', (await fam(R1, 'join_create', { uid: 
 let jc = (await fam(R1, 'join_create', { uid: ua, sudo: SU, name: '妈妈', perms: ['msg', 'node', 'speed', 'bogus'] })).j;
 ok('主账号发加入码：8 位、24 小时、带链接', /^[A-Z2-9]{8}$/.test(jc.code || '') && jc.link === 'https://panel.example/app?join=' + jc.code && jc.exp - Date.now() > 23 * 3600e3, JSON.stringify(jc));
 let info = (await call(B, '/api/account/fam/join_info', { code: jc.code.toLowerCase() })).j;
-ok('家人先看一眼：哪台路由器、谁邀请的、什么权限（不认识的权限去掉）', info.router === 'Home' && info.owner === 'alice' && info.tpl === 'family' && JSON.stringify(info.perms) === '["msg","node","speed"]', JSON.stringify(info));
+ok('家人先看一眼：哪台路由器、谁邀请的（没设名字的显示打码的邮箱开头）、什么权限（不认识的权限去掉）', info.router === 'Home' && info.owner === 'al***' && info.tpl === 'family' && JSON.stringify(info.perms) === '["msg","node","speed"]', JSON.stringify(info));
 ok('没登录不能加入', (await call(jar(), '/api/account/fam/join', { code: jc.code })).st === 401);
 const n0 = MAIL.length;
 ok('家人加入成功', (await call(B, '/api/account/fam/join', { code: jc.code })).j.ok === true);
 ok('主账号收到「谁加入了」的邮件', MAIL.length === n0 + 1 && MAIL.slice(-1)[0].to[0] === 'alice@x.com' && /加入了/.test(MAIL.slice(-1)[0].subject));
 dv = (await call(B, '/api/account/me')).j.devs.find((x) => x.sub === R1.sub);
-ok('子账号的「我的路由器」：标着子账号、主账号是谁、有什么权限', dv && dv.role === 'sub' && dv.owner && dv.owner.name === 'alice' && JSON.stringify(dv.perms) === '["msg","node","speed"]', JSON.stringify(dv));
+ok('子账号的「我的路由器」：标着子账号、主账号是谁、有什么权限', dv && dv.role === 'sub' && dv.owner && dv.owner.name === 'al***' && JSON.stringify(dv.perms) === '["msg","node","speed"]', JSON.stringify(dv));
 ok('加入码只能用一次', /不对或已过期/.test((await call(C, '/api/account/fam/join', { code: jc.code })).j.error || ''));
 ok('主账号不能加入自己的路由器', await (async () => { const x = (await fam(R1, 'join_create', { uid: ua, sudo: SU, name: 'x' })).j; const r = await call(A, '/api/account/fam/join', { code: x.code }); await fam(R1, 'join_cancel', { uid: ua, sudo: SU, code: x.code }); return /主账号/.test(r.j.error || ''); })());
 // 过期的加入码

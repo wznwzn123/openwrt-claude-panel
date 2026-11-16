@@ -86,7 +86,7 @@ export function installV5(Hub) {
 		// 面板第一次打开对话（after = 0）时一起给：开发者的名字头像、自己账号的名字头像（邮箱打码）
 		async chatProfiles(who) {
 			const me = who && who.sub ? await this.chatPeer(who.sub, true) : null;
-			return { dev: await this.devProfile(), me: me ? { name: me.name || me.email.split('@')[0], avatar: me.avatar, email: maskMail(me.email) } : null };
+			return { dev: await this.devProfile(), me: me ? { name: me.name || maskMail(me.email).split('@')[0], avatar: me.avatar, email: maskMail(me.email) } : null };
 		},
 		// 管理后台对话列表：每个对话对方的账号名字（不带头像，头像点开对话再拿）
 		async chatPeers() { const out = {}; for (const t of await this.chatThreads()) { const p = await this.chatPeer(t.sub, false); if (p) out[t.tid] = { name: p.name, email: p.email, av: p.av }; } return out; },
@@ -246,6 +246,10 @@ export function installV5(Hub) {
 			const t = await this.tfa();
 			if (!t) return { st: 200, ok: true, sess: '' };
 			if (!(await totpOk(t.sec, code))) return { st: 401, error: '验证码不对', need2fa: true };
+			// 安全加固：同一个验证码只能用来登录一次（被人在旁边看到或者截到了，也不能再拿去登录）
+			const cd = String(code || '').replace(/\D/g, ''), used = ((await this.ctx.storage.get('adm:2fa:used')) || []).filter((x) => x.t > Date.now() - 120e3);
+			if (used.some((x) => x.c === cd)) return { st: 401, error: '这个验证码已经用过了，等手机上换一个新的再输', need2fa: true };
+			used.push({ c: cd, t: Date.now() }); await this.ctx.storage.put('adm:2fa:used', used.slice(-20));
 			const s = rnd(32), l = (await this.ctx.storage.get('adm:sess')) || {}, now = Date.now();
 			for (const k in l) if (l[k] < now) delete l[k];
 			l[await sha(s)] = now + 12 * 3600e3;
@@ -260,7 +264,7 @@ export function installV5(Hub) {
 			for (;;) {
 				const m = await this.ctx.storage.list({ start, limit: 512 });
 				let last = null;
-				for (const [k, v] of m) { last = k; if (k === start) continue; if (k.startsWith('adm:sess') || k.startsWith('adm:2fa:new')) continue; out[k] = enc(v); }
+				for (const [k, v] of m) { last = k; if (k === start) continue; if (k.startsWith('adm:sess') || k.startsWith('adm:2fa:new') || k === 'adm:2fa:used') continue; out[k] = enc(v); }
 				if (m.size < 512 || last == null) break;
 				start = last;
 			}

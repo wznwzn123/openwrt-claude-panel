@@ -5,7 +5,7 @@ const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
 const MAILS = [];
 globalThis.fetch = async (input, init = {}) => { const url = typeof input === 'string' ? input : input.url; if (url === 'https://api.resend.com/emails') { const b = JSON.parse(init.body); MAILS.push(b); return new Response('{"id":"m"}', { status: b.to[0].includes('bad') ? 500 : 200 }); }
 	const u = new URL(url); if (u.hostname === 'api.cloudflare.com') { return new Response(JSON.stringify({ success: true, result: { id: 'x' + Math.random(), token: 't' }, errors: [] })); } return new Response('{}'); };
-const env = { BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 'cf-token', CF_ACCOUNT_ID: 'acc1', CF_ZONE_ID: 'zone1', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '20', VAPID_PUB: '', VAPID_PRIV: '', RESEND_API_KEY: 're', ADMIN_EMAIL: 'boss@x.com' };
+const env = { OLD_ADMIN: '1', BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 'cf-token', CF_ACCOUNT_ID: 'acc1', CF_ZONE_ID: 'zone1', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '20', VAPID_PUB: '', VAPID_PRIV: '', RESEND_API_KEY: 're', ADMIN_EMAIL: 'boss@x.com' };
 const ns = (Cls) => { const objs = new Map(); return { objs, idFromName: (n) => n, get(id) { if (!objs.has(id)) objs.set(id, new Cls({ storage: memStorage() }, env)); return objs.get(id); } }; };
 env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const req = (method, url, body, headers = {}) => mod.default.fetch(new Request(url, { method, body: body == null ? undefined : JSON.stringify(body), headers: { 'content-type': 'application/json', ...headers } }), env);

@@ -1663,6 +1663,14 @@ function avPaint(el, p) { if (!el) return; const a = p && p.avatar && AV_RE.test
 const meName = (p) => (p && (p.name || (p.email || '').split('@')[0])) || '';
 const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '网络设置', sys: '系统操作' };
 const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys']] };
+// 安全加固：这三项能改动整个路由器（代理插件运行的脚本、路由器后台、重启和服务），有了就跟主账号差不多
+const PERM_RISK = ['proxy', 'net', 'sys'];
+// 新给了高风险权限的：先确认一次（原来就有的不再问）
+async function mpRiskOk(perms, old, who) {
+	const add = PERM_RISK.filter((k) => perms.includes(k) && !(old || []).includes(k));
+	if (!add.length) return true;
+	return confirmBox('给' + (who ? '「' + who + '」' : '他') + '高风险权限？', '你勾了「' + add.map((k) => PERM_N[k]).join('、') + '」。有这些权限的人能改动整个路由器（包括代理插件运行的脚本和路由器后台），跟主账号差不多。只给完全信任的家人。', '确定给', true);
+}
 const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
 	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
@@ -1817,11 +1825,12 @@ async function mpAvatar(f) {
 function mpPermForm(perms, exp) {
 	return `<div class="mp-tpls">${Object.keys(TPLS).map((k) => `<button type="button" class="chip" data-tpl="${k}">${esc(TPLS[k][0])}</button>`).join('')}</div>
 	<div class="mp-perms">${Object.keys(PERM_N).map((k) => `<label class="mp-chk"><input type="checkbox" value="${k}"${perms.includes(k) ? ' checked' : ''}> ${esc(PERM_N[k])}</label>`).join('')}</div>
+	<p class="mp-risk" data-risk hidden>「代理设置」「网络设置」「系统操作」能改动整个路由器，有这些权限的人跟主账号差不多，只给完全信任的人。</p>
 	<p class="muted" style="font-size:12.5px;margin:6px 0 12px">看首页、网速、设备这些人人都能看；终端、文件管理、换密钥、托管服务设置只有主账号能用。</p>
 	<label class="lglabel" style="margin-top:0">能用多久</label><select class="input" data-exp><option value="0">一直能用</option><option value="7">7 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">一年</option>${exp ? `<option value="keep" selected>到 ${esc(ymd(exp))}（不变）</option>` : ''}</select>`;
 }
 function mpPermBind(m) {
-	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', TPLS[b.dataset.tpl][1].slice().sort().join() === p.slice().sort().join())); };
+	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', TPLS[b.dataset.tpl][1].slice().sort().join() === p.slice().sort().join())); const w = m.querySelector('[data-risk]'); if (w) w.hidden = !PERM_RISK.some((k) => p.includes(k)); };
 	m.querySelectorAll('[data-tpl]').forEach((b) => (b.onclick = () => { const want = TPLS[b.dataset.tpl][1]; m.querySelectorAll('.mp-perms input').forEach((x) => (x.checked = want.includes(x.value))); sync(); }));
 	m.querySelectorAll('.mp-perms input').forEach((x) => (x.onchange = sync)); sync();
 	return () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value), e = m.querySelector('[data-exp]').value; return { perms: p, subExp: e === 'keep' ? undefined : +e ? Date.now() + +e * 86400e3 : 0 }; };
@@ -1836,6 +1845,7 @@ async function mpJoin() {
 		m.querySelector('[data-ok]').onclick = () => close({ name: m.querySelector('[data-n]').value.trim(), ...get() });
 	});
 	if (!v || typeof v !== 'object') return;
+	if (!(await mpRiskOk(v.perms, [], v.name))) return;
 	let r; try { r = await famSudo('join_create', v, '添加家人'); } catch (e) { return toast(e.message, true); }
 	if (!r) return;
 	try { await loadQr(); } catch (e) {}
@@ -1858,7 +1868,7 @@ async function mpSub(uid) {
 	});
 	if (!v) return;
 	try {
-		if (v.save) { if (await famSudo('sub_set', { target: uid, ...v.save }, '改家人的权限')) toast('已保存'); }
+		if (v.save) { if (!(await mpRiskOk(v.save.perms, x.perms, meName(x)))) return; if (await famSudo('sub_set', { target: uid, ...v.save }, '改家人的权限')) toast('已保存'); }
 		else if (v === 'off' || v === 'on') { if (v === 'off' && !(await confirmBox('停用 ' + meName(x), '停用后他的手机马上打不开面板；恢复以后他要从官网重新打开。', '停用', true))) return; if (await famSudo('sub_set', { target: uid, off: v === 'off' }, v === 'off' ? '停用家人' : '恢复家人')) toast(v === 'off' ? '已停用' : '已恢复'); }
 		else if (v === 'rm') { if (!(await confirmBox('移除 ' + meName(x), '这台路由器会从他的官网账号里拿掉，他的手机马上打不开面板。', '移除', true))) return; if (await famSudo('sub_remove', { target: uid }, '移除家人')) toast('已移除'); }
 		else if (v === 'owner') return mpTransfer(uid);

@@ -57,6 +57,8 @@ for (const [w, h] of [[390, 844], [1440, 900]]) {
 	await sb.locator('label', { hasText: '代理设置' }).click(); await W(200);
 	await sb.locator('button', { hasText: '保存权限' }).click(); await W(600);
 	ok('改权限要写原因' + T, /原因/.test(await p.locator('[role=dialog]:has(.ask-modal)').textContent()));
+	const dt = await p.locator('[role=dialog]:has(.ask-modal)').textContent(), rv = await sb.locator('.fd-risk').isVisible();
+	ok((had ? '去掉' : '新给') + '「代理设置」：' + (had ? '不再提醒高风险' : '勾上就显示高风险提醒，确认框里写明新给了哪些') + T, had ? !/跟主账号差不多/.test(dt) : rv && /新给了「代理设置」/.test(dt) && /跟主账号差不多/.test(dt), dt.slice(0, 200));
 	if (SHOTS) await p.screenshot({ path: `${SHOTS}/famadm-why-${w}.png` });
 	await p.locator('[role=dialog]:has(.ask-modal)').locator('textarea').fill('家里人打电话来说要开代理设置'); await p.locator('[role=dialog]:has(.ask-modal)').locator('button', { hasText: '确定' }).click(); await W(1200);
 	const d1 = await S().get('d:' + R1.sub);

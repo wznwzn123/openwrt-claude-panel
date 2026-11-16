@@ -59,7 +59,7 @@ ok('[对话] 开发者回复', r.status === 200);
 /* ---------- 5.0.1：对话两边的头像和名字、「查看对方所有信息」 ---------- */
 {
 	const PNG = 'data:image/png;base64,' + Buffer.from('\x89PNG\r\n\x1a\n' + 'x'.repeat(40), 'binary').toString('base64');
-	const acc = async (path, body, sid) => { const r = await api('POST', '/api/account/' + path, body, { origin: 'https://panel.example', ...(sid ? { cookie: 'sid=' + sid } : {}) }); const m = /sid=([a-z2-9]+);/.exec(r.headers.get('set-cookie') || ''); return { st: r.status, j: await r.json().catch(() => ({})), sid: m ? m[1] : sid }; };
+	const acc = async (path, body, sid) => { const r = await api('POST', '/api/account/' + path, body, { origin: 'https://panel.example', ...(sid ? { cookie: '__Host-sid=' + sid } : {}) }); const m = /sid=([a-z2-9]+);/.exec(r.headers.get('set-cookie') || ''); return { st: r.status, j: await r.json().catch(() => ({})), sid: m ? m[1] : sid }; };
 	MAILS.length = 0; await acc('code', { email: 'ming@x.com', kind: 'reg' });
 	const vc = (/\b(\d{6})\b/.exec(JSON.stringify(MAILS[MAILS.length - 1] || {})) || [])[1];
 	const U = await acc('register', { email: 'ming@x.com', password: 'ming-pass-12', code: vc });

@@ -12,12 +12,41 @@ W=/tmp/cmcp_upd
 BK=/tmp/cmcp_upd_backup.tgz
 LOG=/tmp/cmcp_update.log
 GH=${CMCP_GH:-https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download}
+# 安全加固：发布时用开发者的私钥给 SHA256SUMS 签名（私钥只在 GitHub 的仓库密钥里），这里用写死的公钥验签：
+# 官网（下载中转）被人控制了，也没法让路由器装上改过的安装包。UPUB 是 usign 格式的公钥，PPUB 是同一把公钥给 openssl 用的写法，
+# STSIG 是固定内容「cmcp release key selftest」的签名：先拿它试一下这台路由器的验签工具能不能用。换密钥：node tools/sign.mjs --consts
+UPUB=${CMCP_UPUB:-RWTjaBd8Y8ESbCUksln6ozZ4pQfXiYVRTp/c+hEJr+rhh1iHxhShNPQc}
+PPUB=${CMCP_PPUB:-MCowBQYDK2VwAyEAJSSyWfqjNnilB9eJhVFOn9z6EQmv6uGHWIfGFKE09Bw=}
+STSIG=${CMCP_STSIG:-RWTjaBd8Y8ESbGEmi3Oe1i338aYi9HfAgEQzVRbvgzFhy3T/M64KHwFNEfIr+AqK8ZEbaew29n1kdoR8x9jWJ+PJQiAvSZ6TKgI=}
 
 esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 state() { # state 状态 说明 [目标版本]
 	printf '{"state":"%s","msg":"%s","from":"%s","to":"%s","code":"%s","t":%s}\n' "$1" "$(esc "$2")" "$FROM" "${3:-$TO}" "$CODE" "$(date +%s)" > "$ST.tmp" && mv -f "$ST.tmp" "$ST"
 }
 svc() { [ "$CMCP_NOSVC" = 1 ] && return 0; [ -x /etc/init.d/$1 ] && /etc/init.d/$1 $2 >/dev/null 2>&1; }
+# 验签：v_工具 文件 签名文件（签名文件是 usign / signify 格式：第一行说明，第二行 base64 的「Ed + 8 字节密钥编号 + 64 字节签名」）。0 = 签名对
+v_usign() {
+	printf 'untrusted comment: openwrt-claude-panel release key\n%s\n' "$UPUB" > rel.pub
+	usign -V -q -m "$1" -p rel.pub -x "$2" >/dev/null 2>&1
+}
+v_ossl() {
+	printf -- '-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----\n' "$PPUB" > rel.pem
+	rm -f sig.bin; sed -n 2p "$2" | openssl base64 -d -A 2>/dev/null | tail -c 64 > sig.bin
+	[ -s sig.bin ] && openssl pkeyutl -verify -pubin -inkey rel.pem -rawin -in "$1" -sigfile sig.bin >/dev/null 2>&1
+}
+# 找一个能用的验签工具（OpenWrt 一般有 usign；没有的用 openssl 3）：写死的测试签名要能过、内容改一个字要过不了，才用它
+pick_v() {
+	VT=""
+	printf 'cmcp release key selftest\n' > st.msg; printf 'cmcp release key selftesT\n' > st.bad
+	printf 'untrusted comment: selftest\n%s\n' "$STSIG" > st.sig
+	for t in usign openssl; do
+		command -v $t >/dev/null 2>&1 || continue
+		f=v_$t; [ $t = openssl ] && f=v_ossl
+		if $f st.msg st.sig && ! $f st.bad st.sig; then VT=$f; break; fi
+	done
+	rm -f st.msg st.bad st.sig
+	[ -n "$VT" ]
+}
 
 # 现在装的是哪种安装包（老版本没有 version 文件：按设置推算）
 CODE=$(sed -n 's/^CODE=//p' $D/version 2>/dev/null)
@@ -66,15 +95,22 @@ run)
 	: > "$LOG"
 	rm -rf "$W"; mkdir -p "$W" && cd "$W" || { state failed "临时目录建不了"; exit 1; }
 	# 1. 下载：先走官网（大陆快），不行再直连 GitHub
+	# 2. 校验：校验值文件的签名对得上（这台路由器能验签的话）、安装包跟校验值对得上才装；官网那份不对就再试 GitHub 的
 	state downloading "正在下载新版安装包"
-	got=""
+	if pick_v; then echo "验签工具：$VT" >>"$LOG"; else echo "这台路由器没有 usign，也没有能验 Ed25519 签名的 openssl：只按 SHA256 校验" >>"$LOG"; fi
+	got=""; why=""; bad=""
 	for b in "$BASE" "$GH"; do
-		if curl -fsSL -m 180 -o "$PKG" "$b/$PKG" 2>>"$LOG" && curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG"; then got=$b; break; fi
+		rm -f "$PKG" SHA256SUMS SHA256SUMS.sig one.sum
+		if ! curl -fsSL -m 180 -o "$PKG" "$b/$PKG" 2>>"$LOG" || ! curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG"; then why="下载失败：连不上官网和 GitHub，稍后再试"; continue; fi
+		if [ -n "$VT" ]; then
+			if ! curl -fsSL -m 30 -o SHA256SUMS.sig "$b/SHA256SUMS.sig" 2>>"$LOG"; then bad="安装包没有签名，为了安全没有安装，稍后再试"; echo "没有签名：$b" >>"$LOG"; continue; fi
+			if ! $VT SHA256SUMS SHA256SUMS.sig; then bad="安装包的签名不对，为了安全没有安装，稍后再试"; echo "签名不对：$b" >>"$LOG"; continue; fi
+		fi
+		grep " $PKG\$" SHA256SUMS > one.sum 2>/dev/null
+		if [ ! -s one.sum ] || ! sha256sum -c one.sum >>"$LOG" 2>&1; then bad="安装包校验没通过（可能下载不完整），没有安装，稍后再试"; continue; fi
+		got=$b; break
 	done
-	[ -n "$got" ] || { state failed "下载失败：连不上官网和 GitHub，稍后再试"; exit 1; }
-	# 2. 校验：跟发布时算好的校验值对得上才装
-	grep " $PKG\$" SHA256SUMS > one.sum 2>/dev/null
-	if [ ! -s one.sum ] || ! sha256sum -c one.sum >>"$LOG" 2>&1; then state failed "安装包校验没通过（可能下载不完整），没有安装，稍后再试"; exit 1; fi
+	[ -n "$got" ] || { state failed "${bad:-$why}"; exit 1; }
 	tar xzf "$PKG" 2>>"$LOG" && [ -f openwrt-claude-panel/install.sh ] || { state failed "安装包解压失败"; exit 1; }
 	TO=$(sed -n 's/^PKG_VER=//p' openwrt-claude-panel/EDITION 2>/dev/null)
 	if [ -n "$TO" ] && [ "$TO" = "$FROM" ] && [ "$2" != force ]; then state done "已经是最新版（v$TO）"; rm -rf "$W"; exit 0; fi

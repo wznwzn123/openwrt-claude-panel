@@ -18,7 +18,7 @@ globalThis.fetch = async (input, init = {}) => {
 	if (u.hostname === 'api.github.com') return new Response(JSON.stringify({ tag_name: 'v4.0.0', assets: [{ name: 'router-panel.apk' }], body: '## 4.0\n- 通知', published_at: '2026-11-14T00:00:00Z' }));
 	return new Response('{}');
 };
-const env = { BASE_DOMAIN: 'localhost', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '50', VAPID_PUB: '', VAPID_PRIV: '', RESEND_API_KEY: 're', ADMIN_EMAIL: 'boss@x.com' };
+const env = { OLD_ADMIN: '1', BASE_DOMAIN: 'localhost', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '50', VAPID_PUB: '', VAPID_PRIV: '', RESEND_API_KEY: 're', ADMIN_EMAIL: 'boss@x.com' };
 const ns = (Cls) => { const objs = new Map(); return { idFromName: (n) => n, get(id) { if (!objs.has(id)) objs.set(id, new Cls({ storage: memStorage() }, env)); return objs.get(id); } }; };
 env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const server = http.createServer(async (req, res) => {
@@ -127,7 +127,10 @@ for (const [dn, dv] of Object.entries(DEV)) {
 		await shot('2fa-setup');
 		await page.locator('.tfa-steps input').fill('000000'); await page.locator('button', { hasText: '确认开启' }).click(); await W(800);
 		ok('两步验证：验证码错了不开' + tag, await page.isVisible('.tfa-qr'));
-		await page.locator('.tfa-steps input').fill(await mod.totp(secret)); await page.locator('button', { hasText: '确认开启' }).click(); await W(1500);
+		// 同一个验证码只能登录一次（开启时这台浏览器已经用它换了通行证）：后面每次登录都拿一个还没用过的（前后 30 秒的码也认）
+		const usedCodes = new Set(), fresh = async () => { for (const st of [1, 0, -1]) { const c = await mod.totp(secret, Date.now(), st); if (!usedCodes.has(c)) { usedCodes.add(c); return c; } } return ''; };
+		const c0 = await mod.totp(secret); usedCodes.add(c0);
+		await page.locator('.tfa-steps input').fill(c0); await page.locator('button', { hasText: '确认开启' }).click(); await W(1500);
 		ok('两步验证：开了，这台浏览器不用马上重新登录' + tag, /已开启/.test(await page.textContent('.page')) && !page.url().includes('login'));
 		await page.goto(B + '/admin#/devices'); await W(1300);
 		ok('两步验证：开了以后这台浏览器照常用' + tag, page.url().includes('#/devices') && !(/重新登录/.test(await page.textContent('body'))));
@@ -137,12 +140,12 @@ for (const [dn, dv] of Object.entries(DEV)) {
 		await p2.fill('input[type=password]', 'admin-key-1234567890'); await p2.click('button[type=submit]'); await W(1200);
 		ok('两步验证：别的浏览器登录，密钥对了还要验证码' + tag, await p2.isVisible('.code-field input') && p2.url().includes('login'));
 		if (SHOTS) await p2.screenshot({ path: `${SHOTS}/v5-login-2fa-${dn}.png` });
-		await p2.fill('.code-field input', await mod.totp(secret)); await p2.click('button[type=submit]'); await W(2200);
+		await p2.fill('.code-field input', await fresh()); await p2.click('button[type=submit]'); await W(2200);
 		ok('两步验证：输对验证码就进去了' + tag, p2.url().includes('#/dashboard'), p2.url());
 		await c2.close();
 		// 旧版管理页也能用（会问验证码）
 		const c3 = await browser.newContext({ ...dv, extraHTTPHeaders: { 'x-ip': '10.7.98.1' } }), p3 = await c3.newPage();
-		p3.on('dialog', async (d) => d.accept(await mod.totp(secret)));
+		p3.on('dialog', async (d) => d.accept(await fresh()));
 		await p3.goto(B + '/admin/old'); await W(800);
 		await p3.fill('#fKey input[name=k]', 'admin-key-1234567890'); await p3.locator('#fKey button').click(); await W(2500);
 		ok('两步验证：旧版管理页会问验证码，输对了能用' + tag, await p3.isVisible('#vMain'), (await p3.textContent('body')).slice(0, 200));

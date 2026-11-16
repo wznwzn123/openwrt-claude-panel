@@ -18,7 +18,7 @@ const UA = {
 const jar = () => ({ sid: '' });
 const call = async (c, path, b, { ua = UA.edgeAndroid, cf } = {}) => {
 	const h = { 'content-type': 'application/json', origin: 'https://panel.example', 'cf-connecting-ip': '9.9.9.' + Math.floor(Math.random() * 200), 'user-agent': ua };
-	if (c.sid) h.cookie = 'sid=' + c.sid;
+	if (c.sid) h.cookie = '__Host-sid=' + c.sid;
 	const rq = new Request('https://panel.example' + path, { method: 'POST', headers: h, body: JSON.stringify(b || {}) });
 	if (cf) Object.defineProperty(rq, 'cf', { value: cf });
 	const res = await mod.default.fetch(rq, env);

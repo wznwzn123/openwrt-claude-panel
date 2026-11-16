@@ -47,8 +47,8 @@ const origPush = mod.Watch.prototype.push; mod.Watch.prototype.push = async func
 // 账号：直接写进存储（注册流程在别的测试里测过）
 const sid = 's'.repeat(32), sidB = 'b'.repeat(32);
 await hub().ctx.storage.put({ ['u:u1']: { uid: 'u1', email: 'alice@x.com', devs: [] }, ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['u:u2']: { uid: 'u2', email: 'bob@x.com', devs: [] }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } });
-const acc = (s, path, b) => api('POST', '/api/account/' + path, b, { cookie: 'sid=' + s, origin: 'https://panel.example' });
-const me = async (s) => (await (await api('GET', '/api/account/me', null, { cookie: 'sid=' + s })).json());
+const acc = (s, path, b) => api('POST', '/api/account/' + path, b, { cookie: '__Host-sid=' + s, origin: 'https://panel.example' });
+const me = async (s) => (await (await api('GET', '/api/account/me', null, { cookie: '__Host-sid=' + s })).json());
 
 const bind = async (uid, sub) => { const u = await hub().ctx.storage.get('u:' + uid), d = await dev(sub); u.devs = [...(u.devs || []), { sub, at: T }]; d.users = [...(d.users || []), uid]; await hub().ctx.storage.put({ ['u:' + uid]: u, ['d:' + sub]: d }); };
 const dnsOf = async (sub) => (await dev(sub)).dns;
@@ -107,7 +107,7 @@ MAILS.length = 0;
 r = await (await adm('POST', '/devices/' + A.sub + '/purge', { confirm: A.sub })).json();
 ok('彻底删除：路由器、隧道都删掉，从账号里移除', r.ok && !(await dev(A.sub)) && !CF.tunnels.has(tunA) && !(await hub().ctx.storage.get('u:u1')).devs.some((x) => x.sub === A.sub));
 const pm = MAILS.find((x) => /已被删除/.test(x.subject));
-ok('彻底删除：邮件里写着怎么用新邀请码重新开通（安装命令、配对码）', pm && pm.to[0] === 'alice@x.com' && /新的邀请码/.test(pm.html) && /install\.sh --invite 新邀请码/.test(pm.html) && /hosted-noai/.test(pm.html) && /配对码/.test(pm.html), pm && pm.html.slice(0, 200));
+ok('彻底删除：邮件里写着怎么重新开通（5.2 起：官网领安装码、复制命令、装好自动加到账号）', pm && pm.to[0] === 'alice@x.com' && /装新路由器/.test(pm.html) && /安装码/.test(pm.html) && /复制命令/.test(pm.html) && /自动加到你的账号/.test(pm.html) && /install-hosted\.md/.test(pm.html), pm && pm.html.slice(0, 200));
 
 /* ---------- 回收站满 30 天自动彻底删除 ---------- */
 await del(B.sub, B.sub); const tunB = await tunOf(B.sub);

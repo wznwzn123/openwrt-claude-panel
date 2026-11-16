@@ -118,8 +118,21 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('家人列表里出现还没用的加入码，能撤回' + T, /ABCD2345/.test(await page.textContent('#meBox')) && await page.isVisible('[data-mp="jcancel"]'));
 		// 管理爸爸：加上代理设置
 		await page.click('[data-mp="sub"]'); await W(600);
-		await page.locator('.modal .mp-chk', { hasText: '代理设置' }).click(); await page.click('.modal [data-ok]'); await W(1300);
-		ok('管理家人：勾上「代理设置」保存（10 分钟内不用再输码）' + T, F.subs[0].perms.includes('proxy'));
+		ok('管理家人：没勾高风险权限时不显示提醒' + T, !(await page.isVisible('.modal [data-risk]')));
+		await page.locator('.modal .mp-chk', { hasText: '代理设置' }).click(); await W(200);
+		ok('管理家人：勾上「代理设置」马上显示高风险提醒' + T, await page.isVisible('.modal [data-risk]') && /跟主账号差不多/.test(await page.textContent('.modal [data-risk]')));
+		await page.screenshot({ path: path.join(SHOT, `me-risk-${w}.png`) });
+		await page.click('.modal [data-ok]'); await W(600);
+		ok('保存前再确认一次：写明新给了哪些高风险权限' + T, /高风险权限/.test(await page.locator('.modal').last().textContent()) && /代理设置/.test(await page.locator('.modal').last().textContent()));
+		await page.screenshot({ path: path.join(SHOT, `me-riskconfirm-${w}.png`) });
+		await page.locator('.modal').last().locator('button:has-text("取消")').click(); await W(800);
+		ok('确认时点取消：不保存' + T, !F.subs[0].perms.includes('proxy'));
+		await page.click('[data-mp="sub"]'); await W(600);
+		await page.locator('.modal .mp-chk', { hasText: '代理设置' }).click(); await page.click('.modal [data-ok]'); await W(600);
+		await page.locator('.modal').last().locator('button:has-text("确定给")').click(); await W(1300);
+		ok('管理家人：勾上「代理设置」确认后保存（10 分钟内不用再输码）' + T, F.subs[0].perms.includes('proxy'));
+		await page.click('[data-mp="sub"]'); await W(600); await page.click('.modal [data-ok]'); await W(1000);
+		ok('原来就有的高风险权限：再保存不重复确认' + T, !/高风险权限/.test(await page.locator('.modal').last().textContent().catch(() => '')) && F.subs[0].perms.includes('proxy'));
 		await page.click('[data-mp="sub"]'); await W(600); await page.click('.modal [data-v="off"]'); await W(400); await page.locator('.modal').last().locator('button:has-text("停用")').click(); await W(1300);
 		ok('停用爸爸：列表里标「已停用」' + T, F.subs[0].off === true && /已停用/.test(await page.textContent('#meBox')));
 		await page.click('[data-mp="logall"]'); await W(400);

@@ -447,9 +447,16 @@ export class Hub extends DurableObject {
 		if (u && Date.now() - (ss.last || 0) > 600e3) { ss.last = Date.now(); await this.ctx.storage.put('s:' + sid, ss); }
 		return u ? { uid: u.uid, email: u.email } : null;
 	}
+	// 旧名字的登录 Cookie（sid）还认不认：只认改用 __Host-sid 之前登录的（h 是之后发的）。子域名塞进来一个新登录的 sid 不管用；
+	// 以前的登录最多 30 天就过期，之后旧名字自然全部失效
+	async sidLegacyOk(sid) {
+		if (!sid || !/^[a-z2-9]{32}$/.test(sid)) return false;
+		const ss = await this.ctx.storage.get('s:' + sid);
+		return !!ss && !ss.h;
+	}
 	async newSession(u, dev) {
 		const sid = rnd(32), now = Date.now();
-		await this.ctx.storage.put('s:' + sid, { uid: u.uid, exp: now + SESSION_DAYS * DAY, kid: rnd(10), at: now, last: now, ua: String((dev && dev.ua) || '').slice(0, 60), place: String((dev && dev.place) || '').slice(0, 60) });
+		await this.ctx.storage.put('s:' + sid, { uid: u.uid, h: 1, exp: now + SESSION_DAYS * DAY, kid: rnd(10), at: now, last: now, ua: String((dev && dev.ua) || '').slice(0, 60), place: String((dev && dev.place) || '').slice(0, 60) });
 		u.sids = [...(u.sids || []), sid].slice(-20); u.lastAt = now;
 		await this.ctx.storage.put('u:' + u.uid, u);
 		return sid;
@@ -1016,11 +1023,15 @@ export class Hub extends DurableObject {
 		for (const x of drop) await this.fbImgRm(x);
 		await this.notifyAdmin(kind === 'install' ? '有人安装失败了' : '官网报告（' + KIND[kind] + '）', `受理编号：${fb.code.toUpperCase()}\n\n${text}\n\n${email ? '邮箱：' + email + '\n' : ''}${contact ? '联系方式：' + contact : email ? '' : '没留联系方式'}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 		// 留了邮箱的：发一封「收到了」，带受理编号和查进度的网址
-		if (email) await this.fbMail(fb, email, kind === 'install' ? '我们收到了你上报的安装问题' : '我们收到了你的报告', kind === 'install'
+		// 安全加固：不登录也能提交，填的邮箱可能是别人的；「收到了」只发给登录账号自己的邮箱（填的邮箱照样记下，处理好了管理员回复时再发）
+		const own = uid && kind !== 'install' && email && String((await this.ctx.storage.get('u:' + uid))?.email || '').toLowerCase() === email.toLowerCase();
+		// 终端里安装失败上报（邮箱必填，终端会说「确认邮件发到了」）：照样发，但同一个邮箱一天最多收一封、全部一天最多 30 封，没法拿来给别人刷邮件
+		const inst = !own && kind === 'install' && email && (await this.hit('rpm:' + email.toLowerCase(), 1, DAY)) && (await this.hit('rpm:all', 30, DAY));
+		if (own || inst) await this.fbMail(fb, email, kind === 'install' ? '我们收到了你上报的安装问题' : '我们收到了你的报告', kind === 'install'
 			? '<p>你好，</p><p>我们收到了你在路由器上安装失败时上报的问题，会尽快查原因。处理好以后，重新运行一次安装命令就行，终端最上面也会显示处理结果。</p>'
 			: '<p>你好，</p><p>我们收到了你在官网提交的报告，会尽快处理。</p>');
 		await this.track(kind === 'install' ? 'install_fail' : 'report');
-		return { st: 200, ok: true, code: fb.code, mailed: email ? 1 : 0 };
+		return { st: 200, ok: true, code: fb.code, mailed: own || inst ? 1 : 0 };
 	}
 	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
 	async gcRate(now) {
@@ -1287,7 +1298,7 @@ export async function hubFetch(req, env) {
 		const b = await body();
 		if (b.website) return J({ ok: true });
 		// 登录了官网账号的：没填邮箱就用账号邮箱，这条也会出现在账号页「我的反馈」里
-		const me = b.kind === 'install' ? null : await H.who(getSid(req));
+		const me = b.kind === 'install' ? null : await H.who(await sidFor(req, H));
 		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), email: String(b.email || '').trim() || (me ? me.email : ''), uid: me ? me.uid : '', ip: req.headers.get('cf-connecting-ip') || '' });
 		return J(rest, st);
 	}
@@ -1387,8 +1398,8 @@ export async function hubFetch(req, env) {
 	// 管理后台的推送（5.0）：手机上收到「有人发来消息」，点开回到对话
 	if (p === '/admin/sw.js' && req.method === 'GET') return new Response(ADMIN_SW, { headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'service-worker-allowed': '/admin/', 'x-content-type-options': 'nosniff' } });
 	if (p.startsWith('/admin/assets/') && (req.method === 'GET' || req.method === 'HEAD')) {
-		const f = ADMIN_FILES[p.slice('/admin/assets/'.length)];
-		if (!f) return J({ error: 'not found' }, 404);
+		const fn = p.slice('/admin/assets/'.length), f = Object.prototype.hasOwnProperty.call(ADMIN_FILES, fn) ? ADMIN_FILES[fn] : null;
+		if (!f || typeof f.body !== 'string') return J({ error: 'not found' }, 404);
 		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' } });
 	}
 	// 官网字体（只有拉丁字母和数字，中文用手机自带字体）
@@ -1400,6 +1411,8 @@ export async function hubFetch(req, env) {
 		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff' } });
 	}
 	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms' };
+	// 安全加固：旧版管理页默认下线（新版在 /admin/），只在设了 OLD_ADMIN=1 时打开（测试用）；下线后打开它跳到新版
+	if (p === '/admin/old' && env.OLD_ADMIN !== '1') return new Response(null, { status: 301, headers: { location: '/admin/' } });
 	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
@@ -1521,7 +1534,7 @@ async function appApk(env) {
 }
 
 // 安装包也从官网下载（从 GitHub 最新发布转过来）：大陆的路由器直连 GitHub 常常很慢或者下不动
-export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hosted(?:-(?:ai|noai))?))?\.tar\.gz|SHA256SUMS)$/;
+export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hosted(?:-(?:ai|noai))?))?\.tar\.gz|SHA256SUMS(?:\.sig)?)$/;
 // 通用安装包（5.2 起，安装时在终端里选版本）：还没发布的旧版本里没有，就用能问版本的那个具体包顶上
 const DL_FALLBACK = { 'openwrt-claude-panel.tar.gz': 'openwrt-claude-panel-ai-full.tar.gz', 'openwrt-claude-panel-hosted.tar.gz': 'openwrt-claude-panel-hosted-ai.tar.gz' };
 async function dlFile(env, name) {
@@ -1549,11 +1562,19 @@ async function dlCfd(rest) {
 }
 
 /* ---------- 账号接口（官网）和路由器配对接口 ---------- */
-const getSid = (req) => (/(?:^|;\s*)sid=([a-z2-9]{32})(?:;|$)/.exec(req.headers.get('cookie') || '') || [])[1] || '';
-const sidCookie = (sid, age) => `sid=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+// 安全加固：登录 Cookie 用 __Host- 开头的名字。托管路由器的专属网址都在主域名下面（网页内容由路由器主人决定），
+// 普通名字的 Cookie 能被子域名用 Domain= 覆盖（把别人换成自己的账号登录）；__Host- 开头的浏览器只认主域名自己设的。
+// 以前发的 sid / did 还认（没有新 Cookie 时，sid 只认改名之前登录的），下次访问自动换成新的
+const ck = (req, name) => (new RegExp('(?:^|;\\s*)' + name + '=([a-z2-9]{32})(?:;|$)').exec(req.headers.get('cookie') || '') || [])[1] || '';
+// 没有 __Host-sid 时才看旧的 sid，而且只认改名之前登录的（见 Hub.sidLegacyOk）
+const legacySid = async (req, H) => { if (ck(req, '__Host-sid')) return ''; const o = ck(req, 'sid'); return o && (await H.sidLegacyOk(o)) ? o : ''; };
+const sidFor = async (req, H) => ck(req, '__Host-sid') || (await legacySid(req, H));
+const sidCookie = (sid, age) => `__Host-sid=${sid}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
+const sidOld = 'sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
 // 新设备验证用：这个浏览器的编号（验证过一次以后，30 天内登录只要密码）
-const getDid = (req) => (/(?:^|;\s*)did=([a-z2-9]{32})(?:;|$)/.exec(req.headers.get('cookie') || '') || [])[1] || '';
-const didCookie = (did) => `did=${did}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TRUST_DAYS * 86400}`;
+const getDid = (req) => ck(req, '__Host-did') || ck(req, 'did');
+const didCookie = (did) => `__Host-did=${did}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${TRUST_DAYS * 86400}`;
+const didOld = 'did=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
 // 自建版路由器的面板网址：只认 https；登录地址（/cgi-bin/mcp/密钥）和 #login=密钥 都只取网址部分，密钥丢掉
 export function panelUrl(raw) {
 	let u;
@@ -1566,6 +1587,16 @@ export function panelUrl(raw) {
 	return { host, url: 'https://' + host + (u.port ? ':' + u.port : '') + '/panel/', stripped };
 }
 async function accountApi(req, env, H, p, body) {
+	const res = await accountApi0(req, env, H, p, body);
+	// 还带着以前的 sid / did（没有新的）：换成 __Host- 开头的新 Cookie，旧的删掉
+	if (p.startsWith('/api/account/') && !/^\/api\/account\/(logout|delete)$/.test(p) && !/(^|, )__Host-sid=/.test(res.headers.get('set-cookie') || '')) {
+		const os = await legacySid(req, H), od = !ck(req, '__Host-did') && ck(req, 'did');
+		if (os) { res.headers.append('set-cookie', sidCookie(os, 30 * 86400)); res.headers.append('set-cookie', sidOld); }
+		if (od) { res.headers.append('set-cookie', didCookie(od)); res.headers.append('set-cookie', didOld); }
+	}
+	return res;
+}
+async function accountApi0(req, env, H, p, body) {
 	const ip = req.headers.get('cf-connecting-ip') || '';
 	const post = req.method === 'POST';
 	if (post) {
@@ -1576,7 +1607,7 @@ async function accountApi(req, env, H, p, body) {
 	}
 	const b = post ? await body() : {};
 	const s = (v) => String(v == null ? '' : v);
-	const out = (r) => { const { st, sid, did: nd, ...rest } = r; const res = J(sid ? { ok: true, ...rest } : rest, st); if (sid) res.headers.append('set-cookie', sidCookie(sid, 30 * 86400)); if (nd) res.headers.append('set-cookie', didCookie(nd)); return res; };
+	const out = (r) => { const { st, sid, did: nd, ...rest } = r; const res = J(sid ? { ok: true, ...rest } : rest, st); if (sid) { res.headers.append('set-cookie', sidCookie(sid, 30 * 86400)); res.headers.append('set-cookie', sidOld); } if (nd) { res.headers.append('set-cookie', didCookie(nd)); res.headers.append('set-cookie', didOld); } return res; };
 	const did = getDid(req);
 	if (!post && p !== '/api/account/me' && p !== '/api/account/brief') return J({ error: 'method not allowed' }, 405);
 	// 路由器那边（凭 RKEY）
@@ -1597,8 +1628,8 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip, dev, did }));
 	if (a === 'login2') return out(await H.userLogin2({ token: s(b.token), code: s(b.code), op: s(b.op), ip, dev, did }));
 	if (a === 'reset') return out(await H.userReset({ email: s(b.email), code: s(b.code), password: s(b.password), dev, ip, did }));
-	const sid = getSid(req);
-	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); return res; }
+	const sid = await sidFor(req, H);
+	if (a === 'logout') { await H.userLogout(sid); const res = J({ ok: true }); res.headers.append('set-cookie', sidCookie('', 0)); res.headers.append('set-cookie', sidOld); return res; }
 	// 官网各页右上角问「登录了没有」：没登录也回 200，免得每个访客的浏览器控制台里都有一条红色报错
 	if (a === 'brief' && !sid) return J({ ok: false });
 	const me = await H.who(sid);
@@ -1622,7 +1653,7 @@ async function accountApi(req, env, H, p, body) {
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
 	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password), did));
-	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) res.headers.append('set-cookie', sidCookie('', 0)); return res; }
+	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) { res.headers.append('set-cookie', sidCookie('', 0)); res.headers.append('set-cookie', sidOld); } return res; }
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';

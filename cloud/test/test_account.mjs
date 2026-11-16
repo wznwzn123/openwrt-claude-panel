@@ -14,7 +14,7 @@ globalThis.fetch = async (input, init = {}) => {
 	if (m === 'POST' && u.pathname.endsWith('/dns_records')) return R({ id: 'dns' + ++CF.n });
 	return R({});
 };
-const env = { BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', VAPID_PUB: '', VAPID_PRIV: '' };
+const env = { OLD_ADMIN: '1', BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', VAPID_PUB: '', VAPID_PRIV: '' };
 const ns = (Cls) => { const objs = new Map(); return { idFromName: (n) => n, get(id) { if (!objs.has(id)) objs.set(id, new Cls({ storage: memStorage() }, env)); return objs.get(id); } }; };
 env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const hub = () => env.H.get('hub');
@@ -23,7 +23,7 @@ const hub = () => env.H.get('hub');
 const jar = (name) => ({ name, sid: '' });
 async function call(c, path, body, extra = {}) {
 	const h = { 'content-type': 'application/json', origin: 'https://panel.example', 'cf-connecting-ip': extra.ip || '1.1.1.1', ...(extra.headers || {}) };
-	if (c && (c.sid || c.did)) h.cookie = [c.sid && 'sid=' + c.sid, c.did && 'did=' + c.did].filter(Boolean).join('; ');
+	if (c && (c.sid || c.did)) h.cookie = [c.sid && '__Host-sid=' + c.sid, c.did && '__Host-did=' + c.did].filter(Boolean).join('; ');
 	const res = await mod.default.fetch(new Request('https://panel.example' + path, { method: body === undefined ? 'GET' : 'POST', headers: h, body: body === undefined ? undefined : JSON.stringify(body) }), env);
 	const sc = res.headers.get('set-cookie');
 	if (c && sc) { const m = /sid=([a-z2-9]*);/.exec(sc); if (m || !/did=/.test(sc)) c.sid = m ? m[1] : ''; const d = /did=([a-z2-9]{32});/.exec(sc); if (d) c.did = d[1]; c.cookie = sc; }

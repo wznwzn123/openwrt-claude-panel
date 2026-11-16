@@ -1,5 +1,5 @@
 # 发布新版本：在 GitHub 网页的 Actions → 「发布新版本」→ Run workflow，填版本号（例如 v1.0.0）
-# 会自动打安装包（四个自建版；设置了 HUB_URL 时再加两个托管版）和安卓 App，创建 Release 并上传
+# 会自动打安装包（自建版、托管版的通用包和各个具体版本的包）并签名、打安卓 App，创建 Release 并上传
 # App 的代码这次没改的话，app-version.json 里写的是 App 上次改动的版本，App 不会弹更新；改了才提示（必须更新）
 name: 发布新版本
 on:
@@ -15,7 +15,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0   # 要完整历史和标签：算 App 上次改动是哪个版本
       - name: 装面板精简工具
@@ -24,6 +24,11 @@ jobs:
         env:
           HUB_URL: ${{ vars.HUB_URL }}
         run: sh tools/pack.sh "${{ inputs.version }}"
+      # 安全加固：给校验值文件签名，路由器一键更新时验签（官网被人改了也装不上假的安装包）。私钥只在仓库密钥 RELEASE_SIGN_KEY 里，没设置就不发布
+      - name: 给安装包签名
+        env:
+          RELEASE_SIGN_KEY: ${{ secrets.RELEASE_SIGN_KEY }}
+        run: node tools/sign.mjs dist/SHA256SUMS
       - name: App 版本（App 没改就不让 App 弹更新）
         run: |
           sh tools/app-version.sh "${{ inputs.version }}" > dist/app-version.json
@@ -33,14 +38,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
-          gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS dist/app-version.json \
+          gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig dist/app-version.json \
             --target "$GITHUB_SHA" \
-            --title "$VERSION：托管版 + 四个自建版 + 安卓 App" \
+            --title "$VERSION：托管版 + 自建版 + 安卓 App" \
             --notes-file tools/release-notes.md
       # 依赖清单（SBOM）：列出用到的所有第三方组件，跟安装包一起放进 Release；出错也不影响发布
       - name: 生成依赖清单（SBOM）
         continue-on-error: true
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json

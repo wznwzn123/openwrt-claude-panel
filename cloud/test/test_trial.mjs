@@ -47,8 +47,8 @@ const origPush = mod.Watch.prototype.push; mod.Watch.prototype.push = async func
 // 账号：直接写进存储（注册流程在别的测试里测过）
 const sid = 's'.repeat(32), sidB = 'b'.repeat(32);
 await hub().ctx.storage.put({ ['u:u1']: { uid: 'u1', email: 'alice@x.com', devs: [] }, ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['u:u2']: { uid: 'u2', email: 'bob@x.com', devs: [] }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } });
-const acc = (s, path, b) => api('POST', '/api/account/' + path, b, { cookie: 'sid=' + s, origin: 'https://panel.example' });
-const me = async (s) => (await (await api('GET', '/api/account/me', null, { cookie: 'sid=' + s })).json());
+const acc = (s, path, b) => api('POST', '/api/account/' + path, b, { cookie: '__Host-sid=' + s, origin: 'https://panel.example' });
+const me = async (s) => (await (await api('GET', '/api/account/me', null, { cookie: '__Host-sid=' + s })).json());
 
 let r = await (await adm('POST', '/invites', { direct: true, max: 20, days: 7, note: '酷安', svc: 7 })).json();
 const TRIAL = r.invite.code;

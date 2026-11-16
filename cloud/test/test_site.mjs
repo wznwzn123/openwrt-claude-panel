@@ -16,7 +16,7 @@ globalThis.fetch = async (input, init = {}) => {
 	if (u.hostname === 'api.github.com') return new Response(JSON.stringify({ tag_name: 'v1.3.2', assets: [{ name: 'router-panel.apk' }], body: '## 这个版本的更新\n- 测试', published_at: '2026-11-01T00:00:00Z' }));
 	return new Response('{}');
 };
-const env = { BASE_DOMAIN: 'localhost', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '50', VAPID_PUB: '', VAPID_PRIV: '' };
+const env = { OLD_ADMIN: '1', BASE_DOMAIN: 'localhost', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'admin-key-1234567890', MAX_DEVICES: '50', VAPID_PUB: '', VAPID_PRIV: '' };
 const ns = (Cls) => { const objs = new Map(); return { idFromName: (n) => n, get(id) { if (!objs.has(id)) objs.set(id, new Cls({ storage: memStorage() }, env)); return objs.get(id); } }; };
 env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const server = http.createServer(async (req, res) => {
@@ -407,7 +407,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	ok('[隐私] 手机宽度不横向滚动（表格变成一条一条）', pw <= 390, pw);
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-privacy.png' });
 	r = await page.goto(B + '/security'); await W(300); t = await page.textContent('body');
-	ok('[安全] 打开 /security：做了哪些措施、没覆盖的风险、被入侵了怎么办', r.status() === 200 && /做了哪些措施/.test(t) && /没覆盖的风险/.test(t) && /没有签名/.test(t) && /Cloudflare 能看到流量/.test(t) && /换登录密钥/.test(t));
+	ok('[安全] 打开 /security：做了哪些措施、没覆盖的风险、被入侵了怎么办', r.status() === 200 && /做了哪些措施/.test(t) && /没覆盖的风险/.test(t) && /签过名的安装包/.test(t) && /先验签名、再核对 SHA256/.test(t) && !/没有签名/.test(t) && /Cloudflare 能看到流量/.test(t) && /换登录密钥/.test(t));
 	ok('[安全] 不写「所有安全问题都已解决」「进不了」这类绝对的话', !/所有安全问题|进不了|绝对安全|100%/.test(t));
 	// 报告表单
 	await page.fill('#rpForm [name=text]', '太短'); await page.click('#rpGo'); await W(300);

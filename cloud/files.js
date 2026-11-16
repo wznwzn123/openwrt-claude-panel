@@ -3,17 +3,21 @@
 // · 用户发的（对话、反馈）30 天后自动删；公告里的一直留着（删公告时一起删）
 // · 上传：浏览器直接分块传给托管服务（每块 8MB），不经过路由器；传之前先凭路由器钥匙或管理员身份领一张上传票（1 小时有效）
 // · 下载：链接带签名和到期时间；不是图片、视频、音频、PDF 的一律当附件下载，防止被当成网页打开
-// · 防滥用：每台路由器每天最多 30 个、1GB；全部文件加起来超过 8GB 就先不收新的（R2 免费额度 10GB）
+// · 防滥用：每台路由器每天最多 30 个、1GB（自建版的匿名对话身份 10 个、300MB）；同一个 IP 每天最多 60 个、2GB；
+//   全部文件加起来超过 8GB 就先不收新的（R2 免费额度 10GB）
 const DAY = 86400e3;
 export const FILE_MAX = 200 * 1024 * 1024, FILE_PART = 8 * 1024 * 1024, FILE_KEEP_DAYS = 30;
 const DAY_N = 30, DAY_BYTES = 1024 * 1024 * 1024, TOTAL_BYTES = 8 * 1024 * 1024 * 1024, PER_MSG = 5;
+const ANON_N = 10, ANON_BYTES = 300 * 1024 * 1024, IP_N = 60, IP_BYTES = 2 * 1024 * 1024 * 1024;
 const ID_RE = /^[a-z2-9]{16}$/, TOK_RE = /^[a-z2-9]{32}$/;
 const J = (o, s = 200, h = {}) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...h } });
 const rnd = (n) => { const a = 'abcdefghijkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(n)); let s = ''; for (const x of b) s += a[x % a.length]; return s; };
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 // 能在浏览器里直接打开的类型；其他一律当附件下载（application/octet-stream）
-const INLINE = /^(image\/(png|jpeg|gif|webp|avif)|video\/(mp4|webm|quicktime)|audio\/(mpeg|mp4|ogg|wav|webm|aac)|application\/pdf)$/;
-export const safeType = (t) => { t = String(t || '').toLowerCase().split(';')[0].trim(); return INLINE.test(t) ? t : 'application/octet-stream'; };
+const INLINE = /^(image\/(png|jpeg|gif|webp|avif)|video\/(mp4|webm|quicktime)|audio\/(mpeg|mp4|ogg|wav|webm|aac))$/;
+// PDF 记下类型（下载时文件名、图标对），但一律当附件下载：不在主域名下直接打开别人传的 PDF（防止被拿来做假页面）
+const KEEP = /^application\/pdf$/;
+export const safeType = (t) => { t = String(t || '').toLowerCase().split(';')[0].trim(); return INLINE.test(t) || KEEP.test(t) ? t : 'application/octet-stream'; };
 // 文件名：去掉路径、控制字符和会出问题的字符，最长 100 个字
 export const cleanFileName = (n) => { let s = String(n || '').replace(/^.*[\\/]/, '').replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '').replace(/\s+/g, ' ').trim(); if (!s || s === '.' || s === '..') s = '文件'; return [...s].slice(-100).join(''); };
 const kind = (t) => (/^image\//.test(t) ? 'img' : /^video\//.test(t) ? 'video' : /^audio\//.test(t) ? 'audio' : 'file');
@@ -23,7 +27,7 @@ export function installFiles(Hub) {
 		async fileKey() { let k = await this.ctx.storage.get('m:fkey'); if (!k) { k = rnd(48); await this.ctx.storage.put('m:fkey', k); } return k; },
 		// 领上传票：检查大小、类型、每天的量、总量
 		fileStart(o) { return this.lock(() => this._fileStart(o)); },
-		async _fileStart({ owner, ctx, name, size, type }) {
+		async _fileStart({ owner, ctx, name, size, type, ip }) {
 			size = Math.floor(+size || 0);
 			if (!(size > 0)) return { st: 400, error: '文件是空的' };
 			if (size > FILE_MAX) return { st: 400, error: '文件太大了：最大 200MB' };
@@ -32,9 +36,13 @@ export function installFiles(Hub) {
 			const tot = (await this.ctx.storage.get('m:fbytes')) || 0;
 			if (tot + size > TOTAL_BYTES) return { st: 507, error: '文件存储快满了，暂时发不了文件，先发文字吧' };
 			if (owner !== 'admin') {
+				const anon = owner[0] === 'a', mn = anon ? ANON_N : DAY_N, mb = anon ? ANON_BYTES : DAY_BYTES;
 				const qk = 'fq:' + owner + ':' + day, q = (await this.ctx.storage.get(qk)) || { n: 0, b: 0 };
-				if (q.n + 1 > DAY_N || q.b + size > DAY_BYTES) return { st: 429, error: '今天发的文件太多了（每天最多 30 个、1GB），明天再发' };
+				if (q.n + 1 > mn || q.b + size > mb) return { st: 429, error: `今天发的文件太多了（每天最多 ${mn} 个、${anon ? '300MB' : '1GB'}），明天再发` };
+				const ik = ip ? 'fq:ip:' + ip + ':' + day : '', iq = (ik && (await this.ctx.storage.get(ik))) || { n: 0, b: 0 };
+				if (ik && (iq.n + 1 > IP_N || iq.b + size > IP_BYTES)) return { st: 429, error: '今天这个网络发的文件太多了，明天再发' };
 				q.n++; q.b += size; await this.ctx.storage.put(qk, q);
+				if (ik) { iq.n++; iq.b += size; await this.ctx.storage.put(ik, iq); }
 			}
 			let id; do { id = rnd(16); } while (await this.ctx.storage.get('fl:' + id));
 			const nm = cleanFileName(name), t = safeType(type), tok = rnd(32);
@@ -100,9 +108,9 @@ export async function signFiles(env, H, files, ttl = 7 * DAY) {
 function cors() { return { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'PUT, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600' }; }
 
 // 领上传票（对话、反馈：凭路由器钥匙，在 /api/chat 里调；公告和管理员回复：管理后台）
-export async function fileStartFor(env, H, owner, ctx, b) {
+export async function fileStartFor(env, H, owner, ctx, b, ip = '') {
 	if (!env.F) return { st: 503, error: '托管服务还没开文件存储，现在只能发文字和截图' };
-	const r = await H.fileStart({ owner, ctx, name: String(b.name || ''), size: b.size, type: String(b.type || '') });
+	const r = await H.fileStart({ owner, ctx, name: String(b.name || ''), size: b.size, type: String(b.type || ''), ip: String(ip || '').slice(0, 45) });
 	if (r.st !== 200) return r;
 	try {
 		const mp = await env.F.createMultipartUpload(r.key, { httpMetadata: { contentType: r.type } });
@@ -155,7 +163,7 @@ export async function filesRoute(req, env, H, p) {
 	if (!f || f.state !== 'ok') return J({ error: '文件已经过期删除了（用户发的文件只留 30 天）' }, 404);
 	const o = await env.F.get(f.key, { range: req.headers });
 	if (!o) return J({ error: '文件已经删除了' }, 404);
-	const inline = f.type !== 'application/octet-stream' && u.searchParams.get('dl') !== '1';
+	const inline = INLINE.test(f.type) && u.searchParams.get('dl') !== '1';
 	const hd = new Headers({
 		'content-type': f.type,
 		'content-disposition': (inline ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(f.name),

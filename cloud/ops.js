@@ -221,7 +221,7 @@ export async function chatApi(req, env, H, body) {
 	if (!who) return J({ error: '身份不对（路由器的钥匙对不上）', relogin: !!b.cid }, 403);
 	if (op === 'get') { const { st, ...r } = await H.chatGet(who, b.after, !!b.read); const pf = !(+b.after) && st === 200 ? await H.chatProfiles(who) : {}; return J({ ...r, ...pf, files: !!env.F, msgs: await signMsgs(env, H, (r.msgs || []).map(pubMsg)) }, st); }
 	// 5.2 发文件：领上传票（对话 chat、反馈 fb；反馈只有托管版）
-	if (op === 'up') { const ctx = s(b.ctx) === 'fb' ? 'fb' : 'chat'; if (ctx === 'fb' && who.kind !== 'hosted') return J({ error: '自建版的反馈还不能带文件，请在对话里发' }, 400); const { st, ...r } = await fileStartFor(env, H, who.tid, ctx, b); return J(r, st); }
+	if (op === 'up') { const ctx = s(b.ctx) === 'fb' ? 'fb' : 'chat'; if (ctx === 'fb' && who.kind !== 'hosted') return J({ error: '自建版的反馈还不能带文件，请在对话里发' }, 400); const { st, ...r } = await fileStartFor(env, H, who.tid, ctx, b, ip); return J(r, st); }
 	if (op === 'img') { const im = await H.chatImg(who.tid, Math.floor(+b.seq || 0)); if (!im) return J({ error: '图片没有了' }, 404); let bin = ''; for (let i = 0; i < im.buf.length; i += 0x8000) bin += String.fromCharCode(...im.buf.subarray(i, i + 0x8000)); return J({ ok: true, data: 'data:' + im.type + ';base64,' + btoa(bin) }); }
 	if (op === 'send') {
 		if (!(await H.hit('cs:' + who.tid, 20, 600e3)) || !(await H.hit('csd:' + who.tid, 200, DAY))) return J({ error: '发得太快了，歇一会儿再发' }, 429);

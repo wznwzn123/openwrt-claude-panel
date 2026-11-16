@@ -99,6 +99,8 @@ ok('[查询] 不返回原文和日志（编号泄露也看不到内容）', !('t
 	// 终端安装失败上报带邮箱（4.0 起必填）：存下来、发「收到了」邮件（说的是安装问题）、管理页能回邮件
 	const ri = await (await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：闪存只剩 0 MB', email: 'inst@x.com', log: 'x' }, '5.5.7.1')).json();
 	const iMail = sent.filter((m) => m.to[0] === 'inst@x.com');
+	const ri2 = await (await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：又失败了一次', email: 'INST@x.com', log: 'x' }, '5.5.7.2')).json();
+	ok('[安装上报] 同一个邮箱一天只发一封「收到了」（没法拿来给别人刷邮件），上报照样收下', ri2.ok && ri2.mailed === 0 && sent.filter((m) => String(m.to[0]).toLowerCase() === 'inst@x.com').length === 1, JSON.stringify(ri2));
 	ok('[安装上报] 带邮箱：发「我们收到了你上报的安装问题」，有受理编号，内容说重新运行安装命令', ri.ok && ri.mailed === 1 && iMail.length === 1 && iMail[0].subject === '我们收到了你上报的安装问题（受理编号 ' + ri.code.toUpperCase() + '）' && /重新运行一次安装命令/.test(iMail[0].html), JSON.stringify(iMail[0] || {}).slice(0, 160));
 	const iL = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === ri.code);
 	ok('[安装上报] 管理页：能发邮件给他，回复方式写着邮件', JSON.stringify(iL.mailTo) === '["inst@x.com"]' && iL.kind === 'install' && !iL.uid);
@@ -178,19 +180,23 @@ ok('[面板反馈] 钥匙不对：403，不给编号', r.status === 403);
 	ok('[邮箱] 格式不对：400', r.status === 400 && /邮箱格式不对/.test((await r.json()).error));
 	r = await rp({ kind: 'other', text: '官网报告带邮箱官网报告带邮箱', email: 'me@x.com' }, '5.5.6.2'); j = await r.json();
 	const mine = sent.filter((m) => m.to[0] === 'me@x.com'), other = j.code.toUpperCase();
-	ok('[邮箱] 填了邮箱：马上发「收到了」邮件，标题和内容都有受理编号和查进度网址', j.ok && j.mailed === 1 && mine.length === 1 && mine[0].subject === '我们收到了你的报告（受理编号 ' + j.code.toUpperCase() + '）' && mine[0].html.includes('/r/' + j.code.toUpperCase()), JSON.stringify(mine[0] || {}).slice(0, 200));
+	ok('[邮箱] 没登录、填了邮箱：不马上发「收到了」（邮箱可能是别人的），邮箱照样记下', j.ok && j.mailed === 0 && mine.length === 0, JSON.stringify(mine[0] || {}).slice(0, 200));
+	{ const id = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code).id; const n0 = sent.length;
+	await adm('POST', '/feedback/' + id + '/done', { state: 'fixed', note: '修好了', mail: true });
+	const m2 = sent.slice(n0).filter((m) => m.to[0] === 'me@x.com');
+	ok('[邮箱] 管理员处理好了点「发邮件」：发到他填的邮箱，带受理编号和查进度网址', m2.length === 1 && m2[0].html.includes('/r/' + j.code.toUpperCase()), JSON.stringify(m2[0] || {}).slice(0, 200)); }
 	const L3 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);
 	ok('[邮箱] 管理页里能发邮件给他', JSON.stringify(L3.mailTo) === '["me@x.com"]');
 	// 登录了官网账号：不填邮箱也会用账号邮箱
 	const uid = 'u' + 'a'.repeat(9), sid = 'b'.repeat(32);
 	await hub().ctx.storage.put('u:' + uid, { uid, email: 'acc@x.com', devs: [{ sub: A.sub, at: Date.now(), alias: '客厅' }] });
 	await hub().ctx.storage.put('s:' + sid, { uid, exp: Date.now() + DAY, kid: 'k', at: Date.now(), last: Date.now() });
-	r = await api('POST', '/api/report', { kind: 'privacy', text: '登录了账号再报告的问题，不填邮箱' }, { 'cf-connecting-ip': '5.5.6.3', cookie: 'sid=' + sid }); j = await r.json();
+	r = await api('POST', '/api/report', { kind: 'privacy', text: '登录了账号再报告的问题，不填邮箱' }, { 'cf-connecting-ip': '5.5.6.3', cookie: '__Host-sid=' + sid }); j = await r.json();
 	const L4 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);
 	ok('[邮箱] 登录了官网账号、没填邮箱：自动用账号邮箱', JSON.stringify(L4.mailTo) === '["acc@x.com"]' && L4.uid === uid && sent.some((m) => m.to[0] === 'acc@x.com'));
 	globalThis.fetch = of; delete env.RESEND_API_KEY;
 	// 官网账号页「我的反馈」：账号里路由器发的 + 用这个账号报告的
-	r = await api('POST', '/api/account/fb', {}, { cookie: 'sid=' + sid, origin: 'https://panel.example' }); j = await r.json();
+	r = await api('POST', '/api/account/fb', {}, { cookie: '__Host-sid=' + sid, origin: 'https://panel.example' }); j = await r.json();
 	const codes = j.list.map((x) => x.code);
 	ok('[账号页] 我的反馈：有账号里路由器在面板发的、有登录后在官网报告的，带内容和路由器名', r.status === 200 && codes.includes(pc.toUpperCase()) && codes.includes(L4.code.toUpperCase()) && j.list.find((x) => x.code === pc.toUpperCase()).name === '客厅' && j.list.every((x) => typeof x.text === 'string'), JSON.stringify(j).slice(0, 300));
 	ok('[账号页] 别人的不会出现（没登录时填别的邮箱报告的）', !codes.includes(other));

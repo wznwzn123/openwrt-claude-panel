@@ -63,7 +63,7 @@ for (const [w, h] of [[390, 844], [1280, 860]]) {
 	if (SHOTS) await pb.screenshot({ path: `${SHOTS}/fam-join-${w}.png` });
 	await pb.click('.mask [data-ok]'); await W(1500);
 	const bt = await pb.textContent('#devs');
-	ok('加入后：「家人的路由器」里出现这台，标着子账号和主账号名字' + T, /家人的路由器/.test(bt) && /子账号 · 主账号：a\d+/.test(bt), bt.slice(0, 200));
+	ok('加入后：「家人的路由器」里出现这台，标着子账号和主账号名字（没设名字的显示打码的邮箱开头）' + T, /家人的路由器/.test(bt) && /子账号 · 主账号：a\d\*\*\*/.test(bt), bt.slice(0, 200));
 	ok('子账号的按钮：打开面板、改名、退出（没有解绑、续期、登录码）' + T, await pb.isVisible('#devs [data-open]') && await pb.isVisible('#devs [data-leave]') && !(await pb.$('#devs [data-unb]')) && !(await pb.$('#devs [data-lc]')));
 	if (SHOTS) await pb.screenshot({ path: `${SHOTS}/fam-sub-${w}.png`, fullPage: false });
 	// 主账号看到的
@@ -79,12 +79,12 @@ for (const [w, h] of [[390, 844], [1280, 860]]) {
 	await pa.locator('#devs .dev', { hasText: 'Study' }).locator('[data-open]').click(); await W(1200);
 	ok('老路由器绑了 2 个账号：先弹出「选一个主账号」，列出这 2 个人' + T, await pa.isVisible('.mask .pick') && (await pa.locator('.mask .pku').count()) === 2);
 	if (SHOTS) await pa.screenshot({ path: `${SHOTS}/fam-pick-${w}.png` });
-	await pa.locator('.mask .pku', { hasText: 'c' + w }).click(); await pa.click('.mask [data-go]'); await W(1000);
+	await pa.locator('.mask .pku', { hasText: ('c' + w).slice(0, 2) + '***' }).click(); await pa.click('.mask [data-go]'); await W(1000);
 	const pk = await S().get('c:pick:' + R2.sub);
 	ok('选好人：发验证码给他，出现输验证码的框' + T, !!pk && pk.target === uc && await pa.isVisible('.mask .pk2 [data-c]'));
 	await pa.fill('.mask [data-c]', pk.code); await pa.click('.mask [data-go]'); await W(1500);
 	const st = await pa.locator('#devs .dev', { hasText: 'Study' }).textContent();
-	ok('确认后：书房的主账号是 C，A 变成子账号' + T, /子账号 · 主账号：c\d+/.test(st), st.slice(0, 160));
+	ok('确认后：书房的主账号是 C，A 变成子账号' + T, /子账号 · 主账号：c\d\*\*\*/.test(st), st.slice(0, 160));
 	// C 加入的另一个方式：在「添加路由器 → 加入家人」里输加入码
 	const jc2 = (await fam(R1, 'join_create', { uid: ua, sudo: su, name: 'C', perms: ['msg'] })).code;
 	await pc.reload(); await W(1500);

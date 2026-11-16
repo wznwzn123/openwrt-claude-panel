@@ -48,7 +48,7 @@ const origPush = mod.Watch.prototype.push; mod.Watch.prototype.push = async func
 const jar = () => ({ sid: '' });
 const call = async (c, path, b, method = 'POST') => {
 	const h = { 'content-type': 'application/json', origin: 'https://panel.example', 'cf-connecting-ip': '9.9.9.' + Math.floor(Math.random() * 200) };
-	if (c.sid) h.cookie = 'sid=' + c.sid;
+	if (c.sid) h.cookie = '__Host-sid=' + c.sid;
 	const res = await mod.default.fetch(new Request('https://panel.example' + path, { method, headers: h, body: method === 'GET' ? undefined : JSON.stringify(b || {}) }), env);
 	const sc = res.headers.get('set-cookie'); if (sc) { const m = /sid=([a-z2-9]*);/.exec(sc); c.sid = m ? m[1] : ''; }
 	let j = {}; try { j = await res.json(); } catch (e) {}

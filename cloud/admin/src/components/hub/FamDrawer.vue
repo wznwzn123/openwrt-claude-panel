@@ -15,6 +15,9 @@ const props = defineProps<{ sub: string; name?: string }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>()
 const PERMS: Array<[string, string]> = [['msg', '反馈和联系开发者'], ['node', '切换节点'], ['speed', '测速'], ['parent', '家长控制'], ['proxy', '代理设置'], ['net', '网络设置'], ['sys', '系统操作']]
 const TPL: Record<string, string> = { look: '只看', family: '家人', most: '几乎全部', custom: '自定义' }
+// 这三项能改动整个路由器（代理插件运行的脚本、路由器后台、重启和服务），有了就跟主账号差不多
+const RISK = ['proxy', 'net', 'sys']
+const pname = (k: string) => (PERMS.find(([x]) => x === k) || [k, k])[1]
 const info = ref<any>(null)
 const err = ref('')
 const edit = ref<Record<string, Record<string, boolean>>>({})
@@ -51,10 +54,12 @@ async function setOwner(target?: any) {
 async function subOp(s: any, o: 'perms' | 'off' | 'on' | 'remove') {
   const T = { perms: '改 ' + s.email + ' 的权限', off: '停用 ' + s.email, on: '恢复 ' + s.email, remove: '移除 ' + s.email }[o]
   const M = { perms: '按上面勾选的保存。', off: '停用后他的手机马上打不开这台路由器的面板，恢复以后要从官网重新打开。', on: '恢复后他可以从官网重新打开面板。', remove: '移除后这台路由器从他的账号里去掉，他的手机马上打不开面板。' }[o]
-  const v = await why(T, M, o === 'remove' || o === 'off')
+  const np = PERMS.map(([k]) => k).filter((k) => edit.value[s.uid]?.[k])
+  const add = o === 'perms' ? RISK.filter((k) => np.includes(k) && !(s.perms || []).includes(k)) : []
+  const v = await why(T, add.length ? M + '注意：新给了「' + add.map(pname).join('、') + '」，有这些权限的人能改动整个路由器（包括代理插件运行的脚本和路由器后台），跟主账号差不多。' : M, o === 'remove' || o === 'off' || add.length > 0)
   if (!v) return
   const body: any = { target: s.uid, why: v.value }
-  if (o === 'perms') body.perms = PERMS.map(([k]) => k).filter((k) => edit.value[s.uid]?.[k])
+  if (o === 'perms') body.perms = np
   if (o === 'off' || o === 'on') body.off = o === 'off'
   if (o === 'remove') body.remove = true
   try { await post(`fam/${props.sub}/sub`, body); pushToast('好了'); emit('changed'); load() } catch (x) { toastError(x, '没成功') }
@@ -97,6 +102,7 @@ async function subOp(s: any, o: 'perms' | 'off' | 'on' | 'remove') {
           <div class="fd-perms">
             <Checkbox v-for="[k, n] in PERMS" :key="k" v-model="edit[s.uid][k]" :label="n" />
           </div>
+          <p v-if="RISK.some((k) => edit[s.uid]?.[k])" class="fd-risk">勾了「代理设置」「网络设置」「系统操作」的人能改动整个路由器，跟主账号差不多。</p>
           <div class="fd-acts">
             <Button size="sm" variant="primary" @click="subOp(s, 'perms')">保存权限</Button>
             <Button size="sm" @click="subOp(s, s.off ? 'on' : 'off')">{{ s.off ? '恢复' : '停用' }}</Button>
@@ -126,6 +132,7 @@ async function subOp(s: any, o: 'perms' | 'off' | 'on' | 'remove') {
 .fd-sub { padding: 12px; border-radius: 12px; border: 1px solid var(--line, rgba(127, 127, 127, .2)); display: grid; gap: 10px; }
 .fd-sub + .fd-sub { margin-top: 10px; }
 .fd-perms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; }
+.fd-risk { margin: 8px 0 0; padding: 7px 10px; border-radius: var(--r-xs); background: var(--red-soft); color: var(--red-text); font-size: 12.5px; line-height: 1.55; }
 .fd-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .fd-sub .fd-acts { margin-top: 0; }
 .fd-note { padding: 10px 12px; border-radius: 10px; background: rgba(255, 159, 10, .12); font-size: 13px; line-height: 1.6; margin-bottom: 10px; }

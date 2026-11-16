@@ -47,7 +47,7 @@ export function installFam(Hub) {
 		async famPerson(uid, full) {
 			const u = await this.ctx.storage.get('u:' + uid);
 			if (!u) return null;
-			return { uid, name: u.name || u.email.split('@')[0], email: full ? u.email : mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '' };
+			return { uid, name: u.name || mask(u.email).split('@')[0], email: full ? u.email : mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '' };
 		},
 		// 这台路由器的成员（主账号、子账号、还没被接受的加入码）
 		async famMembers(sub, full) {
@@ -82,7 +82,7 @@ export function installFam(Hub) {
 			const role = this.famRole(d, uid);
 			if (!['main', 'sub', 'off', 'expired', 'pick'].includes(role)) return { st: 403, error: '你已经不是这台路由器的成员了' };
 			const f = this.famOf(d), sx = f.subs[uid], x = (u.devs || []).find((y) => y.sub === sub) || {};
-			return { st: 200, ok: true, me: { uid, name: u.name || u.email.split('@')[0], email: mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '', created: u.created || 0, verified: !!u.verified, joined: x.at || 0 },
+			return { st: 200, ok: true, me: { uid, name: u.name || mask(u.email).split('@')[0], email: mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '', created: u.created || 0, verified: !!u.verified, joined: x.at || 0 },
 				role, perms: role === 'main' ? PERM_KEYS : sx ? sx.perms || [] : [], subExp: sx ? sx.exp || 0 : 0, owner: f.owner && f.owner !== uid ? await this.famPerson(f.owner) : null, nsub: Object.keys(f.subs).length,
 				router: { name: d.name || sub, model: d.model || '', created: d.created || 0, exp: d.exp || 0 } };
 		},
@@ -368,7 +368,7 @@ export function installFam(Hub) {
 			if (remove) { await this.famDrop(d, target); if (u) { u.devs = (u.devs || []).filter((x) => x.sub !== sub); await this.ctx.storage.put('u:' + target, u); } }
 			else { if (perms) { s.perms = cleanPerms(perms); s.tpl = tplOf(s.perms); } if (off !== undefined) { s.off = !!off; if (s.off) this.famKick(d, target); } if (subExp !== undefined) s.exp = +subExp > Date.now() ? +subExp : 0; }
 			await this.famSave(d);
-			await this.rlog(sub, '🛠', '开发者' + (remove ? '移除了子账号 ' : '改了子账号 ') + (u ? u.name || u.email.split('@')[0] : '') + '（' + why + '）');
+			await this.rlog(sub, '🛠', '开发者' + (remove ? '移除了子账号 ' : '改了子账号 ') + (u ? u.name || mask(u.email).split('@')[0] : '') + '（' + why + '）');
 			await this.alog('fam-sub', sub, (remove ? '移除子账号 ' : '改子账号 ') + (u ? u.email : target) + '：' + why);
 			return { st: 200, ok: true };
 		},

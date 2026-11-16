@@ -1,4 +1,5 @@
 // 5.2 我的主页：顶栏和侧边栏显示官网账号的头像和名字，点开是「我的主页」整页（托管服务、这台路由器、家人、敏感信息要验证码、操作记录、我的反馈）；实时对话两边显示头像和名字
+// 5.2.2：一次拿全（先显示上次的）；验证码框去邮箱复制再回来、刷新都不丢，输满 6 位自动确认；能打开面板的手机挪进敏感信息，官网的密码和设备去官网账号设置
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const { respond } = require('./mock');
@@ -10,7 +11,9 @@ const AV = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 let hosted = true, accs = [{ uid: 'abcdefghijk2', email: 'al***@x.com', name: '小明', avatar: AV, at: Date.now() - 864e5 }, { uid: 'bcdefghijk23', email: 'bo***@y.com', name: '', avatar: '', at: 2 }];
 let dev = { name: '王开发', avatar: '' }, me = { name: '小明', avatar: AV };
 const calls = [];
-let ROLE = 'owner';
+let ROLE = 'owner', EMERG = false, DELAY = 0;
+const DEVS0 = () => ({ abcd1234: { name: '安卓手机 · Edge', at: Math.floor(Date.now() / 1000) - 3600, via: '官网账号 xi***@qq.com' }, app00001: { name: '安卓手机 23127PN0CC · App', at: Math.floor(Date.now() / 1000) - 86400, via: '官网账号 xi***@qq.com' }, old00001: { name: '旧手机 · Chrome', at: Math.floor(Date.now() / 1000) - 9 * 86400, via: '账号 xi***@qq.com' } });
+let DEVS = DEVS0();
 const F = { name: '小明', avatar: AV, subs: [{ uid: 'sub000000002', name: '爸爸', email: 'ba***@x.com', avatar: '', perms: ['msg', 'node', 'speed'], exp: 0, off: false, at: Date.now() - 3 * 864e5 }], joins: [], sudo: '', sessOut: 0 };
 const LOG = [{ t: Date.now() - 3600e3, ic: '👋', x: '爸爸 用加入码成为子账号（家人）' }, { t: Date.now() - 86400e3, ic: '🔗', x: '绑定到 小明 的账号，他是主账号' }, { t: Date.now() - 2 * 86400e3, ic: '✨', x: '开通托管服务（7 天）' }];
 for (let i = 0; i < 6; i++) LOG.push({ t: Date.now() - (3 + i) * 86400e3, ic: '🔧', x: '主账号把 爸爸 的权限改成「家人」' });
@@ -24,7 +27,8 @@ function famOp(a) {
 		case 'log': return { ok: true, list: LOG };
 		case 'profile': if (a.name !== undefined) F.name = a.name; if (a.avatar !== undefined) F.avatar = a.avatar; return { ok: true };
 		case 'sudo_code': return { ok: true, mail: 'xi***@qq.com' };
-		case 'sudo': if (a.code !== '123456') return { error: '验证码不对' }; F.sudo = 'sudotokensudotokensudotok'; return { ok: true, sudo: F.sudo, exp: Date.now() + 600e3 };
+		case 'sudo': if (a.code !== '123456') return { error: '验证码不对' }; F.sudo = 'sudotokensudotokensudotok'; return { ok: true, sudo: F.sudo, exp: Date.now() + 600e3, ...(a.want === 'secret' ? { secret: famOp({ op: 'secret', sudo: F.sudo }) } : {}) };
+		case 'page': return { ok: true, me: famOp({ op: 'me' }), members: famOp({ op: 'members' }), log: LOG, secret: a.sudo && a.sudo === F.sudo ? famOp({ op: 'secret', sudo: a.sudo }) : null };
 		case 'secret': return { ok: true, email: 'xiaoming2026@qq.com', verified: true, sessions: F.sessOut ? [] : [{ id: 's1', ua: '安卓手机 · Edge', place: '台北', at: Date.now() - 864e5, last: Date.now() - 3600e3 }, { id: 's2', ua: 'Windows 电脑 · Chrome', place: '台北', at: Date.now() - 2 * 864e5, last: Date.now() - 7200e3 }], logins: [{ t: Date.now() - 864e5, k: 'user', ok: true, why: '登录成功', place: '台北', ua: '安卓手机' }, { t: Date.now() - 864e5 - 60e3, k: 'user', ok: false, why: '密码错了', place: '台北', ua: '安卓手机' }, { t: Date.now() - 5 * 864e5, k: 'reg', ok: true, why: '注册', place: '台北', ua: 'Windows 电脑' }] };
 		case 'sess_out': F.sessOut++; return { ok: true };
 		case 'join_create': F.joins.push({ code: 'ABCD2345', name: a.name, perms: a.perms, exp: Date.now() + 864e5 }); F.lastJoin = a; return { ok: true, code: 'ABCD2345', exp: Date.now() + 864e5, link: 'https://panel.example/app?join=ABCD2345' };
@@ -43,8 +47,10 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (m === 'svc_info') result = hosted ? { hosted: true, hub: 'https://panel.example', exp: Date.now() + 7 * 864e5 - 3600e3, off: false } : { hosted: false };
 		else if (m === 'cloud_info') result = hosted ? { enabled: true, url: 'https://ab3cd4ef.panel.example/cloud', tablet: 'x', pkey: 'p'.repeat(32), hosted: true, hub: 'https://panel.example' } : { enabled: false };
 		else if (m === 'hub_accounts') result = accs;
-		else if (m === 'whoami') result = { hosted, hub: 'https://panel.example', role: ROLE, perms: ROLE === 'sub' ? ['msg', 'node', 'speed'] : ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'], uid: 'abcdefghijk2' };
-		else if (m === 'fam') { const r = famOp(body.params); if (r.error) return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: r.error } })); result = r; }
+		else if (m === 'device_list') result = { hosted, list: Object.entries(DEVS).map(([id, d]) => ({ id, name: d.name, at: d.at, via: d.via, seen: id === 'app00001' ? Math.floor(Date.now() / 1000) - 8 * 3600 : null, me: id === 'abcd1234' })) };
+		else if (m === 'device_remove') { if (body.params.all_others) { for (const k of Object.keys(DEVS)) if (k !== 'abcd1234') delete DEVS[k]; } else delete DEVS[body.params.id]; result = { ok: true }; }
+		else if (m === 'whoami') result = { hosted, hub: 'https://panel.example', emerg: EMERG, role: ROLE, perms: ROLE === 'sub' ? ['msg', 'node', 'speed'] : ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'], uid: 'abcdefghijk2' };
+		else if (m === 'fam') { const r = famOp(body.params); if (DELAY && body.params.op === 'page') { setTimeout(() => res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: r })), DELAY); return; } if (r.error) return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: r.error } })); result = r; }
 		else if (m === 'chat') result = body.params.op === 'get' ? { ok: true, msgs: body.params.after ? [] : msgs, seq: 4, uu: 0, hosted: true, ...(body.params.after ? {} : { dev, me }) } : { ok: true, s: 5, t: Date.now() };
 		else result = respond(m, body.params || {});
 		return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result })); }
@@ -60,7 +66,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 	const browser = await chromium.launch();
 	for (const [dn, w, h] of [['iPhone SE', 320, 568], ['安卓', 390, 844], ['电脑', 1280, 800]]) {
 		const T = '［' + dn + '］';
-		hosted = true; ROLE = 'owner'; F.sudo = ''; F.sessOut = 0; F.joins = []; F.name = '小明'; F.avatar = AV;
+		hosted = true; ROLE = 'owner'; EMERG = false; DELAY = 0; DEVS = DEVS0(); F.sudo = ''; F.sessOut = 0; F.joins = []; F.name = '小明'; F.avatar = AV;
 		F.subs = [{ uid: 'sub000000002', name: '爸爸', email: 'ba***@x.com', avatar: '', perms: ['msg', 'node', 'speed'], exp: 0, off: false, at: Date.now() - 3 * 864e5 }];
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
 		await ctx.route('https://panel.example/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '官网' }));
@@ -72,13 +78,17 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('头像是官网账号的头像（图片）' + T, /data:image\/png/.test(await page.evaluate((s) => getComputedStyle(document.querySelector(s + ' .av')).backgroundImage, btn)));
 		if (w >= 900) ok('侧边栏显示名字' + T, (await page.textContent('#sideMeName')) === '小明');
 		ok('顶栏不重叠、不超出' + T, (await topLay(page)) === '', await topLay(page));
+		const c0 = calls.length;
 		await page.click(btn); await W(1500);
 		const t = await page.textContent('#meBox');
+		const fc0 = calls.slice(c0).filter((c) => c.m === 'fam').map((c) => c.p.op);
+		ok('打开我的主页：只问一次（page），不再一个接一个问 me / members / log' + T, fc0.join() === 'page', fc0.join());
 		ok('点开是「我的主页」整页：头像、名字、打码邮箱、主账号' + T, (await page.textContent('#pageTitle')) === '我的主页' && /小明/.test(t) && /xi\*\*\*@qq\.com/.test(t) && /主账号/.test(t), t.slice(0, 200));
 		ok('有托管服务、这台路由器、家人、敏感信息、操作记录、我的反馈' + T, ['托管服务', '这台路由器', '家人', '敏感信息', '操作记录', '我的反馈'].every((x) => t.includes(x)));
 		ok('托管服务：到期时间、专属网址、输入续期码' + T, /还剩 7 天/.test(t) && /localhost:8181/.test(t) && await page.isVisible('[data-mp="renew"]'));
 		ok('家人：列出爸爸（家人权限），能管理、添加、转让' + T, /爸爸/.test(t) && /家人/.test(t) && await page.isVisible('[data-mp="sub"]') && await page.isVisible('[data-mp="join"]') && await page.isVisible('[data-mp="transfer"]'));
-		ok('敏感信息默认锁着，看不到完整邮箱' + T, !/xiaoming2026/.test(t) && await page.isVisible('[data-mp="unlock"]'));
+		ok('敏感信息默认锁着，看不到完整邮箱，有「发验证码」' + T, !/xiaoming2026/.test(t) && await page.isVisible('#meBox [data-cwrap] [data-send]') && /发验证码到 xi\*\*\*@qq\.com/.test(t));
+		ok('锁着时说清楚里面有：能打开这个面板的手机' + T, /哪些手机能打开这个面板/.test(t));
 		ok('操作记录：先显示 6 条，有「看更多」' + T, (await page.locator('#meBox .mp-tl li').count()) === 6 && await page.isVisible('[data-mp="logall"]'));
 		ok('整页不横向滚动' + T, (await page.evaluate(() => document.documentElement.scrollWidth)) <= w, String(await page.evaluate(() => document.documentElement.scrollWidth)));
 		await page.screenshot({ path: path.join(SHOT, `me-page-${w}.png`), fullPage: true });
@@ -89,20 +99,42 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-mp="av"]')]);
 		await fc.setFiles(path.join(__dirname, '..', '..', 'cloud', 'test', 'fixtures', 'shot.png')); await W(1500);
 		ok('换头像：裁小压缩后上传（不用验证码）' + T, /^data:image\/(webp|jpeg);base64,/.test(F.avatar) && F.avatar.length < 60000, F.avatar.slice(0, 30));
-		// 敏感信息：发验证码 → 输错 → 输对
-		await page.click('[data-mp="unlock"]'); await W(700);
-		ok('点「发验证码」：出现输验证码的框，说发到哪了' + T, await page.isVisible('#mpCode input') && /xi\*\*\*@qq\.com/.test(await page.textContent('#mpCode')));
-		await page.fill('#mpCode input', '000000'); await page.click('[data-mp="unlock2"]'); await W(700);
-		ok('验证码错了：还锁着' + T, !/xiaoming2026/.test(await page.textContent('#meBox')));
-		await page.fill('#mpCode input', '123456'); await page.click('[data-mp="unlock2"]'); await W(1500);
-		const t2 = await page.textContent('#meBox');
-		ok('验证码对了：看到完整邮箱、官网登录着的 2 台设备、登录记录（有一条失败）' + T, /xiaoming2026@qq\.com/.test(t2) && /Windows 电脑 · Chrome/.test(t2) && /密码错了/.test(t2), t2.slice(0, 300));
+		// 敏感信息：发验证码 → 输错（输满 6 位自动核对）→ 去邮箱复制验证码再回来（自动刷新）→ 关掉重开 → 输对
+		const sc0 = calls.filter((c) => c.m === 'fam' && c.p.op === 'sudo_code').length;
+		await page.click('#meBox [data-cwrap] [data-send]'); await W(700);
+		ok('点「发验证码」：出现输验证码的框，说发到哪了' + T, await page.isVisible('#meBox [data-code]') && /验证码发到了 xi\*\*\*@qq\.com/.test(await page.textContent('#meBox [data-cwrap]')));
+		ok('「重新发」按钮 1 分钟内不能点，显示还要等几秒' + T, await page.isDisabled('#meBox [data-resend]') && /秒后/.test(await page.textContent('#meBox [data-resend]')));
+		await page.fill('#meBox [data-code]', '000000'); await W(900);
+		ok('输满 6 位自动核对；验证码错了：还锁着，输入框还在' + T, calls.some((c) => c.m === 'fam' && c.p.op === 'sudo' && c.p.code === '000000') && !/xiaoming2026/.test(await page.textContent('#meBox')) && await page.isVisible('#meBox [data-code]'));
+		await page.fill('#meBox [data-code]', '12'); await page.evaluate(() => { document.querySelector('#meBox [data-code]').dataset.keep = '1'; });
+		const c1 = calls.length;
+		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await W(1200);
+		ok('去邮箱复制验证码再回来（页面自动刷新）：输入框还在，输了一半的还在，没被重画' + T, calls.slice(c1).some((c) => c.m === 'fam' && c.p.op === 'page') && (await page.evaluate(() => { const i = document.querySelector('#meBox [data-code]'); return !!i && i.dataset.keep === '1' && i.value === '12'; })));
+		await page.reload(); await W(1800); if ((await page.textContent('#pageTitle')) !== '我的主页') { await page.click(btn); await W(1500); }
+		ok('关掉面板重新打开（或侧滑退出再进来）：10 分钟内直接显示输入框，不用重新发' + T, await page.isVisible('#meBox [data-code]') && calls.filter((c) => c.m === 'fam' && c.p.op === 'sudo_code').length === sc0 + 1);
+		const c2 = calls.length;
+		await page.fill('#meBox [data-code]', '123456'); await W(1500);
+		const t2 = await page.textContent('#meBox'), after = calls.slice(c2).map((c) => c.m + (c.m === 'fam' ? ':' + c.p.op : ''));
+		ok('输对了自动确认：只问一次（验证码 + 敏感信息一起回来），同时读手机列表，不再整页重读' + T, after.filter((x) => x.startsWith('fam')).join() === 'fam:sudo' && after.includes('device_list') && calls.slice(c2).find((c) => c.m === 'fam').p.want === 'secret', after.join());
+		ok('验证后：完整邮箱、登录记录（有一条失败）' + T, /xiaoming2026@qq\.com/.test(t2) && /密码错了/.test(t2), t2.slice(0, 300));
+		ok('验证后：能打开面板的 3 台手机（这台、最近使用、能移除）' + T, /登录着的设备 · 3 台/.test(t2) && /安卓手机 23127PN0CC · App/.test(t2) && /这台/.test(t2) && /最近使用：8 小时前/.test(t2) && (await page.locator('#meBox [data-mp="drm"]').count()) === 2);
+		ok('验证后：官网的设备不在这里列，改成「官网账号设置」入口（去官网）' + T, !/Windows 电脑 · Chrome/.test(t2) && /官网上登录着的 2 台设备/.test(t2) && (await page.getAttribute('#meBox a[href$="/app#settings"]', 'href')) === 'https://panel.example/app#settings');
 		ok('显示多久后自动锁上' + T, /后自动锁上/.test(await page.textContent('#mpLeft')));
+		ok('验证后整页不横向滚动' + T, (await page.evaluate(() => document.documentElement.scrollWidth)) <= w);
 		await page.screenshot({ path: path.join(SHOT, `me-open-${w}.png`), fullPage: true });
-		await page.click('[data-mp="soutall"]'); await W(400); await page.locator('.modal').last().locator('button:has-text("全部退出")').click(); await W(1200);
-		ok('官网全部退出（验证过了不用再输码）' + T, F.sessOut === 1 && /没有设备登录着官网/.test(await page.textContent('#meBox')));
+		await page.locator('#meBox [data-mp="drm"]').first().click(); await W(400);
+		ok('移除手机：先确认，写明哪台' + T, /移除这台手机/.test(await page.locator('.modal').last().textContent()) && /23127PN0CC|旧手机/.test(await page.locator('.modal').last().textContent()));
+		await page.locator('.modal').last().locator('button:has-text("移除")').click(); await W(1000);
+		ok('移除后列表跟着变（不用再输验证码）' + T, Object.keys(DEVS).length === 2 && /登录着的设备 · 2 台/.test(await page.textContent('#meBox')));
+		await page.click('#meBox [data-mp="drmall"]'); await W(400); await page.locator('.modal').last().locator('button:has-text("全部移除")').click(); await W(1000);
+		ok('除了这台，全部移除' + T, Object.keys(DEVS).join() === 'abcd1234' && /登录着的设备 · 1 台/.test(await page.textContent('#meBox')));
 		await page.click('[data-mp="lock"]'); await W(500);
-		ok('「现在锁上」：又锁起来了' + T, !/xiaoming2026/.test(await page.textContent('#meBox')) && await page.isVisible('[data-mp="unlock"]'));
+		ok('「现在锁上」：又锁起来了，显示「发验证码」' + T, !/xiaoming2026/.test(await page.textContent('#meBox')) && await page.isVisible('#meBox [data-cwrap] [data-send]') && !(await page.isVisible('#meBox [data-code]')));
+		// 再打开我的主页：先显示上次的（官网慢也马上有内容）
+		DELAY = 2500;
+		await page.goto('http://localhost:8181/panel/?p=more'); await W(1200); await page.click(btn); await W(500);
+		ok('再打开我的主页：马上显示上次的内容（不等官网）' + T, /小明/.test(await page.textContent('#meBox')) && /爸爸/.test(await page.textContent('#meBox')) && !/读取中/.test(await page.textContent('#meBox')));
+		await W(2600); DELAY = 0;
 		// 添加家人：要验证码（锁上后重新确认）
 		await page.click('[data-mp="join"]'); await W(600);
 		await page.fill('.modal [data-n]', '奶奶'); await page.click('.modal [data-tpl="look"]'); await W(200);
@@ -111,7 +143,8 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		await page.click('.modal [data-ok]'); await W(800);
 		ok('生成加入码前要确认本人' + T, /先确认是你本人/.test(await page.locator('.modal').last().textContent()));
 		await page.locator('.modal').last().locator('[data-send]').click(); await W(600);
-		await page.locator('.modal').last().locator('input').fill('123456'); await page.locator('.modal').last().locator('[data-ok]').click(); await W(1500);
+		ok('弹窗里发验证码：出现输入框' + T, await page.locator('.modal').last().locator('[data-code]').isVisible());
+		await page.locator('.modal').last().locator('[data-code]').fill('123456'); await W(1500);
 		ok('确认后：显示加入码和链接，带着选的权限' + T, /ABCD 2345/.test(await page.locator('.modal').last().textContent()) && F.lastJoin && F.lastJoin.name === '奶奶' && F.lastJoin.perms.join() === 'msg');
 		await page.screenshot({ path: path.join(SHOT, `me-joincode-${w}.png`) });
 		await page.locator('.modal').last().locator('button:has-text("完成")').click(); await W(1300);
@@ -142,6 +175,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		// 系统操作里没有「托管服务」「绑定到账号」了
 		await page.goto('http://localhost:8181/panel/?p=more'); await W(1500);
 		ok('系统操作里没有「托管服务」「绑定到账号」（搬到我的主页了）' + T, !/托管服务|绑定到账号/.test(await page.textContent('#p-more')));
+		ok('系统操作里没有「已登录的手机」（挪到我的主页 → 敏感信息了）' + T, !(await page.isVisible('#devsBtn')));
 		// 实时对话：两边头像和名字
 		await page.goto('http://localhost:8181/panel/?p=chat'); await W(1800);
 		const who = await page.$$eval('#chList .chwho', (l) => l.map((x) => ({ me: x.closest('.chrow').classList.contains('me'), t: x.querySelector(':scope > span:last-child').textContent.trim(), img: !!x.querySelector('.av.img') })));
@@ -159,6 +193,17 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('[子账号] 整页不横向滚动' + T, (await p3.evaluate(() => document.documentElement.scrollWidth)) <= w);
 		await p3.screenshot({ path: path.join(SHOT, `me-sub-${w}.png`), fullPage: true });
 		await c3.close();
+		// 用应急登录码进来的（看不到我的主页）：「已登录的手机」还在系统操作里
+		ROLE = 'owner'; EMERG = true;
+		const c4 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
+		const p4 = await c4.newPage(); p4.on('pageerror', (e) => problems.push('页面错误4' + T + '：' + e.message));
+		await p4.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); localStorage.setItem('rp_dev', 'abcd1234.' + 'x'.repeat(32)); });
+		await p4.goto('http://localhost:8181/panel/?p=more'); await W(2400);
+		if (!(await p4.isVisible('#devsBtn'))) { await p4.goto('http://localhost:8181/panel/?p=more'); await W(1800); }
+		ok('[应急登录码] 系统操作里还有「已登录的手机」，能打开列表' + T, await p4.isVisible('#devsBtn'));
+		await p4.click('#devsBtn'); await W(900);
+		ok('[应急登录码] 列表能用' + T, /已登录的手机/.test(await p4.locator('.modal').last().textContent()) && /安卓手机/.test(await p4.locator('.modal').last().textContent()));
+		await c4.close(); EMERG = false;
 		// 自建版：不显示
 		hosted = false; ROLE = 'owner';
 		const ctx2 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });

@@ -183,7 +183,7 @@ P.device_approve = function(a) {
 	else if (!acct) d[id].emerg = true;
 	devs_write(d);
 	DEV_ID = id;
-	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「系统操作 → 已登录的手机」里把它移除。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除（用应急登录码进来的手机在「系统操作 → 已登录的手机」）。'))); } catch (e) {}
 	return { dev: id + '.' + sec, id, name };
 };
 P.device_list = function() {
@@ -310,7 +310,7 @@ P.open_login = function(a) {
 	devs_write(d);
 	DEV_ID = id;
 	sh('rm -f ' + FAM_PATH); // 成员可能刚变过，下个请求重新拿
-	if (!again) try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机打开了面板：' + name), shq((who ? who + '（' + (o.email ?? '') + '）' : '账号 ' + (o.email ?? '')) + (o.role == 'main' ? '' : '，子账号') + '从官网打开了面板。不是你们家的人的话，马上在面板「我的主页 → 登录着的设备」里把它移除。'))); } catch (e) {}
+	if (!again) try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机打开了面板：' + name), shq((who ? who + '（' + (o.email ?? '') + '）' : '账号 ' + (o.email ?? '')) + (o.role == 'main' ? '' : '，子账号') + '从官网打开了面板。不是你们家的人的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除。'))); } catch (e) {}
 	return { token: conf().token, dev: id + '.' + sec, id, name };
 };
 // 我是谁：面板「我的主页」用
@@ -319,18 +319,20 @@ P.whoami = function() {
 	return { hosted: !!h, hub: h?.HUB ?? null, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null };
 };
 // 家人管理、确认本人：转给官网（账号编号由路由器按这台手机填，手机自己填的不算）
-const FAM_OPS = { me: 0, profile: 0, log: 0, leave: 0, members: 0, sudo_code: 0, sudo: 0, secret: 0, sess_out: 0, join_create: 1, join_cancel: 1, sub_set: 1, sub_remove: 1, transfer: 1 };
+const FAM_OPS = { me: 0, page: 0, profile: 0, log: 0, leave: 0, members: 0, sudo_code: 0, sudo: 0, secret: 0, sess_out: 0, join_create: 1, join_cancel: 1, sub_set: 1, sub_remove: 1, transfer: 1 };
 P.fam = function(a) {
 	let op = '' + (a?.op ?? '');
 	if (!exists(FAM_OPS, op)) die('不支持的操作');
 	if (!DEV?.uid) die(DEV?.emerg ? '用应急登录码进来的手机不能管理家人：从官网打开面板再操作' : '先从官网打开面板');
 	if (FAM_OPS[op] && ROLE != 'owner') die('只有主账号能管理家人');
 	let x = { uid: DEV.uid };
-	for (let k in ['sudo', 'code', 'name', 'perms', 'subExp', 'target', 'off', 'avatar', 'id', 'all']) if (exists(a, k)) x[k] = a[k];
+	for (let k in ['sudo', 'code', 'name', 'perms', 'subExp', 'target', 'off', 'avatar', 'id', 'all', 'want']) if (exists(a, k)) x[k] = a[k];
 	let r = hub_call('/api/dev/fam/' + op, x);
 	if (FAM_OPS[op] || op == 'leave') sh('rm -f ' + FAM_PATH);
 	if (op == 'leave') { let d = devs_read(); for (let k in keys(d)) if (d[k].uid == DEV.uid) delete d[k]; devs_write(d); }
 	if (op == 'members' && ROLE == 'sub') { r.subs = filter(r.subs ?? [], (y) => y.uid == DEV.uid); r.joins = []; }
+	// 「我的主页」一次拿全：子账号同样只看得到自己
+	if (op == 'page' && ROLE == 'sub' && type(r.members) == 'object') { r.members.subs = filter(r.members.subs ?? [], (y) => y.uid == DEV.uid); r.members.joins = []; }
 	return r;
 };
 

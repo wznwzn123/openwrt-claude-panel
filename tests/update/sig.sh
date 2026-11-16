@@ -80,6 +80,17 @@ s=$(run "$T/good" "$T/good")
 ok "已经是最新版：照样先验签，然后说已经是最新" $([ "$s" = done ] && msg | grep -q '已经是最新版' ; echo $?) "$s $(msg)"
 s=$(run "$T/evil" "$T/evil")
 ok "已经是最新版、但下到的是假的：不装也不说「最新」" $([ "$s" = failed ] ; echo $?) "$s $(msg)"
+# 安全加固（第二轮）：防回滚——路由器现在是 9.9.9，下载地址被换成以前发布过、签名也对的 1.0：不装
+mkdir -p "$T/old/p/openwrt-claude-panel"; printf 'exit 1 # old\n' > "$T/old/p/openwrt-claude-panel/install.sh"; printf 'PKG_VER=1.0\n' > "$T/old/p/openwrt-claude-panel/EDITION"
+tar -C "$T/old/p" -czf "$T/old/openwrt-claude-panel-ai-full.tar.gz" openwrt-claude-panel && rm -rf "$T/old/p"; (cd "$T/old" && sha256sum *.tar.gz > SHA256SUMS); sg "$T/old"
+s=$(run "$T/old" "$T/old")
+ok "防回滚：签名对、但版本比现在旧（1.0 < 9.9.9）：不装，说明是旧版本" $([ "$s" = failed ] && msg | grep -q '旧版本' && ! log | grep -q '正在安装' ; echo $?) "$s $(msg)"
+rm -f "$ST"; rmdir /tmp/cmcp_update.lock 2>/dev/null
+env CMCP_ROOT="$T/root" CMCP_DL="file://$T/old" CMCP_GH="file://$T/old" CMCP_ST="$ST" CMCP_NOSVC=1 CMCP_UPUB="$K_UPUB" CMCP_PPUB="$K_PPUB" CMCP_STSIG="$K_STSIG" sh "$REPO/src/bin/cmcp-update" run force >/dev/null 2>&1
+s=$(sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' "$ST")
+ok "防回滚：强制更新也不装旧版本" $([ "$s" = failed ] && msg | grep -q '旧版本' ; echo $?) "$s $(msg)"
+s=$(run "$T/old" "$T/old" CMCP_ALLOW_OLD=1)
+ok "防回滚：在路由器终端明确要退回（CMCP_ALLOW_OLD=1）：可以装" $([ "$s" = rolledback ] ; echo $?) "$s $(msg)"
 # 12. 发布用的签名脚本：私钥跟脚本里写死的公钥对不上就不签（免得发出去路由器都验不过）
 mk "$T/rel" rel
 (cd "$T/rel" && RELEASE_SIGN_KEY=$TK node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?

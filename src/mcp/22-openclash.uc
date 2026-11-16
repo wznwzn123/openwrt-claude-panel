@@ -273,7 +273,8 @@ P.myip = function() {
 };
 
 P.site_check = function(a) {
-	let sites = a.sites ?? [
+	// 子账号只能测内置的这几个网站（自定义地址能让路由器去访问家里内网的地址，只给主账号）
+	let sites = (ROLE != 'sub' ? a.sites : null) ?? [
 		{ key: 'baidu', url: 'https://www.baidu.com' }, { key: 'taobao', url: 'https://www.taobao.com' },
 		{ key: 'google', url: 'https://www.google.com/generate_204' }, { key: 'github', url: 'https://github.com' },
 		{ key: 'youtube', url: 'https://www.youtube.com' }, { key: 'claude', url: 'https://claude.ai' },

@@ -1548,7 +1548,8 @@ P.myip = function() {
 };
 
 P.site_check = function(a) {
-	let sites = a.sites ?? [
+	// 子账号只能测内置的这几个网站（自定义地址能让路由器去访问家里内网的地址，只给主账号）
+	let sites = (ROLE != 'sub' ? a.sites : null) ?? [
 		{ key: 'baidu', url: 'https://www.baidu.com' }, { key: 'taobao', url: 'https://www.taobao.com' },
 		{ key: 'google', url: 'https://www.google.com/generate_204' }, { key: 'github', url: 'https://github.com' },
 		{ key: 'youtube', url: 'https://www.youtube.com' }, { key: 'claude', url: 'https://claude.ai' },
@@ -2587,7 +2588,7 @@ P.device_remove = function(a) {
  * 一台路由器一个主账号（权限最大），最多 10 个子账号（家人），子账号能做什么由主账号在官网或面板里勾选。
  * 手机都从官网「我的路由器 → 打开面板」进来：官网发一张 2 分钟、只能用一次的票，路由器拿票去官网问「这是谁、什么身份」，再发手机钥匙。
  * 每个请求都按这台手机属于哪个账号检查权限；谁是主账号、子账号有什么权限，从官网拿，在内存里缓存 30 秒（连不上官网时用上一次的）。 */
-const FAM_PATH = '/tmp/cmcp_fam.json', FAM_LOCK = '/tmp/cmcp_fam.lock';
+const FAM_PATH = '/tmp/cmcp_fam.json', FAM_LOCK = '/tmp/cmcp_fam.lock', FAM_STALE = 6 * 3600;
 const EMERG_VIA = '路由器终端的应急登录码';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
@@ -2647,14 +2648,16 @@ function fam_check() {
 	if (DEV.emerg || (!DEV.uid && DEV.via == EMERG_VIA)) return null; // 在路由器终端拿应急登录码进来的：能碰到路由器的人，按主账号算
 	if (!DEV.uid) return fam_drop_dev('面板升级到 5.2 了：每台手机要从官网「我的路由器」点「打开面板」重新进一次');
 	let v = fam_view();
-	if (!v) { ROLE = DEV.role ?? 'sub'; PERMS = DEV.perms ?? []; return null; } // 连不上官网，也没有缓存：按登录时的身份
+	// 安全加固（第二轮）：连不上官网时，子账号最多按 6 小时内的成员名单用原来的权限；再久就只能看（主账号不受影响）。
+	// 不然主账号在官网移除了某个家人，而路由器一直连不上官网，这个人就一直能用
+	if (!v) { ROLE = DEV.role ?? 'sub'; PERMS = time() - (DEV.at ?? 0) < FAM_STALE ? (DEV.perms ?? []) : []; return null; } // 连不上官网，也没有缓存：按登录时的身份
 	let k = v.kick?.[DEV.uid];
 	if (k && (DEV.sat ?? 0) <= k) return fam_drop_dev('这个账号在别处被要求退出所有设备了：从官网「我的路由器」重新打开面板');
 	if (v.owner == DEV.uid) return null;
 	let s = v.subs?.[DEV.uid];
 	if (type(s) == 'object') {
 		if (!s.ok) return '主账号暂时停用了你在这台路由器上的权限，或者使用期限到了';
-		ROLE = 'sub'; PERMS = s.perms ?? [];
+		ROLE = 'sub'; PERMS = (v.age ?? 0) < FAM_STALE ? (s.perms ?? []) : [];
 		return null;
 	}
 	if (v.pick) { ROLE = 'sub'; PERMS = []; return null; } // 老路由器还没选主账号：先只能看
@@ -2669,18 +2672,19 @@ const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', spee
 function fam_deny_msg(m, p) { let g = fam_group(m, p); return g && PERM_NAMES[g] ? '主账号没有给你开「' + PERM_NAMES[g] + '」权限' : '只有主账号能用这个功能'; }
 
 // 官网「打开面板」：拿票换手机钥匙（这个请求走 /cgi-bin/mcp/open，不需要登录密钥）
+// 安全加固（第二轮）：打开面板用的票是官网发的 24 位随机串、2 分钟内有效、只能用一次，猜不出来，不用锁；
+// 以前坏票跟登录码共用一把锁，谁都能发 10 次坏票，让全家 10 分钟打不开面板（路由器拿不到访问者的真实 IP，没法按 IP 锁）
 P.open_login = function(a) {
 	if (!is_hosted()) die('这台路由器没有用托管服务');
-	if (length(lc_fails()) >= 10) die('失败太多次了，10 分钟后再试');
 	let t = '' + (a?.ticket ?? '');
-	if (!match(t, /^[a-z2-9]{24}$/)) { lc_fail(); die('链接不完整：回到官网「我的路由器」重新点「打开面板」'); }
+	if (!match(t, /^[a-z2-9]{24}$/)) die('链接不完整：回到官网「我的路由器」重新点「打开面板」');
 	let c = hub_conf(true);
 	let r = sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary %s %s",
 		shq(sprintf('%J', { sub: c.SUB, rkey: c.RKEY, ticket: t })), shq(c.HUB + '/api/dev/ticket')));
 	let o = null;
 	try { o = json(r.out); } catch (e) {}
 	if (type(o) != 'object') die('连不上官网，稍后再试；急的话在路由器后台终端运行 cmcp-logincode 拿一个应急登录码');
-	if (!o.ok || !match('' + o.uid, /^[a-z2-9]{12}$/)) { lc_fail(); die(o.error ?? '这个链接用不了了：回到官网重新点「打开面板」'); }
+	if (!o.ok || !match('' + o.uid, /^[a-z2-9]{12}$/)) die(o.error ?? '这个链接用不了了：回到官网重新点「打开面板」');
 	let id = rand_str(8), sec = rand_str(32);
 	if (!id || !sec) die('生成手机钥匙失败，再试一次');
 	let d = devs_read();

@@ -146,6 +146,25 @@ await call(devB, 'whoami'); // 用旧缓存，后台去拿新的
 await new Promise((z) => setTimeout(z, 1500));
 ok('官网改的权限：缓存过期后自动拿新的，子账号不能切换节点了', (await code(devB, 'px_set', {})) === -32012);
 
+// 安全加固（第二轮）：路由器连不上官网时，子账号最多按 6 小时内的名单用原来的权限，再久就只能看；主账号不受影响
+{
+	await H().devSubSet({ sub: R.sub, uid: ua, target: ub, perms: ['msg', 'node'] }); clearCache();
+	ok('[连不上官网] 前提：子账号能切换节点', (await code(devB, 'px_set', {})) !== -32012);
+	const hc = fs.readFileSync(ETC + '/hub.conf', 'utf8');
+	fs.writeFileSync(ETC + '/hub.conf', hc.replace(/^HUB=.*$/m, 'HUB=http://127.0.0.1:9'));
+	const old = (h) => { const t = new Date(Date.now() - h * 3600e3); fs.utimesSync('/tmp/cmcp_fam.json', t, t); try { fs.rmSync('/tmp/cmcp_fam.lock', { recursive: true }); } catch (e) {} };
+	old(1);
+	ok('[连不上官网] 名单是 1 小时前的：子账号照旧能用原来的权限', (await code(devB, 'px_set', {})) !== -32012);
+	old(7);
+	ok('[连不上官网] 名单是 7 小时前的：子账号只能看（切换节点不行）', (await code(devB, 'px_set', {})) === -32012 && (await code(devB, 'overview')) !== -32012);
+	old(7);
+	ok('[连不上官网] 名单是 7 小时前的：主账号照常（切换节点可以）', (await code(devA, 'px_set', {})) !== -32012);
+	fs.writeFileSync(ETC + '/hub.conf', hc); clearCache();
+	ok('[连不上官网] 官网恢复后：子账号马上恢复', (await code(devB, 'px_set', {})) !== -32012);
+	await H().devSubSet({ sub: R.sub, uid: ua, target: ub, perms: ['msg'] }); clearCache();
+	await call(devB, 'whoami');
+}
+
 // 4. 停用子账号：手机钥匙作废
 await H().devSubSet({ sub: R.sub, uid: ua, target: ub, off: true }); clearCache();
 const off = await call(devB, 'whoami');

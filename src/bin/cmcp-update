@@ -23,6 +23,12 @@ esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 state() { # state 状态 说明 [目标版本]
 	printf '{"state":"%s","msg":"%s","from":"%s","to":"%s","code":"%s","t":%s}\n' "$1" "$(esc "$2")" "$FROM" "${3:-$TO}" "$CODE" "$(date +%s)" > "$ST.tmp" && mv -f "$ST.tmp" "$ST"
 }
+# vlt a b：版本 a 比 b 旧就返回 0（只比较像 5.2.1 这样的纯数字版本；有一边不是这种写法，算不旧）
+vlt() {
+	case "$1" in ''|*[!0-9.]*) return 1 ;; esac
+	case "$2" in ''|*[!0-9.]*) return 1 ;; esac
+	awk -v a="$1" -v b="$2" 'BEGIN { n = split(a, x, "."); m = split(b, y, "."); k = n > m ? n : m; for (i = 1; i <= k; i++) { p = x[i] + 0; q = y[i] + 0; if (p < q) exit 0; if (p > q) exit 1 } exit 1 }'
+}
 svc() { [ "$CMCP_NOSVC" = 1 ] && return 0; [ -x /etc/init.d/$1 ] && /etc/init.d/$1 $2 >/dev/null 2>&1; }
 # 验签：v_工具 文件 签名文件（签名文件是 usign / signify 格式：第一行说明，第二行 base64 的「Ed + 8 字节密钥编号 + 64 字节签名」）。0 = 签名对
 v_usign() {
@@ -114,6 +120,9 @@ run)
 	tar xzf "$PKG" 2>>"$LOG" && [ -f openwrt-claude-panel/install.sh ] || { state failed "安装包解压失败"; exit 1; }
 	TO=$(sed -n 's/^PKG_VER=//p' openwrt-claude-panel/EDITION 2>/dev/null)
 	if [ -n "$TO" ] && [ "$TO" = "$FROM" ] && [ "$2" != force ]; then state done "已经是最新版（v$TO）"; rm -rf "$W"; exit 0; fi
+	# 安全加固（第二轮）：不装比现在旧的版本——有人把以前发布过、签名也对的旧安装包放到下载地址，路由器也不会退回到有已知问题的旧版本。
+	# 真要退回旧版：在路由器终端运行 CMCP_ALLOW_OLD=1 cmcp-update run
+	if [ -n "$TO" ] && [ -n "$FROM" ] && vlt "$TO" "$FROM" && [ "$CMCP_ALLOW_OLD" != 1 ]; then echo "下载到的版本 $TO 比现在的 $FROM 旧，没有安装" >>"$LOG"; state failed "下载到的是旧版本（v$TO，比现在的 v$FROM 旧），为了安全没有安装"; rm -rf "$W"; exit 1; fi
 	# 3. 备份现在的程序（设置不动，安装本来就会保留设置）
 	state installing "正在安装 v$TO（面板会断开一会儿，不会断网）"
 	( cd "${R:-/}" && tar czf "$BK" www-claude-mcp usr/share/ucode/cmcp usr/sbin/cmcp-* etc/init.d/claude-mcp etc/init.d/cmcp-watchdog \

@@ -132,9 +132,9 @@ body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 .sech { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 22px 2px 2px; }
 .sech h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
 .sech .muted { font-size: 14px; }
-#vDash .card { padding: clamp(18px, 2.4vw, 24px); border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); box-shadow: none; }
-#vDash .card > p, #vDash .card li { font-size: 14.5px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); }
-#vDash .card b { color: var(--ink); }
+:is(#vDash, #vSet) .card { padding: clamp(18px, 2.4vw, 24px); border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); box-shadow: none; }
+:is(#vDash, #vSet) .card > p, :is(#vDash, #vSet) .card li { font-size: 14.5px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 74%, var(--bg)); }
+:is(#vDash, #vSet) .card b { color: var(--ink); }
 #vDash .card ul { margin: 0 0 14px; padding-left: 18px; }
 /* 路由器卡片 */
 #devs { display: grid; gap: 14px; }
@@ -212,6 +212,29 @@ body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 .sess .l > span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
 .sess .l b .pill { margin-left: 6px; vertical-align: 1px; background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); }
 .fine { margin: 14px 0 0 !important; font-size: 13px !important; line-height: 1.65 !important; color: var(--muted) !important; }
+/* ---------- 账号设置（/app#settings）：资料、密码、登录着的设备、注销，都在这一页 ---------- */
+#vSet { display: none; }
+body.setmode #vSet { display: block; }
+body.setmode #vDash { display: none !important; }
+.s-hero { position: relative; padding: calc(var(--nav) + clamp(24px, 4vw, 48px)) 0 clamp(20px, 3vw, 30px); border-bottom: 1px solid var(--hair); }
+.wrap.s-wrap { width: min(100% - 2 * var(--gut), 760px); }
+.s-back { display: inline-flex; align-items: center; gap: 4px; margin-left: -4px; padding: 6px 4px; color: var(--muted); font-size: 14.5px; text-decoration: none; border-radius: 10px; }
+.s-back:hover, .s-back:focus-visible { color: var(--ink); }
+.s-back svg { width: 18px; height: 18px; }
+.s-hero h1 { margin: 8px 0 0; font-size: clamp(30px, 4.4vw, 44px); line-height: 1.12; letter-spacing: -.025em; font-weight: 650; }
+.s-hero p { margin: 8px 0 0; font-size: 15px; color: var(--muted); overflow-wrap: anywhere; }
+.s-body { display: grid; gap: 6px; padding-top: clamp(8px, 2vw, 16px); padding-bottom: clamp(48px, 7vw, 88px); }
+.s-prof { display: flex; flex-direction: row; align-items: center; gap: 14px; }
+.s-av { --avs: 56px; flex: none; width: 56px; height: 56px; border-radius: 18px; overflow: hidden; box-shadow: 0 0 0 1px rgb(255 255 255 / .1); }
+.s-prof .l { flex: 1; min-width: 0; }
+.s-prof .l b { display: block; font-size: 16.5px; font-weight: 600; overflow-wrap: anywhere; }
+.s-prof .l span { display: block; margin-top: 3px; font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
+.s-note { max-width: none !important; margin: 14px 0 0 !important; padding-top: 14px; border-top: 1px solid var(--hair); font-size: 13px !important; line-height: 1.7 !important; color: var(--muted) !important; }
+.s-del { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
+.s-del span { flex: 1 1 260px; min-width: 0; font-size: 14px; line-height: 1.7; color: var(--muted); }
+a.d-stat { color: inherit; text-decoration: none; transition: border-color .2s, background-color .2s; }
+a.d-stat:hover, a.d-stat:focus-visible { border-color: color-mix(in oklab, var(--accent) 45%, var(--hair)); }
+@media (max-width: 639px) { .s-prof { flex-wrap: wrap; } .s-prof .btn { flex: 1 1 100%; } .s-del .btn { flex: 1 1 100%; } }
 .danger-zone { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--hair); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .danger-zone span { font-size: 13.5px; color: var(--muted); }
 
@@ -383,13 +406,13 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 					<p class="me-mail"><span id="who"></span><span class="me-dot">·</span><span id="meSince"></span></p>
 				</div>
 
-				<div class="me-acts"><button type="button" class="btn sm" id="meEdit">编辑资料</button><button type="button" class="btn sm" id="layEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>调整布局</button><button type="button" class="btn sm me-out" id="outBtn" aria-label="退出登录" title="退出登录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg><span>退出</span></button></div>
+				<div class="me-acts"><a class="btn sm" href="#settings" id="setBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>账号设置</a><button type="button" class="btn sm" id="layEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>调整布局</button><button type="button" class="btn sm me-out" id="outBtn" aria-label="退出登录" title="退出登录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg><span>退出</span></button></div>
 			</div>
 			<div class="d-stats">
 				<div class="d-stat"><b id="sRouters">0</b><span>路由器</span></div>
 				<div class="d-stat live"><b id="sOnline">0</b><span>在线</span></div>
 				<div class="d-stat"><b id="sFb">0</b><span>反馈</span></div>
-				<div class="d-stat"><b id="sSess">0</b><span>登录设备</span></div>
+				<a class="d-stat" href="#settings" aria-label="登录设备：去账号设置"><b id="sSess">0</b><span>登录设备</span></a>
 			</div>
 		</div>
 	</div>
@@ -445,28 +468,48 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 				</div>
 
 				</section>
-				<section class="blk" data-blk="sess" data-w="half" data-name="登录过的设备">
-					<div class="sech"><h2>登录过的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
-				<div class="card fxc"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div>
-				</section>
-				<section class="blk" data-blk="acct" data-w="half" data-name="账号安全">
-					<div class="sech"><h2>账号安全</h2></div>
-				<div class="card fxc">
-					<form id="fPw">
-						<label class="f" style="margin-top:0">原密码</label><input class="input" name="old" type="password" autocomplete="current-password" required>
-						<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
-						<div class="err" data-err></div>
-						<button class="btn" style="margin-top:16px">修改密码</button>
-					</form>
-					<div class="danger-zone"><span>注销后 30 天内可以联系恢复</span><button class="btn danger" id="delBtn">注销账号</button></div>
-				</div>
-				</section>
 				<section class="blk" data-blk="help" data-w="full" data-name="换手机怎么办">
 					<div class="sech"><h2>换手机怎么办</h2></div>
 				<div class="card fxc help2"><div><h3>新手机、清了浏览器</h3><p>在新手机上登录这个官网，在「我的路由器」里点「<b>打开面板</b>」就进去了，不用输任何码。面板里点浏览器菜单「添加到主屏幕」，以后像 App 一样打开。</p></div><div><h3>家里人也要用</h3><p>让他注册自己的官网账号；你在面板「我的主页 → 家人」里生成<b>加入码</b>发给他，他在「添加路由器 → 加入家人」里填上。他能做什么由你决定。</p></div></div>
 				</section>
 			</div>
 		</div>
+	</div>
+</div>
+<div id="vSet" aria-labelledby="setH">
+	<div class="s-hero">
+		<div class="wrap s-wrap">
+			<a class="s-back" href="/app" id="setBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>我的主页</a>
+			<h1 id="setH">账号设置</h1>
+			<p id="setWho"></p>
+		</div>
+	</div>
+	<div class="wrap s-wrap s-body">
+		<section>
+			<div class="sech"><h2>个人资料</h2></div>
+			<div class="card s-prof"><span class="s-av"><span class="av" id="setAvImg"></span></span><div class="l"><b id="setName"></b><span>名字和头像在官网、路由器面板、跟开发者的对话里都显示</span></div><button type="button" class="btn sm" id="meEdit">编辑资料</button></div>
+		</section>
+		<section>
+			<div class="sech"><h2>登录密码</h2></div>
+			<div class="card">
+				<form id="fPw">
+					<label class="f" style="margin-top:0">原密码</label><input class="input" name="old" type="password" autocomplete="current-password" required>
+					<label class="f">新密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
+					<div class="err" data-err></div>
+					<button class="btn" style="margin-top:16px">修改密码</button>
+				</form>
+				<p class="s-note">改了密码，其他设备上的登录都会退出。忘了密码：退出后在登录页点「忘记密码」。</p>
+			</div>
+		</section>
+		<section>
+			<div class="sech"><h2>登录着的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
+			<div class="card"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div>
+			<p class="s-note">这里是登录着官网账号的手机和电脑。能打开路由器面板的手机在面板里管。</p></div>
+		</section>
+		<section>
+			<div class="sech"><h2>注销账号</h2></div>
+			<div class="card s-del"><span>注销后马上登录不了，绑定的路由器会从账号里拿掉（路由器本身不受影响）。30 天内可以联系恢复。</span><button class="btn danger" id="delBtn">注销账号</button></div>
+		</section>
 	</div>
 </div>
 </main>
@@ -492,7 +535,7 @@ async function api(path, body) {
 const pair = new URLSearchParams(location.search).get('pair') || '';
 const joinCode = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
 let mailOn = false;
-function show(v) { document.body.classList.toggle('authmode', v === 'auth'); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
+function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
 	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'code' ? 'login' : t)));
 	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code');
@@ -512,7 +555,20 @@ function lgView(v, push) {
 $('goLogin').onclick = () => lgView('login', true);
 $('goReg').onclick = () => lgView('reg', true);
 $('lgBack').onclick = () => lgView('welcome', true);
-window.addEventListener('popstate', () => { if (!LGV[location.hash.slice(1)]) lgPushed = false; if (!$('vAuth').classList.contains('hidden')) lgView(location.hash.slice(1)); });
+window.addEventListener('popstate', () => { if (!LGV[location.hash.slice(1)]) lgPushed = false; if (!$('vAuth').classList.contains('hidden')) lgView(location.hash === '#settings' ? 'login' : location.hash.slice(1)); });
+// 账号设置：/app#settings（我的主页「账号设置」、顶上「登录设备」、路由器面板「敏感信息 → 官网账号设置」都到这里）；返回键回到我的主页
+let setFrom = false;
+function setSync() {
+	const on = location.hash === '#settings' && !$('vDash').classList.contains('hidden') && !document.body.classList.contains('authmode');
+	const was = document.body.classList.contains('setmode');
+	document.body.classList.toggle('setmode', on);
+	document.title = on ? '账号设置 · 路由器面板' : '我的路由器 · 账号';
+	if (on !== was) scrollTo({ top: 0 });
+	if (!on && location.hash !== '#settings') setFrom = false;
+}
+window.addEventListener('hashchange', setSync);
+document.addEventListener('click', (e) => { const a = e.target.closest('a[href="#settings"]'); if (a) setFrom = true; });
+$('setBack').onclick = (e) => { e.preventDefault(); if (setFrom) history.back(); else { try { history.replaceState(null, '', location.pathname + location.search); } catch (x) {} setSync(); } };
 // 背景点阵：缓慢起伏；系统设了「减少动态效果」就不动；看不到登录页时不画（省电）
 (function lgBackground() {
 	const c = $('lgbg'); if (!c || !c.getContext) return; const g = c.getContext('2d'); if (!g) return;
@@ -762,7 +818,8 @@ const avPaint = (el, me) => { if (!el) return; const a = me && me.avatar; el.cla
 function renderMe(me) {
 	ME = me;
 	$('meName').textContent = me.name || me.email.split('@')[0];
-	avPaint($('meAvImg'), me);
+	avPaint($('meAvImg'), me); avPaint($('setAvImg'), me);
+	$('setName').textContent = me.name || me.email.split('@')[0]; $('setWho').textContent = me.email;
 	const d = new Date(me.created || Date.now());
 	$('meSince').textContent = '注册于 ' + d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
 	if (window.navMe) window.navMe(me);
@@ -969,7 +1026,7 @@ function report(where, e) {
 // 没登录：显示登录框（带着配对码、加入码的提示）
 function showLogin() {
 	show('auth');
-	lgView(((pair || joinCode) && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	lgView(((pair || joinCode || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
 	if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
 	if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
 }

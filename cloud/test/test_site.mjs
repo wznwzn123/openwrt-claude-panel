@@ -141,6 +141,22 @@ for (const dark of [false, true]) {
 	ok('登录后自动绑定那台路由器', (await page.locator('#devs .dev').count()) === 2);
 	if (await page.isVisible('.mask')) { await page.click('.mask [data-x]'); await W(300); }
 	ok('不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
+	// 账号设置：我的主页上的「账号设置」进去，返回键回到我的主页
+	await page.click('#setBtn'); await W(500);
+	ok('[账号设置] 点「账号设置」：进到账号设置（资料、密码、登录着的设备、注销），我的主页藏起来', await page.isVisible('#vSet') && !(await page.isVisible('#vDash')) && await page.isVisible('#fPw') && await page.isVisible('#sessList') && await page.isVisible('#delBtn') && await page.isVisible('#meEdit') && /alice@x\.com/.test(await page.textContent('#setWho')));
+	ok('[账号设置] 我的主页上不再有密码和设备这两块', (await page.locator('#vDash #fPw, #vDash #sessList, #vDash [data-blk="sess"], #vDash [data-blk="acct"]').count()) === 0);
+	ok('[账号设置] 不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
+	await page.goBack(); await W(500);
+	ok('[账号设置] 返回键：回到我的主页', await page.isVisible('#vDash') && !(await page.isVisible('#vSet')));
+	await page.click('a.d-stat[href="#settings"]'); await W(500);
+	ok('[账号设置] 点顶上的「登录设备」也进到账号设置', await page.isVisible('#vSet'));
+	await page.click('#setBack'); await W(500);
+	ok('[账号设置] 点「我的主页」回去', await page.isVisible('#vDash') && !(await page.isVisible('#vSet')) && !/#settings/.test(page.url()));
+	await page.goto(B + '/app#settings'); await W(1500);
+	ok('[账号设置] 直接打开 /app#settings（面板里的「官网账号设置」）：已登录就是账号设置', await page.isVisible('#vSet') && !(await page.isVisible('#vDash')));
+	await page.click('#setBack'); await W(500);
+	ok('[账号设置] 直接打开的点「我的主页」：回到我的主页（不离开官网）', await page.isVisible('#vDash') && page.url().endsWith('/app'));
+	await page.goto(B + '/app#settings'); await W(1200);
 	// 改密码
 	await page.fill('#fPw [name=old]', 'alice-pass-1'); await page.fill('#fPw [name=password]', 'alice-pass-2'); await page.click('#fPw button'); await W(600);
 	await page.waitForFunction(() => /密码已修改/.test(document.getElementById('toast').textContent), null, { timeout: 5000 }).catch(() => {});
@@ -279,17 +295,24 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await X.p.fill('#fReg [name=email]', 'sess@x.com'); await X.p.fill('#fReg [name=password]', 'sess-pass-1'); await X.p.click('#fReg button.primary'); await W(1200);
 	const Y = await mk('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36');
 	await login(Y.p);
-	await X.p.reload(); await W(1200);
+	await X.p.goto(B + '/app#settings'); await X.p.reload(); await W(1200);
 	let t = await X.p.textContent('#sessList');
 	ok('[登录设备] 账号页列出两台：安卓手机 · Edge（这台设备）、Windows 电脑 · Chrome（有「退出」）', /安卓手机 · Edge/.test(t) && /这台设备/.test(t) && /Windows 电脑 · Chrome/.test(t) && await X.p.locator('#sessList [data-out]').count() === 1, t);
 	ok('[登录设备] 有别的设备时显示「退出其他所有设备」', await X.p.isVisible('#sessAll'));
 	if (SHOTS) { await X.p.locator('#sessList').scrollIntoViewIfNeeded(); await X.p.screenshot({ path: SHOTS + '/site-sessions.png' }); }
-	await X.p.click('#sessList [data-out]'); await W(900);
+	await X.p.click('#sessList [data-out]'); await X.p.waitForFunction(() => document.querySelectorAll('#sessList [data-sess]').length === 1, null, { timeout: 6000 }).catch(() => {}); await W(200);
 	ok('[登录设备] 点「退出」（确认后）：列表只剩这台，按钮藏起来', (await X.p.locator('#sessList [data-sess]').count()) === 1 && !(await X.p.isVisible('#sessAll')));
 	await Y.p.reload(); await W(900);
 	ok('[登录设备] 被退出的那台：回到登录页', await Y.p.isVisible('#lgWelcome') && !(await Y.p.isVisible('#vDash')));
-	await login(Y.p); const Z = await mk('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'); await login(Z.p);
+	await Y.p.goto(B + '/app#settings'); await W(500);
+	ok('[账号设置] 没登录、页面上跳到 #settings：显示登录框', await Y.p.isVisible('#fLogin'));
+	await Y.p.reload(); await W(900);
+	ok('[账号设置] 没登录打开 /app#settings：直接是登录框', await Y.p.isVisible('#fLogin') && !(await Y.p.isVisible('#vSet')));
+	await Y.p.fill('#fLogin [name=email]', 'sess@x.com'); await Y.p.fill('#fLogin [name=password]', 'sess-pass-1'); await Y.p.click('#fLogin button.primary'); await W(1200);
+	ok('[账号设置] 登录后直接进到账号设置', await Y.p.isVisible('#vSet') && !(await Y.p.isVisible('#vDash')));
+	const Z = await mk('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'); await login(Z.p);
 	await X.p.reload(); await W(1200);
+	ok('[账号设置] 刷新后还在账号设置', await X.p.isVisible('#vSet'));
 	await X.p.click('#sessAll'); await W(900);
 	ok('[登录设备] 「退出其他所有设备」：只剩这台，提示退出了 2 台', (await X.p.locator('#sessList [data-sess]').count()) === 1 && /已退出 2 台设备/.test(await X.p.textContent('body')));
 	await Z.p.reload(); await W(900);

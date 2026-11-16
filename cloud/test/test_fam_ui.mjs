@@ -91,7 +91,7 @@ for (const [w, h] of [[390, 844], [1280, 860]]) {
 	await pc.click('.seg [data-seg="join"]'); await W(300);
 	await pc.fill('#fJoin [name=code]', jc2.toLowerCase()); await pc.click('#fJoin button'); await W(1000);
 	ok('在「加入家人」里输加入码：也弹出邀请详情' + T, await pc.isVisible('.mask') && /Living/.test(await pc.textContent('.mask')));
-	await pc.click('.mask [data-ok]'); await W(1500);
+	await pc.click('.mask [data-ok]'); await pc.waitForFunction(() => /Living/.test(document.getElementById('devs').textContent), null, { timeout: 8000 }).catch(() => {}); await W(300); // 测试机上慢的时候要两秒左右
 	ok('加入成功' + T, /Living/.test(await pc.textContent('#devs')));
 	// 子账号退出
 	await pb.reload(); await W(1500);

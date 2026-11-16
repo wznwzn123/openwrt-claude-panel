@@ -1802,10 +1802,11 @@ function mpEmpty(html) { MP.h = ''; $('meBox').innerHTML = html; }
 // 一次拿全（我是谁、家人、操作记录，确认过本人的再加敏感信息）；官网还没更新的话照旧分开拿（同时发出去）
 async function mpFetch() {
 	const tok = sudoOn() ? SUDO.tok : undefined, mine = () => tok && sudoOn() && SUDO.tok === tok;
-	let r;
+	let r = null;
 	try { r = await P('fam', { op: 'page', sudo: tok }, 30000); }
-	catch (e) {
-		if (!/not found|不支持/.test(e.message)) return false;
+	catch (e) { if (!/not found|不支持/.test(e.message)) return false; r = null; }
+	// 老的官网 / 老的路由器不认 page（报错，或者回来的东西里没有「我是谁」）：分开拿
+	if (!r || !r.me) {
 		const q = (op, a) => P('fam', { op, ...a }, 30000).catch(() => null);
 		const [me, mem, log, sec] = await Promise.all([q('me'), q('members'), q('log'), tok ? q('secret', { sudo: tok }) : null]);
 		if (!me) return false;

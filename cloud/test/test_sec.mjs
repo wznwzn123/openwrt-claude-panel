@@ -80,7 +80,7 @@ ok('匿名身份：每天最多 10 个', r.st === 429 && /10 个/.test(r.j.error
 const anons = [];
 for (let i = 0; i < 12; i++) anons.push((await chat({ op: 'anon', name: 'x' + i, model: 'x86' }, '5.5.5.' + (i + 1))).j);
 let tot = 0, blocked = false;
-for (const a of anons) for (let k = 0; k < 1 && !blocked; k++) { const x = await chat({ op: 'up', cid: a.cid, ckey: a.ckey, name: 'p.zip', size: 199 * 1024 * 1024, type: 'application/zip' }, '6.6.6.6'); if (x.st === 200) tot += 199; else if (/这个网络/.test(x.j.error || '')) blocked = true; }
+for (const a of anons) for (let k = 0; k < 1 && !blocked; k++) { const x = await chat({ op: 'up', cid: a.cid, ckey: a.ckey, name: 'p.zip', size: 199 * 1024 * 1024, type: 'application/zip' }, '6.6.6.6'); if (x.st === 200) { tot += 199; await hub().fileDone(x.j.id, '', true); } else if (/这个网络/.test(x.j.error || '')) blocked = true; } // 当成传完了（正在传的另有 1GB 上限，见 test_files）
 ok('同一个 IP 换着匿名身份传：每天到 2GB 就不让传了', blocked && tot === 1990, tot + 'MB');
 r = await chat({ op: 'up', sub: R1.sub, rkey: R1.rkey, name: 'ok.zip', size: 199 * 1024 * 1024, type: 'application/zip' }, '1.1.1.1');
 ok('别的网络（托管路由器）不受影响', r.st === 200, JSON.stringify(r.j));

@@ -445,6 +445,8 @@ export class Hub extends DurableObject {
 		const ss = await this.ctx.storage.get('s:' + sid);
 		if (!ss || ss.exp < Date.now()) { if (ss) await this.ctx.storage.delete('s:' + sid); return null; }
 		const u = await this.ctx.storage.get('u:' + ss.uid);
+		// 安全加固（第二轮）：只认账号「登录着的设备」列表里还有的登录。被挤出列表的（一个账号最多同时 20 个）、改密码或「退出其他设备」时漏掉的，一律作废
+		if (u && !(u.sids || []).includes(sid)) { await this.ctx.storage.delete('s:' + sid); return null; }
 		if (u && Date.now() - (ss.last || 0) > 600e3) { ss.last = Date.now(); await this.ctx.storage.put('s:' + sid, ss); }
 		return u ? { uid: u.uid, email: u.email } : null;
 	}
@@ -458,7 +460,10 @@ export class Hub extends DurableObject {
 	async newSession(u, dev) {
 		const sid = rnd(32), now = Date.now();
 		await this.ctx.storage.put('s:' + sid, { uid: u.uid, h: 1, exp: now + SESSION_DAYS * DAY, kid: rnd(10), at: now, last: now, ua: String((dev && dev.ua) || '').slice(0, 60), place: String((dev && dev.place) || '').slice(0, 60) });
-		u.sids = [...(u.sids || []), sid].slice(-20); u.lastAt = now;
+		// 最多同时 20 个登录：超出的最早那几个直接作废（以前只是从列表里拿掉，人还登录着，改密码也清不掉）
+		const all = [...(u.sids || []), sid], gone = all.slice(0, -20);
+		if (gone.length) await this.ctx.storage.delete(gone.map((x) => 's:' + x));
+		u.sids = all.slice(-20); u.lastAt = now;
 		await this.ctx.storage.put('u:' + u.uid, u);
 		return sid;
 	}
@@ -609,8 +614,9 @@ export class Hub extends DurableObject {
 		const L = (ok, why) => this.loginLog({ k: 'user', who: email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
 		if (!(await this.hit('li:' + ip, 30, 900e3))) { await L(false, '这个 IP 试太多次，被限制'); return { st: 429, error: '尝试太多次了，15 分钟后再试' }; }
 		const fk = 'lf:' + email, f = ((await this.ctx.storage.get('r:' + fk)) || []).filter((t) => t > Date.now() - 900e3);
-		if (f.length >= 10) { await L(false, '这个账号密码错太多次，被限制'); return { st: 429, error: '这个账号密码错了太多次，15 分钟后再试' }; }
 		const uid = await this.ctx.storage.get('e:' + email), u = uid && (await this.ctx.storage.get('u:' + uid));
+		// 安全加固（第二轮）：别人拿你的邮箱连输错密码，只锁「没验证过的设备」；你自己常用、验证过的设备照样能登录
+		if (f.length >= 10 && !(u && (await this.trusted(u, did)))) { await L(false, '这个账号密码错太多次，被限制'); return { st: 429, error: '这个账号密码错了太多次，15 分钟后再试' }; }
 		if (!u) { const xu = await this.ctx.storage.get('xe:' + email).then((x) => x && this.ctx.storage.get('xu:' + x)); if (xu) { const h0 = await pwHash(password, xu.salt); if (safeEq(h0, xu.pw)) return { st: 403, error: '这个账号已经' + (xu.delWhy === 'self' ? '注销' : '被停用') + '，' + ymd(xu.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复' }; } }
 		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
 		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); await L(false, u ? '密码不对' : '没有这个账号'); return { st: 401, error: '邮箱或密码不对' }; }
@@ -687,11 +693,14 @@ export class Hub extends DurableObject {
 	// 路由器那边（凭 RKEY）要一个配对码，用户在官网输入配对码，就把这台路由器加到自己账号里
 	async pairStart({ sub, rkey }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		if (await this.devOff(sub)) return { st: 403, error: '这台路由器的托管服务已停用' };
 		if (!(await this.hit('ps:' + sub, 20, 3600e3))) return { st: 429, error: '太频繁了，稍后再试' };
 		const code = rnd(8).toUpperCase();
 		await this.ctx.storage.put('p:' + code, { sub, exp: Date.now() + 600e3 });
 		return { st: 200, code, exp: Date.now() + 600e3 };
 	}
+	// 管理员封禁的、在回收站里的路由器：钥匙还对，但不再给它加新的人、新的登录、发消息和文件（到期暂停的不算，还要能联系开发者续期）
+	async devOff(sub) { const d = await this.ctx.storage.get('d:' + sub); return !!(d && d.off && d.offWhy !== 'exp'); }
 	async devOk(sub, rkey) { if (!SUB_RE.test(sub || '')) return false; const c = await this.watch(sub).getCfg(); return !!c && safeEq(rkey, c.rkey); }
 	bind(uid, code, ip) { return this.lock(() => this._bind(uid, code, ip)); }
 	async _bind(uid, code, ip) {
@@ -726,6 +735,8 @@ export class Hub extends DurableObject {
 			await this.rlog(sub, '✂️', '主账号 ' + (await this.rname(uid)) + ' 解绑了这台路由器，所有账号都移除了');
 			return { st: 200, ok: true, all: true };
 		}
+		// 官网上解绑：自己账号里没有、也不是成员的路由器，直接说没有（以前什么都不做也回「成功」）
+		if (opt.web && !(u && (u.devs || []).some((x) => x.sub === sub)) && !(d && (d.users || []).includes(uid))) return { st: 404, error: '你的账号里没有这台路由器' };
 		if (u) { u.devs = (u.devs || []).filter((x) => x.sub !== sub); await this.ctx.storage.put('u:' + uid, u); }
 		if (d) { await this.famDrop(d, uid); await this.ctx.storage.put('d:' + sub, d); }
 		return { st: 200, ok: true };
@@ -824,6 +835,7 @@ export class Hub extends DurableObject {
 	// 路由器那边（凭 RKEY）核对手机上输入的登录码
 	async devLoginCode({ sub, rkey, code }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		if (await this.devOff(sub)) return { st: 403, error: '这台路由器的托管服务已停用' };
 		if (!(await this.hit('lv:' + sub, 30, 3600e3))) return { st: 429, error: '输错太多次了，一小时后再试' };
 		code = String(code || '').trim().toUpperCase().replace(/[^A-Z2-9]/g, '');
 		const k = 'l:' + sub + ':' + code, x = code.length === 8 ? await this.ctx.storage.get(k) : null;
@@ -978,6 +990,7 @@ export class Hub extends DurableObject {
 	/* ---------- 问题反馈：路由器面板里发来（凭 RKEY），管理页看，发邮件提醒管理员 ---------- */
 	async feedback({ sub, rkey, text, contact, diag, images, files }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+		if (await this.devOff(sub)) return { st: 403, error: '这台路由器的托管服务已停用' };
 		text = String(text || '').trim().slice(0, 2000); contact = String(contact || '').trim().slice(0, 80); diag = String(diag || '').trim().slice(0, 1500);
 		if (text.length < 4) return { st: 400, error: '写几句遇到的问题或者建议吧' };
 		if (!(await this.hit('fb:' + sub, 5, DAY))) return { st: 429, error: '今天发了很多条了，明天再发' };
@@ -1323,13 +1336,15 @@ export async function hubFetch(req, env) {
 		// 管理后台登录：只在输入密钥进来时记一次（之后每个请求不记）；开了两步验证的还要验证码，换一个 12 小时的通行证
 		if (a[0] === 'login' && req.method === 'POST') {
 			const b = await body(), t = await H.tfaLogin(b.code);
-			if (t.st !== 200) { if (b.code) await H.admFail(aip, aua, apl, '两步验证码不对'); return J({ error: b.code ? t.error : '要输入两步验证码', need2fa: true }, 401); }
+			if (t.st !== 200) { if (b.code) await H.admFail(aip, aua, apl, '登录', '两步验证码不对'); return J({ error: b.code ? t.error : '要输入两步验证码', need2fa: true }, 401); }
 			await H.loginLog({ k: 'admin', who: '管理后台', ok: true, why: '登录成功', ip: aip, ua: aua, place: apl });
 			try { await H.admLoginSeen(aip, aua, apl); } catch (e) {}
 			await H.admTouch();
 			return J({ ok: true, sess: t.sess || '', ...(await H.stats()) });
 		}
-		if (!(await H.tfaCheck(req.headers.get('x-adm-sess') || '', req.headers.get('x-adm-otp') || ''))) return J({ error: '要重新登录（两步验证）', need2fa: true }, 401);
+		// 请求头里带的验证码不对 / 被别处用过：跟密钥错一样计数（同一个 IP 15 分钟 10 次就锁），防止有密钥的人一直猜验证码
+		const tc = await H.tfaCheck(req.headers.get('x-adm-sess') || '', req.headers.get('x-adm-otp') || '', aip);
+		if (tc !== true) { if (tc === 'bad') await H.admFail(aip, aua, apl, p, '两步验证码不对'); return J({ error: '要重新登录（两步验证）', need2fa: true }, 401); }
 		await H.admTouch();
 		const vx = await v5Admin(req, a, H, body, u, env);
 		if (vx) return vx;

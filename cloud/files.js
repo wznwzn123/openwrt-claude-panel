@@ -5,11 +5,22 @@
 // · 下载：链接带签名和到期时间；不是图片、视频、音频、PDF 的一律当附件下载，防止被当成网页打开
 // · 防滥用：每台路由器每天最多 30 个、1GB（自建版的匿名对话身份 10 个、300MB）；同一个 IP 每天最多 60 个、2GB；
 //   全部文件加起来超过 8GB 就先不收新的（R2 免费额度 10GB）
+// · 安全加固（第二轮）：领了票却不传的，1 小时后就作废、额度退回（以前要等 1 天）；IPv6 按 /64 网段算同一个网络；
+//   匿名身份（自建版）合起来：正在传的最多 1GB、每天最多 3GB，而且最后 2GB 只留给托管用户和管理员——匿名的再多也占不满
 const DAY = 86400e3;
 export const FILE_MAX = 200 * 1024 * 1024, FILE_PART = 8 * 1024 * 1024, FILE_KEEP_DAYS = 30;
 const DAY_N = 30, DAY_BYTES = 1024 * 1024 * 1024, TOTAL_BYTES = 8 * 1024 * 1024 * 1024, PER_MSG = 5;
 const ANON_N = 10, ANON_BYTES = 300 * 1024 * 1024, IP_N = 60, IP_BYTES = 2 * 1024 * 1024 * 1024;
+const PEND_MS = 3600e3 + 300e3, ANON_PEND = 1024 * 1024 * 1024, ANON_DAY = 3 * 1024 * 1024 * 1024, KEEP_FREE = 2 * 1024 * 1024 * 1024;
 const ID_RE = /^[a-z2-9]{16}$/, TOK_RE = /^[a-z2-9]{32}$/;
+// 同一个网络：IPv4 按地址；IPv6 按前 64 位（一户人家一般拿到一整个 /64，里面的地址随便换）
+export function ipGroup(ip) {
+	ip = String(ip || '').trim().toLowerCase();
+	if (!ip.includes(':')) return ip;
+	const [a, b = ''] = ip.split('::'), h = a ? a.split(':') : [], t = b ? b.split(':') : [];
+	const full = ip.includes('::') ? [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t] : h;
+	return full.slice(0, 4).map((x) => (parseInt(x, 16) || 0).toString(16)).join(':') + '::/64';
+}
 const J = (o, s = 200, h = {}) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...h } });
 const rnd = (n) => { const a = 'abcdefghijkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(n)); let s = ''; for (const x of b) s += a[x % a.length]; return s; };
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -33,29 +44,51 @@ export function installFiles(Hub) {
 			if (size > FILE_MAX) return { st: 400, error: '文件太大了：最大 200MB' };
 			if (!['chat', 'fb', 'ann'].includes(ctx)) return { st: 400, error: '不支持' };
 			const now = Date.now(), day = new Date(now + 8 * 3600e3).toISOString().slice(0, 10);
+			const pend = await this._filePend(now), anon = owner[0] === 'a';
 			const tot = (await this.ctx.storage.get('m:fbytes')) || 0;
-			if (tot + size > TOTAL_BYTES) return { st: 507, error: '文件存储快满了，暂时发不了文件，先发文字吧' };
+			if (tot + size > TOTAL_BYTES - (anon ? KEEP_FREE : 0)) return { st: 507, error: '文件存储快满了，暂时发不了文件，先发文字吧' };
+			let ak = '', aq = null;
+			if (anon) {
+				const ap = pend.filter((x) => x.anon).reduce((n, x) => n + x.size, 0);
+				ak = 'fq:anon:' + day; aq = (await this.ctx.storage.get(ak)) || { n: 0, b: 0 };
+				if (ap + size > ANON_PEND || aq.b + size > ANON_DAY) return { st: 429, error: '现在发文件的人太多了，过一会儿再发' };
+			}
 			if (owner !== 'admin') {
-				const anon = owner[0] === 'a', mn = anon ? ANON_N : DAY_N, mb = anon ? ANON_BYTES : DAY_BYTES;
+				const mn = anon ? ANON_N : DAY_N, mb = anon ? ANON_BYTES : DAY_BYTES;
 				const qk = 'fq:' + owner + ':' + day, q = (await this.ctx.storage.get(qk)) || { n: 0, b: 0 };
 				if (q.n + 1 > mn || q.b + size > mb) return { st: 429, error: `今天发的文件太多了（每天最多 ${mn} 个、${anon ? '300MB' : '1GB'}），明天再发` };
-				const ik = ip ? 'fq:ip:' + ip + ':' + day : '', iq = (ik && (await this.ctx.storage.get(ik))) || { n: 0, b: 0 };
+				const ig = ipGroup(ip), ik = ig ? 'fq:ip:' + ig + ':' + day : '', iq = (ik && (await this.ctx.storage.get(ik))) || { n: 0, b: 0 };
 				if (ik && (iq.n + 1 > IP_N || iq.b + size > IP_BYTES)) return { st: 429, error: '今天这个网络发的文件太多了，明天再发' };
 				q.n++; q.b += size; await this.ctx.storage.put(qk, q);
 				if (ik) { iq.n++; iq.b += size; await this.ctx.storage.put(ik, iq); }
+				if (anon) { aq.n++; aq.b += size; await this.ctx.storage.put(ak, aq); }
 			}
 			let id; do { id = rnd(16); } while (await this.ctx.storage.get('fl:' + id));
 			const nm = cleanFileName(name), t = safeType(type), tok = rnd(32);
 			const f = { id, key: (ctx === 'ann' ? 'a/' : 'u/') + id, name: nm, size, type: t, owner, ctx, at: now, exp: ctx === 'ann' ? 0 : now + FILE_KEEP_DAYS * DAY, state: 'up', up: '', parts: [] };
-			await this.ctx.storage.put({ ['fl:' + id]: f, ['ut:' + tok]: { id, exp: now + 3600e3 }, 'm:fbytes': tot + size });
+			await this.ctx.storage.put({ ['fl:' + id]: f, ['ut:' + tok]: { id, exp: now + 3600e3 }, 'm:fbytes': tot + size, 'm:fup': [...pend, { id, size, at: now, anon }].slice(-5000) });
 			return { st: 200, ok: true, id, key: f.key, tok, type: t };
 		},
+		// 正在传的（领了票、还没传完）：票 1 小时有效，过了还没传完的作废、额度退回
+		async _filePend(now) {
+			let p = (await this.ctx.storage.get('m:fup')) || [];
+			const stale = p.filter((x) => x.at < now - PEND_MS).map((x) => x.id);
+			if (stale.length) {
+				p = p.filter((x) => !stale.includes(x.id)); await this.ctx.storage.put('m:fup', p);
+				const dead = [];
+				for (const id of stale) { const f = await this.ctx.storage.get('fl:' + id); if (f && f.state === 'up') dead.push(id); }
+				if (dead.length) await this.fileGone(dead);
+				p = (await this.ctx.storage.get('m:fup')) || [];
+			}
+			return p;
+		},
+		async _fileUnpend(ids) { const p = (await this.ctx.storage.get('m:fup')) || [], q = p.filter((x) => !ids.includes(x.id)); if (q.length !== p.length) await this.ctx.storage.put('m:fup', q); },
 		async fileSetUpload(id, up) { const f = await this.ctx.storage.get('fl:' + id); if (f) { f.up = up; await this.ctx.storage.put('fl:' + id, f); } },
 		async fileByTok(tok) { if (!TOK_RE.test(String(tok || ''))) return null; const t = await this.ctx.storage.get('ut:' + tok); if (!t || t.exp < Date.now()) return null; const f = await this.ctx.storage.get('fl:' + t.id); return f && f.state === 'up' ? f : null; },
 		filePart(id, n, etag) { return this.lock(async () => { const f = await this.ctx.storage.get('fl:' + id); if (!f || f.state !== 'up') return false; f.parts = [...f.parts.filter((p) => p.partNumber !== n), { partNumber: n, etag }]; await this.ctx.storage.put('fl:' + id, f); return true; }); },
 		async fileDone(id, tok, ok) {
 			const f = await this.ctx.storage.get('fl:' + id); if (!f) return null;
-			if (ok) { f.state = 'ok'; delete f.up; delete f.parts; await this.ctx.storage.put('fl:' + id, f); }
+			if (ok) { f.state = 'ok'; delete f.up; delete f.parts; await this.ctx.storage.put('fl:' + id, f); await this._fileUnpend([id]); }
 			else await this.fileGone([id]);
 			if (tok) await this.ctx.storage.delete('ut:' + tok);
 			return f;
@@ -77,6 +110,7 @@ export function installFiles(Hub) {
 			const keys = [];
 			for (const id of ids) { const f = await this.ctx.storage.get('fl:' + id); if (!f) continue; keys.push({ key: f.key, up: f.state === 'up' ? f.up : '' }); tot -= f.size; await this.ctx.storage.delete('fl:' + id); }
 			await this.ctx.storage.put('m:fbytes', Math.max(0, tot));
+			await this._fileUnpend(ids);
 			if (keys.length) { const q = (await this.ctx.storage.get('fdel')) || []; await this.ctx.storage.put('fdel', [...q, ...keys].slice(-2000)); }
 			return keys.length;
 		},

@@ -189,7 +189,7 @@ ok('[面板反馈] 钥匙不对：403，不给编号', r.status === 403);
 	ok('[邮箱] 管理页里能发邮件给他', JSON.stringify(L3.mailTo) === '["me@x.com"]');
 	// 登录了官网账号：不填邮箱也会用账号邮箱
 	const uid = 'u' + 'a'.repeat(9), sid = 'b'.repeat(32);
-	await hub().ctx.storage.put('u:' + uid, { uid, email: 'acc@x.com', devs: [{ sub: A.sub, at: Date.now(), alias: '客厅' }] });
+	await hub().ctx.storage.put('u:' + uid, { uid, email: 'acc@x.com', devs: [{ sub: A.sub, at: Date.now(), alias: '客厅' }], sids: [sid] });
 	await hub().ctx.storage.put('s:' + sid, { uid, exp: Date.now() + DAY, kid: 'k', at: Date.now(), last: Date.now() });
 	r = await api('POST', '/api/report', { kind: 'privacy', text: '登录了账号再报告的问题，不填邮箱' }, { 'cf-connecting-ip': '5.5.6.3', cookie: '__Host-sid=' + sid }); j = await r.json();
 	const L4 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);

@@ -46,7 +46,7 @@ const PUSH = [];
 const origPush = mod.Watch.prototype.push; mod.Watch.prototype.push = async function (m) { PUSH.push(m); return 1; };
 // 账号：直接写进存储（注册流程在别的测试里测过）
 const sid = 's'.repeat(32), sidB = 'b'.repeat(32);
-await hub().ctx.storage.put({ ['u:u1']: { uid: 'u1', email: 'alice@x.com', devs: [] }, ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['u:u2']: { uid: 'u2', email: 'bob@x.com', devs: [] }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } });
+await hub().ctx.storage.put({ ['u:u1']: { uid: 'u1', email: 'alice@x.com', devs: [], sids: [sid] }, ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['u:u2']: { uid: 'u2', email: 'bob@x.com', devs: [], sids: [sidB] }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } });
 const acc = (s, path, b) => api('POST', '/api/account/' + path, b, { cookie: '__Host-sid=' + s, origin: 'https://panel.example' });
 const me = async (s) => (await (await api('GET', '/api/account/me', null, { cookie: '__Host-sid=' + s })).json());
 
@@ -59,7 +59,7 @@ ok('用试用码开通：到期时间 = 7 天后', A.sub && A.exp && Math.abs(A.
 const P = await (await reg(PERM, '2.2.2.2')).json();
 ok('普通邀请码开通：不限期', P.sub && P.exp === 0);
 // 绑定到 alice 的账号
-await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }] });
+await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }], sids: [sid] });
 let m = await me(sid);
 ok('官网账号页看得到到期时间', m.devs.find((d) => d.sub === A.sub).exp === A.exp && m.devs.find((d) => d.sub === P.sub).exp === 0);
 r = await (await api('POST', '/api/dev/info', { sub: A.sub, rkey: A.rkey })).json();
@@ -129,7 +129,7 @@ ok('作废续期码', (await adm('DELETE', '/renewals/' + K3)).status === 200 &&
 // ---- 续期申请表 ----
 const TRIAL3 = (await (await adm('POST', '/invites', { direct: true, max: 2, days: 1, svc: 7 })).json()).invite.code;
 const C = await (await reg(TRIAL3, '2.2.3.1')).json(), D2 = await (await reg(TRIAL3, '2.2.3.2')).json();
-await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }, { sub: C.sub, at: T }, { sub: D2.sub, at: T }] });
+await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }, { sub: C.sub, at: T }, { sub: D2.sub, at: T }], sids: [sid] });
 T = C.exp + 60e3; await hub().cleanup();
 await hub().ctx.storage.put({ ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } }); // 时间往后跳了很多，会话重新续上
 ok('[申请] 第三台到期暂停', (await dev(C.sub)).off);

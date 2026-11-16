@@ -88,6 +88,19 @@ ok('认得出常见设备：iPhone · Safari、安卓手机 · 微信、路由�
 env.LOGIN_ALERT = '0'; MAILS.length = 0; const G = jar(); await call(G, '/api/account/login', { email: 'alice@x.com', password: 'newpass123' }, { ua: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/120.0' });
 ok('设了 LOGIN_ALERT=0：不发提醒邮件', MAILS.length === 0);
 
+// 安全加固（第二轮）：一个账号最多同时 20 个登录，挤出去的那个真的作废；改密码以后谁都留不下
+{
+	const first = jar(); await call(first, '/api/account/login', { email: 'alice@x.com', password: 'newpass123' });
+	ok('[20 个上限] 前提：最早那个登录能用', (await call(first, '/api/account/me')).st === 200);
+	for (let i = 0; i < 20; i++) { const x = jar(); await call(x, '/api/account/login', { email: 'alice@x.com', password: 'newpass123' }); }
+	ok('[20 个上限] 又登录了 20 次以后：最早那个被挤出列表，也不能再用', (await call(first, '/api/account/me')).st === 401);
+	const H = env.H.get('hub'), uid = (await H.ctx.storage.get('e:alice@x.com'));
+	const u = await H.ctx.storage.get('u:' + uid), orphan = 'q'.repeat(32);
+	await H.ctx.storage.put('s:' + orphan, { uid, h: 1, exp: T + 10 * 86400e3, kid: 'k', at: T, last: T });
+	ok('[20 个上限] 不在「登录着的设备」列表里的登录（比如以前被挤出去的）：不认', (await call({ sid: orphan }, '/api/account/me')).st === 401);
+	ok('[20 个上限] 列表最多 20 个', (await H.ctx.storage.get('u:' + uid)).sids.length === 20 && u.sids.length === 20);
+}
+
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

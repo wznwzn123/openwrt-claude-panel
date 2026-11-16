@@ -1,7 +1,7 @@
 // 4.0：统计（访问次数、访客 IP、国家/地区）、登录记录、出错记录、邮件记录、实时对话（用户 ↔ 开发者）
 // 这些方法挂到托管服务的 Hub（Durable Object）上；数据都在自己的 Cloudflare 存储里，不交给任何第三方
 import { rnd, safeEq, SUB_RE, placeOf, uaLabel } from './hub.js';
-import { fileStartFor, signFiles } from './files.js';
+import { fileStartFor, signFiles, ipGroup } from './files.js';
 
 const DAY = 86400e3;
 // 按北京时间算「哪一天」（管理页按天看统计）
@@ -92,7 +92,7 @@ const M = {
 	async loginList() { return (await this.ctx.storage.get('ll')) || []; },
 	// 管理后台：同一个 IP 15 分钟内密钥错 10 次就先锁住（防猜密钥）
 	async admBlocked(ip) { const a = ((await this.ctx.storage.get('r:af:' + ip)) || []).filter((t) => t > Date.now() - 900e3); return a.length >= 10; },
-	async admFail(ip, ua, place, path) { await this.hit('af:' + ip, 1000, 900e3); await this.loginLog({ k: 'admin', who: '管理后台', ok: false, why: '密钥不对 · ' + clip(path, 40), ip, ua, place }); },
+	async admFail(ip, ua, place, path, why) { await this.hit('af:' + ip, 1000, 900e3); await this.loginLog({ k: 'admin', who: '管理后台', ok: false, why: (why || '密钥不对') + ' · ' + clip(path, 40), ip, ua, place }); },
 	/* ---------- 出错记录、邮件记录 ---------- */
 	async errLog(path, msg) {
 		const l = (await this.ctx.storage.get('el')) || [];
@@ -109,14 +109,15 @@ const M = {
 	/* ---------- 实时对话：用户在面板里「实时联系开发者」，开发者在管理后台回复 ---------- */
 	// 自建版没有托管身份：第一次用时给这台路由器一个匿名身份（只存钥匙的哈希）
 	async chatAnon({ ip, name, model }) {
-		if (!(await this.hit('can:' + ip, 5, DAY))) return { st: 429, error: '今天建的对话太多了，明天再试' };
+		// IPv6 按 /64 网段算同一个网络（一户人家的地址可以随便换）
+		if (!(await this.hit('can:' + ipGroup(ip), 5, DAY))) return { st: 429, error: '今天建的对话太多了，明天再试' };
 		const cid = rnd(12), ckey = rnd(32);
 		await this.ctx.storage.put('ca:' + cid, { kh: await sha(ckey), at: Date.now(), name: clip(name, 40), model: clip(model, 60) });
 		return { st: 200, ok: true, cid, ckey };
 	},
 	// 认出是谁：托管版凭 sub + rkey；自建版凭 cid + ckey
 	async chatWho(b) {
-		if (b.sub) { if (!SUB_RE.test(b.sub) || !(await this.devOk(b.sub, b.rkey))) return null; const d = await this.ctx.storage.get('d:' + b.sub); return { tid: 'd' + b.sub, kind: 'hosted', sub: b.sub, name: (d && d.name) || b.sub, model: (d && d.model) || '' }; }
+		if (b.sub) { if (!SUB_RE.test(b.sub) || !(await this.devOk(b.sub, b.rkey))) return null; const d = await this.ctx.storage.get('d:' + b.sub); return { tid: 'd' + b.sub, kind: 'hosted', off: !!(d && d.off && d.offWhy !== 'exp'), sub: b.sub, name: (d && d.name) || b.sub, model: (d && d.model) || '' }; }
 		if (b.cid) { if (!/^[a-z2-9]{12}$/.test(b.cid)) return null; const a = await this.ctx.storage.get('ca:' + b.cid); if (!a || !safeEq(await sha(String(b.ckey || '')), a.kh)) return null; return { tid: 'a' + b.cid, kind: 'self', name: a.name || '自建版路由器', model: a.model || '' }; }
 		return null;
 	},
@@ -219,6 +220,8 @@ export async function chatApi(req, env, H, body) {
 	if (op === 'anon') { const { st, ...r } = await H.chatAnon({ ip, name: s(b.name), model: s(b.model) }); return J(r, st); }
 	const who = await H.chatWho({ sub: s(b.sub), rkey: s(b.rkey), cid: s(b.cid), ckey: s(b.ckey) });
 	if (!who) return J({ error: '身份不对（路由器的钥匙对不上）', relogin: !!b.cid }, 403);
+	// 管理员封禁 / 放进回收站的路由器：还能看对话（开发者可能写了原因），不能再发消息、传文件
+	if (who.off && (op === 'send' || op === 'up')) return J({ error: '这台路由器的托管服务已停用，暂时不能发消息' }, 403);
 	if (op === 'get') { const { st, ...r } = await H.chatGet(who, b.after, !!b.read); const pf = !(+b.after) && st === 200 ? await H.chatProfiles(who) : {}; return J({ ...r, ...pf, files: !!env.F, msgs: await signMsgs(env, H, (r.msgs || []).map(pubMsg)) }, st); }
 	// 5.2 发文件：领上传票（对话 chat、反馈 fb；反馈只有托管版）
 	if (op === 'up') { const ctx = s(b.ctx) === 'fb' ? 'fb' : 'chat'; if (ctx === 'fb' && who.kind !== 'hosted') return J({ error: '自建版的反馈还不能带文件，请在对话里发' }, 400); const { st, ...r } = await fileStartFor(env, H, who.tid, ctx, b, ip); return J(r, st); }

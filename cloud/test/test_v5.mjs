@@ -181,7 +181,23 @@ r = await adm('GET', '/overview');
 ok('[两步验证] 带着通行证：能用', r.status === 200);
 const sess0 = SESS; SESS = '';
 r = await adm('GET', '/overview', null, '9.9.9.9', { 'x-adm-otp': await v5.totp(sec, T) });
+ok('[两步验证] 登录用过的验证码：放在请求头里也不能再用', r.status === 401);
+T += 60e3;
+const otp2 = await v5.totp(sec, T);
+r = await adm('GET', '/overview', null, '9.9.9.9', { 'x-adm-otp': otp2 });
 ok('[两步验证] GitHub 自动任务现算验证码：能用', r.status === 200);
+r = await adm('GET', '/devices', null, '9.9.9.9', { 'x-adm-otp': otp2 });
+ok('[两步验证] 同一个自动任务（同一个 IP）接着发第二个请求：同一个码还能用', r.status === 200);
+r = await adm('GET', '/overview', null, '7.7.7.7', { 'x-adm-otp': otp2 });
+ok('[两步验证] 别的 IP 拿这个码去用：不行', r.status === 401);
+r = await adm('POST', '/login', { code: otp2 }, '9.9.9.9');
+ok('[两步验证] 自动任务用过的码：不能拿去登录', r.status === 401);
+{
+	let n401 = 0;
+	for (let i = 0; i < 10; i++) { const x = await adm('GET', '/overview', null, '6.6.6.' + 1, { 'x-adm-otp': String((Number(otp2) + 1000 + i * 7919) % 1e6).padStart(6, '0') }); if (x.status === 401) n401++; }
+	r = await adm('GET', '/overview', null, '6.6.6.1', { 'x-adm-otp': otp2 });
+	ok('[两步验证] 请求头里猜错 10 次：这个 IP 被锁 15 分钟（再用对的码也是 429）', n401 === 10 && r.status === 429, n401 + '/' + r.status);
+}
 T += 13 * 3600e3; SESS = sess0;
 r = await adm('GET', '/overview');
 ok('[两步验证] 通行证 12 小时后过期', r.status === 401);

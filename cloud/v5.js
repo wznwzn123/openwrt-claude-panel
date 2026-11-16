@@ -234,22 +234,37 @@ export function installV5(Hub) {
 		async tfaDisable(code) { const t = await this.tfa(); if (!t) return { st: 200, ok: true }; if (!(await totpOk(t.sec, code))) return { st: 400, error: '验证码不对' }; await this.ctx.storage.delete('adm:2fa'); await this.ctx.storage.delete('adm:sess'); return { st: 200, ok: true }; },
 		// 开了两步验证：登录时输入验证码换一个 12 小时有效的通行证，之后每个请求带着它；GitHub 里的自动任务用 HUB_TOTP_SECRET 现算验证码
 		// 只收两个请求头的值：Durable Object 之间传 Request 会把请求内容（body）一起搬走，后面就读不到了
-		async tfaCheck(s = '', otp = '') {
+		// 安全加固（第二轮）：验证码用过就记下来（登录和请求头共用一张表，2 分钟内有效）
+		// 登录用过的码不能再用；请求头里的码只认第一次用它的那个 IP（GitHub 自动任务一次要连发几个请求，都从同一台机器发出），换个 IP 拿去用不行
+		// 两步验证的检查排成一队做（两个请求同时用同一个码，不会都通过）
+		_tfaQ(fn) { const run = (this.tq || Promise.resolve()).then(fn, fn); this.tq = run.catch(() => {}); return run; },
+		async _tfaUse(cd, ip, via) {
+			const now = Date.now(), used = ((await this.ctx.storage.get('adm:2fa:used')) || []).filter((x) => x.t > now - 120e3);
+			const hit = used.find((x) => x.c === cd);
+			if (hit && (via === 'login' || hit.via === 'login' || !ip || hit.ip !== ip)) return false;
+			if (!hit) { used.push({ c: cd, t: now, via, ip: ip || '' }); await this.ctx.storage.put('adm:2fa:used', used.slice(-40)); }
+			return true;
+		},
+		// 返回：true 通过；false 不通过（没带有效凭证）；'bad' 请求头里的验证码不对或者已经被别处用过（要计入「错太多次」的锁）
+		tfaCheck(s = '', otp = '', ip = '') { return this._tfaQ(() => this._tfaCheck(s, otp, ip)); },
+		async _tfaCheck(s, otp, ip) {
 			const t = await this.tfa();
 			if (!t) return true;
 			s = String(s || ''); otp = String(otp || '');
 			if (s) { const l = (await this.ctx.storage.get('adm:sess')) || {}, h = await sha(s); if (l[h] && l[h] > Date.now()) return true; }
-			if (otp && (await totpOk(t.sec, otp))) return true;
-			return false;
+			if (!otp) return false;
+			const cd = otp.replace(/\D/g, '');
+			if (!(await totpOk(t.sec, cd))) return 'bad';
+			return (await this._tfaUse(cd, String(ip || ''), 'otp')) ? true : 'bad';
 		},
-		async tfaLogin(code) {
+		tfaLogin(code) { return this._tfaQ(() => this._tfaLogin(code)); },
+		async _tfaLogin(code) {
 			const t = await this.tfa();
 			if (!t) return { st: 200, ok: true, sess: '' };
 			if (!(await totpOk(t.sec, code))) return { st: 401, error: '验证码不对', need2fa: true };
 			// 安全加固：同一个验证码只能用来登录一次（被人在旁边看到或者截到了，也不能再拿去登录）
-			const cd = String(code || '').replace(/\D/g, ''), used = ((await this.ctx.storage.get('adm:2fa:used')) || []).filter((x) => x.t > Date.now() - 120e3);
-			if (used.some((x) => x.c === cd)) return { st: 401, error: '这个验证码已经用过了，等手机上换一个新的再输', need2fa: true };
-			used.push({ c: cd, t: Date.now() }); await this.ctx.storage.put('adm:2fa:used', used.slice(-20));
+			const cd = String(code || '').replace(/\D/g, '');
+			if (!(await this._tfaUse(cd, '', 'login'))) return { st: 401, error: '这个验证码已经用过了，等手机上换一个新的再输', need2fa: true };
 			const s = rnd(32), l = (await this.ctx.storage.get('adm:sess')) || {}, now = Date.now();
 			for (const k in l) if (l[k] < now) delete l[k];
 			l[await sha(s)] = now + 12 * 3600e3;

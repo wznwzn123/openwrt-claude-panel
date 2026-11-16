@@ -184,6 +184,7 @@ export function installFam(Hub) {
 		devTicket(a) { return this.lock(() => this._devTicket(a)); },
 		async _devTicket({ sub, rkey, ticket }) {
 			if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+			if (await this.devOff(sub)) return { st: 403, error: '这台路由器的托管服务已停用' };
 			const k = 'ot:' + String(ticket || ''), t = /^[a-z2-9]{24}$/.test(String(ticket || '')) && (await this.ctx.storage.get(k));
 			if (!t || t.exp < Date.now() || t.sub !== sub) return { st: 400, error: '这个链接过期了：回到官网「我的路由器」重新点「打开面板」' };
 			await this.ctx.storage.delete(k);

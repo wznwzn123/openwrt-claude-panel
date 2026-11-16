@@ -128,6 +128,30 @@ ok('30 天到了：R2 里的文件和记录都删了，下载说已经删了', !
 ok('传了一半放弃的：清掉，分块上传也取消了', !(await S().get('fl:' + half.id)) && ![...F.ups.values()].some((u) => u.key === 'u/' + half.id));
 ok('总用量跟着减少', (await S().get('m:fbytes')) < before);
 
+// 安全加固（第二轮）：匿名身份只领票不传，占不满存储；托管用户照样能发；领了不传的 1 小时后退回额度
+{
+	const anonUp = async (ip, size) => {
+		const a = await post('/api/chat', { op: 'anon', name: 'x' }, { 'cf-connecting-ip': ip });
+		if (!a.j.cid) return { st: a.st, n: 0, b: 0 };
+		let n = 0, b = 0, last = 0;
+		for (let f = 0; f < 2; f++) { const t = await post('/api/chat', { op: 'up', cid: a.j.cid, ckey: a.j.ckey, name: 'a.bin', size, type: 'application/octet-stream' }, { 'cf-connecting-ip': ip }); last = t.st; if (t.st === 200) { n++; b += size; } }
+		return { st: last, n, b };
+	};
+	let held = 0, ids = 0, n429 = 0;
+	for (let i = 0; i < 9; i++) for (let k = 0; k < 5; k++) { const x = await anonUp('2001:db8:' + i.toString(16) + '::' + k.toString(16), 150 * 1024 * 1024); if (x.n) ids++; held += x.b; if (x.st === 429) n429++; }
+	ok('[R4] 9 个 IPv6 网段、每个开 5 个匿名身份只领票不传：最多占 1GB（实际 ' + Math.round(held / 1048576) + 'MB）', held <= 1024 * 1024 * 1024 && n429 > 0, held);
+	const v = await chat(R1, { op: 'up', name: 'v.jpg', size: 5 * 1024 * 1024, type: 'image/jpeg' });
+	ok('[R4] 这时托管用户发 5MB 图片：照样能发', v.st === 200, JSON.stringify(v.j));
+	const same = [];
+	for (let k = 0; k < 7; k++) same.push((await post('/api/chat', { op: 'anon', name: 'x' }, { 'cf-connecting-ip': '2001:db8:aaaa:1::' + (k + 1).toString(16) })).st);
+	ok('[R4] 同一个 /64 网段换地址开匿名身份：每天也只算 5 个', same.filter((x) => x === 200).length === 5 && same.slice(5).every((x) => x === 429), same.join(','));
+	const real = Date.now, t0 = real();
+	Date.now = () => t0 + 66 * 60e3;
+	const after = await anonUp('2001:db8:bbbb:2::1', 100 * 1024 * 1024);
+	Date.now = real;
+	ok('[R4] 1 小时后：领了不传的票作废、额度退回，匿名又能领了', after.n > 0, JSON.stringify(after));
+}
+
 console.log(results.map(([n, c, note]) => (c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '（' + String(note).slice(0, 300) + '）')).join('\n'));
 const pass = results.filter((x) => x[1]).length;
 console.log(`\n通过 ${pass}/${results.length}`);

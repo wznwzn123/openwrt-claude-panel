@@ -1,0 +1,10 @@
+# 密钥扫描（gitleaks）的设置：用默认规则，只放过下面两个写死的假值
+# 它们是以前面板测试里用的假令牌，早就换掉了（提交 9db4cd7），只留在历史提交里；定时的全历史扫描会把它们当成密钥报出来
+title = "openwrt-claude-panel"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "历史提交里测试用的假令牌（不是真的密钥）"
+regexes = ['''^tok1234567890abcdefgh$''', '''^AGE-SECRET-KEY-1ABCDEF$''']

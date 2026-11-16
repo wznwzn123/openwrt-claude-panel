@@ -1,0 +1,18 @@
+# 依赖漏洞扫描（grype）的设置：.github/workflows/security.yml 里 High 及以上会让检查变红
+# 下面放过的，每条都写了为什么不影响用户；依赖能升级时（npm update）删掉对应的条目
+exclude:
+  # 宣传视频工程（Remotion），不进安装包、也不部署到官网
+  - './promo/**'
+ignore:
+  # 管理后台（cloud/admin）打包时用的工具链：只在构建时运行，打好的页面里不包含它们
+  - vulnerability: GHSA-r28c-9q8g-f849
+    package: { name: postcss }
+  - vulnerability: GHSA-68fv-2mgg-jv7q
+    package: { name: source-map-js }
+  - vulnerability: GHSA-2v37-7h3g-55p8
+    package: { name: nanoid }
+  - vulnerability: GHSA-28wg-ghj8-5hjv
+    package: { name: nanoid }
+  # Vue 的服务端渲染包：管理后台是纯浏览器页面，不做服务端渲染，用不到它
+  - vulnerability: GHSA-g2v6-rqmx-r4w6
+    package: { name: '@vue/server-renderer' }

@@ -38,14 +38,17 @@ jobs:
           gradle-version: '8.7'
       - name: 版本号
         id: v
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          V="${{ inputs.version }}"; V="${V#v}"
+          V="$VERSION"; V="${V#v}"
           IFS=. read -r A B C <<< "$V"
           echo "name=$V" >> "$GITHUB_OUTPUT"
           echo "code=$(( ${A:-0} * 10000 + ${B:-0} * 100 + ${C:-0} ))" >> "$GITHUB_OUTPUT"
       - name: 解开签名密钥
         env:
           PASS: ${{ secrets.ANDROID_SIGNING_PASS }}
+          RELEASE: ${{ inputs.release }}
         run: |
           if [ -n "$PASS" ]; then
             openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/signing/router-panel.jks.enc -out "$RUNNER_TEMP/release.jks" -pass env:PASS
@@ -53,7 +56,7 @@ jobs:
             echo "KEYSTORE_PASS=$PASS" >> "$GITHUB_ENV"
             echo "::notice::使用正式签名"
           else
-            if [ "${{ inputs.release }}" = "true" ]; then echo "::error::发布正式版需要先设置仓库密钥 ANDROID_SIGNING_PASS"; exit 1; fi
+            if [ "$RELEASE" = "true" ]; then echo "::error::发布正式版需要先设置仓库密钥 ANDROID_SIGNING_PASS"; exit 1; fi
             echo "::warning::没有设置 ANDROID_SIGNING_PASS，打的是测试包（调试签名），不能拿去发布"
           fi
       - name: 打包
@@ -79,4 +82,5 @@ jobs:
         if: ${{ inputs.release }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.version }}" router-panel.apk --clobber
+          VERSION: ${{ inputs.version }}
+        run: gh release upload "$VERSION" router-panel.apk --clobber

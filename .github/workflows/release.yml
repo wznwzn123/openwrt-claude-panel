@@ -11,6 +11,8 @@ on:
         default: v1.0.0
 permissions:
   contents: write
+  id-token: write      # 安装包来源证明（GitHub 签发，说明是这个仓库的这次构建打出来的）
+  attestations: write
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -20,18 +22,28 @@ jobs:
           fetch-depth: 0   # 要完整历史和标签：算 App 上次改动是哪个版本
       - name: 装面板精简工具
         run: npm ci --prefix tools/minify --no-audit --no-fund
+      # 手动输入的版本号先放进环境变量再用（不直接拼进命令里）
       - name: 打包
         env:
           HUB_URL: ${{ vars.HUB_URL }}
-        run: sh tools/pack.sh "${{ inputs.version }}"
+          VERSION: ${{ inputs.version }}
+        run: sh tools/pack.sh "$VERSION"
       # 安全加固：给校验值文件签名，路由器一键更新时验签（官网被人改了也装不上假的安装包）。私钥只在仓库密钥 RELEASE_SIGN_KEY 里，没设置就不发布
       - name: 给安装包签名
         env:
           RELEASE_SIGN_KEY: ${{ secrets.RELEASE_SIGN_KEY }}
         run: node tools/sign.mjs dist/SHA256SUMS
+      # 来源证明：任何人都能用 gh attestation verify 查安装包是不是这个仓库的 GitHub Actions 打出来的；出错也不影响发布
+      - name: 安装包来源证明
+        continue-on-error: true
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'dist/*.tar.gz'
       - name: App 版本（App 没改就不让 App 弹更新）
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          sh tools/app-version.sh "${{ inputs.version }}" > dist/app-version.json
+          sh tools/app-version.sh "$VERSION" > dist/app-version.json
           echo "::notice::App 版本：$(jq -r .version dist/app-version.json)（跟这次发布的版本一样 = App 改了，会提示用户必须更新；不一样 = App 没改，不弹更新）"
       - name: 创建 Release 并上传安装包
         env:

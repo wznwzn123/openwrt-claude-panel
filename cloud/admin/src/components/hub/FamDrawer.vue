@@ -13,10 +13,10 @@ import { day } from '@/utils/fmt'
    主账号丢了、家里有争议时由开发者处理；每次都要写原因，记进操作记录，双方都会收到邮件 */
 const props = defineProps<{ sub: string; name?: string }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>()
-const PERMS: Array<[string, string]> = [['msg', '反馈和联系开发者'], ['node', '切换节点'], ['speed', '测速'], ['parent', '家长控制'], ['proxy', '代理设置'], ['net', '网络设置'], ['sys', '系统操作']]
+const PERMS: Array<[string, string]> = [['msg', '反馈和联系开发者'], ['node', '切换节点'], ['speed', '测速'], ['parent', '家长控制'], ['proxy', '代理设置'], ['net', '完全控制'], ['sys', '系统操作']]
 const TPL: Record<string, string> = { look: '只看', family: '家人', most: '几乎全部', custom: '自定义' }
-// 这三项能改动整个路由器（代理插件运行的脚本、路由器后台、重启和服务），有了就跟主账号差不多
-const RISK = ['proxy', 'net', 'sys']
+// 「完全控制」能在路由器上以 root 运行任何东西（原版后台、OpenClash 脚本和覆写、恢复备份），有了就跟主账号一样
+const RISK = ['net']
 const pname = (k: string) => (PERMS.find(([x]) => x === k) || [k, k])[1]
 const info = ref<any>(null)
 const err = ref('')
@@ -56,7 +56,7 @@ async function subOp(s: any, o: 'perms' | 'off' | 'on' | 'remove') {
   const M = { perms: '按上面勾选的保存。', off: '停用后他的手机马上打不开这台路由器的面板，恢复以后要从官网重新打开。', on: '恢复后他可以从官网重新打开面板。', remove: '移除后这台路由器从他的账号里去掉，他的手机马上打不开面板。' }[o]
   const np = PERMS.map(([k]) => k).filter((k) => edit.value[s.uid]?.[k])
   const add = o === 'perms' ? RISK.filter((k) => np.includes(k) && !(s.perms || []).includes(k)) : []
-  const v = await why(T, add.length ? M + '注意：新给了「' + add.map(pname).join('、') + '」，有这些权限的人能改动整个路由器（包括代理插件运行的脚本和路由器后台），跟主账号差不多。' : M, o === 'remove' || o === 'off' || add.length > 0)
+  const v = await why(T, add.length ? M + '注意：新给了「' + add.map(pname).join('、') + '」，有了就跟主账号一样（能进原版后台、改 OpenClash 运行的脚本、恢复备份）。' : M, o === 'remove' || o === 'off' || add.length > 0)
   if (!v) return
   const body: any = { target: s.uid, why: v.value }
   if (o === 'perms') body.perms = np
@@ -102,7 +102,7 @@ async function subOp(s: any, o: 'perms' | 'off' | 'on' | 'remove') {
           <div class="fd-perms">
             <Checkbox v-for="[k, n] in PERMS" :key="k" v-model="edit[s.uid][k]" :label="n" />
           </div>
-          <p v-if="RISK.some((k) => edit[s.uid]?.[k])" class="fd-risk">勾了「代理设置」「网络设置」「系统操作」的人能改动整个路由器，跟主账号差不多。</p>
+          <p v-if="RISK.some((k) => edit[s.uid]?.[k])" class="fd-risk">「完全控制」能进原版后台、改 OpenClash 运行的脚本、恢复备份，跟主账号一样。</p>
           <div class="fd-acts">
             <Button size="sm" variant="primary" @click="subOp(s, 'perms')">保存权限</Button>
             <Button size="sm" @click="subOp(s, s.off ? 'on' : 'off')">{{ s.off ? '恢复' : '停用' }}</Button>

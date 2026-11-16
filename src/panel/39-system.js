@@ -1661,15 +1661,15 @@ const AV_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
 function avHtml(p, cls) { const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; const n = (p && (p.name || (p.email || '').split('@')[0])) || '?'; return `<span class="av${a ? ' img' : ''}${cls ? ' ' + cls : ''}"${a ? ` style="background-image:url('${a}')"` : ''}>${a ? '' : esc(n.trim().slice(0, 1))}</span>`; }
 function avPaint(el, p) { if (!el) return; const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; el.classList.toggle('img', !!a); el.style.backgroundImage = a ? `url('${a}')` : ''; el.textContent = a ? '' : ((p && (p.name || (p.email || '').split('@')[0])) || '?').trim().slice(0, 1); }
 const meName = (p) => (p && (p.name || (p.email || '').split('@')[0])) || '';
-const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '网络设置', sys: '系统操作' };
-const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys']] };
-// 安全加固：这三项能改动整个路由器（代理插件运行的脚本、路由器后台、重启和服务），有了就跟主账号差不多
-const PERM_RISK = ['proxy', 'net', 'sys'];
+const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
+const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'proxy', 'sys']] };
+// 安全加固（第二轮）：「完全控制」能在路由器上以 root 运行任何东西（原版后台、OpenClash 自定义脚本和覆写、恢复备份），有了就跟主账号一样；「几乎全部」不含它
+const PERM_RISK = ['net'];
 // 新给了高风险权限的：先确认一次（原来就有的不再问）
 async function mpRiskOk(perms, old, who) {
 	const add = PERM_RISK.filter((k) => perms.includes(k) && !(old || []).includes(k));
 	if (!add.length) return true;
-	return confirmBox('给' + (who ? '「' + who + '」' : '他') + '高风险权限？', '你勾了「' + add.map((k) => PERM_N[k]).join('、') + '」。有这些权限的人能改动整个路由器（包括代理插件运行的脚本和路由器后台），跟主账号差不多。只给完全信任的家人。', '确定给', true);
+	return confirmBox('给' + (who ? '「' + who + '」' : '他') + '完全控制？', '有「完全控制」的人能进路由器原版后台、改 OpenClash 运行的脚本、恢复备份，能做主账号能做的一切，而且收回权限以后也可能留下自己的改动。只给完全信任的家人。', '确定给', true);
 }
 const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
@@ -1876,7 +1876,7 @@ function mpDraw() {
 	h += `<div class="sectitle"><b>${main ? '家人（子账号）' : '这台路由器的主账号'}</b>${main && mm ? `<span class="muted" style="font-size:13px">${(mm.subs || []).length} / 10</span>` : ''}</div><section class="card">`;
 	if (!mm) h += '<p class="muted" style="margin:0">读不到，稍后再试</p>';
 	else if (main) {
-		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms))}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span></div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
+		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms))}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span>${!x.off && !x.expired && (x.perms || []).includes('net') ? '<span class="pill red mp-root">有完全控制</span>' : ''}</div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
 		h += (mm.joins || []).map((j) => `<div class="mp-fb"><div><b>加入码 <span class="mono">${esc(j.code)}</span></b><span>给「${esc(j.name || '家人')}」 · ${esc(tplName(j.perms))} · ${esc(ymdhm(j.exp))} 过期 · 还没人用</span></div><button class="btn sm" data-mp="jcancel" data-c="${esc(j.code)}">撤回</button></div>`).join('');
 		h += `<div class="mp-acts"><button class="btn primary" data-mp="join"${(mm.subs || []).length + (mm.joins || []).length >= 10 ? ' disabled' : ''}>添加家人</button><button class="btn" data-mp="transfer"${(mm.subs || []).length ? '' : ' disabled'}>转让主账号</button></div>`;
 	} else {
@@ -1943,7 +1943,7 @@ async function mpAvatar(f) {
 function mpPermForm(perms, exp) {
 	return `<div class="mp-tpls">${Object.keys(TPLS).map((k) => `<button type="button" class="chip" data-tpl="${k}">${esc(TPLS[k][0])}</button>`).join('')}</div>
 	<div class="mp-perms">${Object.keys(PERM_N).map((k) => `<label class="mp-chk"><input type="checkbox" value="${k}"${perms.includes(k) ? ' checked' : ''}> ${esc(PERM_N[k])}</label>`).join('')}</div>
-	<p class="mp-risk" data-risk hidden>「代理设置」「网络设置」「系统操作」能改动整个路由器，有这些权限的人跟主账号差不多，只给完全信任的人。</p>
+	<p class="mp-risk" data-risk hidden>「完全控制」能进原版后台、改 OpenClash 运行的脚本、恢复备份，有了就跟主账号一样，只给完全信任的人。</p>
 	<p class="muted" style="font-size:12.5px;margin:6px 0 12px">看首页、网速、设备这些人人都能看；终端、文件管理、换密钥、托管服务设置只有主账号能用。</p>
 	<label class="lglabel" style="margin-top:0">能用多久</label><select class="input" data-exp><option value="0">一直能用</option><option value="7">7 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">一年</option>${exp ? `<option value="keep" selected>到 ${esc(ymd(exp))}（不变）</option>` : ''}</select>`;
 }

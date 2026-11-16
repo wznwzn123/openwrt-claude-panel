@@ -110,6 +110,19 @@ ok('子账号看家人列表：只看到主账号和自己', mb.result && mb.res
 const ss = await call(devA, 'fam', { op: 'sub_set', sudo: su.result.sudo, target: ub, perms: ['msg', 'node', 'speed', 'proxy'] });
 ok('主账号给子账号加「代理设置」', !!ss.result, JSON.stringify(ss));
 ok('马上生效：子账号能改代理设置了', (await code(devB, 'oc_set', {})) !== -32012);
+// 安全加固（第二轮）：「代理设置」不再包括能以 root 运行的东西（自定义脚本、覆写、恢复备份、原版后台），这些要「完全控制」
+ok('[完全控制] 代理设置：改两份自定义规则可以', (await code(devB, 'file_save', { kind: 'custom', name: 'openclash_custom_rules.list', content: '' })) !== -32012);
+ok('[完全控制] 代理设置：写自定义脚本（.sh）不行', (await code(devB, 'file_save', { kind: 'custom', name: 'openclash_custom_firewall_rules.sh', content: 'id' })) === -32012);
+ok('[完全控制] 代理设置：写覆写文件不行', (await code(devB, 'file_save', { kind: 'overwrite', name: 'x.conf', content: 'x' })) === -32012);
+ok('[完全控制] 代理设置：改覆写模块设置不行', (await code(devB, 'oc_sec', { op: 'add', type: 'config_overwrite' })) === -32012);
+ok('[完全控制] 代理设置：恢复备份、下载覆写模块、原版后台钥匙都不行', (await code(devB, 'restore', {})) === -32012 && (await code(devB, 'overwrite_fetch', {})) === -32012 && (await code(devB, 'luci_key', {})) === -32012);
+ok('[完全控制] 代理设置：改配置文件、订阅照样可以', (await code(devB, 'file_save', { kind: 'config', name: 'a.yaml', content: '' })) !== -32012 && (await code(devB, 'oc_sec', { op: 'add', type: 'config_subscribe' })) !== -32012);
+{
+	const sr = await call(devA, 'fam', { op: 'sub_set', sudo: su.result.sudo, target: ub, perms: ['msg', 'node', 'speed', 'proxy', 'net'] });
+	ok('[完全控制] 主账号给了「完全控制」：写自定义脚本、恢复备份可以', !!sr.result && (await code(devB, 'file_save', { kind: 'custom', name: 'openclash_custom_firewall_rules.sh', content: '' })) !== -32012 && (await code(devB, 'restore', {})) !== -32012);
+	await call(devA, 'fam', { op: 'sub_set', sudo: su.result.sudo, target: ub, perms: ['msg', 'node', 'speed', 'proxy'] });
+	ok('[完全控制] 收回后：又不能写自定义脚本了', (await code(devB, 'file_save', { kind: 'custom', name: 'openclash_custom_firewall_rules.sh', content: '' })) === -32012);
+}
 // 在官网上改（路由器缓存还在）：30 秒后才生效；这里把缓存放旧
 await H().devSubSet({ sub: R.sub, uid: ua, target: ub, perms: ['msg'] });
 { const t = new Date(Date.now() - 40e3); fs.utimesSync('/tmp/cmcp_fam.json', t, t); }

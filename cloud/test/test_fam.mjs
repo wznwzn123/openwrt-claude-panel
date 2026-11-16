@@ -136,7 +136,7 @@ ok('主账号移除子账号：他的账号里就没有这台了，还发邮件�
 // 转让
 await fam(R1, 'transfer', { uid: ua, sudo: SU, target: ub });
 view = (await post('/api/dev/fam/view', { sub: R1.sub, rkey: R1.rkey })).j;
-ok('转让：B 成了主账号，A 变成子账号（几乎全部）、A 原来的手机钥匙作废', view.owner === ub && view.subs[ua] && view.subs[ua].perms.length === 7 && view.kick[ua] > 0);
+ok('转让：B 成了主账号，A 变成子账号（几乎全部，不含「完全控制」）、A 原来的手机钥匙作废', view.owner === ub && view.subs[ua] && view.subs[ua].perms.length === 6 && !view.subs[ua].perms.includes('net') && view.kick[ua] > 0);
 ok('原主账号的凭证不能再做主账号的事', /主账号/.test((await fam(R1, 'join_create', { uid: ua, sudo: SU, name: 'x' })).j.error || ''));
 // 老路由器：好几个账号平等绑定，第一次打开面板选主账号
 delete env.RESEND_API_KEY;
@@ -170,6 +170,21 @@ ok('后台改登录邮箱：新邮箱能用，旧邮箱登录不了', (await pos
 // 主账号在官网解绑：整台路由器从所有人账号里拿掉
 await call(C, '/api/account/sudo_code', {}); await call(C, '/api/account/sudo', { code: lastCode() });
 ok('主账号确认本人后解绑：所有人（包括子账号）的账号里都没有这台了', (await call(C, '/api/account/unbind', { sub: R2.sub })).j.all === true && !(await S().get('d:' + R2.sub)).users.length);
+
+// 安全加固（第二轮）：「完全控制」单独一项；「几乎全部」不含它；以前给过「代理设置」的照旧（算作有「完全控制」），改过一次权限以后按新的算
+{
+	const H = hub();
+	const sub = 'mig' + Date.now().toString(36).slice(-6);
+	await H.ctx.storage.put('d:' + sub, { sub, state: 'ok', name: 'M', users: ['uaaaaaaaaaaa', 'ubbbbbbbbbbb', 'uccccccccccc'], owner: 'uaaaaaaaaaaa', subs: { ubbbbbbbbbbb: { tpl: 'custom', perms: ['msg', 'proxy'] }, uccccccccccc: { tpl: 'family', perms: ['msg', 'node', 'speed'] } } });
+	let v = await H.famRouterView(sub);
+	ok('[完全控制] 升级前给过「代理设置」的子账号：路由器那边照旧算有完全控制（能做的事不变）', v.subs.ubbbbbbbbbbb.perms.includes('net') && v.subs.ubbbbbbbbbbb.perms.includes('proxy'), JSON.stringify(v.subs.ubbbbbbbbbbb));
+	ok('[完全控制] 没给过的（家人模板）：不受影响', !v.subs.uccccccccccc.perms.includes('net'));
+	await H.devSubSet({ sub, uid: 'uaaaaaaaaaaa', target: 'ubbbbbbbbbbb', perms: ['msg', 'proxy'] });
+	v = await H.famRouterView(sub);
+	ok('[完全控制] 主账号重新勾选（只勾代理设置）后：不再有完全控制', !v.subs.ubbbbbbbbbbb.perms.includes('net') && v.subs.ubbbbbbbbbbb.perms.includes('proxy'), JSON.stringify(v.subs.ubbbbbbbbbbb));
+	const { TPL } = await import('../fam.js');
+	ok('[完全控制] 「几乎全部」模板不含完全控制', !TPL.most.includes('net'));
+}
 
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

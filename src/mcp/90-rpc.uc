@@ -35,7 +35,7 @@ function handle(msg) {
 			return { jsonrpc: '2.0', id, error: { code: DEV ? -32011 : -32010, message: why, data: { need_code: !DEV, hub: hub_conf(true)?.HUB ?? null } } };
 		}
 		let m = msg.method == 'tools/call' ? 'tools:' + (p.name ?? '') : substr(msg.method, 0, 6) == 'panel/' ? substr(msg.method, 6) : null;
-		if (m && !fam_allowed(m)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m));
+		if (m && !fam_allowed(m, p)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m, p));
 	}
 	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')

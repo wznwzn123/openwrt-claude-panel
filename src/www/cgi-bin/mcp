@@ -2597,13 +2597,21 @@ const FAM_GROUPS = {
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
 	parent: ['pause_set', 'black_setup', 'black_set'],
-	proxy: ['oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'restore', 'oc_reset', 'overwrite_fetch', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
+	proxy: ['oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
-	net: ['luci_menu', 'luci_key'],
+	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
+	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
+	net: ['luci_menu', 'luci_key', 'restore', 'overwrite_fetch'],
 	sys: ['update_start', 'auto', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };
-function fam_group(m) { for (let g in FAM_GROUPS) if (index(FAM_GROUPS[g], m) >= 0) return g; return null; }
+function fam_group(m, p) {
+	// 同一个接口，写的东西不同、风险不同：自定义脚本（.sh 等，OpenClash 以 root 运行）、覆写文件、覆写模块设置，算「完全控制」；两份自定义规则照旧算「代理设置」
+	if (m == 'file_save' && (p?.kind == 'overwrite' || (p?.kind == 'custom' && p?.name != 'openclash_custom_rules.list' && p?.name != 'openclash_custom_rules_2.list'))) return 'net';
+	if (m == 'oc_sec' && (p?.type == 'config_overwrite' || (p?.sid && ucur().get('openclash', '' + p.sid) == 'config_overwrite'))) return 'net';
+	for (let g in FAM_GROUPS) if (index(FAM_GROUPS[g], m) >= 0) return g;
+	return null;
+}
 function fam_read() {
 	let st = stat(FAM_PATH), o = null;
 	if (!st) return null;
@@ -2652,13 +2660,13 @@ function fam_check() {
 	if (v.pick) { ROLE = 'sub'; PERMS = []; return null; } // 老路由器还没选主账号：先只能看
 	return fam_drop_dev('你已经不是这台路由器的成员了');
 }
-function fam_allowed(m) {
+function fam_allowed(m, p) {
 	if (ROLE != 'sub') return true;
-	let g = fam_group(m);
+	let g = fam_group(m, p);
 	return g == 'view' || (g != null && index(PERMS, g) >= 0);
 }
-const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '网络设置', sys: '系统操作' };
-function fam_deny_msg(m) { let g = fam_group(m); return g && PERM_NAMES[g] ? '主账号没有给你开「' + PERM_NAMES[g] + '」权限' : '只有主账号能用这个功能'; }
+const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
+function fam_deny_msg(m, p) { let g = fam_group(m, p); return g && PERM_NAMES[g] ? '主账号没有给你开「' + PERM_NAMES[g] + '」权限' : '只有主账号能用这个功能'; }
 
 // 官网「打开面板」：拿票换手机钥匙（这个请求走 /cgi-bin/mcp/open，不需要登录密钥）
 P.open_login = function(a) {
@@ -3453,7 +3461,7 @@ function handle(msg) {
 			return { jsonrpc: '2.0', id, error: { code: DEV ? -32011 : -32010, message: why, data: { need_code: !DEV, hub: hub_conf(true)?.HUB ?? null } } };
 		}
 		let m = msg.method == 'tools/call' ? 'tools:' + (p.name ?? '') : substr(msg.method, 0, 6) == 'panel/' ? substr(msg.method, 6) : null;
-		if (m && !fam_allowed(m)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m));
+		if (m && !fam_allowed(m, p)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m, p));
 	}
 	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')

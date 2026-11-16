@@ -749,7 +749,7 @@ function pickBox(d, r) {
 	document.body.appendChild(m);
 }
 // 加入家人的路由器：先看一眼（谁邀请的、什么权限），再加入
-const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、拉黑设备', proxy: '改代理规则、订阅、配置', net: '网络设置', sys: '重启、服务管理、更新面板' };
+const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、拉黑设备', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
 async function joinBox(code) {
 	let r; try { r = await api('fam/join_info', { code }); } catch (x) { toast(x.message); return; }
 	const m = document.createElement('div'); m.className = 'mask';

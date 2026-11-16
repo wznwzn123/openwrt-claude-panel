@@ -15,8 +15,13 @@ const UID_RE = /^[a-z2-9]{12}$/;
 
 // 权限：「看」一直有；下面这些主账号可以单独开关
 export const PERM_KEYS = ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'];
-export const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、拉黑设备', proxy: '改代理规则、订阅、配置', net: '网络设置（路由器后台）', sys: '重启、服务管理、更新面板' };
-export const TPL = { look: ['msg'], family: ['msg', 'node', 'speed'], most: [...PERM_KEYS] };
+// 安全加固（第二轮）：net 改成「完全控制」——原版路由器后台、OpenClash 自定义脚本和覆写、恢复备份都归它（这些都能在路由器上以 root 运行任何东西）；
+// 「几乎全部」不再包含它。改之前给过「代理设置」或「网络设置」的子账号（v < 2），照旧能做原来能做的事，算作有「完全控制」，主页上标出来让主账号自己决定
+export const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、拉黑设备', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
+export const TPL = { look: ['msg'], family: ['msg', 'node', 'speed'], most: ['msg', 'node', 'speed', 'parent', 'proxy', 'sys'] };
+export const PV = 2;
+// 子账号实际有的权限（老数据：给过「代理设置」的，以前就能写脚本，算作有「完全控制」）
+export const permsOf = (s) => { const p = s && Array.isArray(s.perms) ? s.perms : []; return !s || s.v >= PV || !p.includes('proxy') || p.includes('net') ? p : PERM_KEYS.filter((k) => k === 'net' || p.includes(k)); };
 export const TPL_NAMES = { look: '只看', family: '家人', most: '几乎全部', custom: '自定义' };
 export const MAX_SUBS = 10, MAX_OWN = 20, MAX_JOINED = 20;
 const cleanPerms = (p) => PERM_KEYS.filter((k) => Array.isArray(p) && p.includes(k));
@@ -55,7 +60,7 @@ export function installFam(Hub) {
 			if (!d) return null;
 			const f = this.famOf(d), now = Date.now();
 			const subs = [];
-			for (const [uid, s] of Object.entries(f.subs)) { const p = await this.famPerson(uid, full); if (p) subs.push({ ...p, tpl: s.tpl || tplOf(s.perms || []), perms: s.perms || [], exp: s.exp || 0, off: !!s.off, expired: !!(s.exp && s.exp < now), at: s.at || 0 }); }
+			for (const [uid, s] of Object.entries(f.subs)) { const p = await this.famPerson(uid, full); if (p) subs.push({ ...p, tpl: tplOf(permsOf(s)), perms: permsOf(s), exp: s.exp || 0, off: !!s.off, expired: !!(s.exp && s.exp < now), at: s.at || 0 }); }
 			const joins = [];
 			for (const c of d.joins || []) { const j = await this.ctx.storage.get('jc:' + c); if (j && j.exp > now) joins.push({ code: c, name: j.name, tpl: j.tpl, perms: j.perms, exp: j.exp, subExp: j.subExp || 0 }); }
 			const users = [];
@@ -68,7 +73,7 @@ export function installFam(Hub) {
 			const d = await this.ctx.storage.get('d:' + sub);
 			if (!d) return null;
 			const f = this.famOf(d), now = Date.now(), subs = {};
-			for (const [uid, s] of Object.entries(f.subs)) subs[uid] = { perms: s.perms || [], ok: !s.off && !(s.exp && s.exp < now) };
+			for (const [uid, s] of Object.entries(f.subs)) subs[uid] = { perms: permsOf(s), ok: !s.off && !(s.exp && s.exp < now) };
 			return { owner: f.owner, subs, pick: f.pick, kick: d.kick || {} };
 		},
 		// 这台路由器的操作记录（面板「我的主页 → 操作记录」）：只记谁、做了什么，不记邮箱；留最近 100 条
@@ -83,7 +88,7 @@ export function installFam(Hub) {
 			if (!['main', 'sub', 'off', 'expired', 'pick'].includes(role)) return { st: 403, error: '你已经不是这台路由器的成员了' };
 			const f = this.famOf(d), sx = f.subs[uid], x = (u.devs || []).find((y) => y.sub === sub) || {};
 			return { st: 200, ok: true, me: { uid, name: u.name || mask(u.email).split('@')[0], email: mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '', created: u.created || 0, verified: !!u.verified, joined: x.at || 0 },
-				role, perms: role === 'main' ? PERM_KEYS : sx ? sx.perms || [] : [], subExp: sx ? sx.exp || 0 : 0, owner: f.owner && f.owner !== uid ? await this.famPerson(f.owner) : null, nsub: Object.keys(f.subs).length,
+				role, perms: role === 'main' ? PERM_KEYS : sx ? permsOf(sx) : [], subExp: sx ? sx.exp || 0 : 0, owner: f.owner && f.owner !== uid ? await this.famPerson(f.owner) : null, nsub: Object.keys(f.subs).length,
 				router: { name: d.name || sub, model: d.model || '', created: d.created || 0, exp: d.exp || 0 } };
 		},
 		// 敏感信息（确认本人以后）：完整邮箱、官网上登录着的设备、最近 30 天的登录记录
@@ -191,7 +196,7 @@ export function installFam(Hub) {
 			const d = await this.ctx.storage.get('d:' + sub), role = d && this.famRole(d, t.uid);
 			if (role !== 'main' && role !== 'sub') return { st: 403, error: '你已经不是这台路由器的成员了' };
 			const p = await this.famPerson(t.uid), s = role === 'sub' ? d.subs[t.uid] : null;
-			return { st: 200, ok: true, uid: t.uid, role, name: p.name, email: p.email, perms: s ? s.perms || [] : PERM_KEYS, now: Date.now() };
+			return { st: 200, ok: true, uid: t.uid, role, name: p.name, email: p.email, perms: s ? permsOf(s) : PERM_KEYS, now: Date.now() };
 		},
 
 		/* ---------- 已经绑了多个账号的老路由器：选一个当主账号（只有这一次）。被选的人收验证码确认，其他人变成子账号（家人） ---------- */
@@ -223,7 +228,7 @@ export function installFam(Hub) {
 			if (!(d.users || []).includes(c.target)) return { st: 400, error: '这个账号已经解绑了，重新选一个' };
 			d.owner = c.target; d.subs = {};
 			const now = Date.now();
-			for (const x of d.users) if (x !== c.target) d.subs[x] = { tpl: 'family', perms: [...TPL.family], at: now, by: 'pick' };
+			for (const x of d.users) if (x !== c.target) d.subs[x] = { tpl: 'family', perms: [...TPL.family], v: PV, at: now, by: 'pick' };
 			await this.famSave(d);
 			const o = await this.famPerson(c.target);
 			for (const x of d.users) await this.famMail(x, `路由器「${d.name || d.sub}」选好了主账号`, `<p>路由器「${esc(d.name || d.sub)}」的主账号定为 <b>${esc(o.name)}</b>（${esc(o.email)}）。</p><p>${x === c.target ? '你是主账号，权限最大。家里其他人现在是你的子账号（「家人」权限：看状态、切换节点、测网速、联系开发者），在面板「我的主页 → 子账号」里可以改。' : '你现在是这台路由器的子账号，权限是「家人」（看状态、切换节点、测网速、联系开发者），主账号可以调整。'}</p><p>如果有误，请联系开发者处理。</p>`);
@@ -244,7 +249,7 @@ export function installFam(Hub) {
 			const p = cleanPerms(perms), n = cleanName(name) || '家人';
 			let code; do { code = rnd(8).toUpperCase(); } while (await this.ctx.storage.get('jc:' + code));
 			const exp = now + DAY, se = +subExp > now ? Math.min(+subExp, now + 3650 * DAY) : 0;
-			await this.ctx.storage.put('jc:' + code, { sub, by: uid, name: n, perms: p, tpl: tplOf(p), subExp: se, exp, at: now });
+			await this.ctx.storage.put('jc:' + code, { sub, by: uid, name: n, perms: p, tpl: tplOf(p), v: PV, subExp: se, exp, at: now });
 			d.joins.push(code);
 			await this.famSave(d);
 			return { st: 200, ok: true, code, exp, link: 'https://' + this.env.BASE_DOMAIN + '/app?join=' + code };
@@ -283,7 +288,7 @@ export function installFam(Hub) {
 			await this.ctx.storage.delete('jc:' + info.code);
 			d.joins = (d.joins || []).filter((x) => x !== info.code);
 			d.users = [...new Set([...(d.users || []), uid])];
-			d.subs = { ...(d.subs || {}), [uid]: { tpl: j.tpl, perms: j.perms, exp: j.subExp || 0, at: Date.now(), by: j.by, label: j.name } };
+			d.subs = { ...(d.subs || {}), [uid]: { tpl: j.tpl, perms: j.perms, ...(j.v ? { v: j.v } : {}), exp: j.subExp || 0, at: Date.now(), by: j.by, label: j.name } };
 			u.devs = [...(u.devs || []).filter((x) => x.sub !== j.sub), { sub: j.sub, at: Date.now() }];
 			await this.ctx.storage.put({ ['d:' + d.sub]: d, ['u:' + uid]: u });
 			const me = await this.famPerson(uid);
@@ -315,7 +320,7 @@ export function installFam(Hub) {
 			if (!d || this.famRole(d, uid) !== 'main') return { st: 403, error: '只有主账号能改子账号' };
 			const s = (d.subs || {})[target];
 			if (!s) return { st: 404, error: '没有这个子账号' };
-			if (perms !== undefined) { s.perms = cleanPerms(perms); s.tpl = tplOf(s.perms); }
+			if (perms !== undefined) { s.perms = cleanPerms(perms); s.tpl = tplOf(s.perms); s.v = PV; }
 			if (subExp !== undefined) s.exp = +subExp > Date.now() ? Math.min(+subExp, Date.now() + 3650 * DAY) : 0;
 			if (off !== undefined) { s.off = !!off; if (s.off) this.famKick(d, target); }
 			await this.famSave(d);
@@ -367,7 +372,7 @@ export function installFam(Hub) {
 			if (!s) return { st: 404, error: '没有这个子账号' };
 			const u = await this.ctx.storage.get('u:' + target);
 			if (remove) { await this.famDrop(d, target); if (u) { u.devs = (u.devs || []).filter((x) => x.sub !== sub); await this.ctx.storage.put('u:' + target, u); } }
-			else { if (perms) { s.perms = cleanPerms(perms); s.tpl = tplOf(s.perms); } if (off !== undefined) { s.off = !!off; if (s.off) this.famKick(d, target); } if (subExp !== undefined) s.exp = +subExp > Date.now() ? +subExp : 0; }
+			else { if (perms) { s.perms = cleanPerms(perms); s.tpl = tplOf(s.perms); s.v = PV; } if (off !== undefined) { s.off = !!off; if (s.off) this.famKick(d, target); } if (subExp !== undefined) s.exp = +subExp > Date.now() ? +subExp : 0; }
 			await this.famSave(d);
 			await this.rlog(sub, '🛠', '开发者' + (remove ? '移除了子账号 ' : '改了子账号 ') + (u ? u.name || mask(u.email).split('@')[0] : '') + '（' + why + '）');
 			await this.alog('fam-sub', sub, (remove ? '移除子账号 ' : '改子账号 ') + (u ? u.email : target) + '：' + why);
@@ -409,7 +414,7 @@ export function installFam(Hub) {
 			this.famOf(d);
 			if (!(d.users || []).includes(target)) d.users = [...(d.users || []), target];
 			if (d.subs) delete d.subs[target];
-			if (old && old !== target && (d.users || []).includes(old)) d.subs = { ...(d.subs || {}), [old]: { tpl: 'most', perms: [...TPL.most], at: now, by: 'transfer' } };
+			if (old && old !== target && (d.users || []).includes(old)) d.subs = { ...(d.subs || {}), [old]: { tpl: 'most', perms: [...TPL.most], v: PV, at: now, by: 'transfer' } };
 			d.owner = target;
 			if (old && old !== target) this.famKick(d, old);
 			await this.famSave(d);

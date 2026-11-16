@@ -11,7 +11,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
-import { installFam, famAccount, famDev, famAdmin, famAdminUser } from './fam.js';
+import { installFam, famAccount, famDev, famAdmin, famAdminUser, permsOf } from './fam.js';
 import { installInst, instAccount, instAdmin } from './inst.js';
 import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } from './files.js';
 import { changelogOf } from './changelog.js';
@@ -646,7 +646,7 @@ export class Hub extends DurableObject {
 			let b = { last: 0, state: 'wait', ver: '' };
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
 			const role = this.famRole(d, uid), fo = this.famOf(d), sx = fo.subs[uid];
-			const fam = { role, owner: role === 'main' || !fo.owner ? null : await this.famPerson(fo.owner), perms: sx ? sx.perms || [] : null, subExp: sx ? sx.exp || 0 : 0, nsub: Object.keys(fo.subs).length };
+			const fam = { role, owner: role === 'main' || !fo.owner ? null : await this.famPerson(fo.owner), perms: sx ? permsOf(sx) : null, subExp: sx ? sx.exp || 0 : 0, nsub: Object.keys(fo.subs).length };
 			devs.push({ ...fam, sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));

@@ -6,7 +6,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>路由器面板：用手机管好家里的 OpenWrt 路由器</title>
-<meta name="description" content="OpenClash 节点、在线设备、流量、断线记录、定时断网都在一个手机面板里；断网自动修好再推送给你。不用公网 IP、不用开端口，注册送 7 天试用。">
+<meta name="description" content="在一个手机面板里管理 OpenClash 节点、在线设备、流量、断线记录和定时断网。断网自动修复并推送通知，无需公网 IP 和端口转发。注册即送 7 天试用。">
 <meta property="og:type" content="website">
 <meta property="og:title" content="路由器面板：用手机管好家里的 OpenWrt 路由器">
 <meta property="og:description" content="节点、设备、流量、看门狗和推送，一个手机面板全管了。">
@@ -43,7 +43,8 @@ h2 .muted { color: var(--muted); }
 @media (max-width: 639px) { h2 .muted { display: block; } }
 .section-head { max-width: 1000px; }
 .t-lead, .hero__lead { color: color-mix(in oklab, var(--ink) 82%, var(--bg)); }
-.hero__lead, .section-head h2, .card p { text-wrap: pretty; }
+.hero__lead, .section-head h2, .card p, .mo-pc__step p, .sc p { text-wrap: pretty; }
+
 a.inline { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--accent) 45%, transparent); }
 code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 9%, transparent); }
 .gh-ic { width: 18px; height: 18px; flex: none; }
@@ -107,7 +108,7 @@ code { font-family: var(--font-mono); font-size: .9em; padding: 1px 6px; border-
 }
 @media (min-width: 1024px) {
   .hero h1 { font-size: clamp(40px, 4.3vw, 60px); line-height: 1.08; }
-  .hero__text .hero__lead { max-width: 30em; }
+  .hero__text .hero__lead { max-width: 34em; }
 }
 @media (max-width: 1023px) {
   .hero__art > .ly-piece--main.phone { right: 50%; width: min(58%, 250px); top: 24px; }
@@ -429,12 +430,12 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         <a class="nav__link" href="#features">功能 <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
         <div class="nav__menu">
           <div class="wrap grid">
-            <div class="menu-col span-3"><p class="t-label">管路由器</p><a href="#features">看门狗<span>30 秒查一次，断了先修</span></a><a href="#features">断网推送<span>手机和微信都能收</span></a><a href="#features">定时断网<span>给孩子的设备设时间</span></a><a href="#family">一家人一起用<span>各用各的账号，权限你定</span></a></div>
-            <div class="menu-col span-3"><p class="t-label">看界面</p><a href="#tour">界面导览<span>六个常用页面</span></a><a href="#how">怎么连起来<span>不用公网 IP、不用开端口</span></a><a href="#safety">安全<span>钥匙只在你手里</span></a></div>
+            <div class="menu-col span-3"><p class="t-label">管路由器</p><a href="#features">看门狗<span>每 30 秒巡检，断线自动修复</span></a><a href="#features">异常推送<span>推送到手机或微信</span></a><a href="#features">定时断网<span>按设备设置断网时段</span></a><a href="#family">家人共享<span>每人一个账号，权限由你分配</span></a></div>
+            <div class="menu-col span-3"><p class="t-label">看界面</p><a href="#tour">界面导览<span>六个常用页面</span></a><a href="#how">远程访问<span>无需公网 IP 和端口转发</span></a><a href="#safety">安全<span>密钥只在你手里</span></a></div>
             <a class="menu-card span-3 start-10" href="#start">
               <div class="panel"><img class="frame__img" src="/*IMG:pair*/" alt="官网「我的路由器」里的「打开面板」按钮" loading="lazy" style="object-fit:cover;object-position:top"></div>
-              <span class="t-card">5 分钟装好</span>
-              <span class="t-small muted">只用手机，复制一条命令</span>
+              <span class="t-card">5 分钟完成安装</span>
+              <span class="t-small muted">用手机完成，只需一条命令</span>
             </a>
           </div>
         </div>
@@ -458,15 +459,15 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
     <div class="wrap"><div class="hero-text grid hero__grid">
       <div class="hero__text span-6">
         <h1 id="hero-h"><span class="h1-a">用手机<wbr>管好<wbr>家里的</span> <span class="h1-b"><span data-moment="word-rotate" data-moment-opts='{"words":["OpenWrt","ImmortalWrt","Kwrt"],"every":2200,"cycles":0,"fit":"(min-width: 430px)"}'>OpenWrt</span> 路由器</span></h1>
-        <p class="hero__lead">节点切换、在线设备、流量、测速、断线记录、定时断网，一个手机面板全管了。人在外面也能打开，不用公网 IP，也不用开端口。</p>
+        <p class="hero__lead">切换节点、查看在线设备、统计流量、测速、记录断线、定时断网，都在一个手机面板里完成。离家时随时可用，无需公网 IP 和端口转发。</p>
         <div class="btn-row">
           <a class="btn btn--primary" href="/app#reg" id="heroMain">注册领 7 天试用<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
-          <a class="btn btn--secondary" href="#start">看怎么装</a>
+          <a class="btn btn--secondary" href="#start">查看安装步骤</a>
         </div>
         <p class="hero__proof"><span class="ly-live">看门狗在线</span><span class="proof__more">支持 OpenWrt 18.06 到 25.12</span></p>
         <dl class="hero__facts">
-          <div><dt>0 个</dt><dd>家里要开的端口</dd></div>
-          <div><dt>1 部手机</dt><dd>就能装好、管好</dd></div>
+          <div><dt>0 个</dt><dd>需要开放的端口</dd></div>
+          <div><dt>1 部手机</dt><dd>完成安装和管理</dd></div>
           <div><dt>开源</dt><dd>MIT 许可证</dd></div>
         </dl>
       </div>
@@ -493,12 +494,12 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
     <div class="wrap">
       <div class="group">
         <div class="section-head" data-moment="lines-rise">
-          <h2 id="features-h">你睡觉，它值班。<span class="muted">家里网络的事，它先处理，再告诉你。</span></h2>
+          <h2 id="features-h">自动值守。<span class="muted">问题先处理，结果再通知你。</span></h2>
         </div>
         <div class="grid">
           <article class="card card--row card--open span-6">
-            <h3>看门狗每&nbsp;30&nbsp;秒查一遍</h3>
-            <p>宽带、DNS、隧道、OpenClash 挨个检查，出问题自动修，每次断线都记下原因。</p>
+            <h3>看门狗，每&nbsp;30&nbsp;秒巡检一次。</h3>
+            <p>依次检查宽带、DNS、隧道和 OpenClash。发现问题自动修复，每次断线的原因都会记录下来。</p>
             <div class="panel" data-fx="grid-pulse" data-fx-seed="21">
               <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:40px;--ay-sm:18px" data-ui-loop>
                 <div class="ui ui-panel ui-checks" data-ui="checklist">
@@ -516,8 +517,8 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
             </div>
           </article>
           <article class="card card--row card--open span-6">
-            <h3>出了事，马上推到手机</h3>
-            <p>断电、断网、节点挂了，推送到手机或微信；每天自动把设置备份到云端，一键还原。</p>
+            <h3>异常即时推送。</h3>
+            <p>断电、断网、节点失效，第一时间推送到手机或微信。设置每天自动备份到云端，可一键还原。</p>
             <div class="panel" data-fx="caustics" data-fx-seed="5">
               <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:48px;--ay-sm:20px" data-ui-loop>
                 <div class="ui ui-notify" data-ui="notify">
@@ -534,8 +535,8 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
       </div>
       <div class="grid">
         <article class="card card--row card--open span-6">
-          <h3>给孩子的设备定时断网</h3>
-          <p>谁在线、谁在占网速一眼看到；按设备设时间段，到点自动暂停上网。</p>
+          <h3>定时断网。</h3>
+          <p>在线设备和网速占用一目了然。为每台设备设置时间段，到点自动暂停上网。</p>
           <div class="panel" data-fx="gradient-mesh" data-fx-seed="9">
             <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:40px;--ay-sm:18px" data-ui-loop>
               <div class="ui ui-panel ui-toggles" data-ui="toggles">
@@ -554,8 +555,8 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
           </div>
         </article>
         <article class="card card--row card--open span-6">
-          <h3>每台设备用了多少，一清二楚</h3>
-          <p>今天、这个月，每台设备的流量和网速都记着；也能直接在面板里测速。</p>
+          <h3>流量统计。</h3>
+          <p>按天、按月记录每台设备的流量和网速。面板内可直接测速。</p>
           <div class="panel" data-fx="grid-pulse" data-fx-seed="33">
             <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:400px;--ax:max(24px, 50% - 200px);--ay:40px;--ay-sm:18px" data-ui-loop>
               <div class="ui ui-panel ui-stat" data-ui="stat" data-from="9.8" data-to="12.6" data-suffix=" GB">
@@ -582,25 +583,25 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
   <section class="section night" id="night" style="--h: 2" data-moment="pinned-chapters" aria-labelledby="night-h">
     <div class="wrap mo-pc__grid">
       <div class="mo-pc__text">
-        <h2 id="night-h">一夜值班。<span class="muted">你睡着的时候，它在做这些。</span></h2>
+        <h2 id="night-h">一夜值守。<span class="muted">从深夜到清晨，<wbr>全程自动。</span></h2>
         <ol class="mo-pc__steps">
           <li class="mo-pc__step">
-            <h3><span class="night__t">23:30</span>你睡了，它开始值班</h3>
-            <p>每 30 秒把宽带、DNS、隧道、代理挨个查一遍。都正常的时候，它不打扰你。</p>
+            <h3><span class="night__t">23:30</span>持续巡检</h3>
+            <p>每 30 秒检查一次宽带、DNS、隧道和代理。一切正常时，不会打扰你。</p>
             <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--1" aria-hidden="true">
               <span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg>
               <span class="night__clock">23:30</span>
               <span class="d-card night__card">
-                <span class="d-card__row"><span class="night__h">看门狗 · 值班中</span><span class="d-chip">正常</span></span>
+                <span class="d-card__row"><span class="night__h">看门狗 · 巡检中</span><span class="d-chip">正常</span></span>
                 <span class="night__grid"><span><i></i>宽带</span><span><i></i>DNS</span><span><i></i>隧道</span><span><i></i>代理</span></span>
                 <span class="night__bar"><i></i></span>
-                <span class="night__meta">30 秒后再查一次</span>
+                <span class="night__meta">30 秒后再次检查</span>
               </span>
             </figure>
           </li>
           <li class="mo-pc__step">
-            <h3><span class="night__t">03:12</span>宽带掉了，18 秒修好</h3>
-            <p>PPPoE 掉线，它自己重新拨号；节点超时，就换一个能用的。每次断线的原因都记下来。</p>
+            <h3><span class="night__t">03:12</span>断线自动修复</h3>
+            <p>PPPoE 掉线时自动重新拨号，节点超时时自动切换到可用节点。断线原因写入断线记录。</p>
             <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--2" aria-hidden="true">
               <span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg>
               <span class="night__clock">03:12</span>
@@ -608,13 +609,13 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
                 <span class="d-card__row"><span class="night__h">断线记录</span><span class="d-chip">已修好</span></span>
                 <span class="d-line"><i class="warn">!</i><span><b>宽带断线</b>，PPPoE 掉了</span></span>
                 <span class="d-line"><i>↻</i><span>重新拨号</span></span>
-                <span class="d-line"><i>✓</i><span><b>18 秒</b>恢复，原因已记下</span></span>
+                <span class="d-line"><i>✓</i><span><b>18 秒</b>恢复，原因已记录</span></span>
               </span>
             </figure>
           </li>
           <li class="mo-pc__step">
-            <h3><span class="night__t">04:00</span>设置备份到云端</h3>
-            <p>每天自动备份一次；开了加密，就先在路由器上加密，再上传。</p>
+            <h3><span class="night__t">04:00</span>云端备份</h3>
+            <p>每天自动备份一次设置。开启加密后，先在路由器上加密再上传。</p>
             <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--3" aria-hidden="true">
               <span class="night__stars"></span><svg class="night__moon" viewBox="0 0 100 100" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z"/></svg>
               <span class="night__clock">04:00</span>
@@ -626,14 +627,14 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
             </figure>
           </li>
           <li class="mo-pc__step">
-            <h3><span class="night__t">09:00</span>一份体检推到你手机</h3>
-            <p>每天早上自动体检一次，结果推送到手机或微信。醒来看一眼，就知道家里网络怎么样。</p>
+            <h3><span class="night__t">09:00</span>每日体检</h3>
+            <p>每天早上自动体检一次，结果推送到手机或微信。</p>
             <figure class="mo-pc__visual mo-pc__visual--lit night__v night__v--4" aria-hidden="true">
               <span class="night__sun"></span>
               <span class="night__clock">09:00</span>
               <span class="night__push">
                 <span class="night__app"><svg viewBox="0 0 100 100"><rect width="100" height="100" rx="22.5" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></span>
-                <span class="night__msg"><span class="night__from">路由器面板<time>现在</time></span><b>每日体检完成</b><span>宽带、DNS、隧道、代理都正常</span></span>
+                <span class="night__msg"><span class="night__from">路由器面板<time>现在</time></span><b>每日体检完成</b><span>宽带、DNS、隧道、代理均正常</span></span>
               </span>
             </figure>
           </li>
@@ -645,11 +646,11 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section" id="family" aria-labelledby="family-h">
     <div class="wrap">
-      <div class="section-head" data-moment="lines-rise"><h2 id="family-h">一家人一起用。<span class="muted">各用各的账号，能做什么<wbr>由你定。</span></h2></div>
+      <div class="section-head" data-moment="lines-rise"><h2 id="family-h">家人共享。<span class="muted">每人一个账号，<wbr>权限由你分配。</span></h2></div>
       <div class="grid">
         <article class="card card--row card--open span-6">
-          <h3>给家人开权限，一项一项勾</h3>
-          <p>给家人发个加入码，他用自己的账号就能打开面板。能设到期时间，随时停用；改代理、改网络这种大权限，勾之前会提醒你。</p>
+          <h3>按项分配权限。</h3>
+          <p>发送加入码，家人用自己的账号即可打开面板。可设置使用期限，随时停用。授予代理、网络等高风险权限前，会再次确认。</p>
           <div class="panel" data-fx="gradient-mesh" data-fx-seed="17">
             <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:40px;--ay-sm:18px" data-ui-loop>
               <div class="ui ui-panel ui-toggles" data-ui="toggles">
@@ -658,18 +659,18 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
                   <div class="ui-title">爸爸的权限</div><span class="ui-spacer"></span><div class="ui-meta" data-tg-count>开了 3 项，共 4 项</div>
                 </div>
                 <ul class="ui-toggles__list">
-                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">切换节点</span><span class="ui-tg__sub">节点页点一下就换</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="切换节点"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">切换节点</span><span class="ui-tg__sub">在节点页一键切换</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="切换节点"><i></i></button></li>
                   <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">测速</span><span class="ui-tg__sub">走代理和宽带直连各测一次</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="测速"><i></i></button></li>
-                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">定时断网、拉黑设备</span><span class="ui-tg__sub">管孩子的平板和游戏机</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="定时断网、拉黑设备"><i></i></button></li>
-                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">代理设置</span><span class="ui-tg__sub">能改动整个路由器，勾之前会先提醒</span></span><button class="ui-switch" type="button" role="switch" aria-checked="false" aria-label="代理设置"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">定时断网、拉黑设备</span><span class="ui-tg__sub">管理孩子的平板和游戏机</span></span><button class="ui-switch is-on" type="button" role="switch" aria-checked="true" aria-label="定时断网、拉黑设备"><i></i></button></li>
+                  <li class="ui-tg"><span class="ui-tg__text"><span class="ui-tg__label">代理设置</span><span class="ui-tg__sub">可改动整个路由器，授予前再次确认</span></span><button class="ui-switch" type="button" role="switch" aria-checked="false" aria-label="代理设置"><i></i></button></li>
                 </ul>
               </div>
             </div></div>
           </div>
         </article>
         <article class="card card--row card--open span-6">
-          <h3>有问题，直接问开发者</h3>
-          <p>面板里就能跟开发者对话。截图、录屏、日志直接发，一个文件最大 200MB；开发者回复了，推送到你手机。</p>
+          <h3>联系开发者。</h3>
+          <p>在面板内直接与开发者对话。可发送截图、录屏和日志，单个文件最大 200MB。开发者回复后，推送到你的手机。</p>
           <div class="panel" data-fx="caustics" data-fx-seed="13">
             <div class="stage stage--fade-b"><div class="at-rise fit" style="--fit-max:380px;--ax:max(24px, 50% - 190px);--ay:48px;--ay-sm:20px" data-ui-loop>
               <div class="ui ui-notify" data-ui="notify">
@@ -688,15 +689,15 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section tour" id="tour" aria-labelledby="tour-h">
     <div class="wrap"><div class="tour__stick">
-      <div class="section-head" data-moment="lines-rise"><h2 id="tour-h">打开就是这样。<span class="muted">六个常用页面，<wbr>点一下或左右滑着看。</span></h2></div>
+      <div class="section-head" data-moment="lines-rise"><h2 id="tour-h">六个常用页面。<span class="muted">点击或左右滑动查看。</span></h2></div>
       <div class="tour__body">
         <ol class="tour__list" id="tourList">
-          <li class="tour__item is-on" tabindex="0"><h3>首页</h3><p>实时网速、今日流量、在线设备，打开就看到。</p></li>
-          <li class="tour__item" tabindex="0"><h3>设备</h3><p>谁在线、在用多少网速，走代理还是直连。</p></li>
-          <li class="tour__item" tabindex="0"><h3>暂停上网</h3><p>一键暂停某台设备，或者给它设定时断网。</p></li>
-          <li class="tour__item" tabindex="0"><h3>流量统计</h3><p>每台设备今天、这个月各用了多少。</p></li>
-          <li class="tour__item" tabindex="0"><h3>断线记录</h3><p>每次断网的时间、原因、怎么修好的。</p></li>
-          <li class="tour__item" tabindex="0"><h3>深色模式</h3><p>跟着手机自动切换，磨砂玻璃界面，背景可以换。</p></li>
+          <li class="tour__item is-on" tabindex="0"><h3>首页</h3><p>实时网速、今日流量、在线设备，打开即可查看。</p></li>
+          <li class="tour__item" tabindex="0"><h3>设备</h3><p>在线设备、实时网速，以及走代理还是直连。</p></li>
+          <li class="tour__item" tabindex="0"><h3>暂停上网</h3><p>一键暂停某台设备上网，或设置定时断网。</p></li>
+          <li class="tour__item" tabindex="0"><h3>流量统计</h3><p>每台设备今日和本月的用量。</p></li>
+          <li class="tour__item" tabindex="0"><h3>断线记录</h3><p>每次断网的时间、原因和修复过程。</p></li>
+          <li class="tour__item" tabindex="0"><h3>深色模式</h3><p>跟随手机自动切换，磨砂玻璃界面，背景可自定义。</p></li>
         </ol>
         <div class="tour__phone" aria-hidden="true">
           <div class="tour__glow"></div>
@@ -717,17 +718,17 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section" id="how" aria-labelledby="how-h">
     <div class="wrap">
-      <div class="section-head" data-moment="lines-rise"><h2 id="how-h">在哪都能<wbr>连回家。<span class="muted">路由器主动<wbr>连出去，家里<wbr>一个端口都不用开。</span></h2></div>
+      <div class="section-head" data-moment="lines-rise"><h2 id="how-h">远程访问。<span class="muted">路由器主动建立<wbr>加密隧道，<wbr>无需开放端口。</span></h2></div>
       <div class="grid">
         <article class="card dg-card">
-          <h3>一条加密隧道，连回家里</h3>
-          <p>路由器主动连上 Cloudflare。你在公司、在路上，打开专属网址就能管节点、设备和看门狗。</p>
+          <h3>加密隧道。</h3>
+          <p>路由器主动连接 Cloudflare。在公司或路上，打开专属网址即可管理节点、设备和看门狗。</p>
           <div class="panel" data-dg-phone="loop" data-icon-base="/k/icons/demo/">
             <div class="dg" data-diagram><script type="application/json">{"layout":"lanes","alt":"你的手机通过 Cloudflare 隧道连到家里的路由器，再管 OpenClash 节点、在线设备和看门狗。","curve":"curve","input":{"label":"你的手机","icon":"ui:smartphone","meta":"在哪都行"},"core":{"label":"家里的路由器","icon":"ui:router"},"lanes":[{"label":"OpenClash 节点","icon":"ui:globe","meta":"换节点","done":true},{"label":"在线设备","icon":"ui:wifi","meta":"12 台","done":true},{"label":"看门狗","icon":"ui:shield-check","meta":"30 秒","done":true}]}</script></div>
           </div>
         </article>
         <article class="card globe-card">
-          <h3>出门在外也能用</h3>
+          <h3>随时随地。</h3>
           <div class="facts3">
             <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>不用公网 IP</span>
             <span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>不用开端口</span>
@@ -741,13 +742,13 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section statement" id="numbers" aria-labelledby="num-h">
     <div class="wrap">
-      <h2 class="sr-only" id="num-h">它每天在做什么</h2>
-      <div data-moment="word-highlight"><p class="mo-wh__text">半夜宽带掉线，它 30 秒内就发现，自己重新拨号；节点挂了，它换一个能用的；修好以后，再把<strong>发生了什么</strong>推到你的手机上。</p></div>
+      <h2 class="sr-only" id="num-h">看门狗每天做的事</h2>
+      <div data-moment="word-highlight"><p class="mo-wh__text">宽带掉线，30 秒内发现并重新拨号。节点失效，自动切换到可用节点。修复完成后，<strong>处理结果</strong>推送到你的手机。</p></div>
       <div class="stats" data-moment="counter-rolls">
-        <div class="stat"><p class="t-stat">30<small>秒</small></p><p class="t-small muted">看门狗检查一次宽带、DNS、隧道和代理</p></div>
-        <div class="stat"><p class="t-stat">6<small>种</small></p><p class="t-small muted">代理插件自动认出，换着用</p></div>
-        <div class="stat"><p class="t-stat">2<small>分钟</small></p><p class="t-small muted">官网打开面板的一次性票，用一次就作废</p></div>
-        <div class="stat"><p class="t-stat">7<small>天</small></p><p class="t-small muted">注册账号送的免费试用</p></div>
+        <div class="stat"><p class="t-stat">30<small>秒</small></p><p class="t-small muted">看门狗巡检一次宽带、DNS、隧道和代理</p></div>
+        <div class="stat"><p class="t-stat">6<small>种</small></p><p class="t-small muted">代理插件自动识别，可随时切换</p></div>
+        <div class="stat"><p class="t-stat">2<small>分钟</small></p><p class="t-small muted">官网打开面板的一次性凭证，用后即失效</p></div>
+        <div class="stat"><p class="t-stat">7<small>天</small></p><p class="t-small muted">注册即送的免费试用</p></div>
       </div>
       <div class="mq">
         <div data-moment="marquee-row" data-moment-opts='{"speed": 40}'>
@@ -760,20 +761,20 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
   <section class="section g2" id="start" aria-labelledby="start-h">
     <div class="wrap">
       <div class="group">
-        <div class="section-head" data-moment="lines-rise"><h2 id="start-h">5&nbsp;分钟装好。<span class="muted">全程只用手机，复制一条命令。</span></h2></div>
+        <div class="section-head" data-moment="lines-rise"><h2 id="start-h">5&nbsp;分钟完成安装。<span class="muted">全程使用手机，只需一条命令。</span></h2></div>
         <div class="grid">
           <div class="s-left">
             <ol class="steps">
-              <li><div><h3>注册账号，拿安装命令</h3><p><a class="inline" href="/app#reg">注册账号</a>后在「添加路由器 → 装新路由器」里领 7 天免费试用（有邀请码的填进去兑换），下面会给你一条<b>带着安装码</b>的命令，点「复制命令」。</p></div></li>
-              <li><div><h3>打开路由器后台的终端</h3><p>手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（不是装好以后面板里的那个终端。）</p></div></li>
-              <li><div><h3>粘贴命令，选版本</h3><p>命令长这样（最后是你的安装码）。终端问装哪个版本时，输 <b>1</b> 是 <b>AI 版</b>（手机面板 + 能在 Claude 里对话管路由器），输 <b>2</b> 是<b>纯面板版</b>（只有手机面板），回车等它装完：</p>
+              <li><div><h3>注册账号，获取安装命令</h3><p><a class="inline" href="/app#reg">注册账号</a>后在「添加路由器 → 装新路由器」里领 7 天免费试用（有邀请码的填进去兑换），下面会给你一条<b>带着安装码</b>的命令，点「复制命令」。</p></div></li>
+              <li><div><h3>打开路由器后台的终端</h3><p>手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（这里用的是路由器后台自带的终端。）</p></div></li>
+              <li><div><h3>粘贴命令，选择版本</h3><p>命令长这样（最后是你的安装码）。终端问装哪个版本时，输 <b>1</b> 是 <b>AI 版</b>（手机面板 + 能在 Claude 里对话管路由器），输 <b>2</b> 是<b>纯面板版</b>（只有手机面板），回车后等待安装完成：</p>
                 <pre class="cmd" id="cmd">cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh --invite 你的安装码</pre>
                 <div class="copy-row"><a class="btn btn--secondary" href="/app#reg">去官网拿我的命令</a><span class="t-small">已有账号的直接<a class="inline" href="/app">登录</a></span></div></div></li>
             </ol>
           </div>
           <article class="card term-card s-right">
-            <h3>装的时候，屏幕上是这样</h3>
-            <p>装好一项勾一项，最后告诉你回官网打开。</p>
+            <h3>安装过程</h3>
+            <p>每完成一项打一个勾，结束后提示你回官网打开面板。</p>
             <div class="panel" data-fx="grid-pulse" data-fx-seed="44">
               <div class="stage"><div class="at-rise fit" style="--fit-max:460px;--ax:max(20px, 50% - 230px);--ay:32px;--ay-sm:16px" data-ui-loop>
                 <div class="ui ui-panel ui-term" data-ui="terminal-run">
@@ -801,7 +802,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
       <div class="grid">
         <div class="s2a">
           <ol class="steps" start="4" style="counter-reset: s 3">
-            <li><div><h3>装好自动加到账号里</h3><p>装完屏幕最后是这样的，这台路由器已经在你的官网账号里了，你是它的<b>主账号</b>：</p>
+            <li><div><h3>自动绑定账号</h3><p>装完屏幕最后是这样的，这台路由器已经在你的官网账号里了，你是它的<b>主账号</b>：</p>
               <pre class="term"><u>======== 安装完成 ========</u>
 
 <b>✅ 这台路由器已经加到你的官网账号里，你是它的主账号。</b>
@@ -812,9 +813,9 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         </div>
         <div class="s2b">
           <ol class="steps" style="counter-reset: s 4">
-            <li><div><h3>回官网，点「打开面板」</h3><p>官网「我的路由器」里会<b>自动出现</b>这台路由器（不用刷新），点「打开面板」就进去了，什么码都不用输。换手机也一样：登录官网，点「打开面板」。之后「添加到主屏幕」，或者装下面的安卓 App。</p></div></li>
-            <li><div><h3>家里人也能用</h3><p>他注册自己的账号；你在面板「我的主页 → 家人」里生成<b>加入码</b>发给他，他就是子账号。他能做什么、用到哪天，由你决定。</p></div></li>
-            <li><div><h3>AI 版：连上 Claude</h3><p>把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里，就能用中文说「把奈飞切到新加坡节点」。</p></div></li>
+            <li><div><h3>在官网打开面板</h3><p>官网「我的路由器」里会<b>自动出现</b>这台路由器（不用刷新），点「打开面板」就进去了，什么码都不用输。换手机也一样：登录官网，点「打开面板」。之后「添加到主屏幕」，或者装下面的安卓 App。</p></div></li>
+            <li><div><h3>邀请家人</h3><p>他注册自己的账号；你在面板「我的主页 → 家人」里生成<b>加入码</b>发给他，他就是子账号。他能做什么、用到哪天，由你决定。</p></div></li>
+            <li><div><h3>AI 版：连接 Claude</h3><p>把「Claude 连接器地址」填到 Claude 的「设置 → 连接器 → 添加自定义连接器」里，就能用中文说「把奈飞切到新加坡节点」。</p></div></li>
           </ol>
           <figure class="pair-shot"><div class="phone"><img src="/*IMG:pair*/" alt="官网「我的路由器」里刚装好的路由器，下面有「打开面板」按钮" loading="lazy"></div><figcaption>第 5 步：官网「我的路由器」里点「打开面板」</figcaption></figure>
           <p class="more-docs">每一步的详细说明：<a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-phone.md" rel="noopener">手机教程</a>；用电脑装：<a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/install-hosted.md" rel="noopener">托管版教程</a></p>
@@ -825,23 +826,23 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section plans-ground" id="plans" data-moment="iris-opens" data-moment-opts='{"from":"base"}' aria-labelledby="plans-h">
     <div class="wrap">
-      <div class="section-head" data-moment="lines-rise"><h2 id="plans-h">挑一种用法。<span class="muted">先免费试&nbsp;7&nbsp;天，不合适<wbr>随时卸载。</span></h2></div>
+      <div class="section-head" data-moment="lines-rise"><h2 id="plans-h">选择版本。<span class="muted">免费试用&nbsp;7&nbsp;天，<wbr>可随时卸载。</span></h2></div>
       <div class="grid" id="app">
         <article class="card is-featured" data-glow="edge-glow">
           <p class="t-label">托管版 · 推荐</p>
-          <h3>装上就有专属网址</h3>
+          <h3>安装即得专属网址</h3>
           <ul>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>不用自己的域名和 Cloudflare 账号</li>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>推送、云端备份、一键更新都有</li>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>AI 版和纯面板版任选</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>无需自备域名和 Cloudflare 账号</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>包含推送、云端备份和一键更新</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>可选 AI 版或纯面板版</li>
           </ul>
           <div class="btn-row"><a class="btn btn--primary" href="/app#reg">注册领 7 天试用</a></div>
         </article>
         <article class="card">
           <p class="t-label">自建版</p>
-          <h3>用自己的域名，或只在家里用</h3>
+          <h3>使用自己的域名，或仅在局域网使用</h3>
           <ul>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>自己的 Cloudflare 账号和域名</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>使用自己的 Cloudflare 账号和域名</li>
             <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>AI 版 / 纯面板版 × 精简版 / 完整版</li>
             <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>开源，MIT 许可证</li>
           </ul>
@@ -849,14 +850,14 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         </article>
         <article class="card">
           <p class="t-label">安卓 App</p>
-          <h3>几台路由器一键切换</h3>
+          <h3>多台路由器一键切换</h3>
           <ul>
             <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>扫码、相册识别二维码、粘贴或手动添加</li>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>有新版本，打开就提醒</li>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>安卓 7.0 以上可用</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>有新版本时，打开即提醒</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>支持安卓 7.0 及以上</li>
           </ul>
           <div class="btn-row"><a class="btn btn--secondary" href="/app/router-panel.apk" id="apkBtn">下载安卓 App</a></div>
-          <p class="apk-note" id="apkVer">提示「未知来源」时允许一次就行。苹果手机用浏览器打开面板，「添加到主屏幕」即可。</p>
+          <p class="apk-note" id="apkVer">安装时如提示「未知来源」，允许一次即可。iPhone 用浏览器打开面板，添加到主屏幕即可。</p>
         </article>
       </div>
     </div>
@@ -864,17 +865,17 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section" id="safety" aria-labelledby="safety-h">
     <div class="wrap">
-      <div class="section-head" data-moment="lines-rise"><h2 id="safety-h">钥匙只在<wbr>你手里。<span class="muted">账号里没有密钥，拿到账号<wbr>也打不开面板。</span></h2></div>
+      <div class="section-head" data-moment="lines-rise"><h2 id="safety-h">密钥只在<wbr>你手里。<span class="muted">账号里没有密钥，<wbr>仅凭账号打不开面板。</span></h2></div>
       <div class="safe-grid">
         <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM224,98.1c-1.09,34.09-29.75,61.86-63.89,61.9H160a63.7,63.7,0,0,1-23.65-4.51,8,8,0,0,0-8.84,1.68L116.69,168H96a8,8,0,0,0-8,8v16H72a8,8,0,0,0-8,8v16H40V187.31l58.83-58.82a8,8,0,0,0,1.68-8.84A63.72,63.72,0,0,1,96,95.92c0-34.14,27.81-62.8,61.9-63.89A64,64,0,0,1,224,98.1ZM192,76a12,12,0,1,1-12-12A12,12,0,0,1,192,76Z"/></svg><h3>登录密钥</h3><p>在你的路由器上生成，只存在路由器和你自己的手机上。</p></article>
-        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z"/></svg><h3>新手机要登录码</h3><p>登录码只有绑定了这台路由器的账号能拿，<b>10 分钟有效、用一次作废</b>。登录地址泄露了也打不开。</p></article>
-        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg><h3>账号</h3><p>只记录你有哪几台路由器，用来拿登录码。账号里没有密钥。</p></article>
-        <article class="sc sc--8"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M178.34,165.66,160,147.31V208a8,8,0,0,1-16,0V147.31l-18.34,18.35a8,8,0,0,1-11.32-11.32l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32ZM160,40A88.08,88.08,0,0,0,81.29,88.68,64,64,0,1,0,72,216h40a8,8,0,0,0,0-16H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.12A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,100.8,66,8,8,0,0,0,3.2,15.34,7.9,7.9,0,0,0,3.2-.68A88,88,0,0,0,160,40Z"/></svg><h3>云端备份</h3><p>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。开启加密后，备份<b>在路由器上加密后才上传</b>，密钥只在你的路由器上；<b>没开启加密的备份仍然原样存在云端</b>。不想用，可以在「自动任务」里关掉。</p></article>
-        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z"/></svg><h3>Claude 连接器</h3><p>AI 版给 Claude 单独一把钥匙，只能给 Claude 用、打不开面板，泄露了可以单独换。</p></article>
-        <article class="sc sc--6"><svg class="si si--line" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><h3>安装包签名</h3><p>每次发布都用开发者的密钥签名，一键更新<b>先验签名再安装</b>。下载的中转站被人改了，路由器也不会装上改过的安装包。</p></article>
-        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><h3>要说明的风险</h3><p>一键更新装的是我们在 GitHub 发布、签过名的安装包；在外面打开面板的流量经过 Cloudflare 加密转发。这两个环节出问题，理论上会影响路由器。发现安全问题请用<a class="inline" href="/security#report">报告表单</a>告诉我们。</p></article>
-        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M120,128V48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Zm60.37-78.7a8,8,0,0,0-8.74,13.4C194.74,77.77,208,101.57,208,128a80,80,0,0,1-160,0c0-26.43,13.26-50.23,36.37-65.3a8,8,0,0,0-8.74-13.4C47.9,67.38,32,96.06,32,128a96,96,0,0,0,192,0C224,96.06,208.1,67.38,180.37,49.3Z"/></svg><h3>不想用了</h3><p>运行卸载脚本，专属网址自动交还；90 天没上线也会自动回收。</p></article>
-        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M232,48H160a40,40,0,0,0-32,16A40,40,0,0,0,96,48H24a8,8,0,0,0-8,8V200a8,8,0,0,0,8,8H96a24,24,0,0,1,24,24,8,8,0,0,0,16,0,24,24,0,0,1,24-24h72a8,8,0,0,0,8-8V56A8,8,0,0,0,232,48ZM96,192H32V64H96a24,24,0,0,1,24,24V200A39.81,39.81,0,0,0,96,192Zm128,0H160a39.81,39.81,0,0,0-24,8V88a24,24,0,0,1,24-24h64Z"/></svg><h3>想看细节</h3><p>措施和没覆盖的风险见<a class="inline" href="/security">安全说明</a>；存了什么、存多久、怎么删见<a class="inline" href="/privacy">隐私政策</a>。</p></article>
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z"/></svg><h3>新设备需要登录码</h3><p>只有绑定了这台路由器的账号才能获取登录码，<b>10 分钟内有效，用一次即失效</b>。登录地址泄露，也无法打开面板。</p></article>
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24ZM74.08,197.5a64,64,0,0,1,107.84,0,87.83,87.83,0,0,1-107.84,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm97.76,66.41a79.66,79.66,0,0,0-36.06-28.75,48,48,0,1,0-59.4,0,79.66,79.66,0,0,0-36.06,28.75,88,88,0,1,1,131.52,0Z"/></svg><h3>账号</h3><p>只记录你名下的路由器，用于获取登录码。账号里没有密钥。</p></article>
+        <article class="sc sc--8"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M178.34,165.66,160,147.31V208a8,8,0,0,1-16,0V147.31l-18.34,18.35a8,8,0,0,1-11.32-11.32l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32ZM160,40A88.08,88.08,0,0,0,81.29,88.68,64,64,0,1,0,72,216h40a8,8,0,0,0,0-16H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.29.12A88,88,0,0,0,72,128a8,8,0,0,0,16,0,72,72,0,1,1,100.8,66,8,8,0,0,0,3.2,15.34,7.9,7.9,0,0,0,3.2-.68A88,88,0,0,0,160,40Z"/></svg><h3>云端备份</h3><p>备份里是路由器的全部设置（包括登录密钥、Wi-Fi 密码、宽带账号）。开启加密后，备份<b>在路由器上加密后才上传</b>，密钥只在你的路由器上；<b>未加密的备份按原样保存在云端</b>。可在「自动任务」中关闭备份。</p></article>
+        <article class="sc sc--4"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z"/></svg><h3>Claude 连接器</h3><p>AI 版为 Claude 单独配一把密钥，仅限 Claude 使用，无法打开面板，泄露后可单独更换。</p></article>
+        <article class="sc sc--6"><svg class="si si--line" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><h3>安装包签名</h3><p>每次发布都用开发者的密钥签名，一键更新<b>先验证签名，再安装</b>。下载中转站被篡改时，签名校验不通过，路由器不会安装。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><h3>已知风险</h3><p>一键更新安装的是在 GitHub 发布并签名的安装包；远程打开面板的流量经 Cloudflare 加密转发。这两个环节出现问题，可能影响路由器。发现安全问题，请通过<a class="inline" href="/security#report">报告表单</a>告诉我们。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M120,128V48a8,8,0,0,1,16,0v80a8,8,0,0,1-16,0Zm60.37-78.7a8,8,0,0,0-8.74,13.4C194.74,77.77,208,101.57,208,128a80,80,0,0,1-160,0c0-26.43,13.26-50.23,36.37-65.3a8,8,0,0,0-8.74-13.4C47.9,67.38,32,96.06,32,128a96,96,0,0,0,192,0C224,96.06,208.1,67.38,180.37,49.3Z"/></svg><h3>停用与卸载</h3><p>运行卸载脚本后，专属网址自动释放；连续 90 天未上线，也会自动回收。</p></article>
+        <article class="sc sc--6"><svg class="si" aria-hidden="true" viewBox="0 0 256 256" fill="currentColor"><path d="M232,48H160a40,40,0,0,0-32,16A40,40,0,0,0,96,48H24a8,8,0,0,0-8,8V200a8,8,0,0,0,8,8H96a24,24,0,0,1,24,24,8,8,0,0,0,16,0,24,24,0,0,1,24-24h72a8,8,0,0,0,8-8V56A8,8,0,0,0,232,48ZM96,192H32V64H96a24,24,0,0,1,24,24V200A39.81,39.81,0,0,0,96,192Zm128,0H160a39.81,39.81,0,0,0-24,8V88a24,24,0,0,1,24-24h64Z"/></svg><h3>了解更多</h3><p>安全措施和未覆盖的风险，见<a class="inline" href="/security">安全说明</a>；数据如何存储和删除，见<a class="inline" href="/privacy">隐私政策</a>。</p></article>
       </div>
     </div>
   </section>
@@ -882,11 +883,11 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
   <section class="section g2" id="faq" aria-labelledby="faq-h">
     <div class="wrap">
       <div class="group">
-        <div class="section-head" data-moment="lines-rise"><h2 id="faq-h">常见问题。<span class="muted">大部分情况<wbr>都不用重装。</span></h2></div>
+        <div class="section-head" data-moment="lines-rise"><h2 id="faq-h">常见问题。<span class="muted">大多数情况<wbr>无需重装。</span></h2></div>
         <div class="grid">
           <article class="card fbq">
             <h3>反馈过问题？查处理进度</h3>
-            <p>输入上报时拿到的 8 位受理编号，不用登录。登录账号后，在账号页也能看到自己的全部反馈。</p>
+            <p>输入上报时拿到的 8 位受理编号，无需登录。登录账号后，可在账号页查看自己的全部反馈。</p>
             <form id="fbq" action="/r" autocomplete="off">
               <input name="c" maxlength="20" placeholder="比如 K7F2Q9AB" autocapitalize="characters" spellcheck="false" aria-label="受理编号">
               <button class="btn btn--primary" type="submit">查询</button>
@@ -908,7 +909,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         <div class="qa"><h3>试用快到期了怎么办？</h3><p>到期前 3 天会推送提醒。在<a class="inline" href="/app">账号页</a>这台路由器下面点「申请续期」填个表，审核通过就自动续上；有续期码的点「续期」输入。不用重装。</p></div>
         <div class="qa"><h3>换了手机、清了浏览器数据，怎么再登录面板？</h3><p>在新手机上登录<a class="inline" href="/app">账号页</a>，在「我的路由器」点「打开面板」就进去了，不用输码。官网打不开时，在路由器后台终端运行 <code>cmcp-logincode</code> 拿一个应急登录码。</p></div>
         <div class="qa"><h3>连着家里 Wi-Fi 时面板打不开，换成手机流量就好？</h3><p>多半是代理插件正在重启或者节点卡了。面板会自动改走直连，稍等一两分钟再刷新；急的话先用手机流量打开。</p></div>
-        <div class="qa"><h3>装的不是 OpenClash，能用吗？</h3><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。没装也能用设备、流量、测速、断线记录。</p></div>
+        <div class="qa"><h3>用的是其他代理插件，能用吗？</h3><p>能。OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+ 都能自动认出来；装了两个以上的，在面板「概览」里点「代理插件 · 切换」换着用。未安装代理插件时，设备、流量、测速、断线记录照常可用。</p></div>
         <div class="qa"><h3>遇到问题、想要新功能？</h3><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。发完会给一个受理编号，处理到哪一步，在面板「帮助 → 我的反馈」、官网账号页，或者上面输入编号都能看到。</p></div>
         <div class="qa"><h3>不想用托管服务？</h3><p>可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本和教程都在 <a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。</p></div>
       </div>
@@ -917,8 +918,8 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
 
   <section class="section la" data-moment="letters-assemble" aria-label="结尾的一句话">
     <div class="wrap">
-      <div class="la__in"><h2 class="mo-la__type"><span class="nw">断网了，</span><span class="nw">它先修好。</span></h2>
-      <p class="mo-la__sub">修好了再告诉你。你只管上网。</p></div>
+      <div class="la__in"><h2 class="mo-la__type"><span class="nw">断网，</span><span class="nw">自动修复。</span></h2>
+      <p class="mo-la__sub">修复完成后，结果推送到你的手机。</p></div>
     </div>
   </section>
 </main>
@@ -928,8 +929,8 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
   <div class="wrap">
     <div class="closing__cta close--type">
       <div class="section-head">
-        <h2 id="close-h" class="mo-lt__type" data-moment="liquid-type" data-moment-opts='{"strength":1.2}'>今晚就让它值班</h2>
-        <p>注册账号就送 7 天试用码，装好后自动加到你的账号里。</p>
+        <h2 id="close-h" class="mo-lt__type" data-moment="liquid-type" data-moment-opts='{"strength":1.2}'>免费试用 7 天</h2>
+        <p>注册即送试用码，安装后自动绑定到你的账号。</p>
       </div>
       <a class="btn btn--primary btn--xl btn--wide" href="/app#reg">注册领 7 天试用<svg class="m-arrow" viewBox="0 0 12 12" aria-hidden="true"><path class="m-arrow__stem" d="M1 6h8"/><path class="m-arrow__head" d="M4.5 2.5 8 6l-3.5 3.5"/></svg></a>
     </div>

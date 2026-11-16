@@ -62,7 +62,7 @@ ok('[旧浏览器] 登录页切换滑块也看得见', OLD.tabPill === '1', OLD.
 ok('[旧浏览器] 首屏「实时网速」卡片不透明', OLD.card > 0.5, JSON.stringify(OLD));
 ok('[旧浏览器] 看门狗检查的勾看得见（勾和底色不一样）', OLD.tick, OLD.tickc + ' / ' + OLD.boxc);
 ok('[旧浏览器] 首屏手机截图区域没塌（和新浏览器差不多高）', Math.abs(OLD.art - NEW.art) < 40, OLD.art + ' / ' + NEW.art);
-ok('[旧浏览器] 「看怎么装」按钮有底色', OLD.sec > 0.5, JSON.stringify(OLD));
+ok('[旧浏览器] 「查看安装步骤」按钮有底色', OLD.sec > 0.5, JSON.stringify(OLD));
 ok('[旧浏览器] 页面没有报错', !OLD.errs.length, OLD.errs.join(' | '));
 ok('[旧浏览器] 不认识 :has 时，补的规则用上了（有元素被标记）', OLD.hasMarks > 0, String(OLD.hasMarks));
 await browser.close(); server.close();

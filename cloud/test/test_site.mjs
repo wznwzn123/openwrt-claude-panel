@@ -264,7 +264,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
 	await page.goto(B + '/#faq-restore'); await W(500);
 	{ const body = await page.textContent('body');
-	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、可以开启加密、没开启的仍原样存着，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /没开启加密的备份仍然原样存在云端/.test(body) && /要说明的风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
+	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、可以开启加密、没开启的仍原样存着，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /(没开启加密|未加密)的备份(仍然原样存在|按原样保存在)云端/.test(body) && /(要说明的|已知)风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
 	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，答案直接展开，从链接进来滚到这一条', await page.evaluate(() => { const e = document.getElementById('faq-restore'), r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && e.offsetHeight > 100; }) && /重新领一个安装码/.test(await page.textContent("#faq-restore")));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();

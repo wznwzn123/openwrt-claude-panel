@@ -123,6 +123,22 @@ ok('[完全控制] 代理设置：改配置文件、订阅照样可以', (await 
 	await call(devA, 'fam', { op: 'sub_set', sudo: su.result.sudo, target: ub, perms: ['msg', 'node', 'speed', 'proxy'] });
 	ok('[完全控制] 收回后：又不能写自定义脚本了', (await code(devB, 'file_save', { kind: 'custom', name: 'openclash_custom_firewall_rules.sh', content: '' })) === -32012);
 }
+// 安全加固（第二轮）：同一台路由器的家人，联系开发者、问题反馈各是各的
+{
+	const sa = await call(devA, 'chat', { op: 'send', text: '主账号问的：账号转让怎么弄' });
+	const sb = await call(devB, 'chat', { op: 'send', text: '家人问的：网速慢' });
+	const ga = await call(devA, 'chat', { op: 'get' }), gb = await call(devB, 'chat', { op: 'get' });
+	const ta = (ga.result?.msgs || []).map((m) => m.x).join('|'), tb = (gb.result?.msgs || []).map((m) => m.x).join('|');
+	ok('[分开对话] 主账号和家人都能发', !!sa.result?.ok && !!sb.result?.ok, JSON.stringify(sa).slice(0, 200) + JSON.stringify(sb).slice(0, 200));
+	ok('[分开对话] 主账号只看到自己的', /账号转让/.test(ta) && !/网速慢/.test(ta), ta);
+	ok('[分开对话] 家人只看到自己的，看不到主账号的', /网速慢/.test(tb) && !/账号转让/.test(tb), tb);
+	const th = await H().chatThreads();
+	ok('[分开对话] 官网后台是两个对话：主账号的还是原来那个（d+路由器），家人的写着名字', th.some((t) => t.tid === 'd' + R.sub) && th.some((t) => t.tid === 'd' + R.sub + '.' + ub && /（/.test(t.name)), JSON.stringify(th.map((t) => [t.tid, t.name])));
+	const fa = await call(devA, 'feedback', { text: '主账号的反馈内容' }), fbb = await call(devB, 'feedback', { text: '家人的反馈内容' });
+	const la = await call(devA, 'fb_replies', { force: true }), lb = await call(devB, 'fb_replies', { force: true });
+	const xa = (la.result?.list || []).map((x) => x.text).join('|'), xb = (lb.result?.list || []).map((x) => x.text).join('|');
+	ok('[分开反馈] 我的反馈：各看各的', !!fa.result?.code && !!fbb.result?.code && /主账号的反馈/.test(xa) && !/家人的反馈/.test(xa) && /家人的反馈/.test(xb) && !/主账号的反馈/.test(xb), xa + ' / ' + xb);
+}
 // 在官网上改（路由器缓存还在）：30 秒后才生效；这里把缓存放旧
 await H().devSubSet({ sub: R.sub, uid: ua, target: ub, perms: ['msg'] });
 { const t = new Date(Date.now() - 40e3); fs.utimesSync('/tmp/cmcp_fam.json', t, t); }

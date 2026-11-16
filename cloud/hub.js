@@ -700,6 +700,7 @@ export class Hub extends DurableObject {
 		return { st: 200, code, exp: Date.now() + 600e3 };
 	}
 	// 管理员封禁的、在回收站里的路由器：钥匙还对，但不再给它加新的人、新的登录、发消息和文件（到期暂停的不算，还要能联系开发者续期）
+	async devData(sub) { return SUB_RE.test(String(sub || '')) ? (await this.ctx.storage.get('d:' + sub)) || null : null; }
 	async devOff(sub) { const d = await this.ctx.storage.get('d:' + sub); return !!(d && d.off && d.offWhy !== 'exp'); }
 	async devOk(sub, rkey) { if (!SUB_RE.test(sub || '')) return false; const c = await this.watch(sub).getCfg(); return !!c && safeEq(rkey, c.rkey); }
 	bind(uid, code, ip) { return this.lock(() => this._bind(uid, code, ip)); }
@@ -988,7 +989,7 @@ export class Hub extends DurableObject {
 	}
 	// 路由器那边（凭 RKEY）看自己的到期时间
 	/* ---------- 问题反馈：路由器面板里发来（凭 RKEY），管理页看，发邮件提醒管理员 ---------- */
-	async feedback({ sub, rkey, text, contact, diag, images, files }) {
+	async feedback({ sub, rkey, uid, text, contact, diag, images, files }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		if (await this.devOff(sub)) return { st: 403, error: '这台路由器的托管服务已停用' };
 		text = String(text || '').trim().slice(0, 2000); contact = String(contact || '').trim().slice(0, 80); diag = String(diag || '').trim().slice(0, 1500);
@@ -996,9 +997,11 @@ export class Hub extends DurableObject {
 		if (!(await this.hit('fb:' + sub, 5, DAY))) return { st: 429, error: '今天发了很多条了，明天再发' };
 		const d = await this.ctx.storage.get('d:' + sub), emails = [];
 		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u && u.email) emails.push(u.email); }
-		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub, name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
+		// 安全加固（第二轮）：家人各自的反馈只有自己看得到（新面板会带上是哪个账号发的；主账号的、老面板发的，归主账号）
+		const fu = /^[a-z2-9]{12}$/.test(String(uid || '')) && d && uid !== this.famOf(d).owner ? String(uid) : '';
+		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub, ...(fu ? { by: fu } : {}), name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
 		// 5.2：附带的文件（视频、日志等，先传好的）
-		if (Array.isArray(files) && files.length) { const c = await this.fileClaim(files, 'd' + sub, 'fb'); if (c.error) return { st: 400, error: c.error }; fb.files = c.files; }
+		if (Array.isArray(files) && files.length) { const c = await this.fileClaim(files, 'd' + sub + (fu ? '.' + fu : ''), 'fb'); if (c.error) return { st: 400, error: c.error }; fb.files = c.files; }
 		// 截图：最多 3 张，每张 1.5MB 以内的 JPEG / PNG / WebP（手机上已经压缩过）
 		for (const im of (Array.isArray(images) ? images : []).slice(0, 3)) {
 			const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(im || ''));
@@ -1068,16 +1071,20 @@ export class Hub extends DurableObject {
 		return { st: 200, ok: true, ...fbView(x) };
 	}
 	// 路由器面板「我的反馈」：这台路由器发过的反馈（凭 RKEY；最近 90 天、最多 10 条，带自己写的内容）
-	async devFb({ sub, rkey }) {
+	async devFb({ sub, rkey, uid }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
-		const l = ((await this.ctx.storage.get('fbl')) || []).filter((x) => x.sub === sub && Date.now() - x.at < 90 * DAY).slice(0, 10);
+		const d = await this.ctx.storage.get('d:' + sub), fu = /^[a-z2-9]{12}$/.test(String(uid || '')) && d && uid !== this.famOf(d).owner ? String(uid) : '';
+		const l = ((await this.ctx.storage.get('fbl')) || []).filter((x) => x.sub === sub && (x.by || '') === fu && Date.now() - x.at < 90 * DAY).slice(0, 10);
 		return { st: 200, ok: true, list: l.map((x) => fbView(x, true)) };
 	}
 	// 官网账号页「我的反馈」：自己账号里路由器发的、用这个账号或邮箱在官网报告的
 	async accountFb(uid, email) {
 		const u = await this.ctx.storage.get('u:' + uid); if (!u) return { st: 404, error: '没有这个账号' };
 		const subs = new Set((u.devs || []).map((x) => x.sub)), em = String(email || '').toLowerCase();
-		const l = ((await this.ctx.storage.get('fbl')) || []).filter((x) => Date.now() - x.at < 180 * DAY && ((x.sub && subs.has(x.sub)) || x.uid === uid || (x.emails || []).some((y) => String(y).toLowerCase() === em))).slice(0, 20);
+		// 路由器发来的反馈：家人发的只给他自己看；主账号发的（和以前的）只给主账号看
+		const own = {}; for (const sb of subs) { const d = await this.ctx.storage.get('d:' + sb); own[sb] = d ? this.famOf(d).owner : ''; }
+		const fromMyRouter = (x) => x.sub && subs.has(x.sub) && (x.by ? x.by === uid : own[x.sub] === uid);
+		const l = ((await this.ctx.storage.get('fbl')) || []).filter((x) => Date.now() - x.at < 180 * DAY && (fromMyRouter(x) || x.uid === uid || (!x.sub && (x.emails || []).some((y) => String(y).toLowerCase() === em)))).slice(0, 20);
 		return { st: 200, ok: true, list: l.map((x) => ({ ...fbView(x, true), name: x.sub ? ((u.devs || []).find((d) => d.sub === x.sub) || {}).alias || x.name : '' })) };
 	}
 	async fbImg(id, i) {
@@ -1664,8 +1671,8 @@ async function accountApi0(req, env, H, p, body) {
 	if (p === '/api/dev/unbind') return out(await H.devUnbind({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
 	if (p === '/api/dev/logincode') return out(await H.devLoginCode({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	if (p === '/api/dev/info') return out(await H.devInfo({ sub: s(b.sub), rkey: s(b.rkey) }));
-	if (p === '/api/dev/fb') return out(await H.devFb({ sub: s(b.sub), rkey: s(b.rkey) }));
-	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [], files: Array.isArray(b.files) ? b.files.slice(0, 5).map(s) : [] }));
+	if (p === '/api/dev/fb') return out(await H.devFb({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid) }));
+	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [], files: Array.isArray(b.files) ? b.files.slice(0, 5).map(s) : [] }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
 	{ const fx = await famDev(p, H, b); if (fx) return fx; }

@@ -1,6 +1,6 @@
 // 4.0：统计（访问次数、访客 IP、国家/地区）、登录记录、出错记录、邮件记录、实时对话（用户 ↔ 开发者）
 // 这些方法挂到托管服务的 Hub（Durable Object）上；数据都在自己的 Cloudflare 存储里，不交给任何第三方
-import { rnd, safeEq, SUB_RE, placeOf, uaLabel } from './hub.js';
+import { rnd, safeEq, SUB_RE, placeOf, uaLabel, maskEmail } from './hub.js';
 import { fileStartFor, signFiles, ipGroup } from './files.js';
 
 const DAY = 86400e3;
@@ -9,7 +9,8 @@ export const dayKey = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10)
 const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 const clip = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, n);
 const IP_MAX = 3000; // 一天最多记多少个不同的访客 IP（超过的只计数）
-export const TID_RE = /^(d[a-z2-9]{8}|a[a-z2-9]{12})$/;
+// 对话编号：d+路由器（主账号的）、d+路由器.账号（家人各自的，第二轮安全审查后）、a+匿名身份（自建版）
+export const TID_RE = /^(d[a-z2-9]{8}(\.[a-z2-9]{12})?|a[a-z2-9]{12})$/;
 const CHAT_KEEP = 500, CHAT_THREADS = 1000, CHAT_IMG = 1024 * 1024, CHUNK = 96 * 1024;
 const BOT_RE = /bot|spider|crawl|slurp|curl|wget|python|go-http|headless|monitor|preview|facebookexternalhit|bytespider/i;
 export const isBot = (ua) => !ua || BOT_RE.test(ua);
@@ -117,7 +118,17 @@ const M = {
 	},
 	// 认出是谁：托管版凭 sub + rkey；自建版凭 cid + ckey
 	async chatWho(b) {
-		if (b.sub) { if (!SUB_RE.test(b.sub) || !(await this.devOk(b.sub, b.rkey))) return null; const d = await this.ctx.storage.get('d:' + b.sub); return { tid: 'd' + b.sub, kind: 'hosted', off: !!(d && d.off && d.offWhy !== 'exp'), sub: b.sub, name: (d && d.name) || b.sub, model: (d && d.model) || '' }; }
+		if (b.sub) {
+			if (!SUB_RE.test(b.sub) || !(await this.devOk(b.sub, b.rkey))) return null;
+			const d = await this.ctx.storage.get('d:' + b.sub);
+			// 安全加固（第二轮）：同一台路由器的家人各说各的。路由器转发时带上是哪个账号（新面板才带）：主账号用原来那个对话（以前的记录都在这里），
+			// 其他账号各自一个对话，互相看不到；老路由器不带，照旧用原来那个
+			const uid = /^[a-z2-9]{12}$/.test(String(b.uid || '')) ? String(b.uid) : '', own = d ? this.famOf(d).owner : '';
+			if (uid && uid !== own) {
+				const u = await this.ctx.storage.get('u:' + uid), mn = u ? u.name || maskEmail(u.email).split('@')[0] : '家人';
+				return { tid: 'd' + b.sub + '.' + uid, uid, mname: mn, kind: 'hosted', off: !!(d && d.off && d.offWhy !== 'exp'), sub: b.sub, name: ((d && d.name) || b.sub) + '（' + mn + '）', model: (d && d.model) || '' };
+			}
+			return { tid: 'd' + b.sub, kind: 'hosted', off: !!(d && d.off && d.offWhy !== 'exp'), sub: b.sub, name: (d && d.name) || b.sub, model: (d && d.model) || '' }; }
 		if (b.cid) { if (!/^[a-z2-9]{12}$/.test(b.cid)) return null; const a = await this.ctx.storage.get('ca:' + b.cid); if (!a || !safeEq(await sha(String(b.ckey || '')), a.kh)) return null; return { tid: 'a' + b.cid, kind: 'self', name: a.name || '自建版路由器', model: a.model || '' }; }
 		return null;
 	},
@@ -149,7 +160,7 @@ const M = {
 		const l = await this.chatThreads(), now = Date.now();
 		let t = l.find((x) => x.tid === who.tid);
 		if (t && t.blocked && from === 'u') return { st: 403, error: '暂时不能发消息了。有问题可以在官网报告问题' };
-		if (!t) { if (from === 'a') return { st: 404, error: '没有这个对话' }; t = { tid: who.tid, kind: who.kind, sub: who.sub || '', at: now, seq: 0, ua: 0, uu: 0, n: 0 }; l.unshift(t); }
+		if (!t) { if (from === 'a') return { st: 404, error: '没有这个对话' }; t = { tid: who.tid, kind: who.kind, sub: who.sub || '', ...(who.uid ? { uid: who.uid, mname: who.mname || '' } : {}), at: now, seq: 0, ua: 0, uu: 0, n: 0 }; l.unshift(t); }
 		if (from === 'u') { t.name = who.name; t.model = who.model; for (const [k, v] of Object.entries(extra)) if (v && k !== 'files') t[k] = v; }
 		const seq = ++t.seq, msg = { s: seq, f: from, t: now, x: text };
 		if (bot) msg.auto = 1;
@@ -218,7 +229,7 @@ export async function chatApi(req, env, H, body) {
 	const b = await body(), ip = req.headers.get('cf-connecting-ip') || '', s = (v) => String(v == null ? '' : v);
 	const op = s(b.op);
 	if (op === 'anon') { const { st, ...r } = await H.chatAnon({ ip, name: s(b.name), model: s(b.model) }); return J(r, st); }
-	const who = await H.chatWho({ sub: s(b.sub), rkey: s(b.rkey), cid: s(b.cid), ckey: s(b.ckey) });
+	const who = await H.chatWho({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid), cid: s(b.cid), ckey: s(b.ckey) });
 	if (!who) return J({ error: '身份不对（路由器的钥匙对不上）', relogin: !!b.cid }, 403);
 	// 管理员封禁 / 放进回收站的路由器：还能看对话（开发者可能写了原因），不能再发消息、传文件
 	if (who.off && (op === 'send' || op === 'up')) return J({ error: '这台路由器的托管服务已停用，暂时不能发消息' }, 403);
@@ -266,7 +277,12 @@ export async function opsAdmin(req, a, H, body, u, env = {}) {
 			await H.chatSet(tid, 'adminSeen', r.msg.s);
 			await H.track('chat_out');
 			// 托管版：推送到这台路由器绑定的手机（自建版由路由器自己每 30 分钟来看一次，有新回复再推送）
-			if (t.kind === 'hosted' && t.sub) { try { await H.watch(t.sub).push({ title: '💬 开发者回复了你', body: r.msg.x ? r.msg.x.slice(0, 120) : files.length ? '[文件] ' + files[0].name : '[图片]', tag: 'chat', lvl: 'info', url: './?p=chat', force: true, nolog: true }); } catch (e) {} }
+			// 推送会到这台路由器的每一部手机：家人的对话、或者这台路由器有好几个人用时，不带回复内容（只说回复了谁），内容打开面板才看得到
+			if (t.kind === 'hosted' && t.sub) {
+				const dd = await H.devData(t.sub), many = !!t.uid || ((dd && dd.users) || []).length > 1;
+				const body = many ? '打开面板「联系开发者」查看' : r.msg.x ? r.msg.x.slice(0, 120) : files.length ? '[文件] ' + files[0].name : '[图片]';
+				try { await H.watch(t.sub).push({ title: t.uid ? '💬 开发者回复了' + (t.mname || '家人') : '💬 开发者回复了你', body, tag: 'chat', lvl: 'info', url: './?p=chat', force: true, nolog: true }); } catch (e) {}
+			}
 			return J({ ok: true, msg: (await signMsgs(env, H, [pubMsg(r.msg)]))[0] });
 		}
 		if (a[2] === 'img' && /^\d{1,8}$/.test(a[3] || '') && m === 'GET') { const im = await H.chatImg(tid, +a[3]); return im ? new Response(im.buf, { headers: { 'content-type': im.type, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff' } }) : J({ error: '图片没有了' }, 404); }

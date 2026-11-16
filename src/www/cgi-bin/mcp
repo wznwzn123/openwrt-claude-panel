@@ -2873,6 +2873,9 @@ function fb_diag() {
 }
 /* 反馈的编号（托管服务给的）：存在路由器上，用来查开发者的回复 */
 const FB_CODES = '/etc/claude-mcp/fb.codes', FB_CACHE = '/tmp/cmcp_fbr.json';
+// 家人各自的反馈分开缓存（官网按账号分开给）
+function fb_cache() { let u = DEV && match('' + (DEV.uid ?? ''), /^[a-z2-9]{12}$/) ? DEV.uid : ''; return u ? '/tmp/cmcp_fbr.' + u + '.json' : FB_CACHE; }
+function fb_uid() { return DEV && match('' + (DEV.uid ?? ''), /^[a-z2-9]{12}$/) ? DEV.uid : ''; }
 // 查处理进度的网页（官网 /r/编号），不用登录，跟终端安装失败时给的是同一个页面
 function fb_track(code) { let h = hub_conf(true)?.HUB ?? ''; return match(h, /^https:\/\/[A-Za-z0-9.-]+(:[0-9]+)?\/?$/) ? replace(h, /\/+$/, '') + '/r/' + uc(code) : null; }
 function fb_codes() { let l = null; try { l = json(readfile(FB_CODES) ?? '[]'); } catch (e) {} return type(l) == 'array' ? filter(l, (x) => type(x) == 'object' && match(x.code ?? '', /^[a-z2-9]{8}$/)) : []; }
@@ -2888,12 +2891,12 @@ P.feedback = function(a) {
 	}
 	if (hub_conf(true)?.HUB) {
 		let files = type(a?.files) == 'array' ? filter(map(slice(a.files, 0, 5), (x) => '' + x), (x) => match(x, /^[a-z2-9]{16}$/)) : [];
-		let o = hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs, files }, 60);
+		let o = hub_call('/api/dev/feedback', { uid: fb_uid(), text, contact: substr(contact, 0, 80), diag, images: imgs, files }, 60);
 		// 托管服务给的编号存在路由器上：开发者回复以后，打开面板时能看到（不用邮箱）
 		if (match(o.code ?? '', /^[a-z2-9]{8}$/)) {
 			let l = fb_codes(); push(l, { code: o.code, at: time() });
 			writefile(FB_CODES, sprintf('%J', slice(l, -30)));
-			sh('rm -f ' + FB_CACHE);   // 「我的反馈」马上能看到这条
+			sh('rm -f ' + shq(fb_cache()));   // 「我的反馈」马上能看到这条
 		}
 		let ok = match(o.code ?? '', /^[a-z2-9]{8}$/);
 		return { ok: true, sent: 'hub', images: length(imgs), code: ok ? uc(o.code) : null, track: ok ? fb_track(o.code) : null };
@@ -2907,18 +2910,18 @@ P.feedback = function(a) {
 P.fb_replies = function(a) {
 	let c = hub_conf(true);
 	if (!c?.HUB) return { list: [], hosted: false };
-	let cc = null; try { cc = json(readfile(FB_CACHE) ?? 'null'); } catch (e) {}
+	let cc = null; try { cc = json(readfile(fb_cache()) ?? 'null'); } catch (e) {}
 	let list = null;
 	if (!a?.force && type(cc) == 'object' && time() - (cc.at ?? 0) < 45 && type(cc.list) == 'array') list = cc.list;
 	if (list == null) {
 		let o = null;
-		try { o = hub_call('/api/dev/fb', {}, 10); } catch (e) {}
+		try { o = hub_call('/api/dev/fb', { uid: fb_uid() }, 10); } catch (e) {}
 		if (type(o?.list) != 'array') return { list: type(cc?.list) == 'array' ? cc.list : [], hosted: true, stale: true };
 		list = [];
 		for (let x in o.list) if (type(x) == 'object' && match(x.code ?? '', /^[A-Z2-9]{8}$/)) push(list, { code: x.code, track: fb_track(x.code), kind: x.kind ?? '', text: x.text ?? '', at: x.at ?? 0,
 			state: x.state ?? 'open', stage: x.stage ?? 1, ackAt: x.ackAt ?? 0, done: x.done ?? 0, nofix: x.nofix ?? 0, doneAt: x.doneAt ?? 0,
 			reply: x.reply ?? '', replyAt: x.replyAt ?? 0, updated: x.updated ?? 0, history: type(x.history) == 'array' ? x.history : [] });
-		writefile(FB_CACHE, sprintf('%J', { at: time(), list }));
+		writefile(fb_cache(), sprintf('%J', { at: time(), list }));
 	}
 	let seen = {};
 	for (let x in fb_codes()) seen[uc(x.code)] = x.seen ?? 0;
@@ -2936,6 +2939,9 @@ P.fb_seen = function(a) {
 /* 实时联系开发者（4.0）：托管版凭这台路由器的托管钥匙；自建版第一次发消息时，向官网要一个匿名身份（存在 chat.conf，只有这台路由器知道钥匙）。
    面板开着这一页时每几秒来拿一次新消息；开发者回复了，托管版由官网推送，自建版由定时任务（cmcp-ann）每 30 分钟看一次再推送 */
 const CHAT_CONF = '/etc/claude-mcp/chat.conf', CHAT_PEEK = '/tmp/cmcp_chatpeek.json';
+// 安全加固（第二轮）：托管版的家人各说各的——转发对话和反馈时带上这台手机属于哪个账号（官网按账号分开；主账号还是原来那个对话）
+function me_uid() { return DEV && match('' + (DEV.uid ?? ''), /^[a-z2-9]{12}$/) ? DEV.uid : ''; }
+function chat_peek_path() { let u = me_uid(); return u ? '/tmp/cmcp_chatpeek.' + u + '.json' : CHAT_PEEK; }
 function chat_id() {
 	let c = hub_conf(true);
 	if (c?.HUB) return { url: replace(c.HUB, /\/+$/, ''), auth: { sub: c.SUB, rkey: c.RKEY }, hosted: true };
@@ -2971,6 +2977,7 @@ P.chat = function(a) {
 	}
 	let b = { op: op == 'peek' ? 'get' : op };
 	for (let k in id.auth) b[k] = id.auth[k];
+	if (id.hosted && me_uid()) b.uid = me_uid();
 	if (op == 'get') { b.after = +(a?.after ?? 0) || 0; b.read = !!a?.read; }
 	if (op == 'peek') b.after = 99999999;
 	if (op == 'img') b.seq = +(a?.seq ?? 0) || 0;
@@ -2988,16 +2995,16 @@ P.chat = function(a) {
 	if (r.error) die(r.error);
 	r.hosted = id.hosted;
 	if (op == 'up') return r;
-	if (op != 'img') writefile(CHAT_PEEK, sprintf('%J', { at: time(), uu: r.uu ?? 0, seq: r.seq ?? 0, blocked: !!r.blocked }));
+	if (op != 'img') writefile(chat_peek_path(), sprintf('%J', { at: time(), uu: r.uu ?? 0, seq: r.seq ?? 0, blocked: !!r.blocked }));
 	return r;
 };
 // 通知页 / 铃铛用：有没有开发者的新回复（缓存 50 秒；还没说过话的不去问）
 function chat_peek() {
 	let id = chat_id();
 	if (!id) return null;
-	let c = null; try { c = json(readfile(CHAT_PEEK) ?? 'null'); } catch (e) {}
+	let c = null; try { c = json(readfile(chat_peek_path()) ?? 'null'); } catch (e) {}
 	if (type(c) == 'object' && time() - (c.at ?? 0) < 50) return c;
-	try { P.chat({ op: 'peek' }); c = json(readfile(CHAT_PEEK) ?? 'null'); } catch (e) {}
+	try { P.chat({ op: 'peek' }); c = json(readfile(chat_peek_path()) ?? 'null'); } catch (e) {}
 	return type(c) == 'object' ? c : null;
 }
 /* 通知（4.0）：路由器上的断线/故障记录、公告、反馈进度一次给面板；云端的（断电、托管服务）面板自己去云端拿。

@@ -55,7 +55,8 @@ export function installFiles(Hub) {
 			}
 			if (owner !== 'admin') {
 				const mn = anon ? ANON_N : DAY_N, mb = anon ? ANON_BYTES : DAY_BYTES;
-				const qk = 'fq:' + owner + ':' + day, q = (await this.ctx.storage.get(qk)) || { n: 0, b: 0 };
+				// 每台路由器的额度：家人各自的对话（d路由器.账号）也算在这台路由器头上
+				const qk = 'fq:' + (owner[0] === 'd' ? owner.split('.')[0] : owner) + ':' + day, q = (await this.ctx.storage.get(qk)) || { n: 0, b: 0 };
 				if (q.n + 1 > mn || q.b + size > mb) return { st: 429, error: `今天发的文件太多了（每天最多 ${mn} 个、${anon ? '300MB' : '1GB'}），明天再发` };
 				const ig = ipGroup(ip), ik = ig ? 'fq:ip:' + ig + ':' + day : '', iq = (ik && (await this.ctx.storage.get(ik))) || { n: 0, b: 0 };
 				if (ik && (iq.n + 1 > IP_N || iq.b + size > IP_BYTES)) return { st: 429, error: '今天这个网络发的文件太多了，明天再发' };

@@ -191,6 +191,7 @@ ok('[面板反馈] 钥匙不对：403，不给编号', r.status === 403);
 	const uid = 'u' + 'a'.repeat(9), sid = 'b'.repeat(32);
 	await hub().ctx.storage.put('u:' + uid, { uid, email: 'acc@x.com', devs: [{ sub: A.sub, at: Date.now(), alias: '客厅' }], sids: [sid] });
 	await hub().ctx.storage.put('s:' + sid, { uid, exp: Date.now() + DAY, kid: 'k', at: Date.now(), last: Date.now() });
+	{ const d = await hub().ctx.storage.get('d:' + A.sub); d.users = [uid]; d.owner = uid; await hub().ctx.storage.put('d:' + A.sub, d); } // 账号绑定了这台路由器（两边一致）
 	r = await api('POST', '/api/report', { kind: 'privacy', text: '登录了账号再报告的问题，不填邮箱' }, { 'cf-connecting-ip': '5.5.6.3', cookie: '__Host-sid=' + sid }); j = await r.json();
 	const L4 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);
 	ok('[邮箱] 登录了官网账号、没填邮箱：自动用账号邮箱', JSON.stringify(L4.mailTo) === '["acc@x.com"]' && L4.uid === uid && sent.some((m) => m.to[0] === 'acc@x.com'));

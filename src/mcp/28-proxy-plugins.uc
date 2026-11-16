@@ -34,6 +34,9 @@ function fb_diag() {
 }
 /* 反馈的编号（托管服务给的）：存在路由器上，用来查开发者的回复 */
 const FB_CODES = '/etc/claude-mcp/fb.codes', FB_CACHE = '/tmp/cmcp_fbr.json';
+// 家人各自的反馈分开缓存（官网按账号分开给）
+function fb_cache() { let u = DEV && match('' + (DEV.uid ?? ''), /^[a-z2-9]{12}$/) ? DEV.uid : ''; return u ? '/tmp/cmcp_fbr.' + u + '.json' : FB_CACHE; }
+function fb_uid() { return DEV && match('' + (DEV.uid ?? ''), /^[a-z2-9]{12}$/) ? DEV.uid : ''; }
 // 查处理进度的网页（官网 /r/编号），不用登录，跟终端安装失败时给的是同一个页面
 function fb_track(code) { let h = hub_conf(true)?.HUB ?? ''; return match(h, /^https:\/\/[A-Za-z0-9.-]+(:[0-9]+)?\/?$/) ? replace(h, /\/+$/, '') + '/r/' + uc(code) : null; }
 function fb_codes() { let l = null; try { l = json(readfile(FB_CODES) ?? '[]'); } catch (e) {} return type(l) == 'array' ? filter(l, (x) => type(x) == 'object' && match(x.code ?? '', /^[a-z2-9]{8}$/)) : []; }
@@ -49,12 +52,12 @@ P.feedback = function(a) {
 	}
 	if (hub_conf(true)?.HUB) {
 		let files = type(a?.files) == 'array' ? filter(map(slice(a.files, 0, 5), (x) => '' + x), (x) => match(x, /^[a-z2-9]{16}$/)) : [];
-		let o = hub_call('/api/dev/feedback', { text, contact: substr(contact, 0, 80), diag, images: imgs, files }, 60);
+		let o = hub_call('/api/dev/feedback', { uid: fb_uid(), text, contact: substr(contact, 0, 80), diag, images: imgs, files }, 60);
 		// 托管服务给的编号存在路由器上：开发者回复以后，打开面板时能看到（不用邮箱）
 		if (match(o.code ?? '', /^[a-z2-9]{8}$/)) {
 			let l = fb_codes(); push(l, { code: o.code, at: time() });
 			writefile(FB_CODES, sprintf('%J', slice(l, -30)));
-			sh('rm -f ' + FB_CACHE);   // 「我的反馈」马上能看到这条
+			sh('rm -f ' + shq(fb_cache()));   // 「我的反馈」马上能看到这条
 		}
 		let ok = match(o.code ?? '', /^[a-z2-9]{8}$/);
 		return { ok: true, sent: 'hub', images: length(imgs), code: ok ? uc(o.code) : null, track: ok ? fb_track(o.code) : null };
@@ -68,18 +71,18 @@ P.feedback = function(a) {
 P.fb_replies = function(a) {
 	let c = hub_conf(true);
 	if (!c?.HUB) return { list: [], hosted: false };
-	let cc = null; try { cc = json(readfile(FB_CACHE) ?? 'null'); } catch (e) {}
+	let cc = null; try { cc = json(readfile(fb_cache()) ?? 'null'); } catch (e) {}
 	let list = null;
 	if (!a?.force && type(cc) == 'object' && time() - (cc.at ?? 0) < 45 && type(cc.list) == 'array') list = cc.list;
 	if (list == null) {
 		let o = null;
-		try { o = hub_call('/api/dev/fb', {}, 10); } catch (e) {}
+		try { o = hub_call('/api/dev/fb', { uid: fb_uid() }, 10); } catch (e) {}
 		if (type(o?.list) != 'array') return { list: type(cc?.list) == 'array' ? cc.list : [], hosted: true, stale: true };
 		list = [];
 		for (let x in o.list) if (type(x) == 'object' && match(x.code ?? '', /^[A-Z2-9]{8}$/)) push(list, { code: x.code, track: fb_track(x.code), kind: x.kind ?? '', text: x.text ?? '', at: x.at ?? 0,
 			state: x.state ?? 'open', stage: x.stage ?? 1, ackAt: x.ackAt ?? 0, done: x.done ?? 0, nofix: x.nofix ?? 0, doneAt: x.doneAt ?? 0,
 			reply: x.reply ?? '', replyAt: x.replyAt ?? 0, updated: x.updated ?? 0, history: type(x.history) == 'array' ? x.history : [] });
-		writefile(FB_CACHE, sprintf('%J', { at: time(), list }));
+		writefile(fb_cache(), sprintf('%J', { at: time(), list }));
 	}
 	let seen = {};
 	for (let x in fb_codes()) seen[uc(x.code)] = x.seen ?? 0;

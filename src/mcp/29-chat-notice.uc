@@ -1,4 +1,7 @@
 const CHAT_CONF = '/etc/claude-mcp/chat.conf', CHAT_PEEK = '/tmp/cmcp_chatpeek.json';
+// 安全加固（第二轮）：托管版的家人各说各的——转发对话和反馈时带上这台手机属于哪个账号（官网按账号分开；主账号还是原来那个对话）
+function me_uid() { return DEV && match('' + (DEV.uid ?? ''), /^[a-z2-9]{12}$/) ? DEV.uid : ''; }
+function chat_peek_path() { let u = me_uid(); return u ? '/tmp/cmcp_chatpeek.' + u + '.json' : CHAT_PEEK; }
 function chat_id() {
 	let c = hub_conf(true);
 	if (c?.HUB) return { url: replace(c.HUB, /\/+$/, ''), auth: { sub: c.SUB, rkey: c.RKEY }, hosted: true };
@@ -34,6 +37,7 @@ P.chat = function(a) {
 	}
 	let b = { op: op == 'peek' ? 'get' : op };
 	for (let k in id.auth) b[k] = id.auth[k];
+	if (id.hosted && me_uid()) b.uid = me_uid();
 	if (op == 'get') { b.after = +(a?.after ?? 0) || 0; b.read = !!a?.read; }
 	if (op == 'peek') b.after = 99999999;
 	if (op == 'img') b.seq = +(a?.seq ?? 0) || 0;
@@ -51,16 +55,16 @@ P.chat = function(a) {
 	if (r.error) die(r.error);
 	r.hosted = id.hosted;
 	if (op == 'up') return r;
-	if (op != 'img') writefile(CHAT_PEEK, sprintf('%J', { at: time(), uu: r.uu ?? 0, seq: r.seq ?? 0, blocked: !!r.blocked }));
+	if (op != 'img') writefile(chat_peek_path(), sprintf('%J', { at: time(), uu: r.uu ?? 0, seq: r.seq ?? 0, blocked: !!r.blocked }));
 	return r;
 };
 // 通知页 / 铃铛用：有没有开发者的新回复（缓存 50 秒；还没说过话的不去问）
 function chat_peek() {
 	let id = chat_id();
 	if (!id) return null;
-	let c = null; try { c = json(readfile(CHAT_PEEK) ?? 'null'); } catch (e) {}
+	let c = null; try { c = json(readfile(chat_peek_path()) ?? 'null'); } catch (e) {}
 	if (type(c) == 'object' && time() - (c.at ?? 0) < 50) return c;
-	try { P.chat({ op: 'peek' }); c = json(readfile(CHAT_PEEK) ?? 'null'); } catch (e) {}
+	try { P.chat({ op: 'peek' }); c = json(readfile(chat_peek_path()) ?? 'null'); } catch (e) {}
 	return type(c) == 'object' ? c : null;
 }
 /* 通知（4.0）：路由器上的断线/故障记录、公告、反馈进度一次给面板；云端的（断电、托管服务）面板自己去云端拿。

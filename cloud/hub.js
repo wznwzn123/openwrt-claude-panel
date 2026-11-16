@@ -1020,7 +1020,21 @@ export class Hub extends DurableObject {
 		return { st: 200, ok: true, code: fb.code };
 	}
 	/* ---------- 官网公开的报告表单：安全问题、隐私和数据、滥用举报（不用登录；不记 IP，只按 IP 限次，限次记录一两天后自动清掉） ---------- */
-	async report({ kind, text, contact, ip, log, email, uid }) {
+	// 安装失败上报：认出是谁的账号。全新安装凭这次用的安装码（官网领的，记着是哪个账号领的）；托管版升级凭路由器自己的钥匙（找主账号）
+	async reportAcct({ inv, sub, rkey }) {
+		let uid = '';
+		const code = String(inv || '').trim().toUpperCase();
+		if (code && /^[A-Z0-9]{4,32}$/.test(code)) { const i = await this.ctx.storage.get('i:' + code); if (i && i.uid && Date.now() - (i.at || i.created || 0) < 90 * DAY) uid = i.uid; }
+		if (!uid && sub && (await this.devOk(String(sub), String(rkey || '')))) { const d = await this.ctx.storage.get('d:' + sub); if (d) uid = this.famOf(d).owner || ''; }
+		const u = uid && (await this.ctx.storage.get('u:' + uid));
+		return u && u.email ? { uid, email: u.email } : null;
+	}
+	async reportWho(a, ip) {
+		if (!(await this.hit('rw:' + (ip || '?'), 20, 3600e3))) return { st: 429, error: '试太多次了' };
+		const r = await this.reportAcct(a);
+		return { st: 200, ok: true, acct: r ? maskEmail(r.email) : '' };
+	}
+	async report({ kind, text, contact, ip, log, email, uid, inv, sub, rkey }) {
 		// install：安装脚本失败时，用户在终端里输入 y 同意后发来的（版本、失败步骤、错误、系统情况）
 		const KIND = { security: '安全问题', privacy: '隐私和数据', abuse: '滥用举报', install: '安装失败', other: '其他' };
 		if (!KIND[kind]) kind = 'other';
@@ -1031,8 +1045,12 @@ export class Hub extends DurableObject {
 		// 邮箱：表单里填的；登录了官网账号又没填的，用账号邮箱（处理好了能发邮件告诉他，账号页也能看到这条）
 		email = String(email || '').trim().slice(0, 120);
 		if (email && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email)) return { st: 400, error: '邮箱格式不对' };
+		// 安全加固（第二轮）：安装失败上报认得出账号的（安装码 / 路由器钥匙），就发到账号自己的邮箱，不用再填；认不出的，填的邮箱只记下，不马上发信
+		const acct = kind === 'install' ? await this.reportAcct({ inv, sub, rkey }) : null;
+		if (acct) email = acct.email;
 		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub: '', name: kind === 'install' ? '安装失败（终端上报）' : '官网 · ' + KIND[kind], kind, web: 1, emails: email ? [email] : [], text, contact, diag: '', done: 0, imgs: [] };
 		if (uid && kind !== 'install') fb.uid = uid;
+		if (acct) fb.uid = acct.uid;
 		// 安装失败带的安装日志（用户同意后发来，已经在路由器上遮住了邀请码、令牌、域名）：单独存，列表里只记有多长
 		log = kind === 'install' ? String(log || '').slice(-64000) : '';
 		if (log) { await this.ctx.storage.put('fblog:' + fb.id, log); fb.log = log.length; }
@@ -1042,13 +1060,13 @@ export class Hub extends DurableObject {
 		// 留了邮箱的：发一封「收到了」，带受理编号和查进度的网址
 		// 安全加固：不登录也能提交，填的邮箱可能是别人的；「收到了」只发给登录账号自己的邮箱（填的邮箱照样记下，处理好了管理员回复时再发）
 		const own = uid && kind !== 'install' && email && String((await this.ctx.storage.get('u:' + uid))?.email || '').toLowerCase() === email.toLowerCase();
-		// 终端里安装失败上报（邮箱必填，终端会说「确认邮件发到了」）：照样发，但同一个邮箱一天最多收一封、全部一天最多 30 封，没法拿来给别人刷邮件
-		const inst = !own && kind === 'install' && email && (await this.hit('rpm:' + email.toLowerCase(), 1, DAY)) && (await this.hit('rpm:all', 30, DAY));
+		// 终端里安装失败上报：只发给认出来的账号自己的邮箱（同一个账号一天最多 3 封）
+		const inst = !own && kind === 'install' && !!acct && (await this.hit('rpm:' + acct.uid, 3, DAY));
 		if (own || inst) await this.fbMail(fb, email, kind === 'install' ? '我们收到了你上报的安装问题' : '我们收到了你的报告', kind === 'install'
 			? '<p>你好，</p><p>我们收到了你在路由器上安装失败时上报的问题，会尽快查原因。处理好以后，重新运行一次安装命令就行，终端最上面也会显示处理结果。</p>'
 			: '<p>你好，</p><p>我们收到了你在官网提交的报告，会尽快处理。</p>');
 		await this.track(kind === 'install' ? 'install_fail' : 'report');
-		return { st: 200, ok: true, code: fb.code, mailed: own || inst ? 1 : 0 };
+		return { st: 200, ok: true, code: fb.code, mailed: own || inst ? 1 : 0, ...(acct ? { acct: maskEmail(acct.email) } : {}) };
 	}
 	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
 	async gcRate(now) {
@@ -1316,12 +1334,14 @@ export async function hubFetch(req, env) {
 		const { st, ...rest } = await H.fbStatus(p.slice(8), req.headers.get('cf-connecting-ip') || '');
 		return J(rest, st);
 	}
+	// 安装失败上报前：问一下这次的安装码（或者路由器钥匙）认不认得出账号，认得出就不用填邮箱
+	if (p === '/api/report/who' && req.method === 'POST') { const b = await body(); const { st, ...rest } = await H.reportWho({ inv: String(b.inv || ''), sub: String(b.sub || ''), rkey: String(b.rkey || '') }, req.headers.get('cf-connecting-ip') || ''); return J(rest, st); }
 	if (p === '/api/report' && req.method === 'POST') {
 		const b = await body();
 		if (b.website) return J({ ok: true });
 		// 登录了官网账号的：没填邮箱就用账号邮箱，这条也会出现在账号页「我的反馈」里
 		const me = b.kind === 'install' ? null : await H.who(await sidFor(req, H));
-		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), email: String(b.email || '').trim() || (me ? me.email : ''), uid: me ? me.uid : '', ip: req.headers.get('cf-connecting-ip') || '' });
+		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), email: String(b.email || '').trim() || (me ? me.email : ''), uid: me ? me.uid : '', inv: String(b.inv || ''), sub: String(b.sub || ''), rkey: String(b.rkey || ''), ip: req.headers.get('cf-connecting-ip') || '' });
 		return J(rest, st);
 	}
 	if (p === '/api/unregister' && req.method === 'POST') {

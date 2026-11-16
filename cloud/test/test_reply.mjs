@@ -97,11 +97,22 @@ ok('[查询] 不返回原文和日志（编号泄露也看不到内容）', !('t
 	await adm('POST', '/feedback/' + id3 + '/done', { state: 'nofix', note: '这个功能路由器不支持', mail: true });
 	await adm('POST', '/feedback/' + id3 + '/done', { state: 'note', note: '补充一句', mail: true });
 	// 终端安装失败上报带邮箱（4.0 起必填）：存下来、发「收到了」邮件（说的是安装问题）、管理页能回邮件
+	// 安全加固（第二轮）：认不出账号的（没带安装码）：填的邮箱只记下，不马上发信（以前会发，可以拿来给陌生人发信）
 	const ri = await (await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：闪存只剩 0 MB', email: 'inst@x.com', log: 'x' }, '5.5.7.1')).json();
-	const iMail = sent.filter((m) => m.to[0] === 'inst@x.com');
-	const ri2 = await (await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：又失败了一次', email: 'INST@x.com', log: 'x' }, '5.5.7.2')).json();
-	ok('[安装上报] 同一个邮箱一天只发一封「收到了」（没法拿来给别人刷邮件），上报照样收下', ri2.ok && ri2.mailed === 0 && sent.filter((m) => String(m.to[0]).toLowerCase() === 'inst@x.com').length === 1, JSON.stringify(ri2));
-	ok('[安装上报] 带邮箱：发「我们收到了你上报的安装问题」，有受理编号，内容说重新运行安装命令', ri.ok && ri.mailed === 1 && iMail.length === 1 && iMail[0].subject === '我们收到了你上报的安装问题（受理编号 ' + ri.code.toUpperCase() + '）' && /重新运行一次安装命令/.test(iMail[0].html), JSON.stringify(iMail[0] || {}).slice(0, 160));
+	ok('[安装上报] 没带安装码、只填了邮箱：照样收下，但不马上发「收到了」', ri.ok && ri.mailed === 0 && !sent.some((m) => m.to[0] === 'inst@x.com'), JSON.stringify(ri));
+	// 带了安装码（官网领的，记着是谁领的）：认出账号，发到账号自己的邮箱，填的邮箱不管
+	await hub().ctx.storage.put({ 'u:uinstaller22': { uid: 'uinstaller22', email: 'owner@x.com', devs: [], sids: [] }, 'i:INSTCODE22': { max: 1, used: 1, created: Date.now(), exp: Date.now() + 86400e3, uid: 'uinstaller22', trial: 1 } });
+	const who = await (await api('POST', '/api/report/who', { inv: 'instcode22' }, { 'cf-connecting-ip': '5.5.7.9' })).json();
+	ok('[安装上报] 先问安装码认不认得出：给打码的账号邮箱（终端就不问邮箱了）', who.ok && who.acct === 'ow***@x.com', JSON.stringify(who));
+	const whoNo = await (await api('POST', '/api/report/who', { inv: 'NOSUCHCODE' }, { 'cf-connecting-ip': '5.5.7.9' })).json();
+	ok('[安装上报] 认不出的安装码：acct 是空的（终端照旧问邮箱）', whoNo.ok && whoNo.acct === '', JSON.stringify(whoNo));
+	const ra = await (await rp({ kind: 'install', text: '面板版本：5.2.2\n错误：带安装码的上报', inv: 'INSTCODE22', email: 'someone-else@x.com', log: 'x' }, '5.5.7.4')).json();
+	const aMail = sent.filter((m) => m.to[0] === 'owner@x.com');
+	ok('[安装上报] 带安装码：发「我们收到了你上报的安装问题」到账号邮箱，有受理编号，内容说重新运行安装命令', ra.ok && ra.mailed === 1 && ra.acct === 'ow***@x.com' && aMail.length === 1 && aMail[0].subject === '我们收到了你上报的安装问题（受理编号 ' + ra.code.toUpperCase() + '）' && /重新运行一次安装命令/.test(aMail[0].html) && !sent.some((m) => m.to[0] === 'someone-else@x.com'), JSON.stringify(ra));
+	for (let k = 0; k < 3; k++) await rp({ kind: 'install', text: '面板版本：5.2.2\n错误：又失败了 ' + k, inv: 'INSTCODE22', log: 'x' }, '5.5.8.' + k);
+	ok('[安装上报] 同一个账号一天最多 3 封「收到了」', sent.filter((m) => m.to[0] === 'owner@x.com').length === 3);
+	const raL = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === ra.code);
+	ok('[安装上报] 带安装码的：记在这个账号名下（官网「我的反馈」能看到）', raL && raL.uid === 'uinstaller22');
 	const iL = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === ri.code);
 	ok('[安装上报] 管理页：能发邮件给他，回复方式写着邮件', JSON.stringify(iL.mailTo) === '["inst@x.com"]' && iL.kind === 'install' && !iL.uid);
 	r = await rp({ kind: 'install', text: '面板版本：4.0.0\n错误：xx', email: 'bad mail' }, '5.5.7.2');

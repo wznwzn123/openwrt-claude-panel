@@ -89,7 +89,7 @@ mask() { # 把邀请码、隧道令牌、域名、云端地址换成 ***，长�
 }
 fail_report() {
 	set +e
-	local rc=$1 url info yn r px logt bf em n
+	local rc=$1 url info yn r px logt bf em n idj acct hs hk
 	[ "$rc" = 0 ] && return 0
 	[ "$ABORT" = 1 ] && return 0
 	url=${PKG_REPORT:-${PKG_HUB:-$HUB}}
@@ -116,7 +116,8 @@ $(df_raw)
 	# 安装日志：这次安装在屏幕上输出的全部内容（去掉颜色，遮住邀请码、令牌、域名，最多最后 60KB）
 	logt=""; if [ -s "$LOG" ]; then logt=$(mask "$(sed "s/$(printf '\033')\[[0-9;]*m//g" "$LOG" | tail -c 60000)"); fi
 	echo
-	echo "安装没有成功。可以把下面这些信息发给开发者，帮忙找原因（不含密码、密钥、邀请码和网址）："
+	if [ -n "$INV" ]; then echo "安装没有成功。可以把下面这些信息发给开发者，帮忙找原因（不含密码、密钥和网址；会另外附上这次的安装码，只用来认出你的官网账号）："
+	else echo "安装没有成功。可以把下面这些信息发给开发者，帮忙找原因（不含密码、密钥、邀请码和网址）："; fi
 	echo "----------------------------------------"
 	printf '%s\n' "$info"
 	[ -n "$logt" ] && echo "（还有这次安装在上面显示的全部过程，共 $(printf '%s\n' "$logt" | wc -l) 行，同样遮住了邀请码、令牌和域名）"
@@ -127,8 +128,24 @@ $(df_raw)
 	printf '要上报吗？输入 y 上报，n 不上报 [n]：'
 	yn=""; read -r yn <&3 || yn=""
 	case "$yn" in y|Y|yes|YES|是) ;; *) exec 3<&-; echo "没有上报。"; return 0 ;; esac
-	# 上报必须留邮箱：开发者处理好了、写了说明，会发邮件告诉他（最多问 3 次；输入 n 取消；输入结束了就不再问）
+	# 认得出官网账号的：这次用了官网给的安装码，或者是托管版路由器升级（凭路由器自己的钥匙）——处理进度直接发到账号邮箱，不用再填
+	idj="" acct=""
+	if [ -n "$INV" ]; then idj="\"inv\":\"$(jesc "$INV")\""
+	elif [ -s "$D/hub.conf" ] && [ -s "$D/cloud.conf" ]; then
+		hs=$(sed -n 's/^SUB=//p' "$D/hub.conf" | head -n1); hk=$(sed -n 's/^RKEY=//p' "$D/cloud.conf" | head -n1)
+		[ -n "$hs" ] && [ -n "$hk" ] && idj="\"sub\":\"$(jesc "$hs")\",\"rkey\":\"$(jesc "$hk")\""
+	fi
+	if [ -n "$idj" ]; then
+		bf=/tmp/cmcp-install-who.json; printf '{%s}' "$idj" > "$bf"
+		if command -v curl >/dev/null 2>&1; then r=$(curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary "@$bf" "$url/api/report/who" 2>/dev/null)
+		elif command -v uclient-fetch >/dev/null 2>&1; then r=$(uclient-fetch -q -T 20 -O - --post-file="$bf" "$url/api/report/who" 2>/dev/null)
+		else r=$(wget -q -T 20 -O - --post-data="$(cat "$bf")" "$url/api/report/who" 2>/dev/null); fi
+		rm -f "$bf"
+		acct=$(printf '%s' "$r" | sed -n 's/.*"acct":"\([^"]*\)".*/\1/p')
+	fi
+	# 认不出账号的：上报必须留邮箱，开发者处理好了、写了说明，会发邮件告诉他（最多问 3 次；输入 n 取消；输入结束了就不再问）
 	em="" n=0
+	[ -n "$acct" ] && n=3
 	while [ $n -lt 3 ]; do
 		n=$((n + 1))
 		printf '你的邮箱（必填，处理进度和结果会发到这个邮箱；输入 n 取消上报）：'
@@ -140,9 +157,9 @@ $(df_raw)
 		em=""
 	done
 	exec 3<&-
-	if [ -z "$em" ]; then echo "没有上报（没填邮箱）。可以把上面的内容截图发给开发者。"; return 0; fi
+	if [ -z "$em" ] && [ -z "$acct" ]; then echo "没有上报（没填邮箱）。可以把上面的内容截图发给开发者。"; return 0; fi
 	bf=/tmp/cmcp-install-report.json
-	printf '{"kind":"install","text":"%s","log":"%s","contact":"","email":"%s"}' "$(jesc "$info")" "$(jesc "$logt")" "$(jesc "$em")" > "$bf"
+	printf '{"kind":"install","text":"%s","log":"%s","contact":"","email":"%s"%s}' "$(jesc "$info")" "$(jesc "$logt")" "$(jesc "$em")" "${idj:+,$idj}" > "$bf"
 	if command -v curl >/dev/null 2>&1; then r=$(curl -s -m 30 -X POST -H 'Content-Type: application/json' --data-binary "@$bf" "$url/api/report" 2>/dev/null)
 	elif command -v uclient-fetch >/dev/null 2>&1; then r=$(uclient-fetch -q -T 30 -O - --post-file="$bf" "$url/api/report" 2>/dev/null)
 	else r=$(wget -q -T 30 -O - --post-data="$(cat "$bf")" "$url/api/report" 2>/dev/null); fi
@@ -154,7 +171,8 @@ $(df_raw)
 				# 编号存在路由器上：下次运行安装命令时，先告诉他开发者回复了什么（不用账号、不用邮箱）
 				printf '%s %s\n' "$code" "$url" > /etc/cmcp-report 2>/dev/null
 				echo "已上报，谢谢！上报编号：$code"
-				case "$r" in *'"mailed":1'*) echo "确认邮件发到了 $em（收不到的话看看垃圾邮件），开发者处理好了也会发邮件告诉你。" ;; *) echo "开发者处理好了会发邮件到 $em 告诉你（收不到的话看看垃圾邮件）。" ;; esac
+				if [ -n "$acct" ]; then echo "处理进度会发到你官网账号的邮箱 $acct（收不到的话看看垃圾邮件），开发者处理好了也会发邮件告诉你。"
+				else echo "开发者处理好了会发邮件到 $em 告诉你（收不到的话看看垃圾邮件）。"; fi
 				echo "过一阵子打开 $url/r/$code 看处理结果（建议截图或收藏这个网址），"
 				echo "也可以在官网底部「查处理进度」输入编号查；"
 				echo "以后重新运行安装命令时，最上面也会显示开发者的回复。"

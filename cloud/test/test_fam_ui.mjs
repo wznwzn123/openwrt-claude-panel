@@ -58,7 +58,7 @@ for (const [w, h] of [[390, 844], [1280, 860]]) {
 	const su = (await fam(R1, 'sudo', { uid: ua, code: '' })).sudo;
 	const jc = (await fam(R1, 'join_create', { uid: ua, sudo: su, name: 'B', perms: ['msg', 'node', 'speed'] })).code;
 	// B 用链接加入
-	await pb.goto(B + '/app?join=' + jc); await W(1800);
+	await pb.goto(B + '/app?join=' + jc); await pb.waitForSelector('.mask', { timeout: 8000 }).catch(() => {}); await W(300); // 弹窗要等「我的路由器」先显示出来（测试机上慢的时候要好几秒）
 	ok('点加入链接：弹出邀请详情（谁邀请、哪台路由器、能做什么）' + T, await pb.isVisible('.mask') && /邀请你加入/.test(await pb.textContent('.mask')) && /Living/.test(await pb.textContent('.mask')) && /切换节点/.test(await pb.textContent('.mask')));
 	if (SHOTS) await pb.screenshot({ path: `${SHOTS}/fam-join-${w}.png` });
 	await pb.click('.mask [data-ok]'); await W(1500);

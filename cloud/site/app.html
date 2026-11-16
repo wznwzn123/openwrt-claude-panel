@@ -579,11 +579,11 @@ document.querySelectorAll('[data-send]').forEach((b) => (b.onclick = async () =>
 	try { await api('code', { email, kind: b.dataset.send }); toast('验证码已发到邮箱'); let n = 60; const t = setInterval(() => { b.textContent = --n + ' 秒'; if (n <= 0) { clearInterval(t); b.textContent = '发送'; b.disabled = false; } }, 1000); }
 	catch (x) { err.textContent = x.message; b.disabled = false; }
 }));
-$('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); show('auth'); lgView('welcome'); };
+$('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); wasIn.set(false); show('auth'); lgView('welcome'); };
 $('delBtn').onclick = async () => {
 	const pw = prompt('注销后马上登录不了，绑定的路由器也会解除（路由器本身不受影响）。30 天内反悔可以联系提供服务的人恢复，之后彻底删除。输入密码确认：');
 	if (!pw) return;
-	try { await api('delete', { password: pw }); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message); }
+	try { await api('delete', { password: pw }); wasIn.set(false); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message); }
 };
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
@@ -966,11 +966,30 @@ function report(where, e) {
 	try { fetch('/api/cerr', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ msg, where: '官网账号页：' + where, stack: String((e && e.stack) || '').slice(0, 600), ua: navigator.userAgent, w: innerWidth, h: innerHeight, page: 'app' }) }).catch(() => {}); } catch (x) {}
 }
 // 读账号、显示「我的路由器」。after = 'login' / 'reg' / 'reset'：刚登录或注册成功
+// 没登录：显示登录框（带着配对码、加入码的提示）
+function showLogin() {
+	show('auth');
+	lgView(((pair || joinCode) && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
+	if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
+}
+let firstLoad = true;
+// 这个浏览器上次是登录着的（只是个提示，不存任何账号信息）：有它就直接读账号，不多问一次「登录了吗」，打开更快
+const wasIn = { get() { try { return localStorage.getItem('acct_in') === '1'; } catch (e) { return false; } }, set(v) { try { if (v) localStorage.setItem('acct_in', '1'); else localStorage.removeItem('acct_in'); } catch (e) {} } };
 async function load(after) {
 	let me;
+	const first = firstLoad; firstLoad = false;
+	// 刚打开页面（只这一次）：先问「登录了吗」（没登录也回 200，浏览器控制台里不会留一条 401 报错），确实没登录就直接显示登录框；
+	// 问不到（网络、服务出错）就照旧去读账号，出错照旧报给开发者。刚登录 / 注册成功（after）和登录后的刷新不走这一步
+	if (first && !after && !wasIn.get()) {
+		let b = null;
+		try { const r = await fetch('/api/account/brief', { credentials: 'same-origin' }); if (r.ok) b = await r.json(); } catch (e) {}
+		if (b && b.ok === false) { showLogin(); return null; }
+	}
 	try { me = await api('me'); }
 	catch (e) {
 		show('auth');
+		if (e.login) wasIn.set(false);
 		if (after) {
 			// 刚登录 / 注册成功，却读不到账号：多半是这个浏览器没有记住登录状态（关了 Cookie、无痕模式、在微信或 QQ 里打开）
 			const v = after === 'reg' ? 'reg' : after === 'reset' ? 'reset' : 'login';
@@ -981,14 +1000,13 @@ async function load(after) {
 			if (v === 'reg' && e.login) { tab('login'); const le = $('fLogin').querySelector('[data-err]'); if (le) le.innerHTML = err.innerHTML; }
 			report(e.login ? '登录成功但读不到账号（' + v + '）' : '读账号失败（' + v + '）', e);
 		} else {
-			lgView(((pair || joinCode) && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
-			if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
-			if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
+			showLogin();
 			if (!e.login) report('打开账号页时读账号失败', e);
 		}
 		return null;
 	}
 	// 已经登录了：后面就算哪一块显示出错，也留在账号页（不再退回登录页），把错误报给开发者
+	wasIn.set(true);
 	show('dash');
 	try {
 		loadSess(); loadFb();

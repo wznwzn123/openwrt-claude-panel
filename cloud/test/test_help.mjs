@@ -109,6 +109,14 @@ for (const p of ['/status', '/help']) {
 	const s2 = (await req('/api/status')).j;
 	ok('[状态] 按天汇总：最后两个格子有记录', s2.days.slice(-2).every((d) => d.web), JSON.stringify(s2.days.slice(-2)));
 	ok('[状态] 当天有一小时故障：那天显示「部分有问题」', s2.days[s2.days.length - 1].dl === 'part', JSON.stringify(s2.days.slice(-1)));
+	// 邮件：一封发不出去不算；两封以上并且占三成以上才算有问题；全发不出去算故障
+	const mailNow = async (list) => { await hub().ctx.storage.put('ml', list.map((ok) => ({ t: Date.now(), ok }))); return (await hub().statusTick()).mail; };
+	ok('[状态] 邮件：只有一封发不出去（多半是邮箱写错）还算正常', (await mailNow([false, true, true])) === 'ok');
+	ok('[状态] 邮件：两封以上、占三成以上发不出去算部分有问题', (await mailNow([false, false, true, true])) === 'part');
+	ok('[状态] 邮件：两封失败但只占很少一部分，还算正常', (await mailNow([false, false, ...Array(10).fill(true)])) === 'ok');
+	ok('[状态] 邮件：全部发不出去算故障', (await mailNow([false, false, false])) === 'down');
+	ok('[状态] 邮件：一小时前的失败不算', (await (async () => { await hub().ctx.storage.put('ml', [{ t: Date.now() - 2 * 3600e3, ok: false }, { t: Date.now() - 2 * 3600e3, ok: false }]); return (await hub().statusTick()).mail; })()) === 'ok');
+	await hub().ctx.storage.delete('ml');
 	// 92 天前的记录会被清掉
 	await hub().ctx.storage.put('svc:2000-01-01', { 1: { t: 1, web: 'ok' } });
 	await hub().statusTick();

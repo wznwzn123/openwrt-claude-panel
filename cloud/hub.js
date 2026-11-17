@@ -8,13 +8,14 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser, permsOf } from './fam.js';
 import { installInst, instAccount, instAdmin } from './inst.js';
 import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } from './files.js';
 import { changelogOf } from './changelog.js';
+import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -1353,6 +1354,8 @@ export async function hubFetch(req, env) {
 	if (p === '/api/chat' && req.method === 'POST') return chatApi(req, env, H, body);
 	// 5.0：面板报错上报、公告点开统计
 	{ const vp = await v5Public(req, env, H, body, u, p); if (vp) return vp; }
+	// 服务状态、常见问题
+	{ const hp = await helpPublic(req, H, body, p); if (hp) return hp; }
 	if (p.startsWith('/api/admin/')) {
 		const k = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), aip = req.headers.get('cf-connecting-ip') || '';
 		const aua = uaLabel(req.headers.get('user-agent')), apl = placeOf(req.cf);
@@ -1373,6 +1376,7 @@ export async function hubFetch(req, env) {
 		const tc = await H.tfaCheck(req.headers.get('x-adm-sess') || '', req.headers.get('x-adm-otp') || '', aip);
 		if (tc !== true) { if (tc === 'bad') await H.admFail(aip, aua, apl, p, '两步验证码不对'); return J({ error: '要重新登录（两步验证）', need2fa: true }, 401); }
 		await H.admTouch();
+		{ const hx = await helpAdmin(req, a, H, body); if (hx) return hx; }
 		const vx = await v5Admin(req, a, H, body, u, env);
 		if (vx) return vx;
 		const fx = (await famAdmin(a, H, body, req.method)) || (await famAdminUser(a, H, body, req.method)) || (await instAdmin(a, H, body, req.method));
@@ -1462,10 +1466,10 @@ export async function hubFetch(req, env) {
 		if (!f) return J({ error: 'not found' }, 404);
 		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff' } });
 	}
-	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog' };
+	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog', '/status': 'status', '/help': 'help' };
 	// 安全加固：旧版管理页默认下线（新版在 /admin/），只在设了 OLD_ADMIN=1 时打开（测试用）；下线后打开它跳到新版
 	if (p === '/admin/old' && env.OLD_ADMIN !== '1') return new Response(null, { status: 301, headers: { location: '/admin/' } });
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG, '/status': STATUS, '/help': HELP }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
 	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {
@@ -1732,10 +1736,11 @@ async function accountApi0(req, env, H, p, body) {
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); }
 installOps(Hub);
 installV5(Hub);
 installFam(Hub);
 installInst(Hub);
 installFiles(Hub);
+installHelp(Hub);
 export { hubObj };

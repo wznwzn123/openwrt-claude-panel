@@ -11,6 +11,8 @@ const PAGES: Record<string, () => Promise<any>> = {
   chat: () => import('@/views/Chat.vue'),
   feedback: () => import('@/views/Feedback.vue'),
   ann: () => import('@/views/Ann.vue'),
+  faq: () => import('@/views/Faq.vue'),
+  status: () => import('@/views/Status.vue'),
   devices: () => import('@/views/Devices.vue'),
   users: () => import('@/views/Users.vue'),
   applications: () => import('@/views/Applications.vue'),

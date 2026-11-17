@@ -9,7 +9,7 @@ import { parse, rules, NEEDS, keyOf } from './css-legacy.mjs';
 const { chromium } = createRequire(new URL('../cloud/test/', import.meta.url))('playwright');
 const B = process.argv[2] || 'http://localhost:8199';
 const OUT = new URL('../cloud/site/legacy-colors.json', import.meta.url);
-const PAGES = ['/', '/app', '/notice', '/terms', '/privacy', '/security', '/changelog', '/r', '/r?c=K7F2Q9AB'];
+const PAGES = ['/', '/app', '/notice', '/terms', '/privacy', '/security', '/changelog', '/status', '/help', '/r', '/r?c=K7F2Q9AB'];
 
 // 在页面里运行：给每条样式找一个它作用的元素，放一个探针进去算出值，再把新颜色写法换成 rgb/rgba
 function evaluate(items) {

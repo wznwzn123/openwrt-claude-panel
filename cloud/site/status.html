@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="pill" data-ground="sage" data-motion>
+<head>
+<meta charset="utf-8">
+<title>服务状态 · 路由器面板</title>
+<meta name="description" content="路由器面板托管服务现在是否正常：官网、专属网址、手机推送、邮件、发文件、安装和更新，以及过去 90 天的记录。">
+<!--KIT_HEAD-->
+<style>
+/* ---------- 服务状态：上面一句话说现在怎么样，下面每项服务一行，90 天每天一格 ---------- */
+.st-hero { padding-bottom: clamp(26px, 4vw, 40px); }
+.st-now { display: flex; align-items: center; gap: 16px; margin-top: clamp(22px, 3vw, 30px); padding: clamp(18px, 2.4vw, 24px); border-radius: 22px; background: var(--glass); border: 1px solid var(--hair); }
+.st-now i { position: relative; flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--c, var(--muted)); }
+.st-now i::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--c, var(--muted)); opacity: 0; animation: stPing 2.6s ease-out infinite; }
+.st-now b { display: block; font-size: clamp(19px, 2.4vw, 24px); font-weight: 650; letter-spacing: -.01em; }
+.st-now span { display: block; margin-top: 3px; font-size: 13.5px; color: var(--muted); }
+.st-now.wait i::after { display: none; }
+@keyframes stPing { 0% { transform: scale(.5); opacity: .9; } 100% { transform: scale(1.5); opacity: 0; } }
+.lv-ok { --c: var(--accent); } .lv-part { --c: #fbbf24; } .lv-down { --c: #f87171; } .lv-none { --c: color-mix(in oklab, var(--ink) 16%, transparent); }
+
+.st-body { padding: clamp(24px, 4vw, 40px) 0 clamp(56px, 8vw, 96px); }
+.st-h { margin: 0 0 14px; font-size: 15px; font-weight: 650; color: var(--muted); }
+.st-sec + .st-sec { margin-top: clamp(32px, 5vw, 48px); }
+
+/* 正在处理的故障 */
+.st-inc { padding: clamp(18px, 2.4vw, 24px); border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); border-left: 4px solid var(--c); }
+.st-inc + .st-inc { margin-top: 12px; }
+.st-inc h3 { margin: 0; font-size: 17px; font-weight: 650; }
+.st-inc .meta { margin-top: 5px; font-size: 13px; color: var(--muted); }
+.st-ups { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.st-ups li { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 10px; font-size: 14.5px; line-height: 1.7; }
+.st-ups time { white-space: nowrap; color: var(--muted); font-size: 13px; line-height: 1.95; font-variant-numeric: tabular-nums; }
+.st-ups p { margin: 0; overflow-wrap: anywhere; }
+.st-ups li.done p { color: var(--accent); font-weight: 600; }
+
+/* 每项服务 */
+.st-list { margin: 0; padding: 0; list-style: none; border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); }
+.st-c { padding: clamp(16px, 2.2vw, 22px); }
+.st-c + .st-c { border-top: 1px solid var(--hair); }
+.st-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.st-top h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.st-top p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+.st-tag { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 26px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--c); background: color-mix(in oklab, var(--c) 13%, transparent); white-space: nowrap; }
+.st-tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.st-bars { position: relative; display: grid; grid-template-columns: repeat(90, minmax(0, 1fr)); gap: 2px; height: 34px; margin-top: 14px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: pan-y; }
+.st-bars span { border-radius: 2px; background: var(--c); transition: opacity .15s, transform .15s; transform-origin: 50% 100%; }
+.st-bars span.hot { transform: scaleY(1.12); filter: brightness(1.25); }
+.st-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-axis b { color: var(--ink); font-weight: 600; }
+.st-tip { position: absolute; z-index: 3; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 7px 11px; border-radius: 12px; background: #1c2723; border: 1px solid var(--hair); box-shadow: 0 12px 30px -12px #000; font-size: 13px; white-space: nowrap; pointer-events: none; }
+.st-tip b { margin-right: 6px; }
+
+/* 过去的故障 */
+.st-past { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.st-past li { padding: 14px 16px; border-radius: 16px; background: var(--glass); border: 1px solid var(--hair); }
+.st-past b { display: block; font-size: 15px; font-weight: 600; }
+.st-past span { display: block; margin-top: 3px; font-size: 13px; color: var(--muted); }
+.st-past p { margin: 8px 0 0; font-size: 14px; line-height: 1.7; color: color-mix(in oklab, var(--ink) 76%, var(--bg)); overflow-wrap: anywhere; }
+.st-empty { padding: 18px; border-radius: 16px; background: var(--glass); border: 1px solid var(--hair); font-size: 14.5px; color: var(--muted); }
+.st-note { margin: clamp(26px, 4vw, 36px) 0 0; font-size: 13px; line-height: 1.8; color: var(--muted); }
+.st-note a { color: var(--accent); }
+
+@media (max-width: 639px) {
+  .st-bars { gap: 1px; height: 30px; }
+  .st-bars span { border-radius: 1px; }
+  .st-ups li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .st-now i::after { animation: none; } }
+</style>
+</head>
+<body>
+<!--KIT_NAV-->
+<main id="main">
+  <div class="pg-hero st-hero">
+    <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="23" aria-hidden="true"></div>
+    <div class="wrap">
+      <h1>服务状态。</h1>
+      <p class="pg-sub">托管服务现在是否正常，以及过去 90 天的记录。每小时自动检查一次。</p>
+      <div class="st-now wait lv-none" id="stNow" role="status" aria-live="polite"><i aria-hidden="true"></i><div><b id="stNowT">正在读取…</b><span id="stNowS"></span></div></div>
+    </div>
+  </div>
+  <div class="st-body">
+    <div class="wrap">
+      <section class="st-sec" id="stIncSec" hidden aria-labelledby="stIncH"><h2 class="st-h" id="stIncH">正在处理</h2><div id="stInc"></div></section>
+      <section class="st-sec" aria-labelledby="stCompH"><h2 class="st-h" id="stCompH">各项服务</h2><ul class="st-list" id="stList"></ul></section>
+      <section class="st-sec" aria-labelledby="stPastH"><h2 class="st-h" id="stPastH">过去的故障</h2><div id="stPast"><p class="st-empty">正在读取…</p></div></section>
+      <p class="st-note">专属网址这一项只看「路由器在线、但在外面打不开面板」的情况；路由器断电、家里断网不算。遇到问题可以先看 <a href="/help">常见问题</a>，或者在面板里点「问题反馈」。</p>
+    </div>
+  </div>
+</main>
+<!--KIT_FOOT-->
+<!--KIT_JS-->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const DAY = 864e5;
+  const LV = { ok: '正常', part: '部分有问题', down: '故障', none: '没有记录' };
+  const md = (d) => { const [, m, dd] = String(d).split('-'); return +m + ' 月 ' + +dd + ' 日'; };
+  const mdT = (t) => { const d = new Date(t); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日'; };
+  const hm = (t) => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+  const dur = (a, b) => { const m = Math.max(1, Math.round((b - a) / 60e3)); return m < 60 ? m + ' 分钟' : m < 1440 ? Math.round(m / 60 * 10) / 10 + ' 小时' : Math.round(m / 1440 * 10) / 10 + ' 天'; };
+  let S = null;
+
+  function nowLine() {
+    const box = $('stNow'), act = S.inc.filter((x) => !x.end);
+    let lv = 'none', t = '暂时没有检查记录', sub = '';
+    const cur = S.comps.map((c) => c.now).filter(Boolean);
+    if (act.length) { lv = act.some((x) => x.level === 'down') ? 'down' : 'part'; t = act[0].title; sub = '正在处理 · ' + mdT(act[0].start) + ' ' + hm(act[0].start) + ' 开始'; }
+    else if (cur.length) {
+      const bad = S.comps.filter((c) => c.now && c.now !== 'ok');
+      lv = bad.some((c) => c.now === 'down') ? 'down' : bad.length ? 'part' : 'ok';
+      t = lv === 'ok' ? '所有服务正常' : bad.map((c) => c.t).join('、') + (lv === 'down' ? '：出故障了' : '：部分有问题');
+    } else if (S.at) t = '最近几小时没有检查记录';
+    sub = (sub ? sub + ' · ' : '') + (S.at ? '最近一次检查 ' + ago(S.at) : '还没开始记录');
+    box.className = 'st-now lv-' + lv + (lv === 'none' ? ' wait' : '');
+    $('stNowT').textContent = t; $('stNowS').textContent = sub;
+  }
+  function incHtml(x, past) {
+    const lv = x.end ? 'ok' : x.level;
+    const comps = (x.comps || []).map((k) => (S.comps.find((c) => c.k === k) || {}).t).filter(Boolean);
+    const ups = (x.ups || []).map((u) => '<li class="' + (u.done ? 'done' : '') + '"><time>' + mdT(u.t) + ' ' + hm(u.t) + '</time><p>' + esc(u.text) + '</p></li>').join('');
+    if (past) return '<li><b>' + esc(x.title) + '</b><span>' + mdT(x.start) + ' ' + hm(x.start) + ' · 持续 ' + dur(x.start, x.end) + (comps.length ? ' · ' + esc(comps.join('、')) : '') + '</span>' + (x.ups && x.ups.length ? '<p>' + esc(x.ups[0].text) + '</p>' : '') + '</li>';
+    return '<article class="st-inc lv-' + lv + '"><h3>' + esc(x.title) + '</h3><div class="meta">' + (x.level === 'down' ? '故障' : '部分有问题') + ' · ' + mdT(x.start) + ' ' + hm(x.start) + ' 开始' + (comps.length ? ' · 影响：' + esc(comps.join('、')) : '') + '</div>' + (ups ? '<ul class="st-ups">' + ups + '</ul>' : '') + '</article>';
+  }
+  function compHtml(c) {
+    const lv = c.now || 'none';
+    const cells = S.days.map((d, i) => '<span class="lv-' + (d[c.k] || 'none') + '" data-i="' + i + '"></span>').join('');
+    const tag = lv === 'none' ? '没有最新记录' : c.k === 'tunnel' && c.pct != null ? LV[lv] + ' · ' + c.pct + '% 在线' : LV[lv];
+    return '<li class="st-c" data-k="' + c.k + '"><div class="st-top"><div><h3>' + esc(c.t) + '</h3><p>' + esc(c.d) + '</p></div><span class="st-tag lv-' + lv + '">' + esc(tag) + '</span></div>'
+      + '<div class="st-bars" role="img" aria-label="' + esc(c.t) + '过去 90 天每天的情况">' + cells + '</div>'
+      + '<div class="st-axis"><span>90 天前</span><span>' + (c.up != null ? '可用 <b>' + c.up + '%</b>' : '') + '</span><span>今天</span></div></li>';
+  }
+  function render() {
+    nowLine();
+    const byNew = (a, b) => b.start - a.start, act = S.inc.filter((x) => !x.end).sort(byNew), past = S.inc.filter((x) => x.end).sort(byNew);
+    $('stIncSec').hidden = !act.length;
+    $('stInc').innerHTML = act.map((x) => incHtml(x, false)).join('');
+    $('stList').innerHTML = S.comps.length ? S.comps.map(compHtml).join('') : '<li class="st-c"><p class="st-empty" style="margin:0">还没有检查记录，第一次检查在一小时内完成。</p></li>';
+    $('stPast').innerHTML = past.length ? '<ul class="st-past">' + past.map((x) => incHtml(x, true)).join('') + '</ul>' : '<p class="st-empty">过去 90 天没有故障说明。</p>';
+  }
+  // 格子：鼠标移上去、手指按住或者按住拖，显示那一天
+  let tip = null;
+  const hide = () => { if (tip) { tip.remove(); tip = null; } document.querySelectorAll('.st-bars span.hot').forEach((x) => x.classList.remove('hot')); };
+  function showCell(bars, x) {
+    const cells = [...bars.children].filter((n) => n.tagName === 'SPAN'); let best = null, bd = 1e9;
+    for (const c of cells) { const r = c.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - x); if (d < bd) { bd = d; best = c; } }
+    if (!best) return;
+    const day = S.days[+best.dataset.i], k = bars.closest('.st-c').dataset.k, lv = day[k] || 'none';
+    hide();
+    best.classList.add('hot');
+    tip = document.createElement('div'); tip.className = 'st-tip';
+    tip.innerHTML = '<b>' + md(day.d) + '</b>' + (S.since && Date.parse(day.d + 'T23:59:59+08:00') < S.since ? '还没开始记录' : LV[lv]);
+    bars.appendChild(tip);
+    const br = bars.getBoundingClientRect(), cr = best.getBoundingClientRect(), tw = tip.offsetWidth;
+    tip.style.left = Math.min(br.width - tw / 2, Math.max(tw / 2, cr.left - br.left + cr.width / 2)) + 'px';
+  }
+  const list = $('stList');
+  list.addEventListener('pointerdown', (e) => { const b = e.target.closest('.st-bars'); if (b) showCell(b, e.clientX); });
+  list.addEventListener('pointermove', (e) => { const b = e.target.closest('.st-bars'); if (b && (e.pointerType === 'mouse' || e.buttons || e.pressure)) showCell(b, e.clientX); });
+  list.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
+  list.addEventListener('contextmenu', (e) => { if (e.target.closest('.st-bars')) e.preventDefault(); });
+  document.addEventListener('pointerdown', (e) => { if (tip && !e.target.closest('.st-bars')) hide(); });
+
+  async function load() {
+    try {
+      const r = await fetch('/api/status', { cache: 'no-store' }); if (!r.ok) throw new Error();
+      S = await r.json(); S.inc = S.inc || []; S.days = S.days || []; S.comps = S.comps || [];
+      if (!tip) render(); else nowLine();
+    } catch (e) {
+      if (!S) { $('stNow').className = 'st-now wait lv-none'; $('stNowT').textContent = '状态暂时读不出来'; $('stNowS').textContent = '稍后刷新再看'; $('stPast').innerHTML = ''; }
+    }
+  }
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 60e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+})();
+</script>
+</body>
+</html>

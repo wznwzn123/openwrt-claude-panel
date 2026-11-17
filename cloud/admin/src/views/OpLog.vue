@@ -11,7 +11,7 @@ import { toastError } from '@/composables/toast'
 import { full } from '@/utils/fmt'
 
 /* 操作记录：谁在什么时候删了、停了、恢复了哪台路由器或账号，发了什么公告……（最近 500 条） */
-const OPN: Record<string, string> = { off: '封禁', on: '解封', delete: '删除路由器', restore: '恢复路由器', purge: '彻底删除路由器', protect: '保护', unprotect: '取消保护', extend: '加天数', note: '改备注', invite: '生成邀请码', 'invite-del': '作废邀请码', renewal: '生成续期码', 'renewal-del': '作废续期码', approve: '通过续期', reject: '拒绝续期', unregister: '路由器卸载', idle: '长期没上线', 'user-delete': '删除账号', 'user-restore': '恢复账号', 'user-purge': '彻底删除账号', ann_new: '发布公告', ann_edit: '修改公告', ann_del: '删除公告', chat_block: '拉黑对话', chat_unblock: '解除拉黑', chat_del: '删除对话', 'trial-used': '官网试用开通' }
+const OPN: Record<string, string> = { off: '封禁', on: '解封', delete: '删除路由器', restore: '恢复路由器', purge: '彻底删除路由器', protect: '保护', unprotect: '取消保护', extend: '加天数', note: '改备注', invite: '生成邀请码', 'invite-del': '作废邀请码', renewal: '生成续期码', 'renewal-del': '作废续期码', approve: '通过续期', reject: '拒绝续期', unregister: '路由器卸载', idle: '长期没上线', 'user-delete': '删除账号', 'user-restore': '恢复账号', 'user-purge': '彻底删除账号', ann_new: '发布公告', ann_edit: '修改公告', ann_del: '删除公告', chat_block: '拉黑对话', chat_unblock: '解除拉黑', chat_del: '删除对话', 'trial-used': '官网试用开通', inc_new: '发布故障说明', inc_update: '补充故障进展', inc_resolve: '故障已恢复', inc_del: '删除故障说明', faq_new: '加常见问题', faq_edit: '改常见问题', faq_del: '删除常见问题', faq_reset: '常见问题恢复默认' }
 const BYN: Record<string, string> = { admin: '管理员', user: '用户', router: '路由器', auto: '自动', system: '系统' }
 const all = ref<any[]>([])
 const loading = ref(true)

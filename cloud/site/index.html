@@ -331,6 +331,7 @@ pre.term u { text-decoration: none; color: var(--accent); } pre.term b { color: 
 /* ------------------------------------------------ 常见问题 + 查进度 */
 .faq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gutter); align-content: start; }
 .qa { padding: 20px 0 0; border-top: 1px solid var(--line); }
+.faq-all { display: flex; flex-wrap: wrap; gap: 10px; margin: clamp(26px, 4vw, 40px) 0 0; }
 .qa h3 { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 600; }
 .qa p, .qa li { font-size: 14.5px; line-height: 1.75; color: color-mix(in oklab, var(--ink) 76%, var(--bg)); }
 .qa p { margin: 8px 0 0; } .qa ul { margin: 8px 0 0; padding-left: 18px; } .qa li { margin: 4px 0; } .qa b { color: var(--ink); }
@@ -921,6 +922,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         <div class="qa"><h3>遇到问题、想要新功能？</h3><p>面板侧边栏最下面、首页最下面都有「问题反馈」，可以附截图，直接发给开发者。发完会给一个受理编号，处理到哪一步，在面板「帮助 → 我的反馈」、官网账号页，或者上面输入编号都能看到。</p></div>
         <div class="qa"><h3>不想用托管服务？</h3><p>可以用自己的 Cloudflare 账号和域名，或者只在家里局域网用。四个自建版本和教程都在 <a class="inline" href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a>。</p></div>
       </div>
+      <p class="faq-all"><a class="btn" href="/help">查看全部问题，按关键词搜</a><a class="btn" href="/status">服务状态</a></p>
     </div>
   </section>
 
@@ -950,7 +952,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
         </div>
         <div class="span-2 footer__col"><h3>产品</h3><ul><li><a href="#features">功能</a></li><li><a href="#tour">界面</a></li><li><a href="#start">怎么装</a></li><li><a href="#plans">安卓 App</a></li><li><a href="/changelog">更新日志</a></li></ul></div>
         <div class="span-2 footer__col"><h3>账号</h3><ul><li><a href="/app">登录</a></li><li><a href="/app#reg">注册</a></li><li><a href="/r">查处理进度</a></li></ul></div>
-        <div class="span-2 footer__col"><h3>帮助</h3><ul><li><a href="#faq">常见问题</a></li><li><a href="/security#report">报告问题</a></li><li><a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a></li></ul></div>
+        <div class="span-2 footer__col"><h3>帮助</h3><ul><li><a href="/help">常见问题</a></li><li><a href="/status">服务状态</a></li><li><a href="/security#report">报告问题</a></li><li><a href="https://github.com/wznwzn123/openwrt-claude-panel" rel="noopener">GitHub</a></li></ul></div>
         <div class="span-2 footer__col"><h3>条款</h3><ul><li><a href="/notice">用户须知</a></li><li><a href="/terms">用户使用协议</a></li><li><a href="/privacy">隐私政策</a></li><li><a href="/security">安全说明</a></li></ul></div>
       </div>
       <div class="footer__legal">

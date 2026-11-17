@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="pill" data-ground="sage" data-motion>
+<head>
+<meta charset="utf-8">
+<title>常见问题 · 路由器面板</title>
+<meta name="description" content="路由器面板常见问题：安装、托管和续期、登录和换手机、家人和权限、代理和节点、更新、反馈和联系开发者。">
+<!--KIT_HEAD-->
+<style>
+/* ---------- 常见问题：一个搜索框 + 分类，点问题展开回答 ---------- */
+.hp-hero { padding-bottom: clamp(24px, 3.6vw, 36px); }
+.hp-search { position: relative; margin-top: clamp(22px, 3vw, 30px); max-width: 720px; }
+.hp-search svg { position: absolute; left: 18px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.hp-search .input { min-height: 56px; padding-left: 50px; padding-right: 48px; border-radius: 18px; font-size: 17px; }
+.hp-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 12px; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+.hp-clear:hover { color: var(--ink); background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.hp-cats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.hp-cats button { display: inline-flex; align-items: center; height: 38px; padding: 0 15px; border-radius: 99px; border: 1px solid var(--hair); background: none; color: var(--muted); font: 500 14px/1 var(--font-text); cursor: pointer; transition: color .2s, background .2s, border-color .2s; }
+.hp-cats button:hover { color: var(--ink); border-color: color-mix(in oklab, var(--ink) 22%, transparent); }
+.hp-cats button[aria-pressed="true"] { color: var(--p-accent-ink); background: var(--accent); border-color: var(--accent); }
+
+.hp-body { padding: clamp(22px, 3.4vw, 36px) 0 clamp(56px, 8vw, 96px); }
+.hp-count { margin: 0 0 14px; font-size: 13.5px; color: var(--muted); }
+.hp-grp + .hp-grp { margin-top: clamp(26px, 4vw, 40px); }
+.hp-grp h2 { margin: 0 0 12px; font-size: 15px; font-weight: 650; color: var(--muted); }
+.hp-list { margin: 0; padding: 0; list-style: none; border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); }
+.hp-it + .hp-it { border-top: 1px solid var(--hair); }
+.hp-it { scroll-margin-top: 96px; }
+#hpQ::-webkit-search-cancel-button, #hpQ::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+.hp-q { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; width: 100%; padding: 17px clamp(16px, 2.2vw, 22px); border: 0; background: none; color: var(--ink); font: 600 16px/1.55 var(--font-text); text-align: left; cursor: pointer; }
+.hp-q:hover { background: color-mix(in oklab, var(--ink) 4%, transparent); }
+.hp-it:first-child .hp-q { border-radius: 22px 22px 0 0; } .hp-it:last-child .hp-q:not([aria-expanded="true"]) { border-radius: 0 0 22px 22px; }
+.hp-q svg { flex: none; width: 20px; height: 20px; margin-top: 2px; color: var(--muted); transition: transform .25s; }
+.hp-q[aria-expanded="true"] svg { transform: rotate(180deg); }
+.hp-q mark { color: var(--accent); background: none; }
+.hp-a { padding: 0 clamp(16px, 2.2vw, 22px) 18px; font-size: 15px; line-height: 1.8; color: color-mix(in oklab, var(--ink) 78%, var(--bg)); overflow-wrap: anywhere; }
+.hp-a p { margin: 0; } .hp-a p + p, .hp-a p + ul, .hp-a ul + p, .hp-a p + ol, .hp-a ol + p { margin-top: 10px; }
+.hp-a ul, .hp-a ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.hp-a b { color: var(--ink); font-weight: 650; }
+.hp-a a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--accent) 45%, transparent); }
+.hp-copy { margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 99px; border: 1px solid var(--hair); background: none; color: var(--muted); font: 500 12.5px/1 var(--font-text); cursor: pointer; }
+.hp-copy:hover { color: var(--ink); }
+
+.hp-none { padding: clamp(20px, 3vw, 28px); border-radius: 22px; background: var(--glass); border: 1px solid var(--hair); }
+.hp-none h2 { margin: 0; font-size: 18px; font-weight: 650; }
+.hp-none p { margin: 8px 0 0; font-size: 14.5px; line-height: 1.8; color: var(--muted); }
+.hp-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.hp-more { margin-top: clamp(32px, 5vw, 48px); }
+.hp-toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 50; transform: translate(-50%, 20px); opacity: 0; padding: 11px 18px; border-radius: 99px; background: var(--accent); color: var(--p-accent-ink); font-weight: 600; font-size: 14px; transition: opacity .25s, transform .25s; pointer-events: none; }
+.hp-toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 639px) {
+  .hp-q { font-size: 15.5px; padding-top: 15px; padding-bottom: 15px; }
+  .hp-a { font-size: 14.5px; }
+  .hp-cats { flex-wrap: nowrap; overflow-x: auto; margin-left: -16px; margin-right: -16px; padding: 0 16px 4px; scrollbar-width: none; }
+  .hp-cats::-webkit-scrollbar { display: none; }
+  .hp-cats button { flex: none; }
+}
+</style>
+</head>
+<body>
+<!--KIT_NAV-->
+<main id="main">
+  <div class="pg-hero hp-hero">
+    <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="31" aria-hidden="true"></div>
+    <div class="wrap">
+      <h1>常见问题。</h1>
+      <p class="pg-sub">搜一下，或者按分类找。大多数情况不用重装。</p>
+      <div class="hp-search" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input class="input" id="hpQ" type="search" placeholder="比如：换手机、续期、家人" autocomplete="off" enterkeyhint="search" aria-label="搜索常见问题">
+        <button type="button" class="hp-clear" id="hpClear" aria-label="清空" hidden>×</button>
+      </div>
+      <div class="hp-cats" id="hpCats" role="group" aria-label="按分类看"></div>
+    </div>
+  </div>
+  <div class="hp-body">
+    <div class="wrap">
+      <p class="hp-count" id="hpCount" aria-live="polite"></p>
+      <div id="hpOut"><p class="hp-count">正在读取…</p></div>
+      <div class="hp-none hp-more" id="hpMore">
+        <h2>没找到想要的答案？</h2>
+        <p>在面板侧边栏最下面点「问题反馈」，可以附截图，直接发给开发者；发完会给一个受理编号，用它能查处理进度。也可以先看看托管服务现在是否正常。</p>
+        <div class="hp-acts"><a class="btn btn--primary" href="/app">打开我的路由器</a><a class="btn" href="/r">查处理进度</a><a class="btn" href="/status">服务状态</a></div>
+      </div>
+    </div>
+  </div>
+</main>
+<div class="hp-toast" id="hpToast" role="status" aria-live="polite"></div>
+<!--KIT_FOOT-->
+<!--KIT_JS-->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // 回答里只认这几种写法：**加粗**、`代码`、[文字](/站内地址 或 https://)、「- 」开头的列表、「1. 」开头的步骤、空一行分段
+  const inline = (s) => esc(s).replace(/\*\*([^*]+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+?)\]\(((?:\/|https:\/\/)[^)\s]*)\)/g, (m, t, u) => '<a href="' + u + '"' + (u[0] === '/' ? '' : ' rel="noopener" target="_blank"') + '>' + t + '</a>');
+  function rich(a) {
+    const out = []; let list = null, kind = '';
+    const flush = () => { if (list) { out.push('<' + kind + '>' + list.join('') + '</' + kind + '>'); list = null; } };
+    for (const line of String(a).split('\n')) {
+      const t = line.trim(), ul = /^[-•]\s+(.*)$/.exec(t), ol = /^\d+[.、]\s*(.*)$/.exec(t);
+      if (!t) { flush(); continue; }
+      if (ul || ol) { const k = ul ? 'ul' : 'ol'; if (list && kind !== k) flush(); if (!list) { list = []; kind = k; } list.push('<li>' + inline((ul || ol)[1]) + '</li>'); continue; }
+      flush(); out.push('<p>' + inline(t) + '</p>');
+    }
+    flush(); return out.join('');
+  }
+  // 说法不一样也能搜到：同一组里的词算一个意思
+  const SYN = [['打不开', '进不去', '连不上', '上不去', '登不上', '加载不出来', '白屏', '转圈'], ['手机', '设备', '新手机'], ['续期', '续费', '延长', '到期'], ['家人', '子账号', '家里人', '成员'],
+    ['更新', '升级', '新版本'], ['安装', '装', '安装命令'], ['卸载', '删除', '移除'], ['密码', '忘记密码', '重置'], ['节点', '线路', '代理'], ['反馈', '联系', '客服', '开发者'], ['断网', '掉线', '断线', '没网'], ['推送', '通知', '提醒']];
+  const norm = (s) => String(s || '').toLowerCase().replace(/wi-?fi/g, 'wifi').replace(/无线网/g, 'wifi').replace(/[，。、？！：；,.?!:;"'“”‘’（）()【】\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+  // 先按「精确」意思找（同义词只替换词里那一段，「换手机」→「换设备」）；一个都没找到时再放宽（「换手机」里有「手机」就算）
+  const words = (q, loose) => norm(q).split(' ').filter(Boolean).map((w) => {
+    const out = [w];
+    for (const g of SYN) for (const y of g) {
+      if (y.includes(w)) { out.push(...g); break; }
+      if (w.includes(y)) { if (loose) out.push(...g); else out.push(...g.map((z) => w.replace(y, z))); break; }
+    }
+    return [...new Set(out)];
+  });
+  let CATS = [], ITEMS = [], cat = 'all', q = '', missT = 0, lastMiss = '';
+  const hay = (it) => norm(it.q + ' ' + it.kw + ' ' + it.a.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'));
+  function score(it, ws) {
+    if (!ws.length) return 1;
+    const h = hay(it), hq = norm(it.q + ' ' + it.kw); let s = 0;
+    for (const g of ws) { const hit = g.find((w) => h.includes(w)); if (!hit) return 0; s += hq.includes(hit) ? 3 : 1; }
+    return s;
+  }
+  const mark = (text, ws) => { let t = esc(text); const all = [...new Set(ws.flat())].filter((w) => w.length > 0).sort((a, b) => b.length - a.length); for (const w of all) { const e = esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); t = t.replace(new RegExp('(' + e + ')(?![^<]*>)', 'gi'), '<mark>$1</mark>'); } return t; };
+  const itemHtml = (it, ws, open) => '<li class="hp-it" id="' + esc(it.id) + '"><button type="button" class="hp-q" aria-expanded="' + open + '" aria-controls="a-' + esc(it.id) + '"><span>' + mark(it.q, ws) + '</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>'
+    + '<div class="hp-a" id="a-' + esc(it.id) + '"' + (open ? '' : ' hidden') + '>' + rich(it.a) + '<button type="button" class="hp-copy" data-link="' + esc(it.id) + '">复制这个问题的链接</button></div></li>';
+  function render(focusId) {
+    let ws = words(q);
+    const pool = ITEMS.filter((it) => cat === 'all' || it.cat === cat);
+    const find = () => pool.map((it) => ({ it, s: score(it, ws) })).filter((x) => x.s > 0);
+    let hits = find();
+    if (!hits.length && ws.length) { ws = words(q, true); hits = find(); }
+    $('hpClear').hidden = !q;
+    let html = '';
+    if (ws.length) {
+      hits.sort((a, b) => b.s - a.s);
+      $('hpCount').textContent = hits.length ? '找到 ' + hits.length + ' 个相关问题' : '';
+      html = hits.length ? '<ul class="hp-list">' + hits.map((x, i) => itemHtml(x.it, ws, hits.length <= 2 && i === 0)).join('') + '</ul>'
+        : '<div class="hp-none"><h2>没找到「' + esc(q) + '」相关的问题</h2><p>换个说法试试，比如少打几个字；或者直接发给开发者，下面有入口。</p></div>';
+      clearTimeout(missT);
+      if (!hits.length && norm(q).length >= 2) missT = setTimeout(() => { const v = norm(q); if (v === lastMiss) return; lastMiss = v; fetch('/api/help/miss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ q: v }) }).catch(() => {}); }, 1500);
+    } else {
+      $('hpCount').textContent = '';
+      html = CATS.filter((c) => cat === 'all' || c.k === cat).map((c) => { const l = pool.filter((it) => it.cat === c.k); return l.length ? '<section class="hp-grp"><h2>' + esc(c.t) + '</h2><ul class="hp-list">' + l.map((it) => itemHtml(it, [], it.id === focusId)).join('') + '</ul></section>' : ''; }).join('');
+    }
+    $('hpOut').innerHTML = html;
+    if (focusId) { const el = document.getElementById(focusId); if (el) el.scrollIntoView({ block: 'start' }); }
+  }
+  function cats() {
+    $('hpCats').innerHTML = [{ k: 'all', t: '全部' }, ...CATS].filter((c) => c.k === 'all' || ITEMS.some((it) => it.cat === c.k)).map((c) => '<button type="button" data-c="' + esc(c.k) + '" aria-pressed="' + (c.k === cat) + '">' + esc(c.t) + '</button>').join('');
+  }
+  $('hpCats').addEventListener('click', (e) => { const b = e.target.closest('button[data-c]'); if (!b) return; cat = b.dataset.c; cats(); render(); });
+  let qT = 0;
+  $('hpQ').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(() => { q = $('hpQ').value; render(); }, 120); });
+  $('hpClear').addEventListener('click', () => { $('hpQ').value = ''; q = ''; render(); $('hpQ').focus(); });
+  $('hpOut').addEventListener('click', async (e) => {
+    const c = e.target.closest('.hp-copy');
+    if (c) {
+      const url = location.origin + '/help#' + c.dataset.link;
+      try { await navigator.clipboard.writeText(url); toast('链接复制好了'); } catch (x) { history.replaceState(null, '', '#' + c.dataset.link); toast('链接在地址栏里'); }
+      return;
+    }
+    const b = e.target.closest('.hp-q'); if (!b) return;
+    const open = b.getAttribute('aria-expanded') !== 'true';
+    b.setAttribute('aria-expanded', String(open)); b.nextElementSibling.hidden = !open;
+  });
+  // 同一页里点了别的问题链接（地址栏 # 变了）：回到全部、清掉搜索，展开那一条
+  addEventListener('hashchange', () => { const id = decodeURIComponent(location.hash.slice(1)); if (!ITEMS.some((x) => x.id === id)) return; cat = 'all'; q = ''; $('hpQ').value = ''; cats(); render(id); });
+  let tT = 0;
+  function toast(t) { const el = $('hpToast'); el.textContent = t; el.classList.add('show'); clearTimeout(tT); tT = setTimeout(() => el.classList.remove('show'), 1800); }
+
+  (async () => {
+    try {
+      const r = await fetch('/api/help'); if (!r.ok) throw new Error();
+      const j = await r.json(); CATS = j.cats || []; ITEMS = (j.items || []).map((x) => ({ ...x, kw: x.kw || '' }));
+    } catch (e) { $('hpOut').innerHTML = '<div class="hp-none"><h2>常见问题暂时读不出来</h2><p>稍后刷新再看。</p></div>'; return; }
+    const id = decodeURIComponent(location.hash.slice(1));
+    const pre = new URLSearchParams(location.search).get('q');
+    if (pre) { $('hpQ').value = pre; q = pre; }
+    cats(); render(ITEMS.some((x) => x.id === id) ? id : '');
+  })();
+})();
+</script>
+</body>
+</html>

@@ -14,6 +14,8 @@ export const navGroups = ref<NavGroup[]>([
     { key: 'chat', label: '实时对话', icon: 'chat', path: '/chat' },
     { key: 'feedback', label: '问题反馈', icon: 'inbox', path: '/feedback' },
     { key: 'ann', label: '公告', icon: 'megaphone', path: '/ann' },
+    { key: 'faq', label: '常见问题', icon: 'info', path: '/faq' },
+    { key: 'status', label: '服务状态', icon: 'activity', path: '/status' },
   ] },
   { key: 'g-dev', label: '用户与路由器', icon: 'router', items: [
     { key: 'devices', label: '路由器', icon: 'router', path: '/devices' },

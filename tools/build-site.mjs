@@ -7,7 +7,7 @@ const dir = new URL('../cloud/site/', import.meta.url);
 const css = fs.readFileSync(new URL('common.css', dir), 'utf8');
 // 旧内核浏览器用的备用颜色（见 tools/css-legacy.mjs）
 const LEG = JSON.parse(fs.readFileSync(new URL('legacy-colors.json', dir), 'utf8')), legMiss = [];
-const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVACY: 'privacy.html', SECURITY: 'security.html', REPLY: 'reply.html', NOTICE: 'notice.html', TERMS: 'terms.html', CHANGELOG: 'changelog.html' };
+const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVACY: 'privacy.html', SECURITY: 'security.html', REPLY: 'reply.html', NOTICE: 'notice.html', TERMS: 'terms.html', CHANGELOG: 'changelog.html', STATUS: 'status.html', HELP: 'help.html' };
 // 旧内核不认识 :has()：先把所有样式里的 :has(条件) 编好号（页面里的小脚本要用同一份编号）
 const HAS = { map: new Map(), list: [] };
 const expand = (html) => { for (let i = 0; i < 3; i++) html = html.replace(/<!--KIT_(HEAD|NAV|FOOT|JS|DOC|ME|HAS)-->/g, (m, n) => fs.readFileSync(new URL('_kit_' + n.toLowerCase() + '.html', dir), 'utf8')); return html; };

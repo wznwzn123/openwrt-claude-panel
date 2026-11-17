@@ -1,7 +1,9 @@
 name: Cloud website recording (isolated)
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - chore/cloud-website-recording
 
 permissions:
   contents: read
@@ -57,6 +59,7 @@ jobs:
           ];
 
           const browser = await chromium.launch({ headless: true });
+          const orderedFiles = [];
           for (let i = 0; i < pages.length; i++) {
             const [label, route] = pages[i];
             const context = await browser.newContext({
@@ -85,16 +88,15 @@ jobs:
             } catch (error) {
               console.log('Page capture warning:', label, String(error));
             }
+            const video = page.video();
             await page.close();
             await context.close();
+            if (video) orderedFiles.push(await video.path());
           }
           await browser.close();
 
-          const files = (await fs.readdir('recordings/raw'))
-            .filter(f => f.endsWith('.webm')).sort();
-          if (!files.length) throw new Error('No browser recordings were produced.');
-          const list = files.map((f, i) => {
-            const src = path.resolve('recordings/raw', f);
+          if (!orderedFiles.length) throw new Error('No browser recordings were produced.');
+          const list = orderedFiles.map((src, i) => {
             const dst = path.resolve('recordings/mp4', String(i).padStart(2, '0') + '.mp4');
             return { src, dst };
           });

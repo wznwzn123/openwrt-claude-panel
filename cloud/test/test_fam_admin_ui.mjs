@@ -52,17 +52,17 @@ for (const [w, h] of [[390, 844], [1440, 900]]) {
 	let t = await dr().textContent();
 	ok('打开「账号和权限」：主账号（完整邮箱）、2 个子账号、没用掉的加入码' + T, /妈妈/.test(t) && /alice@x\.com/.test(t) && /子账号（2 \/ 10）/.test(t) && /小明/.test(t) && /姐姐/.test(t) && /爸爸/.test(t), t.slice(0, 300));
 	if (SHOTS) await p.screenshot({ path: `${SHOTS}/famadm-${w}.png` });
-	// 改小明的权限：加上「代理设置」
-	const sb = p.locator('.fd-sub', { hasText: '小明' }), had = ((await S().get('d:' + R1.sub)).subs[ub].perms || []).includes('proxy');
-	await sb.locator('label', { hasText: '代理设置' }).click(); await W(200);
+	// 改小明的权限：加上「完全控制」（第二轮安全审查后，只有这一项算高风险）
+	const sb = p.locator('.fd-sub', { hasText: '小明' }), had = ((await S().get('d:' + R1.sub)).subs[ub].perms || []).includes('net');
+	await sb.locator('label', { hasText: '完全控制' }).click(); await W(200);
 	await sb.locator('button', { hasText: '保存权限' }).click(); await W(600);
 	ok('改权限要写原因' + T, /原因/.test(await p.locator('[role=dialog]:has(.ask-modal)').textContent()));
 	const dt = await p.locator('[role=dialog]:has(.ask-modal)').textContent(), rv = await sb.locator('.fd-risk').isVisible();
-	ok((had ? '去掉' : '新给') + '「代理设置」：' + (had ? '不再提醒高风险' : '勾上就显示高风险提醒，确认框里写明新给了哪些') + T, had ? !/跟主账号差不多/.test(dt) : rv && /新给了「代理设置」/.test(dt) && /跟主账号差不多/.test(dt), dt.slice(0, 200));
+	ok((had ? '去掉' : '新给') + '「完全控制」：' + (had ? '不再提醒高风险' : '勾上就显示高风险提醒，确认框里写明新给了哪些') + T, had ? !/跟主账号一样/.test(dt) : rv && /新给了「完全控制」/.test(dt) && /跟主账号一样/.test(dt), dt.slice(0, 200));
 	if (SHOTS) await p.screenshot({ path: `${SHOTS}/famadm-why-${w}.png` });
 	await p.locator('[role=dialog]:has(.ask-modal)').locator('textarea').fill('家里人打电话来说要开代理设置'); await p.locator('[role=dialog]:has(.ask-modal)').locator('button', { hasText: '确定' }).click(); await W(1200);
 	const d1 = await S().get('d:' + R1.sub);
-	ok('保存后：小明的「代理设置」按勾选变了' + T, (d1.subs[ub].perms || []).includes('proxy') === !had, JSON.stringify(d1.subs[ub]));
+	ok('保存后：小明的「完全控制」按勾选变了' + T, (d1.subs[ub].perms || []).includes('net') === !had, JSON.stringify(d1.subs[ub]));
 	const log = await api('/api/admin/log', null, ADM).catch(() => ({}));
 	ok('操作记录里写着原因' + T, JSON.stringify(log).includes('家里人打电话来说要开代理设置'));
 	// 停用姐姐

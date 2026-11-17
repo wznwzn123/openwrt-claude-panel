@@ -20,6 +20,8 @@
 /* 发布节奏图 */
 .cl-pulse { position: relative; margin: clamp(26px, 4vw, 40px) 0 0; height: clamp(150px, 20vw, 210px); }
 .cl-pulse svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* 手机上长按、拖动柱状图看每个版本：不选中文字、不弹系统菜单，上下滑照样滚动页面 */
+.cl-pulse { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: pan-y; -webkit-tap-highlight-color: transparent; }
 .cl-bar { fill: color-mix(in oklab, var(--accent) 38%, var(--p-surface)); transition: fill .2s; cursor: pointer; }
 .cl-bar.major { fill: color-mix(in oklab, var(--accent) 72%, var(--p-surface)); }
 .cl-bar.last { fill: var(--accent); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--accent) 70%, transparent)); }
@@ -33,6 +35,7 @@
 .cl-scan { fill: url(#clScanG); pointer-events: none; }
 .cl-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 12px)); padding: 7px 11px; border-radius: 12px; background: #1c2723; border: 1px solid var(--hair); box-shadow: 0 12px 30px -12px #000; font-size: 13px; white-space: nowrap; pointer-events: none; }
 .cl-tip b { color: var(--accent); font-weight: 650; margin-right: 6px; }
+.cl-tip-go { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
 
 .cl-stats { display: flex; gap: 10px; margin: clamp(22px, 3vw, 30px) 0 0; }
 .cl-stats > div { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column-reverse; justify-content: flex-end; padding: 14px 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--hair); }
@@ -271,16 +274,30 @@
     if (!r) { tip.hidden = true; return; }
     const b = svg.querySelector('.cl-bar[data-i="' + i + '"]'); b.classList.add('hot');
     const bx = +b.getAttribute('x') + +b.getAttribute('width') / 2, by = +b.getAttribute('y'), W = $('clPulse').clientWidth;
-    tip.innerHTML = '<b>' + esc(r.v) + '</b>' + (r.at ? md(r.at) + ' · ' : '') + count(r) + ' 条改动';
+    tip.innerHTML = '<b>' + esc(r.v) + '</b>' + (r.at ? md(r.at) + ' · ' : '') + count(r) + ' 条改动' + (matchMedia('(hover: none)').matches ? '<span class="cl-tip-go">再点一下查看</span>' : '');
     tip.hidden = false;
     const tw = tip.offsetWidth; tip.style.left = Math.min(W - tw / 2, Math.max(tw / 2, bx)) + 'px'; tip.style.top = by + 'px';
   }
   const pulse = $('clPulse');
-  pulse.addEventListener('pointermove', (e) => { const b = e.target.closest('.cl-bar'); if (b) tipAt(+b.dataset.i); });
-  pulse.addEventListener('pointerleave', () => tipAt(-1));
+  // 手指离哪根柱子最近就看哪根（柱子很细，不用正好按在上面）
+  const nearest = (cx) => { let bi = -1, bd = 1e9; $('clSvg').querySelectorAll('.cl-bar').forEach((b) => { const r = b.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - cx); if (d < bd) { bd = d; bi = +b.dataset.i; } }); return bi; };
+  let shown = -1, touchTap = -1, lastType = 'mouse';
+  const show = (i) => { shown = i; tipAt(i); };
+  pulse.addEventListener('contextmenu', (e) => e.preventDefault());
+  // 鼠标：移上去看，点了跳到那个版本。手指：按住（或者按住左右拖）看，看着的那根再点一下才跳过去
+  pulse.addEventListener('pointerdown', (e) => { lastType = e.pointerType || 'mouse'; if (lastType === 'mouse') return; const i = nearest(e.clientX); touchTap = i === shown ? i : -1; show(i); });
+  pulse.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') { const b = e.target.closest('.cl-bar'); if (b) show(+b.dataset.i); return; }
+    if (e.buttons || e.pressure) { const i = nearest(e.clientX); if (i !== shown) { touchTap = -1; show(i); } }
+  });
+  pulse.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') show(-1); });
+  document.addEventListener('pointerdown', (e) => { if (shown >= 0 && !pulse.contains(e.target)) show(-1); });
+  addEventListener('scroll', () => { if (shown >= 0 && !pulse.matches(':active')) { const r = pulse.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) show(-1); } }, { passive: true });
   pulse.addEventListener('click', (e) => {
-    const b = e.target.closest('.cl-bar'); if (!b) return;
-    const r = L.slice().reverse()[+b.dataset.i]; if (!r) return;
+    let i;
+    if (lastType !== 'mouse') { if (touchTap < 0) return; i = touchTap; }
+    else { const b = e.target.closest('.cl-bar'); if (!b) return; i = +b.dataset.i; }
+    const r = L.slice().reverse()[i]; if (!r) return;
     if (!keep(r)) { filter = 'all'; applyFilter(); }
     const li = document.getElementById(r.v.replace(/\./g, '-')); if (li) li.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
   });

@@ -30,6 +30,9 @@ rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/c
 # 小闪存模式下载到内存里的 cloudflared
 rm -rf /tmp/cmcp-cfd
 rm -rf /usr/share/ucode/cmcp /www-claude-mcp
+# 固件自带的 ucode 太旧时给面板单独装的那套 ucode（只有面板用，系统原有的 ucode 不受影响）
+rm -rf /usr/share/claude-mcp/ucrt /usr/share/claude-mcp/ucrt.new /usr/share/claude-mcp/ucrt.old /usr/libexec/cmcp-ucode
+rmdir /usr/share/claude-mcp 2>/dev/null
 rm -f /etc/hotplug.d/ntp/90-cmcp-synced
 rm -f /etc/cmcp-report
 sec=$(uci -q show rpcd | sed -n "s/^rpcd\.\(@login\[[0-9]*\]\)\.username='cmcp'$/\1/p" | head -n1)
@@ -52,7 +55,7 @@ echo "卸载检查（$(date '+%Y-%m-%d %H:%M')）" > $CK
 echo "卸载检查："
 chk "面板和看门狗服务已删除" '[ ! -e /etc/init.d/claude-mcp ] && [ ! -e /etc/init.d/cmcp-watchdog ]'
 chk "面板网页服务、面板隧道已停止" '! ps w 2>/dev/null | grep -v grep | grep -q "uhttpd.*18765\|claude-mcp-tunnel"'
-chk "程序文件已删除" '! ls /usr/sbin/cmcp-* 2>/dev/null | grep -v /usr/sbin/cmcp-uninstall | grep -q . && [ ! -e /www-claude-mcp ] && [ ! -e /usr/share/ucode/cmcp ] && [ ! -e /etc/hotplug.d/ntp/90-cmcp-synced ]'
+chk "程序文件已删除" '! ls /usr/sbin/cmcp-* 2>/dev/null | grep -v /usr/sbin/cmcp-uninstall | grep -q . && [ ! -e /www-claude-mcp ] && [ ! -e /usr/share/ucode/cmcp ] && [ ! -e /usr/libexec/cmcp-ucode ] && [ ! -e /etc/hotplug.d/ntp/90-cmcp-synced ]'
 chk "小闪存模式下载的 cloudflared 已删除" '[ ! -e /tmp/cmcp-cfd ]'
 chk "定时任务已删除" '! grep -q "/usr/sbin/cmcp-" /etc/crontabs/root 2>/dev/null'
 chk "防火墙规则（设备暂停）已删除" '! { iptables -t mangle -S 2>/dev/null; ip6tables -t mangle -S 2>/dev/null; } | grep -q CMCP_PAUSE'

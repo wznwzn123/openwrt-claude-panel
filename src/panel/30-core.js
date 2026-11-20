@@ -59,24 +59,58 @@ async function rpc(method, params, timeoutMs) {
 	const read = READS.has(key);
 	const tmo = timeoutMs || (read ? 10000 : 30000);
 	for (let attempt = 0; ; attempt++) {
-		try { return await rpcOnce(method, params, tmo); }
+		try { return await rpcOnce(method, params, tmo, read); }
 		catch (e) {
 			if (read && attempt === 0 && e instanceof OfflineError && ['超时', '离线'].includes(e.short)) continue;
 			throw e;
 		}
 	}
 }
-async function rpcOnce(method, params, timeoutMs) {
+/* ---------- 官网中转（5.2.3）----------
+ * 有的手机网络（比如部分地区的移动流量）连得上官网、却连不上自己的专属网址。托管版遇到这种情况，
+ * 自动改走「手机 → 官网 → 专属网址 → 路由器」，钥匙照样由路由器检查；10 分钟后再试一次直连，通了就换回来。
+ * 只在托管版、而且这个网址确实是官网下面的专属网址时才用（自建版不会把请求发到别处） */
+const RL = { on: false, until: 0, told: false };
+function relayFor(path) {
+	let hub = '';
+	try { hub = new URL(store.get('rp_hub') || '').hostname; } catch (e) {}
+	const h = location.hostname;
+	if (!hub || !h.endsWith('.' + hub) || h.split('.').length !== hub.split('.').length + 1) return '';
+	return 'https://' + hub + '/api/relay/' + h.slice(0, h.length - hub.length - 1) + '/' + path;
+}
+const relayOn = () => RL.on && Date.now() < RL.until;
+function relayStart() {
+	const first = !RL.on;
+	RL.on = true; RL.until = Date.now() + 600e3;
+	if (first && !RL.told) { RL.told = true; toast('你现在的网络连不上专属网址，已自动改走官网中转（速度可能慢一点）'); }
+}
+async function rpcFetch(url, body, signal) {
+	return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body, signal, cache: 'no-store' });
+}
+async function rpcOnce(method, params, timeoutMs, read) {
 	const ctl = new AbortController();
 	const timer = setTimeout(() => ctl.abort(), timeoutMs);
+	const path = 'cgi-bin/mcp/' + encodeURIComponent(token), rel = relayFor(path);
+	const body = JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', dev: store.get('rp_dev') || undefined });
 	let r;
 	try {
-		r = await fetch('../cgi-bin/mcp/' + encodeURIComponent(token), {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-			body: JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', dev: store.get('rp_dev') || undefined }),
-			signal: ctl.signal, cache: 'no-store',
-		});
+		if (rel && relayOn()) {
+			try { r = await rpcFetch(rel, body, ctl.signal); }
+			catch (e) { RL.on = false; throw e; }
+			// 不是中转回来的（比如这台路由器的托管服务停了）：别当成路由器的回答，下次改回直连
+			if (r.headers.get('x-cmcp-relay') !== '1') { RL.on = false; throw new TypeError('relay'); }
+		} else {
+			if (RL.on) RL.on = false; // 中转 10 分钟到了：先试直连
+			try { r = await rpcFetch('../' + path, body, ctl.signal); }
+			catch (e) {
+				// 直连连不上：只读的请求顺便试一下官网中转（会改东西的请求不重发，免得执行两次）
+				if (!rel || !read || navigator.onLine === false) throw e;
+				const c2 = new AbortController(), t2 = setTimeout(() => c2.abort(), Math.min(timeoutMs, 15000));
+				try { r = await rpcFetch(rel, body, c2.signal); } catch (x) { throw e; } finally { clearTimeout(t2); }
+				if (r.headers.get('x-cmcp-relay') !== '1') throw e;
+				relayStart();
+			}
+		}
 	} catch (e) {
 		if (e.name === 'AbortError') throw new OfflineError('请求超时：路由器太久没回应', '超时');
 		if (navigator.onLine === false) throw new OfflineError('你的手机现在没联网', '手机没网');
@@ -603,10 +637,17 @@ async function refresh(quiet) {
 					setStatus(false, '手机网络问题');
 					if (homeOff()) offText(`Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 ${pxAct()?.name || '代理插件'} 正在重启。稍后下拉刷新就好。下面是上次的数据。`);
 				}
-			}).catch(() => {
+			}).catch(async () => {
 				if (!netErr) return;
-				setStatus(false, '手机网络问题');
-				if (homeOff()) offText(`路由器和 Cloudflare 都连不上：多半是你的手机现在没网或网络不稳。${pxAct() ? '如果手机连着家里这台路由器的 Wi-Fi，也可能是 ' + pxAct().name + ' 正在重启，或者代理节点出了问题（面板会在几分钟内自动改走直连）；' : ''}急的话先换成手机流量打开。下面是上次的数据。`);
+				// 专属网址和云端都连不上：查一下是手机没网，还是连不上 Cloudflare，还是只有这个网址连不上
+				const dg = await netDiag().catch(() => ({}));
+				const home = pxAct() ? '如果手机连着家里这台路由器的 Wi-Fi，也可能是 ' + pxAct().name + ' 正在重启或代理节点出了问题（面板会在几分钟内自动改走直连）。' : '';
+				let st = '手机网络问题', t;
+				if (dg.official) { st = '网址连不上'; t = `手机能打开官网，但连不上你的专属网址，官网中转也没连上路由器。${home}可以先换个网络（Wi-Fi 和手机流量换一下）再试；一直这样的话，在官网「问题反馈」里告诉我们。`; }
+				else if (dg.cn) { st = '连不上 Cloudflare'; t = `你的手机有网，但连不上 Cloudflare（官网和专属网址都在 Cloudflare 上）。有些地区的运营商访问 Cloudflare 会时通时不通：换个网络（Wi-Fi 和手机流量换一下），或者开一下飞行模式再关掉，通常就好了。${home}`; }
+				else t = `你的手机现在好像没网（连国内网站也打不开）：检查一下 Wi-Fi 或手机流量。${home}`;
+				setStatus(false, st);
+				if (homeOff()) offText(t + '下面是上次的数据。');
 			});
 		} else if (/连不上|超时/.test(e.message)) setStatus(false, '离线');
 		if (!quiet) toast(e.message, true);

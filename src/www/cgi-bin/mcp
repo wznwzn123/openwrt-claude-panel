@@ -18,6 +18,9 @@ function shq(s) {
 	return "'" + replace('' + s, "'", "'\\''") + "'";
 }
 
+// 这次请求是谁（托管版按手机钥匙认）：在最前面声明，后面所有模块都能用；在 26-backup.uc 里赋值
+let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [];
+
 function sh(cmd) {
 	let p = popen('export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ' + cmd + ' 2>&1', 'r');
 	if (!p)
@@ -643,11 +646,11 @@ T.device_list = function() {
 		let mac = lc(p[1]);
 		seen[mac] = 1;
 		push(out, sprintf('%s %s | %s | %s | %s', arp[mac] ? '●' : '○', p[2], mac,
-			p[3] != '*' ? p[3] : (names[mac] ?? '(未知)'), arp[mac]?.dev ?? '-'));
+			CL.dev_label(mac, p[3] != '*' ? p[3] : names[mac]) ?? '(未知)', arp[mac]?.dev ?? '-'));
 	}
 	for (let mac, e in arp) {
 		if (seen[mac]) continue;
-		push(out, sprintf('● %s | %s | %s | %s', e.ip, mac, names[mac] ?? '(静态 IP / 无 DHCP 记录)', e.dev));
+		push(out, sprintf('● %s | %s | %s | %s', e.ip, mac, CL.dev_label(mac, names[mac]) ?? '(静态 IP / 无 DHCP 记录)', e.dev));
 	}
 	return join('\n', out);
 };
@@ -1064,12 +1067,31 @@ P.groups = function() {
 	return { groups: out };
 };
 
+// 静态分配里起的名字：MAC → 名字
+function static_names() {
+	let cur = {}, out = {};
+	for (let l in split(sh("uci -q show dhcp | grep -E '\\.(mac|name)='").out, '\n')) {
+		let m = match(l, /^dhcp\.([^.]+)\.(mac|name)='?([^']*)'?$/);
+		if (!m) continue;
+		cur[m[1]] ??= {}; cur[m[1]][m[2]] = m[3];
+	}
+	for (let s in cur) if (cur[s].mac && cur[s].name) for (let mm in split(lc(cur[s].mac), ' ')) out[mm] = cur[s].name;
+	return out;
+}
 function lease_map() {
-	let names = {};
+	let names = {}, st = static_names();
 	for (let l in split(trim(readfile('/tmp/dhcp.leases') ?? ''), '\n')) {
 		let p = split(l, ' ');
-		if (length(p) >= 4) names[p[2]] = { mac: lc(p[1]), name: p[3] != '*' ? p[3] : null };
+		if (length(p) >= 4) names[p[2]] = { mac: lc(p[1]), name: CL.dev_label(p[1], st[lc(p[1])] ?? p[3]), orig: CL.name_clean(st[lc(p[1])] ?? p[3]) };
 	}
+	// 有的新固件（odhcpd 分配 IPv4）没有 /tmp/dhcp.leases：从 ubus 读
+	if (!length(names)) try {
+		let j = json(sh('ubus call dhcp ipv4leases 2>/dev/null').out || '{}');
+		for (let dv, x in j?.device ?? {}) for (let e in x?.leases ?? []) {
+			let mac = lc(replace(e.mac ?? '', /^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i, '$1:$2:$3:$4:$5:$6'));
+			if (e.address && match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) names[e.address] = { mac, name: CL.dev_label(mac, st[mac] ?? e.hostname), orig: CL.name_clean(st[mac] ?? e.hostname) };
+		}
+	} catch (e) {}
 	return names;
 }
 
@@ -1157,18 +1179,39 @@ P.devices = function() {
 		}
 	} catch (e) {}
 
+	// 在线多久：cmcp-traffic 每分钟记一次（Wi-Fi 设备用无线驱动报的连上时长，更准）
+	let on = CL.readj('/tmp/cmcp_online.json', {}), now = time();
 	let seen = {}, list = [];
 	function add(ip) {
 		if (seen[ip]) return;
 		seen[ip] = 1;
-		let l = leases[ip] ?? {}, a = arp[ip] ?? {};
-		push(list, { ip, mac: l.mac ?? a.mac, name: l.name, online: !!arp[ip] || !!stats[ip], iface: a.dev, stats: stats[ip] });
+		let l = leases[ip] ?? {}, a = arp[ip] ?? {}, mac = l.mac ?? a.mac, online = !!arp[ip] || !!stats[ip];
+		let since = online && mac && +on[mac] > 0 && +on[mac] <= now ? +on[mac] : null;
+		push(list, { ip, mac, name: l.name ?? (mac ? CL.dev_label(mac, null) : null), orig: l.orig ?? null, renamed: !!(mac && CL.dev_aliases()[mac]), online, since, iface: a.dev, stats: stats[ip] });
 	}
 	for (let ip in keys(leases)) add(ip);
 	for (let ip in keys(arp)) add(ip);
 	for (let ip in keys(stats)) if (match(ip, /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./)) add(ip);
 	list = sort(list, (x, y) => ((y.online ? 1 : 0) - (x.online ? 1 : 0)) || ((y.stats?.dl ?? 0) - (x.stats?.dl ?? 0)));
 	return { devices: list };
+};
+
+// 给设备改名字（按 MAC 记，路由器重启、换 IP 都还在）；名字留空就是改回原来的
+P.dev_rename = function(a) {
+	let mac = lc(trim('' + (a.mac ?? '')));
+	if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) die('设备地址不对');
+	let name = trim(replace('' + (a.name ?? ''), /[\x01-\x1f\x7f]/g, ''));
+	if (length(name) > 60) die('名字太长了，短一点（20 个字以内）');
+	let f = CL.DN_PATH, d = CL.readj(f, {});
+	if (type(d) != 'object') d = {};
+	if (length(name)) d[mac] = { name, at: time() };
+	else delete d[mac];
+	// 最多记 500 台（够用了），多了把最早改的去掉
+	let ks = keys(d);
+	if (length(ks) > 500) for (let k in slice(sort(ks, (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0)), 0, length(ks) - 500)) delete d[k];
+	writefile(f + '.tmp', sprintf('%J', d));
+	rename(f + '.tmp', f);
+	return { ok: true, mac, name: length(name) ? name : null };
 };
 
 P.connections = function(a) {
@@ -2259,6 +2302,9 @@ P.traffic = function() {
 		cur ??= {}; cur[m[1]] ??= {}; cur[m[1]][m[2]] = m[3];
 	}
 	for (let s in cur ?? {}) if (cur[s].mac && cur[s].name) for (let mm in split(lc(cur[s].mac), ' ')) names[mm] = cur[s].name;
+	// 解开被转码的名字；面板里改过名字的优先
+	for (let k in names) names[k] = CL.name_clean(names[k]) ?? names[k];
+	for (let m, x in CL.dev_aliases()) if (type(x) == 'object' && x.name) names[m] = x.name;
 	return { days, names, today: st?.day ?? null, at: st?.at ?? null };
 };
 
@@ -2501,7 +2547,7 @@ P.hub_unbind = function(a) {
  * 输对以后给这台手机发一个「手机钥匙」（存在手机浏览器里），以后每次请求都带上；没有它，光有登录密钥也进不来。
  * Claude 连接器用单独的连接器地址（config.json 的 ckey），不用登录码，但打不开面板。 */
 const DEV_PATH = ETC + '/devices.json', SEEN_PATH = '/tmp/cmcp_devseen.json', LC_PATH = '/tmp/cmcp_logincode', LCFAIL_PATH = '/tmp/cmcp_lcfail';
-let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [];
+// DEV_ID、DEV、ROLE、PERMS 在 00-base.uc 里声明（更早的模块也要用到，比如网站访问检测）
 function is_hosted() { return length(trim(readfile(ETC + '/hub.conf') ?? '')) > 0; }
 function rand_str(n) { let r = trim(sh(sprintf("tr -dc 'a-z0-9' < /dev/urandom | head -c %d", n)).out); return length(r) == n ? r : null; }
 function devs_read() { let d = null; try { d = json(readfile(DEV_PATH) ?? '{}'); } catch (e) {} return type(d) == 'object' ? d : {}; }
@@ -2597,7 +2643,7 @@ const FAM_GROUPS = {
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
-	parent: ['pause_set', 'black_setup', 'black_set'],
+	parent: ['pause_set', 'black_setup', 'black_set', 'dev_rename'],
 	proxy: ['oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；

@@ -508,11 +508,11 @@ T.device_list = function() {
 		let mac = lc(p[1]);
 		seen[mac] = 1;
 		push(out, sprintf('%s %s | %s | %s | %s', arp[mac] ? '●' : '○', p[2], mac,
-			p[3] != '*' ? p[3] : (names[mac] ?? '(未知)'), arp[mac]?.dev ?? '-'));
+			CL.dev_label(mac, p[3] != '*' ? p[3] : names[mac]) ?? '(未知)', arp[mac]?.dev ?? '-'));
 	}
 	for (let mac, e in arp) {
 		if (seen[mac]) continue;
-		push(out, sprintf('● %s | %s | %s | %s', e.ip, mac, names[mac] ?? '(静态 IP / 无 DHCP 记录)', e.dev));
+		push(out, sprintf('● %s | %s | %s | %s', e.ip, mac, CL.dev_label(mac, names[mac]) ?? '(静态 IP / 无 DHCP 记录)', e.dev));
 	}
 	return join('\n', out);
 };

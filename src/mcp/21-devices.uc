@@ -19,18 +19,39 @@ P.devices = function() {
 		}
 	} catch (e) {}
 
+	// 在线多久：cmcp-traffic 每分钟记一次（Wi-Fi 设备用无线驱动报的连上时长，更准）
+	let on = CL.readj('/tmp/cmcp_online.json', {}), now = time();
 	let seen = {}, list = [];
 	function add(ip) {
 		if (seen[ip]) return;
 		seen[ip] = 1;
-		let l = leases[ip] ?? {}, a = arp[ip] ?? {};
-		push(list, { ip, mac: l.mac ?? a.mac, name: l.name, online: !!arp[ip] || !!stats[ip], iface: a.dev, stats: stats[ip] });
+		let l = leases[ip] ?? {}, a = arp[ip] ?? {}, mac = l.mac ?? a.mac, online = !!arp[ip] || !!stats[ip];
+		let since = online && mac && +on[mac] > 0 && +on[mac] <= now ? +on[mac] : null;
+		push(list, { ip, mac, name: l.name ?? (mac ? CL.dev_label(mac, null) : null), orig: l.orig ?? null, renamed: !!(mac && CL.dev_aliases()[mac]), online, since, iface: a.dev, stats: stats[ip] });
 	}
 	for (let ip in keys(leases)) add(ip);
 	for (let ip in keys(arp)) add(ip);
 	for (let ip in keys(stats)) if (match(ip, /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./)) add(ip);
 	list = sort(list, (x, y) => ((y.online ? 1 : 0) - (x.online ? 1 : 0)) || ((y.stats?.dl ?? 0) - (x.stats?.dl ?? 0)));
 	return { devices: list };
+};
+
+// 给设备改名字（按 MAC 记，路由器重启、换 IP 都还在）；名字留空就是改回原来的
+P.dev_rename = function(a) {
+	let mac = lc(trim('' + (a.mac ?? '')));
+	if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) die('设备地址不对');
+	let name = trim(replace('' + (a.name ?? ''), /[\x01-\x1f\x7f]/g, ''));
+	if (length(name) > 60) die('名字太长了，短一点（20 个字以内）');
+	let f = CL.DN_PATH, d = CL.readj(f, {});
+	if (type(d) != 'object') d = {};
+	if (length(name)) d[mac] = { name, at: time() };
+	else delete d[mac];
+	// 最多记 500 台（够用了），多了把最早改的去掉
+	let ks = keys(d);
+	if (length(ks) > 500) for (let k in slice(sort(ks, (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0)), 0, length(ks) - 500)) delete d[k];
+	writefile(f + '.tmp', sprintf('%J', d));
+	rename(f + '.tmp', f);
+	return { ok: true, mac, name: length(name) ? name : null };
 };
 
 P.connections = function(a) {

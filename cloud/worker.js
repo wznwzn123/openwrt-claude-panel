@@ -418,6 +418,7 @@ export default {
 		try {
 			if (env.BASE_DOMAIN) {
 				const h = new URL(req.url).hostname;
+				if (h === env.BASE_DOMAIN && new URL(req.url).pathname.startsWith('/api/relay/')) return await relay(req, env);
 				if (h === env.BASE_DOMAIN || h === 'www.' + env.BASE_DOMAIN) {
 					try { return await hubFetch(req, env); }
 					// 官网 / 开通中心出错：记到管理后台的「出错记录」里
@@ -429,6 +430,36 @@ export default {
 	},
 	async scheduled(ev, env) { if (env.BASE_DOMAIN) await hubScheduled(env); },
 };
+/* ---------- 官网中转（5.2.3）----------
+ * 有的手机网络连得上官网、却连不上自己的专属网址（各地运营商对 Cloudflare 的不同地址时通时不通）。
+ * 这时面板改走：手机 → 官网 /api/relay/子域名/… → 云端内部转给专属网址 → 隧道 → 路由器。
+ * 只转面板的两个接口（路由器接口、云端状态），只接受从这台路由器自己的专属网址打开的面板发来的请求（Origin 必须对上）；
+ * 内容原样转发（钥匙照样由路由器自己检查），不记录、不改动。 */
+const RELAY_RE = /^\/api\/relay\/([a-z0-9]{4,32})\/(cgi-bin\/mcp\/[A-Za-z0-9%_-]{8,200}|cloud\/s)$/;
+const RELAY_OK = new Map(); // 这台路由器能不能中转：缓存 5 分钟，免得每个请求都去查
+async function relay(req, env) {
+	const u = new URL(req.url), m = RELAY_RE.exec(u.pathname);
+	const host = m ? m[1] + '.' + env.BASE_DOMAIN : '';
+	const origin = req.headers.get('origin') || '';
+	const cors = { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type, accept', 'access-control-max-age': '600', 'access-control-expose-headers': 'x-cmcp-relay', vary: 'Origin' };
+	if (!m || origin !== 'https://' + host) return new Response(JSON.stringify({ error: 'not found' }), { status: 404, headers: { 'content-type': 'application/json', vary: 'Origin' } });
+	if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+	if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'method' }), { status: 405, headers: { 'content-type': 'application/json', ...cors } });
+	if (+(req.headers.get('content-length') || 0) > 4 * 1024 * 1024) return new Response(JSON.stringify({ error: '太大了' }), { status: 413, headers: { 'content-type': 'application/json', ...cors } });
+	const c = RELAY_OK.get(m[1]);
+	let okSub = c && Date.now() - c.at < 300e3 ? c.ok : null;
+	if (okSub == null) { okSub = await hubObj(env).relayOk(m[1]); RELAY_OK.set(m[1], { ok: okSub, at: Date.now() }); if (RELAY_OK.size > 5000) RELAY_OK.clear(); }
+	if (!okSub) return new Response(JSON.stringify({ error: '这台路由器的托管服务没开着' }), { status: 404, headers: { 'content-type': 'application/json', ...cors } });
+	const body = await req.arrayBuffer();
+	let r;
+	if (m[2] === 'cloud/s') r = await handle(new Request('https://' + host + '/cloud/s', { method: 'POST', headers: { 'content-type': 'application/json' }, body }), env);
+	else {
+		try { r = await fetch('https://' + host + '/' + m[2], { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json', 'x-cmcp-relay': '1' }, body, redirect: 'manual' }); }
+		catch (e) { return new Response(JSON.stringify({ error: '中转连不上路由器' }), { status: 502, headers: { 'content-type': 'application/json', ...cors } }); }
+	}
+	return new Response(r.body, { status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store', 'x-cmcp-relay': '1', ...cors } });
+}
+
 async function handle(req, env) {
 	{
 		const u = new URL(req.url);

@@ -4,11 +4,11 @@
 let devices = [], blk = { entries: [] };
 const isBlack = (d) => blk.entries.some((e) => (d.mac && e.mac === d.mac) || (!e.mac && e.ip === d.ip) || (e.ip === d.ip && d.mac && e.mac === d.mac));
 const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.devs[d.mac] : null; return `<article class="card" ${attr}="${i}">
-	<div class="sechead"><div style="min-width:0"><b style="font-size:16px;display:block" class="ell">${esc(d.name || '未命名设备')}</b><div class="sub" style="font-size:12.5px">${esc(d.ip)}${d.mac ? ' · ' + esc(d.mac) : ''}</div></div>
+	<div class="sechead"><div style="min-width:0"><b style="font-size:16px;display:block" class="ell">${esc(d.name || '未命名设备')}</b><div class="sub" style="font-size:12.5px">${esc(d.ip)}${d.mac ? ' · ' + esc(d.mac) : ''}</div>${d.renamed && d.orig && d.orig !== d.name ? `<div class="sub ell" style="font-size:12px">原名：${esc(d.orig)}</div>` : ''}${d.online && d.since ? `<div class="sub" style="font-size:12px">已在线 ${esc(dur(Date.now() / 1000 - d.since))}</div>` : ''}</div>
 		<span class="pill ${pz && pz.on ? 'warnc' : isBlack(d) ? 'red' : d.online ? 'good' : ''}">${pz && pz.on ? '已暂停' : isBlack(d) ? '已拉黑' : d.online ? '在线' : '离线'}</span></div>
 	${pz ? `<div class="pzline">${pzDesc(pz)}</div>` : ''}
 	${d.stats ? `<div class="actions" style="margin-top:10px"><span class="pill">${d.stats.conns} 个连接</span>${d.stats.proxied ? `<span class="pill blue">${d.stats.proxied} 个走代理</span>` : ''}<span class="pill">↓ ${B(d.stats.dl)}</span><span class="pill">↑ ${B(d.stats.ul)}</span></div>` : ''}
-	<div class="rowbtns"><button class="btn sm" data-conns>看连接</button>${attr === 'data-i' ? `<button class="btn sm ${pz && pz.on ? 'good' : ''}" data-pause>${pz && pz.on ? '恢复 / 设置' : '暂停'}</button>` : ''}${isBlack(d) ? '<button class="btn sm good" data-unblack>解除拉黑</button>' : '<button class="btn sm danger" data-black>拉黑</button>'}</div>
+	<div class="rowbtns"><button class="btn sm" data-conns>看连接</button>${attr === 'data-i' && d.mac ? '<button class="btn sm" data-ren>改名字</button>' : ''}${attr === 'data-i' ? `<button class="btn sm ${pz && pz.on ? 'good' : ''}" data-pause>${pz && pz.on ? '恢复 / 设置' : '暂停'}</button>` : ''}${isBlack(d) ? '<button class="btn sm good" data-unblack>解除拉黑</button>' : '<button class="btn sm danger" data-black>拉黑</button>'}</div>
 </article>`; };
 async function loadDev() {
 	const [b, pz] = await Promise.all([P('black_state'), P('pause_list').catch(() => null)]);
@@ -27,10 +27,23 @@ $('dvList').addEventListener('click', (e) => {
 	const a = e.target.closest('[data-i]'); if (!a) return;
 	const d = devices[+a.dataset.i];
 	if (e.target.closest('[data-pause]')) return pauseSheet(d);
+	if (e.target.closest('[data-ren]')) return devRename(d);
 	if (e.target.closest('[data-black]')) return blackToggle(d, true, e.target.closest('button'));
 	if (e.target.closest('[data-unblack]')) return blackToggle(d, false, e.target.closest('button'));
 	$('cnFilter').value = d.ip; go('conn');
 });
+
+// 给设备改个好认的名字（按 MAC 记，换 IP、路由器重启都还在）；留空就是改回原来的名字
+async function devRename(d) {
+	const v = await promptBox('改名字', d.orig ? '原来的名字：' + d.orig + '（留空就是改回原名）' : '比如：客厅电视（留空就是改回原名）', d.renamed ? d.name || '' : '');
+	if (v === false || v == null) return;
+	if (v.length > 20) return toast('名字太长了，20 个字以内', true);
+	try {
+		await P('dev_rename', { mac: d.mac, name: v });
+		toast(v ? '改好了：' + v : '已改回原来的名字');
+		loadDev().catch(() => {});
+	} catch (e) { toast(e.message, true); }
+}
 
 /* ---------- 流量统计 ---------- */
 const TF = { r: 'today', sel: null, d: null };
@@ -353,13 +366,32 @@ try { cloud = JSON.parse(store.get('rp_cloud') || 'null'); cinfo = JSON.parse(st
 const noCloud = () => !!cinfo && cinfo.enabled === false;
 // 读云端用的钥匙：托管版有单独的面板钥匙，自建版用登录密钥
 const cloudKey = () => (cinfo && cinfo.pkey) || token;
+// 连不上时查一下是哪一段不通：官网（也在 Cloudflare 上）通不通、国内网站通不通（只看能不能连上，不读内容）
+async function netProbe(url, ms) {
+	const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 6000);
+	try { await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: c.signal }); return true; } catch (e) { return false; } finally { clearTimeout(t); }
+}
+async function netDiag() {
+	let hub = '';
+	try { hub = new URL(store.get('rp_hub') || '').origin; } catch (e) {}
+	const [official, cn] = await Promise.all([hub ? netProbe(hub + '/api/ping') : Promise.resolve(null), netProbe('https://www.baidu.com/favicon.ico')]);
+	return { official, cn };
+}
 async function cloudFetch(force) {
 	if (noCloud()) { cloud = null; cloudErr = null; return null; }
 	if (!force && cloud && Date.now() - cloudAt < 15000) return cloud;
 	cloudAt = Date.now();
 	const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 12000);
 	try {
-		const r = await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey() }), signal: ctl.signal, cache: 'no-store' });
+		const cb = JSON.stringify({ token: cloudKey() }), rel = relayFor('cloud/s');
+		const go = (url) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: cb, signal: ctl.signal, cache: 'no-store' });
+		let r;
+		if (rel && relayOn()) r = await go(rel);
+		else {
+			// 专属网址连不上：托管版试一下官网中转（见 30-core 的 relayFor）
+			try { r = await go('../cloud/s'); }
+			catch (e) { if (!rel || e.name === 'AbortError') throw e; r = await go(rel); if (r.headers.get('x-cmcp-relay') !== '1') throw e; }
+		}
 		if (!r.ok) throw new Error(r.status === 403 ? '云端密钥不对' : '云端返回 ' + r.status);
 		const j = await r.json();
 		j.synced = Date.now(); cloud = j; cloudErr = null;

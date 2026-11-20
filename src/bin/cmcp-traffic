@@ -112,4 +112,33 @@ if (first || length(fresh)) L.writej(KNOWN, known);
 if (readfile(L.D + '/off.newdev') == null) for (let d in fresh)
 	L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备'), sprintf('IP %s · MAC %s\n不认识的话，可以在面板「设备」里把它暂停上网或拉黑', d.ip, d.mac), 'newdev-' + d.mac);
 
+// 3) 每台设备在线多久（面板「设备」里显示）：第一次看到在线时记下时间，离线就清掉；
+//    Wi-Fi 设备用无线驱动报的「连上多久」（路由器重启后也准），有线设备从路由器看到它开始算
+{
+	const OF = '/tmp/cmcp_online.json';
+	let prev = L.readj(OF, {}), cur = {}, wifi = {};
+	if (type(prev) != 'object') prev = {};
+	for (let ifn in split(L.sh("iw dev 2>/dev/null | awk '$1==\"Interface\"{print $2}'"), '\n')) {
+		ifn = trim(ifn);
+		if (!match(ifn, /^[A-Za-z0-9._-]+$/)) continue;
+		let mac = null;
+		for (let l in split(L.sh('iw dev ' + L.shq(ifn) + ' station dump 2>/dev/null'), '\n')) {
+			let m = match(l, /^Station ([0-9a-fA-F:]{17})/);
+			if (m) { mac = lc(m[1]); continue; }
+			m = match(l, /connected time:\s*(\d+)\s*seconds/);
+			if (m && mac) wifi[mac] = +m[1];
+		}
+	}
+	for (let ip in devs) {
+		let d = devs[ip];
+		if (!d.mac || d.mac == '00:00:00:00:00:00') continue;
+		let alive = wifi[d.mac] != null || d.state in ['REACHABLE', 'DELAY', 'PROBE', 'STALE'];
+		if (!alive) continue;
+		let since = +prev[d.mac] > 0 ? +prev[d.mac] : t;
+		if (wifi[d.mac] != null) since = t - wifi[d.mac];
+		cur[d.mac] = since;
+	}
+	L.writej(OF, cur);
+}
+
 L.sh('rmdir /tmp/cmcp_traf.lock');

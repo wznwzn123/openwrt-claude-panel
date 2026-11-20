@@ -112,6 +112,27 @@ function ann_list(tmo) {
 	return c;
 }
 
+/* ---------- 设备名字 ----------
+ * 用户在面板里给设备改过名字的优先（按 MAC 记在 devnames.json）；
+ * DHCP 报上来的名字有的被转成 %E5%B0%8F、\345\260\217、\xe5\xb0\x8f 这种，解回原来的字 */
+const DN_PATH = replace(getenv('CLAUDE_MCP_CONF') || D + '/config.json', /\/[^\/]*$/, '') + '/devnames.json';
+let DN = null;
+function dev_aliases() { if (DN == null) { DN = readj(DN_PATH, {}); if (type(DN) != 'object') DN = {}; } return DN; }
+function oct3(s) { let n = 0; for (let i = 0; i < length(s); i++) n = n * 8 + ord(s, i) - 48; return n; }
+function name_clean(s) {
+	if (type(s) != 'string' || !length(s) || s == '*') return null;
+	if (match(s, /%[0-9A-Fa-f][0-9A-Fa-f]/)) s = replace(s, /%([0-9A-Fa-f][0-9A-Fa-f])/g, (m, h) => chr(hex(h)));
+	if (match(s, /\\[0-7][0-7][0-7]/)) s = replace(s, /\\([0-7][0-7][0-7])/g, (m, o) => chr(oct3(o)));
+	if (match(s, /\\x[0-9A-Fa-f][0-9A-Fa-f]/)) s = replace(s, /\\x([0-9A-Fa-f][0-9A-Fa-f])/g, (m, h) => chr(hex(h)));
+	s = trim(replace(s, /[\x01-\x1f\x7f]/g, ''));
+	return length(s) ? s : null;
+}
+// 显示用的名字：改过的 → 静态分配起的 → DHCP 报上来的（解码后）
+function dev_label(mac, raw) {
+	let a = dev_aliases()[lc(mac ?? '')];
+	return (type(a) == 'object' && type(a.name) == 'string' && length(a.name)) ? a.name : name_clean(raw);
+}
+
 // 局域网设备：IP → { mac, name }
 function lan_devices() {
 	let byip = {}, names = {};
@@ -124,11 +145,11 @@ function lan_devices() {
 	for (let k in names) if (names[k].mac && names[k].name) for (let mm in split(lc(names[k].mac), ' ')) st[mm] = names[k].name;
 	for (let l in split(readfile('/tmp/dhcp.leases') ?? '', '\n')) {
 		let f = split(l, ' ');
-		if (length(f) >= 4) byip[f[2]] = { mac: lc(f[1]), name: st[lc(f[1])] ?? (f[3] != '*' ? f[3] : null), lease: +f[0] };
+		if (length(f) >= 4) byip[f[2]] = { mac: lc(f[1]), name: dev_label(f[1], st[lc(f[1])] ?? f[3]), lease: +f[0] };
 	}
 	for (let l in split(sh('ip -4 neigh show dev br-lan'), '\n')) {
 		let m = match(l, /^([0-9.]+) lladdr ([0-9a-f:]+) (\S+)/);
-		if (m && !byip[m[1]]) byip[m[1]] = { mac: m[2], name: st[m[2]] ?? null, state: m[3] };
+		if (m && !byip[m[1]]) byip[m[1]] = { mac: m[2], name: dev_label(m[2], st[m[2]]), state: m[3] };
 		else if (m) byip[m[1]].state = m[3];
 	}
 	return byip;
@@ -171,4 +192,4 @@ function local_key() {
 	return k;
 }
 
-export { D, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };
+export { D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };

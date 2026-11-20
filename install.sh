@@ -397,6 +397,55 @@ ucode_fetch() {
 	UCWHY="下载的 ucode 在这个固件上跑不起来（$(echo "$out" | head -n 1 | cut -c1-120)），已经删掉了"
 	return 1
 }
+# 系统自带的 ucode 太旧（比如 21.02 时期的固件）：从 OpenWrt 官方补的新模块跟它对不上（报 ucv_resource_data 之类找不到）。
+# 这时给面板单独装一套完整的新 ucode，放在 /usr/share/claude-mcp/ucrt，只给面板自己的程序用：
+# 用系统的动态链接器指定库目录来启动（不设 LD_LIBRARY_PATH，面板调用的系统命令照样用系统自己的库），系统原有的 ucode 一个文件都不动
+UCRT=/usr/share/claude-mcp/ucrt UCW=/usr/libexec/cmcp-ucode
+uc_ld() { local l; for l in $RT/lib/ld-musl-*.so.1 $RT/lib/ld-linux*.so.* $RT/lib64/ld-linux*.so.*; do [ -e "$l" ] && { echo "${l#$RT}"; return 0; }; done; return 1; }
+# 用私有 ucode 试运行（测试时 CMCP_UCLIBX 补上测试机自己的库目录）
+uc_priv_try() { local l; l=$(uc_ld) || return 1; "$RT$l" --library-path "$RT$UCRT/lib${CMCP_UCLIBX:+:$CMCP_UCLIBX}" "$RT$UCRT/bin/ucode" -L "$RT$UCRT/lib/ucode/*.so" -L "$RT/usr/share/ucode/*.uc" -e "$UC_TRY" 2>&1; }
+uc_priv_ok() { [ -x "$RT$UCW" ] && [ -x "$RT$UCRT/bin/ucode" ] && [ "$(uc_priv_try)" = UCODE-PASS ]; }
+ucode_private() {
+	local a v t n line f s u got l
+	UCWHY=""
+	a=$(uc_arch); v=$(sed -n 's/^VER=//p' "$UC_SUMS" 2>/dev/null | head -n 1)
+	if [ -z "$a" ] || [ -z "$v" ] || ! grep -q "^$a " "$UC_SUMS" 2>/dev/null; then UCWHY="安装包里没有这个架构（${a:-认不出来}）的 ucode"; return 1; fi
+	l=$(uc_ld) || { UCWHY="找不到系统的动态链接器"; return 1; }
+	have_pkg sha256sum || { UCWHY="系统里没有 sha256sum，没法校验下载的文件"; return 1; }
+	t=$(mktemp -d /tmp/cmcp_ucp.XXXXXX 2>/dev/null) || { UCWHY="建不了临时目录"; return 1; }
+	mkdir -p "$t/root"
+	for n in libjson-c5 libubox20230523 libuci20130104 libucode20230711 ucode ucode-mod-fs ucode-mod-uci; do
+		line=$(awk -v a="$a" -v n="$n" '$1 == a && $2 == n { print $3, $4; exit }' "$UC_SUMS"); f=${line% *}; s=${line#* }
+		[ -n "$line" ] || { UCWHY="安装包里没有 $n（$a）"; rm -rf "$t"; return 1; }
+		got=0
+		for u in https://mirrors.tuna.tsinghua.edu.cn/openwrt https://mirrors.ustc.edu.cn/openwrt https://downloads.openwrt.org; do
+			curl -fsSL --connect-timeout 10 -m 180 -o "$t/$f" "$u/releases/$v/packages/$a/base/$f" 2>/dev/null || continue
+			[ "$(sha256sum "$t/$f" | cut -d' ' -f1)" = "$s" ] && { got=1; break; }
+		done
+		[ $got = 1 ] || { UCWHY="下载 $n 失败（国内镜像和 OpenWrt 官网都没下成，或者文件校验不对）"; rm -rf "$t"; return 1; }
+		mkdir -p "$t/x" && tar -xzf "$t/$f" -C "$t/x" ./data.tar.gz 2>/dev/null && tar -xzf "$t/x/data.tar.gz" -C "$t/root" 2>/dev/null \
+			|| { UCWHY="解不开下载的 $n"; rm -rf "$t"; return 1; }
+		rm -rf "$t/x" "$t/$f"
+	done
+	# 装到面板自己的目录：bin/ucode、lib/（库）、lib/ucode/（fs、uci 模块）
+	rm -rf "$RT$UCRT.new" && mkdir -p "$RT$UCRT.new/bin" "$RT$UCRT.new/lib/ucode" || { UCWHY="建不了 $UCRT"; rm -rf "$t"; return 1; }
+	cp -a "$t/root/usr/bin/ucode" "$RT$UCRT.new/bin/" && cp -a "$t/root/usr/lib/ucode/fs.so" "$t/root/usr/lib/ucode/uci.so" "$RT$UCRT.new/lib/ucode/" \
+		&& for f in "$t"/root/usr/lib/lib*.so* "$t"/root/lib/lib*.so*; do [ -e "$f" ] && cp -a "$f" "$RT$UCRT.new/lib/"; done \
+		|| { UCWHY="复制文件失败（闪存满了？）"; rm -rf "$t" "$RT$UCRT.new"; return 1; }
+	rm -rf "$t"
+	rm -rf "$RT$UCRT.old"; [ -d "$RT$UCRT" ] && mv "$RT$UCRT" "$RT$UCRT.old"; mv "$RT$UCRT.new" "$RT$UCRT"
+	local out; out=$(uc_priv_try)
+	if [ "$out" != UCODE-PASS ]; then
+		rm -rf "$RT$UCRT"; [ -d "$RT$UCRT.old" ] && mv "$RT$UCRT.old" "$RT$UCRT"
+		UCWHY="面板自带的 ucode 在这个固件上也跑不起来（$(echo "$out" | head -n 1 | cut -c1-120)），已经删掉了"
+		return 1
+	fi
+	rm -rf "$RT$UCRT.old"
+	mkdir -p "$RT${UCW%/*}"
+	printf '#!/bin/sh\n# 面板自带的 ucode（这个固件自带的太旧）：只给面板自己的程序用，系统原有的 ucode 不动\nR=%s\nexec %s --library-path "$R/lib" "$R/bin/ucode" -L "$R/lib/ucode/*.so" -L "/usr/share/ucode/*.uc" "$@"\n' "$UCRT" "$l" > "$RT$UCW.new" \
+		&& chmod 755 "$RT$UCW.new" && mv -f "$RT$UCW.new" "$RT$UCW" || { UCWHY="写不了 $UCW"; return 1; }
+	return 0
+}
 # 小闪存模式能不能用：要官方有这个架构的 cloudflared、内存够、能校验
 cfd_ram_check() {
 	local m why=""
@@ -408,9 +457,14 @@ cfd_ram_check() {
 	[ -n "$why" ] && die "$1，小闪存模式也用不了：$why。可以先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），让闪存剩 40 MB 以上再装一次"
 	return 0
 }
-[ -x /usr/bin/ucode ] || need="$need ucode"
-[ -f /usr/lib/ucode/fs.so ] || need="$need ucode-mod-fs"
-[ -f /usr/lib/ucode/uci.so ] || need="$need ucode-mod-uci"
+# 以前装过面板自带的 ucode、而且还能用：系统的 ucode 就不用管了
+UC_PRIV=0
+uc_priv_ok && UC_PRIV=1
+if [ $UC_PRIV = 0 ]; then
+	[ -x /usr/bin/ucode ] || need="$need ucode"
+	[ -f /usr/lib/ucode/fs.so ] || need="$need ucode-mod-fs"
+	[ -f /usr/lib/ucode/uci.so ] || need="$need ucode-mod-uci"
+fi
 [ -x /usr/sbin/uhttpd ] || need="$need uhttpd"
 have_pkg curl || need="$need curl"
 FREE=$(free_mb); FREE=${FREE:-0}
@@ -437,8 +491,15 @@ if [ -n "$need" ]; then
 		{ [ "$PKGERR" = crash ] || [ "$PKGERR" = nopm ] || [ -n "$oneed" ]; } && pkg_die "${uneed# }${oneed}"
 		if [ -n "$uneed" ]; then
 			warn "软件源里装不上 ucode（$(pkg_why | head -n 1 | sed 's/：$//')），改从 OpenWrt 官方下载补上（会先核对校验值，只补缺的文件）"
-			ucode_fetch || die "依赖安装失败：${uneed# }。$(pkg_why)。从 OpenWrt 官方补装也不行：$UCWHY。建议换成 ImmortalWrt、iStoreOS 或官方 OpenWrt 再装"
-			ok "ucode 已从 OpenWrt 官方补上，校验通过，试运行正常"
+			if ucode_fetch; then
+				ok "ucode 已从 OpenWrt 官方补上，校验通过，试运行正常"
+			else
+				UCWHY1=$UCWHY
+				warn "补上的 ucode 跟这个固件自带的对不上（$UCWHY1），改成给面板单独装一套完整的 ucode（系统原有的不动）"
+				ucode_private || die "依赖安装失败：${uneed# }。$(pkg_why)。从 OpenWrt 官方补装也不行：$UCWHY1；给面板单独装也不行：$UCWHY。建议换成 ImmortalWrt、iStoreOS 或官方 OpenWrt 再装"
+				UC_PRIV=1
+				ok "面板自带的 ucode 装好了，校验通过，试运行正常（只给面板用，系统原有的 ucode 没动）"
+			fi
 		fi
 	fi
 fi
@@ -485,6 +546,12 @@ done
 cp -f "$SRC/init.d/claude-mcp" "$SRC/init.d/cmcp-watchdog" /etc/init.d/
 chmod 755 /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog
 cp -f "$SRC/hotplug/90-cmcp-synced" /etc/hotplug.d/ntp/
+# 用面板自带的 ucode 时：面板的 ucode 程序改由它来跑（第一行 #!/usr/bin/ucode 换成 #!/usr/libexec/cmcp-ucode）
+if [ "$UC_PRIV" = 1 ]; then
+	for f in $WWW/cgi-bin/mcp /usr/sbin/cmcp-*; do
+		[ -f "$f" ] && head -n 1 "$f" | grep -qx '#!/usr/bin/ucode' && sed -i "1s|^#!/usr/bin/ucode\$|#!$UCW|" "$f"
+	done
+fi
 # 卸载脚本也放一份到路由器上（安装包解压在内存里，装完就删了）：以后直接运行 cmcp-uninstall
 [ -f "$SRC/../uninstall.sh" ] && cp -f "$SRC/../uninstall.sh" /usr/sbin/cmcp-uninstall && chmod 755 /usr/sbin/cmcp-uninstall
 # 小闪存模式：校验值跟着安装包走；cfd.ram 是记号（升级、体检、卸载时看）
@@ -510,7 +577,8 @@ fi
 # AI 版另外生成一个「Claude 连接器地址」的钥匙（ckey）：只给 Claude 用，打不开面板；托管版的面板要登录码，连接器不用
 CKEY=$(jsonfilter -i $D/config.json -e '@.ckey' 2>/dev/null || true)
 [ "$AI" = 1 ] && [ ${#CKEY} -lt 16 ] && CKEY=$(rnd 40)
-ucode -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV[1] == "0") c.ai = false; else delete c.ai; if (length(ARGV[2] ?? "") >= 16) c.ckey = ARGV[2]; fs.writefile(f, sprintf("%.J\n", c));' $D/config.json "$AI" "$CKEY" \
+UCX=ucode; [ "$UC_PRIV" = 1 ] && UCX=$UCW
+$UCX -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV[1] == "0") c.ai = false; else delete c.ai; if (length(ARGV[2] ?? "") >= 16) c.ckey = ARGV[2]; fs.writefile(f, sprintf("%.J\n", c));' $D/config.json "$AI" "$CKEY" \
 	|| die "写入 config.json 失败"
 # 路由器自己的小工具调用面板接口用的钥匙（托管版不用输登录码）
 [ -s $D/local.key ] || rnd 40 > $D/local.key
@@ -635,6 +703,7 @@ echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
 /etc/init.d/cron restart >/dev/null 2>&1 || true
 
 # ---------- 升级系统时保留 ----------
+[ "$UC_PRIV" = 1 ] && for p in $UCRT/ $UCW; do grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf; done
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
 	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf

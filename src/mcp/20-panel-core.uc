@@ -125,12 +125,31 @@ P.groups = function() {
 	return { groups: out };
 };
 
+// 静态分配里起的名字：MAC → 名字
+function static_names() {
+	let cur = {}, out = {};
+	for (let l in split(sh("uci -q show dhcp | grep -E '\\.(mac|name)='").out, '\n')) {
+		let m = match(l, /^dhcp\.([^.]+)\.(mac|name)='?([^']*)'?$/);
+		if (!m) continue;
+		cur[m[1]] ??= {}; cur[m[1]][m[2]] = m[3];
+	}
+	for (let s in cur) if (cur[s].mac && cur[s].name) for (let mm in split(lc(cur[s].mac), ' ')) out[mm] = cur[s].name;
+	return out;
+}
 function lease_map() {
-	let names = {};
+	let names = {}, st = static_names();
 	for (let l in split(trim(readfile('/tmp/dhcp.leases') ?? ''), '\n')) {
 		let p = split(l, ' ');
-		if (length(p) >= 4) names[p[2]] = { mac: lc(p[1]), name: p[3] != '*' ? p[3] : null };
+		if (length(p) >= 4) names[p[2]] = { mac: lc(p[1]), name: CL.dev_label(p[1], st[lc(p[1])] ?? p[3]), orig: CL.name_clean(st[lc(p[1])] ?? p[3]) };
 	}
+	// 有的新固件（odhcpd 分配 IPv4）没有 /tmp/dhcp.leases：从 ubus 读
+	if (!length(names)) try {
+		let j = json(sh('ubus call dhcp ipv4leases 2>/dev/null').out || '{}');
+		for (let dv, x in j?.device ?? {}) for (let e in x?.leases ?? []) {
+			let mac = lc(replace(e.mac ?? '', /^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i, '$1:$2:$3:$4:$5:$6'));
+			if (e.address && match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) names[e.address] = { mac, name: CL.dev_label(mac, st[mac] ?? e.hostname), orig: CL.name_clean(st[mac] ?? e.hostname) };
+		}
+	} catch (e) {}
 	return names;
 }
 

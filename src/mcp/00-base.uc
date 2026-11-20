@@ -18,6 +18,9 @@ function shq(s) {
 	return "'" + replace('' + s, "'", "'\\''") + "'";
 }
 
+// 这次请求是谁（托管版按手机钥匙认）：在最前面声明，后面所有模块都能用；在 26-backup.uc 里赋值
+let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [];
+
 function sh(cmd) {
 	let p = popen('export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ' + cmd + ' 2>&1', 'r');
 	if (!p)

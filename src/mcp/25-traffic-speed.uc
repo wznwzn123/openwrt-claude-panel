@@ -21,6 +21,9 @@ P.traffic = function() {
 		cur ??= {}; cur[m[1]] ??= {}; cur[m[1]][m[2]] = m[3];
 	}
 	for (let s in cur ?? {}) if (cur[s].mac && cur[s].name) for (let mm in split(lc(cur[s].mac), ' ')) names[mm] = cur[s].name;
+	// 解开被转码的名字；面板里改过名字的优先
+	for (let k in names) names[k] = CL.name_clean(names[k]) ?? names[k];
+	for (let m, x in CL.dev_aliases()) if (type(x) == 'object' && x.name) names[m] = x.name;
 	return { days, names, today: st?.day ?? null, at: st?.at ?? null };
 };
 

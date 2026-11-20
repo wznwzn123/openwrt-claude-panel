@@ -813,6 +813,12 @@ export class Hub extends DurableObject {
 		return { st: 200, ok: true };
 	}
 	// 路由器面板里看「哪些账号绑定了我」、移除某个账号（凭 RKEY）
+	// 官网中转（5.2.3）：这台路由器的专属网址现在能不能用（存在、没停用、没删除）
+	async relayOk(sub) {
+		if (!SUB_RE.test(String(sub || ''))) return false;
+		const d = await this.ctx.storage.get('d:' + sub);
+		return !!(d && !d.off && !d.delAt && d.dns !== null);
+	}
 	async devAccounts({ sub, rkey }) {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		const d = await this.ctx.storage.get('d:' + sub), list = [];

@@ -77,6 +77,8 @@ async function openAt(page, url) {
 		const tag = upgrade ? '【从旧版升级】' : '【新装】';
 		S.mode = 'ok'; S.old = upgrade; S.marker = 'A';
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+		// 5.2.3：连不上时面板会测一下国内网站通不通；测试里不走真实网络，按「手机也没网」处理
+		await ctx.route('https://www.baidu.com/**', (r) => r.abort('internetdisconnected'));
 		const page = await ctx.newPage();
 		page.on('pageerror', (e) => problems.push(tag + '页面错误：' + e.message));
 		const NET = []; global.NET = NET;

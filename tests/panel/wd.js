@@ -17,6 +17,8 @@ async function open(browser, opt = {}) {
 	page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 	page.on('console', (m) => { if (m.type() === 'error' && !/serviceWorker|sw\.js|Failed to load resource/.test(m.text())) problems.push('控制台：' + m.text()); });
 	const ctl = { mode: opt.mode || 'ok', cloud: opt.cloud, tablet: opt.tablet };
+	// 5.2.3：连不上时面板会测一下国内网站通不通；测试里不走真实网络，按「手机也没网」处理
+	await page.route('https://www.baidu.com/**', (r) => r.abort('internetdisconnected'));
 	await page.route('http://panel.test/**', async (route) => {
 		const u = new URL(route.request().url());
 		if (u.pathname === '/cloud/s') {
@@ -117,7 +119,7 @@ const goWd = async (page) => { await page.click('#menuBtn'); await page.waitForT
 		await page.goto('http://panel.test/panel/');
 		await page.waitForTimeout(1200);
 		ok(`[${mode}] 顶部状态显示原因`, (await txt(page, '#statusText')) === short, await txt(page, '#statusText'));
-		ok(`[${mode}] 首页说明连不上和原因`, (await txt(page, '#hHead')) === '连不上路由器' && (await txt(page, '#hDesc')).includes(key), await txt(page, '#hDesc'));
+		ok(`[${mode}] 首页说明连不上和原因`, (await txt(page, '#hHead')) === '连不上路由器' && (await txt(page, '#hDesc')).includes(mode === 'down' ? '好像没网' : key)  /* 5.2.3：手机真没网时说「好像没网」 */, await txt(page, '#hDesc'));
 		ok(`[${mode}] 首页仍显示上次的数据`, (await txt(page, '#oCfg')) === 'zou.yaml');
 		await goWd(page);
 		const b = await txt(page, '#wdBody');
@@ -230,7 +232,9 @@ const goWd = async (page) => { await page.click('#menuBtn'); await page.waitForT
 		const { page, ctx } = await open(browser, { mode: 'down', cloud: 'down', storage: { rp_page: 'home', rp_ov: JSON.stringify(respond('panel/overview', {})) } });
 		await page.goto('http://panel.test/panel/');
 		await page.waitForTimeout(2500);
-		ok('[手机网络] 都连不上时提示手机没网', (await txt(page, '#hDesc')).includes('路由器和 Cloudflare 都连不上') && (await txt(page, '#statusText')) === '手机网络问题', await txt(page, '#hDesc'));
+		ok('[手机网络] 都连不上时马上标出「手机网络问题」', (await txt(page, '#statusText')) === '手机网络问题', await txt(page, '#statusText'));
+		await page.waitForTimeout(6500);
+		ok('[手机网络] 都连不上时提示手机没网', (await txt(page, '#hDesc')).includes('好像没网') && (await txt(page, '#statusText')) === '手机网络问题', await txt(page, '#hDesc'));
 		await ctx.close();
 	}
 	{

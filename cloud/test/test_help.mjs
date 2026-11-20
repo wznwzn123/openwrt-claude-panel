@@ -1,5 +1,7 @@
 // 官网「服务状态」(/status) 和「常见问题」(/help)：公开接口、后台增删改、搜不到的词、每小时检查
 import { load, memStorage } from './load.mjs';
+import { FAQ_DEFAULT } from '../faq-default.js';
+const N = FAQ_DEFAULT.length; // 默认条目数（加了新的常见问题，测试跟着变）
 const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
 let ghOk = true;
@@ -30,7 +32,7 @@ for (const p of ['/status', '/help']) {
 /* ---------- 常见问题：公开 ---------- */
 {
 	const r = await req('/api/help');
-	ok('[常见问题] 没改过时用默认内容（34 条，7 类）', r.st === 200 && r.j.items.length === 34 && r.j.cats.length === 7, r.j && r.j.items.length);
+	ok('[常见问题] 没改过时用默认内容（' + N + ' 条，7 类）', r.st === 200 && r.j.items.length === N && r.j.cats.length === 7, r.j && r.j.items.length);
 	ok('[常见问题] 每条都有编号、分类、问题、回答', r.j.items.every((x) => x.id && x.cat && x.q && x.a && r.j.cats.some((c) => c.k === x.cat)));
 	ok('[常见问题] 编号不重复', new Set(r.j.items.map((x) => x.id)).size === r.j.items.length);
 	ok('[常见问题] 浏览器缓存 60 秒', /max-age=60/.test(r.r.headers.get('cache-control') || ''));
@@ -41,14 +43,14 @@ for (const p of ['/status', '/help']) {
 {
 	ok('[后台] 没有管理员密钥：读不到、改不了', (await req('/api/admin/faq')).st === 401 && (await req('/api/admin/faq', { body: { q: 'x', a: 'y' } })).st === 401);
 	const g = await req('/api/admin/faq', { headers: ADM });
-	ok('[后台] 读到默认内容，并标着「默认」', g.st === 200 && g.j.dflt === true && g.j.items.length === 34);
+	ok('[后台] 读到默认内容，并标着「默认」', g.st === 200 && g.j.dflt === true && g.j.items.length === N);
 	const bad = await req('/api/admin/faq', { body: { q: '', a: 'x' }, headers: ADM });
 	ok('[后台] 问题或回答空着：不让存', bad.st === 400);
 	const add = await req('/api/admin/faq', { body: { q: '支持 IPv6 吗？', a: '支持。', cat: 'install', kw: 'ipv6' }, headers: ADM });
 	ok('[后台] 加一条', add.st === 200 && add.j.item.id, JSON.stringify(add.j));
 	const id = add.j.item.id;
 	let pub = (await req('/api/help')).j;
-	ok('[后台] 加完官网上就有（35 条），排在「安装」的最后', pub.items.length === 35 && pub.items.filter((x) => x.cat === 'install').slice(-1)[0].id === id);
+	ok('[后台] 加完官网上就有（' + (N + 1) + ' 条），排在「安装」的最后', pub.items.length === N + 1 && pub.items.filter((x) => x.cat === 'install').slice(-1)[0].id === id);
 	await req('/api/admin/faq/' + id + '/move', { body: { dir: 'up' }, headers: ADM });
 	pub = (await req('/api/help')).j; const ins = pub.items.filter((x) => x.cat === 'install');
 	ok('[后台] 往前挪一位（只在同一类里挪）', ins[ins.length - 2].id === id);
@@ -67,7 +69,7 @@ for (const p of ['/status', '/help']) {
 	ok('[后台] 操作记录里有：加、改、删', ['faq_new', 'faq_edit', 'faq_del'].every((k) => log.includes(k)), log.slice(0, 8).join(','));
 	await req('/api/admin/faq/reset', { body: {}, headers: ADM });
 	const af = (await req('/api/admin/faq', { headers: ADM })).j;
-	ok('[后台] 恢复默认：回到 34 条，自己加的没了', af.dflt === true && af.items.length === 34 && !af.items.some((x) => x.id === id));
+	ok('[后台] 恢复默认：回到 ' + N + ' 条，自己加的没了', af.dflt === true && af.items.length === N && !af.items.some((x) => x.id === id));
 }
 
 /* ---------- 搜不到的词 ---------- */

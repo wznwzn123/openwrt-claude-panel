@@ -3,6 +3,8 @@
 import http from 'http';
 import { createRequire } from 'module';
 import { load, memStorage } from './load.mjs';
+import { FAQ_DEFAULT } from '../faq-default.js';
+const N = FAQ_DEFAULT.length;
 const { chromium } = createRequire(import.meta.url)('playwright');
 const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
@@ -68,7 +70,7 @@ const overflow = (p) => p.evaluate(() => document.documentElement.scrollWidth - 
 {
 	const p = await page(390, 844, true);
 	await p.goto(B + '/help'); await p.waitForSelector('.hp-q');
-	ok('[常见问题] 全部 34 条都在', (await p.locator('.hp-q').count()) === 34);
+	ok('[常见问题] 全部 ' + N + ' 条都在', (await p.locator('.hp-q').count()) === N);
 	await p.locator('.hp-cats button', { hasText: '更新' }).click(); await W(150);
 	ok('[常见问题] 按分类看', (await p.locator('.hp-q').count()) === 3 && (await p.locator('.hp-grp h2').textContent()) === '更新');
 	await p.locator('.hp-cats button', { hasText: '全部' }).click();
@@ -87,7 +89,7 @@ const overflow = (p) => p.evaluate(() => document.documentElement.scrollWidth - 
 	const ml = await api('/api/admin/faqmiss');
 	ok('[常见问题] 搜不到的词记到后台', ml.list.some((x) => x.q === '能不能投屏到电视'), JSON.stringify(ml.list));
 	await p.click('#hpClear'); await W(200);
-	ok('[常见问题] 清空后回到全部', (await p.locator('.hp-q').count()) === 34);
+	ok('[常见问题] 清空后回到全部', (await p.locator('.hp-q').count()) === N);
 	await p.locator('#fam-perm .hp-q').click();
 	ok('[常见问题] 点问题展开回答', (await p.locator('#a-fam-perm').getAttribute('hidden')) === null);
 	await p.evaluate(() => { location.hash = 'login-code'; }); await W(300);

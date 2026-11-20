@@ -269,6 +269,10 @@ async function busy(btn, fn, label) {
 	else loadOn();
 	try { return await fn(); } catch (e) { handleErr(e); } finally { if (btn) { btn.disabled = false; btn.innerHTML = old; } else loadOff(); }
 }
+// 连不上时的云端查询、网络诊断要几秒：回来时已经重新连上了，就不再把状态改回「连不上」
+const isOnline = () => $('statusDot').classList.contains('on');
+// 网络诊断的结果留 30 秒：离线时首页每几秒刷新一次，不用每次都重新测，状态也不会来回跳
+let DG = { at: 0, v: null };
 function setStatus(ok, text) {
 	$('statusDot').className = 'dot ' + (ok ? 'on' : 'off');
 	$('statusText').textContent = text;
@@ -627,7 +631,7 @@ async function refresh(quiet) {
 			// 只有「根本连不上 / 超时」才可能是手机网络的问题；收到 Cloudflare 的 530/502 说明手机网络是通的
 			const netErr = ['离线', '超时', '手机没网'].includes(e.short);
 			cloudFetch(Date.now() - cloudAt > 10000).then((c) => {
-				if (!c) return;
+				if (!c || isOnline()) return;
 				const l = cloudLine(c);
 				if (l) {
 					setStatus(false, c.label[c.s.state]);
@@ -638,9 +642,15 @@ async function refresh(quiet) {
 					if (homeOff()) offText(`Cloudflare 显示路由器一切正常（${cAgo(c, c.r.last)}前刚报告过），是你的手机到 Cloudflare 这一段不通：手机网络不稳，或者手机连着家里这台路由器的 Wi-Fi 而 ${pxAct()?.name || '代理插件'} 正在重启。稍后下拉刷新就好。下面是上次的数据。`);
 				}
 			}).catch(async () => {
-				if (!netErr) return;
-				// 专属网址和云端都连不上：查一下是手机没网，还是连不上 Cloudflare，还是只有这个网址连不上
-				const dg = await netDiag().catch(() => ({}));
+				if (!netErr || isOnline()) return;
+				// 专属网址和云端都连不上：先马上标出来，再查一下是手机没网，还是连不上 Cloudflare，还是只有这个网址连不上（最多几秒），查完换成更具体的说法
+				let dg = Date.now() - DG.at < 30e3 ? DG.v : null;
+				if (!dg) {
+					setStatus(false, '手机网络问题');
+					dg = await netDiag().catch(() => ({}));
+					DG = { at: Date.now(), v: dg };
+					if (isOnline()) return;
+				}
 				const home = pxAct() ? '如果手机连着家里这台路由器的 Wi-Fi，也可能是 ' + pxAct().name + ' 正在重启或代理节点出了问题（面板会在几分钟内自动改走直连）。' : '';
 				let st = '手机网络问题', t;
 				if (dg.official) { st = '网址连不上'; t = `手机能打开官网，但连不上你的专属网址，官网中转也没连上路由器。${home}可以先换个网络（Wi-Fi 和手机流量换一下）再试；一直这样的话，在官网「问题反馈」里告诉我们。`; }

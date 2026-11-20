@@ -644,7 +644,7 @@ async function refresh(quiet) {
 				const home = pxAct() ? '如果手机连着家里这台路由器的 Wi-Fi，也可能是 ' + pxAct().name + ' 正在重启或代理节点出了问题（面板会在几分钟内自动改走直连）。' : '';
 				let st = '手机网络问题', t;
 				if (dg.official) { st = '网址连不上'; t = `手机能打开官网，但连不上你的专属网址，官网中转也没连上路由器。${home}可以先换个网络（Wi-Fi 和手机流量换一下）再试；一直这样的话，在官网「问题反馈」里告诉我们。`; }
-				else if (dg.cn) { st = '连不上 Cloudflare'; t = `你的手机有网，但连不上 Cloudflare（官网和专属网址都在 Cloudflare 上）。有些地区的运营商访问 Cloudflare 会时通时不通：换个网络（Wi-Fi 和手机流量换一下），或者开一下飞行模式再关掉，通常就好了。${home}`; }
+				else if (dg.cn) { st = '线路不通'; t = `你的手机有网，但连不上 Cloudflare（官网和专属网址都在 Cloudflare 上）。有些地区的运营商访问 Cloudflare 会时通时不通：换个网络（Wi-Fi 和手机流量换一下），或者开一下飞行模式再关掉，通常就好了。${home}`; }
 				else t = `你的手机现在好像没网（连国内网站也打不开）：检查一下 Wi-Fi 或手机流量。${home}`;
 				setStatus(false, st);
 				if (homeOff()) offText(t + '下面是上次的数据。');

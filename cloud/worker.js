@@ -1,7 +1,7 @@
 // 路由器云端监测（Cloudflare Worker + Durable Object）
 // - 路由器每分钟发心跳（带看门狗状态），平板（证人）每分钟发心跳
-// - 省用量：一切正常、状态没变时，心跳最多每 3 分钟交给 Durable Object 一次（每叫醒一次大约按 10 秒计费）；
-//   状态一变（宽带、DNS、隧道、OpenClash 出问题）马上交。隧道探测在收心跳时顺便做；不正常时才每分钟定时检查
+// - 省用量：一切正常、状态没变时，心跳最多每 3 分钟交给 Durable Object 一次（Durable Object 按「醒着的时间」计费，等对方回话也算）；
+//   状态一变（宽带、DNS、隧道、OpenClash 出问题）马上交。隧道探测在收心跳时由外层 Worker 做；心跳断了才定时检查，断得越久查得越少
 // - 根据「谁还在报告」判断离线原因，变化时记一条事件
 // - 面板在路由器断线时也能从这里读到实时情况（路由 <你的面板域名>/cloud/*，在隧道之前就被 Cloudflare 接住）
 import { DurableObject } from 'cloudflare:workers';
@@ -14,6 +14,16 @@ const BEAT_GAP = 170e3; // 一切正常时，心跳最多每 3 分钟（隔 170 
 const STALE = 300e3; // 超过 5 分钟没收到交过来的心跳算失联（正常时最多隔 4 分钟交一次）
 const PROBE_FAILS = 2; // 隧道连续 2 次探测失败才算断
 const MAX_EV = 300;
+// 心跳断了多久 → 隔多久定时检查一次（断得越久查得越少，路由器回来靠心跳马上恢复）
+export const gapFor = (gone) => (gone < 15 * 60e3 ? 60e3 : gone < 3600e3 ? 180e3 : gone < 6 * 3600e3 ? 600e3 : 1800e3);
+// 探测隧道：只看状态码，回包不读、马上释放（不让连接挂着）
+export async function probeFetch(url, now) {
+	try {
+		const res = await fetch(url + '?cf=' + now, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(8000) });
+		try { await res.body?.cancel(); } catch (e) {}
+		return res.status;
+	} catch (e) { return 0; }
+}
 
 const LABEL = {
 	ok: '一切正常',
@@ -255,27 +265,48 @@ export class Watch extends DurableObject {
 			want = who === 'r' ? c.rkey : c.tkey;
 		} else want = who === 'r' ? this.env.RKEY : this.env.TKEY;
 		if (!safeEq(String(key || ''), String(want || ''))) return 'bad';
-		await this.beat(who, rep);
-		return 'ok';
+		return (await this.beat(who, rep)) || 'ok';
 	}
-	async probeNow(db, now) {
-		let probeUrl = this.env.PROBE_URL;
-		if (this.env.BASE_DOMAIN) { const c = await this.getCfg(); if (!c || c.off) return false; probeUrl = c.probe; }
-		if (!probeUrl) return true;
-		let code = 0;
-		try {
-			const res = await fetch(probeUrl + '?cf=' + now, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(10000) });
-			code = res.status;
-		} catch (e) { code = 0; }
+	// 这台路由器的隧道探测地址：null = 被封禁或已删除（不再检查），'' = 没有可探测的地址
+	async probeUrl() {
+		if (this.env.BASE_DOMAIN) { const c = await this.getCfg(); if (!c || c.off) return null; return c.probe || ''; }
+		return this.env.PROBE_URL || '';
+	}
+	async recordProbe(db, at, code) {
 		const p = db.probe || { fail: 0 };
-		db.probe = code === 200 ? { at: now, code, fail: 0 } : { at: now, code, fail: (p.fail || 0) + 1, firstFail: p.fail ? p.firstFail : now };
+		db.probe = code === 200 ? { at, code, fail: 0 } : { at, code, fail: (p.fail || 0) + 1, firstFail: p.fail ? p.firstFail : at };
 		await this.ctx.storage.put('probe', db.probe);
+	}
+	// 定时检查里的探测（心跳断了的时候才会走到这里）
+	async probeNow(db, now) {
+		const url = await this.probeUrl();
+		if (url === null) return false;
+		if (!url) return true;
+		await this.recordProbe(db, now, await probeFetch(url, now));
 		return true;
 	}
-	// 下一次定时检查：一切正常时，只在心跳断了的那一刻才检查（平时不另外叫醒）；不正常时每分钟检查一次
+	// 收心跳时的探测由外层 Worker 去做（省用量：Durable Object 等对方回话的时间也计费），做完把结果交回来
+	async probeIn(at, code) {
+		const now = Date.now();
+		at = Math.min(now, Math.max(now - 60e3, +at || now));
+		const db = await this.load();
+		if (db.probe && db.probe.at > at) return; // 已经有更新的结果
+		await this.recordProbe(db, at, +code || 0);
+		db.s = await this.evaluate(db, now);
+		await this.schedule(db, now);
+	}
+	// 下一次定时检查（省用量：只在需要的时候叫醒）
+	// - 路由器还在发心跳（正常、或有小问题、或隧道断了）：只在「心跳断了」那一刻检查；恢复靠心跳本身马上报上来
+	// - 隧道刚失败 1 次：1 分钟后再探一次确认
+	// - 心跳断了：刚断的 15 分钟内每分钟检查（尽快判断是断电还是断网、发提醒），之后逐步放慢：1 小时内每 3 分钟、6 小时内每 10 分钟、再往后每 30 分钟；
+	//   路由器一回来，第一次心跳就马上恢复正常节奏，不用等定时检查
 	async schedule(db, now) {
-		const healthy = !!(db.s && db.s.state === 'ok' && db.r && now - db.r.last < STALE && (!db.probe || db.probe.fail === 0));
-		await this.ctx.storage.setAlarm(healthy ? Math.max(now + 60e3, db.r.last + STALE + 5e3) : now + 60e3);
+		const last = (db.r && db.r.last) || 0;
+		let at;
+		if (db.probe && db.probe.fail > 0 && db.probe.fail < PROBE_FAILS) at = now + 60e3;
+		else if (last && now - last < STALE) at = Math.max(now + 60e3, last + STALE + 5e3);
+		else at = now + gapFor(now - (last || (db.s && db.s.since) || now));
+		await this.ctx.storage.setAlarm(at);
 	}
 	async beat(who, rep) {
 		const now = Date.now();
@@ -287,10 +318,18 @@ export class Watch extends DurableObject {
 			db.t = { last: now, first: (db.t && db.t.first) || now };
 			await this.ctx.storage.put('t', db.t);
 		}
-		// 隧道探测顺便做（正常时每 3 分钟左右一次），再马上更新判断
-		if (who === 'r' && (!db.probe || db.probe.fail > 0 || now - db.probe.at > BEAT_GAP - 20e3)) await this.probeNow(db, now);
-		db.s = await this.evaluate(db, now);
-		await this.schedule(db, now);
+		// 隧道探测（正常时每 3 分钟左右一次，失败过就每次都探）：交给外层 Worker 去做，结果经 probeIn 交回来再判断
+		let out;
+		if (who === 'r' && (!db.probe || db.probe.fail > 0 || now - db.probe.at > BEAT_GAP - 20e3)) {
+			const url = await this.probeUrl();
+			if (url) out = { probe: url, at: now };
+		}
+		// 万一探测结果没交回来：1 分钟内照样有定时检查兜底（交回来时会重新排）
+		if (out) { const a = await this.ctx.storage.getAlarm(); if (!a || a > now + 60e3) await this.ctx.storage.setAlarm(now + 60e3); }
+		if (!out) {
+			db.s = await this.evaluate(db, now);
+			await this.schedule(db, now);
+		}
 		// 托管模式：每 6 小时告诉开通中心「这台还在用」（90 天没上线的会被回收）
 		if (who === 'r' && this.env.BASE_DOMAIN && this.env.H) {
 			const c = await this.getCfg();
@@ -300,6 +339,7 @@ export class Watch extends DurableObject {
 				try { await this.env.H.get(this.env.H.idFromName('hub')).seen(c.sub, now); } catch (e) {}
 			}
 		}
+		return out;
 	}
 	async alarm() {
 		const now = Date.now();
@@ -396,7 +436,9 @@ async function beatRoute(req, env, u, who, key) {
 	}
 	const r = await w.beatIn(who, key, rep);
 	if (r === 'off') return J({ error: 'not found' }, 404);
-	if (r !== 'ok') return J({ error: 'bad key' }, 403);
+	if (r !== 'ok' && !(r && r.probe)) return J({ error: 'bad key' }, 403);
+	// 钥匙核对过了、轮到探测隧道：在这里（Durable Object 外面）探，结果交回去判断
+	if (r.probe) { const code = await probeFetch(r.probe, r.at); try { await w.probeIn(r.at, code); } catch (e) {} }
 	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) { why += ',puterr:' + String(e && e.message || e).slice(0, 80); } }
 	return J({ ok: true, m: 0, why });
 }

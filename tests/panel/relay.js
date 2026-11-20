@@ -37,7 +37,8 @@ async function scene(browser, opt) {
 		return route.abort('connectionfailed');
 	});
 	await page.goto(ORIGIN + '/panel/?p=home'); await page.waitForTimeout(opt.wait || 9000);
-	const out = { st, cnt: JSON.stringify(st), desc: await page.textContent('#hDesc').catch(() => ''), status: await page.textContent('#stText').catch(async () => await page.textContent('#statusPill').catch(() => '')), toast: await page.textContent('#toast').catch(() => '') };
+	const titleW = await page.evaluate(() => document.getElementById('pageTitle').getBoundingClientRect().width).catch(() => 0);
+	const out = { titleW, st, cnt: JSON.stringify(st), desc: await page.textContent('#hDesc').catch(() => ''), status: await page.textContent('#stText').catch(async () => await page.textContent('#statusPill').catch(() => '')), toast: await page.textContent('#toast').catch(() => '') };
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'relay-' + opt.tag + '.png') });
 	await ctx.close();
 	return out;
@@ -55,6 +56,7 @@ async function scene(browser, opt) {
 	// 2) 中转也不通，官网打不开，国内网站能开：说「连不上 Cloudflare」
 	r = await scene(browser, { tag: 'cf', name: '连不上CF', direct: false, relay: false, official: false, cn: true, wait: 30000 });
 	ok('[诊断] 手机有网但连不上 Cloudflare：说清楚，不说成手机没网', /连不上 Cloudflare/.test(r.desc) && !/好像没网/.test(r.desc), r.desc + ' ' + r.cnt);
+	ok('[布局] 顶部状态标签不把路由器名字挤成一两个字', r.titleW >= 48 && String(r.status).trim().length <= 6, r.titleW + 'px ' + r.status);
 	// 3) 都打不开：说手机没网
 	r = await scene(browser, { tag: 'nonet', name: '没网', direct: false, relay: false, official: false, cn: false, wait: 30000 });
 	ok('[诊断] 连国内网站都打不开：说手机好像没网', /好像没网/.test(r.desc), r.desc);

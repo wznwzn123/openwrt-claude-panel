@@ -374,7 +374,7 @@ async function netProbe(url, ms) {
 async function netDiag() {
 	let hub = '';
 	try { hub = new URL(store.get('rp_hub') || '').origin; } catch (e) {}
-	const [official, cn] = await Promise.all([hub ? netProbe(hub + '/api/ping') : Promise.resolve(null), netProbe('https://www.baidu.com/favicon.ico')]);
+	const [official, cn] = await Promise.all([hub ? netProbe(hub + '/api/ping') : Promise.resolve(null), netProbe('https://www.baidu.com/robots.txt')]);
 	return { official, cn };
 }
 async function cloudFetch(force) {

@@ -30,7 +30,7 @@ ok('隧道探测也是 3 分钟左右一次', probes === 2, probes);
 ok('定时检查跟着往后推', storage.alarmAt - T >= 300e3);
 T += 30e3; await call('/cloud/beat/r/rk', { ...OK, dns: 'fail' });
 ok('状态变了（DNS 出问题）：马上交，马上判断', wakes === 3 && (await storage.get('s')).state === 'partial', (await storage.get('s')).state);
-ok('不正常时每分钟检查一次', storage.alarmAt - T === 60e3, (storage.alarmAt - T) / 1000);
+ok('有小问题但心跳还在：不另外每分钟叫醒，只在心跳断了那一刻检查（省用量；恢复靠心跳马上报上来）', storage.alarmAt - T >= 270e3 && storage.alarmAt - T <= 305e3, (storage.alarmAt - T) / 1000);
 T += 30e3; await call('/cloud/beat/r/rk', OK);
 ok('恢复正常：也马上交', wakes === 4 && (await storage.get('s')).state === 'ok');
 T += 20e3; r = await call('/cloud/beat/r/WRONG', OK);
@@ -56,6 +56,42 @@ ok('恢复后又回到「平时不另外叫醒」', storage.alarmAt - T >= 300e3
 // 粗算：一天 1440 次心跳，状态一直没变时叫醒几次
 const w1 = wakes; for (let i = 0; i < 1440; i++) { T += 60e3; await call('/cloud/beat/r/rk', { ...OK, up: i }); }
 ok('一切正常的一天：叫醒约 480 次（原来 1440 次心跳 + 1440 次定时检查）', wakes - w1 >= 470 && wakes - w1 <= 490, wakes - w1);
+
+// 省用量：探测在 Durable Object 外面做，回包马上释放
+let inDO = 0, probedInDO = 0, cancelled = 0;
+for (const k of ['beatIn', 'probeIn']) { const f = obj[k].bind(obj); obj[k] = async (...a) => { inDO++; try { return await f(...a); } finally { inDO--; } }; }
+globalThis.fetch = async (u) => {
+	if (String(u).startsWith('https://x/p')) { probes++; if (inDO) probedInDO++; const body = new ReadableStream({ pull(c) { c.enqueue(new Uint8Array(10)); }, cancel() { cancelled++; } }); return new Response(body, { status: probeCode }); }
+	return new Response('{}');
+};
+C.clear(); T += 200e3; const p0 = probes;
+await call('/cloud/beat/r/rk', OK);
+ok('收心跳时的隧道探测在 Durable Object 外面做（等路由器回话的时间不算 Durable Object 用量）', probes === p0 + 1 && probedInDO === 0, probedInDO);
+ok('探测只看状态码，回包马上释放', cancelled === 1, cancelled);
+ok('探测结果交回去后照样判断、排下一次检查', (await storage.get('s')).state === 'ok' && (await storage.get('probe')).at === T && storage.alarmAt - T >= 300e3);
+ok('过期的探测结果（比已有的还旧）不会覆盖', (await obj.probeIn(T - 120e3, 530), (await storage.get('probe')).fail === 0));
+
+// 长时间断线：查得越来越少
+probeCode = 530; const off0 = T; let n = 0;
+while (T - off0 < 24 * 3600e3) { T = storage.alarmAt; await obj.alarm(); n++; }
+const st = await storage.get('s');
+ok('断线一整天：判断为断电或断网', ['down', 'power', 'net'].includes(st.state), st.state);
+ok('断线一整天：定时检查约 90 次（原来每分钟一次是 1440 次）', n >= 70 && n <= 110, n);
+ok('断了 6 小时以上：每 30 分钟查一次', storage.alarmAt - T === 1800e3, (storage.alarmAt - T) / 1000);
+ok('刚断的 15 分钟内照样每分钟检查（断电提醒不晚发）', mod.gapFor(5 * 60e3) === 60e3 && mod.gapFor(14 * 60e3) === 60e3 && mod.gapFor(30 * 60e3) === 180e3 && mod.gapFor(2 * 3600e3) === 600e3);
+probeCode = 200; C.clear(); const ev0 = ((await storage.get('ev')) || []).length;
+await call('/cloud/beat/r/rk', OK);
+ok('断了一天后来电：第一次心跳就恢复「一切正常」，不用等定时检查', (await storage.get('s')).state === 'ok');
+ok('恢复时只记一条「恢复正常」，不会多记一条「隧道断开」', ((await storage.get('ev')) || []).slice(0, ((await storage.get('ev')) || []).length - ev0).every((e) => !/隧道断开/.test(e.msg)));
+ok('恢复后又回到「平时不另外叫醒」', storage.alarmAt - T >= 300e3);
+// 探测结果万一没交回来：1 分钟内有定时检查兜底
+const pi = obj.probeIn; obj.probeIn = async () => { throw new Error('x'); };
+C.clear(); T += 200e3; probeCode = 200; await call('/cloud/beat/r/rk', OK);
+ok('探测结果没交回来：1 分钟内有定时检查兜底', storage.alarmAt - T <= 60e3, (storage.alarmAt - T) / 1000);
+obj.probeIn = pi;
+// 心跳钥匙不对时不探测（不能被人拿来刷路由器）
+const p1 = probes; C.clear(); T += 200e3; await call('/cloud/beat/r/WRONG', OK);
+ok('钥匙不对：不探测路由器', probes === p1);
 Date.now = realNow;
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] !== undefined && !x[1] ? '（' + String(x[2]).slice(0, 200) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

@@ -55,7 +55,7 @@ function onNewChat(n: number) { newChatHandler?.(n) }
 export function startBadges() {
   clearInterval(timer)
   refreshBadges()
-  timer = window.setInterval(refreshBadges, 15000)
+  timer = window.setInterval(refreshBadges, 60000) // 每分钟一次（省官网后台用量）；切回页面时马上刷新
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBadges() })
 }
 

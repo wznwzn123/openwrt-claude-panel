@@ -119,7 +119,7 @@ P.speed_last = function() {
 const SSL_RUN = '/tmp/cmcp_sslinst.run', SSL_LOG = '/tmp/cmcp_sslinst.log', BK_NOENC = '/etc/claude-mcp/bk.noenc';
 function bk_cloud() {
 	let c = {};
-	for (let l in split(readfile('/etc/claude-mcp/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
+	for (let l in split(readfile(ETC + '/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
 	if (!c.URL || !c.RKEY) die('还没有设置云端（云端备份是完整版功能）');
 	return c;
 }
@@ -131,7 +131,7 @@ function bk_fetch(id) {
 	sh('rm -f ' + raw + ' ' + f);
 	let r = sh(sprintf('curl -s -f -m 120 -o %s %s', raw, shq(c.URL + '/bk/' + c.RKEY + '/' + id)));
 	if (r.code != 0 || !stat(raw)) { sh('rm -f ' + raw); die('从云端下载备份失败'); }
-	let d = sh(sprintf('/usr/sbin/cmcp-backup decrypt %s %s', raw, f));
+	let d = sh(sprintf('%s/cmcp-backup decrypt %s %s', SBIN, raw, f));
 	if (d.code == 2) sh('mv -f ' + raw + ' ' + f);
 	else {
 		sh('rm -f ' + raw);

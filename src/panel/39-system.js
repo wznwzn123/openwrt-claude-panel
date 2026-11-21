@@ -221,7 +221,7 @@ $('bkBody').addEventListener('click', async (e) => {
 		return busy(rm, async () => { await P('bk_del', { id }, 30000); toast('已删除'); await loadBk(); }, false);
 	}
 	if (rs) {
-		if (!(await confirmBox('还原到这份备份', `把路由器的全部设置换回「${when}」那时的样子，然后自动重启。\n\n· 还原前会先把现在的设置备份一份到云端\n· 重启大约 1–2 分钟，期间全家断网，面板也连不上\n· 这份备份之后改过的设置会被换掉`, '还原并重启', true))) return;
+		if (!(await confirmBox('还原到这份备份', `把路由器的全部设置换回「${when}」那时的样子，然后自动重启。\n\n· 还原前会先把现在的设置备份一份到云端\n· 重启大约 1–2 分钟，期间全家断网，面板也连不上\n· 这份备份之后改过的设置会被换掉\n· 登录密钥、登录着的手机这些钥匙保持现在的，不会回到那时（移除过的手机不会再能登录）`, '还原并重启', true))) return;
 		return busy(rs, async () => {
 			await P('bk_restore', { id }, 180000);
 			toast('正在还原，路由器马上重启，1–2 分钟后再打开面板');

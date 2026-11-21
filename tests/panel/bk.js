@@ -116,7 +116,13 @@ const server = http.createServer((req, res) => {
 			calls = [];
 			await page.locator('.bkrow').nth(1).locator('[data-bkrs]').click(); await page.waitForTimeout(400);
 			const mt = await page.textContent('.modal');
-			ok('还原前说明：先备份现在的、会重启断网 1–2 分钟', /还原到这份备份/.test(mt) && /先把现在的设置备份/.test(mt) && /1–2 分钟/.test(mt) && /断网/.test(mt), mt);
+			ok('还原前说明：先备份现在的、会重启断网 1–2 分钟', /还原到这份备份/.test(mt) && /先把现在的设置备份/.test(mt) && /1–2 分钟/.test(mt) && /断网/.test(mt) && /钥匙保持现在的/.test(mt), mt);
+			// 说明变长了：最窄的手机（320 宽）上也要完整显示、按钮看得见
+			await page.setViewportSize({ width: 320, height: 640 }); await page.waitForTimeout(300);
+			await page.screenshot({ path: path.join(__dirname, 'shots', 'bk-restore-320' + (dark ? '-dark' : '') + '.png') });
+			const rb = await page.evaluate(() => { const m = [...document.querySelectorAll('.modal')].pop(), b = m.querySelector('[data-v="true"]').getBoundingClientRect(); return { sw: document.documentElement.scrollWidth, right: b.right, bottom: b.bottom, h: innerHeight }; });
+			ok('还原确认框在 320 宽的手机上不横向滚动、按钮在屏幕里', rb.sw <= 320 && rb.right <= 320 && rb.bottom <= rb.h, JSON.stringify(rb));
+			await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(300);
 			await page.click('.modal [data-v="false"]'); await page.waitForTimeout(400);
 			ok('取消还原：不调用还原', !calls.some((c) => c.startsWith('bk_restore')));
 			await page.locator('.bkrow').nth(1).locator('[data-bkrs]').click(); await page.waitForTimeout(400);

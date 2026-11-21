@@ -45,13 +45,23 @@ P.bk_dl = function(a) {
 	return dl_put(f, (match('' + (a.name ?? ''), /^[A-Za-z0-9_.-]{1,60}$/) ? a.name : 'router-backup-' + id) + '.tar.gz');
 };
 // 还原：先下载并检查，确认没问题才动手；还原 = sysupgrade -r（和 LuCI「恢复备份」一样），然后重启
+// 还原云端备份时保留现在的：登录密钥和连接器钥匙（config.json）、登录着的手机、原版页面门禁钥匙、「登录要输路由器密码」开关、
+// 路由器自己的小工具钥匙、托管服务和云端的钥匙、备份加密密钥
+const RESTORE_KEEP = ['config.json', 'devices.json', 'luci_key', 'luci_key.v6', 'login_pw', 'local.key', 'hub.conf', 'cloud.conf', 'bk.key'];
 P.bk_restore = function(a) {
 	let id = bk_id(a), f = bk_fetch(id), keep = '/tmp/cmcp_restore.tgz';
 	sh('mv -f ' + f + ' ' + keep);
 	// 动手前先把现在的设置也存一份（目标备份已经下载到本地，不怕被挤掉）
-	let pre = sh('/usr/sbin/cmcp-backup manual 2>&1');
+	let pre = sh(SBIN + '/cmcp-backup manual 2>&1');
 	if (pre.code != 0 && !a.force) { sh('rm -f ' + keep); die('还原前备份当前设置失败：' + trim(pre.out)); }
-	sh('( sleep 3; /usr/sbin/cmcp-watchdog shutdown; sysupgrade -r ' + keep + ' && sync && reboot ) >/dev/null 2>&1 </dev/null &');
+	// 6.0：钥匙类的文件保留现在的（不回到备份当时）：不然之后移除的手机、换掉的登录地址、旧的门禁钥匙又能用了。
+	// Wi-Fi、插件、面板其它设置照常还原。现在没有的（比如没开「登录要输路由器密码」）还原后也删掉
+	let kd = '/tmp/cmcp_keep', ks = '';
+	for (let f in RESTORE_KEEP) ks += sprintf('if [ -e %s ]; then cp -p %s %s/%s; else : > %s/%s.none; fi; ', shq(ETC + '/' + f), shq(ETC + '/' + f), kd, f, kd, f);
+	let kb = '';
+	for (let f in RESTORE_KEEP) kb += sprintf('if [ -e %s/%s.none ]; then rm -f %s; else cp -p %s/%s %s; fi; ', kd, f, shq(ETC + '/' + f), kd, f, shq(ETC + '/' + f));
+	sh('rm -rf ' + kd + '; mkdir -p ' + kd + ' && chmod 700 ' + kd + ' && { ' + ks + '}');
+	sh('( sleep 3; ' + SBIN + '/cmcp-watchdog shutdown; sysupgrade -r ' + keep + ' && { ' + kb + 'true; } && sync && ' + REBOOT + ' ) >/dev/null 2>&1 </dev/null &');
 	return { ok: true };
 };
 
@@ -65,7 +75,6 @@ P.daily = function(a) {
 };
 
 /* ---------- 托管版：绑定到官网账号（配对码）、看/移除绑定了这台路由器的账号 ---------- */
-const ETC = replace(CONF_PATH, /\/[^\/]*$/, ''); // 一般是 /etc/claude-mcp（测试时可以换目录）
 function hub_conf(quiet) {
 	let c = {};
 	for (let f in [ETC + '/hub.conf', ETC + '/cloud.conf'])

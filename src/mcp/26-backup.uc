@@ -183,10 +183,88 @@ P.device_approve = function(a) {
 	else if (!acct) d[id].emerg = true;
 	devs_write(d);
 	DEV_ID = id;
-	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除（用应急登录码进来的手机在「系统操作 → 已登录的手机」）。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除（用应急登录码进来的手机在「我的主页 → 敏感信息 → 登录着的设备」）。'))); } catch (e) {}
 	return { dev: id + '.' + sec, id, name };
 };
-P.device_list = function() {
+/* ---------- 敏感信息（6.0 第 63 项）：登录密钥、Claude 连接器地址、平板网址、登录着的手机 ----------
+ * 只在「我的主页 → 敏感信息」里给，路由器这边没确认本人就不返回（不靠界面藏起来）。
+ * 确认本人的凭证（10 分钟）两种：
+ *   · 有官网账号的（托管版从官网打开）：官网发的，邮箱验证码换来的；路由器问一下官网它还有效没有
+ *   · 自建版、用应急登录码进来的：路由器自己发的，输对路由器后台（root）密码换来的
+ * 凭证只认发给的那台手机（DEV_ID）；路由器重启就全部作废（放在内存 /tmp 里） */
+const SUDO_F = '/tmp/cmcp_sudo.json', SUDO_FAIL = '/tmp/cmcp_sudo_fail.json', SUDO_TTL = 600;
+function sudo_read() { let m = cmcp_readj(SUDO_F, {}); return type(m) == 'object' ? m : {}; }
+function sudo_keep(m, t, exp, kind) {
+	let now = time();
+	for (let k in keys(m)) if (!(m[k]?.exp > now)) delete m[k];
+	m[t] = { exp, dev: DEV_ID ?? '', kind };
+	cmcp_writej(SUDO_F, m);
+}
+function sudo_ok(t) {
+	t = '' + (t ?? '');
+	if (!match(t, /^[A-Za-z0-9]{20,48}$/)) return false;
+	let m = sudo_read(), x = m[t], now = time();
+	// 只认这台路由器发出去 / 转交过的凭证，而且只认发给的那台手机
+	if (!x || !(x.exp > now) || x.dev != (DEV_ID ?? '')) return false;
+	if (x.kind != 'hub') return true;
+	// 官网发的凭证：再问一下官网还有效没有（账号被移出、凭证作废了就不认）；连不上官网就不认
+	if (!DEV?.uid || !is_hosted()) return false;
+	let r = null;
+	try { r = hub_call('/api/dev/fam/sudo_ok', { uid: DEV.uid, sudo: t }, 12); } catch (e) { r = null; }
+	return !!(r?.ok && +r.exp > now * 1000);
+}
+// owner = 只有主账号（自建版就是用登录密钥的人）能看：登录密钥、连接器地址、平板网址是整台路由器的钥匙
+function need_sudo(a, owner) {
+	if (owner && ROLE != 'owner') die('只有主账号能看');
+	if (!sudo_ok(a?.sudo)) die('要先确认是你本人：在「我的主页 → 敏感信息」里验证');
+}
+// 用路由器后台密码确认本人：输错 5 次锁 15 分钟（并推送）；密码交给路由器自己的登录服务（rpcd）核对，路由器不存也不记
+P.sudo_local = function(a) {
+	let pw = '' + (a?.pw ?? ''), now = time(), f = cmcp_readj(SUDO_FAIL, { n: 0, until: 0 });
+	if ((f.until ?? 0) > now) die(sprintf('密码输错太多次，%d 分钟后再试', int(((f.until - now) + 59) / 60)));
+	if (!length(pw) || length(pw) > 256) die('请输入路由器后台密码');
+	// 没设后台密码的路由器：不能拿空密码当验证（先去原版后台设一个）
+	let sh0 = match(readfile(getenv('CMCP_SHADOW') ?? '/etc/shadow') ?? '', /(^|\n)root:([^:\n]*):/);
+	if (sh0 && !length(sh0[2])) die('路由器还没设后台密码：先在原版后台「系统 → 管理权」设一个，再回来验证');
+	if (!match(sh('ubus list session 2>/dev/null').out, /session/)) die('这台路由器没有登录服务（rpcd），验证不了后台密码');
+	let tf = trim(sh('mktemp /tmp/cmcp_pw.XXXXXX').out);
+	if (!match(tf, /^\/tmp\/cmcp_pw\.[A-Za-z0-9]+$/)) die('路由器上建不了临时文件');
+	writefile(tf, sprintf('%J', { username: 'root', password: pw, timeout: 30 }));
+	// 临时文件只有 root 能读（mktemp 建的是 600），用完马上删
+	let r = sh(sprintf('ubus call session login "$(cat %s)" 2>/dev/null; rm -f %s', tf, tf)).out, sid = null;
+	try { sid = json(r)?.ubus_rpc_session; } catch (e) {}
+	if (!sid || !match(sid, /^[0-9a-f]{32}$/)) {
+		f.n = (f.n ?? 0) + 1;
+		if (f.n >= 5) {
+			f = { n: 0, until: now + 900 };
+			try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('面板里连续 5 次输错路由器后台密码'), shq('「我的主页 → 敏感信息」的验证锁了 15 分钟。不是你自己输错的话，马上改路由器后台密码，并在面板里换登录密钥。'))); } catch (e) {}
+		}
+		cmcp_writej(SUDO_FAIL, f);
+		die(f.until > now ? '密码输错太多次，15 分钟后再试' : sprintf('密码不对（还能再试 %d 次）', 5 - f.n));
+	}
+	sh(sprintf('ubus call session destroy %s >/dev/null 2>&1', shq(sprintf('{"ubus_rpc_session":"%s"}', sid))));
+	sh('rm -f ' + SUDO_FAIL);
+	let t = rand_str(24);
+	if (!t) die('生成凭证失败，再试一次');
+	sudo_keep(sudo_read(), t, now + SUDO_TTL, 'local');
+	return { sudo: t, exp: (now + SUDO_TTL) * 1000 };
+};
+// 「现在锁上」：作废这台手机的凭证（只能作废自己的）
+P.sudo_drop = function(a) {
+	let m = sudo_read(), t = '' + (a?.sudo ?? '');
+	if (m[t] && m[t].dev == (DEV_ID ?? '')) { delete m[t]; cmcp_writej(SUDO_F, m); }
+	return { ok: true };
+};
+// 平板（证人）每分钟要访问的网址：带着平板的钥匙，只在敏感信息里给
+P.tablet_url = function(a) {
+	need_sudo(a, true);
+	let c = {};
+	for (let l in split(readfile('/etc/claude-mcp/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
+	if (!c.URL || !c.TKEY) return { url: null };
+	return { url: c.URL + '/beat/t/' + c.TKEY };
+};
+P.device_list = function(a) {
+	need_sudo(a);
 	let d = devs_read(), sn = seen_read(), list = [];
 	// 子账号只看得到自己登录的手机
 	for (let id in d) if (ROLE != 'sub' || (DEV?.uid && d[id].uid == DEV.uid)) push(list, { id, name: d[id].name, at: d[id].at, via: d[id].via, seen: sn[id] ?? null, me: id == DEV_ID });
@@ -194,6 +272,8 @@ P.device_list = function() {
 	return { hosted: is_hosted(), list };
 };
 P.device_remove = function(a) {
+	// 退出自己这台（「退出登录」）不用确认；移除别的手机要先确认本人
+	if (!a?.self) need_sudo(a);
 	let d = devs_read(), id = a?.self ? (DEV_ID ?? '') : '' + (a?.id ?? '');
 	if (ROLE == 'sub') {
 		// 子账号只能退出自己的手机
@@ -327,7 +407,8 @@ P.open_login = function(a) {
 // 我是谁：面板「我的主页」用
 P.whoami = function() {
 	let h = hub_conf(true);
-	return { hosted: !!h, hub: h?.HUB ?? null, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null };
+	// ai：装的是不是 AI 版（有没有 Claude 连接器）；连接器地址本身只在敏感信息里给
+	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null };
 };
 // 家人管理、确认本人：转给官网（账号编号由路由器按这台手机填，手机自己填的不算）
 const FAM_OPS = { me: 0, page: 0, profile: 0, log: 0, leave: 0, members: 0, sudo_code: 0, sudo: 0, secret: 0, sess_out: 0, join_create: 1, join_cancel: 1, sub_set: 1, sub_remove: 1, transfer: 1 };
@@ -339,6 +420,8 @@ P.fam = function(a) {
 	let x = { uid: DEV.uid };
 	for (let k in ['sudo', 'code', 'name', 'perms', 'subExp', 'target', 'off', 'avatar', 'id', 'all', 'want']) if (exists(a, k)) x[k] = a[k];
 	let r = hub_call('/api/dev/fam/' + op, x);
+	// 官网发的确认凭证：记下是发给这台手机的（别的手机拿去用不行），10 分钟内有效
+	if (op == 'sudo' && match('' + (r?.sudo ?? ''), /^[a-z2-9]{24}$/)) sudo_keep(sudo_read(), r.sudo, min(time() + SUDO_TTL, int((+r.exp || 0) / 1000) || time() + SUDO_TTL), 'hub');
 	if (FAM_OPS[op] || op == 'leave') sh('rm -f ' + FAM_PATH);
 	if (op == 'leave') { let d = devs_read(); for (let k in keys(d)) if (d[k].uid == DEV.uid) delete d[k]; devs_write(d); }
 	if (op == 'members' && ROLE == 'sub') { r.subs = filter(r.subs ?? [], (y) => y.uid == DEV.uid); r.joins = []; }
@@ -359,13 +442,15 @@ function ckey_get(make) {
 	return c.ckey;
 }
 function ckey_url(k) { let h = trim(readfile('/etc/claude-mcp/hostname') ?? ''); return length(h) ? 'https://' + h + '/cgi-bin/mcp/' + k : null; }
-P.ckey_info = function() {
+P.ckey_info = function(a) {
 	if (conf().ai === false) return { ai: false };
+	need_sudo(a, true);
 	let k = ckey_get(true);
 	return { ai: true, url: ckey_url(k), hosted: is_hosted() };
 };
 P.ckey_rotate = function(a) {
 	if (a?.confirm != 'CKEY') die('需要确认');
+	need_sudo(a, true);
 	if (conf().ai === false) die('纯面板版没有 Claude 连接器');
 	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 	c.ckey = rand_str(40);

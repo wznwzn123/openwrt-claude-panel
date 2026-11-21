@@ -744,7 +744,7 @@ section.page{display:none}section.page.on{display:block}
 		<div class="logo" role="img" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 		<div style="min-width:0"><b>我的路由器</b><div class="sub" id="sideSub">OpenWrt 管理面板</div></div>
 	</div>
-	<button class="sideme hidden" id="sideMe" type="button"><span class="av" id="sideMeAv"></span><span class="t"><b id="sideMeName"></b><small>我的主页 · 官网账号</small></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+	<button class="sideme hidden" id="sideMe" type="button"><span class="av" id="sideMeAv"></span><span class="t"><b id="sideMeName"></b><small id="sideMeSub">我的主页 · 官网账号</small></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
 	<input class="sideq" id="sideQ" type="search" placeholder="搜索功能，如 DHCP、端口转发" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索功能">
 	<nav class="sidenav" id="sidenav">
 	</nav>
@@ -1110,10 +1110,8 @@ section.page{display:none}section.page.on{display:block}
 		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="addphone"><div><b>添加新手机</b><span class="muted">用另一台手机扫码，直接打开这个面板</span></div><span class="muted">›</span></button>
-		<button class="file hidden" data-t="devices" id="devsBtn"><div><b>已登录的手机</b><span class="muted">看看哪些手机能打开面板，把不认识的移除</span></div><span class="muted">›</span></button>
-		<button class="file hidden" data-t="ckey" id="ckeyBtn"><div><b>Claude 连接器地址</b><span class="muted">在 Claude 里添加连接器用（打不开面板）</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="rotatekey"><div><b>换登录密钥</b><span class="muted">旧的登录地址马上作废（截图泄露、手机丢了时用）</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="addphone"><div><b>添加新手机</b><span class="muted">新手机扫码打开官网，登录自己的账号就能用</span></div><span class="muted">›</span></button>
+		<!-- 6.0：已登录的手机、Claude 连接器地址、换登录密钥、自建版的添加新手机，都在「我的主页 → 敏感信息」里（验证后才能看） -->
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="feedback"><div><b>问题反馈 / 建议</b><span class="muted">遇到问题、想要什么功能，直接告诉开发者</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="logout"><div><b>退出登录</b><span class="muted">这台手机退出面板，下次要重新登录</span></div><span class="muted">›</span></button>
@@ -4066,10 +4064,9 @@ function tabletHelp() {
 			<li><b>插着电放着</b>，屏幕可以关。</li>
 			<li>回到这一页，「云端监测」里的「平板（证人）」变成「正常」就设置好了（最多等 1 分钟）。</li>
 		</ol>
-		<div class="kv" style="display:block"><span style="display:block;margin-bottom:6px">平板要访问的网址（只给这台平板用，别发给别人）</span>
-		${u ? `<div class="mono" style="font-size:12px;word-break:break-all;background:var(--fill);padding:8px 10px;border-radius:10px" data-u>${esc(u)}</div>` : '<div class="muted">路由器连上后才能显示</div>'}</div>
-		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-v="close">关闭</button><button class="btn primary" data-c ${u ? '' : 'disabled'}>复制网址</button></div>`,
-	(m) => { const b = m.querySelector('[data-c]'); if (b && u) b.onclick = () => copyText(u); });
+		<div class="notice" style="margin-top:4px">平板要访问的网址带着平板的钥匙，放在「我的主页 → 敏感信息」里，验证是你本人后才能看和复制。</div>
+		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-v="close">关闭</button><button class="btn primary" data-me ${u ? '' : 'disabled'}>去看网址</button></div>`,
+	(m, close) => { const b = m.querySelector('[data-me]'); if (b && u) b.onclick = () => { close(null); go('me'); }; });
 }
 
 /* ---------- 终端 ---------- */
@@ -4238,7 +4235,6 @@ const T = {
 	look() { lookSettings(); },
 	addphone() { addPhone(); },
 	rotatekey() { rotateKey(); },
-	devices() { devList(); },
 	svc() { svcSheet(); },
 	ckey() { ckeySheet(); },
 	update() { updSheet(); },
@@ -4444,6 +4440,8 @@ async function addPhone() {
 		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制官网地址</button><button class="btn primary" data-v="close">完成</button></div>`,
 		(m) => { m.querySelector('[data-copy]').onclick = () => copyText(url); });
 	}
+	// 自建版：二维码里就是登录密钥，只在「我的主页 → 敏感信息」验证后给
+	if (!sudoOn()) { toast('先在「我的主页 → 敏感信息」里验证是你本人', true); return go('me'); }
 	const url = location.origin + location.pathname.replace(/[^/]*$/, '') + '#login=' + token;
 	try { await loadQr(); } catch (e) { return toast(e.message, true); }
 	modal(`<div class="sheethead"><h3>添加新手机</h3><button class="btn sm" data-v="close">关闭</button></div>
@@ -4993,14 +4991,14 @@ async function updStart(noConfirm) {
 async function rotateKey() {
 	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 这台手机自动换成新密钥，不用重新登录\n· 其他已经登录的手机要重新添加（在这台手机「添加新手机」扫码）\n· 用「Claude 连接器地址」加的 Claude 连接器不受影响', '换新密钥', true))) return;
 	let r;
-	try { r = await P('rotate_key', { confirm: 'ROTATE' }, 30000); } catch (e) { return toast(e.message, true); }
+	try { r = await secP('rotate_key', { confirm: 'ROTATE' }, 30000); } catch (e) { return toast(e.message, true); }
 	token = r.token; store.set('rp_token', r.token);
 	const login = location.origin + '/cgi-bin/mcp/' + r.token;
 	modal(`<div class="sheethead"><h3>已换成新密钥</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<p class="muted" style="margin:0 0 10px">旧的登录地址已经作废。这是新的登录地址，点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(login)}<span>点一下显示</span></div>
 	${r.selfcloud ? '<div class="notice w" style="margin-top:12px">你用的是自建完整版：还要把 Cloudflare Worker 的密钥 <b>PANEL_TOKEN</b> 换成新的登录密钥（地址最后那一串），不然推送和云端备份会连不上。</div>' : ''}
-	<div class="notice" style="margin-top:12px">接下来：其他手机在这台手机「系统操作 → 添加新手机」扫码重新添加。Claude 里如果用的是旧的登录地址，换成「系统操作 → Claude 连接器地址」里的地址。</div>
+	<div class="notice" style="margin-top:12px">接下来：其他手机在这台手机「我的主页 → 敏感信息 → 添加新手机」扫码重新添加。Claude 里如果用的是旧的登录地址，换成「我的主页 → 敏感信息」里的「Claude 连接器地址」里的地址。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制新地址</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
 }
@@ -5039,9 +5037,11 @@ async function mpRiskOk(perms, old, who) {
 const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
 	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
-	$('meBtn').classList.toggle('hidden', !on); $('sideMe').classList.toggle('hidden', !on);
-	if (!on) return;
-	avPaint($('meAv'), p); avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p);
+	$('meBtn').classList.toggle('hidden', !on);
+	// 侧边栏的「我的主页」谁都有：没有官网账号的（自建版、应急登录）里面只有这台路由器的敏感信息
+	$('sideMe').classList.toggle('hidden', !token);
+	if (!on) { avPaint($('sideMeAv'), { name: '我' }); $('sideMeName').textContent = '我的主页'; $('sideMeSub').textContent = '敏感信息（要验证）'; return; }
+	avPaint($('meAv'), p); avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p); $('sideMeSub').textContent = '我的主页 · 官网账号';
 }
 async function meLoad(force) {
 	if (!SVC || !SVC.hosted || !store.get('rp_dev') || ME_ROLE.emerg) { if (!store.get('rp_dev')) ME = null; meRender(); return ME; }
@@ -5154,8 +5154,73 @@ async function famSudo(op, args, why) {
 	try { return await P('fam', { op, sudo: tok, ...args }, 30000); }
 	catch (e) { if (/确认是你本人/.test(e.message)) { sudoSet(null); tok = await needSudo(why); if (!tok) return null; return P('fam', { op, sudo: tok, ...args }, 30000); } throw e; }
 }
+/* 6.0 第 63 项：路由器上的钥匙（登录密钥、Claude 连接器地址、平板网址、登录着的手机）只在「我的主页 → 敏感信息」里；
+   路由器那边没确认本人就不给（凭证只认发给的这台手机）。有官网账号的用邮箱验证码；自建版、应急登录的用路由器后台密码 */
+async function secP(method, args, tmo) {
+	if (!sudoOn()) { toast('先在「我的主页 → 敏感信息」里验证是你本人', true); go('me'); throw new Error('要先确认是你本人'); }
+	try { return await P(method, { ...(args || {}), sudo: SUDO.tok }, tmo); }
+	catch (e) { if (/确认是你本人/.test(e.message)) { sudoSet(null); MP.sec = null; MP.devs = null; toast('验证过期了，再验证一次', true); go('me'); } throw e; }
+}
+// 锁上：这台手机忘掉凭证，也让路由器作废它
+function sudoLock() { const t = SUDO && SUDO.tok; sudoSet(null); MP.sec = null; MP.devs = null; if (t) P('sudo_drop', { sudo: t }).catch(() => {}); }
+const LOCK_IC = '<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>';
+// 「这台路由器的钥匙」：只有主账号（自建版就是拿着登录密钥的人）
+function mpKeysHtml() {
+	if (ME_ROLE.role === 'sub') return '';
+	const self = !store.get('rp_dev'), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
+	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b><span class="muted">${d}</span></div><span class="muted">›</span></button>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${ai ? row('kckey', 'Claude 连接器地址', '在 Claude 里添加连接器用，打不开面板') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+}
+// 登录着的手机（托管版）：移除不认识的
+function mpDevsHtml(dl, note) {
+	return `<div class="mp-sub">登录着的设备${dl ? ' · ' + dl.length + ' 台' : ''}</div><section class="card">${!dl ? '<p class="muted" style="margin:0">读不到，稍后刷新再试</p>' : dl.map((d) => `<div class="mp-fb"><div><b>${esc(d.name)}${d.me ? ' <span class="pill blue">这台</span>' : ''}</b><span>${esc([new Date(d.at * 1000).toLocaleDateString('zh-CN') + ' 登录', d.via || '', d.me ? '' : '最近使用：' + (d.seen ? agoSec(d.seen) : '路由器重启后还没用过')].filter(Boolean).join(' · '))}</span></div>${d.me ? '' : `<button class="btn sm danger" data-mp="drm" data-i="${esc(d.id)}">移除</button>`}</div>`).join('') || '<p class="muted" style="margin:0">没有记录</p>'}
+		${dl && dl.length > 1 ? '<button class="btn sm danger" data-mp="drmall" style="width:100%;margin-top:6px">除了这台，全部移除</button>' : ''}</section>
+		<p class="mp-note" style="text-align:left;margin:7px 4px 0!important">${note}</p>`;
+}
+// 自建版、应急登录：没有官网账号，「我的主页」只有这台路由器的敏感信息，用路由器后台密码验证
+function mpLocalDraw() {
+	const box = $('meBox'), hosted = !!store.get('rp_dev'), ver = sudoOn() && SUDO.kind === 'local';
+	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? '应急登录' : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? '你是用路由器终端的应急登录码进来的，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
+	if (!ver) {
+		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
+		if (store.get('rp_ai') === '1') L.push(['Claude 连接器地址', '能让 AI 控制路由器的地址']);
+		if (cinfo && cinfo.tablet) L.push(['平板（证人）网址', '平板报平安用的网址']);
+		if (hosted) L.push(['登录着的设备', '哪些手机能打开这个面板，不认识的马上移除']);
+		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">${LOCK_IC}
+		<h3>输路由器后台密码验证</h3>
+		<ul class="mp-lockl">${L.map((x) => `<li><b>${x[0]}</b><span>${x[1]}</span></li>`).join('')}</ul>
+		<form data-pwf class="mp-pwf"><input class="input" type="password" data-pw autocomplete="current-password" placeholder="路由器后台密码" aria-label="路由器后台密码"><button class="btn primary" type="submit" data-pwok style="width:100%;margin-top:10px">确认</button></form>
+		<p class="mp-note">就是登录路由器原版后台（比如 192.168.1.1）用的密码，由路由器自己核对，面板不保存。验证一次，10 分钟内不用再输；输错 5 次锁 15 分钟。</p></section>`;
+	} else {
+		const mins = Math.max(0, Math.ceil((SUDO.exp - Date.now()) / 1000));
+		h += `<div class="sectitle mp-sec-h"><b>敏感信息</b><span class="pill mpok" id="mpLeft">已验证 · ${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} 后自动锁上</span></div>`;
+		if (hosted) h += mpDevsHtml(MP.devs && MP.devs.list, '这些手机能打开这个面板。不认识的马上移除：移除后它要从官网重新打开才能进来。');
+		h += mpKeysHtml() + '<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>';
+	}
+	if (h !== MP.h || !box.firstElementChild) { box.innerHTML = h; MP.h = h; }
+	const f = box.querySelector('[data-pwf]');
+	if (f) f.onsubmit = (e) => {
+		e.preventDefault();
+		const inp = f.querySelector('[data-pw]'), pw = inp.value;
+		if (!pw) return toast('请输入路由器后台密码', true);
+		busy(f.querySelector('[data-pwok]'), async () => {
+			const x = await P('sudo_local', { pw }, 20000);
+			inp.value = '';
+			sudoSet({ tok: x.sudo, exp: x.exp, kind: 'local' });
+			MP.devs = hosted ? await P('device_list', { sudo: x.sudo }).catch(() => null) : null;
+			mpLocalDraw();
+		}, '核对中');
+	};
+	clearInterval(mpTimer);
+	if (ver) mpTimer = setInterval(() => {
+		const el = $('mpLeft'); if (!el || page !== 'me') { clearInterval(mpTimer); return; }
+		const t = Math.ceil((SUDO.exp - Date.now()) / 1000);
+		if (t <= 0) { clearInterval(mpTimer); sudoLock(); mpLocalDraw(); return; }
+		el.textContent = '已验证 · ' + Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') + ' 后自动锁上';
+	}, 1000);
+}
 const MP = { sec: null, log: null, logAll: false, mem: null, devs: null, h: '' };
-let mpTimer = 0, mpSeq = 0, mpDevP = null;
+let mpTimer = 0, mpSeq = 0;
 // 上次读到的家人、操作记录（只存在这台手机上）：再打开「我的主页」先显示这些，后台再拿最新的
 try { const c = JSON.parse(store.get('rp_mp') || 'null'); if (c && c.dev && c.dev === devTag()) { MP.mem = c.mem || null; MP.log = c.log || null; } } catch (e) {}
 function mpSave() {
@@ -5186,14 +5251,17 @@ async function mpFetch() {
 async function loadMe(quiet) {
 	const my = ++mpSeq;
 	const why = () => (!SVC || !SVC.hosted ? 'nohost' : !store.get('rp_dev') || ME_ROLE.emerg ? 'emerg' : '');
-	const showWhy = () => mpEmpty(why() === 'nohost' ? '<section class="card empty">这台路由器没有用托管服务，没有官网账号信息。</section>' : '<section class="card empty" style="line-height:1.7">你是用路由器终端的应急登录码进来的，看不到官网账号的信息。<br>从官网「我的路由器」点「打开面板」进来以后，这里会显示你的主页。</section>');
+	const showWhy0 = () => mpEmpty(why() === 'nohost' ? '<section class="card empty">这台路由器没有用托管服务，没有官网账号信息。</section>' : '<section class="card empty" style="line-height:1.7">你是用路由器终端的应急登录码进来的，看不到官网账号的信息。<br>从官网「我的路由器」点「打开面板」进来以后，这里会显示你的主页。</section>');
+	// 自建版、应急登录：只有路由器的敏感信息（路由器后台密码验证）
+	const showWhy = () => { MP.h = ''; mpLocalDraw(); };
 	if (!sudoOn()) { MP.sec = null; MP.devs = null; }
 	// 先把上次的显示出来（打开就有内容），后台再拿最新的
 	if (SVC && !why() && ME && ME.me) mpDraw();
 	else if (!(SVC && why())) mpEmpty('<section class="card empty">读取中…</section>');
 	const sv = svcLoad(false, true);
+	sv.then(() => { if (Date.now() - SVC_AT < 10000 && page === 'me') setStatus(true, '在线'); });
 	if (!SVC || why()) { await sv; if (my !== mpSeq) return; if (why()) return showWhy(); }
-	const [ok, devs] = await Promise.all([mpFetch(), sudoOn() ? P('device_list').catch(() => null) : null, sv]);
+	const [ok, devs] = await Promise.all([mpFetch(), sudoOn() ? P('device_list', { sudo: SUDO.tok }).catch(() => null) : null, sv]);
 	if (my !== mpSeq) return;
 	if (why()) return showWhy();
 	if (devs && sudoOn()) MP.devs = devs;
@@ -5204,9 +5272,8 @@ async function loadMe(quiet) {
 // 敏感信息里验证码对了：凭证和敏感信息一起回来，能打开面板的手机在核对的同时读
 const mpCodeOpts = {
 	want: true,
-	before: () => { mpDevP = P('device_list').catch(() => null); },
 	done: async (r) => {
-		const dp = mpDevP || P('device_list').catch(() => null); mpDevP = null;
+		const dp = P('device_list', { sudo: SUDO.tok }).catch(() => null);
 		let sec = r.secret || null;
 		if (!sec) sec = await P('fam', { op: 'secret', sudo: SUDO.tok }, 30000).catch((e) => { toast(e.message, true); return null; });
 		MP.sec = sec; MP.devs = await dp;
@@ -5253,10 +5320,9 @@ function mpDraw() {
 	h += '</section>';
 	// 敏感信息：联系方式、能打开这个面板的手机、登录记录（官网的密码、官网上登录的设备在官网「账号设置」里管）
 	if (!sudoOn() || !MP.sec) {
-		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">
-		<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">${LOCK_IC}
 		<h3>验证一下才能看</h3>
-		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机能打开这个面板，不认识的马上移除</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录官网，成功还是失败</span></li></ul>
+		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机能打开这个面板，不认识的马上移除</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录官网，成功还是失败</span></li>${ME_ROLE.role === 'sub' ? '' : '<li><b>这台路由器的钥匙</b><span>' + (store.get('rp_ai') === '1' ? 'Claude 连接器地址、' : '') + (cinfo && cinfo.tablet ? '平板网址、' : '') + '换登录密钥</span></li>'}</ul>
 		<div data-cwrap>${codeHtml(me.email)}</div>
 		<p class="mp-note">验证一次，这个页面 10 分钟内不用再输</p></section>`;
 	} else {
@@ -5264,11 +5330,10 @@ function mpDraw() {
 		const dl = D && D.list ? D.list : null;
 		h += `<div class="sectitle mp-sec-h"><b>敏感信息</b><span class="pill mpok" id="mpLeft">已验证 · ${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} 后自动锁上</span></div>
 		<div class="mp-sub">联系方式</div><section class="card"><dl class="mp-kv"><dt>登录邮箱</dt><dd>${esc(x.email)} <span class="${x.verified ? 'mp-ok' : 'mp-warn'}" style="font-size:12px">${x.verified ? '已验证' : '没验证'}</span></dd></dl></section>
-		<div class="mp-sub">登录着的设备${dl ? ' · ' + dl.length + ' 台' : ''}</div><section class="card">${!dl ? '<p class="muted" style="margin:0">读不到，稍后刷新再试</p>' : dl.map((d) => `<div class="mp-fb"><div><b>${esc(d.name)}${d.me ? ' <span class="pill blue">这台</span>' : ''}</b><span>${esc([new Date(d.at * 1000).toLocaleDateString('zh-CN') + ' 登录', d.via || '', d.me ? '' : '最近使用：' + (d.seen ? agoSec(d.seen) : '路由器重启后还没用过')].filter(Boolean).join(' · '))}</span></div>${d.me ? '' : `<button class="btn sm danger" data-mp="drm" data-i="${esc(d.id)}">移除</button>`}</div>`).join('') || '<p class="muted" style="margin:0">没有记录</p>'}
-		${dl && dl.length > 1 ? '<button class="btn sm danger" data-mp="drmall" style="width:100%;margin-top:6px">除了这台，全部移除</button>' : ''}</section>
-		<p class="mp-note" style="text-align:left;margin:7px 4px 0!important">${ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开这个面板。'}不认识的马上移除：移除后它要从官网重新打开才能进来。</p>
+		${mpDevsHtml(dl, (ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开这个面板。') + '不认识的马上移除：移除后它要从官网重新打开才能进来。')}
 		<div class="mp-sub">登录记录 · 最近 30 天</div><section class="card"><ul class="mp-tl">${(x.logins || []).slice(0, 20).map((l) => `<li><div class="d"${l.ok ? '' : ' style="color:#ff3b30"'}>${l.ok ? '✓' : '✕'}</div><div><b>${esc(l.ok ? ({ reg: '注册账号', reset: '重设密码' }[l.k] || '登录成功') : (l.why || '登录失败'))}</b><span>${esc([ymdhm(l.t), l.place, l.ua].filter(Boolean).join(' · '))}</span></div></li>`).join('') || '<li style="display:block"><span>最近 30 天没有登录记录</span></li>'}</ul></section>
 		${hub ? `<div class="mp-sub">官网账号</div><section class="card list" style="padding:4px 12px"><a class="file" href="${esc(hub + '/app#settings')}" target="_blank" rel="noopener" style="background:none;margin:4px 0"><div><b>官网账号设置</b><span class="muted">修改密码、官网上登录着的 ${(x.sessions || []).length} 台设备、注销账号</span></div><span class="muted">›</span></a></section>` : ''}
+		${mpKeysHtml()}
 		<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>`;
 	}
 	// 操作记录
@@ -5289,7 +5354,7 @@ function mpDraw() {
 	if (sudoOn() && MP.sec) mpTimer = setInterval(() => {
 		const el = $('mpLeft'); if (!el || page !== 'me') { clearInterval(mpTimer); return; }
 		const t = Math.ceil((SUDO.exp - Date.now()) / 1000);
-		if (t <= 0) { clearInterval(mpTimer); sudoSet(null); MP.sec = null; MP.devs = null; mpDraw(); return; }
+		if (t <= 0) { clearInterval(mpTimer); sudoLock(); mpDraw(); return; }
 		el.textContent = '已验证 · ' + Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') + ' 后自动锁上';
 	}, 1000);
 }
@@ -5377,12 +5442,16 @@ $('meBox').addEventListener('click', async (e) => {
 	if (k === 'av') { const f = await pickFile('image/*'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
-	else if (k === 'lock') { sudoSet(null); MP.sec = null; MP.devs = null; mpDraw(); toast('已锁上'); }
-	// 能打开这个面板的手机：移除一台 / 除了这台全部移除（原来在「系统操作 → 已登录的手机」）
+	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }
+	else if (k === 'kphone') addPhone();
+	else if (k === 'kckey') ckeySheet();
+	else if (k === 'ktab') tabletUrlSheet();
+	else if (k === 'krot') rotateKey();
+	// 能打开这个面板的手机：移除一台 / 除了这台全部移除（原来在「我的主页 → 敏感信息 → 登录着的设备」）
 	else if (k === 'drm' || k === 'drmall') {
 		const one = k === 'drm', nm = one ? (b.closest('.mp-fb').querySelector('b').firstChild || {}).textContent || '这台手机' : '';
 		if (!(await confirmBox(one ? '移除这台手机' : '移除其他所有手机', one ? '「' + nm.trim() + '」要从官网重新打开才能进来。' : '除了这台，其他手机都要从官网重新打开才能进来。', one ? '移除' : '全部移除', true))) return;
-		busy(b, async () => { await P('device_remove', one ? { id: b.dataset.i } : { all_others: true }); MP.devs = await P('device_list').catch(() => MP.devs); mpDraw(); toast('已移除'); });
+		busy(b, async () => { await secP('device_remove', one ? { id: b.dataset.i } : { all_others: true }); MP.devs = await secP('device_list').catch(() => MP.devs); if (MP.sec) mpDraw(); else mpLocalDraw(); toast('已移除'); });
 	}
 	else if (k === 'logall') { MP.logAll = true; mpDraw(); }
 	else if (k === 'fb') go('myfb');
@@ -5395,8 +5464,9 @@ $('meBox').addEventListener('click', async (e) => {
 		busy(b, async () => { await P('fam', { op: 'leave' }, 30000); store.del('rp_dev'); store.del('rp_me'); store.del('rp_role'); toast('已退出'); setTimeout(() => location.reload(), 900); });
 	}
 });
+let SVC_AT = 0; // 上次从路由器读到托管服务信息的时间（读到了说明路由器连得上）
 async function svcLoad(force, noMe) {
-	try { SVC = await P('svc_info', { force: !!force }); store.set('rp_svc', JSON.stringify(SVC)); } catch (e) {}
+	try { SVC = await P('svc_info', { force: !!force }); SVC_AT = Date.now(); store.set('rp_svc', JSON.stringify(SVC)); } catch (e) {}
 	svcRender(); moreBtns(); if (!noMe) meLoad(false);
 	return SVC;
 }
@@ -5420,35 +5490,24 @@ async function svcSheet() {
 		};
 	});
 }
-// 「已登录的手机」：从官网打开面板的，挪到了「我的主页 → 敏感信息」；用应急登录码进来的（看不到我的主页）、不是托管版的，还在系统操作里
-function moreBtns() { $('devsBtn').classList.toggle('hidden', !store.get('rp_dev') || !!(SVC && SVC.hosted && !ME_ROLE.emerg)); $('ckeyBtn').classList.toggle('hidden', store.get('rp_ai') !== '1'); }
+// 6.0：已登录的手机、Claude 连接器地址、换登录密钥、自建版的「添加新手机」都只在「我的主页 → 敏感信息」里；系统操作里只留托管版的「添加新手机」（扫码只是打开官网）
+function moreBtns() { const a = document.querySelector('#p-more [data-t="addphone"]'); if (a) a.classList.toggle('hidden', !store.get('rp_dev')); }
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
-function devList() {
-	modal(`<div class="sheethead"><h3>已登录的手机</h3><button class="btn sm" data-v="close">关闭</button></div><div data-dl><div class="muted" style="padding:20px 0;text-align:center">读取中…</div></div>`, (m, close) => {
-		const box = m.querySelector('[data-dl]');
-		const draw = async () => {
-			try {
-				const r = await P('device_list');
-				box.innerHTML = `<p class="muted" style="margin:0 0 8px;font-size:13.5px">${ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开面板。'}不认识的马上移除：移除后它要从官网重新打开才能进来。</p>
-				${r.list.map((d) => `<div class="devrow"><div class="devtx"><b>${esc(d.name)}</b>${d.me ? ' <span class="pill blue">这台</span>' : ''}<div class="muted">${esc(new Date(d.at * 1000).toLocaleDateString('zh-CN'))} 登录 · ${esc(d.via || '')}${d.me ? '' : ' · 最近使用：' + esc(d.seen ? agoS(d.seen) : '路由器重启后还没用过')}</div></div>${d.me ? '' : `<button class="btn sm danger" data-rm="${esc(d.id)}">移除</button>`}</div>`).join('') || '<div class="muted">没有记录</div>'}
-				${r.list.length > 1 ? '<div class="btngrid" style="margin:12px 0 0"><button class="btn danger" data-all>除了这台，全部移除</button></div>' : ''}`;
-				box.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = async () => {
-					if (!(await confirmBox('移除这台手机', '「' + b.closest('.devrow').querySelector('b').textContent + '」要从官网重新打开才能进来。', '移除', true))) return;
-					busy(b, async () => { await P('device_remove', { id: b.dataset.rm }); toast('已移除'); await draw(); });
-				}));
-				const all = box.querySelector('[data-all]');
-				if (all) all.onclick = async () => {
-					if (!(await confirmBox('移除其他所有手机', '除了这台，其他手机都要从官网重新打开才能进来。', '全部移除', true))) return;
-					busy(all, async () => { await P('device_remove', { all_others: true }); toast('已移除'); await draw(); });
-				};
-			} catch (e) { box.innerHTML = `<div class="notice w">${esc(e.message)}</div>`; }
-		};
-		draw();
-	});
+// 平板（证人）网址：带着平板的钥匙，只在「我的主页 → 敏感信息」验证后给
+async function tabletUrlSheet() {
+	let r;
+	try { r = await secP('tablet_url'); } catch (e) { return toast(e.message, true); }
+	if (!r.url) return toast('这台路由器没开云端监测，没有平板网址', true);
+	modal(`<div class="sheethead"><h3>平板（证人）网址</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 10px">在平板的 MacroDroid 里每分钟访问这个网址（设置方法在「断线记录 → 云端监测 → 平板设置方法」）。点一下显示：</p>
+	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(r.url)}<span>点一下显示</span></div>
+	<div class="notice w" style="margin-top:12px">⚠️ 只给家里那台平板用，别发给别人：别人拿到能冒充平板报平安，断电断网就判断不准了。</div>
+	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
+	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(r.url); });
 }
 async function ckeySheet() {
 	let r;
-	try { r = await P('ckey_info'); } catch (e) { return toast(e.message, true); }
+	try { r = await secP('ckey_info'); } catch (e) { return toast(e.message, true); }
 	if (!r.ai) return toast('这台路由器装的是纯面板版，没有 Claude 连接器', true);
 	modal(`<div class="sheethead"><h3>Claude 连接器地址</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<p class="muted" style="margin:0 0 10px">在 Claude「设置 → 连接器 → 添加自定义连接器」里填这个地址，就能在对话里管理路由器。它只给 Claude 用，打不开面板。点一下显示：</p>
@@ -5461,7 +5520,7 @@ async function ckeySheet() {
 		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
 		m.querySelector('[data-rot]').onclick = async () => {
 			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，Claude 里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
-			try { await P('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }
+			try { await secP('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }
 		};
 	});
 }
@@ -5699,7 +5758,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -5826,6 +5885,7 @@ async function loadRole() {
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
+		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); }
 	} catch (e) {}
 }
@@ -5864,7 +5924,8 @@ function start() {
 	// 先用上次读到的菜单，把新装的插件放进侧边栏（这样上次停在插件页面也能直接打开）
 	try { navExtra(JSON.parse(store.get('rp_menu') || '[]'), false); renderNav(); } catch (e) {}
 	setTimeout(loadMenu, 2500);
-	if (store.get('rp_dev')) setTimeout(loadRole, 400);
+	// 我是谁（托管版：身份和权限；所有版本：装的是不是 AI 版，敏感信息里要不要放连接器地址）
+	setTimeout(loadRole, 400);
 	const qp = new URLSearchParams(location.search).get('p');
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}

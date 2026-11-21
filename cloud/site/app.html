@@ -230,6 +230,10 @@ body.setmode #vDash { display: none !important; }
 .s-prof .l b { display: block; font-size: 16.5px; font-weight: 600; overflow-wrap: anywhere; }
 .s-prof .l span { display: block; margin-top: 3px; font-size: 13.5px; color: var(--muted); overflow-wrap: anywhere; }
 .s-note { max-width: none !important; margin: 14px 0 0 !important; padding-top: 14px; border-top: 1px solid var(--hair); font-size: 13px !important; line-height: 1.7 !important; color: var(--muted) !important; }
+.s-lock { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.s-lock b { font-size: 15px; }
+.s-lock span { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.s-lock .btn { margin-top: 6px; }
 .s-del { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
 .s-del span { flex: 1 1 260px; min-width: 0; font-size: 14px; line-height: 1.7; color: var(--muted); }
 a.d-stat { color: inherit; text-decoration: none; transition: border-color .2s, background-color .2s; }
@@ -502,7 +506,7 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 			</div>
 		</section>
 		<section>
-			<div class="sech"><h2>登录着的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
+			<div class="sech"><h2>登录邮箱和登录着的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
 			<div class="card"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div>
 			<p class="s-note">这里是登录着官网账号的手机和电脑。能打开路由器面板的手机在面板里管。</p></div>
 		</section>
@@ -978,7 +982,19 @@ const verP = fetch('/api/router/version').then((r) => r.json()).then((j) => { if
 // 登录过的设备
 const when = (t) => { if (!t) return '—'; const d = new Date(t); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 async function loadSess() {
-	let r; try { r = await api('sessions', {}); } catch (e) { $('sessList').innerHTML = '<p class="muted" style="margin:0">' + esc(e.message) + '</p>'; return; }
+	let r;
+	try { r = await api('sessions', {}); }
+	catch (e) {
+		$('sessAll').classList.add('hidden');
+		// 6.0：完整邮箱和登录着的设备，验证一下（邮箱验证码，10 分钟内有效）才给
+		if (/确认是你本人/.test(e.message)) {
+			$('sessList').innerHTML = '<div class="s-lock"><b>验证一下才能看</b><span>完整的登录邮箱、哪些手机和电脑登录着这个账号</span><button type="button" class="btn" data-sess-sudo>发验证码到我的邮箱</button></div>';
+			$('sessList').querySelector('[data-sess-sudo]').onclick = () => sudoBox(() => loadSess());
+			return;
+		}
+		$('sessList').innerHTML = '<p class="muted" style="margin:0">' + esc(e.message) + '</p>'; return;
+	}
+	if (r.email) $('setWho').textContent = r.email;
 	const L = r.list || [], others = L.filter((x) => !x.cur).length;
 	$('sessAll').classList.toggle('hidden', !others); roll($('sSess'), L.length);
 	$('sessList').innerHTML = L.map((x) => `<div class="sess" data-sess="${esc(x.id)}"><div class="l"><b>${esc(x.ua || '以前登录的（没有记录设备信息）')}${x.cur ? ' <span class="pill">这台设备</span>' : ''}</b><span>${x.place ? esc(x.place) + ' · ' : ''}${x.at ? when(x.at) + ' 登录' : ''}${x.cur ? '' : ' · 最近使用 ' + ago(x.last)}</span></div>${x.cur ? '' : '<button class="btn sm danger" data-out>退出</button>'}</div>`).join('') || '<p class="muted" style="margin:0">没有别的设备</p>';

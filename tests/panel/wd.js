@@ -173,7 +173,7 @@ const goWd = async (page) => { await page.click('#menuBtn'); await page.waitForT
 		ok('[云端] 时间线按时间排序', await page.$$eval('.wdev .tm:first-child', (x) => x.length > 0));
 		await page.click('[data-tablet]'); await page.waitForTimeout(500);
 		const m = await txt(page, '.modal');
-		ok('[云端] 平板设置方法：步骤和专用网址', m.includes('MacroDroid') && m.includes('不要连这台路由器的 Wi-Fi') && m.includes('/cloud/beat/t/tabletkey123'), m.slice(0, 80));
+		ok('[云端] 平板设置方法：有步骤；网址不在这里显示（在「我的主页 → 敏感信息」里验证后才给）', m.includes('MacroDroid') && m.includes('不要连这台路由器的 Wi-Fi') && !m.includes('/beat/t/') && m.includes('敏感信息'), m.slice(0, 80));
 		await page.screenshot({ path: path.join(OUT, 'wd-tablet.png') });
 		await page.click('.modal [data-v="close"]'); await page.waitForTimeout(400);
 		await page.screenshot({ path: path.join(OUT, 'wd-cloud.png'), fullPage: true });

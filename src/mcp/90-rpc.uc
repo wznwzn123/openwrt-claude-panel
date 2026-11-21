@@ -24,7 +24,7 @@ function handle(msg) {
 		return { jsonrpc: '2.0', id, error: { code: -32010,
 			message: msg.client == 'panel'
 				? '这台手机还没登录：从官网「我的路由器」点「打开面板」进来'
-				: '托管版的 Claude 连接器要用单独的「Claude 连接器地址」：在手机面板「系统操作 → Claude 连接器地址」里复制，然后在 Claude 里把这个连接器删掉，用新地址重新添加',
+				: '托管版的 Claude 连接器要用单独的「Claude 连接器地址」：在手机面板「我的主页 → 敏感信息」（验证后）的「Claude 连接器地址」里复制，然后在 Claude 里把这个连接器删掉，用新地址重新添加',
 			data: { need_code: true, hub: h } } };
 	}
 	// 主账号 / 子账号：按这台手机属于哪个账号检查权限

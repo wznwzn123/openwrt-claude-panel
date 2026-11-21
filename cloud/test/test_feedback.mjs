@@ -117,11 +117,13 @@ ok('[反馈] 再标回没处理', L.find((x) => x.id === id).done === 0);
 	ok('[回复] 不勾发邮件：不发，只改状态、记录里写「没发」', r.ok && MAILS.length === m0 && F1.done > 0 && F1.acts.length === nActs + 2 && F1.acts.at(-1).mailed.length === 0 && F1.acts.at(-1).note === '只记给自己看');
 	await adm('POST', '/feedback/' + id + '/done', { done: false });
 	// 官网报告：联系方式里写了邮箱就能回；安装失败（没留联系方式）发不了
-	await api('POST', '/api/report', { kind: 'other', text: '官网的常见问题页打不开，一直转圈圈', contact: 'QQ 12345 / Me.Test@example.org' }, { 'cf-connecting-ip': '7.7.7.1' });
+	// 6.0 第 67 项：官网报告要先登录（这里用一个登录着的账号 me.test@example.org）
+	{ const H0 = env.H.get('hub'), ruid = 'f' + 'b'.repeat(9), rsid = 'd'.repeat(32); await H0.ctx.storage.put('u:' + ruid, { uid: ruid, email: 'Me.Test@example.org', devs: [], sids: [rsid] }); await H0.ctx.storage.put('s:' + rsid, { uid: ruid, exp: Date.now() + 3650 * 86400e3, kid: 'k3', at: Date.now(), last: Date.now() });
+	await api('POST', '/api/report', { kind: 'other', text: '官网的常见问题页打不开，一直转圈圈', contact: 'QQ 12345' }, { 'cf-connecting-ip': '7.7.7.1', cookie: '__Host-sid=' + rsid }); }
 	await api('POST', '/api/report', { kind: 'install', text: '安装失败：失败的步骤 下载', log: 'xxx' }, { 'cf-connecting-ip': '7.7.7.2' });
 	L = (await (await adm('GET', '/feedback')).json()).list;
 	const W1 = L.find((x) => /常见问题页/.test(x.text)), W2 = L.find((x) => x.kind === 'install');
-	ok('[回复] 官网报告：从联系方式里认出邮箱', W1 && JSON.stringify(W1.mailTo) === '["Me.Test@example.org"]', JSON.stringify(W1 && W1.mailTo));
+	ok('[回复] 官网报告：用登录账号的邮箱回', W1 && JSON.stringify(W1.mailTo) === '["Me.Test@example.org"]', JSON.stringify(W1 && W1.mailTo));
 	m0 = MAILS.length;
 	r = await (await adm('POST', '/feedback/' + W1.id + '/done', { done: true, mail: true })).json();
 	ok('[回复] 官网报告标已修复：邮件发到联系方式里的邮箱（没写说明也行）', r.ok && MAILS.length === m0 + 1 && MAILS[m0].to[0] === 'Me.Test@example.org' && !/补充说明/.test(MAILS[m0].html));

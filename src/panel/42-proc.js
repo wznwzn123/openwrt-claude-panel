@@ -111,7 +111,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); try { store.set('rp_ai', (await P('ckey_info')).ai ? '1' : '0'); } catch (e) {} moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -238,6 +238,7 @@ async function loadRole() {
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
+		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); }
 	} catch (e) {}
 }
@@ -276,7 +277,8 @@ function start() {
 	// 先用上次读到的菜单，把新装的插件放进侧边栏（这样上次停在插件页面也能直接打开）
 	try { navExtra(JSON.parse(store.get('rp_menu') || '[]'), false); renderNav(); } catch (e) {}
 	setTimeout(loadMenu, 2500);
-	if (store.get('rp_dev')) setTimeout(loadRole, 400);
+	// 我是谁（托管版：身份和权限；所有版本：装的是不是 AI 版，敏感信息里要不要放连接器地址）
+	setTimeout(loadRole, 400);
 	const qp = new URLSearchParams(location.search).get('p');
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}

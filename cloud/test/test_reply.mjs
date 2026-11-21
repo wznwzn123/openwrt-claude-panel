@@ -43,7 +43,11 @@ const f0 = globalThis.fetch; globalThis.fetch = async (input, init = {}) => { co
 let T = Date.now(); Date.now = () => T;
 env.ADMIN_EMAIL = 'boss@x.com';
 const H = hub();
-const rp = (b, ip = '5.5.5.5') => api('POST', '/api/report', b, { 'cf-connecting-ip': ip });
+// 6.0 第 67 项：官网报告问题要先登录官网账号（安装失败上报不用）。这里用一个登录着的账号 rep@x.com 报告
+const RUID = 'r' + 'p'.repeat(9), RSID = 'c'.repeat(32);
+await H.ctx.storage.put('u:' + RUID, { uid: RUID, email: 'rep@x.com', devs: [], sids: [RSID] });
+await H.ctx.storage.put('s:' + RSID, { uid: RUID, exp: Date.now() + 3650 * DAY, kid: 'k2', at: Date.now(), last: Date.now() });
+const rp = (b, ip = '5.5.5.5', anon) => api('POST', '/api/report', b, { 'cf-connecting-ip': ip, ...(anon || b.kind === 'install' ? {} : { cookie: '__Host-sid=' + RSID }) });
 const st = (code, ip = '6.6.6.6') => api('GET', '/api/fb/' + code, null, { 'cf-connecting-ip': ip });
 
 // 终端安装失败上报：拿到编号
@@ -188,16 +192,18 @@ ok('[面板反馈] 钥匙不对：403，不给编号', r.status === 403);
 	env.RESEND_API_KEY = 're_x'; const sent = []; const of = globalThis.fetch;
 	globalThis.fetch = async (u, i) => { if (String(u).includes('resend')) { sent.push(JSON.parse(i.body)); return new Response('{"id":"1"}', { status: 200 }); } return of(u, i); };
 	r = await rp({ kind: 'other', text: '官网报告带邮箱官网报告带邮箱', email: 'bad-mail' }, '5.5.6.2');
-	ok('[邮箱] 格式不对：400', r.status === 400 && /邮箱格式不对/.test((await r.json()).error));
-	r = await rp({ kind: 'other', text: '官网报告带邮箱官网报告带邮箱', email: 'me@x.com' }, '5.5.6.2'); j = await r.json();
-	const mine = sent.filter((m) => m.to[0] === 'me@x.com'), other = j.code.toUpperCase();
-	ok('[邮箱] 没登录、填了邮箱：不马上发「收到了」（邮箱可能是别人的），邮箱照样记下', j.ok && j.mailed === 0 && mine.length === 0, JSON.stringify(mine[0] || {}).slice(0, 200));
+	ok('[邮箱] 网页上传来的邮箱不管（格式不对也不报错）：一律用登录账号的邮箱', r.status === 200);
+	r = await rp({ kind: 'other', text: '官网报告的没登录不收' }, '5.5.6.4', true);
+	ok('[邮箱] 没登录：不收（6.0 第 67 项）', r.status === 401 && (await r.json()).login === true);
+	r = await rp({ kind: 'other', text: '官网报告带邮箱官网报告带邮箱', email: 'victim@x.com' }, '5.5.6.2'); j = await r.json();
+	const mine = sent.filter((m) => m.to[0] === 'rep@x.com'), other = j.code.toUpperCase();
+	ok('[邮箱] 填了别人的邮箱也没用：记账号邮箱，「收到了」发给账号邮箱，不给别人发', j.ok && j.mailed === 1 && mine.length >= 1 && !sent.some((m) => m.to[0] === 'victim@x.com'), JSON.stringify(j));
 	{ const id = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code).id; const n0 = sent.length;
 	await adm('POST', '/feedback/' + id + '/done', { state: 'fixed', note: '修好了', mail: true });
-	const m2 = sent.slice(n0).filter((m) => m.to[0] === 'me@x.com');
-	ok('[邮箱] 管理员处理好了点「发邮件」：发到他填的邮箱，带受理编号和查进度网址', m2.length === 1 && m2[0].html.includes('/r/' + j.code.toUpperCase()), JSON.stringify(m2[0] || {}).slice(0, 200)); }
+	const m2 = sent.slice(n0).filter((m) => m.to[0] === 'rep@x.com');
+	ok('[邮箱] 管理员处理好了点「发邮件」：发到账号邮箱，带受理编号和查进度网址', m2.length === 1 && m2[0].html.includes('/r/' + j.code.toUpperCase()), JSON.stringify(m2[0] || {}).slice(0, 200)); }
 	const L3 = (await (await adm('GET', '/feedback')).json()).list.find((x) => x.code === j.code);
-	ok('[邮箱] 管理页里能发邮件给他', JSON.stringify(L3.mailTo) === '["me@x.com"]');
+	ok('[邮箱] 管理页里能发邮件给他（账号邮箱）', JSON.stringify(L3.mailTo) === '["rep@x.com"]');
 	// 登录了官网账号：不填邮箱也会用账号邮箱
 	const uid = 'u' + 'a'.repeat(9), sid = 'b'.repeat(32);
 	await hub().ctx.storage.put('u:' + uid, { uid, email: 'acc@x.com', devs: [{ sub: A.sub, at: Date.now(), alias: '客厅' }], sids: [sid] });
@@ -211,7 +217,7 @@ ok('[面板反馈] 钥匙不对：403，不给编号', r.status === 403);
 	r = await api('POST', '/api/account/fb', {}, { cookie: '__Host-sid=' + sid, origin: 'https://panel.example' }); j = await r.json();
 	const codes = j.list.map((x) => x.code);
 	ok('[账号页] 我的反馈：有账号里路由器在面板发的、有登录后在官网报告的，带内容和路由器名', r.status === 200 && codes.includes(pc.toUpperCase()) && codes.includes(L4.code.toUpperCase()) && j.list.find((x) => x.code === pc.toUpperCase()).name === '客厅' && j.list.every((x) => typeof x.text === 'string'), JSON.stringify(j).slice(0, 300));
-	ok('[账号页] 别人的不会出现（没登录时填别的邮箱报告的）', !codes.includes(other));
+	ok('[账号页] 别人的不会出现（别的账号报告的）', !codes.includes(other));
 	r = await api('POST', '/api/account/fb', {}, { origin: 'https://panel.example' }); ok('[账号页] 没登录：401', r.status === 401);
 }
 

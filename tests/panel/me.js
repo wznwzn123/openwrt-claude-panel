@@ -40,13 +40,19 @@ function famOp(a) {
 	return { error: '不支持' };
 }
 const now = Date.now();
+const LSU = 'l'.repeat(24); // 路由器后台密码换来的凭证
 const msgs = [{ s: 1, f: 'u', t: now - 600e3, x: '节点页打不开了' }, { s: 2, f: 'u', t: now - 590e3, x: '一直转圈' }, { s: 3, f: 'a', t: now - 300e3, x: '你好，我看一下' }, { s: 4, f: 'a', t: now - 290e3, x: '先刷新试试' }];
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { const u = new URL(req.url, 'http://x');
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, ''); calls.push({ m, p: body.params }); res.writeHead(200, { 'content-type': 'application/json' });
 		let result;
 		if (m === 'svc_info') result = hosted ? { hosted: true, hub: 'https://panel.example', exp: Date.now() + 7 * 864e5 - 3600e3, off: false } : { hosted: false };
-		else if (m === 'cloud_info') result = hosted ? { enabled: true, url: 'https://ab3cd4ef.panel.example/cloud', tablet: 'x', pkey: 'p'.repeat(32), hosted: true, hub: 'https://panel.example' } : { enabled: false };
+		else if (m === 'cloud_info') result = hosted ? { enabled: true, url: 'https://ab3cd4ef.panel.example/cloud', tablet: true, pkey: 'p'.repeat(32), hosted: true, hub: 'https://panel.example' } : { enabled: false };
 		else if (m === 'hub_accounts') result = accs;
+		// 6.0 第 63 项：登录着的手机要带着确认本人的凭证才给（邮箱验证码的，或者路由器后台密码换的）
+		else if (['device_list', 'device_remove', 'ckey_info', 'tablet_url', 'rotate_key'].includes(m) && !body.params.self && !(body.params.sudo && (body.params.sudo === F.sudo || body.params.sudo === LSU))) return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: '要先确认是你本人：在「我的主页 → 敏感信息」里验证' } }));
+		else if (m === 'sudo_local') { if (body.params.pw !== 'rootpw') return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: '密码不对（还能再试 4 次）' } })); result = { sudo: LSU, exp: Date.now() + 600e3 }; }
+		else if (m === 'ckey_info') result = { ai: true, url: 'https://r.example/cgi-bin/mcp/' + 'c'.repeat(40), hosted };
+		else if (m === 'tablet_url') result = { url: 'https://ab3cd4ef.panel.example/cloud/beat/t/' + 't'.repeat(32) };
 		else if (m === 'device_list') result = { hosted, list: Object.entries(DEVS).map(([id, d]) => ({ id, name: d.name, at: d.at, via: d.via, seen: id === 'app00001' ? Math.floor(Date.now() / 1000) - 8 * 3600 : null, me: id === 'abcd1234' })) };
 		else if (m === 'device_remove') { if (body.params.all_others) { for (const k of Object.keys(DEVS)) if (k !== 'abcd1234') delete DEVS[k]; } else delete DEVS[body.params.id]; result = { ok: true }; }
 		else if (m === 'whoami') result = { hosted, hub: 'https://panel.example', emerg: EMERG, role: ROLE, perms: ROLE === 'sub' ? ['msg', 'node', 'speed'] : ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'], uid: 'abcdefghijk2' };
@@ -198,24 +204,31 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('[子账号] 整页不横向滚动' + T, (await p3.evaluate(() => document.documentElement.scrollWidth)) <= w);
 		await p3.screenshot({ path: path.join(SHOT, `me-sub-${w}.png`), fullPage: true });
 		await c3.close();
-		// 用应急登录码进来的（看不到我的主页）：「已登录的手机」还在系统操作里
+		// 用应急登录码进来的（看不到官网账号）：「我的主页」里只有这台路由器的敏感信息，用路由器后台密码验证
 		ROLE = 'owner'; EMERG = true;
 		const c4 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
 		const p4 = await c4.newPage(); p4.on('pageerror', (e) => problems.push('页面错误4' + T + '：' + e.message));
 		await p4.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); localStorage.setItem('rp_dev', 'abcd1234.' + 'x'.repeat(32)); });
 		await p4.goto('http://localhost:8181/panel/?p=more'); await W(2400);
-		if (!(await p4.isVisible('#devsBtn'))) { await p4.goto('http://localhost:8181/panel/?p=more'); await W(1800); }
-		ok('[应急登录码] 系统操作里还有「已登录的手机」，能打开列表' + T, await p4.isVisible('#devsBtn'));
-		await p4.click('#devsBtn'); await W(900);
-		ok('[应急登录码] 列表能用' + T, /已登录的手机/.test(await p4.locator('.modal').last().textContent()) && /安卓手机/.test(await p4.locator('.modal').last().textContent()));
+		ok('[应急登录码] 系统操作里没有「已登录的手机」「连接器地址」「换登录密钥」了' + T, (await p4.locator('#devsBtn, #ckeyBtn, [data-t="rotatekey"]').count()) === 0);
+		await p4.goto('http://localhost:8181/panel/?p=me'); await W(2200);
+		const t4 = await p4.textContent('#meBox');
+		ok('[应急登录码] 我的主页：说明是应急登录，敏感信息要输路由器后台密码' + T, /应急登录/.test(t4) && /输路由器后台密码验证/.test(t4) && /登录着的设备/.test(t4) && !/安卓手机/.test(t4), t4.slice(0, 200));
+		await p4.fill('#meBox [data-pw]', 'rootpw'); await p4.click('#meBox [data-pwok]'); await W(1200);
+		const t5 = await p4.textContent('#meBox');
+		ok('[应急登录码] 验证后：登录着的手机、连接器地址、平板网址、换登录密钥都在这一处' + T, /登录着的设备 · \d+ 台/.test(t5) && /安卓手机/.test(t5) && /这台路由器的钥匙/.test(t5) && (await p4.locator('#meBox [data-mp="ktab"], #meBox [data-mp="krot"]').count()) === 2, t5.slice(0, 300));
+		ok('[应急登录码] 托管版的「添加新手机」不在钥匙里（扫码只是打开官网，留在系统操作）' + T, (await p4.locator('#meBox [data-mp="kphone"]').count()) === 0);
+		await p4.screenshot({ path: path.join(SHOT, `me-emerg-${w}.png`), fullPage: true });
+		await p4.click('#meBox [data-mp="ktab"]'); await W(700);
+		ok('[应急登录码] 平板网址：带着凭证才拿到，先打码' + T, /beat\/t\//.test(await p4.locator('.modal').last().textContent()) && (await p4.locator('.modal .keybox.blur').count()) === 1 && calls.some((c) => c.m === 'tablet_url' && c.p.sudo === LSU));
 		await c4.close(); EMERG = false;
-		// 自建版：不显示
+		// 自建版：顶部没有头像；侧边栏有「我的主页」（只有敏感信息）
 		hosted = false; ROLE = 'owner';
 		const ctx2 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
 		const p2 = await ctx2.newPage(); p2.on('pageerror', (e) => problems.push('页面错误2' + T + '：' + e.message));
 		await p2.addInitScript(() => localStorage.setItem('rp_token', 'testtoken1234567890abc'));
 		await p2.goto('http://localhost:8181/panel/'); await W(1500);
-		ok('自建版：没有头像按钮' + T, !(await p2.isVisible('#meBtn')) && !(await p2.isVisible('#sideMe')));
+		ok('自建版：顶部没有头像；侧边栏有「我的主页」' + T, !(await p2.isVisible('#meBtn')) && (await p2.locator('#sideMe').evaluate((e) => !e.classList.contains('hidden'))) && /敏感信息/.test(await p2.textContent('#sideMe')));
 		await ctx2.close();
 	}
 	await browser.close(); server.close();

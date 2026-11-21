@@ -49,7 +49,7 @@ ok('同一个邮箱（不分大小写）不能再注册', (await call(B, '/api/a
 const stored = [...(await hub().ctx.storage.list({ prefix: 'u:' })).values()][0];
 ok('密码不明文保存', !JSON.stringify(stored).includes('alice-pass-1') && /^[0-9a-f]{64}$/.test(stored.pw));
 r = await call(A, '/api/account/me');
-ok('登录后看到自己的邮箱，路由器列表是空的', r.st === 200 && r.j.email === 'alice@x.com' && r.j.devs.length === 0);
+ok('登录后看到自己的邮箱（打码，完整的在账号设置里验证后看），路由器列表是空的', r.st === 200 && r.j.email === 'al***@x.com' && r.j.devs.length === 0);
 ok('没登录：看不到', (await call(anon, '/api/account/me')).st === 401);
 ok('乱填的会话号：看不到', (await call({ sid: 'a'.repeat(32) }, '/api/account/me')).st === 401);
 
@@ -159,7 +159,7 @@ ok('路由器移除某个账号后，那个账号里就没有这台了', !(await
 	r = await call(A, '/api/account/me');
 	ok('[个人主页] 账号页能拿到名字、头像、注册时间', r.j.name === '小明 b家里/b' && r.j.avatar === PNG && r.j.created > 0);
 	r = await call(A, '/api/account/brief');
-	ok('[个人主页] 顶栏用的简要信息：只有邮箱、名字、头像（GET 就行）', r.st === 200 && r.j.email === 'alice@x.com' && r.j.avatar === PNG && !('devs' in r.j));
+	ok('[个人主页] 顶栏用的简要信息：只有邮箱（打码）、名字、头像（GET 就行）', r.st === 200 && r.j.email === 'al***@x.com' && r.j.avatar === PNG && !('devs' in r.j));
 	{ const r0 = await call(anon, '/api/account/brief'); ok('[个人主页] 没登录拿不到简要信息（回 200 + ok:false，不在访客控制台里报错）', r0.st === 200 && r0.j.ok === false && !r0.j.email, JSON.stringify(r0)); }
 	L = await (await devAcc(R1, R1.rkey)).json();
 	const al = L.list.find((x) => x.email.startsWith('al'));

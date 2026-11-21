@@ -135,6 +135,8 @@ export function installFam(Hub) {
 			await this.ctx.storage.put('su:' + token, { sub, uid, exp });
 			return { st: 200, ok: true, sudo: token, exp };
 		},
+		// 凭证什么时候过期（路由器那边按这个记，不会比官网记得久）
+		async famSudoExp(sub, uid, token) { if (!(await this.famSudoOk(sub, uid, token))) return 0; return (await this.ctx.storage.get('su:' + token)).exp; },
 		async famSudoOk(sub, uid, token) {
 			if (!/^[a-z2-9]{24}$/.test(String(token || ''))) return false;
 			const s = await this.ctx.storage.get('su:' + token);
@@ -475,6 +477,8 @@ export async function famDev(p, H, b) {
 	}
 	// 下面这些都要先确认是本人
 	if (!(await H.famSudoOk(sub, uid, s(b.sudo)))) return J({ error: '要先确认是你本人（邮箱验证码）', sudo: true }, 403);
+	// 路由器问：这个凭证还有效吗（面板「敏感信息」里看登录密钥、连接器地址这些路由器上的东西时，路由器先问一下）
+	if (op === 'sudo_ok') return J({ ok: true, exp: await H.famSudoExp(sub, uid, s(b.sudo)) });
 	if (op === 'secret') return out(await H.famDevSecret(sub, uid));
 	if (op === 'sess_out') return out(b.all ? await H.famDevSessOut(sub, uid, '') : await H.famDevSessOut(sub, uid, s(b.id)));
 	if (op === 'join_create') return out(await H.devJoinCreate({ sub, uid, name: s(b.name), perms: b.perms, subExp: b.subExp }));

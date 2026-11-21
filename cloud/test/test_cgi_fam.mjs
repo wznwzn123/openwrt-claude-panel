@@ -75,11 +75,12 @@ ok('乱写的票不行', !!(await open('abcdefghijkmnpqrstuvwxyz', 'x')).error);
 ok('/open 地址只能换钥匙，调别的接口不行', (await cgi('/open', { jsonrpc: '2.0', id: 1, method: 'panel/overview', params: {}, client: 'panel' })).error?.code === -32601);
 const wa = await call(devA, 'whoami');
 ok('主账号：whoami 是 owner，有全部权限', wa.result && wa.result.role === 'owner' && wa.result.uid === ua && wa.result.perms.length === 7, JSON.stringify(wa));
-ok('主账号能用只有主账号能用的功能（手机管理）', !!(await call(devA, 'device_list')).result);
+ok('手机管理：没确认本人看不到登录着的手机（6.0 第 63 项）', /确认是你本人/.test((await call(devA, 'device_list')).error?.message || ''));
 
 // 2. 主账号确认本人 → 发加入码 → B 加入
 const su = await call(devA, 'fam', { op: 'sudo', code: '' });
 ok('主账号在面板里确认本人', su.result && /^[a-z2-9]{24}$/.test(su.result.sudo), JSON.stringify(su));
+ok('主账号确认本人后能看登录着的手机', !!(await call(devA, 'device_list', { sudo: su.result.sudo })).result);
 const jc = await call(devA, 'fam', { op: 'join_create', sudo: su.result.sudo, name: 'Bob', perms: ['msg', 'node', 'speed'] });
 ok('主账号在面板里生成加入码', jc.result && /^[A-Z2-9]{8}$/.test(jc.result.code), JSON.stringify(jc));
 ok('没确认本人不能生成加入码', !!(await call(devA, 'fam', { op: 'join_create', sudo: 'x', name: 'x', perms: [] })).error);
@@ -100,9 +101,11 @@ ok('子账号：换登录密钥不行', (await code(devB, 'rotate_key', {})) ===
 ok('子账号：家人管理（生成加入码）不行', /只有主账号/.test((await call(devB, 'fam', { op: 'join_create', sudo: su.result.sudo })).error?.message || ''));
 ok('子账号：AI 工具里的执行命令不行', (await cgi('/' + TOKEN, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name: 'run_command', arguments: { command: 'id' } }, client: 'panel', dev: devB })).error?.code === -32012);
 ok('子账号：权限错误的提示说清楚是哪一项', /代理设置/.test((await call(devB, 'oc_set', {})).error?.message || ''));
-const lb = await call(devB, 'device_list');
+const suB = (await call(devB, 'fam', { op: 'sudo', code: '' })).result.sudo;
+ok('子账号：拿主账号的凭证看不了（凭证只认发给的那个账号）', /确认是你本人/.test((await call(devB, 'device_list', { sudo: su.result.sudo })).error?.message || ''));
+const lb = await call(devB, 'device_list', { sudo: suB });
 ok('子账号：登录的手机列表里只有自己的', lb.result && lb.result.list.length === 1 && lb.result.list[0].me, JSON.stringify(lb.result));
-ok('子账号：不能移除主账号的手机', !!(await call(devB, 'device_remove', { id: devA.slice(0, 8) })).error && !!devs()[devA.slice(0, 8)]);
+ok('子账号：不能移除主账号的手机', !!(await call(devB, 'device_remove', { id: devA.slice(0, 8), sudo: suB })).error && !!devs()[devA.slice(0, 8)]);
 const mb = await call(devB, 'fam', { op: 'members' });
 ok('子账号看家人列表：只看到主账号和自己', mb.result && mb.result.owner && mb.result.subs.length === 1 && mb.result.subs[0].uid === ub, JSON.stringify(mb.result));
 

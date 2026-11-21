@@ -39,6 +39,7 @@ P.update_status = function() {
 /* ---------- 换一把新的登录密钥：旧的登录地址马上作废（截图泄露、手机丢了时用） ---------- */
 P.rotate_key = function(a) {
 	if (a?.confirm != 'ROTATE') die('需要确认');
+	need_sudo(a, true);
 	let nt = trim(sh("tr -dc 'a-z0-9' < /dev/urandom | head -c 40").out);
 	if (length(nt) != 40) die('生成新密钥失败，稍后再试');
 	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
@@ -61,7 +62,8 @@ P.cloud_info = function() {
 	}
 	if (!c.URL) return { enabled: false };
 	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建版没有 PKEY，面板就用登录密钥
-	return { enabled: true, url: c.URL, tablet: c.URL + '/beat/t/' + c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
+	// 平板网址带着平板的钥匙：不在这里给，在「我的主页 → 敏感信息」里验证后才给（P.tablet_url）；这里只说有没有
+	return { enabled: true, url: c.URL, tablet: !!c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
 };
 
 P.wd_check = function() {

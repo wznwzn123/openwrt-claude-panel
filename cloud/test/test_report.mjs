@@ -42,12 +42,18 @@ const MAILS = []; env.RESEND_API_KEY = 're_test';
 const f0 = globalThis.fetch; globalThis.fetch = async (input, init = {}) => { const url = typeof input === 'string' ? input : input.url; if (url === 'https://api.resend.com/emails') { MAILS.push(JSON.parse(init.body)); return new Response('{"id":"m"}'); } return f0(input, init); };
 let T = Date.now(); Date.now = () => T;
 env.ADMIN_EMAIL = 'boss@x.com';
-const rp = (b, ip = '5.5.5.5') => api('POST', '/api/report', b, { 'content-type': 'application/json', 'cf-connecting-ip': ip });
+// 6.0 第 67 项：官网报告问题要先登录官网账号（安装失败上报不用）。这里用一个登录着的账号报告
+const RK0 = env.RESEND_API_KEY; delete env.RESEND_API_KEY;
+const regR = await api('POST', '/api/account/register', { email: 'rep@x.com', password: 'rep-pass-12345' }, { 'cf-connecting-ip': '9.9.9.9' });
+const SID = (/sid=([a-z2-9]+)/.exec(regR.headers.get('set-cookie') || '') || [])[1];
+env.RESEND_API_KEY = RK0;
+const rp = (b, ip = '5.5.5.5', anon) => api('POST', '/api/report', b, { 'content-type': 'application/json', 'cf-connecting-ip': ip, ...(anon || b.kind === 'install' ? {} : { cookie: '__Host-sid=' + SID }) });
 const H = hub();
 
 // 提交
 let r = await rp({ kind: 'security', text: '面板某个接口没校验参数，可以读到别的文件', contact: 'sec@x.com' });
-ok('[报告] 不用登录就能提交安全问题', r.status === 200 && (await r.json()).ok === true);
+ok('[报告] 登录了官网账号就能提交安全问题', r.status === 200 && (await r.json()).ok === true);
+{ const a = await rp({ kind: 'security', text: '没登录也想报告一个安全问题试试' }, '5.5.5.6', true); const j = await a.json(); ok('[报告] 没登录：不收，说要先登录（6.0 第 67 项）', a.status === 401 && j.login === true && /先登录/.test(j.error)); }
 let L = await (await adm('GET', '/feedback')).json();
 ok('[报告] 管理页反馈列表里能看到，标着「官网 · 安全问题」、联系方式', L.list.length === 1 && L.list[0].name === '官网 · 安全问题' && L.list[0].kind === 'security' && L.list[0].web === 1 && L.list[0].contact === 'sec@x.com' && L.list[0].sub === '', JSON.stringify(L.list[0]));
 ok('[报告] 不记 IP', !JSON.stringify(L.list).includes('5.5.5.5'));

@@ -33,24 +33,24 @@ const hostSid = /^__Host-sid=([a-z2-9]{32});/.exec(sc.find((x) => x.startsWith('
 ok('注册：登录 Cookie 用 __Host-sid（Secure、Path=/、不带 Domain，子域名改不了）', !!hostSid && sc.some((x) => /^__Host-sid=.*; Path=\/; HttpOnly; Secure; SameSite=Lax/.test(x) && !/Domain=/i.test(x)), sc.join(' | '));
 ok('注册：同时删掉旧名字的 sid', sc.some((x) => /^sid=; .*Max-Age=0/.test(x)));
 let me = await (await go('/api/account/me', { headers: { cookie: '__Host-sid=' + hostSid } })).json();
-ok('带 __Host-sid 能用', me.ok && me.email === 'alice@x.com');
+ok('带 __Host-sid 能用', me.ok && me.email === 'al***@x.com');
 // 子域名用 Domain= 塞进来一个别人的 sid（Cookie 头里排在前面）：认 __Host-sid，不认它
 await post('/api/account/code', { email: 'mallory@x.com', kind: 'reg' });
 const code2 = /验证码 (\d{6})/.exec(MAILS.at(-1)?.subject || '')?.[1];
 r = await post('/api/account/register', { email: 'mallory@x.com', password: 'mallory-pass-1', code: code2 });
 const evil = /^__Host-sid=([a-z2-9]{32});/.exec(cookies(r.r).find((x) => x.startsWith('__Host-sid=')) || '')?.[1];
 me = await (await go('/api/account/me', { headers: { cookie: 'sid=' + evil + '; __Host-sid=' + hostSid } })).json();
-ok('子域名塞进来的 sid 不管用：还是自己的账号', me.ok && me.email === 'alice@x.com', me.email);
+ok('子域名塞进来的 sid 不管用：还是自己的账号', me.ok && me.email === 'al***@x.com', me.email);
 // 没登录的人（没有 __Host-sid）被子域名塞了一个新登录的 sid（攻击者自己的账号）：不认，不会被登录成别人的账号
 r = await go('/api/account/me', { headers: { cookie: 'sid=' + evil } });
 ok('没登录时子域名塞进来一个新登录的 sid：不认（不会被登录成别人的账号）', r.status === 401 && !cookies(r).some((x) => x.startsWith('__Host-sid=' + evil)), r.status);
 r = await post('/api/report', { kind: 'other', text: '没登录，带着塞进来的旧名字 Cookie', email: '' }, { 'cf-connecting-ip': '3.3.3.9', cookie: 'sid=' + evil });
-ok('报告表单也不认塞进来的 sid（不会记到别人的账号下）', r.st === 200 && !(await hub().feedbacks())[0].uid, JSON.stringify((await hub().feedbacks())[0]));
+ok('报告表单也不认塞进来的 sid：当没登录，不收（6.0 起报告要先登录），也不会记到别人的账号下', r.st === 401 && !(await hub().feedbacks()).some((x) => /塞进来的旧名字/.test(x.text)), JSON.stringify(r.j));
 // 改名之前就登录着的（只有旧的 sid，会话里没有 h）：照样认，并换成新的 Cookie
 const ss = await S().get('s:' + hostSid); delete ss.h; await S().put('s:' + hostSid, ss);
 r = await go('/api/account/me', { headers: { cookie: 'sid=' + hostSid } });
 sc = cookies(r);
-ok('改名之前登录的旧 Cookie 照样认，顺便换成 __Host-sid、删掉旧的（不用重新登录）', (await r.clone().json()).email === 'alice@x.com' && sc.some((x) => x.startsWith('__Host-sid=' + hostSid + ';')) && sc.some((x) => /^sid=; /.test(x)), sc.join(' | '));
+ok('改名之前登录的旧 Cookie 照样认，顺便换成 __Host-sid、删掉旧的（不用重新登录）', (await r.clone().json()).email === 'al***@x.com' && sc.some((x) => x.startsWith('__Host-sid=' + hostSid + ';')) && sc.some((x) => /^sid=; /.test(x)), sc.join(' | '));
 r = await post('/api/account/logout', {}, { cookie: '__Host-sid=' + hostSid });
 sc = cookies(r.r);
 ok('退出：新旧 Cookie 都删掉', sc.some((x) => /^__Host-sid=; /.test(x)) && sc.some((x) => /^sid=; /.test(x)));
@@ -107,16 +107,18 @@ const p = await hub().famPerson(uid);
 ok('没设名字：默认名字是打了码的（xi*** 这种），拼不出完整邮箱', p.name === 'al***' && p.email === 'al***@x.com' && !JSON.stringify(p).includes('alice@'), JSON.stringify(p));
 void u;
 
-// 5. 「收到了」邮件只发给登录账号本人的邮箱
+// 5. 「收到了」邮件只发给登录账号本人的邮箱（6.0 第 67 项：报告要先登录，邮箱一律用账号邮箱，网页上填的不管）
 const n0 = MAILS.length;
 r = await post('/api/report', { kind: 'other', text: '不登录，填了别人的邮箱试一下', email: 'victim@x.com' }, { 'cf-connecting-ip': '3.3.3.3' });
-ok('没登录、填了邮箱：不发「收到了」邮件（邮箱照样记下，回复时再发）', r.st === 200 && MAILS.length === n0 && r.j.mailed === 0 && (await hub().feedbacks())[0].emails[0] === 'victim@x.com', MAILS.slice(n0).map((m) => String(m.to)).join(','));
-r = await post('/api/report', { kind: 'other', text: '登录了，填自己的邮箱' + ' ', email: 'alice@x.com' }, { 'cf-connecting-ip': '3.3.3.4', cookie: '__Host-sid=' + evil });
-ok('登录了但填的不是自己的邮箱：也不发', MAILS.length === n0, MAILS.slice(n0).map((m) => String(m.to)).join(','));
+ok('没登录：不收，不发任何邮件', r.st === 401 && r.j.login === true && MAILS.length === n0 && !(await hub().feedbacks()).some((x) => (x.emails || []).includes('victim@x.com')), JSON.stringify(r.j));
+r = await post('/api/report', { kind: 'other', text: '登录了（mallory），填了 alice 的邮箱', email: 'alice@x.com' }, { 'cf-connecting-ip': '3.3.3.4', cookie: '__Host-sid=' + evil });
+const fm = (await hub().feedbacks()).find((x) => /填了 alice 的邮箱/.test(x.text));
+ok('登录了但填别人的邮箱：没用，记的和发的都是自己账号的邮箱，alice 收不到', r.st === 200 && fm && JSON.stringify(fm.emails) === '["mallory@x.com"]' && !MAILS.slice(n0).some((m) => String(m.to).toLowerCase() === 'alice@x.com'), JSON.stringify(fm && fm.emails));
 const ls = (await post('/api/account/login', { email: 'alice@x.com', password: 'alice-pass-1' }, { 'cf-connecting-ip': '3.3.3.5' })).r;
 const s2 = /^__Host-sid=([a-z2-9]{32});/.exec(cookies(ls).find((x) => x.startsWith('__Host-sid=')) || '')?.[1];
-r = await post('/api/report', { kind: 'other', text: '登录了，填自己的邮箱试一下', email: 'Alice@X.com' }, { 'cf-connecting-ip': '3.3.3.6', cookie: '__Host-sid=' + s2 });
-ok('登录了、填的是自己的邮箱：发「收到了」', r.j.mailed === 1 && MAILS.length === n0 + 1 && String(MAILS.at(-1).to).toLowerCase() === 'alice@x.com', JSON.stringify(r.j));
+const n1 = MAILS.length;
+r = await post('/api/report', { kind: 'other', text: '登录了，不填邮箱也行的报告', email: '' }, { 'cf-connecting-ip': '3.3.3.6', cookie: '__Host-sid=' + s2 });
+ok('登录了：「收到了」发到自己的账号邮箱', r.j.mailed === 1 && MAILS.length === n1 + 1 && String(MAILS.at(-1).to).toLowerCase() === 'alice@x.com', JSON.stringify(r.j));
 
 // 6. 两步验证码不能重复登录
 r = await post('/api/admin/2fa/begin', {}, ADM);

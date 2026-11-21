@@ -15,7 +15,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (body.method !== 'panel/open_login') return E(-32601, 'not found');
 		if (body.params.ticket !== 'goodticketgoodticketgood') return E(-32000, '这个链接过期了：回到官网「我的路由器」重新点「打开面板」');
 		const id = 'opn' + String(++n).padStart(5, '0'), s = 'z'.repeat(32); DEVS[id] = { s, name: body.params.name, at: Date.now() / 1000 | 0, via: '官网账号 al***@x.com' }; return R({ token: TOK, dev: id + '.' + s, id }); }
-	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const tok = decodeURIComponent(u.pathname.split('/').pop()); const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, ''); calls.push({ m, dev: body.dev, t: Date.now() });
+	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const tok = decodeURIComponent(u.pathname.split('/').pop()); const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, ''); calls.push({ m, dev: body.dev, t: Date.now(), p: body.params });
 		if (tok !== TOK) { res.writeHead(404); return res.end('{"error":"not found"}'); }
 		const dm = /^([a-z0-9]{8})\.([a-z0-9]{32})$/.exec(body.dev || ''), me = dm && DEVS[dm[1]] && DEVS[dm[1]].s === dm[2] ? dm[1] : null;
 		const R = (result) => res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result })), E = (code, message, data) => res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code, message, data } }));
@@ -23,11 +23,14 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (STOP && me) return E(-32011, STOP, { hub: 'https://hub.example' });
 		const OWN = ['term', 'fs_list', 'rotate_key', 'oc_set'];
 		if (ROLE.role === 'sub' && OWN.includes(m)) return E(-32012, '只有主账号能用这个功能');
-		if (m === 'whoami') return R({ hosted, hub: 'https://hub.example', role: ROLE.role, perms: ROLE.perms, uid: 'aaaaaaaaaaaa', dev: me });
+		if (m === 'whoami') return R({ hosted, hub: 'https://hub.example', role: ROLE.role, perms: ROLE.perms, uid: 'aaaaaaaaaaaa', dev: me, ai });
 		if (m === 'device_approve') {
 			if (body.params.code !== 'ABCD2345') return E(-32000, '登录码不对');
 			const id = 'new' + String(++n).padStart(5, '0'), s = 'y'.repeat(32); DEVS[id] = { s, name: body.params.name, at: Date.now() / 1000 | 0, via: '账号 al***@x.com' }; return R({ dev: id + '.' + s, id });
 		}
+		// 6.0 第 63 项：登录着的手机、连接器地址要带着确认本人的凭证（这里是路由器后台密码换的）
+		if (m === 'sudo_local') return body.params.pw === 'rootpw' ? R({ sudo: 'l'.repeat(24), exp: Date.now() + 600e3 }) : E(-32000, '密码不对（还能再试 4 次）');
+		if (['device_list', 'ckey_info'].includes(m) || (m === 'device_remove' && !body.params.self)) { if (body.params.sudo !== 'l'.repeat(24)) return E(-32000, '要先确认是你本人：在「我的主页 → 敏感信息」里验证'); }
 		if (m === 'device_list') return R({ hosted, list: Object.entries(DEVS).map(([id, d]) => ({ id, name: d.name, at: d.at, via: d.via, seen: null, me: id === me })) });
 		if (m === 'device_remove') { const id = body.params.self ? me : body.params.all_others ? null : body.params.id; if (body.params.all_others) { for (const k of Object.keys(DEVS)) if (k !== me) delete DEVS[k]; } else delete DEVS[id]; return R({ ok: true }); }
 		if (m === 'ckey_info') return R(ai ? { ai: true, url: 'https://r.example.com/cgi-bin/mcp/' + 'c'.repeat(40), hosted } : { ai: false });
@@ -67,21 +70,23 @@ const vis = (page, sel) => page.isVisible(sel);
 	ok('手机钥匙存在这台手机上，之后每个请求都带着', /^new00001\./.test(await page.evaluate(() => localStorage.getItem('rp_dev'))) && calls.filter((c) => c.m !== 'device_approve').every((c) => /^new00001\./.test(c.dev || '')));
 	await page.reload(); await W(1500);
 	ok('刷新后不用再登录', !(await vis(page, '#needcode')));
-	// 3. 系统操作：已登录的手机、Claude 连接器地址、添加新手机（托管版：扫码打开官网）
+	// 3. 已登录的手机、Claude 连接器地址：6.0 起只在「我的主页 → 敏感信息」（应急登录的用路由器后台密码验证）；添加新手机（托管版：扫码打开官网）还在系统操作
 	await page.goto('http://localhost:8143/panel/?p=more'); await W(1500);
-	ok('「系统操作」有「已登录的手机」和「Claude 连接器地址」', await vis(page, '#devsBtn') && await vis(page, '#ckeyBtn'));
-	await page.click('#devsBtn'); await W(800);
-	let t = await page.textContent('.modal');
-	ok('已登录的手机：列出两台，标出「这台」，这台没有移除按钮', /iPhone · Safari/.test(t) && /安卓手机 Pixel 8 · Edge/.test(t) && /这台/.test(t) && (await page.$$('.modal [data-rm]')).length === 1);
-	ok('已登录的手机：说移除后要从官网重新打开（不再说登录码）', /从官网重新打开/.test(t) && !/登录码/.test(t));
-	await page.screenshot({ path: path.join(__dirname, 'shots', 'lc-02-devs.png') });
-	await page.click('.modal [data-rm]'); await W(400); await page.locator('.modal').last().locator('button:has-text("移除")').click(); await W(900);
-	ok('移除别的手机', !DEVS.old00001 && (await page.$$('.modal [data-rm]')).length === 0);
-	await page.click('.modal button:has-text("关闭")'); await W(400);
-	await page.click('#ckeyBtn'); await W(800);
+	ok('「系统操作」里没有「已登录的手机」「Claude 连接器地址」了', (await page.locator('#devsBtn, #ckeyBtn').count()) === 0);
+	await page.goto('http://localhost:8143/panel/?p=me'); await W(1800);
+	ok('我的主页：没验证看不到手机列表', !/iPhone · Safari/.test(await page.textContent('#meBox')) && (await page.locator('#meBox [data-pw]').count()) === 1);
+	await page.fill('#meBox [data-pw]', 'rootpw'); await page.click('#meBox [data-pwok]'); await W(1200);
+	let t = await page.textContent('#meBox');
+	ok('已登录的手机：列出两台，标出「这台」，这台没有移除按钮', /iPhone · Safari/.test(t) && /安卓手机 Pixel 8 · Edge/.test(t) && /这台/.test(t) && (await page.$$('#meBox [data-mp="drm"]')).length === 1);
+	ok('已登录的手机：说移除后要从官网重新打开（不再说登录码）', /从官网重新打开/.test(t) && !/登录码/.test(t.replace(/应急登录码/g, '')));
+	await page.screenshot({ path: path.join(__dirname, 'shots', 'lc-02-devs.png'), fullPage: true });
+	await page.click('#meBox [data-mp="drm"]'); await W(400); await page.locator('.modal').last().locator('button:has-text("移除")').click(); await W(900);
+	ok('移除别的手机（带着凭证）', !DEVS.old00001 && (await page.$$('#meBox [data-mp="drm"]')).length === 0 && calls.some((c) => c.m === 'device_remove' && c.p && c.p.sudo));
+	await page.click('#meBox [data-mp="kckey"]'); await W(800);
 	t = await page.textContent('.modal');
 	ok('Claude 连接器地址：先打码，说明打不开面板，提醒旧连接器要换', (await page.getAttribute('.modal .keybox', 'class')).includes('blur') && /打不开面板/.test(t) && /重新添加/.test(t) && t.includes('c'.repeat(40)));
 	await page.click('.modal button:has-text("完成")'); await W(400);
+	await page.goto('http://localhost:8143/panel/?p=more'); await W(1500);
 	const addBtn = await page.$('[data-t="addphone"], #addPhoneBtn, button:has-text("添加新手机")');
 	if (addBtn) {
 		await addBtn.click(); await W(900); t = await page.textContent('.modal');

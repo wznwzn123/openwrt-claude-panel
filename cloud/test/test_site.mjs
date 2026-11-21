@@ -57,7 +57,7 @@ for (const dark of [false, true]) {
 	await page.click('#fReg button.primary'); await W(300);
 	ok('密码太短：浏览器先拦住（不提交）', await page.isVisible('#fReg'));
 	await page.fill('#fReg [name=password]', 'alice-pass-1'); await page.click('#fReg button.primary'); await W(800);
-	ok('注册后进入「我的路由器」，显示邮箱', await page.isVisible('#vDash') && (await page.textContent('#who')) === 'alice@x.com');
+	ok('注册后进入「我的路由器」，显示邮箱（打码，完整的在账号设置里验证后看）', await page.isVisible('#vDash') && (await page.textContent('#who')) === 'al***@x.com');
 	ok('还没有路由器：提示去「装新路由器」', /还没有路由器/.test(await page.textContent('#devs')) && /装新路由器/.test(await page.textContent('#devs')));
 	await shot('empty');
 	// 绑定（5.2 以前装的老路由器：用配对码，收在「路由器已经装好了」里）
@@ -96,7 +96,7 @@ for (const dark of [false, true]) {
 		// 到期：打开账号页自动弹出申请表
 		const dv3 = await H.ctx.storage.get(dk); dv3.exp = Date.now() - 1000; await H.ctx.storage.put(dk, dv3); await H.cleanup(); await page.reload(); await W(1000);
 		ok('到期暂停：打开账号页自动弹出「托管服务已到期」申请表', await page.isVisible('#fApply') && /托管服务已到期/.test(await page.textContent('.mask')));
-		ok('申请表：用户账号自动填好（只读）、申请日期是今天', (await page.inputValue('#fApply [name=acc]')) === 'alice@x.com' && (await page.inputValue('#fApply [name=day]')) === new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10));
+		ok('申请表：用户账号自动填好（只读，打码）、申请日期是今天', (await page.inputValue('#fApply [name=acc]')) === 'al***@x.com' && (await page.inputValue('#fApply [name=day]')) === new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10));
 		await shot('apply');
 		await page.click('#fApply button.primary'); await W(300);
 		ok('没选从哪里知道的：浏览器先拦住', await page.isVisible('#fApply'));
@@ -143,7 +143,7 @@ for (const dark of [false, true]) {
 	ok('不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
 	// 账号设置：我的主页上的「账号设置」进去，返回键回到我的主页
 	await page.click('#setBtn'); await W(500);
-	ok('[账号设置] 点「账号设置」：进到账号设置（资料、密码、登录着的设备、注销），我的主页藏起来', await page.isVisible('#vSet') && !(await page.isVisible('#vDash')) && await page.isVisible('#fPw') && await page.isVisible('#sessList') && await page.isVisible('#delBtn') && await page.isVisible('#meEdit') && /alice@x\.com/.test(await page.textContent('#setWho')));
+	ok('[账号设置] 点「账号设置」：进到账号设置（资料、密码、登录着的设备、注销），我的主页藏起来', await page.isVisible('#vSet') && !(await page.isVisible('#vDash')) && await page.isVisible('#fPw') && await page.isVisible('#sessList') && await page.isVisible('#delBtn') && await page.isVisible('#meEdit') && /al\*\*\*@x\.com/.test(await page.textContent('#setWho')));
 	ok('[账号设置] 我的主页上不再有密码和设备这两块', (await page.locator('#vDash #fPw, #vDash #sessList, #vDash [data-blk="sess"], #vDash [data-blk="acct"]').count()) === 0);
 	ok('[账号设置] 不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
 	await page.goBack(); await W(500);
@@ -296,6 +296,12 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	const Y = await mk('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36');
 	await login(Y.p);
 	await X.p.goto(B + '/app#settings'); await X.p.reload(); await W(1200);
+	// 6.0 第 63 项：完整邮箱和登录着的设备，验证一下才给
+	ok('[登录设备] 没验证：设备列表锁着，邮箱打码', /验证一下才能看/.test(await X.p.textContent('#sessList')) && !/Windows/.test(await X.p.textContent('#sessList')) && (await X.p.textContent('#setWho')) === 'se***@x.com', await X.p.textContent('#setWho'));
+	if (SHOTS) { await X.p.locator('#sessList').scrollIntoViewIfNeeded(); await X.p.screenshot({ path: SHOTS + '/site-sessions-lock.png' }); }
+	await X.p.click('#sessList [data-sess-sudo]'); await W(400);
+	await X.p.click('.mask [data-ok]'); await W(1300);
+	ok('[登录设备] 验证后：显示完整邮箱', (await X.p.textContent('#setWho')) === 'sess@x.com', await X.p.textContent('#setWho'));
 	let t = await X.p.textContent('#sessList');
 	ok('[登录设备] 账号页列出两台：安卓手机 · Edge（这台设备）、Windows 电脑 · Chrome（有「退出」）', /安卓手机 · Edge/.test(t) && /这台设备/.test(t) && /Windows 电脑 · Chrome/.test(t) && await X.p.locator('#sessList [data-out]').count() === 1, t);
 	ok('[登录设备] 有别的设备时显示「退出其他所有设备」', await X.p.isVisible('#sessAll'));
@@ -344,7 +350,9 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	await page.click('.dlg [data-x]'); await W(300);
 	ok('[管理页] 关闭日志窗口', !(await page.isVisible('.dlg')));
 	// 标已修复：弹窗写补充说明、勾发邮件；撤回也能发
-	await realFetch(B + '/api/report', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '8.8.4.4' }, body: JSON.stringify({ kind: 'other', text: '常见问题页在手机上打不开，一直在转圈', contact: '邮箱 fix.me@example.org' }) });
+	// 6.0 第 67 项：官网报告要先登录（这里用一个登录着的账号 fix.me@example.org）
+	{ const H0 = env.H.get('hub'), ruid = 'f' + 'x'.repeat(9), rsid = 'e'.repeat(32); await H0.ctx.storage.put('u:' + ruid, { uid: ruid, email: 'fix.me@example.org', devs: [], sids: [rsid] }); await H0.ctx.storage.put('s:' + rsid, { uid: ruid, exp: Date.now() + 3650 * 86400e3, kid: 'k4', at: Date.now(), last: Date.now() });
+	await realFetch(B + '/api/report', { method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '8.8.4.4', cookie: '__Host-sid=' + rsid }, body: JSON.stringify({ kind: 'other', text: '常见问题页在手机上打不开，一直在转圈', contact: '邮箱 fix.me@example.org' }) }); }
 	env.RESEND_API_KEY = 're_test';
 	await page.reload(); await W(400); await page.fill('#fKey [name=k]', 'admin-key-1234567890').catch(() => {}); await page.click('#fKey button').catch(() => {}); await W(1200);
 	{ // 带截图的反馈：管理页要能真的显示出来（页面安全设置要允许 blob: 图片）
@@ -432,22 +440,9 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	r = await page.goto(B + '/security'); await W(300); t = await page.textContent('body');
 	ok('[安全] 打开 /security：做了哪些措施、没覆盖的风险、被入侵了怎么办', r.status() === 200 && /做了哪些措施/.test(t) && /没覆盖的风险/.test(t) && /签过名的安装包/.test(t) && /先验签名、再核对 SHA256/.test(t) && !/没有签名/.test(t) && /Cloudflare 能看到流量/.test(t) && /换登录密钥/.test(t));
 	ok('[安全] 不写「所有安全问题都已解决」「进不了」这类绝对的话', !/所有安全问题|进不了|绝对安全|100%/.test(t));
-	// 报告表单
-	await page.fill('#rpForm [name=text]', '太短'); await page.click('#rpGo'); await W(300);
-	ok('[报告] 太短：页面上直接提示，不提交', await page.isVisible('#rpErr') && /至少 10 个字/.test(await page.textContent('#rpErr')));
-	await page.selectOption('#rpForm [name=kind]', 'privacy');
-	await page.fill('#rpForm [name=text]', '我想删除我账号的所有数据，谢谢处理');
-	await page.fill('#rpForm [name=contact]', 'me@x.com');
-	await page.click('#rpGo'); await W(800);
-	ok('[报告] 提交成功：显示已经收到', await page.isVisible('#rpOk') && !(await page.isVisible('#rpForm')));
-	const FL = await env.H.get('hub').feedbacks();
-	ok('[报告] 管理后台收到：类型、内容、联系方式', FL.some((x) => x.kind === 'privacy' && /删除我账号/.test(x.text) && x.contact === 'me@x.com'));
+	// 报告表单（6.0 第 67 项：要先登录官网账号）
+	ok('[报告] 没登录：不显示表单，提示先登录，有「登录 / 注册」按钮', !(await page.isVisible('#rpForm')) && await page.isVisible('#rpLogin') && (await page.getAttribute('#rpLogin a', 'href')) === '/app#login');
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-security.png', fullPage: true });
-	await page.goto(B + '/security#report'); await page.reload(); await W(300);
-	await page.evaluate(() => { document.querySelector('#rpForm [name=website]').value = 'http://spam'; });
-	await page.fill('#rpForm [name=text]', '机器人提交的垃圾内容垃圾内容'); const n1 = (await env.H.get('hub').feedbacks()).length;
-	await page.click('#rpGo'); await W(600); await page.waitForSelector('#rpOk', { state: 'visible', timeout: 4000 }).catch(() => {});
-	ok('[报告] 陷阱字段被填（机器人）：页面显示成功，但不存', await page.isVisible('#rpOk') && (await env.H.get('hub').feedbacks()).length === n1);
 	ok('[隐私/安全] 页面没有报错', !e2.length, e2.join(' | '));
 	await ctx.close();
 }
@@ -474,14 +469,9 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		ok('[查进度] 首页输了 0：提示，不跳转', /0、1、O、L/.test(await page.textContent('#fbqErr')) && new URL(page.url()).pathname === '/');
 		await page.fill('#fbq [name=c]', ' abcd 2345 '); await page.click('#fbq button'); await W(600);
 		ok('[查进度] 首页输编号：跳到 /r/编号', new URL(page.url()).pathname === '/r/ABCD2345');
-		// 没登录：报告表单的邮箱是空的；填了邮箱，管理页能发邮件给他
+		// 没登录：不能报告（6.0 第 67 项）
 		await page.goto(B + '/security#report'); await W(500);
-		ok('[报告邮箱] 没登录：邮箱是空的，没有「已经登录」的提示', (await page.inputValue('#rpForm [name=email]')) === '' && !(await page.isVisible('#rpMe')));
-		await page.fill('#rpForm [name=text]', '官网报告：手机上安全说明页字太小了'); await page.fill('#rpForm [name=email]', 'bad-mail'); await page.click('#rpGo'); await W(300);
-		ok('[报告邮箱] 邮箱格式不对：页面上直接提示', /邮箱格式不对/.test(await page.textContent('#rpErr')));
-		await page.fill('#rpForm [name=email]', 'guest@x.com'); await page.click('#rpGo'); await W(800);
-		const g = (await env.H.get('hub').feedbacks()).find((x) => /字太小了/.test(x.text));
-		ok('[报告邮箱] 填了邮箱：存下来，管理页能给他发邮件；显示受理编号', g && JSON.stringify(g.emails) === '["guest@x.com"]' && !g.uid && /受理编号 [A-Z2-9]{8}/.test(await page.textContent('#rpOk')));
+		ok('[报告邮箱] 没登录：不显示表单，提示先登录', !(await page.isVisible('#rpForm')) && await page.isVisible('#rpLogin'));
 		// 登录：注册账号、绑定路由器；面板里发一条反馈；登录后在官网报告一条
 		await page.goto(B + '/app#login'); await W(500); await page.click('[data-tab="reg"]');
 		await page.fill('#fReg [name=email]', 'fbuser@x.com'); await page.fill('#fReg [name=password]', 'fbuser-pass-1'); await page.click('#fReg button.primary'); await W(900);
@@ -491,7 +481,14 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 		await page.fill('#fBind [name=code]', await pairOf(R3)); await page.click('#fBind button'); await W(900); await page.click('.mask [data-x]').catch(() => {}); await W(300);
 		const pf = await api('/api/dev/feedback', { sub: R3.sub, rkey: R3.rkey, text: '面板里发的：首页流量一直是 0' });
 		await page.goto(B + '/security#report'); await W(700);
-		ok('[报告邮箱] 登录了：邮箱自动填账号邮箱，写着会显示在账号页', (await page.inputValue('#rpForm [name=email]')) === 'fbuser@x.com' && /账号页「我的反馈」/.test(await page.textContent('#rpMe')));
+		ok('[报告邮箱] 登录了：邮箱自动填账号邮箱（打码）、灰掉不能改，写着会显示在账号页', (await page.inputValue('#rpForm [name=email]')) === 'fb***@x.com' && await page.isDisabled('#rpForm [name=email]') && /账号页「我的反馈」/.test(await page.textContent('#rpMe')));
+		await page.fill('#rpForm [name=text]', '太短'); await page.click('#rpGo'); await W(300);
+		ok('[报告] 太短：页面上直接提示，不提交', await page.isVisible('#rpErr') && /至少 10 个字/.test(await page.textContent('#rpErr')));
+		await page.evaluate(() => { document.querySelector('#rpForm [name=website]').value = 'http://spam'; });
+		await page.fill('#rpForm [name=text]', '机器人提交的垃圾内容垃圾内容'); const n1 = (await env.H.get('hub').feedbacks()).length;
+		await page.click('#rpGo'); await W(600); await page.waitForSelector('#rpOk', { state: 'visible', timeout: 4000 }).catch(() => {});
+		ok('[报告] 陷阱字段被填（机器人）：页面显示成功，但不存', await page.isVisible('#rpOk') && (await env.H.get('hub').feedbacks()).length === n1);
+		await page.goto(B + '/security#report'); await page.reload(); await W(700);
 		if (SHOTS) { await page.locator('#rpForm').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-rpmail.png' }); }
 		ok('[报告邮箱] 表单排版不重叠', (await lay(page, '#rpForm > *:not(.hp)')) === '', await lay(page, '#rpForm > *:not(.hp)'));
 		await page.fill('#rpForm [name=text]', '登录后报告：账号页的设备列表不显示城市'); await page.click('#rpGo'); await W(800);
@@ -597,7 +594,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 			await page.fill('#fCode [name=code]', pl.code === '111111' ? '222222' : '111111'); await page.click('#fCode button.primary'); await W(800);
 			ok('[新设备] 验证码错：提示，还在这一页［' + w + '］', /验证码不对/.test(await page.textContent('#fCode [data-err]')) && await page.isVisible('#fCode'));
 			await page.fill('#fCode [name=code]', pl.code); await page.click('#fCode button.primary'); await W(1500);
-			ok('[新设备] 验证码对：进了账号页［' + w + '］', await page.isVisible('#vDash') && /newdev@x\.com/.test(await page.textContent('#who')));
+			ok('[新设备] 验证码对：进了账号页［' + w + '］', await page.isVisible('#vDash') && /ne\*\*\*@x\.com/.test(await page.textContent('#who')));
 			await page.click('#outBtn'); await W(1200);
 			await page.goto(B + '/app#login'); await W(800);
 			await page.fill('#fLogin [name=email]', 'newdev@x.com'); await page.fill('#fLogin [name=password]', 'newdev-pass-1'); await page.click('#fLogin button.primary'); await W(1500);

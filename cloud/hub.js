@@ -652,10 +652,10 @@ export class Hub extends DurableObject {
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		const td = this.trialDays(), ts = td ? await this.trialState(u) : null, inst = await this.instList(u);
-		return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: ts && ts.max ? { days: td, max: ts.max, used: ts.used, left: ts.left, open: ts.open } : null, inst };
+		return { email: maskEmail(u.email), name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: ts && ts.max ? { days: td, max: ts.max, used: ts.used, left: ts.left, open: ts.open } : null, inst };
 	}
 	// 个人主页：名字和头像。头像是浏览器里裁成正方形、压缩好的小图（data:image/...;base64），单独存一份，不放进账号记录里
-	async brief(uid) { const u = await this.ctx.storage.get('u:' + uid); if (!u) return null; return { email: u.email, name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '' }; }
+	async brief(uid) { const u = await this.ctx.storage.get('u:' + uid); if (!u) return null; return { email: maskEmail(u.email), name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '' }; }
 	setProfile(uid, p) { return this.lock(() => this._setProfile(uid, p)); }
 	async _setProfile(uid, { name, avatar, layout }) {
 		const u = await this.ctx.storage.get('u:' + uid);
@@ -1346,9 +1346,11 @@ export async function hubFetch(req, env) {
 	if (p === '/api/report' && req.method === 'POST') {
 		const b = await body();
 		if (b.website) return J({ ok: true });
-		// 登录了官网账号的：没填邮箱就用账号邮箱，这条也会出现在账号页「我的反馈」里
+		// 6.0 第 67 项：官网报告问题要先登录官网账号；邮箱一律用账号邮箱（网页上改了也没用），这条也会出现在账号页「我的反馈」里
+		// 终端里的安装失败上报（kind=install）不在这个范围：照旧按安装码 / 路由器钥匙认账号
 		const me = b.kind === 'install' ? null : await H.who(await sidFor(req, H));
-		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), email: String(b.email || '').trim() || (me ? me.email : ''), uid: me ? me.uid : '', inv: String(b.inv || ''), sub: String(b.sub || ''), rkey: String(b.rkey || ''), ip: req.headers.get('cf-connecting-ip') || '' });
+		if (b.kind !== 'install' && !me) return J({ error: '先登录官网账号再报告问题', login: true }, 401);
+		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), email: me ? me.email : String(b.email || '').trim(), uid: me ? me.uid : '', inv: String(b.inv || ''), sub: String(b.sub || ''), rkey: String(b.rkey || ''), ip: req.headers.get('cf-connecting-ip') || '' });
 		return J(rest, st);
 	}
 	if (p === '/api/unregister' && req.method === 'POST') {
@@ -1734,7 +1736,8 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
 	if (a === 'profile') return out(await H.setProfile(me.uid, { name: b.name === undefined ? undefined : s(b.name), avatar: b.avatar === undefined ? undefined : s(b.avatar), layout: b.layout === undefined ? undefined : b.layout }));
 	if (a === 'fb') return out(await H.accountFb(me.uid, me.email));
-	if (a === 'sessions') return out(await H.sessions(me.uid, sid));
+	// 6.0 第 63 项：登录着的设备和完整邮箱只在「账号设置」里确认本人（邮箱验证码）后给
+	if (a === 'sessions') { if (!(await H.webSudoOk(sid))) return J({ error: '要先确认是你本人（邮箱验证码）', sudo: true }, 403); const r = await H.sessions(me.uid, sid); if (r.st === 200) r.email = me.email; return out(r); }
 	if (a === 'session_out') return out(await H.sessionOut(me.uid, sid, s(b.id)));
 	if (a === 'sessions_out_others') return out(await H.sessionsOutOthers(me.uid, sid, did));
 	if (a === 'bind') return out(await H.bind(me.uid, s(b.code), ip));

@@ -1,0 +1,142 @@
+#!/usr/bin/ucode
+// 云端备份的「自带加密」（6.0 第 9 项）：路由器没有 openssl 时用，云端备份照样只存密文
+// 加密：ChaCha20（RFC 8439，256 位密钥、96 位随机数，计数从 0 开始）；校验：HMAC-SHA256（RFC 2104，摘要用系统自带的 sha256sum）
+// 都是公开、成熟的算法，结果和 openssl / Node.js 算的一模一样（自动测试逐字节比对）
+// 用法：cmcp-bkcrypt rand 字节数                     → 随机数（十六进制）
+//       cmcp-bkcrypt chacha 密钥文件 随机数 输入 输出  → 加密 / 解密（同一个操作）；密钥用密钥文件第 1 行
+//       cmcp-bkcrypt hmac 密钥文件 文件                → 校验值（十六进制）；密钥用密钥文件第 2 行
+'use strict';
+import { open, readfile, writefile, popen, unlink } from 'fs';
+
+const M = 0xffffffff;
+function die(msg) { warn(msg + '\n'); exit(1); }
+function hexok(h, n) { return type(h) == 'string' && length(h) == n && match(h, /^[0-9a-f]+$/); }
+function hex2bin(h) { let a = []; for (let i = 0; i < length(h); i += 2) push(a, hex(substr(h, i, 2))); return a; }
+function bin2hex(s) { let o = ''; for (let i = 0; i < length(s); i++) o += sprintf('%02x', ord(s, i)); return o; }
+function keyline(f, n) {
+	let l = split(trim(readfile(f) ?? ''), '\n')[n - 1];
+	l = trim(l ?? '');
+	if (!hexok(l, 64)) die('密钥文件不对');
+	return l;
+}
+// 32 位小端字
+function le(b, i) { return b[i] | (b[i + 1] << 8) | (b[i + 2] << 16) | (b[i + 3] << 24); }
+
+function rand(n) {
+	let f = open('/dev/urandom', 'r');
+	if (!f) die('读不到随机数');
+	let s = f.read(n); f.close();
+	if (length(s) != n) die('读不到随机数');
+	return bin2hex(s);
+}
+
+// ChaCha20：每块 64 字节。为了在路由器上跑得快，16 个状态字用局部变量、20 轮展开写，整块一次拼出来
+function chacha(kf, nonce, fin, fout) {
+	if (!hexok(nonce, 24)) die('随机数不对');
+	let k = hex2bin(keyline(kf, 1)), n = hex2bin(nonce);
+	const s0 = 0x61707865, s1 = 0x3320646e, s2 = 0x79622d32, s3 = 0x6b206574;
+	const s4 = le(k, 0), s5 = le(k, 4), s6 = le(k, 8), s7 = le(k, 12), s8 = le(k, 16), s9 = le(k, 20), s10 = le(k, 24), s11 = le(k, 28);
+	const s13 = le(n, 0), s14 = le(n, 4), s15 = le(n, 8);
+	let fi = open(fin, 'r'), fo = open(fout, 'w');
+	if (!fi || !fo) die('打不开文件');
+	let s12 = 0;
+	// 每次读 64 KB（64 的整数倍，计数接得上）
+	while (true) {
+		let d = fi.read(65536);
+		if (d == null || !length(d)) break;
+		let out = [], len = length(d);
+		for (let o = 0; o < len; o += 64) {
+			let x0 = s0, x1 = s1, x2 = s2, x3 = s3, x4 = s4, x5 = s5, x6 = s6, x7 = s7, x8 = s8, x9 = s9, x10 = s10, x11 = s11, x12 = s12, x13 = s13, x14 = s14, x15 = s15, t;
+			for (let r = 0; r < 10; r++) {
+			x0 = (x0 + x4) & M; t = x12 ^ x0; x12 = ((t << 16) | (t >> 16)) & M;
+			x8 = (x8 + x12) & M; t = x4 ^ x8; x4 = ((t << 12) | (t >> 20)) & M;
+			x0 = (x0 + x4) & M; t = x12 ^ x0; x12 = ((t << 8) | (t >> 24)) & M;
+			x8 = (x8 + x12) & M; t = x4 ^ x8; x4 = ((t << 7) | (t >> 25)) & M;
+			x1 = (x1 + x5) & M; t = x13 ^ x1; x13 = ((t << 16) | (t >> 16)) & M;
+			x9 = (x9 + x13) & M; t = x5 ^ x9; x5 = ((t << 12) | (t >> 20)) & M;
+			x1 = (x1 + x5) & M; t = x13 ^ x1; x13 = ((t << 8) | (t >> 24)) & M;
+			x9 = (x9 + x13) & M; t = x5 ^ x9; x5 = ((t << 7) | (t >> 25)) & M;
+			x2 = (x2 + x6) & M; t = x14 ^ x2; x14 = ((t << 16) | (t >> 16)) & M;
+			x10 = (x10 + x14) & M; t = x6 ^ x10; x6 = ((t << 12) | (t >> 20)) & M;
+			x2 = (x2 + x6) & M; t = x14 ^ x2; x14 = ((t << 8) | (t >> 24)) & M;
+			x10 = (x10 + x14) & M; t = x6 ^ x10; x6 = ((t << 7) | (t >> 25)) & M;
+			x3 = (x3 + x7) & M; t = x15 ^ x3; x15 = ((t << 16) | (t >> 16)) & M;
+			x11 = (x11 + x15) & M; t = x7 ^ x11; x7 = ((t << 12) | (t >> 20)) & M;
+			x3 = (x3 + x7) & M; t = x15 ^ x3; x15 = ((t << 8) | (t >> 24)) & M;
+			x11 = (x11 + x15) & M; t = x7 ^ x11; x7 = ((t << 7) | (t >> 25)) & M;
+			x0 = (x0 + x5) & M; t = x15 ^ x0; x15 = ((t << 16) | (t >> 16)) & M;
+			x10 = (x10 + x15) & M; t = x5 ^ x10; x5 = ((t << 12) | (t >> 20)) & M;
+			x0 = (x0 + x5) & M; t = x15 ^ x0; x15 = ((t << 8) | (t >> 24)) & M;
+			x10 = (x10 + x15) & M; t = x5 ^ x10; x5 = ((t << 7) | (t >> 25)) & M;
+			x1 = (x1 + x6) & M; t = x12 ^ x1; x12 = ((t << 16) | (t >> 16)) & M;
+			x11 = (x11 + x12) & M; t = x6 ^ x11; x6 = ((t << 12) | (t >> 20)) & M;
+			x1 = (x1 + x6) & M; t = x12 ^ x1; x12 = ((t << 8) | (t >> 24)) & M;
+			x11 = (x11 + x12) & M; t = x6 ^ x11; x6 = ((t << 7) | (t >> 25)) & M;
+			x2 = (x2 + x7) & M; t = x13 ^ x2; x13 = ((t << 16) | (t >> 16)) & M;
+			x8 = (x8 + x13) & M; t = x7 ^ x8; x7 = ((t << 12) | (t >> 20)) & M;
+			x2 = (x2 + x7) & M; t = x13 ^ x2; x13 = ((t << 8) | (t >> 24)) & M;
+			x8 = (x8 + x13) & M; t = x7 ^ x8; x7 = ((t << 7) | (t >> 25)) & M;
+			x3 = (x3 + x4) & M; t = x14 ^ x3; x14 = ((t << 16) | (t >> 16)) & M;
+			x9 = (x9 + x14) & M; t = x4 ^ x9; x4 = ((t << 12) | (t >> 20)) & M;
+			x3 = (x3 + x4) & M; t = x14 ^ x3; x14 = ((t << 8) | (t >> 24)) & M;
+			x9 = (x9 + x14) & M; t = x4 ^ x9; x4 = ((t << 7) | (t >> 25)) & M;
+			}
+		x0 = (x0 + s0) & M;
+		x1 = (x1 + s1) & M;
+		x2 = (x2 + s2) & M;
+		x3 = (x3 + s3) & M;
+		x4 = (x4 + s4) & M;
+		x5 = (x5 + s5) & M;
+		x6 = (x6 + s6) & M;
+		x7 = (x7 + s7) & M;
+		x8 = (x8 + s8) & M;
+		x9 = (x9 + s9) & M;
+		x10 = (x10 + s10) & M;
+		x11 = (x11 + s11) & M;
+		x12 = (x12 + s12) & M;
+		x13 = (x13 + s13) & M;
+		x14 = (x14 + s14) & M;
+		x15 = (x15 + s15) & M;
+			s12++;
+			if (len - o >= 64) push(out, chr(ord(d, o) ^ (x0 & 255), ord(d, o + 1) ^ ((x0 >> 8) & 255), ord(d, o + 2) ^ ((x0 >> 16) & 255), ord(d, o + 3) ^ ((x0 >> 24) & 255), ord(d, o + 4) ^ (x1 & 255), ord(d, o + 5) ^ ((x1 >> 8) & 255), ord(d, o + 6) ^ ((x1 >> 16) & 255), ord(d, o + 7) ^ ((x1 >> 24) & 255), ord(d, o + 8) ^ (x2 & 255), ord(d, o + 9) ^ ((x2 >> 8) & 255), ord(d, o + 10) ^ ((x2 >> 16) & 255), ord(d, o + 11) ^ ((x2 >> 24) & 255), ord(d, o + 12) ^ (x3 & 255), ord(d, o + 13) ^ ((x3 >> 8) & 255), ord(d, o + 14) ^ ((x3 >> 16) & 255), ord(d, o + 15) ^ ((x3 >> 24) & 255), ord(d, o + 16) ^ (x4 & 255), ord(d, o + 17) ^ ((x4 >> 8) & 255), ord(d, o + 18) ^ ((x4 >> 16) & 255), ord(d, o + 19) ^ ((x4 >> 24) & 255), ord(d, o + 20) ^ (x5 & 255), ord(d, o + 21) ^ ((x5 >> 8) & 255), ord(d, o + 22) ^ ((x5 >> 16) & 255), ord(d, o + 23) ^ ((x5 >> 24) & 255), ord(d, o + 24) ^ (x6 & 255), ord(d, o + 25) ^ ((x6 >> 8) & 255), ord(d, o + 26) ^ ((x6 >> 16) & 255), ord(d, o + 27) ^ ((x6 >> 24) & 255), ord(d, o + 28) ^ (x7 & 255), ord(d, o + 29) ^ ((x7 >> 8) & 255), ord(d, o + 30) ^ ((x7 >> 16) & 255), ord(d, o + 31) ^ ((x7 >> 24) & 255), ord(d, o + 32) ^ (x8 & 255), ord(d, o + 33) ^ ((x8 >> 8) & 255), ord(d, o + 34) ^ ((x8 >> 16) & 255), ord(d, o + 35) ^ ((x8 >> 24) & 255), ord(d, o + 36) ^ (x9 & 255), ord(d, o + 37) ^ ((x9 >> 8) & 255), ord(d, o + 38) ^ ((x9 >> 16) & 255), ord(d, o + 39) ^ ((x9 >> 24) & 255), ord(d, o + 40) ^ (x10 & 255), ord(d, o + 41) ^ ((x10 >> 8) & 255), ord(d, o + 42) ^ ((x10 >> 16) & 255), ord(d, o + 43) ^ ((x10 >> 24) & 255), ord(d, o + 44) ^ (x11 & 255), ord(d, o + 45) ^ ((x11 >> 8) & 255), ord(d, o + 46) ^ ((x11 >> 16) & 255), ord(d, o + 47) ^ ((x11 >> 24) & 255), ord(d, o + 48) ^ (x12 & 255), ord(d, o + 49) ^ ((x12 >> 8) & 255), ord(d, o + 50) ^ ((x12 >> 16) & 255), ord(d, o + 51) ^ ((x12 >> 24) & 255), ord(d, o + 52) ^ (x13 & 255), ord(d, o + 53) ^ ((x13 >> 8) & 255), ord(d, o + 54) ^ ((x13 >> 16) & 255), ord(d, o + 55) ^ ((x13 >> 24) & 255), ord(d, o + 56) ^ (x14 & 255), ord(d, o + 57) ^ ((x14 >> 8) & 255), ord(d, o + 58) ^ ((x14 >> 16) & 255), ord(d, o + 59) ^ ((x14 >> 24) & 255), ord(d, o + 60) ^ (x15 & 255), ord(d, o + 61) ^ ((x15 >> 8) & 255), ord(d, o + 62) ^ ((x15 >> 16) & 255), ord(d, o + 63) ^ ((x15 >> 24) & 255)));
+			else {
+				let ks = [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15], c = [];
+				for (let j = 0; o + j < len; j++) push(c, chr(ord(d, o + j) ^ ((ks[j >> 2] >> ((j & 3) * 8)) & 255)));
+				push(out, join('', c));
+			}
+		}
+		fo.write(join('', out));
+	}
+	fi.close(); fo.close();
+}
+
+// 把数据从管道交给 sha256sum（跟密钥有关的内容不落到文件里）
+function sha_pipe(parts, file) {
+	let t = '/tmp/cmcp_bkh.' + rand(8), p = popen(sprintf("sha256sum > '%s'", t), 'w');
+	if (!p) die('算不出校验值（没有 sha256sum）');
+	for (let x in parts) p.write(x);
+	if (file) {
+		let f = open(file, 'r');
+		if (!f) { p.close(); unlink(t); die('打不开文件'); }
+		while (true) { let s = f.read(65536); if (s == null || !length(s)) break; p.write(s); }
+		f.close();
+	}
+	p.close();
+	let o = substr(trim(readfile(t) ?? ''), 0, 64);
+	unlink(t);
+	if (!hexok(o, 64)) die('算不出校验值（没有 sha256sum）');
+	return o;
+}
+function hmac(kf, file) {
+	let k = hex2bin(keyline(kf, 2)), ip = '', op = '';
+	for (let i = 0; i < 64; i++) { let b = k[i] ?? 0; ip += chr(b ^ 0x36); op += chr(b ^ 0x5c); }
+	let ib = '';
+	for (let b in hex2bin(sha_pipe([ip], file))) ib += chr(b);
+	return sha_pipe([op, ib], null);
+}
+
+let A = ARGV;
+if (A[0] == 'rand') { let n = +A[1]; if (!(n > 0 && n <= 64)) die('字节数不对'); print(rand(n), '\n'); }
+else if (A[0] == 'chacha' && length(A) == 5) chacha(A[1], A[2], A[3], A[4]);
+else if (A[0] == 'hmac' && length(A) == 3) print(hmac(A[1], A[2]), '\n');
+else die('用法：cmcp-bkcrypt rand N | chacha 密钥文件 随机数 输入 输出 | hmac 密钥文件 文件');

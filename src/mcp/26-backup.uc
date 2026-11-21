@@ -3,35 +3,13 @@ P.bk_list = function() {
 	try { j = json(r.out); } catch (e) {}
 	if (!j?.ok) die('连不上云端备份' + (j?.error ? '：' + j.error : ''));
 	let cron = sh("grep -q cmcp-backup /etc/crontabs/root 2>/dev/null").code == 0;
-	let ssl = sh('command -v openssl >/dev/null 2>&1').code == 0, srun = !!stat(SSL_RUN);
-	return { list: j.list, max: j.max, auto: cron, running: !!stat('/tmp/cmcp_bk.lock'), ssl, noenc: !!stat(BK_NOENC), ssl_run: srun, ssl_err: !ssl && !srun && stat(SSL_LOG) ? substr(trim(readfile(SSL_LOG) ?? ''), -200) : null };
-};
-// 开启备份加密：用户在云端备份页点了才装 openssl-util（不会自己装）；闪存剩不到 4MB 不装
-// 在后台装（软件源慢的话超过一分多钟，经 Cloudflare 的请求会被断开），面板隔几秒看一次 bk_list 的 ssl / ssl_run / ssl_err
-P.bk_ssl = function() {
-	if (sh('command -v openssl >/dev/null 2>&1').code == 0) return { ok: true, already: true };
-	if (stat(SSL_RUN)) return { ok: true, running: true };
-	// 分区名很长时 BusyBox df 会换行：把数据行拼起来、从后往前数取「可用」（KB）
-	let free = +trim(sh("{ df -k /overlay 2>/dev/null || df -k /; } | awk 'NR > 1 { l = l \" \" $0 } END { n = split(l, f, \" \"); if (n >= 6) print f[n - 2] }'").out);
-	if (free > 0 && free < 4096) die(sprintf('闪存只剩 %d KB，装加密工具至少要 4 MB，先清理一下空间', free));
-	sh(sprintf("( touch %s; if command -v opkg >/dev/null 2>&1; then opkg update >/dev/null 2>&1; opkg install openssl-util; elif command -v apk >/dev/null 2>&1; then apk update >/dev/null 2>&1; apk add openssl-util; else echo 没有软件包管理器; fi; rm -f %s ) >%s 2>&1 </dev/null &", SSL_RUN, SSL_RUN, SSL_LOG));
-	return { ok: true, running: true };
-};
-// 「加密上传」开关：关 = 留一个标记文件，备份时不加密（密钥不删，以前加密的照样能还原）；
-// 开 = 删掉标记；没有 openssl 的话顺便开始装（跟以前的「开启加密」按钮一样）
-P.bk_enc = function(a) {
-	if (a?.on) {
-		if (stat(BK_NOENC)) sh('rm -f ' + BK_NOENC);
-		return P.bk_ssl();
-	}
-	writefile(BK_NOENC, sprintf('%d\n', time()));
-	return { ok: true, off: true };
+	// 用哪种方式加密：有 openssl 用它（快），没有就用面板自带的（慢一些，不用装东西）
+	let ssl = sh('command -v openssl >/dev/null 2>&1').code == 0;
+	return { list: j.list, max: j.max, auto: cron, running: !!stat('/tmp/cmcp_bk.lock'), crypt: ssl ? 'openssl' : 'builtin', job: bk_job() };
 };
 P.bk_now = function() {
-	let r = sh('/usr/sbin/cmcp-backup manual 2>&1');
-	let j = null; try { j = json(trim(r.out)); } catch (e) {}
-	if (r.code != 0 || !j?.ok) die(trim(r.out) || '备份失败');
-	return j;
+	bk_cloud();
+	return bk_start('now');
 };
 P.bk_del = function(a) {
 	let c = bk_cloud(), id = bk_id(a);
@@ -40,29 +18,22 @@ P.bk_del = function(a) {
 	if (!j?.ok) die('删除失败');
 	return { ok: true };
 };
+// 下载：先在后台下载并解密（running），做完了面板再调一次拿下载链接
 P.bk_dl = function(a) {
-	let id = bk_id(a), f = bk_fetch(id);
-	return dl_put(f, (match('' + (a.name ?? ''), /^[A-Za-z0-9_.-]{1,60}$/) ? a.name : 'router-backup-' + id) + '.tar.gz');
+	let id = bk_id(a), j = bk_job(), f = '/tmp/cmcp_bkdl.' + id + '.tgz';
+	if (j && j.op == 'dl' && j.id == id && j.state == 'done' && stat(f)) {
+		writefile(BK_JOB, sprintf('%J\n', { ...j, state: 'taken' }));
+		return dl_put(f, (match('' + (a.name ?? ''), /^[A-Za-z0-9_.-]{1,60}$/) ? a.name : 'router-backup-' + id) + '.tar.gz');
+	}
+	bk_cloud();
+	return bk_start('dl', id);
 };
-// 还原：先下载并检查，确认没问题才动手；还原 = sysupgrade -r（和 LuCI「恢复备份」一样），然后重启
-// 还原云端备份时保留现在的：登录密钥和连接器钥匙（config.json）、登录着的手机、原版页面门禁钥匙、「登录要输路由器密码」开关、
-// 路由器自己的小工具钥匙、托管服务和云端的钥匙、备份加密密钥
-const RESTORE_KEEP = ['config.json', 'devices.json', 'luci_key', 'luci_key.v6', 'login_pw', 'local.key', 'hub.conf', 'cloud.conf', 'bk.key'];
+// 还原：在后台先下载并检查、再把现在的设置备份一份，都成功了才还原（sysupgrade -r，和 LuCI「恢复备份」一样），然后重启。
+// 钥匙类文件（登录密钥、登录着的手机、门禁钥匙等）保持现在的，见 cmcp-backup 的 KEEP
 P.bk_restore = function(a) {
-	let id = bk_id(a), f = bk_fetch(id), keep = '/tmp/cmcp_restore.tgz';
-	sh('mv -f ' + f + ' ' + keep);
-	// 动手前先把现在的设置也存一份（目标备份已经下载到本地，不怕被挤掉）
-	let pre = sh(SBIN + '/cmcp-backup manual 2>&1');
-	if (pre.code != 0 && !a.force) { sh('rm -f ' + keep); die('还原前备份当前设置失败：' + trim(pre.out)); }
-	// 6.0：钥匙类的文件保留现在的（不回到备份当时）：不然之后移除的手机、换掉的登录地址、旧的门禁钥匙又能用了。
-	// Wi-Fi、插件、面板其它设置照常还原。现在没有的（比如没开「登录要输路由器密码」）还原后也删掉
-	let kd = '/tmp/cmcp_keep', ks = '';
-	for (let f in RESTORE_KEEP) ks += sprintf('if [ -e %s ]; then cp -p %s %s/%s; else : > %s/%s.none; fi; ', shq(ETC + '/' + f), shq(ETC + '/' + f), kd, f, kd, f);
-	let kb = '';
-	for (let f in RESTORE_KEEP) kb += sprintf('if [ -e %s/%s.none ]; then rm -f %s; else cp -p %s/%s %s; fi; ', kd, f, shq(ETC + '/' + f), kd, f, shq(ETC + '/' + f));
-	sh('rm -rf ' + kd + '; mkdir -p ' + kd + ' && chmod 700 ' + kd + ' && { ' + ks + '}');
-	sh('( sleep 3; ' + SBIN + '/cmcp-watchdog shutdown; sysupgrade -r ' + keep + ' && { ' + kb + 'true; } && sync && ' + REBOOT + ' ) >/dev/null 2>&1 </dev/null &');
-	return { ok: true };
+	let id = bk_id(a);
+	bk_cloud();
+	return bk_start('restore', id, a.force ? 'force' : '');
 };
 
 /* ---------- 每日体检：读最近一次结果；run=1 现在体检一次（只更新面板，不推送） ---------- */

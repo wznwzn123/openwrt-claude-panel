@@ -77,7 +77,7 @@ for ai in ai noai; do
 		# 安装失败时用户同意上报，发到这里（只在设置了 HUB_URL 时）
 		[ -n "$HUB_URL" ] && echo "PKG_REPORT=$HUB_URL" >> "$d/EDITION"
 		if [ "$ed" = lite ]; then
-			rm -f "$d/src/bin/cmcp-backup"
+			rm -f "$d/src/bin/cmcp-backup" "$d/src/bin/cmcp-bkcrypt"
 		else
 			# worker.js 要用 hub.js、ops.js、site.js（自己部署 Worker 时 wrangler 会一起打包）
 			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/v5.js cloud/fam.js cloud/inst.js cloud/files.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"

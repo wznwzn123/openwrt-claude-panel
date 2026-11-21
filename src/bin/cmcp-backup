@@ -1,90 +1,185 @@
 #!/bin/sh
 # 把路由器配置备份到 Cloudflare（每天凌晨 4:07 自动，云端只留最近 10 份；面板里也能点「立即备份」）
 # 内容 = 系统升级时会保留的全部文件（所有设置、OpenClash 配置和规则、面板），去掉能重新下载的大文件（内核、GEO 数据库）
-# 路由器上有 openssl：上传前先加密（AES-256-CBC + HMAC-SHA256），密钥只在路由器上（$D/bk.key），云端只存看不懂的密文；
+# 6.0 第 9 项：一律加密，云端只存看不懂的密文，密钥只在路由器上（$D/bk.key），不再上传没加密的备份：
+#   有 openssl：AES-256-CBC + HMAC-SHA256（格式 CMCPBK1，跟以前一样）
+#   没有 openssl：用面板自带的 cmcp-bkcrypt（ChaCha20 + HMAC-SHA256，格式 CMCPBK2），不用装任何东西，就是慢一些
+#   加密失败就不上传，说明原因
+#   以前没加密就上传的旧备份：新备份上传成功后，在路由器上加密后原地换掉（日期、名字不变，还能照常还原）
 #   下载、还原时路由器先校验再解密，解出来和 LuCI「备份/升级」导出的格式一样
-# 没有 openssl：跟以前一样上传（不加密），不自动装任何东西；用户在面板云端备份页点「开启加密」才装 openssl-util
-# 面板里关掉「加密上传」（$D/bk.noenc）：有 openssl 也不加密，直接上传；密钥留着，以前加密的备份照样能下载、还原
-# 以前没加密的旧备份不主动删，跟以前一样随着新备份轮换掉（最多留 10 份）
 # 用法：cmcp-backup [auto|manual]
-#       cmcp-backup decrypt 输入 输出    解密云端下载的备份（校验不过、不是加密格式都会失败）
-#       cmcp-backup encrypt 输入 输出    （测试用）
-# 测试用环境变量：BK_DIR（代替 /etc/claude-mcp）、BK_PATH（放在 PATH 最前面的假命令目录）、
-#                 BK_SSL（openssl 命令名，测「没有 openssl」用）、BK_NOTIFY（通知命令）
+#       cmcp-backup job now | job dl 编号 | job restore 编号   面板用：在后台做，进度写在 /tmp/cmcp_bkjob.json
+#       cmcp-backup fetch 编号 输出                        从云端下载一份并解密成普通的 .tar.gz
+#       cmcp-backup decrypt 输入 输出 | encrypt 输入 输出   （测试用）
+# 测试用环境变量：BK_DIR（代替 /etc/claude-mcp）、BK_PATH（放在 PATH 最前面的假命令目录）、BK_SSL（openssl 命令名，测「没有 openssl」用）、
+#                 BK_NOTIFY（通知命令）、BK_CRYPT（自带加密工具）、BK_TMP（临时目录）、BK_REBOOT（重启命令）
 D=${BK_DIR:-/etc/claude-mcp}
 KEY=$D/bk.key   # 两行：加密密钥、校验密钥（各 64 位十六进制），只在这台路由器上
-MAGIC=CMCPBK1
+MAGIC=CMCPBK1 MAGIC2=CMCPBK2
 export PATH=${BK_PATH:+$BK_PATH:}/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 SSL=${BK_SSL:-openssl}
 NOTIFY=${BK_NOTIFY:-/usr/sbin/cmcp-notify}
+BKC=${BK_CRYPT:-/usr/sbin/cmcp-bkcrypt}
+T=${BK_TMP:-/tmp}
+JOB=$T/cmcp_bkjob.json
+umask 077
 
 have_ssl() { command -v "$SSL" >/dev/null 2>&1; }
 hex() { echo "$1" | grep -qxE "[0-9a-f]{$2}"; }
+rnd() { if have_ssl; then $SSL rand -hex "$1"; else $BKC rand "$1"; fi; }
 mkkey() {
 	[ -s "$KEY" ] && return 0
 	local a b
-	a=$($SSL rand -hex 32) && b=$($SSL rand -hex 32) && hex "$a" 64 && hex "$b" 64 || return 1
-	( umask 077; printf '%s\n%s\n' "$a" "$b" > "$KEY.tmp" ) && mv -f "$KEY.tmp" "$KEY"
+	a=$(rnd 32) && b=$(rnd 32) && hex "$a" 64 && hex "$b" 64 || return 1
+	printf '%s\n%s\n' "$a" "$b" > "$KEY.tmp" && mv -f "$KEY.tmp" "$KEY"
 }
 ek() { sed -n 1p "$KEY"; }
 mk() { sed -n 2p "$KEY"; }
 mac() { $SSL dgst -sha256 -mac HMAC -macopt hexkey:"$(mk)" | sed 's/.*= *//'; }
+# 自带工具算校验值：内容先写进文件（第一行 + 密文），算完删掉
+mac2() { { echo "$1"; cat "$2"; } > "$2.m" && $BKC hmac "$KEY" "$2.m"; local r=$?; rm -f "$2.m"; return $r; }
 keyok() { [ -s "$KEY" ] && hex "$(ek)" 64 && hex "$(mk)" 64; }
 
-# 加密后的文件：第一行「CMCPBK1 IV 校验值」，后面是密文；校验值 = HMAC(第一行前半段 + 密文)
+# 加密后的文件：第一行「格式 IV/随机数 校验值」，后面是密文；校验值 = HMAC(第一行前半段 + 换行 + 密文)
 encrypt() {
 	local iv m
 	keyok || return 1
-	iv=$($SSL rand -hex 16) && hex "$iv" 32 || return 1
-	$SSL enc -aes-256-cbc -K "$(ek)" -iv "$iv" -in "$1" -out "$2.ct" || { rm -f "$2.ct"; return 1; }
-	m=$( { echo "$MAGIC $iv"; cat "$2.ct"; } | mac )
-	hex "$m" 64 || { rm -f "$2.ct"; return 1; }
-	{ echo "$MAGIC $iv $m"; cat "$2.ct"; } > "$2"
+	if have_ssl; then
+		iv=$($SSL rand -hex 16) && hex "$iv" 32 || return 1
+		$SSL enc -aes-256-cbc -K "$(ek)" -iv "$iv" -in "$1" -out "$2.ct" || { rm -f "$2.ct"; return 1; }
+		m=$( { echo "$MAGIC $iv"; cat "$2.ct"; } | mac )
+		hex "$m" 64 || { rm -f "$2.ct"; return 1; }
+		{ echo "$MAGIC $iv $m"; cat "$2.ct"; } > "$2"
+	else
+		iv=$($BKC rand 12) && hex "$iv" 24 || return 1
+		$BKC chacha "$KEY" "$iv" "$1" "$2.ct" || { rm -f "$2.ct"; return 1; }
+		m=$(mac2 "$MAGIC2 $iv" "$2.ct")
+		hex "$m" 64 || { rm -f "$2.ct"; return 1; }
+		{ echo "$MAGIC2 $iv $m"; cat "$2.ct"; } > "$2"
+	fi
 	rm -f "$2.ct"
 }
-# 返回：0 成功；2 不是加密格式（旧备份）；3 校验没通过（被改过，或者不是这台路由器的密钥）；1 其他错误
+# 返回：0 成功；2 不是加密格式（旧备份）；3 校验没通过（被改过，或者不是这台路由器的密钥）；4 要 openssl 才解得开；1 其他错误
 decrypt() {
 	local m iv want got hl
 	[ -f "$1" ] || return 1
 	read -r m iv want < "$1"
-	[ "$m" = "$MAGIC" ] || return 2
-	hex "$iv" 32 && hex "$want" 64 || return 3
+	[ "$m" = "$MAGIC" ] || [ "$m" = "$MAGIC2" ] || return 2
+	if [ "$m" = "$MAGIC" ]; then hex "$iv" 32 || return 3; else hex "$iv" 24 || return 3; fi
+	hex "$want" 64 || return 3
 	keyok || return 3
+	[ "$m" = "$MAGIC" ] && ! have_ssl && return 4
 	hl=$(head -n1 "$1" | wc -c)
 	tail -c +$((hl + 1)) "$1" > "$2.ct"
-	got=$( { echo "$MAGIC $iv"; cat "$2.ct"; } | mac )
+	if [ "$m" = "$MAGIC" ]; then got=$( { echo "$MAGIC $iv"; cat "$2.ct"; } | mac ); else got=$(mac2 "$MAGIC2 $iv" "$2.ct"); fi
 	[ "$got" = "$want" ] || { rm -f "$2.ct"; return 3; }
-	$SSL enc -d -aes-256-cbc -K "$(ek)" -iv "$iv" -in "$2.ct" -out "$2" || { rm -f "$2.ct" "$2"; return 1; }
+	if [ "$m" = "$MAGIC" ]; then
+		$SSL enc -d -aes-256-cbc -K "$(ek)" -iv "$iv" -in "$2.ct" -out "$2" || { rm -f "$2.ct" "$2"; return 1; }
+	else
+		$BKC chacha "$KEY" "$iv" "$2.ct" "$2" || { rm -f "$2.ct" "$2"; return 1; }
+	fi
 	rm -f "$2.ct"
 }
+cloud() { [ -f "$D/cloud.conf" ] || { echo "还没有设置云端（云端备份是完整版功能）"; return 1; }; . "$D/cloud.conf"; [ -n "$URL" ] && [ -n "$RKEY" ] || { echo "还没有设置云端（云端备份是完整版功能）"; return 1; }; }
+# 从云端下载一份并解出普通的 .tar.gz：成功输出空；失败输出原因、返回 1
+fetch() {
+	local raw="$2.raw" d
+	case "$1" in *[!a-z0-9]*|'') echo "备份编号不对"; return 1 ;; esac
+	cloud || return 1
+	rm -f "$raw" "$2"
+	curl -s -f -m 120 -o "$raw" "$URL/bk/$RKEY/$1" && [ -s "$raw" ] || { rm -f "$raw"; echo "从云端下载备份失败"; return 1; }
+	decrypt "$raw" "$2"; d=$?
+	if [ $d = 2 ]; then mv -f "$raw" "$2"; d=0; fi
+	rm -f "$raw"
+	case $d in
+		0) ;;
+		3) rm -f "$2"; echo "备份校验没通过：文件被改过，或者不是这台路由器备份的，没有使用"; return 1 ;;
+		4) rm -f "$2"; echo "这份备份是用 openssl 加密的，这台路由器现在没有 openssl：在路由器后台「系统 → 软件包」里装 openssl-util 再试"; return 1 ;;
+		*) rm -f "$2"; echo "解密备份失败"; return 1 ;;
+	esac
+	tar tzf "$2" >/dev/null 2>&1 || { rm -f "$2"; echo "备份文件损坏，没有使用"; return 1; }
+}
+# 以前没加密就上传的旧备份：加密后原地换掉（云端不认识「换掉」的旧版 Worker 就先留着，下次再试）
+reenc() {
+	local l n i id enc
+	mkdir "$T/cmcp_bkre.lock" 2>/dev/null || return 0
+	trap 'rm -rf "$T/cmcp_bkre.lock" "$T"/cmcp_bkre.raw "$T"/cmcp_bkre.x "$T"/cmcp_bkre.enc' EXIT
+	l=$(curl -s -m 20 "$URL/bk/$RKEY") || return 0
+	n=$(jsonfilter -s "$l" -e '@.list[*].id' 2>/dev/null | wc -l)
+	i=0
+	while [ "$i" -lt "$n" ]; do
+		id=$(jsonfilter -s "$l" -e "@.list[$i].id" 2>/dev/null); enc=$(jsonfilter -s "$l" -e "@.list[$i].enc" 2>/dev/null)
+		i=$((i + 1))
+		case "$id" in *[!a-z0-9]*|'') continue ;; esac
+		[ "$enc" = true ] || [ "$enc" = 1 ] && continue
+		curl -s -f -m 120 -o "$T/cmcp_bkre.raw" "$URL/bk/$RKEY/$id" || continue
+		decrypt "$T/cmcp_bkre.raw" "$T/cmcp_bkre.x" >/dev/null 2>&1; [ $? = 2 ] || { rm -f "$T"/cmcp_bkre.*; continue; }
+		encrypt "$T/cmcp_bkre.raw" "$T/cmcp_bkre.enc" && curl -s -m 120 -X PUT -H "Content-Type: application/octet-stream" --data-binary @"$T/cmcp_bkre.enc" "$URL/bk/$RKEY/$id?enc=1" >/dev/null
+		rm -f "$T"/cmcp_bkre.*
+	done
+}
+# 面板的后台任务：进度写进 $JOB（面板隔几秒来看一次）；size 是「立即备份」传了多大
+jset() { printf '{"op":"%s","id":"%s","state":"%s","msg":"%s","size":%s,"at":%s}\n' "$1" "$2" "$3" "$(printf '%s' "$4" | tr -d '"\\' | tr '\n\r\t' '   ' | cut -c1-300)" "${5:-0}" "$(date +%s)" > "$JOB.tmp" && mv -f "$JOB.tmp" "$JOB"; }
+# 还原时保持现在的：登录密钥和连接器钥匙、登录着的手机、原版页面门禁钥匙、「登录要输路由器密码」开关、路由器小工具钥匙、托管和云端钥匙、备份加密密钥
+# （不然之后移除的手机、换掉的登录地址又能用了）。Wi-Fi、插件这些设置照常还原；现在没有的文件，还原后也删掉
+KEEP="config.json devices.json luci_key luci_key.v6 login_pw local.key hub.conf cloud.conf bk.key"
+keep_save() { local f; rm -rf "$T/cmcp_keep"; mkdir -p "$T/cmcp_keep" && chmod 700 "$T/cmcp_keep" || return 1; for f in $KEEP; do if [ -e "$D/$f" ]; then cp -p "$D/$f" "$T/cmcp_keep/$f" || return 1; else : > "$T/cmcp_keep/$f.none"; fi; done; }
+keep_back() { local f; for f in $KEEP; do if [ -e "$T/cmcp_keep/$f.none" ]; then rm -f "$D/$f"; else cp -p "$T/cmcp_keep/$f" "$D/$f"; fi; done; true; }
 
 case "$1" in
-	decrypt) have_ssl || exit 1; decrypt "$2" "$3"; exit $? ;;
-	encrypt) have_ssl || exit 1; mkkey && encrypt "$2" "$3"; exit $? ;;
+	decrypt) decrypt "$2" "$3"; exit $? ;;
+	encrypt) mkkey && encrypt "$2" "$3"; exit $? ;;
+	fetch) fetch "$2" "$3"; exit $? ;;
+	job)
+		op=$2 id=$3
+		case "$op" in now|dl|restore) ;; *) echo "用法不对"; exit 1 ;; esac
+		[ "$op" = now ] || case "$id" in *[!a-z0-9]*|'') echo "备份编号不对"; exit 1 ;; esac
+		jset "$op" "$id" running ""
+		case "$op" in
+			now)
+				if out=$("$0" manual 2>&1); then jset now "" done "" "$(printf '%s' "$out" | sed -n 's/.*"size":\([0-9]*\).*/\1/p' | head -n1)"; else jset now "" error "$out"; fi ;;
+			dl)
+				rm -f "$T"/cmcp_bkdl.*.tgz
+				if out=$(fetch "$id" "$T/cmcp_bkdl.$id.tgz"); then jset dl "$id" done ""; else jset dl "$id" error "$out"; fi ;;
+			restore)
+				# 先下载解密、再把现在的设置备份一份，都成功了才还原；还原完重启
+				if ! out=$(fetch "$id" "$T/cmcp_restore.tgz"); then jset restore "$id" error "$out"; exit 1; fi
+				jset restore "$id" running "正在备份现在的设置"
+				if ! out=$("$0" manual 2>&1) && [ "$4" != force ]; then rm -f "$T/cmcp_restore.tgz"; jset restore "$id" error "还原前备份现在的设置失败：$out"; exit 1; fi
+				keep_save || { rm -f "$T/cmcp_restore.tgz"; jset restore "$id" error "还原前保存钥匙失败，没有还原"; exit 1; }
+				jset restore "$id" restoring "正在还原，路由器马上重启"
+				sleep 3
+				cmcp-watchdog shutdown >/dev/null 2>&1
+				if sysupgrade -r "$T/cmcp_restore.tgz"; then
+					keep_back; sync; ${BK_REBOOT:-reboot}
+				else
+					keep_back; rm -f "$T/cmcp_restore.tgz"; jset restore "$id" error "还原失败（系统没能解开这份备份），路由器没有重启"
+				fi ;;
+		esac
+		exit 0 ;;
 esac
 
-[ -f "$D/cloud.conf" ] || { echo "没有配置云端"; exit 1; }
+cloud >/dev/null || { cloud; exit 1; }
 # 自动处理里关掉了「云端自动备份」：每天 4:07 不再备份；面板里点「立即备份」照样能用
 [ "$1" = auto ] && [ -f "$D/off.cloudbackup" ] && { echo "自动备份已关掉"; exit 0; }
-. "$D/cloud.conf"
-mkdir /tmp/cmcp_bk.lock 2>/dev/null || { echo "已经在备份了"; exit 1; }
-trap 'rm -rf /tmp/cmcp_bk.lock /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc /tmp/cmcp_bk.list' EXIT
+rm -f "$D/bk.noenc"   # 6.0 起一律加密：以前「关掉加密上传」的标记不再用
+mkdir "$T/cmcp_bk.lock" 2>/dev/null || { echo "已经在备份了"; exit 1; }
+trap 'rm -rf "$T/cmcp_bk.lock" "$T/cmcp_bk.tgz" "$T/cmcp_bk.enc" "$T/cmcp_bk.list"' EXIT
 kind=${1:-manual}
 fail() { echo "$1"; [ "$kind" = auto ] && $NOTIFY warn backup "云端自动备份失败" "$1"; exit 1; }
 { sysupgrade -l 2>/dev/null; find /www-claude-mcp -type f 2>/dev/null; } | \
 	grep -v -E '^/etc/openclash/(core|history|cache\.db|.*\.(dat|mmdb|metadb|db))' | \
 	grep -v -E '/etc/claude-mcp/(bak/|.*\.bak$|panel-index\.before-|traffic/)' | \
-	grep -v -E '\.(dat|mmdb|metadb)$' | sort -u > /tmp/cmcp_bk.list
-tar czf /tmp/cmcp_bk.tgz -T /tmp/cmcp_bk.list 2>/dev/null
-sz=$(wc -c < /tmp/cmcp_bk.tgz)
-[ "$sz" -gt 1000 ] || { echo "打包失败"; exit 1; }
-[ "$sz" -lt 20000000 ] || { echo "备份太大（$sz 字节）"; exit 1; }
-# 有 openssl、而且没在面板里关掉加密，就加密（生成密钥或加密失败也照常上传不加密的，备份功能不受影响）
-up=/tmp/cmcp_bk.tgz ct=application/gzip enc=
-if [ ! -f "$D/bk.noenc" ] && have_ssl && mkkey && encrypt /tmp/cmcp_bk.tgz /tmp/cmcp_bk.enc; then up=/tmp/cmcp_bk.enc ct=application/octet-stream enc='&enc=1'; fi
+	grep -v -E '\.(dat|mmdb|metadb)$' | sort -u > "$T/cmcp_bk.list"
+tar czf "$T/cmcp_bk.tgz" -T "$T/cmcp_bk.list" 2>/dev/null
+sz=$(wc -c < "$T/cmcp_bk.tgz")
+[ "$sz" -gt 1000 ] || fail "打包失败"
+[ "$sz" -lt 20000000 ] || fail "备份太大（$sz 字节）"
+mkkey || fail "生成加密密钥失败，这次没有上传（不会上传没加密的备份）"
+encrypt "$T/cmcp_bk.tgz" "$T/cmcp_bk.enc" || fail "加密失败，这次没有上传（不会上传没加密的备份）"
 name="$(uci -q get system.@system[0].hostname || echo router)-$(date +%Y%m%d-%H%M)"
-r=$(curl -s -m 120 -X POST -H "Content-Type: $ct" --data-binary @$up "$URL/bk/$RKEY?name=$name&kind=$kind$enc&files=$(wc -l < /tmp/cmcp_bk.list)")
+r=$(curl -s -m 120 -X POST -H "Content-Type: application/octet-stream" --data-binary @"$T/cmcp_bk.enc" "$URL/bk/$RKEY?name=$name&kind=$kind&enc=1&files=$(wc -l < "$T/cmcp_bk.list")")
 case "$r" in
-	*'"ok":true'*) date +%s > "$D/backup_last"; echo "$r" ;;
+	*'"ok":true'*) date +%s > "$D/backup_last"; echo "$r"; ( reenc ) >/dev/null 2>&1 </dev/null & ;;
 	*) fail "上传失败：$r" ;;
 esac

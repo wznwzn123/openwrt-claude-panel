@@ -70,7 +70,7 @@ cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel.tar.gz
 |---|:---:|:---:|
 | 上面表格里的全部功能 | ✅ | ✅ |
 | 手机推送 / 微信推送（PushPlus） | — | ✅ |
-| 云端备份（每天自动，保留 10 份，可一键恢复） | — | ✅ |
+| 云端备份（每天自动，保留 10 份，可一键恢复；6.0 起一律在路由器上加密后才上传） | — | ✅ |
 | 断电 / 断网判断（路由器离线时也能从云端看到原因） | — | ✅ |
 | 需要 Cloudflare | 可选（临时隧道不需要账号） | 自建：账号 + 域名；托管：不需要 |
 
@@ -205,7 +205,7 @@ cmcp-uninstall --purge
 |---|---|
 | `/www-claude-mcp/cgi-bin/mcp` | 连接器主程序（ucode CGI） |
 | `/www-claude-mcp/panel/` | 手机面板 |
-| `/usr/sbin/cmcp-*` | 看门狗、节点自动切换、设备暂停、流量统计、每日体检、通知、云端备份、面板直连自动选择（`cmcp-route`）、拿配对码（`cmcp-pair`）、应急登录码（`cmcp-logincode`）、一键更新（`cmcp-update`） |
+| `/usr/sbin/cmcp-*` | 看门狗、节点自动切换、设备暂停、流量统计、每日体检、通知、云端备份（`cmcp-backup`，没有 openssl 时用自带的加密 `cmcp-bkcrypt`）、面板直连自动选择（`cmcp-route`）、拿配对码（`cmcp-pair`）、应急登录码（`cmcp-logincode`）、一键更新（`cmcp-update`） |
 | `/usr/share/ucode/cmcp/lib.uc` | 共用函数 |
 | `/etc/init.d/claude-mcp` | 面板服务（uhttpd）+ Cloudflare 隧道 |
 | `/etc/init.d/cmcp-watchdog` | 看门狗 |

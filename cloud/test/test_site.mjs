@@ -280,7 +280,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-trial-card.png' });
 	await page.goto(B + '/#faq-restore'); await W(500);
 	{ const body = await page.textContent('body');
-	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、可以开启加密、没开启的仍原样存着，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /(没开启加密|未加密)的备份(仍然原样存在|按原样保存在)云端/.test(body) && /(要说明的|已知)风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
+	ok('[安全说明] 不再写「进不了你的路由器」这种绝对的话，如实写明云端备份里有密钥、一律在路由器上加密后才上传，并说明一键更新和 Cloudflare 这两个环节的风险', !/进不了/.test(body) && !/不保存密钥|这个网站也没有|托管服务也没有/.test(body) && /云端备份/.test(body) && /在路由器上加密后才上传/.test(body) && /在路由器上加密后才上传/.test(body) && /云端只存看不懂的密文/.test(body) && /(要说明的|已知)风险/.test(body) && /Cloudflare 加密转发/.test(body)); }
 	ok('[常见问题] 首页有「被停用、到期、删除了怎么恢复」，答案直接展开，从链接进来滚到这一条', await page.evaluate(() => { const e = document.getElementById('faq-restore'), r = e.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && e.offsetHeight > 100; }) && /重新领一个安装码/.test(await page.textContent("#faq-restore")));
 	if (SHOTS) { await page.locator('#faq').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/site-faq.png' }); }
 	await ctx.close();
@@ -432,7 +432,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	let r = await page.goto(B + '/privacy'); await W(300);
 	let t = await page.textContent('body');
 	ok('[隐私] 打开 /privacy：写了存哪些数据、存多久、交给谁、怎么删', r.status() === 200 && /存了哪些数据、存多久/.test(t) && /交给了谁/.test(t) && /你能做什么/.test(t) && /Cloudflare/.test(t) && /PushPlus/.test(t) && /可能在中国大陆以外/.test(t) && /两天内自动删除/.test(t));
-	ok('[隐私] 如实写云端备份：开启加密后只存密文、没开启的原样存着', /开启加密后/.test(t) && /没开启加密的原样存着/.test(t));
+	ok('[隐私] 如实写云端备份：一律加密后才上传、以前没加密的旧备份会换成加密的', /一律在路由器上加密后才上传/.test(t) && /以前没加密就上传的旧备份/.test(t));
 	ok('[隐私] 页面头：不能被嵌入、限制外部脚本', /frame-ancestors 'none'/.test(r.headers()['content-security-policy'] || '') && r.headers()['x-frame-options'] === 'DENY');
 	const pw = await page.evaluate(() => document.documentElement.scrollWidth);
 	ok('[隐私] 手机宽度不横向滚动（表格变成一条一条）', pw <= 390, pw);

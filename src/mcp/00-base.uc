@@ -10,7 +10,7 @@ const VERSION = '2.2.0';
 const CONF_PATH = getenv('CLAUDE_MCP_CONF') || '/etc/claude-mcp/config.json';
 const ETC = replace(CONF_PATH, /\/[^\/]*$/, ''); // 一般是 /etc/claude-mcp（测试时可以换目录）
 // 面板自带的小工具放在哪（测试时换成假的；CGI 环境变量只能由路由器自己设，网页请求改不了）
-const SBIN = getenv('CMCP_SBIN') || '/usr/sbin', REBOOT = getenv('CMCP_REBOOT') || 'reboot';
+const SBIN = getenv('CMCP_SBIN') || '/usr/sbin';
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 // 改设置前留的备份（/etc/claude-mcp/bak）：最多 40 份；加起来超过 4 MB（闪存剩不到 16 MB 时 1 MB）就从最旧的删，最新 5 份一定留着
 const BAK_PRUNE = 'cd /etc/claude-mcp/bak 2>/dev/null && { ls -1t | sed -n "41,\\$p" | while read f; do rm -f "$f"; done; fr=$(df -k . 2>/dev/null | tail -n 1 | awk \'{print $(NF-2)}\'); cap=4096; [ "${fr:-99999}" -lt 16384 ] 2>/dev/null && cap=1024; n=0; t=0; ls -1t | while read f; do [ -f "$f" ] || continue; n=$((n+1)); t=$((t+($(wc -c < "$f")+1023)/1024)); [ $n -gt 5 ] && [ $t -gt $cap ] && rm -f "$f"; done; }';

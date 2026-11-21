@@ -116,7 +116,9 @@ P.speed_last = function() {
 
 
 /* ---------- 云端备份（存在 Cloudflare，经路由器转发，面板拿不到云端密钥） ---------- */
-const SSL_RUN = '/tmp/cmcp_sslinst.run', SSL_LOG = '/tmp/cmcp_sslinst.log', BK_NOENC = '/etc/claude-mcp/bk.noenc';
+// 6.0 第 9 项：一律加密。加密、下载解密、还原都由 cmcp-backup 在后台做（自带加密在慢的路由器上要一两分钟，
+// 经 Cloudflare 的请求等不了那么久），进度在 /tmp/cmcp_bkjob.json，面板隔几秒看一次 bk_list
+const BK_JOB = '/tmp/cmcp_bkjob.json';
 function bk_cloud() {
 	let c = {};
 	for (let l in split(readfile(ETC + '/cloud.conf') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) c[m[1]] = m[2]; }
@@ -124,20 +126,17 @@ function bk_cloud() {
 	return c;
 }
 function bk_id(a) { let id = '' + (a.id ?? ''); if (!match(id, /^[a-z0-9]{4,16}$/)) die('备份编号不对'); return id; }
-// 云端存的是路由器加密过的（cmcp-backup，有 openssl 时）：下载下来先校验、再解密成普通的 .tar.gz
-// 没加密的（以前的、或者路由器没有 openssl 时的）：跟以前一样直接用
-function bk_fetch(id) {
-	let c = bk_cloud(), raw = '/tmp/cmcp_bkget.raw', f = '/tmp/cmcp_bkget.tgz';
-	sh('rm -f ' + raw + ' ' + f);
-	let r = sh(sprintf('curl -s -f -m 120 -o %s %s', raw, shq(c.URL + '/bk/' + c.RKEY + '/' + id)));
-	if (r.code != 0 || !stat(raw)) { sh('rm -f ' + raw); die('从云端下载备份失败'); }
-	let d = sh(sprintf('%s/cmcp-backup decrypt %s %s', SBIN, raw, f));
-	if (d.code == 2) sh('mv -f ' + raw + ' ' + f);
-	else {
-		sh('rm -f ' + raw);
-		if (d.code == 3) { sh('rm -f ' + f); die('备份校验没通过：文件被改过，或者不是这台路由器备份的，没有使用'); }
-		if (d.code != 0) { sh('rm -f ' + f); die(stat('/usr/bin/openssl') ? '解密备份失败' : '这台路由器没有 openssl，解不开加密的备份。在路由器后台「系统 → 软件包」里装 openssl-util 再试'); }
-	}
-	if (sh('tar tzf ' + f + ' >/dev/null 2>&1').code != 0) { sh('rm -f ' + f); die('备份文件损坏，没有使用'); }
-	return f;
+// 现在的后台任务：超过 30 分钟还没做完的当作卡住了（比如中途断电），不再挡着
+function bk_job() {
+	let j = cmcp_readj(BK_JOB, null);
+	if (type(j) != 'object') return null;
+	if ((j.state == 'running' || j.state == 'restoring') && time() - (j.at ?? 0) > 1800) j.state = 'stale';
+	return j;
+}
+function bk_start(op, id, extra) {
+	let j = bk_job();
+	if (j && (j.state == 'running' || j.state == 'restoring')) die(j.op == 'restore' ? '正在还原，等它做完' : j.op == 'now' ? '正在备份，等它做完' : '正在准备下载，等它做完');
+	writefile(BK_JOB, sprintf('%J\n', { op, id: id ?? '', state: 'running', msg: '', at: time() }));
+	sh(sprintf('( %s/cmcp-backup job %s %s %s ) >/dev/null 2>&1 </dev/null &', SBIN, op, id ?? '""', extra ?? ''));
+	return { ok: true, running: true };
 }

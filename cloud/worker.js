@@ -374,13 +374,32 @@ export class Watch extends DurableObject {
 	async bkGet(id) {
 		const m = (await this.bkList()).find((x) => x.id === id);
 		if (!m) return null;
-		const got = await this.ctx.storage.get([...Array(m.n)].map((_, i) => 'bk:' + id + ':' + i));
+		const k = m.k || id, got = await this.ctx.storage.get([...Array(m.n)].map((_, i) => 'bk:' + k + ':' + i));
 		const out = new Uint8Array(m.size);
 		let off = 0;
-		for (let i = 0; i < m.n; i++) { const c = got.get('bk:' + id + ':' + i); if (!c) return null; out.set(c, off); off += c.length; }
+		for (let i = 0; i < m.n; i++) { const c = got.get('bk:' + k + ':' + i); if (!c) return null; out.set(c, off); off += c.length; }
 		return off === m.size ? { meta: m, buf: out.buffer } : null;
 	}
-	async bkRm(m) { const keys = [...Array(m.n)].map((_, i) => 'bk:' + m.id + ':' + i); for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128)); }
+	async bkRm(m) { const keys = [...Array(m.n)].map((_, i) => 'bk:' + (m.k || m.id) + ':' + i); for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128)); }
+	// 6.0 第 9 项：以前没加密就上传的备份，路由器加密后原地换掉（编号、日期、名字不变）；只能把没加密的换成加密的
+	async bkReenc(id, buf) {
+		let list = await this.bkList();
+		const m = list.find((x) => x.id === id);
+		if (!m) return { error: '没有这份备份' };
+		if (m.enc) return { error: '这份已经加密了' };
+		const k = id + 'e', u8 = new Uint8Array(buf), n = Math.ceil(u8.length / BK_CHUNK), put = {};
+		for (let i = 0; i < n; i++) put['bk:' + k + ':' + i] = u8.slice(i * BK_CHUNK, (i + 1) * BK_CHUNK);
+		const keys = Object.keys(put);
+		for (let i = 0; i < keys.length; i += 16) await this.ctx.storage.put(Object.fromEntries(keys.slice(i, i + 16).map((x) => [x, put[x]])));
+		list = await this.bkList();
+		const cur = list.find((x) => x.id === id);
+		if (!cur || cur.enc) { await this.bkRm({ id, k, n }); return { error: '这份备份已经变了' }; }
+		const old = { ...cur };
+		Object.assign(cur, { k, n, size: u8.length, enc: true });
+		await this.ctx.storage.put('bkl', list);
+		await this.bkRm(old);
+		return { ok: true, id, size: u8.length };
+	}
 	async bkDel(id) {
 		const list = await this.bkList(), m = list.find((x) => x.id === id);
 		if (!m) return false;
@@ -542,6 +561,15 @@ async function handle(req, env) {
 				return new Response(r.buf, { headers: { 'content-type': r.meta.enc ? 'application/octet-stream' : 'application/gzip', 'content-disposition': 'attachment; filename="' + encodeURIComponent(r.meta.name) + (r.meta.enc ? '.enc' : '.tar.gz') + '"', 'cache-control': 'no-store' } });
 			}
 			if (id && req.method === 'DELETE') return J({ ok: await w.bkDel(id) });
+			if (id && req.method === 'PUT' && u.searchParams.get('enc') === '1') {
+				const buf = await req.arrayBuffer();
+				if (buf.byteLength < 100 || buf.byteLength > BK_LIMIT) return J({ error: '备份大小不对（' + buf.byteLength + ' 字节）' }, 400);
+				// 只收路由器加密过的格式（第一行 CMCPBK1 / CMCPBK2）
+				const head = new TextDecoder().decode(new Uint8Array(buf, 0, 8));
+				if (!/^CMCPBK[12] $/.test(head)) return J({ error: '不是加密过的备份' }, 400);
+				const r = await w.bkReenc(id, buf);
+				return J(r, r.ok ? 200 : 400);
+			}
 			return J({ error: 'bad request' }, 400);
 		}
 		if (p[1] === 'push' && p[2] === 'key' && req.method === 'GET') return J({ key: env.VAPID_PUB || null });

@@ -51,6 +51,23 @@ const gg = await call('GET', '/cloud/bk/rk/' + L[0].id);
 ok('[加密] 下载加密的：原样返回，类型是 octet-stream、文件名 .enc', gg.headers.get('content-type') === 'application/octet-stream' && /enc1\.enc/.test(gg.headers.get('content-disposition')) && Buffer.from(await gg.arrayBuffer()).equals(e));
 const rp = await (await call('POST', '/cloud/bk/rk?name=p1&kind=manual', nc.randomBytes(3000))).json();
 ok('[加密] 没带 enc 的（老版本路由器）：照样收，回复 enc=false', rp.ok === true && rp.enc === false); }
+// 6.0 第 9 项：以前没加密的备份，路由器加密后原地换掉
+{
+	const L0 = (await (await call('GET', '/cloud/bk/rk')).json()).list, pid = L0.find((x) => !x.enc).id, before = L0.find((x) => x.id === pid);
+	const encBuf = Buffer.concat([Buffer.from('CMCPBK2 ' + 'a'.repeat(24) + ' ' + 'b'.repeat(64) + '\n'), nc.randomBytes(260000)]);
+	ok('[换成加密] 密钥不对不行', (await call('PUT', '/cloud/bk/bad/' + pid + '?enc=1', encBuf)).status === 403);
+	ok('[换成加密] 不是加密格式的不收', (await call('PUT', '/cloud/bk/rk/' + pid + '?enc=1', nc.randomBytes(3000))).status === 400);
+	ok('[换成加密] 没带 enc=1 不行', (await call('PUT', '/cloud/bk/rk/' + pid, encBuf)).status === 400);
+	const pr = await (await call('PUT', '/cloud/bk/rk/' + pid + '?enc=1', encBuf)).json();
+	const L1 = (await (await call('GET', '/cloud/bk/rk')).json()).list, after = L1.find((x) => x.id === pid);
+	ok('[换成加密] 换成功：编号、时间、名字、顺序都不变，标成已加密、大小更新', pr.ok && after && after.enc === true && after.at === before.at && after.name === before.name && after.size === encBuf.length && L1.map((x) => x.id).join() === L0.map((x) => x.id).join(), JSON.stringify(pr));
+	const gp = await call('GET', '/cloud/bk/rk/' + pid);
+	ok('[换成加密] 下载到的是新的密文', Buffer.from(await gp.arrayBuffer()).equals(encBuf) && gp.headers.get('content-type') === 'application/octet-stream');
+	ok('[换成加密] 旧的明文数据块删掉了', !bkKeys().some((k) => k.startsWith('bk:' + pid + ':')) && bkKeys().some((k) => k.startsWith('bk:' + pid + 'e:')));
+	ok('[换成加密] 已经加密的不能再换', (await call('PUT', '/cloud/bk/rk/' + pid + '?enc=1', encBuf)).status === 400);
+	ok('[换成加密] 不存在的返回错误', (await call('PUT', '/cloud/bk/rk/nope?enc=1', encBuf)).status === 400);
+	ok('[换成加密] 删除换过的那份，数据块也清掉', (await (await call('DELETE', '/cloud/bk/rk/' + pid)).json()).ok && !bkKeys().some((k) => k.startsWith('bk:' + pid)));
+}
 ok('其他接口照常（心跳）', (await (await call('POST', '/cloud/beat/t/tk')).json()).ok === true);
 
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[1] ? '' : '（' + x[2] + '）')).join('\n'));

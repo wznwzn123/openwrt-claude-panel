@@ -77,7 +77,7 @@ npx wrangler secret put VAPID_PUB      # 粘贴 B 开头的那一串
 | `POST /cloud/beat/r/{RKEY}` | 路由器心跳 | RKEY |
 | `GET /cloud/beat/t/{TKEY}` | 平板心跳 | TKEY |
 | `POST /cloud/n/{RKEY}` | 路由器发通知 | RKEY |
-| `/cloud/bk/{RKEY}[/{id}]` | 云端备份：上传 / 列表 / 下载 / 删除 | RKEY |
+| `/cloud/bk/{RKEY}[/{id}]` | 云端备份：上传 / 列表 / 下载 / 删除；把以前没加密的换成加密的（PUT，6.0） | RKEY |
 | `POST /cloud/s` | 面板读取云端状态 | PANEL_TOKEN |
 | `POST /cloud/push` | 面板管理推送订阅、微信推送 | PANEL_TOKEN |
 | `GET /cloud/push/key` | VAPID 公钥 | 公开 |

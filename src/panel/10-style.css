@@ -34,6 +34,9 @@ h1,h2,h3{letter-spacing:-.02em}
 .topcap .btn{background:none;width:36px;height:36px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:16px;position:relative}
 .topcap .btn::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:.5px;background:var(--line)}
 .topcap .btn:active{background:var(--fill2)}
+/* 顶栏放不下：先藏 logo，再把状态收成一个点（fitTop 判断） */
+.top.tight1 .toplogo{display:none}.top.tight3 .title{font-size:15px}.top.tight3{padding-left:12px;padding-right:12px}.top.tight3 .brand{gap:7px}.top.tight3 .actions{gap:4px}.top.tight4 #topSub .subx{display:none}.top.tight2 #statusText{display:none}.top.tight2 .topcap .pill{padding:0 8px 0 13px;cursor:pointer}
+.brand{flex:1 1 auto}.top .actions{flex:none}
 #jobPill{height:36px;border-radius:99px;padding:0 12px;font-size:12.5px;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:560px){#jobPill #jobText{display:none}#jobPill{width:36px;padding:0;justify-content:center}}
 /* 侧边栏：手机上滑出，宽屏常驻 */
@@ -63,8 +66,6 @@ h1,h2,h3{letter-spacing:-.02em}
 /* 我的主页（5.0.1）：绑定的官网账号的头像和名字 */
 .av{display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#4ade80,#0ea5e9) center/cover no-repeat;color:#04140a;font-weight:700;text-transform:uppercase;overflow:hidden;flex:none}
 .av.img{color:transparent}
-.mebtn{width:36px;height:36px;border-radius:50%;border:0;padding:0;background:none;flex:none;cursor:pointer;transition:transform .18s var(--spring)}
-.mebtn:active{transform:scale(.92)}.mebtn .av{width:36px;height:36px;font-size:15px;box-shadow:0 0 0 2px var(--card),0 0 0 3.5px rgba(52,199,89,.55)}
 .sideme{display:flex;align-items:center;gap:10px;margin:0 10px 8px;width:calc(100% - 20px);padding:10px 12px;border:0;border-radius:14px;background:var(--fill);color:var(--text);text-align:left;cursor:pointer}
 .sideme .av{width:38px;height:38px;font-size:16px}.sideme .t{flex:1;min-width:0}.sideme b{display:block;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sideme small{display:block;font-size:12px;color:var(--muted);margin-top:1px}.sideme svg{width:16px;height:16px;color:var(--muted);flex:none}
 .mehead{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 6px}.mehead .av{width:84px;height:84px;font-size:34px;border-radius:28px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.mehead h3{margin:14px 0 2px;font-size:21px}.mehead p{margin:0;color:var(--muted);font-size:13.5px}

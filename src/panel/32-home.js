@@ -13,7 +13,8 @@ function pxSet(px) {
 function renderSub(o) {
 	if (o.px) pxSet(o.px);
 	const s = o.system || {}, a = pxAct(), run = a && (a.kind === 'clash' ? (o.clash || {}).running : a.running);
-	$('topSub').textContent = (s.model || 'OpenWrt') + (a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件');
+	// 型号一定显示；后面的插件状态放不下时藏起来（fitTop），概览页里有
+	$('topSub').innerHTML = esc(s.model || 'OpenWrt') + '<span class="subx">' + esc(a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件') + '</span>';
 }
 // 不是 Clash 内核的插件：节点列表、测延迟、切换（切换要重启插件，断网十几秒）
 async function pxNodeSheet() {

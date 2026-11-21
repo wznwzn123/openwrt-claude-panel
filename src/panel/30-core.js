@@ -276,6 +276,23 @@ let DG = { at: 0, v: null };
 function setStatus(ok, text) {
 	$('statusDot').className = 'dot ' + (ok ? 'on' : 'off');
 	$('statusText').textContent = text;
+	$('statusPill').setAttribute('aria-label', '状态：' + text);
+}
+/* 顶栏（6.0 第 76 项）：页面名、路由器名要显示完整。放不下时先藏 logo，再藏副标题里的插件状态，再把状态收成一个点（点一下看完整状态），最后标题字小一号 */
+function fitTop() {
+	const tb = $('topbar'), t = $('pageTitle'), s = $('topSub'); if (!tb || !t || !s) return;
+	const over = () => t.scrollWidth > t.clientWidth + 1 || s.scrollWidth > s.clientWidth + 1;
+	tb.classList.remove('tight1', 'tight2', 'tight3', 'tight4');
+	if (over()) tb.classList.add('tight1');
+	if (over()) tb.classList.add('tight4'); // 副标题只留型号（插件状态概览页里有）
+	if (over()) tb.classList.add('tight2'); // 状态收成一个点
+	if (over()) tb.classList.add('tight3'); // 再不够：标题字小一号
+}
+{
+	let q = 0; const fit = () => { if (!q) q = requestAnimationFrame(() => { q = 0; fitTop(); }); };
+	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
+	addEventListener('resize', fit);
+	$('statusPill').addEventListener('click', () => { if ($('topbar').classList.contains('tight2')) toast($('statusText').textContent); });
 }
 
 /* ---------- 共享数据 ---------- */
@@ -318,7 +335,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { me: '我的主页', main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };

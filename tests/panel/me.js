@@ -79,8 +79,11 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误' + T + '：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); localStorage.setItem('rp_dev', 'abcd1234.' + 'x'.repeat(32)); });
 		await page.goto('http://localhost:8181/panel/'); await W(2000);
-		const btn = w < 900 ? '#meBtn' : '#sideMe';
-		ok('托管版：显示我的头像按钮' + T, await page.isVisible(btn));
+		// 第 76 项：顶栏不再放头像，手机上从菜单（侧边栏）进我的主页
+		const btn = '#sideMe', openMe = async (pg) => { if (w < 900) { await pg.click('#menuBtn'); await W(500); } await pg.click(btn); };
+		ok('顶栏没有头像按钮' + T, (await page.locator('#meBtn').count()) === 0);
+		if (w < 900) { await page.click('#menuBtn'); await W(500); }
+		ok('托管版：侧边栏显示我的头像按钮' + T, await page.isVisible(btn));
 		ok('头像是官网账号的头像（图片）' + T, /data:image\/png/.test(await page.evaluate((s) => getComputedStyle(document.querySelector(s + ' .av')).backgroundImage, btn)));
 		if (w >= 900) ok('侧边栏显示名字' + T, (await page.textContent('#sideMeName')) === '小明');
 		ok('顶栏不重叠、不超出' + T, (await topLay(page)) === '', await topLay(page));
@@ -116,7 +119,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		const c1 = calls.length;
 		await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await W(1200);
 		ok('去邮箱复制验证码再回来（页面自动刷新）：输入框还在，输了一半的还在，没被重画' + T, calls.slice(c1).some((c) => c.m === 'fam' && c.p.op === 'page') && (await page.evaluate(() => { const i = document.querySelector('#meBox [data-code]'); return !!i && i.dataset.keep === '1' && i.value === '12'; })));
-		await page.reload(); await W(1800); if ((await page.textContent('#pageTitle')) !== '我的主页') { await page.click(btn); await W(1500); }
+		await page.reload(); await W(1800); if ((await page.textContent('#pageTitle')) !== '我的主页') { await openMe(page); await W(1500); }
 		ok('关掉面板重新打开（或侧滑退出再进来）：10 分钟内直接显示输入框，不用重新发' + T, await page.isVisible('#meBox [data-code]') && calls.filter((c) => c.m === 'fam' && c.p.op === 'sudo_code').length === sc0 + 1);
 		const c2 = calls.length;
 		await page.fill('#meBox [data-code]', '123456'); await W(1500);
@@ -138,7 +141,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('「现在锁上」：又锁起来了，显示「发验证码」' + T, !/xiaoming2026/.test(await page.textContent('#meBox')) && await page.isVisible('#meBox [data-cwrap] [data-send]') && !(await page.isVisible('#meBox [data-code]')));
 		// 再打开我的主页：先显示上次的（官网慢也马上有内容）
 		DELAY = 2500;
-		await page.goto('http://localhost:8181/panel/?p=more'); await W(1200); await page.click(btn); await W(500);
+		await page.goto('http://localhost:8181/panel/?p=more'); await W(1200); await openMe(page); await W(500);
 		ok('再打开我的主页：马上显示上次的内容（不等官网）' + T, /小明/.test(await page.textContent('#meBox')) && /爸爸/.test(await page.textContent('#meBox')) && !/读取中/.test(await page.textContent('#meBox')));
 		await W(2600); DELAY = 0;
 		// 添加家人：要验证码（锁上后重新确认）

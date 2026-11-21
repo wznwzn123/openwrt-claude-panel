@@ -1713,11 +1713,10 @@ async function mpRiskOk(perms, old, who) {
 const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
 	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
-	$('meBtn').classList.toggle('hidden', !on);
 	// 侧边栏的「我的主页」谁都有：没有官网账号的（自建版、应急登录）里面只有这台路由器的敏感信息
 	$('sideMe').classList.toggle('hidden', !token);
 	if (!on) { avPaint($('sideMeAv'), { name: '我' }); $('sideMeName').textContent = '我的主页'; $('sideMeSub').textContent = '敏感信息（要验证）'; return; }
-	avPaint($('meAv'), p); avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p); $('sideMeSub').textContent = '我的主页 · 官网账号';
+	avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p); $('sideMeSub').textContent = '我的主页 · 官网账号';
 }
 async function meLoad(force) {
 	if (!SVC || !SVC.hosted || !store.get('rp_dev') || ME_ROLE.emerg) { if (!store.get('rp_dev')) ME = null; meRender(); return ME; }
@@ -1726,7 +1725,6 @@ async function meLoad(force) {
 	meRender();
 	return ME;
 }
-$('meBtn').onclick = () => go('me');
 $('sideMe').onclick = () => go('me');
 // 确认是本人：发邮箱验证码，10 分钟内有效（只记在这个浏览器标签页里）
 let SUDO = (() => { try { const x = JSON.parse(sessionStorage.getItem('rp_sudo') || 'null'); return x && x.exp > Date.now() ? x : null; } catch (e) { return null; } })();

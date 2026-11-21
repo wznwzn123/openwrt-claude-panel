@@ -50,6 +50,9 @@ h1,h2,h3{letter-spacing:-.02em}
 .topcap .btn{background:none;width:36px;height:36px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:16px;position:relative}
 .topcap .btn::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:.5px;background:var(--line)}
 .topcap .btn:active{background:var(--fill2)}
+/* 顶栏放不下：先藏 logo，再把状态收成一个点（fitTop 判断） */
+.top.tight1 .toplogo{display:none}.top.tight3 .title{font-size:15px}.top.tight3{padding-left:12px;padding-right:12px}.top.tight3 .brand{gap:7px}.top.tight3 .actions{gap:4px}.top.tight4 #topSub .subx{display:none}.top.tight2 #statusText{display:none}.top.tight2 .topcap .pill{padding:0 8px 0 13px;cursor:pointer}
+.brand{flex:1 1 auto}.top .actions{flex:none}
 #jobPill{height:36px;border-radius:99px;padding:0 12px;font-size:12.5px;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:560px){#jobPill #jobText{display:none}#jobPill{width:36px;padding:0;justify-content:center}}
 /* 侧边栏：手机上滑出，宽屏常驻 */
@@ -79,8 +82,6 @@ h1,h2,h3{letter-spacing:-.02em}
 /* 我的主页（5.0.1）：绑定的官网账号的头像和名字 */
 .av{display:grid;place-items:center;border-radius:50%;background:linear-gradient(135deg,#4ade80,#0ea5e9) center/cover no-repeat;color:#04140a;font-weight:700;text-transform:uppercase;overflow:hidden;flex:none}
 .av.img{color:transparent}
-.mebtn{width:36px;height:36px;border-radius:50%;border:0;padding:0;background:none;flex:none;cursor:pointer;transition:transform .18s var(--spring)}
-.mebtn:active{transform:scale(.92)}.mebtn .av{width:36px;height:36px;font-size:15px;box-shadow:0 0 0 2px var(--card),0 0 0 3.5px rgba(52,199,89,.55)}
 .sideme{display:flex;align-items:center;gap:10px;margin:0 10px 8px;width:calc(100% - 20px);padding:10px 12px;border:0;border-radius:14px;background:var(--fill);color:var(--text);text-align:left;cursor:pointer}
 .sideme .av{width:38px;height:38px;font-size:16px}.sideme .t{flex:1;min-width:0}.sideme b{display:block;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sideme small{display:block;font-size:12px;color:var(--muted);margin-top:1px}.sideme svg{width:16px;height:16px;color:var(--muted);flex:none}
 .mehead{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 6px}.mehead .av{width:84px;height:84px;font-size:34px;border-radius:28px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.mehead h3{margin:14px 0 2px;font-size:21px}.mehead p{margin:0;color:var(--muted);font-size:13.5px}
@@ -733,9 +734,8 @@ section.page{display:none}section.page.on{display:block}
 		</div>
 		<div class="actions">
 			<span class="pill hidden" id="jobPill"><i class="dot busy"></i><span id="jobText">后台任务</span></span>
-			<button class="mebtn hidden" id="meBtn" type="button" aria-label="我的主页" title="我的主页"><span class="av" id="meAv"></span></button>
 			<button class="bell" id="bellBtn" type="button" aria-label="通知" title="通知"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><em id="bellN" class="hidden"></em></button>
-			<div class="topcap"><span class="pill" id="statusPill"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
+			<div class="topcap"><span class="pill" id="statusPill" role="status"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
 		</div>
 	</div>
 </header>
@@ -1414,6 +1414,23 @@ let DG = { at: 0, v: null };
 function setStatus(ok, text) {
 	$('statusDot').className = 'dot ' + (ok ? 'on' : 'off');
 	$('statusText').textContent = text;
+	$('statusPill').setAttribute('aria-label', '状态：' + text);
+}
+/* 顶栏（6.0 第 76 项）：页面名、路由器名要显示完整。放不下时先藏 logo，再藏副标题里的插件状态，再把状态收成一个点（点一下看完整状态），最后标题字小一号 */
+function fitTop() {
+	const tb = $('topbar'), t = $('pageTitle'), s = $('topSub'); if (!tb || !t || !s) return;
+	const over = () => t.scrollWidth > t.clientWidth + 1 || s.scrollWidth > s.clientWidth + 1;
+	tb.classList.remove('tight1', 'tight2', 'tight3', 'tight4');
+	if (over()) tb.classList.add('tight1');
+	if (over()) tb.classList.add('tight4'); // 副标题只留型号（插件状态概览页里有）
+	if (over()) tb.classList.add('tight2'); // 状态收成一个点
+	if (over()) tb.classList.add('tight3'); // 再不够：标题字小一号
+}
+{
+	let q = 0; const fit = () => { if (!q) q = requestAnimationFrame(() => { q = 0; fitTop(); }); };
+	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
+	addEventListener('resize', fit);
+	$('statusPill').addEventListener('click', () => { if ($('topbar').classList.contains('tight2')) toast($('statusText').textContent); });
 }
 
 /* ---------- 共享数据 ---------- */
@@ -1456,7 +1473,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { me: '我的主页', main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2085,7 +2102,8 @@ function pxSet(px) {
 function renderSub(o) {
 	if (o.px) pxSet(o.px);
 	const s = o.system || {}, a = pxAct(), run = a && (a.kind === 'clash' ? (o.clash || {}).running : a.running);
-	$('topSub').textContent = (s.model || 'OpenWrt') + (a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件');
+	// 型号一定显示；后面的插件状态放不下时藏起来（fitTop），概览页里有
+	$('topSub').innerHTML = esc(s.model || 'OpenWrt') + '<span class="subx">' + esc(a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件') + '</span>';
 }
 // 不是 Clash 内核的插件：节点列表、测延迟、切换（切换要重启插件，断网十几秒）
 async function pxNodeSheet() {
@@ -5041,11 +5059,10 @@ async function mpRiskOk(perms, old, who) {
 const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
 	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
-	$('meBtn').classList.toggle('hidden', !on);
 	// 侧边栏的「我的主页」谁都有：没有官网账号的（自建版、应急登录）里面只有这台路由器的敏感信息
 	$('sideMe').classList.toggle('hidden', !token);
 	if (!on) { avPaint($('sideMeAv'), { name: '我' }); $('sideMeName').textContent = '我的主页'; $('sideMeSub').textContent = '敏感信息（要验证）'; return; }
-	avPaint($('meAv'), p); avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p); $('sideMeSub').textContent = '我的主页 · 官网账号';
+	avPaint($('sideMeAv'), p); $('sideMeName').textContent = meName(p); $('sideMeSub').textContent = '我的主页 · 官网账号';
 }
 async function meLoad(force) {
 	if (!SVC || !SVC.hosted || !store.get('rp_dev') || ME_ROLE.emerg) { if (!store.get('rp_dev')) ME = null; meRender(); return ME; }
@@ -5054,7 +5071,6 @@ async function meLoad(force) {
 	meRender();
 	return ME;
 }
-$('meBtn').onclick = () => go('me');
 $('sideMe').onclick = () => go('me');
 // 确认是本人：发邮箱验证码，10 分钟内有效（只记在这个浏览器标签页里）
 let SUDO = (() => { try { const x = JSON.parse(sessionStorage.getItem('rp_sudo') || 'null'); return x && x.exp > Date.now() ? x : null; } catch (e) { return null; } })();

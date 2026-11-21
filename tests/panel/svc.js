@@ -45,7 +45,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	ok('不限期：显示「不限期」', /不限期/.test(await svcT()));
 	SVC = { hosted: false };
 	await page.reload(); await W(1800);
-	ok('自建版：没有我的主页按钮', !(await page.isVisible('#meBtn')));
+	ok('自建版：顶栏没有头像按钮', (await page.locator('#meBtn').count()) === 0);
 	await page.goto('http://localhost:8155/panel/?p=home'); await W(3500);
 	const ipt = await page.textContent('#ipList');
 	ok('IP 检查：同一个 IP 只显示一行，标出「机房 IP」，显示中文归属地', (ipt.match(/45\.1\.2\.3/g) || []).length === 1 && /机房 IP/.test(ipt) && /香港 某云/.test(ipt), ipt);

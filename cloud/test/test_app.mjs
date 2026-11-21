@@ -103,6 +103,17 @@ ok('[路由器版本] App（安卓浏览器内核）问 /api/app/version：还�
 rel.body = '## 这个版本的更新\n\n- 安全修复【必须更新】\n\n最低版本：2.0.2';
 k = await (await get('/api/router/version')).json();
 ok('[路由器版本] 发布说明写了【必须更新】/最低版本：路由器版本带上', k.force === true && k.min === '2.0.2', JSON.stringify(k));
+// 5.2.3 的问题：沿用上一版的「最低版本：v2.0.3【必须更新】」→ 只表示比 2.0.3 旧的必须更新，这一版（2.0.4）本身不强制
+rel.body = '## 这个版本的更新\n\n- 小修复\n\n最低版本：v2.0.3【必须更新】（安全更新）';
+k = await (await get('/api/router/version')).json();
+ok('[路由器版本] 「最低版本：更早的版本【必须更新】」：这一版不强制，比最低版本旧的照样要更新', k.force === false && k.min === '2.0.3', JSON.stringify(k));
+rel.body = '## 这个版本的更新\n\n- 小修复\n\n最低版本：v2.0.4【必须更新】';
+k = await (await get('/api/router/version')).json();
+ok('[路由器版本] 「最低版本：就是这一版【必须更新】」：强制', k.force === true && k.min === '2.0.4', JSON.stringify(k));
+rel.body = '## 这个版本的更新\n\n- 安全修复【必须更新】\n\n最低版本：v2.0.3【必须更新】';
+k = await (await get('/api/router/version')).json();
+ok('[路由器版本] 别处另外写了【必须更新】：照样强制', k.force === true, JSON.stringify(k));
+ok('[路由器版本] 判断函数：v 前缀、全角半角冒号都认', mod.mustUpdate('最低版本: 1.2【必须更新】', 'v1.2') === true && mod.mustUpdate('最低版本：1.1【必须更新】', '1.2') === false && mod.mustUpdate('', '1.2') === false);
 allDown = true; apiDown = true;
 k = await (await get('/api/router/version')).json();
 ok('[路由器版本] GitHub 连不上：用上一次查到的', k.version === '2.0.4', JSON.stringify(k));

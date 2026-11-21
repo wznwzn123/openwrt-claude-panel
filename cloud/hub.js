@@ -1567,7 +1567,7 @@ async function appVersion(env) {
 			const o = m
 				? { version: m.version.replace(/^v/, ''), notes: notesOf(m.body || ''), apk: '/app/router-panel.apk', at: m.at || x.at, force: m.force !== false, min: '' }
 				// 老的发布没有 app-version.json：照旧用发布的版本号
-				: { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), apk: '/app/router-panel.apk', at: x.at, force: x.body.includes('【必须更新】'), min: mv ? mv[1] : '' };
+				: { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), apk: '/app/router-panel.apk', at: x.at, force: mustUpdate(x.body, x.tag), min: mv ? mv[1] : '' };
 			try { await hubObj(env).setMeta('appver', o); } catch (e) {}
 			return o;
 		});
@@ -1596,6 +1596,15 @@ async function changelogApi(env) {
 		return v ? J({ ok: true, list: v.list, at: v.at }) : J({ ok: false, error: '暂时读不到更新日志' }, 502);
 	} catch (e) { return J({ ok: false, error: '暂时读不到更新日志' }, 502); }
 }
+// 这一版本身是不是「必须更新」：
+// 「最低版本：x.y.z【必须更新】」这一行说的是「比 x.y.z 旧的必须更新」——x.y.z 就是这一版时这一版强制，是更早的版本时这一版不强制
+// （5.2.3 就是因为沿用了上一版的「最低版本：v5.2.2【必须更新】」，结果已经是 5.2.2 的也被强制更新）；
+// 说明里别处另外写了【必须更新】（比如某条修复后面）照旧算强制
+export function mustUpdate(body, ver) {
+	body = String(body || ''); ver = String(ver || '').replace(/^v/, '');
+	const re = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})\s*【必须更新】/, m = re.exec(body);
+	return !!((m && m[1] === ver) || body.replace(re, '').includes('【必须更新】'));
+}
 async function routerVersion(env) {
 	try {
 		const v = await cached('router-version', 600, async () => {
@@ -1603,7 +1612,7 @@ async function routerVersion(env) {
 			if (!x) { try { return (await hubObj(env).meta('rver')) || null; } catch (e) { return null; } }
 			if (x.none || !x.tag) return null;
 			const mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(x.body);
-			const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), at: x.at, force: x.body.includes('【必须更新】'), min: mv ? mv[1] : '' };
+			const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), at: x.at, force: mustUpdate(x.body, x.tag), min: mv ? mv[1] : '' };
 			try { await hubObj(env).setMeta('rver', o); } catch (e) {}
 			return o;
 		});

@@ -273,7 +273,7 @@ function respond(method, p) {
 		{ pid: 8286, ppid: 1, st: 'S', mem: 30000, name: 'cloudflared', cmd: '/usr/bin/cloudflared tunnel run --token ***', cpu: 1, sys: true },
 		{ pid: 8534, ppid: 1, st: 'S', mem: 52000, name: 'dockerd', cmd: '/usr/bin/dockerd --config-file=/tmp/dockerd/daemon.json', cpu: 25, sys: false }] };
 	case 'kill': KILLED.push(p); return { ok: true, name: 'clash' };
-	case 'cloud_info': return { enabled: true, url: 'https://router.example/cloud', tablet: true };
+	case 'cloud_info': return { enabled: true, url: 'https://router.example/cloud', tablet: true, pkey: 'testtoken1234567890' }; // 6.0：自建完整版的 Worker 认登录密钥，路由器在这里给（手机不再自己存）
 	case 'notices': return { now: Math.round(Date.now() / 1000), app: null, ann: [], annAt: 0, annFail: false, events: [], fb: [], hosted: true, seen: { t: Date.now() + 864e5, pop: [] } };
 	case 'notices_seen': return { ok: true };
 	case 'chat': return { ok: true, msgs: [], uu: 0, seq: 0, hosted: true };

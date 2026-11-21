@@ -71,9 +71,20 @@ ok "有 usign：用 usign 验签，假的照样认出来" $([ "$s" = rolledback 
 mkdir -p "$T/bin2"; printf '#!/bin/sh\nexit 0\n' > "$T/bin2/usign"; chmod 755 "$T/bin2/usign"
 s=$(run "$T/evil" "$T/good" PATH="$T/bin2:$PATH")
 ok "usign 是坏的（假的也说对）：自检认出来，改用 openssl" $([ "$s" = rolledback ] && log | grep -q '验签工具：v_ossl' && log | grep -q "签名不对：file://$T/evil" ; echo $?) "$s $(log | head -3)"
-# 10. 没有能用的验签工具（自检过不了）：跟以前一样只按 SHA256 校验，照样能更新（不影响老路由器）
-s=$(run "$T/nosig" "$T/nosig" CMCP_STSIG=RWQAAAAAAAAAAA==)
-ok "没有能用的验签工具：只按 SHA256 校验，照样能更新，日志里写明" $([ "$s" = rolledback ] && log | grep -q '只按 SHA256 校验' ; echo $?) "$s $(msg)"
+# 10. 6.0 第 10 项：一律验签。没有能用的验签工具（这里用一个总是失败的假 openssl 挡住本机的 openssl）
+mkdir -p "$T/nossl" "$T/inst"; printf '#!/bin/sh\nexit 1\n' > "$T/nossl/openssl"; chmod 755 "$T/nossl/openssl"
+#   a. 没有软件包管理器、装不了：不更新，说清楚原因（不再只按 SHA256 校验就装）
+s=$(run "$T/good" "$T/good" PATH="$T/nossl:$T/inst:$PATH")
+ok "没有验签工具、也装不了：不更新，说明原因和怎么办" $([ "$s" = failed ] && msg | grep -q '为了安全没有更新' && msg | grep -q 'usign' && ! log | grep -q '只按 SHA256' ; echo $?) "$s $(msg)"
+#   b. 有 opkg：自动装上 usign，验签通过后照常更新；假的安装包照样认出来
+printf '#!/bin/sh\necho "opkg $*" >> "%s/opkg.log"\n[ "$1" = install ] && [ "$2" = usign ] && printf "#!/bin/sh\\nexec node %s/tests/update/fake-usign.mjs \\"\\$@\\"\\n" > "%s/inst/usign" && chmod 755 "%s/inst/usign"\nexit 0\n' "$T" "$REPO" "$T" "$T" > "$T/nossl/opkg"; chmod 755 "$T/nossl/opkg"
+s=$(run "$T/evil" "$T/good" PATH="$T/nossl:$T/inst:$PATH")
+ok "没有验签工具、有 opkg：自动装上 usign，用它验签，假的照样认出来" $([ "$s" = rolledback ] && grep -q 'opkg install usign' "$T/opkg.log" && log | grep -q '验签工具：v_usign' && log | grep -q "签名不对：file://$T/evil" ; echo $?) "$s $(msg) $(log | head -5)"
+#   c. 装是装上了，但装的工具是坏的（自检过不了）：不更新
+rm -f "$T/inst/usign"; printf '#!/bin/sh\n[ "$1" = install ] && printf "#!/bin/sh\\nexit 0\\n" > "%s/inst/usign" && chmod 755 "%s/inst/usign"\nexit 0\n' "$T" "$T" > "$T/nossl/opkg"
+s=$(run "$T/good" "$T/good" PATH="$T/nossl:$T/inst:$PATH")
+ok "装上的验签工具是坏的（假的也说对）：自检认出来，不更新" $([ "$s" = failed ] && msg | grep -q '为了安全没有更新' ; echo $?) "$s $(msg)"
+rm -f "$T/inst/usign"
 # 11. 已经是最新版：签名过了才说「已经是最新版」
 printf 'CODE=ai-full\nVER=9.9.9\n' > "$T/root/etc/claude-mcp/version"
 s=$(run "$T/good" "$T/good")

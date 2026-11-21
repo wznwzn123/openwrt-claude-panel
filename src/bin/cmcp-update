@@ -53,6 +53,22 @@ pick_v() {
 	rm -f st.msg st.bad st.sig
 	[ -n "$VT" ]
 }
+# 6.0 第 10 项：一律验签。没有能用的验签工具就先自动装 usign（很小，OpenWrt 自己验软件包也用它），装不上再试 openssl-util；
+# 都装不上就不更新（不再只按 SHA256 校验就装），说清楚原因
+inst_v() {
+	local p
+	for p in usign openssl-util; do
+		if command -v opkg >/dev/null 2>&1; then
+			{ opkg update; opkg install "$p"; } >>"$LOG" 2>&1
+		elif command -v apk >/dev/null 2>&1; then
+			{ apk update; apk add "$p"; } >>"$LOG" 2>&1
+		else
+			echo "没有软件包管理器（opkg / apk），装不了验签工具" >>"$LOG"; return 1
+		fi
+		pick_v && return 0
+	done
+	return 1
+}
 
 # 现在装的是哪种安装包（老版本没有 version 文件：按设置推算）
 CODE=$(sed -n 's/^CODE=//p' $D/version 2>/dev/null)
@@ -101,17 +117,24 @@ run)
 	: > "$LOG"
 	rm -rf "$W"; mkdir -p "$W" && cd "$W" || { state failed "临时目录建不了"; exit 1; }
 	# 1. 下载：先走官网（大陆快），不行再直连 GitHub
-	# 2. 校验：校验值文件的签名对得上（这台路由器能验签的话）、安装包跟校验值对得上才装；官网那份不对就再试 GitHub 的
+	# 2. 校验：校验值文件的签名对得上、安装包跟校验值对得上才装（6.0 起一律验签，没有验签工具先自动装）；官网那份不对就再试 GitHub 的
 	state downloading "正在下载新版安装包"
-	if pick_v; then echo "验签工具：$VT" >>"$LOG"; else echo "这台路由器没有 usign，也没有能验 Ed25519 签名的 openssl：只按 SHA256 校验" >>"$LOG"; fi
+	if ! pick_v; then
+		echo "这台路由器没有能用的验签工具（usign，或者能验 Ed25519 签名的 openssl）：先自动安装" >>"$LOG"
+		state downloading "正在安装验签工具（usign）"
+		if ! inst_v; then
+			state failed "这台路由器没有能验证安装包签名的工具（usign），自动安装也没成功（可能连不上软件源），为了安全没有更新。在路由器后台「系统 → 软件包」里装 usign 后再试，或者在路由器终端运行官网上的安装命令手动更新"
+			exit 1
+		fi
+		state downloading "正在下载新版安装包"
+	fi
+	echo "验签工具：$VT" >>"$LOG"
 	got=""; why=""; bad=""
 	for b in "$BASE" "$GH"; do
 		rm -f "$PKG" SHA256SUMS SHA256SUMS.sig one.sum
 		if ! curl -fsSL -m 180 -o "$PKG" "$b/$PKG" 2>>"$LOG" || ! curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG"; then why="下载失败：连不上官网和 GitHub，稍后再试"; continue; fi
-		if [ -n "$VT" ]; then
-			if ! curl -fsSL -m 30 -o SHA256SUMS.sig "$b/SHA256SUMS.sig" 2>>"$LOG"; then bad="安装包没有签名，为了安全没有安装，稍后再试"; echo "没有签名：$b" >>"$LOG"; continue; fi
-			if ! $VT SHA256SUMS SHA256SUMS.sig; then bad="安装包的签名不对，为了安全没有安装，稍后再试"; echo "签名不对：$b" >>"$LOG"; continue; fi
-		fi
+		if ! curl -fsSL -m 30 -o SHA256SUMS.sig "$b/SHA256SUMS.sig" 2>>"$LOG"; then bad="安装包没有签名，为了安全没有安装，稍后再试"; echo "没有签名：$b" >>"$LOG"; continue; fi
+		if ! $VT SHA256SUMS SHA256SUMS.sig; then bad="安装包的签名不对，为了安全没有安装，稍后再试"; echo "签名不对：$b" >>"$LOG"; continue; fi
 		grep " $PKG\$" SHA256SUMS > one.sum 2>/dev/null
 		if [ ! -s one.sum ] || ! sha256sum -c one.sum >>"$LOG" 2>&1; then bad="安装包校验没通过（可能下载不完整），没有安装，稍后再试"; continue; fi
 		got=$b; break

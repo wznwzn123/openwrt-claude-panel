@@ -17,9 +17,9 @@ GH=${CMCP_GH:-https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/
 # STSIG 是固定内容「cmcp release key selftest」的签名：先拿它试一下这台路由器的验签工具能不能用。
 # 6.0 第 52 项：换了新的签名密钥（私钥只在 GitHub 仓库密钥 RELEASE_SIGN_KEY_V6 里），新密钥的签名在 SHA256SUMS.sig2；
 # 旧密钥签的 SHA256SUMS.sig 只给还没升到 6.0 的老路由器用，这里不认。下面三个值由 Actions「写入新签名公钥」自动写入
-UPUB=${CMCP_UPUB:-RWTjaBd8Y8ESbCUksln6ozZ4pQfXiYVRTp/c+hEJr+rhh1iHxhShNPQc}
-PPUB=${CMCP_PPUB:-MCowBQYDK2VwAyEAJSSyWfqjNnilB9eJhVFOn9z6EQmv6uGHWIfGFKE09Bw=}
-STSIG=${CMCP_STSIG:-RWTjaBd8Y8ESbGEmi3Oe1i338aYi9HfAgEQzVRbvgzFhy3T/M64KHwFNEfIr+AqK8ZEbaew29n1kdoR8x9jWJ+PJQiAvSZ6TKgI=}
+UPUB=${CMCP_UPUB:-RWQntnhab0CCxMKwdhGL1UPRuIJU9Md8fdLGumVFAQ/Bm2yiuZD7EDld}
+PPUB=${CMCP_PPUB:-MCowBQYDK2VwAyEAwrB2EYvVQ9G4glT0x3x90sa6ZUUBD8GbbKK5kPsQOV0=}
+STSIG=${CMCP_STSIG:-RWQntnhab0CCxEGcPEWzgNGBeUdU5x/InuejhMO1FAru/xNCMM0Za/TJ7w7nDZ+KXxVXlUD1q6kO2ZaEZBSLnFqVW7NFwgPpLAc=}
 
 esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 state() { # state 状态 说明 [目标版本]

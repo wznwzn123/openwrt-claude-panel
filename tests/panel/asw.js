@@ -1,4 +1,5 @@
-// 节点页：自动切换卡片（开关、换策略组、最近切换、模拟一次）
+// 节点挂了自动换（6.0 第 62 项：同一个设置只留一个入口）：
+// 节点页只显示状态，点了去「自动任务」页；开关、换策略组、最近切换、模拟一次都在「自动任务」页这一项下面
 const { chromium } = require('playwright');
 const http = require('http');
 const fs = require('fs');
@@ -36,9 +37,15 @@ const server = http.createServer((req, res) => {
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8097/panel/?p=proxy'); await page.waitForTimeout(2500);
 		const T = dark ? '【深色】' : '';
+		const sum = await page.textContent('#aswSum');
+		ok(T + '节点页只显示状态：已开启、看哪个组、最近一次切换', /节点挂了自动换/.test(sum) && /已开启 · 看「Zou」/.test(sum) && /香港04 专线 3x → 🇭🇰香港02/.test(sum), sum);
+		ok(T + '节点页没有开关（同一个设置只留一个入口）', (await page.locator('#pg-proxy input[type=checkbox][data-aswon], [data-aswon]').count()) === 0);
+		await page.screenshot({ path: path.join(__dirname, 'shots', `asw-00-sum${dark ? '-dark' : ''}.png`) });
+		await page.click('#aswSum'); await page.waitForTimeout(1800);
+		ok(T + '点状态去「自动任务」页', /自动任务/.test(await page.textContent('#pageTitle')));
 		const txt = async () => page.textContent('#aswCard');
-		ok(T + '节点页有「自动切换」卡片，显示已开启', (await page.textContent('#aswPill')) === '已开启' && /节点挂了自动换/.test(await txt()) && await page.locator('[data-aswon]').isChecked());
-		ok(T + '说明看的是哪个策略组、同地区优先、推送到微信', /「Zou」正在用的节点/.test(await txt()) && /同地区/.test(await txt()) && /微信/.test(await txt()));
+		ok(T + '「自动任务」页：开关在「节点挂了自动换」那一行，开着', await page.locator('[data-au="autosw"] input').isChecked());
+		ok(T + '说明里写清楚手动换节点后 10 分钟内不换走', /10 分钟内不会把它换走/.test(await page.textContent('[data-au="autosw"]')));
 		ok(T + '显示最近切换（换了地区的有标注）', /香港04 专线 3x → 🇭🇰香港02/.test(await txt()) && /换了地区/.test(await txt()));
 		ok(T + '多个手动策略组时可以选看哪个', (await page.locator('[data-aswg] option').count()) === 2);
 		await page.locator('#aswCard').scrollIntoViewIfNeeded();
@@ -56,14 +63,14 @@ const server = http.createServer((req, res) => {
 		ASW.dryRes = { err: '家里宽带现在上不了网，先不动节点' };
 		await page.click('[data-aswdry]'); await page.waitForTimeout(1500);
 		ok('模拟：家里断网时给出原因', /家里宽带现在上不了网/.test(await txt()));
-		// 关闭 / 开启
-		await page.click('#aswCard .sw'); await page.waitForTimeout(600);
-		ok('关闭自动切换', calls.some((c) => c.set && c.enabled === false) && (await page.textContent('#aswPill')) === '已关闭' && /已关闭节点自动切换/.test(await page.textContent('#toast')));
-		await page.click('#aswCard .sw'); await page.waitForTimeout(600);
-		ok('重新开启', ASW.enabled === true && (await page.textContent('#aswPill')) === '已开启');
+		// 关闭 / 开启（在「自动任务」页那一行）
+		await page.click('[data-au="autosw"] .sw'); await page.waitForTimeout(900);
+		ok('关闭自动切换：详细设置收起来', ASW.enabled === false && (await page.locator('#aswCard').innerHTML()) === '' && /已关闭：节点挂了自动换/.test(await page.textContent('#toast')));
+		await page.click('[data-au="autosw"] .sw'); await page.waitForTimeout(1200);
+		ok('重新开启：详细设置又出来', ASW.enabled === true && /最近切换/.test(await txt()));
 		// 换策略组：选的是策略组（不是具体节点）时提示
 		await page.selectOption('[data-aswg]', 'Media'); await page.waitForTimeout(600);
-		ok('换成看别的策略组', ASW.group === 'Media' && /「Media」正在用的节点/.test(await txt()));
+		ok('换成看别的策略组', ASW.group === 'Media' && /「Media」/.test(await txt()));
 		ok('该组选的是策略组时提示不会起作用', /选的是「Auto」（策略组）/.test(await txt()), await txt());
 		await page.selectOption('[data-aswg]', 'Zou'); await page.waitForTimeout(600);
 		// 断线记录里的切换事件显示「节点」
@@ -79,6 +86,7 @@ const server = http.createServer((req, res) => {
 		ASW.sub = { ...ASW.sub, down: 1, expire: Math.floor(Date.now() / 1000) - 100 }; ASW.dryRes = { err: 'x' };
 		await page.click('[data-aswdry]'); await page.waitForTimeout(1500);
 		ok('到期：说明订阅已经到期', /订阅已经到期/.test(await txt()));
+		await page.goto('http://localhost:8097/panel/?p=proxy'); await page.waitForTimeout(2200);
 		ok('节点页其它功能正常（策略组列表还在）', (await page.locator('#pxList .grp').count()) === 2);
 		await ctx.close();
 	}

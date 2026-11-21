@@ -278,7 +278,7 @@ P.oc_move = function(a) {
 	return { ok: true };
 };
 
-/* ---------------- 面板：第三批（终端、文件管理、拉黑） ---------------- */
+/* ---------------- 面板：第三批（终端、文件管理、不走代理） ---------------- */
 
 function shell_allowed() { if (conf().allow_shell === false) die('路由器上已关闭命令行功能（claude-mcp shell on 可以重新打开）'); }
 
@@ -441,7 +441,7 @@ P.fs_download = function(a) {
 	return dl_put(tmp, name);
 };
 
-/* ---------- 拉黑名单：被拉黑的设备所有流量直连（只能用大陆网络） ---------- */
+/* ---------- 不走代理（以前叫「拉黑名单」）：名单里的设备所有流量直连（只能用大陆网络） ---------- */
 const BL_FILE = '/etc/claude-mcp/blacklist.json';
 const BL_PROVIDER = 'cmcp_blacklist';
 const BL_RULESET = '/etc/openclash/rule_provider/cmcp_blacklist.yaml';
@@ -450,7 +450,7 @@ const BL_MARK = '# [cmcp-blacklist]';
 
 function bl_load() { let j = null; try { j = json(readfile(BL_FILE) ?? '[]'); } catch (e) {} return type(j) == 'array' ? j : []; }
 function bl_save(l) { writefile(BL_FILE + '.tmp', sprintf('%J', l)); rename(BL_FILE + '.tmp', BL_FILE); }
-// 规则集的内容在共用库里生成（cmcp-route 也要用）：被拉黑的设备、路由器自己的隧道、面板走直连时的面板域名
+// 规则集的内容在共用库里生成（cmcp-route 也要用）：不走代理的设备、路由器自己的隧道、面板走直连时的面板域名
 function bl_write_ruleset(l) { CL.bl_ruleset_write(); }
 function bl_custom_ready() { return index(readfile(BL_CUSTOM) ?? '', BL_MARK) >= 0; }
 function bl_live() { try { let r = api('GET', '/providers/rules', null, 4); return !!(r?.providers?.[BL_PROVIDER]); } catch (e) { return false; } }
@@ -465,7 +465,7 @@ function bl_pin(mac, ip, name) {
 		for (let m in macs) if (lc(m) == mac) found = s;
 	});
 	if (found) return { ip: found.ip, created: false };
-	if (!match(ip ?? '', /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，先让它连上网再拉黑');
+	if (!match(ip ?? '', /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，先让它连上网再设置');
 	let sid = c.add('dhcp', 'host');
 	c.set('dhcp', sid, 'mac', mac);
 	c.set('dhcp', sid, 'ip', ip);

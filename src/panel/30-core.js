@@ -318,7 +318,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { me: '我的主页', main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '拉黑名单', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { me: '我的主页', main: '首页', home: '我的路由器', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -341,7 +341,7 @@ const NAV = [
 		{ p: 'cfg', i: '▤', t: '配置文件', px: 'oc' },
 		{ p: 'ow', i: '✎', t: '覆写设置', px: 'oc' },
 		{ p: 'rules', i: '☰', t: '规则', px: 'oc' },
-		{ p: 'black', i: '⊘', t: '拉黑名单', px: 'oc' },
+		{ p: 'black', i: '⊘', t: '不走代理', px: 'oc' },
 		{ p: 'set', i: '⚙', t: '插件设置', px: 'oc' },
 		{ p: 'log', i: '≡', t: 'OpenClash 日志', px: 'oc' },
 		{ t: 'OpenClash 原版', i: 'C', kids: [['admin/services/openclash/client', '运行状态'], ['admin/services/openclash/settings', '插件设置'], ['admin/services/openclash/config-overwrite', '覆写设置'], ['admin/services/openclash/config-subscribe', '配置订阅'], ['admin/services/openclash/config', '配置管理'], ['admin/services/openclash/log', '运行日志']] },

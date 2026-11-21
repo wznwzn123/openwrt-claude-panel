@@ -110,7 +110,7 @@ for (let ip in devs) {
 if (first || length(fresh)) L.writej(KNOWN, known);
 // 自动处理里关掉了「新设备连上提醒」：照样记下来（面板「设备」里能看到），只是不推送
 if (readfile(L.D + '/off.newdev') == null) for (let d in fresh)
-	L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备'), sprintf('IP %s · MAC %s\n不认识的话，可以在面板「设备」里把它暂停上网或拉黑', d.ip, d.mac), 'newdev-' + d.mac);
+	L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备'), sprintf('IP %s · MAC %s\n不认识的话，可以在面板「设备」里把它暂停上网', d.ip, d.mac), 'newdev-' + d.mac);
 
 // 3) 每台设备在线多久（面板「设备」里显示）：第一次看到在线时记下时间，离线就清掉；
 //    Wi-Fi 设备用无线驱动报的「连上多久」（路由器重启后也准），有线设备从路由器看到它开始算

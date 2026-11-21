@@ -68,7 +68,7 @@ P.auto = function(a) {
 		on, autosw: act?.kind == 'clash' ? !!cmcp_readj(D + '/autosw.json', { enabled: true }).enabled : null,
 		// 哪些用得上：云端备份要完整版或托管版；面板线路自动选择要 OpenClash
 		cloud: !!stat(D + '/cloud.conf'), route: !!stat('/etc/init.d/openclash'),
-		// 面板线路自动选择要「拉黑名单」规则集启用了才起作用（换路线就是刷新这个规则集）
+		// 面板线路自动选择要「不走代理」（以前叫「拉黑名单」）规则集启用了才起作用（换路线就是刷新这个规则集）
 		route_ready: !!stat('/etc/init.d/openclash') ? bl_custom_ready() : null,
 	};
 };
@@ -137,7 +137,7 @@ P.black_setup = function(a) {
 	if (index(s, BL_MARK) < 0) {
 		if (!match(s, /(^|\n)rules:[ \t]*(\n|$)/)) die('自定义规则文件里找不到「rules:」行，没有修改');
 		oc_backup_file('custom', BL_CUSTOM);
-		let entry = sprintf('  %s: %s 由路由器面板「拉黑名单」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
+		let entry = sprintf('  %s: %s 由路由器面板「不走代理」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
 		s = replace(s, /(^|\n)rules:[ \t]*\n/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
 		if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
 		else s = 'rule-providers:\n' + entry + s;

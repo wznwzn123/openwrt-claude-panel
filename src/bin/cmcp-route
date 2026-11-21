@@ -4,7 +4,7 @@
 // 做法：分别测「直连」和「代理」打开面板要多久——
 //   · 代理打不开、直连能打开 → 马上改走直连（反过来也一样），记进断线记录
 //   · 两条都能通 → 最近 3 次都明显更快、而且离上次换路线超过 1 小时，才换；只因为快慢换的不记进断线记录（免得刷屏）
-// 切换只是刷新「拉黑名单」那个规则集，不重启 OpenClash、不断网。
+// 切换只是刷新「不走代理」（以前叫「拉黑名单」）那个规则集，不重启 OpenClash、不断网。
 // 用法：cmcp-route          检查一次，需要就切换
 //       cmcp-route --init   只按现在的设置重新生成规则集（安装、换网址后用）
 //       cmcp-route --status 看现在走哪条
@@ -32,7 +32,7 @@ if (!FAKE && (arg == '--init' || !host || match(host, /trycloudflare\.com$/))) {
 }
 // 自动处理里关掉了「面板线路自动选择」：保持现在的走法，不再测、不再换
 if (!FAKE && readfile(L.D + '/off.route') != null) exit(0);
-// 还没启用「拉黑名单」规则集的路由器：只更新文件，等用户在面板里启用（启用要重启一次 OpenClash）
+// 还没启用「不走代理」规则集的路由器：只更新文件，等用户在面板里启用（启用要重启一次 OpenClash）
 const ready = FAKE || index(readfile('/etc/openclash/custom/openclash_custom_rules.list') ?? '', '# [cmcp-blacklist]') >= 0;
 if (!ready) { L.bl_ruleset_write(); exit(0); }
 

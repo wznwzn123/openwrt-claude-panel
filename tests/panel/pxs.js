@@ -85,7 +85,7 @@ const home = async (page) => { await page.goto('http://panel.test/panel/?p=home'
 	PXM.px = { ...PL('passwall', [PW]), cur: 'n1', curName: '香港 01', count: 3 };
 	({ page, ctx } = await open(browser)); await home(page);
 	const nt3 = await navTxt(page), has3 = (t, x) => ('|' + t + '|').includes('|' + x + '|');
-	ok('[只装 PassWall] 侧边栏没有 OpenClash 的订阅、配置文件、覆写、规则、拉黑名单、插件设置、日志', !['subs', 'cfg', 'ow', 'rules', 'black', 'set', 'log', 'proxy', 'conn'].some((x) => has3(nt3, x)) && has3(nt3, 'home') && has3(nt3, 'wd'), nt3.slice(0, 200));
+	ok('[只装 PassWall] 侧边栏没有 OpenClash 的订阅、配置文件、覆写、规则、不走代理、插件设置、日志', !['subs', 'cfg', 'ow', 'rules', 'black', 'set', 'log', 'proxy', 'conn'].some((x) => has3(nt3, x)) && has3(nt3, 'home') && has3(nt3, 'wd'), nt3.slice(0, 200));
 	await ctx.close();
 	// 装了两个插件：概览里能切换
 	PXM.px = { ...PL('openclash', [OCX, { ...PW, enabled: false, running: false }]) };
@@ -122,7 +122,7 @@ const home = async (page) => { await page.goto('http://panel.test/panel/?p=home'
 	ok('[Nikki] 有代理模式，没有运行模式、配置文件、订阅、控制面板按钮', await vis(page, '#modeBox') && !(await vis(page, '#runBox')) && await vis(page, '#ocCard') && /Nikki/.test(await txt(page, '#ocName')) && !(await vis(page, '#oDash')) && !(await page.locator('#oCfgBtn').isVisible()));
 	const nt2 = await navTxt(page);
 	const has2 = (t, x) => ('|' + t + '|').includes('|' + x + '|');
-	ok('[Nikki] 侧边栏：有节点、连接；没装 OpenClash，就没有订阅、配置文件、覆写设置、拉黑名单', has2(nt2, 'proxy') && has2(nt2, 'conn') && !has2(nt2, 'subs') && !has2(nt2, 'cfg') && !has2(nt2, 'ow') && !has2(nt2, 'black'), nt2.slice(0, 200));
+	ok('[Nikki] 侧边栏：有节点、连接；没装 OpenClash，就没有订阅、配置文件、覆写设置、不走代理', has2(nt2, 'proxy') && has2(nt2, 'conn') && !has2(nt2, 'subs') && !has2(nt2, 'cfg') && !has2(nt2, 'ow') && !has2(nt2, 'black'), nt2.slice(0, 200));
 	await ctx.close();
 	// 5 OpenClash：跟以前一样
 	PXM.px = PL('openclash', [OCX]);

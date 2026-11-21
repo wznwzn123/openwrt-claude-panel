@@ -17,12 +17,19 @@ async function loadAsw(b) {
 	catch (e) { if (b) throw e; ASW.st = { err: e.message }; }
 	renderAsw();
 }
+// 节点页上的一行状态（点了去「自动任务」页设置）
+function renderAswSum() {
+	const t = $('aswSumT'), s = ASW.st; if (!t || !s) return;
+	t.textContent = s.err ? s.err : s.enabled ? '已开启 · 看「' + s.group + '」' + (s.hist && s.hist[0] ? ' · 最近一次 ' + s.hist[0].from + ' → ' + s.hist[0].to : '') : '已关闭';
+}
+$('aswSum').addEventListener('click', () => go('auto'));
+// 「自动任务」页里「节点挂了自动换」下面的详细设置：看哪个策略组、机场订阅、最近切换、模拟一次（开关就是上面那一行）
 function renderAsw() {
+	renderAswSum();
 	const el = $('aswCard'), s = ASW.st;
 	if (!el || !s) return;
-	const pill = $('aswPill');
-	if (s.err) { pill.className = 'pill'; pill.textContent = '—'; el.innerHTML = `<div class="notice w">${esc(s.err)}</div>`; return; }
-	pill.className = 'pill ' + (s.enabled ? 'good' : ''); pill.textContent = s.enabled ? '已开启' : '已关闭';
+	if (s.err) { el.innerHTML = `<div class="notice w">${esc(s.err)}</div>`; return; }
+	if (!s.enabled) { el.innerHTML = ''; return; }
 	const isGroup = s.now && groups.some((g) => g.name === s.now);
 	const d = ASW.dry;
 	let dry = '';
@@ -44,21 +51,20 @@ function renderAsw() {
 	const sday = (x) => { const y = new Date(x * 1000); return y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0'); };
 	const subRow = sb && (sb.total || sb.expire) ? `<div class="kv"><span>机场订阅</span><span class="${sbad ? 'badc' : ''}">${sb.total ? `剩 ${B(Math.max(0, sb.total - sb.up - sb.down))} / 共 ${B(sb.total)}` : ''}${sb.total && sb.expire ? ' · ' : ''}${sb.expire ? sday(sb.expire) + ' 到期' : ''}</span></div>
 		${sbad ? `<div class="notice w" style="margin-top:8px">${sbad === 'traffic' ? '订阅流量用光了' : '订阅已经到期'}：这时节点连不上是因为这个，换节点也没用，所以<b>不会自动切换</b>，只推送提醒你。续费或重置流量后自动恢复。</div>` : ''}` : '';
-	el.innerHTML = `<label class="kv aswon"><span><b>节点挂了自动换</b><span class="muted">每分钟测一次「${esc(s.group)}」正在用的节点，连不上就换到同地区延迟最低的节点（同地区都不通才换其他地区），并推送到微信；你手动换节点后 10 分钟内不会把它换走</span></span><span class="sw"><input type="checkbox" data-aswon ${s.enabled ? 'checked' : ''}><i></i></span></label>
-		${sel}
+	el.innerHTML = `${sel}
 		${subRow}
 		${s.enabled && isGroup ? `<div class="notice w" style="margin-top:8px">「${esc(s.group)}」现在选的是「${esc(s.now)}」（策略组），自动切换只在选了具体节点时才起作用。</div>` : ''}
 		${hist.length ? `<div class="subhd" style="margin-top:10px">最近切换</div>${hist.map((h) => `<div class="kv aswh"><span>${fmt(h.t)}</span><span>${esc(h.from)} → <b>${esc(h.to)}</b>${h.same === false ? '<i>换了地区</i>' : ''}</span></div>`).join('')}` : ''}
 		${dry}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn" data-aswdry>模拟一次：要是当前节点挂了，会换到哪</button></div>`;
 }
-$('aswCard').addEventListener('change', (e) => {
-	const on = e.target.closest('[data-aswon]'), g = e.target.closest('[data-aswg]');
-	if (on) busy(null, async () => { await loadAsw({ set: true, enabled: on.checked }); toast(on.checked ? '已开启节点自动切换' : '已关闭节点自动切换'); });
+// 详细设置在「自动任务」页里每次重画，事件挂在外面那层（auCard）上
+$('auCard').addEventListener('change', (e) => {
+	const g = e.target.closest('#aswCard [data-aswg]');
 	if (g) busy(null, async () => { ASW.dry = null; await loadAsw({ set: true, group: g.value }); toast('改为看「' + g.value + '」'); });
 });
-$('aswCard').addEventListener('click', (e) => {
-	const b = e.target.closest('[data-aswdry]');
+$('auCard').addEventListener('click', (e) => {
+	const b = e.target.closest('#aswCard [data-aswdry]');
 	if (b) busy(b, () => loadAsw({ dry: true }), '正在测所有节点');
 });
 function renderProxy() {

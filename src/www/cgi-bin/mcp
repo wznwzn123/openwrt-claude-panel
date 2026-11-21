@@ -1984,7 +1984,7 @@ P.oc_move = function(a) {
 	return { ok: true };
 };
 
-/* ---------------- 面板：第三批（终端、文件管理、拉黑） ---------------- */
+/* ---------------- 面板：第三批（终端、文件管理、不走代理） ---------------- */
 
 function shell_allowed() { if (conf().allow_shell === false) die('路由器上已关闭命令行功能（claude-mcp shell on 可以重新打开）'); }
 
@@ -2147,7 +2147,7 @@ P.fs_download = function(a) {
 	return dl_put(tmp, name);
 };
 
-/* ---------- 拉黑名单：被拉黑的设备所有流量直连（只能用大陆网络） ---------- */
+/* ---------- 不走代理（以前叫「拉黑名单」）：名单里的设备所有流量直连（只能用大陆网络） ---------- */
 const BL_FILE = '/etc/claude-mcp/blacklist.json';
 const BL_PROVIDER = 'cmcp_blacklist';
 const BL_RULESET = '/etc/openclash/rule_provider/cmcp_blacklist.yaml';
@@ -2156,7 +2156,7 @@ const BL_MARK = '# [cmcp-blacklist]';
 
 function bl_load() { let j = null; try { j = json(readfile(BL_FILE) ?? '[]'); } catch (e) {} return type(j) == 'array' ? j : []; }
 function bl_save(l) { writefile(BL_FILE + '.tmp', sprintf('%J', l)); rename(BL_FILE + '.tmp', BL_FILE); }
-// 规则集的内容在共用库里生成（cmcp-route 也要用）：被拉黑的设备、路由器自己的隧道、面板走直连时的面板域名
+// 规则集的内容在共用库里生成（cmcp-route 也要用）：不走代理的设备、路由器自己的隧道、面板走直连时的面板域名
 function bl_write_ruleset(l) { CL.bl_ruleset_write(); }
 function bl_custom_ready() { return index(readfile(BL_CUSTOM) ?? '', BL_MARK) >= 0; }
 function bl_live() { try { let r = api('GET', '/providers/rules', null, 4); return !!(r?.providers?.[BL_PROVIDER]); } catch (e) { return false; } }
@@ -2171,7 +2171,7 @@ function bl_pin(mac, ip, name) {
 		for (let m in macs) if (lc(m) == mac) found = s;
 	});
 	if (found) return { ip: found.ip, created: false };
-	if (!match(ip ?? '', /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，先让它连上网再拉黑');
+	if (!match(ip ?? '', /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，先让它连上网再设置');
 	let sid = c.add('dhcp', 'host');
 	c.set('dhcp', sid, 'mac', mac);
 	c.set('dhcp', sid, 'ip', ip);
@@ -3262,7 +3262,7 @@ P.auto = function(a) {
 		on, autosw: act?.kind == 'clash' ? !!cmcp_readj(D + '/autosw.json', { enabled: true }).enabled : null,
 		// 哪些用得上：云端备份要完整版或托管版；面板线路自动选择要 OpenClash
 		cloud: !!stat(D + '/cloud.conf'), route: !!stat('/etc/init.d/openclash'),
-		// 面板线路自动选择要「拉黑名单」规则集启用了才起作用（换路线就是刷新这个规则集）
+		// 面板线路自动选择要「不走代理」（以前叫「拉黑名单」）规则集启用了才起作用（换路线就是刷新这个规则集）
 		route_ready: !!stat('/etc/init.d/openclash') ? bl_custom_ready() : null,
 	};
 };
@@ -3331,7 +3331,7 @@ P.black_setup = function(a) {
 	if (index(s, BL_MARK) < 0) {
 		if (!match(s, /(^|\n)rules:[ \t]*(\n|$)/)) die('自定义规则文件里找不到「rules:」行，没有修改');
 		oc_backup_file('custom', BL_CUSTOM);
-		let entry = sprintf('  %s: %s 由路由器面板「拉黑名单」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
+		let entry = sprintf('  %s: %s 由路由器面板「不走代理」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
 		s = replace(s, /(^|\n)rules:[ \t]*\n/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
 		if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
 		else s = 'rule-providers:\n' + entry + s;

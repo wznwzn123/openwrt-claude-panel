@@ -17,7 +17,7 @@ const UID_RE = /^[a-z2-9]{12}$/;
 export const PERM_KEYS = ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'];
 // 安全加固（第二轮）：net 改成「完全控制」——原版路由器后台、OpenClash 自定义脚本和覆写、恢复备份都归它（这些都能在路由器上以 root 运行任何东西）；
 // 「几乎全部」不再包含它。改之前给过「代理设置」或「网络设置」的子账号（v < 2），照旧能做原来能做的事，算作有「完全控制」，主页上标出来让主账号自己决定
-export const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、拉黑设备', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
+export const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、设备不走代理', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
 export const TPL = { look: ['msg'], family: ['msg', 'node', 'speed'], most: ['msg', 'node', 'speed', 'parent', 'proxy', 'sys'] };
 export const PV = 2;
 // 子账号实际有的权限（老数据：给过「代理设置」的，以前就能写脚本，算作有「完全控制」）

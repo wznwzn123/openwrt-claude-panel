@@ -5,10 +5,10 @@ let devices = [], blk = { entries: [] };
 const isBlack = (d) => blk.entries.some((e) => (d.mac && e.mac === d.mac) || (!e.mac && e.ip === d.ip) || (e.ip === d.ip && d.mac && e.mac === d.mac));
 const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.devs[d.mac] : null; return `<article class="card" ${attr}="${i}">
 	<div class="sechead"><div style="min-width:0"><b style="font-size:16px;display:block" class="ell">${esc(d.name || '未命名设备')}</b><div class="sub" style="font-size:12.5px">${esc(d.ip)}${d.mac ? ' · ' + esc(d.mac) : ''}</div>${d.renamed && d.orig && d.orig !== d.name ? `<div class="sub ell" style="font-size:12px">原名：${esc(d.orig)}</div>` : ''}${d.online && d.since ? `<div class="sub" style="font-size:12px">已在线 ${esc(dur(Date.now() / 1000 - d.since))}</div>` : ''}</div>
-		<span class="pill ${pz && pz.on ? 'warnc' : isBlack(d) ? 'red' : d.online ? 'good' : ''}">${pz && pz.on ? '已暂停' : isBlack(d) ? '已拉黑' : d.online ? '在线' : '离线'}</span></div>
+		<span class="pill ${pz && pz.on ? 'warnc' : isBlack(d) ? 'red' : d.online ? 'good' : ''}">${pz && pz.on ? '已暂停' : isBlack(d) ? '不走代理' : d.online ? '在线' : '离线'}</span></div>
 	${pz ? `<div class="pzline">${pzDesc(pz)}</div>` : ''}
 	${d.stats ? `<div class="actions" style="margin-top:10px"><span class="pill">${d.stats.conns} 个连接</span>${d.stats.proxied ? `<span class="pill blue">${d.stats.proxied} 个走代理</span>` : ''}<span class="pill">↓ ${B(d.stats.dl)}</span><span class="pill">↑ ${B(d.stats.ul)}</span></div>` : ''}
-	<div class="rowbtns"><button class="btn sm" data-conns>看连接</button>${attr === 'data-i' && d.mac ? '<button class="btn sm" data-ren>改名字</button>' : ''}${attr === 'data-i' ? `<button class="btn sm ${pz && pz.on ? 'good' : ''}" data-pause>${pz && pz.on ? '恢复 / 设置' : '暂停'}</button>` : ''}${isBlack(d) ? '<button class="btn sm good" data-unblack>解除拉黑</button>' : '<button class="btn sm danger" data-black>拉黑</button>'}</div>
+	<div class="rowbtns"><button class="btn sm" data-conns>看连接</button>${attr === 'data-i' && d.mac ? '<button class="btn sm" data-ren>改名字</button>' : ''}${attr === 'data-i' ? `<button class="btn sm ${pz && pz.on ? 'good' : ''}" data-pause>${pz && pz.on ? '恢复 / 设置' : '暂停'}</button>` : ''}${isBlack(d) ? '<button class="btn sm good" data-unblack>恢复走代理</button>' : '<button class="btn sm" data-black>不走代理</button>'}</div>
 </article>`; };
 async function loadDev() {
 	const [b, pz] = await Promise.all([P('black_state'), P('pause_list').catch(() => null)]);
@@ -302,22 +302,22 @@ function pauseSheet(d) {
 	});
 }
 
-/* ---------- 拉黑名单 ---------- */
+/* ---------- 不走代理的设备（以前叫「拉黑名单」；内部名字 black 不变，已有设置照用） ---------- */
 async function blackToggle(d, on, btn) {
-	if (on && !(await confirmBox('拉黑「' + (d.name || d.ip) + '」', `拉黑后这台设备的所有流量都不走代理，只能用大陆网络：国内网站和 App 正常，海外网站和 App（谷歌、YouTube、Claude 等）会打不开。\n${d.mac ? '会给它固定 IP（' + d.ip + '），防止 IP 变了以后失效。' : '这台设备读不到 MAC 地址，只能按 IP 拉黑；如果它的 IP 变了需要重新拉黑。'}\n不需要重启，马上生效。`, '拉黑', true))) return;
+	if (on && !(await confirmBox('让「' + (d.name || d.ip) + '」不走代理', `这台设备的所有流量都不走代理，只能用大陆网络：国内网站和 App 正常，海外网站和 App（谷歌、YouTube、Claude 等）会打不开。\n${d.mac ? '会给它固定 IP（' + d.ip + '），防止 IP 变了以后失效。' : '这台设备读不到 MAC 地址，只能按 IP 设置；如果它的 IP 变了需要重新设置。'}\n不需要重启，马上生效。`, '不走代理', true))) return;
 	await busy(btn, async () => {
 		const r = await P('black_set', { mac: d.mac || undefined, ip: d.ip, name: d.name || undefined, on });
 		if (on && r.need_setup) {
-			toast('已加入名单，但拉黑功能还没启用', true);
+			toast('已加入名单，但「不走代理」功能还没启用', true);
 			await blackSetup();
-		} else toast(on ? `已拉黑${r.pinned ? '（已固定 IP ' + r.ip + '）' : ''}` : '已解除拉黑');
+		} else toast(on ? `已设为不走代理${r.pinned ? '（已固定 IP ' + r.ip + '）' : ''}` : '已恢复走代理');
 		refresh(true);
 	}, false);
 }
 async function blackSetup() {
-	if (!(await confirmBox('启用拉黑功能', '第一次使用需要把拉黑规则加到「优先匹配」自定义规则里，并重启 OpenClash 一次（断网 10–30 秒）。之后拉黑、解除都不用再重启。', '启用并重启'))) return;
+	if (!(await confirmBox('启用「不走代理」', '第一次使用需要把这条规则加到「优先匹配」自定义规则里，并重启 OpenClash 一次（断网 10–30 秒）。之后添加、恢复都不用再重启。', '启用并重启'))) return;
 	await P('black_setup', { restart: true });
-	toast('正在重启 OpenClash，完成后拉黑立即生效');
+	toast('正在重启 OpenClash，完成后立即生效');
 	setStatus(false, '重启中'); watchJobs();
 }
 async function loadBlack() {
@@ -326,11 +326,11 @@ async function loadBlack() {
 	const box = $('blBody'), devs = blk.devices || [];
 	const ok = blk.ready && blk.live && blk.custom_on;
 	const others = devs.map((d, i) => [d, i]).filter(([d]) => !isBlack(d));
-	box.innerHTML = `<div class="hero"><div class="herohead"><h1>拉黑名单</h1><span class="pill ${ok ? 'good' : 'warnc'}">${ok ? '已启用' : '未启用'}</span></div>
-		<p class="muted" style="margin-bottom:${ok ? 0 : 12}px">被拉黑的设备不走代理，只能用大陆网络（国内网站正常，海外网站打不开）。拉黑、解除都马上生效，不用重启。</p>
-		${ok ? '' : `<div class="notice w" style="margin-bottom:10px">${!blk.custom_on ? '「自定义规则」总开关是关着的，拉黑不会生效。' : '拉黑功能还没启用（需要重启 OpenClash 一次）。'}</div><button class="btn primary" data-setup style="width:100%;padding:12px">启用拉黑功能</button>`}</div>
-		<div class="sectitle"><b>已拉黑</b><span class="pill">${blk.entries.length} 台</span></div>
-		<section class="card list">${blk.entries.length ? blk.entries.map((e, i) => `<div class="file" data-e="${i}"><div><b>${esc((devs.find((d) => d.mac && d.mac === e.mac) || {}).name || e.name || e.ip)}</b><span class="muted">${esc(e.ip)}${e.mac ? ' · ' + esc(e.mac) : ' · 按 IP'}${e.at ? ' · ' + ts(e.at) + ' 拉黑' : ''}</span></div><button class="btn sm good" data-un>解除</button></div>`).join('') : '<div class="empty">还没有拉黑任何设备</div>'}</section>
+	box.innerHTML = `<div class="hero"><div class="herohead"><h1>不走代理</h1><span class="pill ${ok ? 'good' : 'warnc'}">${ok ? '已启用' : '未启用'}</span></div>
+		<p class="muted" style="margin-bottom:${ok ? 0 : 12}px">这些设备的所有流量都不走代理，只能用大陆网络（国内网站正常，海外网站打不开）。添加、恢复都马上生效，不用重启。想让设备完全上不了网，用「设备」里的「暂停」。</p>
+		${ok ? '' : `<div class="notice w" style="margin-bottom:10px">${!blk.custom_on ? '「自定义规则」总开关是关着的，「不走代理」不会生效。' : '「不走代理」还没启用（需要重启 OpenClash 一次）。'}</div><button class="btn primary" data-setup style="width:100%;padding:12px">启用「不走代理」</button>`}</div>
+		<div class="sectitle"><b>不走代理的设备</b><span class="pill">${blk.entries.length} 台</span></div>
+		<section class="card list">${blk.entries.length ? blk.entries.map((e, i) => `<div class="file" data-e="${i}"><div><b>${esc((devs.find((d) => d.mac && d.mac === e.mac) || {}).name || e.name || e.ip)}</b><span class="muted">${esc(e.ip)}${e.mac ? ' · ' + esc(e.mac) : ' · 按 IP'}${e.at ? ' · ' + ts(e.at) + ' 加入' : ''}</span></div><button class="btn sm good" data-un>解除</button></div>`).join('') : '<div class="empty">还没有设置不走代理的设备</div>'}</section>
 		<div class="sectitle"><b>其他设备</b><button class="btn sm" data-manual>按 IP 添加</button></div>
 		<section class="grid tasks" data-devs>${others.length ? others.map(([d, i]) => devCard(d, i, 'data-d')).join('') : '<div class="card empty">没有其他设备</div>'}</section>`;
 	box.onclick = async (e) => {
@@ -345,7 +345,7 @@ async function loadBlack() {
 			return;
 		}
 		if (e.target.closest('[data-manual]')) {
-			const ip = await promptBox('按 IP 拉黑', '例如 192.168.1.20');
+			const ip = await promptBox('按 IP 添加', '例如 192.168.1.20');
 			if (!ip) return;
 			if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip)) return toast('IP 格式不对', true);
 			const d = devs.find((x) => x.ip === ip) || { ip };
@@ -463,11 +463,11 @@ function autoItems(d) {
 	add('出问题时自动修', 'panelrestart', on.panelrestart !== false, '面板服务卡住自动重启', '面板没响应时自动重启面板服务。关掉后面板卡住只能自己重启路由器或服务');
 	add('出问题时自动修', 'cacheclean', on.cacheclean !== false, '内存快满时清理缓存', '内存快用完时先清理系统缓存，不影响上网');
 	if (d.oc) add('出问题时自动修', 'memguard', !!d.memguard, '内存不够时自动重启 ' + pn, '清理缓存后还不够，就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
-	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知；你手动换节点后 10 分钟内不会把它换走（在「节点」页可以选看哪个策略组）');
+	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知；你手动换节点后 10 分钟内不会把它换走');
 	// 开关看「有没有打开」（want）；打开了但有的插件还没生效，下面另外提示
 	if (d.oc) add('网络', 'tunbypass', !!(d.tb && (d.tb.want ?? d.tb.on)), '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
-	// 面板线路自动选择靠「拉黑名单」那个规则集换路线：规则集没启用时开着也不起作用，要说清楚
-	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「拉黑名单」页启用规则集' : ''));
+	// 面板线路自动选择靠「不走代理」那个规则集换路线：规则集没启用时开着也不起作用，要说清楚
+	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「不走代理」页启用' : ''));
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
 	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
 	if (d.cloud) add('提醒和备份', 'cloudbackup', on.cloudbackup !== false, '云端自动备份', '每天 4:07 把路由器设置备份到云端，保留最近 10 份。关掉后「立即备份」照样能用');
@@ -484,9 +484,12 @@ function renderAuto() {
 	const groups = [];
 	for (const x of items) { let g = groups.find((y) => y.g === x.g); if (!g) groups.push(g = { g: x.g, list: [] }); g.list.push(x); }
 	const note = (x) => x.k !== 'tunbypass' ? '' : x.v ? (d.tb.status === '还没生效' ? '<div class="notice" style="margin:2px 0 8px">已打开，还有代理插件没生效：Nikki 要等它下次重启；其他的过几分钟会自动补上。</div>' : '') : d.tb.auto ? `<div class="notice w" style="margin:2px 0 8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>` : '';
-	let html = groups.map((g) => `<div class="sectitle"><b>${esc(g.g)}</b></div><section class="card aucard">${g.list.map((x) => row(x) + note(x)).join('')}</section>`).join('');
+	// 「节点挂了自动换」的详细设置（看哪个策略组、最近切换、模拟一次）放在它下面：同一个设置只在这一页改（节点页只显示状态）
+	const more = (x) => (x.k === 'autosw' ? '<div id="aswCard" class="aswin"></div>' : '');
+	let html = groups.map((g) => `<div class="sectitle"><b>${esc(g.g)}</b></div><section class="card aucard">${g.list.map((x) => row(x) + note(x) + more(x)).join('')}</section>`).join('');
 	if (!d.oc) html += '<p class="muted" style="font-size:12.5px;margin:10px 4px 0">这台路由器没装代理插件，跟代理插件有关的几项不显示。</p>';
 	el.innerHTML = html;
+	if (d.autosw != null) { if (ASW.st) renderAsw(); loadAsw(); }
 	const n = items.filter((x) => x.v).length;
 	pl.textContent = n === items.length ? '全部开启' : n ? `开了 ${n} / ${items.length} 项` : '全部关闭';
 	pl.className = 'pill ' + (n === items.length ? 'good' : '');

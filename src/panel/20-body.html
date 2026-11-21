@@ -167,8 +167,8 @@
 		<p class="muted" style="margin-bottom:6px">点节点即可切换。自动选择的策略组只能测速，不能手动切换。</p>
 		<label class="notice" style="display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--text)"><span>切换后断开旧连接<br><span class="muted">让 App 立刻走新节点</span></span><span class="sw"><input type="checkbox" id="pxClose" checked><i></i></span></label>
 	</div>
-	<div class="sectitle"><b>自动切换</b><span class="pill" id="aswPill">—</span></div>
-	<section class="card" id="aswCard"><div class="muted" style="font-size:13px">读取中…</div></section>
+	<!-- 节点挂了自动换：只在「自动任务」页设置（同一个设置只留一个入口），这里只显示状态 -->
+	<button class="card aswsum" id="aswSum" type="button"><span><b>节点挂了自动换</b><span class="muted" id="aswSumT">读取中…</span></span><span class="muted">去设置 ›</span></button>
 	<div class="sectitle"><b>策略组</b><span class="pill" id="pxCount">—</span></div>
 	<div id="pxList" class="grid"></div>
 	<div class="sectitle"><b>代理集</b><span class="pill" id="ppCount">—</span></div>
@@ -340,7 +340,7 @@
 	<section class="card list" id="cnBox"><div id="cnList"></div></section>
 </section>
 
-<!-- 拉黑名单 -->
+<!-- 不走代理的设备（以前叫「拉黑名单」） -->
 <section class="page" id="p-black"><div id="blBody"></div></section>
 
 <!-- 终端 -->
@@ -439,7 +439,7 @@
 </main>
 
 <nav class="dock" id="dock">
-	<button data-d="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg><span>重启</span></button>
+	<button data-d="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg><span>重启插件</span></button>
 	<button data-d="subs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z"/><path d="M12 10.5v6M9.5 14l2.5 2.5 2.5-2.5"/></svg><span>更新订阅</span></button>
 	<button data-d="mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span id="dockMode">模式</span></button>
 	<button data-d="ip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z"/></svg><span>IP 检查</span></button>

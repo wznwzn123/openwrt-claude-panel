@@ -198,8 +198,8 @@ function respond(method, p) {
 	case 'auto': {
 		if (p && p.set) { if (p.memguard != null) AUTO.memguard = !!p.memguard; if (p.tunbypass != null) { if (AUTO.failSet) throw new Error('设置失败：测试'); AUTO.tb = { on: !!p.tunbypass, want: !!p.tunbypass, auto: false, at: 0, status: p.tunbypass ? '已开启' : '已关闭：面板关闭' }; }
 			for (const k of ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup']) if (p[k] != null) AUTO.on[k] = !!p[k];
-			if (p.autosw != null) AUTO.autosw = !!p.autosw; }
-		return { oc: AUTO.oc, px: AUTO.oc ? 'OpenClash' : '', memguard: AUTO.memguard, tb: AUTO.tb, on: { ...AUTO.on }, autosw: AUTO.oc ? AUTO.autosw : null, cloud: AUTO.cloud, route: AUTO.oc };
+			if (p.autosw != null) { AUTO.autosw = !!p.autosw; ASW.enabled = !!p.autosw; } } // 路由器上两边读写的是同一个 autosw.json
+		return { oc: AUTO.oc, px: AUTO.oc ? 'OpenClash' : '', memguard: AUTO.memguard, tb: AUTO.tb, on: { ...AUTO.on }, autosw: AUTO.oc ? ASW.enabled !== false && AUTO.autosw !== false : null, cloud: AUTO.cloud, route: AUTO.oc };
 	}
 	case 'daily': if (p && p.run) { DYD.runs++; DYD.d = { t: Math.floor(Date.now() / 1000), ok: false, summary: '发现 2 个问题', items: [{ lvl: 'ok', title: '过去 24 小时没有断线', detail: '' }, { lvl: 'warn', title: '24 小时内有 1 台新设备连上', detail: 'iPhone（192.168.5.50）' }, { lvl: 'ok', title: '内存正常（可用 61 MB）', detail: '' }, { lvl: 'err', title: '温度过高：88°C', detail: '检查通风' }] }; } return DYD.d || { none: true };
 	case 'luci_menu': return { items: MENU.items };

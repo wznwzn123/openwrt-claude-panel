@@ -155,7 +155,7 @@ function lan_devices() {
 	return byip;
 }
 
-/* ---------- 「拉黑名单」规则集（OpenClash 的 file 规则集，改完刷新一下就生效，不用重启） ---------- */
+/* ---------- 「不走代理」（以前叫「拉黑名单」）规则集（OpenClash 的 file 规则集，改完刷新一下就生效，不用重启） ---------- */
 const BL_RULESET = '/etc/openclash/rule_provider/cmcp_blacklist.yaml';
 // 面板的主域名：子域名.主域名 → 主域名（托管版是官网域名，这样官网和面板一起）
 function panel_domain() {
@@ -167,7 +167,7 @@ function panel_direct() { return !!readj(D + '/panel_route.json', {})?.direct; }
 function bl_ruleset_write() {
 	let l = readj(D + '/blacklist.json', []), dom = panel_domain();
 	if (type(l) != 'array') l = [];
-	let lines = ['# 由路由器面板「拉黑名单」自动生成，不要手动修改', 'payload:'];
+	let lines = ['# 由路由器面板「不走代理」（以前叫「拉黑名单」）自动生成，不要手动修改', 'payload:'];
 	// 路由器自己连 Cloudflare 的流量（隧道、云端报告）走直连：不受代理节点抽风影响
 	push(lines, '  - PROCESS-NAME,cloudflared', '  - DST-PORT,7844', '  - AND,((DOMAIN,api.cloudflare.com),(PROCESS-NAME,curl))');
 	if (dom) {

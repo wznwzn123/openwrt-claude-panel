@@ -320,31 +320,31 @@ const ok = (name, cond, note) => { results.push([name, !!cond, note || '']); if 
 	await page.click('#scrim', { position: { x: 370, y: 400 } }); await page.waitForTimeout(500);
 	ok('点遮罩关闭侧边栏', await page.locator('#side.open').count() === 0);
 
-	// 拉黑
+	// 不走代理（以前叫「拉黑」）
 	await tab('black');
 	await full('31-black');
-	await overflow('拉黑名单');
-	ok('拉黑页显示未启用', (await page.textContent('#blBody')).includes('未启用'));
+	await overflow('不走代理');
+	ok('不走代理页显示未启用', (await page.textContent('#blBody')).includes('未启用'));
 	i = calls.length;
 	await page.click('#blBody [data-d="1"] [data-black]'); await page.waitForTimeout(300);
-	ok('拉黑前先提醒', (await page.locator('.modal').last().textContent()).includes('只能用大陆网络'));
+	ok('设置前先提醒', (await page.locator('.modal').last().textContent()).includes('只能用大陆网络'));
 	await okBtn(); await page.waitForTimeout(400);
-	ok('拉黑 → black_set', since(i).some((c) => c.m === 'panel/black_set' && c.p.on === true && c.p.mac === '11:22:33:44:55:66'));
-	ok('未启用时提示启用', (await page.locator('.modal').last().textContent()).includes('启用拉黑功能'));
+	ok('不走代理 → black_set', since(i).some((c) => c.m === 'panel/black_set' && c.p.on === true && c.p.mac === '11:22:33:44:55:66'));
+	ok('未启用时提示启用', (await page.locator('.modal').last().textContent()).includes('启用「不走代理」'));
 	await okBtn(); await page.waitForTimeout(500);
 	ok('启用 → black_setup', since(i).some((c) => c.m === 'panel/black_setup' && c.p.restart === true));
 	await tab('black'); await page.waitForTimeout(300);
 	await full('32-black-after');
-	ok('已拉黑列表 1 台', await page.locator('#blBody [data-e]').count() === 1);
+	ok('不走代理列表 1 台', await page.locator('#blBody [data-e]').count() === 1);
 	i = calls.length;
 	await page.click('#blBody [data-un]'); await page.waitForTimeout(400);
 	ok('解除 → black_set off', since(i).some((c) => c.m === 'panel/black_set' && c.p.on === false));
 	await page.click('#blBody [data-manual]'); await page.waitForTimeout(300);
 	await page.fill('.modal input', '192.168.5.9'); await page.click('.modal [data-ok]'); await page.waitForTimeout(300); await okBtn(); await page.waitForTimeout(400);
-	ok('按 IP 拉黑（无 MAC）', last('panel/black_set').p.ip === '192.168.5.9' && !last('panel/black_set').p.mac);
+	ok('按 IP 添加（无 MAC）', last('panel/black_set').p.ip === '192.168.5.9' && !last('panel/black_set').p.mac);
 	await tab('dev');
 	await full('33-dev-black');
-	ok('设备页显示已拉黑', (await page.textContent('#dvList')).includes('已拉黑'));
+	ok('设备页显示「不走代理」，没有「拉黑」字样', (await page.textContent('#dvList')).includes('不走代理') && !(await page.textContent('#dvList')).includes('拉黑'));
 
 	// 终端
 	await tab('term');

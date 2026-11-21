@@ -1002,10 +1002,14 @@ export class Hub extends DurableObject {
 		text = String(text || '').trim().slice(0, 2000); contact = String(contact || '').trim().slice(0, 80); diag = String(diag || '').trim().slice(0, 1500);
 		if (text.length < 4) return { st: 400, error: '写几句遇到的问题或者建议吧' };
 		if (!(await this.hit('fb:' + sub, 5, DAY))) return { st: 429, error: '今天发了很多条了，明天再发' };
-		const d = await this.ctx.storage.get('d:' + sub), emails = [];
-		for (const uid of (d && d.users) || []) { const u = await this.ctx.storage.get('u:' + uid); if (u && u.email) emails.push(u.email); }
-		// 安全加固（第二轮）：家人各自的反馈只有自己看得到（新面板会带上是哪个账号发的；主账号的、老面板发的，归主账号）
-		const fu = /^[a-z2-9]{12}$/.test(String(uid || '')) && d && uid !== this.famOf(d).owner ? String(uid) : '';
+		const d = await this.ctx.storage.get('d:' + sub), users = (d && d.users) || [];
+		// 6.0 第 67 项：要是这台路由器上登录着官网账号的人发的（用应急登录码进来的不行）；回复邮件只发到发反馈的人自己的账号邮箱
+		// （以前发到这台路由器所有账号的邮箱：家人的反馈会被主账号、别的家人在邮件里看到）
+		// 用应急登录码进来的手机，路由器那边就不让发；没带账号的（老面板）归主账号
+		const own = d ? this.famOf(d).owner : '', who = /^[a-z2-9]{12}$/.test(String(uid || '')) && users.includes(String(uid)) ? String(uid) : own;
+		const wu = who ? await this.ctx.storage.get('u:' + who) : null, emails = wu && wu.email ? [wu.email] : [];
+		// 安全加固（第二轮）：家人各自的反馈只有自己看得到；主账号的归主账号
+		const fu = who && who !== own ? who : '';
 		const fb = { id: rnd(10), code: rnd(8), at: Date.now(), sub, ...(fu ? { by: fu } : {}), name: (d && d.name) || sub, emails, text, contact, diag, done: 0, imgs: [] };
 		// 5.2：附带的文件（视频、日志等，先传好的）
 		if (Array.isArray(files) && files.length) { const c = await this.fileClaim(files, 'd' + sub + (fu ? '.' + fu : ''), 'fb'); if (c.error) return { st: 400, error: c.error }; fb.files = c.files; }

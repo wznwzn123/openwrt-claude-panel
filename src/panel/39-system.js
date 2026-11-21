@@ -943,6 +943,8 @@ function shrinkImg(file, lim) {
 async function feedbackSheet() {
 	let dg = '', hosted = true;
 	try { const r = await P('feedback_diag', {}, 15000); dg = r.text || ''; hosted = r.hosted !== false; } catch (e) {}
+	// 6.0 第 67 项：托管版要登录着官网账号才能反馈（用应急登录码进来的，先从官网打开面板）
+	if (hosted && store.get('rp_dev') && ME_ROLE.emerg) return toast('先从官网「我的路由器」打开面板再反馈：用应急登录码进来的手机不能发反馈', true);
 	// 5.2：托管服务开了文件存储才显示「添加视频或文件」（老的缓存里没有这一项，就问一次）
 	if (hosted && !(SVC && 'files' in SVC)) await svcLoad(false);
 	const IM = [];
@@ -952,7 +954,8 @@ async function feedbackSheet() {
 		<div class="fbims" data-ims></div>
 		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
 		${hosted && SVC && SVC.files ? `<div class="atts hidden" data-atts style="margin-top:8px"></div><label class="btn fbadd"><input type="file" multiple data-any style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加视频或文件（200MB 以内）</span></label>` : ''}
-		<input class="input" data-ct maxlength="80" placeholder="联系方式（可以不填）：微信、QQ、邮箱" style="margin-top:8px" autocapitalize="off" spellcheck="false">
+		${hosted && ME && ME.me && ME.me.email ? `<div class="kv fbmail"><span>处理进度发到</span><span>${esc(ME.me.email)}<i>账号邮箱，不能改</i></span></div>` : ''}
+		<input class="input" data-ct maxlength="80" placeholder="其他联系方式（可以不填）：微信、QQ" style="margin-top:8px" autocapitalize="off" spellcheck="false">
 		<label class="kv aswon" style="margin-top:6px"><span><b>附上路由器信息</b><span class="muted">方便查问题，只有下面这些，不含密钥和网址</span></span><span class="sw"><input type="checkbox" data-dg checked><i></i></span></label>
 		${dg ? `<pre class="out" style="font-size:11.5px;max-height:120px;overflow:auto;margin:6px 0 0">${esc(dg)}</pre>` : ''}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn primary" data-go>发送</button></div>`, (m, close) => {

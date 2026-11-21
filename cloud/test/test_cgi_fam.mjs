@@ -230,6 +230,22 @@ const lv = await call(oa3.result.dev, 'fam', { op: 'leave' });
 ok('[主页] 子账号在面板里自己退出：账号里没了，这台路由器上他的手机都删了', !!lv.result && !(await S().get('d:' + R.sub)).subs[ua] && !Object.values(devs()).some((x) => x.uid === ua), JSON.stringify(lv));
 ok('[主页] 主账号不能「退出」（要先转让或解绑）', !!(await call(oc3.result.dev, 'fam', { op: 'leave' })).error);
 
+// 9b. 6.0 第 67 项：面板反馈的回复邮件只发到发反馈那个人自己的账号邮箱（家人的反馈不会发到主账号、别的家人邮箱里）
+{
+	// 先保证有一个家人：新建一个账号加成这台路由器的子账号
+	const uz = await mkUser('zoe@x.com');
+	{ const d0 = await S().get('d:' + R.sub); d0.users = [...new Set([...(d0.users || []), uz])]; d0.subs = { ...(d0.subs || {}), [uz]: { perms: ['msg'], at: Date.now() } }; await S().put('d:' + R.sub, d0); }
+	const d = await S().get('d:' + R.sub), own = H().famOf(d).owner, mem = [uz];
+	{
+		const r1 = await H().feedback({ sub: R.sub, rkey: R.rkey, uid: mem[0], text: '家人发的反馈：节点页打不开' });
+		const f1 = (await H().feedbacks()).find((x) => x.code === r1.code), mu = await S().get('u:' + mem[0]);
+		ok('[反馈] 家人发的：邮件只发到他自己的账号邮箱，不发主账号', f1 && JSON.stringify(f1.emails) === JSON.stringify([mu.email]) && f1.by === uz, JSON.stringify(f1 && f1.emails));
+	}
+	const r2 = await H().feedback({ sub: R.sub, rkey: R.rkey, uid: '', text: '老面板发的反馈：没带账号' });
+	const f2 = (await H().feedbacks()).find((x) => x.code === r2.code), ou = await S().get('u:' + own);
+	ok('[反馈] 没带账号的（老面板）：归主账号，只发主账号邮箱', f2 && JSON.stringify(f2.emails) === JSON.stringify([ou.email]) && !f2.by, JSON.stringify(f2 && f2.emails));
+}
+
 // 10. 没托管的（自建版）不受影响：不要手机钥匙，全部能用
 fs.rmSync(ETC + '/hub.conf');
 const self = await cgi('/' + TOKEN, { jsonrpc: '2.0', id: 1, method: 'panel/whoami', params: {}, client: 'panel' });

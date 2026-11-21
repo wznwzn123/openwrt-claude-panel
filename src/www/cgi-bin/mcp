@@ -2747,7 +2747,7 @@ const FAM_GROUPS = {
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
-	net: ['luci_menu', 'luci_key', 'restore', 'overwrite_fetch'],
+	net: ['luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch'],
 	sys: ['update_start', 'auto', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };
@@ -3590,6 +3590,25 @@ P.auto = function(a) {
 /* ---------- 面板：内嵌 Kwrt 原版页面 / 系统日志 / 进程 ---------- */
 P.luci_key = function() {
 	return { key: trim(readfile(LUCI_KEY) ?? '') };
+};
+// 6.0 第 1 项：完整原版后台的入口票（12 小时有效，记着是哪台手机）。登录要输路由器密码，核对、锁定、推送在 cmcp-lfull 里
+const LFULL = '/tmp/cmcp_lfull.json';
+P.luci_full = function() {
+	if (!DEV_ID) die('先在面板重新登录一次再打开');
+	if (!length(trim(readfile(LUCI_KEY) ?? '')) || !stat(SBIN + '/cmcp-lfull')) die('这台路由器上的面板版本太旧，先一键更新');
+	let s = null; try { s = json(readfile(LFULL) ?? 'null'); } catch (e) {}
+	if (type(s) != 'object') s = {};
+	s.t ??= {}; s.fail ??= { n: 0, until: 0 }; s.act ??= {};
+	for (let k in keys(s.t)) if ((s.t[k].exp ?? 0) < time() || s.t[k].dev == DEV_ID) delete s.t[k];
+	let ks = sort(keys(s.t), (x, y) => s.t[x].exp - s.t[y].exp);
+	while (length(ks) >= 20) delete s.t[shift(ks)];
+	let t = rand_str(32);
+	if (!t) die('生成入口失败，再试一次');
+	t = replace(t, /[g-z]/g, (c) => sprintf('%x', ord(c) % 16));
+	s.t[t] = { dev: DEV_ID, name: DEV?.name ?? '手机', exp: time() + 43200 };
+	writefile(LFULL + '.tmp', sprintf('%J', s));
+	sh(sprintf('chmod 600 %s; mv -f %s %s', shq(LFULL + '.tmp'), shq(LFULL + '.tmp'), shq(LFULL)));
+	return { ticket: t, exp: time() + 43200, locked: (s.fail.until ?? 0) > time() ? s.fail.until : null };
 };
 P.slog = function(a) {
 	let n = +a.lines || 300;

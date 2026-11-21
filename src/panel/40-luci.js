@@ -10,9 +10,12 @@ let lfCur = '', lfTry = 0, lfTimer;
 // 6.0 第 53 项：门禁钥匙只在这次打开面板期间记着（不长期留在手机上），路由器换了钥匙（换登录密钥、移除手机）就重新取
 const LK_SS = { get() { try { return sessionStorage.getItem('rp_lk'); } catch (e) { return null; } }, set(k) { try { sessionStorage.setItem('rp_lk', k); } catch (e) {} } };
 try { localStorage.removeItem('rp_lk'); } catch (e) {} // 6.0 以前长期存在手机上的旧钥匙
+const ckSec = () => (location.protocol === 'https:' ? '; secure' : '');
+const lffTicketOff = () => { document.cookie = 'cmcp_f=; path=/cgi-bin/; max-age=0; samesite=strict' + ckSec(); };
 function luciForget() {
 	try { sessionStorage.removeItem('rp_lk'); } catch (e) {}
-	document.cookie = 'cmcp_l=; path=/cgi-bin/; max-age=0; samesite=strict' + (location.protocol === 'https:' ? '; secure' : '');
+	document.cookie = 'cmcp_l=; path=/cgi-bin/; max-age=0; samesite=strict' + ckSec();
+	lffTicketOff();
 }
 async function luciKey(force) {
 	let k = force ? null : LK_SS.get();
@@ -24,6 +27,7 @@ function lfMask(msg, retry) {
 	if (msg) { $('lfMsg').textContent = msg; $('lfMask').querySelector('.spin').classList.toggle('hidden', !!retry); $('lfRetry').classList.toggle('hidden', !retry); }
 }
 function lfOpen(path) {
+	lffTicketOff(); // 面板里的「原版页面」照旧自动登录：不带完整后台的入口票
 	lfCur = path;
 	lfMask('正在打开「' + pageTitle('k:' + path) + '」…');
 	loadOn();
@@ -74,3 +78,59 @@ $('lfr').addEventListener('load', async () => {
 	}
 });
 
+
+/* ---------- 6.0 第 1 项：完整原版后台 ----------
+ * 原样打开路由器的 LuCI（顶栏、菜单、主题都是它自己的），要输路由器密码登录，跟在家里一样。
+ * 面板先向路由器要一张入口票（只有登录着、有「完全控制」的手机拿得到），放在 Cookie 里；路由器的门禁核对密码、
+ * 输错 5 次锁 15 分钟并推送、每次登录推送、30 分钟没操作退出、太弱的密码不让用（见 src/bin/cmcp-lfull） */
+let lffOn = false, lffTry = 0, lffTimer;
+function lffMask(msg, retry) {
+	$('lffMask').classList.toggle('hidden', !msg);
+	if (msg) { $('lffMsg').textContent = msg; $('lffMask').querySelector('.spin').classList.toggle('hidden', !!retry); $('lffRetry').classList.toggle('hidden', !retry); }
+}
+async function lffTicket() {
+	const r = await P('luci_full', {}, 20000);
+	document.cookie = `cmcp_f=${r.ticket}; path=/cgi-bin/; samesite=strict` + ckSec();
+	return r;
+}
+async function loadLfull(quiet) {
+	if (quiet && lffOn) return;
+	lffMask('正在打开完整原版后台…');
+	try { await luciKey(false); await lffTicket(); }
+	catch (e) { lffMask(e.message || '打不开，稍后再试', true); return; }
+	lffOn = true; lffTry = 0;
+	clearTimeout(lffTimer);
+	lffTimer = setTimeout(() => lffMask('打开得太慢了，路由器可能忙或者网络不稳', true), 30000);
+	$('lff').src = '../cgi-bin/luci/';
+}
+function lffClose() {
+	lffOn = false; clearTimeout(lffTimer);
+	$('lff').src = 'about:blank';
+	lffTicketOff();
+}
+$('lffRetry').onclick = () => { lffOn = false; loadLfull(); };
+$('lffOut').onclick = async () => {
+	if (!(await confirmBox('退出完整原版后台', '退出后要再用，得重新输路由器密码。', '退出'))) return;
+	// 先让原版后台自己退出（会话作废），再回到概览
+	try { const w = $('lff').contentWindow; if (w && /\/cgi-bin\/luci/.test(w.location.pathname)) { $('lff').src = '../cgi-bin/luci/admin/logout'; await new Promise((r) => setTimeout(r, 900)); } } catch (e) {}
+	go('home');
+};
+$('lff').addEventListener('load', async () => {
+	if (!lffOn) return;
+	clearTimeout(lffTimer);
+	let d = null;
+	try { d = $('lff').contentDocument; } catch (e) {}
+	if (!d || !d.body || d.location.href === 'about:blank') return lffMask('页面打不开', true);
+	const txt = (d.body.innerText || '').slice(0, 400);
+	// 门禁钥匙或入口票过期了（换了登录密钥、移除了手机、过了 12 小时）：重新取一次
+	if (/请从路由器面板里打开|入口过期了/.test(txt)) {
+		if (lffTry++ < 1) { try { await luciKey(true); await lffTicket(); $('lff').src = d.location.pathname + (d.location.search || ''); return; } catch (e) {} }
+		return lffMask('没有权限打开完整原版后台', true);
+	}
+	if (/cloudflare/i.test(d.title + ' ' + txt) || /Error 10\d\d|Bad gateway|502|530/.test(d.title)) {
+		setStatus(false, '离线');
+		return lffMask('连不上路由器，稍后再试', true);
+	}
+	lffTry = 0;
+	lffMask('');
+});

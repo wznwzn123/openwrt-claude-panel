@@ -113,6 +113,12 @@ h1,h2,h3{letter-spacing:-.02em}
 .lfmask .spin{font-size:22px;color:var(--brand)}
 body.luci .dock{display:none}
 @media(min-width:900px){#p-luci.on{left:min(272px,82vw)}}
+#p-lfull.on{position:fixed;left:0;right:0;top:var(--toph,64px);bottom:0;z-index:15;background:var(--bg);display:flex;flex-direction:column}
+#p-lfull iframe{display:block;width:100%;flex:1;min-height:0;border:0;background:#fff}
+.lffbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 12px;font-size:12px;color:var(--muted);border-bottom:.5px solid var(--line);background:var(--card)}
+.lffbar>span{min-width:0;line-height:1.4}
+.lffbar .btn{flex:none}
+@media(min-width:900px){#p-lfull.on{left:min(272px,82vw)}}
 @media(min-width:900px){body.app .toast{left:272px}}
 /* 进程 */
 .prrow .pill{font-variant-numeric:tabular-nums}

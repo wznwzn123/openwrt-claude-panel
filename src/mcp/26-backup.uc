@@ -314,7 +314,7 @@ const FAM_GROUPS = {
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
-	net: ['luci_menu', 'luci_key', 'restore', 'overwrite_fetch'],
+	net: ['luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch'],
 	sys: ['update_start', 'auto', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };

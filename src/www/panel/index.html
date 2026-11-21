@@ -129,6 +129,12 @@ h1,h2,h3{letter-spacing:-.02em}
 .lfmask .spin{font-size:22px;color:var(--brand)}
 body.luci .dock{display:none}
 @media(min-width:900px){#p-luci.on{left:min(272px,82vw)}}
+#p-lfull.on{position:fixed;left:0;right:0;top:var(--toph,64px);bottom:0;z-index:15;background:var(--bg);display:flex;flex-direction:column}
+#p-lfull iframe{display:block;width:100%;flex:1;min-height:0;border:0;background:#fff}
+.lffbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 12px;font-size:12px;color:var(--muted);border-bottom:.5px solid var(--line);background:var(--card)}
+.lffbar>span{min-width:0;line-height:1.4}
+.lffbar .btn{flex:none}
+@media(min-width:900px){#p-lfull.on{left:min(272px,82vw)}}
 @media(min-width:900px){body.app .toast{left:272px}}
 /* 进程 */
 .prrow .pill{font-variant-numeric:tabular-nums}
@@ -1068,6 +1074,12 @@ section.page{display:none}section.page.on{display:block}
 	<iframe id="lfr" title="LuCI 原版页面"></iframe>
 	<div class="lfmask hidden" id="lfMask"><span class="spin">↻</span><span id="lfMsg">正在打开…</span><button class="btn hidden" id="lfRetry">重新打开</button></div>
 </section>
+<!-- 6.0 第 1 项：完整原版后台（原样的 LuCI，要输路由器密码） -->
+<section class="page" id="p-lfull">
+	<div class="lffbar" id="lffBar"><span>用路由器密码登录 · 30 分钟没操作自动退出</span><button class="btn sm" id="lffOut">退出完整后台</button></div>
+	<iframe id="lff" title="完整原版后台"></iframe>
+	<div class="lfmask hidden" id="lffMask"><span class="spin">↻</span><span id="lffMsg">正在打开…</span><button class="btn hidden" id="lffRetry">重新打开</button></div>
+</section>
 
 <!-- 系统日志 -->
 <section class="page" id="p-slog">
@@ -1160,7 +1172,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { lfull: 'net', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -1578,7 +1590,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -1643,6 +1655,7 @@ const NAV = [
 		{ p: 'term', i: '›_', t: '终端' },
 		{ p: 'files', i: '▣', t: '文件管理' },
 		{ p: 'cbk', i: '☁', t: '云端备份' },
+		{ p: 'lfull', i: '⧉', t: '完整原版后台' },
 		['admin/quickstart', 'LuCI 首页', '⌂'],
 	] },
 	{ g: '消息与帮助', items: [
@@ -1813,10 +1826,11 @@ async function go(p, how) {
 	const swap = () => {
 		if (page !== p) return; // 又点了别的页面
 		$$('section.page').forEach((s) => s.classList.toggle('on', s.id === 'p-' + sec));
-		document.body.classList.toggle('luci', sec === 'luci');
+		document.body.classList.toggle('luci', sec === 'luci' || sec === 'lfull');
 		document.body.classList.toggle('chatp', sec === 'chat');
 		if (sec !== 'chat') chStop();
 		if (sec !== 'luci' && prev && prev.startsWith('k:')) lfClose();
+		if (sec !== 'lfull' && prev === 'lfull') lffClose();
 		scrollTo({ top: 0 });
 		refresh();
 		navReveal(p);
@@ -5729,9 +5743,12 @@ let lfCur = '', lfTry = 0, lfTimer;
 // 6.0 第 53 项：门禁钥匙只在这次打开面板期间记着（不长期留在手机上），路由器换了钥匙（换登录密钥、移除手机）就重新取
 const LK_SS = { get() { try { return sessionStorage.getItem('rp_lk'); } catch (e) { return null; } }, set(k) { try { sessionStorage.setItem('rp_lk', k); } catch (e) {} } };
 try { localStorage.removeItem('rp_lk'); } catch (e) {} // 6.0 以前长期存在手机上的旧钥匙
+const ckSec = () => (location.protocol === 'https:' ? '; secure' : '');
+const lffTicketOff = () => { document.cookie = 'cmcp_f=; path=/cgi-bin/; max-age=0; samesite=strict' + ckSec(); };
 function luciForget() {
 	try { sessionStorage.removeItem('rp_lk'); } catch (e) {}
-	document.cookie = 'cmcp_l=; path=/cgi-bin/; max-age=0; samesite=strict' + (location.protocol === 'https:' ? '; secure' : '');
+	document.cookie = 'cmcp_l=; path=/cgi-bin/; max-age=0; samesite=strict' + ckSec();
+	lffTicketOff();
 }
 async function luciKey(force) {
 	let k = force ? null : LK_SS.get();
@@ -5743,6 +5760,7 @@ function lfMask(msg, retry) {
 	if (msg) { $('lfMsg').textContent = msg; $('lfMask').querySelector('.spin').classList.toggle('hidden', !!retry); $('lfRetry').classList.toggle('hidden', !retry); }
 }
 function lfOpen(path) {
+	lffTicketOff(); // 面板里的「原版页面」照旧自动登录：不带完整后台的入口票
 	lfCur = path;
 	lfMask('正在打开「' + pageTitle('k:' + path) + '」…');
 	loadOn();
@@ -5793,6 +5811,62 @@ $('lfr').addEventListener('load', async () => {
 	}
 });
 
+
+/* ---------- 6.0 第 1 项：完整原版后台 ----------
+ * 原样打开路由器的 LuCI（顶栏、菜单、主题都是它自己的），要输路由器密码登录，跟在家里一样。
+ * 面板先向路由器要一张入口票（只有登录着、有「完全控制」的手机拿得到），放在 Cookie 里；路由器的门禁核对密码、
+ * 输错 5 次锁 15 分钟并推送、每次登录推送、30 分钟没操作退出、太弱的密码不让用（见 src/bin/cmcp-lfull） */
+let lffOn = false, lffTry = 0, lffTimer;
+function lffMask(msg, retry) {
+	$('lffMask').classList.toggle('hidden', !msg);
+	if (msg) { $('lffMsg').textContent = msg; $('lffMask').querySelector('.spin').classList.toggle('hidden', !!retry); $('lffRetry').classList.toggle('hidden', !retry); }
+}
+async function lffTicket() {
+	const r = await P('luci_full', {}, 20000);
+	document.cookie = `cmcp_f=${r.ticket}; path=/cgi-bin/; samesite=strict` + ckSec();
+	return r;
+}
+async function loadLfull(quiet) {
+	if (quiet && lffOn) return;
+	lffMask('正在打开完整原版后台…');
+	try { await luciKey(false); await lffTicket(); }
+	catch (e) { lffMask(e.message || '打不开，稍后再试', true); return; }
+	lffOn = true; lffTry = 0;
+	clearTimeout(lffTimer);
+	lffTimer = setTimeout(() => lffMask('打开得太慢了，路由器可能忙或者网络不稳', true), 30000);
+	$('lff').src = '../cgi-bin/luci/';
+}
+function lffClose() {
+	lffOn = false; clearTimeout(lffTimer);
+	$('lff').src = 'about:blank';
+	lffTicketOff();
+}
+$('lffRetry').onclick = () => { lffOn = false; loadLfull(); };
+$('lffOut').onclick = async () => {
+	if (!(await confirmBox('退出完整原版后台', '退出后要再用，得重新输路由器密码。', '退出'))) return;
+	// 先让原版后台自己退出（会话作废），再回到概览
+	try { const w = $('lff').contentWindow; if (w && /\/cgi-bin\/luci/.test(w.location.pathname)) { $('lff').src = '../cgi-bin/luci/admin/logout'; await new Promise((r) => setTimeout(r, 900)); } } catch (e) {}
+	go('home');
+};
+$('lff').addEventListener('load', async () => {
+	if (!lffOn) return;
+	clearTimeout(lffTimer);
+	let d = null;
+	try { d = $('lff').contentDocument; } catch (e) {}
+	if (!d || !d.body || d.location.href === 'about:blank') return lffMask('页面打不开', true);
+	const txt = (d.body.innerText || '').slice(0, 400);
+	// 门禁钥匙或入口票过期了（换了登录密钥、移除了手机、过了 12 小时）：重新取一次
+	if (/请从路由器面板里打开|入口过期了/.test(txt)) {
+		if (lffTry++ < 1) { try { await luciKey(true); await lffTicket(); $('lff').src = d.location.pathname + (d.location.search || ''); return; } catch (e) {} }
+		return lffMask('没有权限打开完整原版后台', true);
+	}
+	if (/cloudflare/i.test(d.title + ' ' + txt) || /Error 10\d\d|Bad gateway|502|530/.test(d.title)) {
+		setStatus(false, '离线');
+		return lffMask('连不上路由器，稍后再试', true);
+	}
+	lffTry = 0;
+	lffMask('');
+});
 /* =====================================================================
    系统日志
    ===================================================================== */
@@ -5933,7 +6007,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

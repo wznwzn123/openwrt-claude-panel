@@ -1,0 +1,120 @@
+#!/usr/bin/ucode
+// 6.0 第 1 项：完整原版后台（像在家一样输路由器密码登录 LuCI，顶栏、菜单、主题都是原样的）
+// 由原版页面的门禁脚本 luci-gate 调用（先核对过门禁钥匙 cmcp_l），手机带着面板发的入口票 cmcp_f 时走这里：
+//   - 入口票只有登录着、有「完全控制」的手机能拿（路由器 panel/luci_full 发，12 小时有效，记着是哪台手机）
+//   - 不自动登录：必须输路由器的登录密码（rpcd 核对，跟在家登录 LuCI 一样），会话 30 分钟没操作就退出
+//   - 连续输错 5 次锁 15 分钟并推送；每次登录成功都推送；太弱的密码（太短、admin、12345678 这类）不让用，先改密码
+//   - 只认这里登录的会话（标了 cmcp_full）：面板里「原版页面」自动登录的会话在这里不算，要重新输密码
+// 返回给 luci-gate：0 已经回复了；10 交给 LuCI，Cookie 换成 /tmp/cmcp_lf.<pid>.ck、请求内容在 /tmp/cmcp_lf.<pid>.body；
+//                   11 交给 LuCI，Cookie 换成 /tmp/cmcp_lf.<pid>.ck，请求内容不动
+// 测试用环境变量：CMCP_LF_STATE（状态文件）、CMCP_LF_SID（会话记录文件）、CMCP_NOTIFY（通知命令）
+'use strict';
+import { readfile, writefile, open, popen, unlink, stdin } from 'fs';
+
+const ST = getenv('CMCP_LF_STATE') || '/tmp/cmcp_lfull.json', SIDF = getenv('CMCP_LF_SID') || '/tmp/cmcp_luci_sid';
+const NOTIFY = getenv('CMCP_NOTIFY') || '/usr/sbin/cmcp-notify';
+const IDLE = 1800, MAXFAIL = 5, LOCK = 900;
+const PID = '' + (+ARGV[0] || 0);
+const now = time();
+function shq(s) { return "'" + replace('' + s, "'", "'\\''") + "'"; }
+function run(cmd) { let p = popen(cmd + ' 2>/dev/null', 'r'); if (!p) return ''; let o = p.read('all'); p.close(); return o ?? ''; }
+function ubus(m, a) { let j = null; try { j = json(run(sprintf('ubus call session %s %s', m, shq(sprintf('%J', a))))); } catch (e) {} return j; }
+function rnd(n) { let f = open('/dev/urandom', 'r'), s = f ? f.read(n) : '', o = ''; if (f) f.close(); for (let i = 0; i < length(s); i++) o += sprintf('%02x', ord(s, i)); return o; }
+function load() { let j = null; try { j = json(readfile(ST) ?? 'null'); } catch (e) {} if (type(j) != 'object') j = {}; j.t ??= {}; j.fail ??= { n: 0, until: 0 }; j.act ??= {}; return j; }
+function save(j) { writefile(ST + '.tmp', sprintf('%J', j)); run(sprintf('chmod 600 %s; mv -f %s %s', shq(ST + '.tmp'), shq(ST + '.tmp'), shq(ST))); }
+function notify(lvl, title, body) { run(sprintf('%s %s login %s %s lfull', NOTIFY, lvl, shq(title), shq(body))); }
+// Cookie
+let CK = {};
+for (let p in split(getenv('HTTP_COOKIE') ?? '', ';')) { let m = match(trim(p), /^([^=]+)=(.*)$/); if (m) CK[m[1]] = m[2]; }
+function cookie_without_sysauth() {
+	let o = [];
+	for (let p in split(getenv('HTTP_COOKIE') ?? '', ';')) { p = trim(p); if (length(p) && !match(p, /^sysauth(_https)?=/)) push(o, p); }
+	return join('; ', o);
+}
+function page(code, title, msg) {
+	print(sprintf('Status: %s\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n\r\n', code));
+	print(sprintf('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><div id="cmcp-lf" style="font:15px/1.6 -apple-system,system-ui,sans-serif;max-width:420px;margin:15vh auto;padding:24px;color:#333"><h2 style="font-size:19px;margin:0 0 10px">%s</h2><p style="color:#666;margin:0">%s</p></div>', title, title, msg));
+	exit(0);
+}
+function pass(code, ck) { writefile('/tmp/cmcp_lf.' + PID + '.ck', ck); exit(code); }
+function pct(s) {
+	s = replace(s ?? '', '+', ' ');
+	return replace(s, /%([0-9A-Fa-f]{2})/g, (m, h) => chr(hex(h)));
+}
+// 太弱的密码：太短、全是同一个字、常见的、跟用户名一样
+const WEAK = ['admin', 'password', 'root', 'openwrt', 'kwrt', 'immortalwrt', '12345678', '123456789', '1234567890', '87654321', '11223344', '12341234', 'qwertyui', 'qwerty123', 'password1', 'admin123', 'admin888', 'abc12345', 'abcd1234', 'a1234567', '1qaz2wsx', 'iloveyou'];
+function weak(pw, user) {
+	if (length(pw) < 8) return true;
+	if (index(WEAK, lc(pw)) >= 0 || lc(pw) == lc(user)) return true;
+	if (match(pw, /^(.)\1+$/)) return true;
+	return false;
+}
+
+let S = load();
+// 入口票
+let tk = CK.cmcp_f ?? '', T = match(tk, /^[0-9a-f]{32}$/) ? S.t[tk] : null;
+if (!T || (T.exp ?? 0) < now)
+	page('403 Forbidden', '入口过期了', '完整原版后台的入口只在面板里打开时有效。回到面板，重新打开「完整原版后台」。');
+// 已经登录：只认这里登录的会话，30 分钟没操作就退出
+let sid = CK.sysauth_https ?? CK.sysauth ?? '';
+if (match(sid, /^[0-9a-f]{32}$/)) {
+	let g = ubus('get', { ubus_rpc_session: sid }), v = g?.values;
+	if (v && v.cmcp_full == 1) {
+		let last = S.act[sid] ?? now, ui = !match(getenv('PATH_INFO') ?? getenv('REQUEST_URI') ?? '', /\/admin\/ubus/);
+		if (now - last > IDLE) {
+			ubus('destroy', { ubus_rpc_session: sid }); delete S.act[sid]; save(S);
+		} else {
+			// 页面跳转、点按钮才算操作（LuCI 页面自己定时刷新的请求不算）
+			if (ui || !S.act[sid]) { S.act[sid] = now; save(S); }
+			pass(11, getenv('HTTP_COOKIE') ?? '');
+		}
+	}
+}
+let ck = cookie_without_sysauth();
+// 锁着：连登录页都不给
+if ((S.fail.until ?? 0) > now)
+	page('403 Forbidden', '暂时不能登录', sprintf('路由器密码输错太多次，%d 分钟后再试。已经推送提醒到你的手机；不是你自己在试的话，马上在面板「我的主页 → 敏感信息」把不认识的手机移除，并改路由器密码。', int(((S.fail.until - now) + 59) / 60)));
+// 登录：LuCI 登录页提交的用户名和密码，在这里核对（不交给 LuCI 自己登录）
+let len = +(getenv('CONTENT_LENGTH') ?? 0);
+if (getenv('REQUEST_METHOD') == 'POST' && len > 0 && len < 8192 && match(getenv('CONTENT_TYPE') ?? '', /^application\/x-www-form-urlencoded/)) {
+	let body = stdin.read(len) ?? '';
+	writefile('/tmp/cmcp_lf.' + PID + '.body', body);
+	let F = {};
+	for (let kv in split(body, '&')) { let i = index(kv, '='); if (i > 0) F[pct(substr(kv, 0, i))] = pct(substr(kv, i + 1)); }
+	if (F.luci_password != null) {
+		let user = length(F.luci_username ?? '') ? F.luci_username : 'root', pw = F.luci_password;
+		let L = ubus('login', { username: user, password: pw, timeout: IDLE });
+		let nsid = L?.ubus_rpc_session;
+		if (!match(nsid ?? '', /^[0-9a-f]{32}$/)) {
+			S.fail.n = (S.fail.n ?? 0) + 1;
+			if (S.fail.n >= MAXFAIL) {
+				S.fail = { n: 0, until: now + LOCK };
+				save(S);
+				notify('warn', '完整原版后台：密码输错 5 次，锁 15 分钟', sprintf('从「%s」登录完整原版后台时路由器密码连续输错。不是你自己的话，马上在面板「我的主页 → 敏感信息」移除这台手机，并改路由器密码。', T.name ?? '手机'));
+				page('403 Forbidden', '暂时不能登录', '路由器密码连续输错 5 次，15 分钟后再试。已经推送提醒到你的手机。');
+			}
+			save(S);
+			pass(10, ck);   // 交给 LuCI：它会显示「用户名或密码不对」
+		}
+		if (weak(pw, user)) {
+			ubus('destroy', { ubus_rpc_session: nsid });
+			unlink('/tmp/cmcp_lf.' + PID + '.body');
+			page('403 Forbidden', '路由器密码太弱，先改一个', '从外面登录完整原版后台，路由器密码不能太简单（至少 8 位，不能是 admin、12345678、跟用户名一样这类）。先在面板「系统 → 管理权 → 路由器密码」改一个强密码，再来登录。');
+		}
+		ubus('set', { ubus_rpc_session: nsid, values: { token: rnd(16), username: user, cmcp_full: 1, cmcp_dev: T.dev ?? '' } });
+		// 记下这个会话：换门禁钥匙（换登录密钥、移除手机）时一起退出
+		let old = split(trim(readfile(SIDF) ?? ''), '\n');
+		push(old, nsid);
+		writefile(SIDF, join('\n', slice(filter(old, (x) => match(x, /^[0-9a-f]{32}$/)), -50)) + '\n');
+		S.fail = { n: 0, until: 0 }; S.act[nsid] = now;
+		for (let k in keys(S.act)) if (now - S.act[k] > 86400) delete S.act[k];
+		save(S);
+		unlink('/tmp/cmcp_lf.' + PID + '.body');
+		notify('info', '有人登录了完整原版后台', sprintf('从「%s」用路由器密码登录。不是你自己的话，马上在面板「我的主页 → 敏感信息」移除这台手机，并改路由器密码。', T.name ?? '手机'));
+		print(sprintf('Status: 302 Found\r\nSet-Cookie: sysauth_https=%s; path=/cgi-bin/luci/; SameSite=Strict; HttpOnly; secure\r\nLocation: %s\r\nCache-Control: no-store\r\n\r\n', nsid, replace(getenv('REQUEST_URI') ?? '/cgi-bin/luci/', /[\r\n]/g, '')));
+		exit(0);
+	}
+	pass(10, ck);
+}
+// 没登录：交给 LuCI，它会显示自己的登录页（Cookie 里面板自动登录的会话去掉）
+pass(11, ck);

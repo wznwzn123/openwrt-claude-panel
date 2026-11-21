@@ -77,6 +77,25 @@ P.auto = function(a) {
 P.luci_key = function() {
 	return { key: trim(readfile(LUCI_KEY) ?? '') };
 };
+// 6.0 第 1 项：完整原版后台的入口票（12 小时有效，记着是哪台手机）。登录要输路由器密码，核对、锁定、推送在 cmcp-lfull 里
+const LFULL = '/tmp/cmcp_lfull.json';
+P.luci_full = function() {
+	if (!DEV_ID) die('先在面板重新登录一次再打开');
+	if (!length(trim(readfile(LUCI_KEY) ?? '')) || !stat(SBIN + '/cmcp-lfull')) die('这台路由器上的面板版本太旧，先一键更新');
+	let s = null; try { s = json(readfile(LFULL) ?? 'null'); } catch (e) {}
+	if (type(s) != 'object') s = {};
+	s.t ??= {}; s.fail ??= { n: 0, until: 0 }; s.act ??= {};
+	for (let k in keys(s.t)) if ((s.t[k].exp ?? 0) < time() || s.t[k].dev == DEV_ID) delete s.t[k];
+	let ks = sort(keys(s.t), (x, y) => s.t[x].exp - s.t[y].exp);
+	while (length(ks) >= 20) delete s.t[shift(ks)];
+	let t = rand_str(32);
+	if (!t) die('生成入口失败，再试一次');
+	t = replace(t, /[g-z]/g, (c) => sprintf('%x', ord(c) % 16));
+	s.t[t] = { dev: DEV_ID, name: DEV?.name ?? '手机', exp: time() + 43200 };
+	writefile(LFULL + '.tmp', sprintf('%J', s));
+	sh(sprintf('chmod 600 %s; mv -f %s %s', shq(LFULL + '.tmp'), shq(LFULL + '.tmp'), shq(LFULL)));
+	return { ticket: t, exp: time() + 43200, locked: (s.fail.until ?? 0) > time() ? s.fail.until : null };
+};
 P.slog = function(a) {
 	let n = +a.lines || 300;
 	if (n > 1000) n = 1000;

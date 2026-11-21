@@ -118,7 +118,7 @@ ok('[完全控制] 代理设置：改两份自定义规则可以', (await code(d
 ok('[完全控制] 代理设置：写自定义脚本（.sh）不行', (await code(devB, 'file_save', { kind: 'custom', name: 'openclash_custom_firewall_rules.sh', content: 'id' })) === -32012);
 ok('[完全控制] 代理设置：写覆写文件不行', (await code(devB, 'file_save', { kind: 'overwrite', name: 'x.conf', content: 'x' })) === -32012);
 ok('[完全控制] 代理设置：改覆写模块设置不行', (await code(devB, 'oc_sec', { op: 'add', type: 'config_overwrite' })) === -32012);
-ok('[完全控制] 代理设置：恢复备份、下载覆写模块、原版后台钥匙都不行', (await code(devB, 'restore', {})) === -32012 && (await code(devB, 'overwrite_fetch', {})) === -32012 && (await code(devB, 'luci_key', {})) === -32012);
+ok('[完全控制] 代理设置：恢复备份、下载覆写模块、原版后台钥匙都不行', (await code(devB, 'restore', {})) === -32012 && (await code(devB, 'overwrite_fetch', {})) === -32012 && (await code(devB, 'luci_key', {})) === -32012 && (await code(devB, 'luci_full', {})) === -32012);
 ok('[完全控制] 代理设置：改配置文件、订阅照样可以', (await code(devB, 'file_save', { kind: 'config', name: 'a.yaml', content: '' })) !== -32012 && (await code(devB, 'oc_sec', { op: 'add', type: 'config_subscribe' })) !== -32012);
 {
 	const sr = await call(devA, 'fam', { op: 'sub_set', sudo: su.result.sudo, target: ub, perms: ['msg', 'node', 'speed', 'proxy', 'net'] });

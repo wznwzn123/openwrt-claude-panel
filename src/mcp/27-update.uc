@@ -61,9 +61,10 @@ P.cloud_info = function() {
 		if (m) c[m[1]] = m[2];
 	}
 	if (!c.URL) return { enabled: false };
-	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建版没有 PKEY，面板就用登录密钥
+	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建完整版自己部署的 Worker 认的是登录密钥（PANEL_TOKEN），
+	// 6.0 起手机不再存登录密钥，只有自建完整版在这里拿一份给自己的 Worker 用（确认登录过的手机才拿得到）
 	// 平板网址带着平板的钥匙：不在这里给，在「我的主页 → 敏感信息」里验证后才给（P.tablet_url）；这里只说有没有
-	return { enabled: true, url: c.URL, tablet: !!c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
+	return { enabled: true, url: c.URL, tablet: !!c.TKEY, pkey: c.PKEY || (c.URL && !hub_conf(true) ? conf().token : null), hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
 };
 
 P.wd_check = function() {

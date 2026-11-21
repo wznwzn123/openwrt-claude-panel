@@ -34,20 +34,27 @@ function pxShow(it) {
 }
 // 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
 // 托管版安装完终端里给的链接还带着配对码（#login=密钥&pair=配对码）：输登录码那一页会带着去官网绑定账号
-try { const m = /^#login=([A-Za-z0-9]{16,64})(?:&pair=([A-Za-z0-9]{8}))?$/.exec(location.hash); if (m) { localStorage.setItem('rp_token', m[1]); localStorage.removeItem('rp_pair'); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+// 6.0：已经有这台手机自己的钥匙了就不再存登录密钥（App 每次都带着 #login 打开，不能每次都当成新手机）
+try { const m = /^#login=([A-Za-z0-9]{16,64})(?:&pair=([A-Za-z0-9]{8}))?$/.exec(location.hash); if (m) { if (!localStorage.getItem('rp_dev')) { localStorage.setItem('rp_token', m[1]); sessionStorage.setItem('rp_fresh', '1'); } localStorage.removeItem('rp_pair'); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 // 官网「获取登录码 → 打开面板」：网址带 #code=登录码，自动填好
 let pendCode = '';
 try { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (m) { pendCode = m[1].toUpperCase(); history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
 // 5.2 官网「我的路由器 → 打开面板」：网址带 #open=一次性票，路由器拿票去官网核对，发这台手机的钥匙
 let pendOpen = '';
 try { const m = /^#open=([a-z2-9]{24})$/.exec(location.hash); if (m) { pendOpen = m[1]; history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
-let token = store.get('rp_token') || store.get('cmcp_token');
+// 6.0 第 6 项：手机上存的是这台手机自己的钥匙（rp_dev），不再长期存路由器的登录密钥。
+// token 现在只表示「这台手机登录过」：有手机钥匙，或者还有一把旧的登录密钥等着换成手机钥匙
+let token = store.get('rp_dev') || store.get('rp_token') || store.get('cmcp_token');
 let seq = 0;
 class AuthError extends Error {}
 // 托管版：这台手机还没输过登录码
 class NeedCodeError extends Error {}
 // 连不上路由器时带上原因（short 显示在顶部状态里）
 class OfflineError extends Error { constructor(msg, short) { super(msg); this.short = short; } }
+// 面板锁：路由器要先输面板锁密码（data 里有盐和位数）
+class LockError extends Error { constructor(msg, data) { super(msg); this.data = data || {}; } }
+// 自建版开了「登录要输路由器后台密码」
+class NeedPwError extends Error {}
 
 /* ---------- 和路由器通信 ---------- */
 // 只读的请求：卡住 10 秒就自动再试一次（网络偶尔丢一个请求很常见，没必要让页面干等 60 秒）
@@ -87,11 +94,75 @@ function relayStart() {
 async function rpcFetch(url, body, signal) {
 	return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body, signal, cache: 'no-store' });
 }
-async function rpcOnce(method, params, timeoutMs, read) {
+/* ---------- 6.0 第 6 项：手机钥匙 + 1 小时通行证 ----------
+ * 平时的请求只带通行证（放在这个页面的会话存储里，关掉就没了），走 cgi-bin/mcp/pass；快过期或路由器重启作废了，
+ * 就拿手机钥匙去换一张新的（路由器每 12 小时顺便给一把新钥匙）。旧手机还存着登录密钥的，第一次用时换成手机钥匙 */
+const PS = { pass: '', exp: 0, p: null, lkp: null };
+try { const o = JSON.parse(sessionStorage.getItem('rp_pass') || 'null'); if (o && o.exp > Date.now() + 60e3 && /^[a-z0-9]{32}$/.test(o.pass)) { PS.pass = o.pass; PS.exp = o.exp; } } catch (e) {}
+function passClear() { PS.pass = ''; PS.exp = 0; try { sessionStorage.removeItem('rp_pass'); } catch (e) {} }
+const oldToken = () => store.get('rp_token') || store.get('cmcp_token');
+// 托管版还是自建版（以前用「有没有手机钥匙」判断，6.0 起两种都有手机钥匙了）：路由器 whoami 说的为准，还没问过就看有没有官网地址
+const isHosted = () => { const h = store.get('rp_host'); return h ? h === '1' : !!store.get('rp_hub'); };
+function forgetToken() { store.del('rp_token'); store.del('cmcp_token'); }
+// 拿手机钥匙换通行证（同时只换一次）
+function passGet() {
+	if (PS.pass && PS.exp - Date.now() > 60e3) return Promise.resolve(PS.pass);
+	if (PS.p) return PS.p;
+	PS.p = (async () => {
+		const lkp = PS.lkp; PS.lkp = null;
+		// 手上的通行证还没过期就一起带上：路由器知道是接着用，开了面板锁也不用再输密码
+		const prev = PS.pass && PS.exp > Date.now() ? PS.pass : undefined;
+		const j = await rpcPost('cgi-bin/mcp/pass', { jsonrpc: '2.0', id: ++seq, method: 'panel/pass_new', params: { dev: store.get('rp_dev'), lkp: lkp || undefined, prev }, client: 'panel' }, 20000, true);
+		rpcResult(j);
+		if (j.result.dev) store.set('rp_dev', j.result.dev); // 路由器给了新钥匙
+		PS.pass = j.result.pass; PS.exp = j.result.exp;
+		try { sessionStorage.setItem('rp_pass', JSON.stringify({ pass: PS.pass, exp: PS.exp })); } catch (e) {}
+		forgetToken(); // 换到了通行证：旧的登录密钥不用再留在手机上
+		return PS.pass;
+	})().finally(() => { PS.p = null; });
+	return PS.p;
+}
+// 旧手机（6.0 以前直接存着登录密钥）或刚扫码 / 粘贴登录地址：用登录密钥换这台手机的钥匙
+let DFT = null;
+function devFromToken(pw) {
+	if (DFT && pw == null) return DFT;
+	DFT = (async () => {
+		const fresh = (() => { try { return sessionStorage.getItem('rp_fresh') === '1'; } catch (e) { return false; } })();
+		const j = await rpcPost('cgi-bin/mcp/' + encodeURIComponent(oldToken() || ''), { jsonrpc: '2.0', id: ++seq, method: 'panel/pass_login', params: { name: loginDevName(), migrate: !fresh || undefined, pw: pw || undefined }, client: 'panel' }, 30000, false);
+		rpcResult(j);
+		store.set('rp_dev', j.result.dev); store.set('rp_host', '0'); forgetToken(); token = j.result.dev;
+		try { sessionStorage.removeItem('rp_fresh'); } catch (e) {}
+		return j.result.dev;
+	})().finally(() => { DFT = null; });
+	return DFT;
+}
+async function rpcOnce(method, params, timeoutMs, read, again) {
+	if (!store.get('rp_dev')) { if (!oldToken()) throw new AuthError('还没登录'); await devFromToken(); }
+	const pass = await passGet();
+	const j = await rpcPost('cgi-bin/mcp/pass', { jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', pass }, timeoutMs, read);
+	// 通行证过期了（路由器重启、锁屏作废）：换一张再试一次
+	if (j.error && j.error.code === -32013 && !again) { if (PS.pass === pass) passClear(); return rpcOnce(method, params, timeoutMs, read, true); }
+	return rpcResult(j).result;
+}
+// 路由器的回答：出错就按错误码报出来
+function rpcResult(j) {
+	const e = j && j.error;
+	if (!e) return j;
+	if (e.code === -32010 || e.code === -32011) {
+		const d = e.data || {};
+		if (e.code === -32010) { store.del('rp_dev'); passClear(); }
+		if (d.need_code === false) { forgetToken(); logout(e.message); throw new AuthError(e.message); } // 自建版：手机钥匙失效了，重新打开登录地址
+		needCode(d, e.message); throw new NeedCodeError(e.message);
+	}
+	if (e.code === -32014) { const err = new LockError(e.message, e.data); try { lkNeedPin(err); } catch (x) {} throw err; }
+	if (e.code === -32015) throw new NeedPwError(e.message);
+	throw new Error(e.message);
+}
+async function rpcPost(path, bodyObj, timeoutMs, read) {
 	const ctl = new AbortController();
 	const timer = setTimeout(() => ctl.abort(), timeoutMs);
-	const path = 'cgi-bin/mcp/' + encodeURIComponent(token), rel = relayFor(path);
-	const body = JSON.stringify({ jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', dev: store.get('rp_dev') || undefined });
+	const rel = relayFor(path);
+	const body = JSON.stringify(bodyObj);
 	let r;
 	try {
 		if (rel && relayOn()) {
@@ -122,10 +193,7 @@ async function rpcOnce(method, params, timeoutMs, read) {
 	if (r.status === 502 || r.status === 503) throw new OfflineError('路由器没有回应：可能刚断电或断网（Cloudflare 要过一两分钟才会发现，之后会显示「隧道断开」），也可能是面板服务卡住了（看门狗会自动重启它）', '无响应');
 	if (r.status === 504 || r.status === 524) throw new OfflineError('路由器处理超时，可能正忙或卡住了', '超时');
 	if (!r.ok) throw new Error('路由器返回 ' + r.status);
-	const j = await r.json();
-	if (j.error && (j.error.code === -32010 || j.error.code === -32011)) { if (j.error.code === -32010) store.del('rp_dev'); needCode(j.error.data, j.error.message); throw new NeedCodeError(j.error.message); }
-	if (j.error) throw new Error(j.error.message);
-	return j.result;
+	return r.json();
 }
 const P = (m, a, t) => rpc('panel/' + m, a, t);
 // 面板脚本出错（5.0）：经路由器转给开发者（只带错误本身、手机型号和屏幕大小）；同一条只报一次，一次打开最多报 3 条

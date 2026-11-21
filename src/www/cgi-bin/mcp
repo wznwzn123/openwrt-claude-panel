@@ -2609,7 +2609,7 @@ P.device_approve = function(a) {
 	let ids = sort(keys(d), (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0));
 	while (length(ids) >= 30) delete d[shift(ids)];
 	let name = substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || '手机';
-	d[id] = { s: sec, name, at: time(), via };
+	d[id] = { s: sec, name, at: time(), rot: time(), via };
 	if (acct?.uid) { d[id].uid = acct.uid; d[id].sat = acct.now ?? 0; }
 	else if (!acct) d[id].emerg = true;
 	devs_write(d);
@@ -2650,9 +2650,12 @@ function need_sudo(a, owner) {
 	if (!sudo_ok(a?.sudo)) die('要先确认是你本人：在「我的主页 → 敏感信息」里验证');
 }
 // 用路由器后台密码确认本人：输错 5 次锁 15 分钟（并推送）；密码交给路由器自己的登录服务（rpcd）核对，路由器不存也不记
-P.sudo_local = function(a) {
-	let pw = '' + (a?.pw ?? ''), now = time(), f = cmcp_readj(SUDO_FAIL, { n: 0, until: 0 });
+// 核对路由器后台（root）密码：交给路由器自己的登录服务（rpcd）核对，不存密码；输错 5 次锁 15 分钟并推送
+// what：推送里说是在哪里输错的。对了返回 true，错了直接报错（带还能试几次）
+function rootpw_check(pw, what) {
+	let now = time(), f = cmcp_readj(SUDO_FAIL, { n: 0, until: 0 });
 	if ((f.until ?? 0) > now) die(sprintf('密码输错太多次，%d 分钟后再试', int(((f.until - now) + 59) / 60)));
+	pw = '' + (pw ?? '');
 	if (!length(pw) || length(pw) > 256) die('请输入路由器后台密码');
 	// 没设后台密码的路由器：不能拿空密码当验证（先去原版后台设一个）
 	let sh0 = match(readfile(getenv('CMCP_SHADOW') ?? '/etc/shadow') ?? '', /(^|\n)root:([^:\n]*):/);
@@ -2668,14 +2671,18 @@ P.sudo_local = function(a) {
 		f.n = (f.n ?? 0) + 1;
 		if (f.n >= 5) {
 			f = { n: 0, until: now + 900 };
-			try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('面板里连续 5 次输错路由器后台密码'), shq('「我的主页 → 敏感信息」的验证锁了 15 分钟。不是你自己输错的话，马上改路由器后台密码，并在面板里换登录密钥。'))); } catch (e) {}
+			try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('面板里连续 5 次输错路由器后台密码'), shq((what ?? '「我的主页 → 敏感信息」的验证') + '锁了 15 分钟。不是你自己输的话，说明有人拿到了这台手机或者登录地址，换一下登录密钥和路由器后台密码'))); } catch (e) {}
 		}
 		cmcp_writej(SUDO_FAIL, f);
 		die(f.until > now ? '密码输错太多次，15 分钟后再试' : sprintf('密码不对（还能再试 %d 次）', 5 - f.n));
 	}
 	sh(sprintf('ubus call session destroy %s >/dev/null 2>&1', shq(sprintf('{"ubus_rpc_session":"%s"}', sid))));
 	sh('rm -f ' + SUDO_FAIL);
-	let t = rand_str(24);
+	return true;
+}
+P.sudo_local = function(a) {
+	rootpw_check(a?.pw);
+	let now = time(), t = rand_str(24);
 	if (!t) die('生成凭证失败，再试一次');
 	sudo_keep(sudo_read(), t, now + SUDO_TTL, 'local');
 	return { sudo: t, exp: (now + SUDO_TTL) * 1000 };
@@ -2828,18 +2835,20 @@ P.open_login = function(a) {
 	while (length(ids) >= 30) delete d[shift(ids)];
 	let name = substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || '手机';
 	let who = substr(replace('' + (o.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40);
-	d[id] = { s: sec, name, at: time(), via: '官网账号 ' + (o.email ?? ''), uid: o.uid, sat: +(o.now ?? 0), role: o.role == 'main' ? 'owner' : 'sub', perms: type(o.perms) == 'array' ? o.perms : [] };
+	d[id] = { s: sec, name, at: time(), rot: time(), via: '官网账号 ' + (o.email ?? ''), uid: o.uid, sat: +(o.now ?? 0), role: o.role == 'main' ? 'owner' : 'sub', perms: type(o.perms) == 'array' ? o.perms : [] };
 	devs_write(d);
 	DEV_ID = id;
 	sh('rm -f ' + FAM_PATH); // 成员可能刚变过，下个请求重新拿
 	if (!again) try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机打开了面板：' + name), shq((who ? who + '（' + (o.email ?? '') + '）' : '账号 ' + (o.email ?? '')) + (o.role == 'main' ? '' : '，子账号') + '从官网打开了面板。不是你们家的人的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除。'))); } catch (e) {}
-	return { token: conf().token, dev: id + '.' + sec, id, name };
+	return { dev: id + '.' + sec, id, name }; // 6.0 起不再把登录密钥给手机（第 6 项）
 };
 // 我是谁：面板「我的主页」用
 P.whoami = function() {
 	let h = hub_conf(true);
 	// ai：装的是不是 AI 版（有没有 Claude 连接器）；连接器地址本身只在敏感信息里给
-	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null };
+	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null,
+		// 6.0：自建版是否开了「登录要输路由器密码」；这台手机在路由器上有没有面板锁
+		login_pw: !h && trim(readfile(ETC + '/login_pw') ?? '') == '1', lock: DEV?.lk ? { on: true, len: DEV.lk.len, salt: DEV.lk.salt } : { on: false } };
 };
 // 家人管理、确认本人：转给官网（账号编号由路由器按这台手机填，手机自己填的不算）
 const FAM_OPS = { me: 0, page: 0, profile: 0, log: 0, leave: 0, members: 0, sudo_code: 0, sudo: 0, secret: 0, sess_out: 0, join_create: 1, join_cancel: 1, sub_set: 1, sub_remove: 1, transfer: 1 };
@@ -2904,6 +2913,219 @@ function ver_newer(a, b) {
 	for (let i = 0; i < 3; i++) if ((x[i] ?? 0) != (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
 	return false;
 }
+/* ---------- 6.0 第 6、12、13 项：手机钥匙 + 1 小时通行证 ----------
+ * 手机不再存路由器的登录密钥（主密钥）。每台手机有自己的钥匙（编号.密钥，存在 devices.json，能单独让它退出），
+ * 平时每个请求只带 1 小时的通行证（放在内存 /tmp 里，路由器重启就全部作废，手机会自动再领），走 /cgi-bin/mcp/pass，
+ * 钥匙和通行证都在请求内容里，不在网址里。
+ *   · 手机钥匙每 12 小时自动换一把；换过以后，如果旧钥匙又被拿来用（新钥匙已经用过了），说明可能被人复制了：
+ *     让这台手机退出并推送提醒（你 11/21 定）
+ *   · 自建版：登录地址（带登录密钥）只用来换一把手机钥匙（panel/pass_login），换完手机上就不留登录密钥了；
+ *     可以开启「登录要输路由器后台密码」（第 12 项），开了以后光有登录地址进不来
+ *   · 面板锁（第 13 项）：密码由路由器核对。手机把「密码 + 盐」算一遍（PBKDF2）发来，路由器只存它的摘要；
+ *     指纹解锁保留，但每天至少要输一次密码（你 11/21 定）；一直输错会让这台手机退出 */
+const PASS_F = '/tmp/cmcp_pass.json', LKOK_F = '/tmp/cmcp_lkok.json', LKF_F = '/tmp/cmcp_lkfail.json', LOGINPW_F = ETC + '/login_pw';
+const PASS_TTL = 3600, DEV_ROT = 43200, LK_DAY = 86400, LK_WIPE = 20;
+let ERR_CODE = null; // 报错时要给手机的特殊错误码（比如 -32015 要输路由器密码），见 90-rpc
+function pass_read() { let m = cmcp_readj(PASS_F, {}); return type(m) == 'object' ? m : {}; }
+function pass_write(m) {
+	let t = time();
+	for (let k in keys(m)) if (!(m[k]?.exp > t)) delete m[k];
+	cmcp_writej(PASS_F, m); sh('chmod 600 ' + shq(PASS_F));
+}
+// 发一张通行证；每台手机同时最多 5 张（开了几个页面）
+function pass_issue(id) {
+	let p = rand_str(32);
+	if (!p) die('生成通行证失败，再试一次');
+	let m = pass_read(), t = time();
+	let mine = sort(filter(keys(m), (k) => m[k]?.dev == id), (a, b) => (m[a].exp ?? 0) - (m[b].exp ?? 0));
+	while (length(mine) >= 5) delete m[shift(mine)];
+	m[p] = { dev: id, exp: t + PASS_TTL };
+	pass_write(m);
+	return { pass: p, exp: (t + PASS_TTL) * 1000 };
+}
+function pass_drop_dev(id) {
+	let m = pass_read(), ch = false;
+	for (let k in keys(m)) if (m[k]?.dev == id) { delete m[k]; ch = true; }
+	if (ch) pass_write(m);
+}
+// 请求带的通行证对不对；对的话记下是哪台手机（DEV_ID / DEV）
+function pass_ok(p) {
+	if (type(p) != 'string' || !match(p, /^[a-z0-9]{32}$/)) return false;
+	let e = pass_read()[p];
+	if (type(e) != 'object' || !(e.exp > time())) return false;
+	let d = devs_read()[e.dev];
+	if (type(d) != 'object') return false;
+	DEV_ID = e.dev; DEV = d;
+	let sn = seen_read(), t = time();
+	if (t - (sn[e.dev] ?? 0) > 60) { sn[e.dev] = t; writefile(SEEN_PATH, sprintf('%J', sn)); }
+	return true;
+}
+// 拿手机钥匙换通行证时核对钥匙：{ id, d, cred（换了新钥匙时是新的，手机要存下） }；钥匙不对返回 null；被复制返回 'copied'
+function dev_renew(cred) {
+	let m = match(type(cred) == 'string' ? cred : '', /^([a-z0-9]{8})\.([a-z0-9]{32})$/);
+	if (!m) return null;
+	let all = devs_read(), d = all[m[1]], t = time();
+	if (type(d) != 'object') return null;
+	if (d.s == m[2]) {
+		let ch = false;
+		if (!d.su) { d.su = 1; ch = true; } // 新钥匙用过了：从现在起旧钥匙再出现就算被复制
+		let out = null;
+		if (t - (d.rot ?? d.at ?? 0) >= DEV_ROT) {
+			let ns = rand_str(32);
+			if (ns) { d.ps = d.s; d.s = ns; d.rot = t; d.su = 0; out = m[1] + '.' + ns; ch = true; }
+		}
+		if (ch) { all[m[1]] = d; devs_write(all); }
+		return { id: m[1], d, cred: out };
+	}
+	if (d.ps && d.ps == m[2]) {
+		// 刚换的新钥匙还没用过：多半是手机没收到换钥匙的回答，把新钥匙再给它一次
+		if (!d.su) return { id: m[1], d, cred: m[1] + '.' + d.s };
+		// 新钥匙已经用过了，旧钥匙又来：两个人手上都有这台手机的钥匙
+		delete all[m[1]]; devs_write(all); pass_drop_dev(m[1]);
+		try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('「' + (d.name ?? '手机') + '」的钥匙可能被复制了'), shq('同一台手机的旧钥匙在换新以后又被拿来用，已经让这台手机退出。是你自己的话重新登录就行；不是的话，在面板「我的主页 → 敏感信息」换一下登录密钥'))); } catch (e) {}
+		return 'copied';
+	}
+	return null;
+}
+/* ---------- 面板锁（路由器核对） ---------- */
+// 字符串的摘要（sha256，没有就 md5）：内容写进只有 root 能读的临时文件再算，不出现在命令行里
+function hash_str(s) {
+	let tf = trim(sh('mktemp /tmp/cmcp_h.XXXXXX').out);
+	if (!match(tf, /^\/tmp\/cmcp_h\.[A-Za-z0-9]+$/)) die('路由器上建不了临时文件');
+	writefile(tf, s);
+	let r = sh(sprintf('(sha256sum %s 2>/dev/null || md5sum %s) | cut -d" " -f1; rm -f %s', tf, tf, tf)).out;
+	let h = trim(split(r, '\n')[0] ?? '');
+	if (!match(h, /^[0-9a-f]{32,64}$/)) die('路由器上算不了摘要');
+	return h;
+}
+function lk_proof(p) { return type(p) == 'string' && match(p, /^[A-Za-z0-9+\/=]{40,100}$/) ? p : null; }
+function lkok_read() { let m = cmcp_readj(LKOK_F, {}); return type(m) == 'object' ? m : {}; }
+function lkok_set(id) { let m = lkok_read(); m[id] = time(); cmcp_writej(LKOK_F, m); }
+function lkok_fresh(id) { return time() - (lkok_read()[id] ?? 0) < LK_DAY; }
+// 核对面板锁密码：对了返回 null；错了返回 { msg, revoked }
+function lk_verify(id, d, proof) {
+	let f = cmcp_readj(LKF_F, {}), x = f[id] ?? { n: 0, total: 0, k: 0, until: 0 }, t = time();
+	if ((x.until ?? 0) > t) { let w = x.until - t; return { msg: sprintf('错误次数太多，%s后再试', w >= 120 ? int((w + 59) / 60) + ' 分钟' : w + ' 秒'), wait: w }; }
+	let p = lk_proof(proof);
+	if (p && d.lk?.h && hash_str(d.lk.salt + ':' + p) == d.lk.h) { delete f[id]; cmcp_writej(LKF_F, f); return null; }
+	x.n++; x.total++;
+	if (x.total >= LK_WIPE) {
+		delete f[id]; cmcp_writej(LKF_F, f);
+		let all = devs_read(); delete all[id]; devs_write(all); pass_drop_dev(id);
+		try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('「' + (d.name ?? '手机') + '」面板锁密码输错太多次'), shq('累计输错 ' + LK_WIPE + ' 次，已经让这台手机退出。不是你自己输的话，说明有人拿到了这台手机'))); } catch (e) {}
+		return { msg: '密码输错太多次，已经让这台手机退出，要重新登录', revoked: true };
+	}
+	// 每错 5 次要等，等的时间翻倍：30 秒、1 分钟、2 分钟……最长 15 分钟
+	if (x.n >= 5) { x.n = 0; x.k = (x.k ?? 0) + 1; let w = 30 * (1 << (x.k - 1)); x.until = t + (w > 900 ? 900 : w); }
+	f[id] = x; cmcp_writej(LKF_F, f);
+	let left = LK_WIPE - x.total;
+	return { msg: left <= 5 ? sprintf('密码不对，再错 %d 次会让这台手机退出', left) : x.until > t ? '密码不对，30 秒后再试' : sprintf('密码不对，还能试 %d 次', 5 - x.n) };
+}
+// 拿手机钥匙换通行证（只有这个方法不用带通行证）。返回整条 JSON-RPC 回答（错误码手机要分开处理）
+function pass_new_rpc(id, p) {
+	let err = (code, message, data) => { let dd = { need_code: is_hosted(), hub: hub_conf(true)?.HUB ?? null }; for (let k in keys(data ?? {})) dd[k] = data[k]; return { jsonrpc: '2.0', id, error: { code, message, data: dd } }; };
+	let r = dev_renew(p?.dev);
+	if (r == 'copied') return err(-32010, '这台手机的钥匙可能被复制了，已经让它退出：重新登录就行');
+	if (!r) return err(-32010, is_hosted() ? '这台手机还没登录：从官网「我的路由器」点「打开面板」进来' : '这台手机的登录失效了：重新打开登录地址（或在另一台已登录的手机上「添加新手机」扫码）');
+	DEV_ID = r.id; DEV = r.d;
+	try {
+		if (r.d.lk) {
+			if (p?.lkp != null) {
+				let why = lk_verify(r.id, r.d, p.lkp);
+				if (why) return why.revoked ? err(-32010, why.msg) : err(-32014, why.msg, { need_pin: true, bad: true, wait: why.wait ?? 0, salt: r.d.lk.salt, len: r.d.lk.len });
+				lkok_set(r.id);
+			} else {
+				// 手上的通行证还没过期（正在用、快到期续一张）：接着用，不用再输
+				let pv = type(p?.prev) == 'string' ? pass_read()[p.prev] : null;
+				if (!(type(pv) == 'object' && pv.dev == r.id && pv.exp > time())) {
+					// 新开的会话（锁屏后、关掉重开、过期了）：只开了密码的要输密码；开了指纹的（指纹只能在手机上验证）每天至少输一次
+					if (!r.d.lk.fp) return err(-32014, '输面板锁密码解锁', { need_pin: true, salt: r.d.lk.salt, len: r.d.lk.len });
+					if (!lkok_fresh(r.id)) return err(-32014, '今天第一次解锁，要输一次面板锁密码', { need_pin: true, salt: r.d.lk.salt, len: r.d.lk.len });
+				}
+			}
+		}
+		let ps = pass_issue(r.id);
+		if (r.cred) ps.dev = r.cred;
+		return { jsonrpc: '2.0', id, result: ps };
+	} catch (e) { return { jsonrpc: '2.0', id, error: { code: -32000, message: type(e) == 'object' ? e.message : '' + e } }; }
+}
+// 面板「现在锁上」、退出登录：作废这台手机手上的通行证（之后要指纹或密码才能再领）
+P.pass_drop = function() { if (DEV_ID) pass_drop_dev(DEV_ID); return { ok: true }; };
+// 设置 / 修改 / 关闭面板锁（只能改自己这台手机的）。已经有锁时要先核对旧密码
+P.lock_set = function(a) {
+	if (!DEV_ID || !DEV) die('先登录');
+	let all = devs_read(), d = all[DEV_ID];
+	if (type(d) != 'object') die('这台手机已经退出了');
+	if (d.lk) {
+		let why = lk_verify(DEV_ID, d, a?.old);
+		if (why) die(why.msg);
+	}
+	if (a?.on) {
+		let salt = '' + (a?.salt ?? ''), p = lk_proof(a?.lkp), len = +(a?.len ?? 0);
+		if (!match(salt, /^[A-Za-z0-9+\/=]{16,64}$/) || !p || len < 4 || len > 6) die('面板锁密码的格式不对');
+		d.lk = { salt, h: hash_str(salt + ':' + p), len, at: time(), fp: !!a?.fp };
+	} else delete d.lk;
+	all[DEV_ID] = d; devs_write(all);
+	if (a?.on) lkok_set(DEV_ID);
+	return { ok: true, on: !!a?.on };
+};
+// 开 / 关指纹解锁（开之前面板已经核对过密码）：路由器据此决定新会话要不要每次都输密码
+P.lock_fp = function(a) {
+	let all = devs_read(), d = all[DEV_ID ?? ''];
+	if (type(d) != 'object' || !d.lk) die('这台手机没开面板锁');
+	d.lk.fp = !!a?.fp; all[DEV_ID] = d; devs_write(all);
+	return { ok: true, fp: d.lk.fp };
+};
+// 核对面板锁密码（改密码、开指纹前确认是本人）
+P.lock_check = function(a) {
+	if (!DEV?.lk) return { ok: true, none: true };
+	let why = lk_verify(DEV_ID, DEV, a?.lkp);
+	if (why) die(why.msg);
+	lkok_set(DEV_ID);
+	return { ok: true };
+};
+P.lock_state = function() { return DEV?.lk ? { on: true, len: DEV.lk.len, salt: DEV.lk.salt } : { on: false }; };
+/* ---------- 自建版：用登录地址换手机钥匙（第 6、12 项） ---------- */
+function login_pw_on() { return trim(readfile(LOGINPW_F) ?? '') == '1'; }
+// 开了「登录要输路由器密码」又没带密码：手机要弹出输密码（错误码 -32015，见 90-rpc）
+function die2_need_pw() { ERR_CODE = -32015; die('这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码'); }
+P.pass_login = function(a) {
+	if (is_hosted()) die('托管版要从官网「我的路由器」点「打开面板」进来');
+	if (login_pw_on()) {
+		if (a?.pw == null || a?.pw == '') die2_need_pw();
+		rootpw_check(a?.pw, '登录面板时的路由器密码');
+	}
+	let id = rand_str(8), sec = rand_str(32);
+	if (!id || !sec) die('生成手机钥匙失败，再试一次');
+	let d = devs_read();
+	let ids = sort(keys(d), (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0));
+	while (length(ids) >= 30) delete d[shift(ids)];
+	let name = substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || '手机';
+	let via = login_pw_on() ? '登录地址 + 路由器密码' : '登录地址';
+	d[id] = { s: sec, name, at: time(), rot: time(), via };
+	devs_write(d);
+	DEV_ID = id;
+	// 以前就在用的手机（6.0 以前直接存着登录密钥）换成手机钥匙：不当成新手机推送
+	if (!a?.migrate) try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + '登录。不是你自己的话，马上在面板「我的主页 → 敏感信息」让它退出，并换一下登录密钥'))); } catch (e) {}
+	return { dev: id + '.' + sec, id, name };
+};
+// 开关「登录要输路由器后台密码」：只有主账号、确认过本人才能改（敏感信息里）
+P.login_pw_set = function(a) {
+	if (is_hosted()) die('托管版登录要过官网账号，不用这个');
+	need_sudo(a, true);
+	if (a?.on) {
+		let sh0 = match(readfile(getenv('CMCP_SHADOW') ?? '/etc/shadow') ?? '', /(^|\n)root:([^:\n]*):/);
+		if (sh0 && !length(sh0[2])) die('路由器还没设后台密码：先在原版后台「系统 → 管理权」设一个');
+		writefile(LOGINPW_F, '1\n');
+	} else sh('rm -f ' + shq(LOGINPW_F));
+	return { ok: true, on: !!a?.on };
+};
+// 自建版「添加新手机」：给新手机的登录链接（带登录密钥）只在确认本人以后给
+P.login_link = function(a) {
+	if (is_hosted()) die('托管版添加新手机用官网');
+	need_sudo(a, true);
+	return { token: conf().token, pw: login_pw_on() };
+};
 P.update_check = function(a) {
 	let v = ver_info(), cf = '/tmp/cmcp_latest.json', c = null;
 	try { c = json(readfile(cf) ?? 'null'); } catch (e) {}
@@ -2967,9 +3189,10 @@ P.cloud_info = function() {
 		if (m) c[m[1]] = m[2];
 	}
 	if (!c.URL) return { enabled: false };
-	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建版没有 PKEY，面板就用登录密钥
+	// 托管版：面板读云端用单独的 PKEY（登录密钥不交给托管服务）；自建完整版自己部署的 Worker 认的是登录密钥（PANEL_TOKEN），
+	// 6.0 起手机不再存登录密钥，只有自建完整版在这里拿一份给自己的 Worker 用（确认登录过的手机才拿得到）
 	// 平板网址带着平板的钥匙：不在这里给，在「我的主页 → 敏感信息」里验证后才给（P.tablet_url）；这里只说有没有
-	return { enabled: true, url: c.URL, tablet: !!c.TKEY, pkey: c.PKEY || null, hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
+	return { enabled: true, url: c.URL, tablet: !!c.TKEY, pkey: c.PKEY || (c.URL && !hub_conf(true) ? conf().token : null), hosted: !!c.PKEY, hub: hub_conf(true)?.HUB ?? null };
 };
 
 P.wd_check = function() {
@@ -3595,10 +3818,21 @@ function handle(msg) {
 		return is_notification ? null : rpc_error(id, -32001, '这是 Claude 连接器地址，不能用来打开面板');
 	// 官网「打开面板」的入口：只能拿票换手机钥匙
 	if (MODE == 'open') {
-		if (msg.method != 'panel/open_login') return is_notification ? null : rpc_error(id, -32601, 'not found');
-		try { return rpc_result(id, P.open_login(p)); }
+		// 6.0：手机不再存登录密钥，输登录码（官网的或应急的）也从这里进；登录码 8 位、10 分钟最多错 10 次
+		if (msg.method != 'panel/open_login' && msg.method != 'panel/device_approve') return is_notification ? null : rpc_error(id, -32601, 'not found');
+		try { return rpc_result(id, msg.method == 'panel/open_login' ? P.open_login(p) : P.device_approve(p)); }
 		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
+	// 6.0 第 6 项：通行证地址。只有「拿手机钥匙换通行证」不用带通行证；别的请求都要带，并且只给手机面板用
+	if (MODE == 'pass') {
+		if (msg.method == 'panel/pass_new') return is_notification ? null : pass_new_rpc(id, p);
+		if (!pass_ok(msg.pass)) return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32013, message: '通行证过期了' } };
+		if (msg.client != 'panel') return is_notification ? null : rpc_error(id, -32001, '这个地址只给手机面板用');
+	}
+	// 自建版开了「登录要输路由器密码」（第 12 项）：登录地址只能用来换手机钥匙，不能直接操作路由器
+	// （路由器自己的小工具带 local. 钥匙照常；Claude 用单独的连接器地址，不受影响）
+	if (MODE == 'token' && !NEED_DEV && login_pw_on() && msg.method != 'panel/pass_login' && !(type(msg.dev) == 'string' && dev_ok(msg.dev)))
+		return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32015, message: msg.client == 'panel' ? '这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码' : '这台路由器开了「登录要输路由器后台密码」，登录地址不能直接用。Claude 请用「我的主页 → 敏感信息」里的 Claude 连接器地址' } };
 	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（从官网打开面板时拿到的）
 	if (MODE == 'token' && NEED_DEV && msg.method != 'panel/device_approve' && !dev_ok(msg.dev)) {
 		if (is_notification) return null;
@@ -3610,7 +3844,7 @@ function handle(msg) {
 			data: { need_code: true, hub: h } } };
 	}
 	// 主账号 / 子账号：按这台手机属于哪个账号检查权限
-	if (MODE == 'token' && NEED_DEV && DEV) {
+	if (NEED_DEV && DEV) { // 托管版：登录密钥地址（旧手机）和通行证地址都按账号查权限
 		let why = fam_check();
 		if (why) {
 			if (is_notification) return null;
@@ -3626,8 +3860,9 @@ function handle(msg) {
 	if (substr(msg.method, 0, 6) == 'panel/') {
 		let fn = P[substr(msg.method, 6)];
 		if (type(fn) != 'function') return rpc_error(id, -32601, '面板接口不存在：' + msg.method);
+		ERR_CODE = null;
 		try { return rpc_result(id, fn(p)); }
-		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
+		catch (e) { return rpc_error(id, ERR_CODE ?? -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
 
 	switch (msg.method) {
@@ -3695,11 +3930,13 @@ function main() {
 		MODE = 'ai';
 	else if (path == '/open' && is_hosted())
 		MODE = 'open';
+	else if (path == '/pass')
+		MODE = 'pass';
 	else if (length(token) < 16 || path != '/' + token) {
 		reply('404 Not Found', { error: 'not found' });
 		return;
 	}
-	NEED_DEV = MODE == 'token' && is_hosted();
+	NEED_DEV = (MODE == 'token' || MODE == 'pass') && is_hosted();
 
 	let method = getenv('REQUEST_METHOD') ?? 'GET';
 	if (method == 'GET' || method == 'HEAD') {

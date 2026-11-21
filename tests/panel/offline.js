@@ -25,7 +25,7 @@ const server = http.createServer((req, res) => {
 		return req.on('end', () => {
 			const body = JSON.parse(b || '{}');
 			res.writeHead(200, { 'content-type': 'application/json' });
-			res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(body.method, body.params || {}) }));
+			res.end(JSON.stringify(require('./mock').reply(body.id, body.method, body.params || {})));
 		});
 	}
 	let p = u.pathname.replace(/^\/panel\//, '');

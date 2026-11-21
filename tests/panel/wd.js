@@ -38,7 +38,7 @@ async function open(browser, opt = {}) {
 			if (ctl.mode === '502') return route.fulfill({ status: 502, contentType: 'text/html', body: 'Bad gateway' });
 			if (ctl.mode === 'down') return route.abort('connectionrefused');
 			await new Promise((r) => setTimeout(r, 30));
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(body.method, body.params || {}) }) });
+			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(require('./mock').reply(body.id, body.method, body.params || {})) });
 		}
 		let f = path.join(ROOT, u.pathname);
 		if (f.endsWith('/')) f += 'index.html';

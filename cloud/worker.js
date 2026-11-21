@@ -477,7 +477,8 @@ export default {
  * 这时面板改走：手机 → 官网 /api/relay/子域名/… → 云端内部转给专属网址 → 隧道 → 路由器。
  * 只转面板的两个接口（路由器接口、云端状态），只接受从这台路由器自己的专属网址打开的面板发来的请求（Origin 必须对上）；
  * 内容原样转发（钥匙照样由路由器自己检查），不记录、不改动。 */
-const RELAY_RE = /^\/api\/relay\/([a-z0-9]{4,32})\/(cgi-bin\/mcp\/[A-Za-z0-9%_-]{8,200}|cloud\/s)$/;
+// 6.0：手机平时走通行证地址 cgi-bin/mcp/pass，输登录码走 cgi-bin/mcp/open（钥匙都在请求内容里，路由器检查）
+const RELAY_RE = /^\/api\/relay\/([a-z0-9]{4,32})\/(cgi-bin\/mcp\/(?:[A-Za-z0-9%_-]{8,200}|pass|open)|cloud\/s)$/;
 const RELAY_OK = new Map(); // 这台路由器能不能中转：缓存 5 分钟，免得每个请求都去查
 async function relay(req, env) {
 	const u = new URL(req.url), m = RELAY_RE.exec(u.pathname);

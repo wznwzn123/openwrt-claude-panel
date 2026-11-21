@@ -15,7 +15,7 @@ const server = http.createServer((req, res) => {
 	req.on('data', (d) => (b += d));
 	req.on('end', () => {
 		const J = (o, st = 200) => { res.writeHead(st, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
-		if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); return J({ jsonrpc: '2.0', id: body.id, result: respond(body.method, body.params || {}) }); }
+		if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); return J(require('./mock').reply(body.id, body.method, body.params || {})); }
 		if (u.pathname === '/cloud/push/key') return J({ key: 'BElsZ2tLeTFvN3h4eDF4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg' });
 		if (u.pathname === '/cloud/push') {
 			const x = JSON.parse(b || '{}');

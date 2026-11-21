@@ -54,6 +54,9 @@ ok('[安全] 只收 POST', (await call(P, { method: 'GET', origin: O })).st === 
 ok('[安全] 太大的请求：拒绝', (await call(P, { body: {}, origin: O, headers: { 'content-length': String(5 * 1024 * 1024) } })).st === 413);
 const bad = await call('/api/relay/' + R.sub + '/cgi-bin/mcp/badkey0123456789', { body: {}, origin: O });
 ok('[中转] 路由器说钥匙不对（404）：照实带回，并标明是中转回来的', bad.st === 404 && bad.h.get('x-cmcp-relay') === '1');
+// 6.0 第 6 项：通行证地址和输登录码的入口也能中转（钥匙、通行证都在请求内容里，由路由器检查）
+for (const sp of ['pass', 'open']) { const n2 = SEEN.length; const rr = await call('/api/relay/' + R.sub + '/cgi-bin/mcp/' + sp, { body: { jsonrpc: '2.0', id: 1, method: 'panel/live' }, origin: O }); ok('[中转] cgi-bin/mcp/' + sp + ' 也能中转', rr.h.get('x-cmcp-relay') === '1' && SEEN.length === n2 + 1 && SEEN.at(-1).url === O + '/cgi-bin/mcp/' + sp, rr.st); }
+ok('[安全] 别的短路径不转', (await call('/api/relay/' + R.sub + '/cgi-bin/mcp/abc', { body: {}, origin: O })).st === 404);
 // 云端状态（/cloud/s）也能中转：走云端自己，不去路由器
 const n1 = SEEN.length;
 const cs = await call('/api/relay/' + R.sub + '/cloud/s', { body: { token: 'nope' }, origin: O });

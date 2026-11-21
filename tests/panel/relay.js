@@ -12,7 +12,7 @@ async function scene(browser, opt) {
 	const page = await ctx.newPage();
 	const st = { direct: 0, relay: 0, cloudRelay: 0, ping: 0, cn: 0, other: [] };
 	page.on('pageerror', (e) => problems.push(opt.name + ' 页面错误：' + e.message));
-	await page.addInitScript(([hub]) => { localStorage.setItem('rp_token', 'testtoken1234567890'); if (hub) localStorage.setItem('rp_hub', hub); }, [opt.hub === false ? '' : 'https://' + HUB]);
+	await page.addInitScript(([hub]) => { /* 6.0：托管版登录过的手机有自己的钥匙，平时走通行证 */ localStorage.setItem('rp_dev', 'abcd1234.' + 'k'.repeat(32)); if (hub) localStorage.setItem('rp_hub', hub); }, [opt.hub === false ? '' : 'https://' + HUB]);
 	await page.route('**/*', async (route) => {
 		const req = route.request(), u = new URL(req.url());
 		const cors = { 'access-control-allow-origin': ORIGIN, 'access-control-allow-methods': 'POST', 'access-control-allow-headers': 'content-type, accept', 'access-control-expose-headers': 'x-cmcp-relay' };

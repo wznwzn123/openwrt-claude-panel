@@ -178,7 +178,7 @@ P.device_approve = function(a) {
 	let ids = sort(keys(d), (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0));
 	while (length(ids) >= 30) delete d[shift(ids)];
 	let name = substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || '手机';
-	d[id] = { s: sec, name, at: time(), via };
+	d[id] = { s: sec, name, at: time(), rot: time(), via };
 	if (acct?.uid) { d[id].uid = acct.uid; d[id].sat = acct.now ?? 0; }
 	else if (!acct) d[id].emerg = true;
 	devs_write(d);
@@ -219,9 +219,12 @@ function need_sudo(a, owner) {
 	if (!sudo_ok(a?.sudo)) die('要先确认是你本人：在「我的主页 → 敏感信息」里验证');
 }
 // 用路由器后台密码确认本人：输错 5 次锁 15 分钟（并推送）；密码交给路由器自己的登录服务（rpcd）核对，路由器不存也不记
-P.sudo_local = function(a) {
-	let pw = '' + (a?.pw ?? ''), now = time(), f = cmcp_readj(SUDO_FAIL, { n: 0, until: 0 });
+// 核对路由器后台（root）密码：交给路由器自己的登录服务（rpcd）核对，不存密码；输错 5 次锁 15 分钟并推送
+// what：推送里说是在哪里输错的。对了返回 true，错了直接报错（带还能试几次）
+function rootpw_check(pw, what) {
+	let now = time(), f = cmcp_readj(SUDO_FAIL, { n: 0, until: 0 });
 	if ((f.until ?? 0) > now) die(sprintf('密码输错太多次，%d 分钟后再试', int(((f.until - now) + 59) / 60)));
+	pw = '' + (pw ?? '');
 	if (!length(pw) || length(pw) > 256) die('请输入路由器后台密码');
 	// 没设后台密码的路由器：不能拿空密码当验证（先去原版后台设一个）
 	let sh0 = match(readfile(getenv('CMCP_SHADOW') ?? '/etc/shadow') ?? '', /(^|\n)root:([^:\n]*):/);
@@ -237,14 +240,18 @@ P.sudo_local = function(a) {
 		f.n = (f.n ?? 0) + 1;
 		if (f.n >= 5) {
 			f = { n: 0, until: now + 900 };
-			try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('面板里连续 5 次输错路由器后台密码'), shq('「我的主页 → 敏感信息」的验证锁了 15 分钟。不是你自己输错的话，马上改路由器后台密码，并在面板里换登录密钥。'))); } catch (e) {}
+			try { sh(sprintf('/usr/sbin/cmcp-notify warn login %s %s login', shq('面板里连续 5 次输错路由器后台密码'), shq((what ?? '「我的主页 → 敏感信息」的验证') + '锁了 15 分钟。不是你自己输的话，说明有人拿到了这台手机或者登录地址，换一下登录密钥和路由器后台密码'))); } catch (e) {}
 		}
 		cmcp_writej(SUDO_FAIL, f);
 		die(f.until > now ? '密码输错太多次，15 分钟后再试' : sprintf('密码不对（还能再试 %d 次）', 5 - f.n));
 	}
 	sh(sprintf('ubus call session destroy %s >/dev/null 2>&1', shq(sprintf('{"ubus_rpc_session":"%s"}', sid))));
 	sh('rm -f ' + SUDO_FAIL);
-	let t = rand_str(24);
+	return true;
+}
+P.sudo_local = function(a) {
+	rootpw_check(a?.pw);
+	let now = time(), t = rand_str(24);
 	if (!t) die('生成凭证失败，再试一次');
 	sudo_keep(sudo_read(), t, now + SUDO_TTL, 'local');
 	return { sudo: t, exp: (now + SUDO_TTL) * 1000 };
@@ -397,18 +404,20 @@ P.open_login = function(a) {
 	while (length(ids) >= 30) delete d[shift(ids)];
 	let name = substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || '手机';
 	let who = substr(replace('' + (o.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40);
-	d[id] = { s: sec, name, at: time(), via: '官网账号 ' + (o.email ?? ''), uid: o.uid, sat: +(o.now ?? 0), role: o.role == 'main' ? 'owner' : 'sub', perms: type(o.perms) == 'array' ? o.perms : [] };
+	d[id] = { s: sec, name, at: time(), rot: time(), via: '官网账号 ' + (o.email ?? ''), uid: o.uid, sat: +(o.now ?? 0), role: o.role == 'main' ? 'owner' : 'sub', perms: type(o.perms) == 'array' ? o.perms : [] };
 	devs_write(d);
 	DEV_ID = id;
 	sh('rm -f ' + FAM_PATH); // 成员可能刚变过，下个请求重新拿
 	if (!again) try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机打开了面板：' + name), shq((who ? who + '（' + (o.email ?? '') + '）' : '账号 ' + (o.email ?? '')) + (o.role == 'main' ? '' : '，子账号') + '从官网打开了面板。不是你们家的人的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除。'))); } catch (e) {}
-	return { token: conf().token, dev: id + '.' + sec, id, name };
+	return { dev: id + '.' + sec, id, name }; // 6.0 起不再把登录密钥给手机（第 6 项）
 };
 // 我是谁：面板「我的主页」用
 P.whoami = function() {
 	let h = hub_conf(true);
 	// ai：装的是不是 AI 版（有没有 Claude 连接器）；连接器地址本身只在敏感信息里给
-	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null };
+	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null,
+		// 6.0：自建版是否开了「登录要输路由器密码」；这台手机在路由器上有没有面板锁
+		login_pw: !h && trim(readfile(ETC + '/login_pw') ?? '') == '1', lock: DEV?.lk ? { on: true, len: DEV.lk.len, salt: DEV.lk.salt } : { on: false } };
 };
 // 家人管理、确认本人：转给官网（账号编号由路由器按这台手机填，手机自己填的不算）
 const FAM_OPS = { me: 0, page: 0, profile: 0, log: 0, leave: 0, members: 0, sudo_code: 0, sudo: 0, secret: 0, sess_out: 0, join_create: 1, join_cancel: 1, sub_set: 1, sub_remove: 1, transfer: 1 };

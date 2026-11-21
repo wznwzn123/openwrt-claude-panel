@@ -5,9 +5,12 @@
 <main class="lgcard">
 	<div class="logo lgbiglogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 	<h2>连接你的路由器</h2>
-	<div class="muted" style="font-size:14px">粘贴安装时显示的「登录地址」（用 Claude 的话，就是添加连接器时用的那个地址）。密钥只保存在这台手机上</div>
+	<div class="muted" style="font-size:14px">粘贴安装时显示的「登录地址」。连上以后这台手机只留自己的钥匙，登录地址不存在手机上</div>
 	<label class="lglabel" for="lgInput">连接地址</label>
 	<input id="lgInput" class="input" placeholder="https://…/cgi-bin/mcp/……" autocomplete="off" autocapitalize="off" spellcheck="false">
+	<div id="lgPwRow" class="hidden"><label class="lglabel" for="lgPw">路由器后台密码</label>
+	<input id="lgPw" class="input" type="password" autocomplete="current-password" placeholder="登录原版后台（root）用的密码">
+	<div class="muted" style="font-size:12.5px;margin-top:6px">这台路由器开了「登录要输路由器后台密码」。密码交给路由器自己核对，面板不保存</div></div>
 	<div id="lgErr" class="formerr hidden"></div>
 	<button id="lgBtn" class="lgmain">连接</button>
 </main>

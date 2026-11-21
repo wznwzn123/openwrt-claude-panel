@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { respond } = require('./mock');
 const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') : path.join(__dirname, '..', '..', 'src', 'www', 'panel'));
 const results = [], problems = [];
-const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
+const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (process.env.DBG) console.log((c ? 'OK ' : 'NO ') + n + ' ' + (c ? '' : String(note || '').slice(0, 300))); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const LOGIN = 'testtoken1234567890abc';
 let hosted = false, accs = [{ uid: 'abcdefghijk2', email: 'al***@x.com', at: 1 }, { uid: 'bcdefghijk23', email: 'bo***@y.com', at: 2 }];
 const calls = [];
@@ -14,6 +14,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (m === 'cloud_info') result = hosted ? { enabled: true, url: 'https://ab3cd4ef.panel.example/cloud', tablet: 'x', pkey: 'p'.repeat(32), hosted: true, hub: 'https://panel.example' } : { enabled: false };
 		else if (m === 'hub_pair') result = { code: 'ABCD2345', exp: Date.now() + 600e3, url: 'https://panel.example/app?pair=ABCD2345' };
 		else if (m === 'hub_accounts') result = accs;
+		else if (m === 'login_link') result = body.params.sudo === 'l'.repeat(24) ? { token: LOGIN, pw: false } : null;
 		else if (m === 'sudo_local') result = body.params.pw === 'rootpw' ? { sudo: 'l'.repeat(24), exp: Date.now() + 600e3 } : null;
 		else if (m === 'hub_unbind') { accs = accs.filter((a) => a.uid !== body.params.uid); result = { ok: true }; }
 		else result = respond(m, body.params || {});
@@ -53,11 +54,11 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	const before = calls.length;
 	await p2.goto('http://localhost:8126/panel/#login=' + LOGIN); await W(2000);
 	ok('新手机扫码打开：直接进面板（不显示登录页）', await p2.evaluate(() => document.getElementById('login').classList.contains('hidden')));
-	ok('密钥存到了这台手机，地址栏里的 #login 去掉了', (await p2.evaluate(() => localStorage.getItem('rp_token'))) === LOGIN && !(await p2.evaluate(() => location.hash)));
-	ok('新手机用这个密钥连路由器', calls.slice(before).some((c) => c.tok === LOGIN));
+	ok('新手机用登录地址换到自己的钥匙；登录密钥不留在手机上，地址栏里的 #login 去掉了（6.0 第 6 项）', !(await p2.evaluate(() => localStorage.getItem('rp_token'))) && /^[a-z0-9]{8}\./.test(await p2.evaluate(() => localStorage.getItem('rp_dev')) || '') && !(await p2.evaluate(() => location.hash)));
+	ok('新手机只用登录密钥换了一次钥匙，之后走通行证', calls.slice(before).filter((c) => c.tok === LOGIN).every((c) => c.m === 'pass_login') && calls.slice(before).some((c) => c.tok === 'pass'));
 	const p3 = await ctx2.newPage();
 	await p3.goto('http://localhost:8126/panel/#login=bad'); await W(800);
-	ok('格式不对的 #login 不会覆盖已有密钥', (await p3.evaluate(() => localStorage.getItem('rp_token'))) === LOGIN);
+	ok('格式不对的 #login 不会覆盖已有的手机钥匙', /^[a-z0-9]{8}\./.test(await p3.evaluate(() => localStorage.getItem('rp_dev')) || '') && !(await p3.evaluate(() => localStorage.getItem('rp_token'))));
 	await ctx2.close();
 	// 托管版（5.2）：系统操作里也没有「绑定到账号」，家里人用加入码
 	hosted = true;

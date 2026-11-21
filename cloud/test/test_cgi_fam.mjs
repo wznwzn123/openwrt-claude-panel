@@ -67,7 +67,7 @@ const ua = await mkUser('alice@x.com'), ub = await mkUser('bob@x.com'), uc = awa
 const ta = await ticketOf(ua);
 ok('官网给主账号发了打开面板的票', !!ta);
 const oa = await open(ta, 'A 的手机');
-ok('路由器拿票换到手机钥匙和登录密钥', oa.result && /^[a-z0-9]{8}\.[a-z0-9]{32}$/.test(oa.result.dev) && oa.result.token === TOKEN, JSON.stringify(oa));
+ok('路由器拿票换到手机钥匙；6.0 起不再把登录密钥给手机（第 6 项）', oa.result && /^[a-z0-9]{8}\.[a-z0-9]{32}$/.test(oa.result.dev) && !('token' in oa.result), JSON.stringify(oa));
 const devA = oa.result && oa.result.dev;
 ok('手机记录里有账号编号和身份', devs()[devA.slice(0, 8)].uid === ua && devs()[devA.slice(0, 8)].role === 'owner');
 ok('同一张票不能用第二次', !!(await open(ta, 'x')).error);

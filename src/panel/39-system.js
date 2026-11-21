@@ -365,7 +365,7 @@ try { cloud = JSON.parse(store.get('rp_cloud') || 'null'); cinfo = JSON.parse(st
 // 精简版没有 Cloudflare 云端：路由器说没配置云端，就不去请求 /cloud/，也不显示云端相关卡片
 const noCloud = () => !!cinfo && cinfo.enabled === false;
 // 读云端用的钥匙：托管版有单独的面板钥匙，自建版用登录密钥
-const cloudKey = () => (cinfo && cinfo.pkey) || token;
+const cloudKey = () => (cinfo && cinfo.pkey) || ''; // 6.0：手机不再存登录密钥；自建完整版由路由器在云端信息里给
 // 连不上时查一下是哪一段不通：官网（也在 Cloudflare 上）通不通、国内网站通不通（只看能不能连上，不读内容）
 async function netProbe(url, ms) {
 	const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 6000);
@@ -991,7 +991,7 @@ async function feedbackSheet() {
 // 退出登录：清掉这台手机上的密钥；托管版顺便让路由器忘掉这台手机（下次要重新输登录码）
 async function signOut() {
 	const dev = !!store.get('rp_dev');
-	if (!(await confirmBox('退出登录', (dev ? '这台手机退出面板，下次要从官网「我的路由器」重新打开' : '这台手机退出面板，下次打开要重新粘贴登录地址') + '。路由器上的设置不受影响。', '退出登录', true))) return;
+	if (!(await confirmBox('退出登录', (isHosted() ? '这台手机退出面板，下次要从官网「我的路由器」重新打开' : '这台手机退出面板，下次打开要重新粘贴登录地址') + '。路由器上的设置不受影响。', '退出登录', true))) return;
 	if (dev) { try { await rpcOnce('panel/device_remove', { self: true }, 8000); } catch (e) {} }
 	store.del('rp_dev');
 	sideOpen(false);
@@ -1106,7 +1106,7 @@ function qrSvg(text) { const q = window.qrcode(0, 'M'); q.addData(text); q.make(
 function qrReveal(m) { m.querySelectorAll('.qrbox.blur').forEach((b) => (b.onclick = () => b.classList.remove('blur'))); }
 async function addPhone() {
 	// 托管版 5.2：新手机都从官网账号打开（扫码只是打开官网）；家里人用加入码
-	if (store.get('rp_dev')) {
+	if (isHosted()) {
 		const hub = store.get('rp_hub') || 'https://yrlove520.com', url = hub + '/app';
 		try { await loadQr(); } catch (e) { return toast(e.message, true); }
 		return modal(`<div class="sheethead"><h3>在新手机上打开</h3><button class="btn sm" data-v="close">关闭</button></div>
@@ -1118,10 +1118,12 @@ async function addPhone() {
 	}
 	// 自建版：二维码里就是登录密钥，只在「我的主页 → 敏感信息」验证后给
 	if (!sudoOn()) { toast('先在「我的主页 → 敏感信息」里验证是你本人', true); return go('me'); }
-	const url = location.origin + location.pathname.replace(/[^/]*$/, '') + '#login=' + token;
+	// 6.0：手机上不再存登录密钥，扫码链接现向路由器要（确认过本人才给）
+	let lk; try { lk = await secP('login_link'); } catch (e) { return toast(e.message, true); }
+	const url = location.origin + location.pathname.replace(/[^/]*$/, '') + '#login=' + lk.token;
 	try { await loadQr(); } catch (e) { return toast(e.message, true); }
 	modal(`<div class="sheethead"><h3>添加新手机</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 12px">用新手机的相机扫这个二维码，打开后就直接登录这个面板，不用再粘贴登录地址。${store.get('rp_dev') ? '<br><b>托管版</b>：新手机打开后还要输一次登录码（在官网账号里，这台路由器下面点「获取登录码」）。' : ''}</p>
+	<p class="muted" style="margin:0 0 12px">用新手机的相机扫这个二维码，打开后就直接登录这个面板，不用再粘贴登录地址。${lk.pw ? '<br>这台路由器开了「登录要输路由器后台密码」：新手机打开后还要输一次路由器后台密码。' : ''}</p>
 	<div class="qrbox blur">${qrSvg(url)}<span>点一下显示二维码</span></div>
 	<div class="notice w" style="margin-top:12px">⚠️ 扫到这个码就等于拿到路由器的全部权限。只给自己或家人的手机扫，扫完就关掉，不要截图、不要发给别人。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制链接</button><button class="btn primary" data-v="close">完成</button></div>`,
@@ -1666,16 +1668,16 @@ async function updStart(noConfirm) {
 
 // 换一把新的登录密钥：这台手机自动换成新的；其他手机、Claude 连接器要重新填
 async function rotateKey() {
-	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 这台手机自动换成新密钥，不用重新登录\n· 其他已经登录的手机要重新添加（在这台手机「添加新手机」扫码）\n· 用「Claude 连接器地址」加的 Claude 连接器不受影响', '换新密钥', true))) return;
+	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 已经登录的手机（包括这台）用的是各自的钥匙，不受影响；不认识的手机在下面「登录着的设备」里移除\n· 用「Claude 连接器地址」加的 Claude 连接器不受影响；用旧登录地址加的要换', '换新密钥', true))) return;
 	let r;
 	try { r = await secP('rotate_key', { confirm: 'ROTATE' }, 30000); } catch (e) { return toast(e.message, true); }
-	token = r.token; store.set('rp_token', r.token);
+	// 6.0：手机用的是自己的钥匙，换登录密钥不影响这台手机，新密钥也不存在手机上
 	const login = location.origin + '/cgi-bin/mcp/' + r.token;
 	modal(`<div class="sheethead"><h3>已换成新密钥</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<p class="muted" style="margin:0 0 10px">旧的登录地址已经作废。这是新的登录地址，点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(login)}<span>点一下显示</span></div>
 	${r.selfcloud ? '<div class="notice w" style="margin-top:12px">你用的是自建完整版：还要把 Cloudflare Worker 的密钥 <b>PANEL_TOKEN</b> 换成新的登录密钥（地址最后那一串），不然推送和云端备份会连不上。</div>' : ''}
-	<div class="notice" style="margin-top:12px">接下来：其他手机在这台手机「我的主页 → 敏感信息 → 添加新手机」扫码重新添加。Claude 里如果用的是旧的登录地址，换成「我的主页 → 敏感信息」里的「Claude 连接器地址」里的地址。</div>
+	<div class="notice" style="margin-top:12px">已经登录的手机照常能用。以后添加新手机用「我的主页 → 敏感信息 → 添加新手机」扫码。Claude 里如果用的是旧的登录地址，换成「Claude 连接器地址」。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制新地址</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
 }
@@ -1842,9 +1844,10 @@ const LOCK_IC = '<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26"
 // 「这台路由器的钥匙」：只有主账号（自建版就是拿着登录密钥的人）
 function mpKeysHtml() {
 	if (ME_ROLE.role === 'sub') return '';
-	const self = !store.get('rp_dev'), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
+	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
 	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b><span class="muted">${d}</span></div><span class="muted">›</span></button>`;
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${ai ? row('kckey', 'Claude 连接器地址', '在 Claude 里添加连接器用，打不开面板') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	const lpw = store.get('rp_lpw') === '1';
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'Claude 连接器地址', '在 Claude 里添加连接器用，打不开面板') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -1854,13 +1857,14 @@ function mpDevsHtml(dl, note) {
 }
 // 自建版、应急登录：没有官网账号，「我的主页」只有这台路由器的敏感信息，用路由器后台密码验证
 function mpLocalDraw() {
-	const box = $('meBox'), hosted = !!store.get('rp_dev'), ver = sudoOn() && SUDO.kind === 'local';
+	const box = $('meBox'), hosted = isHosted(), ver = sudoOn() && SUDO.kind === 'local';
 	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? '应急登录' : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? '你是用路由器终端的应急登录码进来的，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
 	if (!ver) {
 		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
 		if (store.get('rp_ai') === '1') L.push(['Claude 连接器地址', '能让 AI 控制路由器的地址']);
 		if (cinfo && cinfo.tablet) L.push(['平板（证人）网址', '平板报平安用的网址']);
-		if (hosted) L.push(['登录着的设备', '哪些手机能打开这个面板，不认识的马上移除']);
+		L.push(['登录着的设备', '哪些手机能打开这个面板，不认识的马上移除']);
+		if (!hosted) L.push(['登录要输路由器后台密码', '开了以后光有登录地址进不来']);
 		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">${LOCK_IC}
 		<h3>输路由器后台密码验证</h3>
 		<ul class="mp-lockl">${L.map((x) => `<li><b>${x[0]}</b><span>${x[1]}</span></li>`).join('')}</ul>
@@ -1869,7 +1873,7 @@ function mpLocalDraw() {
 	} else {
 		const mins = Math.max(0, Math.ceil((SUDO.exp - Date.now()) / 1000));
 		h += `<div class="sectitle mp-sec-h"><b>敏感信息</b><span class="pill mpok" id="mpLeft">已验证 · ${Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} 后自动锁上</span></div>`;
-		if (hosted) h += mpDevsHtml(MP.devs && MP.devs.list, '这些手机能打开这个面板。不认识的马上移除：移除后它要从官网重新打开才能进来。');
+		h += mpDevsHtml(MP.devs && MP.devs.list, hosted ? '这些手机能打开这个面板。不认识的马上移除：移除后它要从官网重新打开才能进来。' : '这些手机能打开这个面板，每台有自己的钥匙。不认识的马上移除：移除后它要重新打开登录地址才能进来；担心登录地址也泄露了，再换一下登录密钥。');
 		h += mpKeysHtml() + '<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>';
 	}
 	if (h !== MP.h || !box.firstElementChild) { box.innerHTML = h; MP.h = h; }
@@ -1882,7 +1886,7 @@ function mpLocalDraw() {
 			const x = await P('sudo_local', { pw }, 20000);
 			inp.value = '';
 			sudoSet({ tok: x.sudo, exp: x.exp, kind: 'local' });
-			MP.devs = hosted ? await P('device_list', { sudo: x.sudo }).catch(() => null) : null;
+			MP.devs = await P('device_list', { sudo: x.sudo }).catch(() => null);
 			mpLocalDraw();
 		}, '核对中');
 	};
@@ -2119,6 +2123,12 @@ $('meBox').addEventListener('click', async (e) => {
 	else if (k === 'renew') svcSheet();
 	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }
 	else if (k === 'kphone') addPhone();
+	// 6.0 第 12 项：自建版「登录要输路由器后台密码」
+	else if (k === 'kpw') {
+		const on = store.get('rp_lpw') !== '1';
+		if (!(await confirmBox(on ? '登录要输路由器后台密码' : '关掉登录时的路由器密码', on ? '开启后：新手机打开登录地址时，还要输一次路由器后台（root）密码才能登录；光有登录地址的人进不来，也不能直接用它操作路由器。\n已经登录的手机不受影响。Claude 请用「Claude 连接器地址」。' : '关掉后：拿到登录地址就能登录新手机。', on ? '开启' : '关掉', !on))) return;
+		try { const r = await secP('login_pw_set', { on }); store.set('rp_lpw', r.on ? '1' : '0'); toast(r.on ? '已开启：登录要输路由器后台密码' : '已关掉'); mpLocalDraw(); } catch (e) { toast(e.message, true); }
+	}
 	else if (k === 'kckey') ckeySheet();
 	else if (k === 'ktab') tabletUrlSheet();
 	else if (k === 'krot') rotateKey();
@@ -2166,7 +2176,7 @@ async function svcSheet() {
 	});
 }
 // 6.0：已登录的手机、Claude 连接器地址、换登录密钥、自建版的「添加新手机」都只在「我的主页 → 敏感信息」里；系统操作里只留托管版的「添加新手机」（扫码只是打开官网）
-function moreBtns() { const a = document.querySelector('#p-more [data-t="addphone"]'); if (a) a.classList.toggle('hidden', !store.get('rp_dev')); }
+function moreBtns() { const a = document.querySelector('#p-more [data-t="addphone"]'); if (a) a.classList.toggle('hidden', !isHosted()); }
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 // 平板（证人）网址：带着平板的钥匙，只在「我的主页 → 敏感信息」验证后给
 async function tabletUrlSheet() {

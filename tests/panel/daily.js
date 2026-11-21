@@ -7,7 +7,7 @@ const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 let down = false;
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { const u = new URL(req.url, 'http://x');
-	if (u.pathname.startsWith('/cgi-bin/mcp/')) { if (down) return req.socket.destroy(); const body = JSON.parse(b || '{}'); const go = () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(body.method.replace(/^panel\//, ''), body.params || {}) })); }; return body.params && body.params.run ? setTimeout(go, 700) : go(); }
+	if (u.pathname.startsWith('/cgi-bin/mcp/')) { if (down) return req.socket.destroy(); const body = JSON.parse(b || '{}'); const go = () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(require('./mock').reply(body.id, body.method.replace(/^panel\//, ''), body.params || {}))); }; return body.params && body.params.run ? setTimeout(go, 700) : go(); }
 	if (u.pathname.startsWith('/cloud/')) { res.writeHead(403); return res.end('{}'); }
 	const p = u.pathname.replace(/^\/panel\//, '') || 'index.html', f = path.join(ROOT, p); if (!fs.existsSync(f)) { res.writeHead(404); return res.end(''); }
 	res.writeHead(200, { 'content-type': p.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' }); res.end(fs.readFileSync(f)); }); });

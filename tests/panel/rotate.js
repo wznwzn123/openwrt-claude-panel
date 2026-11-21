@@ -5,14 +5,14 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { respond } = require('./mock');
 const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') : path.join(__dirname, '..', '..', 'src', 'www', 'panel'));
 const results = [], problems = [];
-const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
+const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (process.env.DBG) console.log((c ? 'OK ' : 'NO ') + n + ' ' + (c ? '' : String(note || '').slice(0, 300))); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const OLD = 'oldtoken1234567890abc', NEW = 'n'.repeat(40);
 let cur = OLD, selfcloud = false;
 const SU = 's'.repeat(24);
 const calls = [];
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { const u = new URL(req.url, 'http://x');
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const tok = decodeURIComponent(u.pathname.split('/').pop()); const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, ''); calls.push({ m, tok });
-		if (tok !== cur) { res.writeHead(404); return res.end('{"error":"not found"}'); }
+		if (tok !== cur && tok !== 'pass') { res.writeHead(404); return res.end('{"error":"not found"}'); } // 6.0：平时走通行证地址（模拟路由器在 mock.js 里发通行证）
 		let result;
 		let error;
 		if (m === 'sudo_local') { if (body.params.pw === 'rootpw') result = { sudo: SU, exp: Date.now() + 600e3 }; else error = { code: -32000, message: '密码不对（还能再试 4 次）' }; }
@@ -45,23 +45,23 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'rotate-00-keys.png') });
 	// 取消：什么都不发生
 	await page.click('#meBox [data-mp="krot"]'); await W(400);
-	ok('先弹确认，说清楚后果', /旧的登录地址马上作废/.test(await page.textContent('.modal')) && /其他已经登录的手机要重新添加/.test(await page.textContent('.modal')) && /Claude/.test(await page.textContent('.modal')));
+	ok('先弹确认，说清楚后果（旧地址作废，已登录的手机不受影响）', /旧的登录地址马上作废/.test(await page.textContent('.modal')) && /不受影响/.test(await page.textContent('.modal')) && /Claude/.test(await page.textContent('.modal')));
 	await page.click('.modal [data-v="0"], .modal button:has-text("取消")'); await W(400);
 	ok('点取消：没有换', !calls.some((c) => c.m === 'rotate_key') && cur === OLD);
 	// 确认
 	await page.click('#meBox [data-mp="krot"]'); await W(400);
 	await page.click('.modal button:has-text("换新密钥")'); await W(800);
-	ok('确认后：路由器换了新密钥', cur === NEW && calls.some((c) => c.m === 'rotate_key' && c.tok === OLD));
-	ok('这台手机自动换成新密钥（存好了）', (await page.evaluate(() => localStorage.getItem('rp_token'))) === NEW);
+	ok('确认后：路由器换了新密钥', cur === NEW && calls.some((c) => c.m === 'rotate_key'));
+	ok('这台手机不受影响：用的是自己的钥匙，新的登录密钥也不存在手机上（6.0 第 6 项）', !(await page.evaluate(() => localStorage.getItem('rp_token'))) && !!(await page.evaluate(() => localStorage.getItem('rp_dev'))));
 	ok('新地址先打码，点一下才显示', (await page.getAttribute('.modal .keybox', 'class')).includes('blur') && (await page.textContent('.modal .keybox')).includes('/cgi-bin/mcp/' + NEW));
 	ok('普通情况：不提 PANEL_TOKEN', !/PANEL_TOKEN/.test(await page.textContent('.modal')));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'rotate-01.png') });
 	await page.click('.modal button:has-text("完成")'); await W(300);
 	calls.length = 0;
 	await page.goto('http://localhost:8182/panel/?p=home'); await W(1800);
-	ok('之后的请求都用新密钥，不会掉线', calls.length > 0 && calls.every((c) => c.tok === NEW), JSON.stringify(calls.slice(0, 3)));
+	ok('之后的请求照常（走通行证，不用登录地址），不会掉线', calls.length > 0 && calls.every((c) => c.tok === 'pass'), JSON.stringify(calls.slice(0, 3)));
 	await page.reload(); await W(1500);
-	ok('刷新页面后还是登录状态（用的新密钥）', calls.some((c) => c.tok === NEW) && !(await page.isVisible('#login')));
+	ok('刷新页面后还是登录状态', calls.some((c) => c.tok === 'pass') && !(await page.isVisible('#login')));
 	// 自建完整版：提醒换 Worker 的 PANEL_TOKEN
 	selfcloud = true; cur = NEW;
 	await page.goto('http://localhost:8182/panel/?p=me'); await W(1500);

@@ -17,7 +17,7 @@ const server = http.createServer((req, res) => {
 		if (u.pathname.startsWith('/cgi-bin/mcp/')) {
 			const body = JSON.parse(b || '{}'); const m = (body.params || {}).name || body.method;
 			if (body.method === 'panel/autosw') { calls.push(body.params || {}); if ((body.params || {}).dry) await new Promise((r) => setTimeout(r, 600)); }
-			return J({ jsonrpc: '2.0', id: body.id, result: respond(body.method.replace(/^panel\//, ''), body.params || {}) });
+			return J(require('./mock').reply(body.id, body.method.replace(/^panel\//, ''), body.params || {}));
 		}
 		if (u.pathname.startsWith('/cloud/')) return J({ error: 'x' }, 403);
 		let p = u.pathname.replace(/^\/panel\//, '') || 'index.html';

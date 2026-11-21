@@ -7,7 +7,7 @@ const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') 
 const results = [], problems = [];
 const ok = (name, cond, note) => { results.push([name, !!cond, note || '']); if (!cond) problems.push(name + (note ? '：' + note : '')); };
 const server = http.createServer((req, res) => { const u = new URL(req.url, 'http://x'); let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
-	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(body.method.replace(/^panel\//, ''), body.params || {}) })); }
+	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(require('./mock').reply(body.id, body.method.replace(/^panel\//, ''), body.params || {}))); }
 	if (u.pathname === '/before') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<title>before</title>上一个网页'); }
 	if (u.pathname.startsWith('/cloud/')) { res.writeHead(403); return res.end('{}'); }
 	let p = u.pathname.replace(/^\/panel\//, '') || 'index.html'; const f = path.join(ROOT, p);

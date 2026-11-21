@@ -27,7 +27,7 @@ async function open(browser, opt = {}) {
 			await new Promise((r) => setTimeout(r, ctl.delay[m] ?? 30));
 			calls.find((c) => c.t0 === t0 && c.m === body.method).t1 = Date.now();
 			if (ctl.fail === m) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -1, message: '测试错误：路由器返回了一个很长很长的错误说明，用来检查长文字会不会换行以及会不会撑破屏幕' } }) });
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(body.method, body.params || {}) }) });
+			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(require('./mock').reply(body.id, body.method, body.params || {})) });
 		}
 		let f = path.join(ROOT, u.pathname);
 		if (f.endsWith('/')) f += 'index.html';

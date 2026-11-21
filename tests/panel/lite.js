@@ -13,7 +13,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		res.writeHead(200, { 'content-type': 'application/json' });
 		if (lite && m === 'cloud_info') return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: { enabled: false } }));
 		if (lite && m === 'bk_list') return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: '还没有设置云端（云端备份是完整版功能）' } }));
-		return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(m, body.params || {}) }));
+		return res.end(JSON.stringify(require('./mock').reply(body.id, m, body.params || {})));
 	}
 	if (u.pathname.startsWith('/cloud/')) { cloudHits++; if (lite) { res.writeHead(404); return res.end('not found'); } res.writeHead(200, { 'content-type': 'application/json' }); const now = Date.now(); return res.end(JSON.stringify(u.pathname === '/cloud/s' ? { now, s: { state: 'ok', since: now - 1e6 }, label: { ok: '正常' }, r: { last: now - 20e3 }, t: null, probe: { at: now - 30e3, code: 200, fail: 0 }, events: [] } : { ok: true, subs: [], key: null })); }
 	const p = u.pathname.replace(/^\/panel\//, '') || 'index.html', f = path.join(ROOT, p); if (!fs.existsSync(f)) { res.writeHead(404); return res.end(''); }

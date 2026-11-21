@@ -14,8 +14,8 @@ const server = http.createServer((req, res) => {
 		const J = (o, st = 200) => { res.writeHead(st, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
 		if (u.pathname.startsWith('/cgi-bin/mcp/')) {
 			const body = JSON.parse(b || '{}');
-			try { return J({ jsonrpc: '2.0', id: body.id, result: respond(body.method.replace(/^panel\//, ''), body.params || {}) }); }
-			catch (e) { return J({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } }); }
+			try { return J(require('./mock').reply(body.id, body.method.replace(/^panel\//, ''), body.params || {})); }
+			catch (e) { return J({ jsonrpc: '2.0', id: body.id, error: { code: e.code || -32000, message: e.message, data: e.data } }); }
 		}
 		if (u.pathname.startsWith('/cloud/')) return J({ error: 'x' }, 403);
 		let p = u.pathname.replace(/^\/panel\//, '') || 'index.html';

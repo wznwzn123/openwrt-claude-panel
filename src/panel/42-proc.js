@@ -127,23 +127,30 @@ async function doLogin() {
 	if (!t) return lgErr('没认出密钥，请粘贴完整的登录地址');
 	const btn = $('lgBtn');
 	btn.disabled = true; btn.textContent = '连接中…';
-	token = t;
+	// 6.0：登录地址只用来换这台手机自己的钥匙（换完手机上就不留登录密钥了）；开了「登录要输路由器密码」的要再输一次
+	const pwi = $('lgPw'), pw = pwi && !$('lgPwRow').classList.contains('hidden') ? pwi.value : null;
+	store.del('rp_dev'); passClear(); store.set('rp_token', t); token = t;
+	try { sessionStorage.setItem('rp_fresh', '1'); } catch (e) {}
 	try {
+		await devFromToken(pw);
 		const r = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }, 15000);
-		store.set('rp_token', t);
 		$('about').textContent = '路由器面板 ' + (r.serverInfo?.version || '');
+		$('lgPwRow').classList.add('hidden'); if (pwi) pwi.value = '';
 		start();
 	} catch (e) {
 		// 托管版：密钥是对的，但这台手机还要输登录码
-		if (e instanceof NeedCodeError) { store.set('rp_token', t); start(); return; }
-		token = null;
+		if (e instanceof NeedCodeError) { start(); return; }
+		// 第一次出现密码框：框下面的说明已经讲清楚了，不再弹红色错误；输了密码还要求输，才是真的错
+		if (e instanceof NeedPwError) { $('lgPwRow').classList.remove('hidden'); setTimeout(() => pwi && pwi.focus(), 60); lgErr(pw ? e.message : ''); if (!pw) return; }
+		if (!(e instanceof NeedPwError)) { forgetToken(); token = null; }
 		lgErr(e instanceof AuthError ? '密钥不对，请检查地址是否完整' : e.message);
 	} finally { btn.disabled = false; btn.textContent = '连接'; }
 }
 $('lgBtn').onclick = doLogin;
 $('lgInput').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
+$('lgPw').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
 function logout(msg) {
-	store.del('rp_token'); store.del('cmcp_token'); store.del('rp_lock');
+	store.del('rp_token'); store.del('cmcp_token'); store.del('rp_lock'); store.del('rp_dev'); store.del('rp_host'); passClear();
 	token = null;
 	$('app').classList.add('hidden');
 	$('needcode').classList.add('hidden');
@@ -223,7 +230,7 @@ async function openTicket(t) {
 			const j = await r.json();
 			if (j.error) msg = j.error.message;
 			else {
-				token = j.result.token; store.set('rp_token', token); store.set('rp_dev', j.result.dev); store.del('rp_role');
+				store.set('rp_dev', j.result.dev); store.set('rp_host', '1'); token = j.result.dev; forgetToken(); passClear(); store.del('rp_role'); // 6.0 起路由器不再给登录密钥
 				w.classList.add('hidden'); start(); return;
 			}
 		}
@@ -238,6 +245,10 @@ async function loadRole() {
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
+		if (r.hosted != null) store.set('rp_host', r.hosted ? '1' : '0');
+		if (r.login_pw != null) store.set('rp_lpw', r.login_pw ? '1' : '0');
+		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
+		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); }
 	} catch (e) {}
@@ -248,12 +259,14 @@ async function ncGo() {
 	if (code.length !== 8) return lcErr('登录码是 8 位字母和数字');
 	const btn = $('lcBtn'); btn.disabled = true; btn.textContent = '核对中…';
 	try {
-		const r = await rpcOnce('panel/device_approve', { code, name: loginDevName() }, 30000);
-		store.set('rp_dev', r.dev); store.del('rp_role');
+		// 6.0：手机上不再存登录密钥，登录码走「打开面板」的入口
+		const j = await rpcPost('cgi-bin/mcp/open', { jsonrpc: '2.0', id: ++seq, method: 'panel/device_approve', params: { code, name: loginDevName() }, client: 'panel' }, 30000, false);
+		if (j.error) throw new Error(j.error.message);
+		store.set('rp_dev', j.result.dev); store.set('rp_host', '1'); forgetToken(); passClear(); store.del('rp_role');
 		btn.textContent = '✓ 登录成功';
 		setTimeout(() => location.reload(), 400);
 	} catch (e) {
-		lcErr(e instanceof AuthError ? '登录地址里的密钥不对，点下面「换一个登录地址」重新粘贴' : e.message);
+		lcErr(e instanceof AuthError ? '这台路由器的面板版本太旧，先在路由器上升级' : e.message);
 		btn.disabled = false; btn.textContent = '确定';
 	}
 }
@@ -425,23 +438,38 @@ function lkWait() {
 	pad.classList.remove('dis');
 	return false;
 }
-function lockNow() {
+function lockNow(why) {
 	const c = lkCfg(); if (!c || !c.on) return;
 	lkBuild();
 	lkSess.del();
+	// 6.0 第 13 项：锁上时作废这台手机手上的通行证，之后要指纹或密码才能再向路由器领
+	if (PS.pass) { const pd = P('pass_drop').catch(() => {}); pd.finally(passClear); } else passClear();
 	LK.on = true; LK.entry = ''; LK.forgot = 0;
 	document.body.classList.add('locked');
 	LK.el.classList.remove('hidden');
-	$('lkFp').style.visibility = c.cred ? '' : 'hidden';
+	$('lkFp').style.visibility = c.cred && !LK.needPin && !c.hash ? '' : 'hidden';
 	$('lkForgot').textContent = '忘记密码'; $('lkForgot').classList.remove('warn');
 	try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch (e) {}
 	lkDots();
-	if (!lkWait()) lkMsg(lkHint());
-	if (c.cred && !document.hidden) setTimeout(lkFp, 350);
+	if (!lkWait()) lkMsg(why || lkHint());
+	if (c.cred && !LK.needPin && !c.hash && !document.hidden) setTimeout(lkFp, 350);
 	lockLabel();
 }
+// 路由器说要输面板锁密码（今天还没输过、或者密码不对）：锁屏只能输密码，不能用指纹
+function lkNeedPin(err) {
+	if (!token) return; // 已经退出了（退出前发出去的请求晚回来）
+	const d = err.data || {};
+	let c = lkCfg();
+	// 手机上的面板锁设置被清掉了，但路由器上这台手机有锁：按路由器给的盐和位数重新建起来
+	if ((!c || !c.on || c.hash) && d.salt && d.len) { c = Object.assign({}, c || {}, { on: 1, salt: d.salt, len: d.len }); delete c.hash; lkSave(c); }
+	if (!c || !c.on) return;
+	LK.needPin = true;
+	if (LK.on) { if (!LK.checking) lkMsg(err.message, !!d.bad); $('lkFp').style.visibility = 'hidden'; return; }
+	if (!LK.after) LK.after = () => { try { refresh(true); } catch (e) {} };
+	lockNow(err.message);
+}
 function lkUnlock(quiet) {
-	LK.on = false; LK.entry = ''; LK.last = Date.now();
+	LK.on = false; LK.entry = ''; LK.last = Date.now(); LK.needPin = false;
 	if (quiet) lkSess.del(); else lkSess.set(LK.last);
 	const c = lkCfg(); if (c && (c.fails || c.until || c.total || c.n)) { c.fails = 0; c.total = 0; c.n = 0; delete c.until; lkSave(c); }
 	if (LK.el) LK.el.classList.add('hidden');
@@ -461,12 +489,30 @@ async function lkKey(k) {
 	LK.entry += k; lkDots();
 	if (LK.entry.length < c.len) return;
 	LK.checking = true;
-	const ok = (await lkHash(LK.entry, c.salt)) === c.hash;
+	const proof = await lkHash(LK.entry, c.salt);
+	if (!c.hash) {
+		// 6.0 第 13 项：密码由路由器核对（错几次要等、错太多让这台手机退出，都由路由器管）
+		let msg = '', ok = false;
+		try { PS.lkp = proof; passClear(); await passGet(); ok = true; }
+		catch (e) { msg = e instanceof LockError ? e.message : e instanceof NeedCodeError || e instanceof AuthError ? '' : (e.message || '连不上路由器，暂时解不了锁'); }
+		LK.checking = false;
+		if (ok) return lkUnlock();
+		if (!LK.on) return; // 被路由器要求退出了
+		const d2 = $('lkDots'); d2.classList.remove('shake'); void d2.offsetWidth; d2.classList.add('shake');
+		try { navigator.vibrate && navigator.vibrate(60); } catch (e) {}
+		setTimeout(() => { LK.entry = ''; lkDots(); }, 380);
+		return lkMsg(msg || '密码不对', true);
+	}
+	// 6.0 以前设的面板锁（密码摘要存在手机上）：这次在手机上核对，对了就交给路由器保管，手机上不再留摘要
+	const ok = proof === c.hash;
 	LK.checking = false;
-	if (ok) return lkUnlock();
+	if (ok) {
+		try { await P('lock_set', { on: 1, salt: c.salt, len: c.len, lkp: proof, fp: !!c.cred }); const n = lkCfg(); delete n.hash; delete n.fails; delete n.total; delete n.n; delete n.until; lkSave(n); } catch (e) {}
+		return lkUnlock();
+	}
 	c.fails = (c.fails || 0) + 1; c.total = (c.total || 0) + 1;
 	// 累计输错 20 次：直接断开这台手机（清掉密钥），要重新粘贴登录地址
-	if (c.total >= LK_WIPE) { lkSave(null); lkUnlock(true); return logout('密码输错太多次，已断开这台手机，请重新粘贴登录地址'); }
+	if (c.total >= LK_WIPE) { lkSave(null); lkUnlock(true); return logout('密码输错太多次，这台手机已退出，请重新登录'); }
 	// 每错 5 次要等，等的时间翻倍：30 秒、1 分钟、2 分钟……最长 15 分钟
 	if (c.fails >= 5) { c.fails = 0; c.n = (c.n || 0) + 1; c.until = Date.now() + Math.min(30000 * 2 ** (c.n - 1), 900000); }
 	lkSave(c);
@@ -478,7 +524,12 @@ async function lkKey(k) {
 async function lkFp() {
 	const c = lkCfg(); if (!LK.on || !c?.cred || LK.fpBusy) return;
 	LK.fpBusy = true;
-	try { if (await fpCheck(c.cred)) lkUnlock(); else if (!lkWait()) lkMsg('指纹没通过，请再试或输入密码', true); }
+	try {
+		if (!(await fpCheck(c.cred))) { if (!lkWait()) lkMsg('指纹没通过，请再试或输入密码', true); return; }
+		// 指纹只在手机上验证；向路由器领通行证时，路由器要求每天至少输过一次密码（你 11/21 定）
+		try { passClear(); await passGet(); lkUnlock(); }
+		catch (e) { if (LK.on) { lkMsg(e instanceof LockError ? e.message : e.message || '连不上路由器，暂时解不了锁', true); if (e instanceof LockError) $('lkFp').style.visibility = 'hidden'; } }
+	}
 	catch (e) { if (e && e.name !== 'NotAllowedError' && e.name !== 'AbortError' && !lkWait()) lkMsg('指纹暂时用不了，请输入密码', true); }
 	finally { LK.fpBusy = false; }
 }
@@ -491,7 +542,7 @@ function lkForgot() {
 		setTimeout(() => { if (LK.on && Date.now() - LK.forgot >= 5000) { b.textContent = '忘记密码'; b.classList.remove('warn'); if (!lkWait()) lkMsg(lkHint()); } }, 5100);
 		return;
 	}
-	lkSave(null); lkUnlock(); logout('面板锁已关闭，请重新粘贴登录地址');
+	lkSave(null); lkUnlock(); logout('面板锁已关闭，这台手机已退出，请重新登录');
 }
 // 5 分钟没操作自动锁（切到后台再回来也算）
 ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach((t) => addEventListener(t, () => {
@@ -500,6 +551,7 @@ function lkForgot() {
 	if (lkCfg()?.on && LK.last - lkSess.get() > 5000) lkSess.set(LK.last);
 }, { capture: true, passive: true }));
 const lkIdle = () => !LK.on && token && lkCfg()?.on && Date.now() - LK.last > LOCK_MIN * 60e3;
+// 改面板锁、关面板锁之前确认本人：返回 { ok, proof }（proof 是给路由器核对用的）
 setInterval(() => { if (lkIdle()) lockNow(); }, 10000);
 document.addEventListener('visibilitychange', () => {
 	if (document.hidden) return;
@@ -523,21 +575,26 @@ async function pinBox(title, sub) {
 	return typeof v === 'string' ? v : null;
 }
 async function lkCheckOld() {
-	const c = lkCfg(); if (!c?.on) return true;
-	const v = await pinBox('输入当前密码', '确认是你本人在操作。'); if (v == null) return false;
-	if ((await lkHash(v, c.salt)) === c.hash) return true;
-	toast('密码不对'); return false;
+	const c = lkCfg(); if (!c?.on) return { ok: true };
+	const v = await pinBox('输入当前密码', '确认是你本人在操作。'); if (v == null) return { ok: false };
+	const proof = await lkHash(v, c.salt);
+	if (c.hash) { if (proof === c.hash) return { ok: true }; toast('密码不对'); return { ok: false }; }
+	try { await P('lock_check', { lkp: proof }); return { ok: true, proof }; } catch (e) { toast(e.message, true); return { ok: false }; }
 }
-async function lkSetPin(old) {
-	const a = await pinBox(old ? '设置新密码' : '设置解锁密码', '4–6 位数字。忘了只能断开这台手机、重新粘贴登录地址。'); if (a == null) return false;
+async function lkSetPin(old, oldProof) {
+	const a = await pinBox(old ? '设置新密码' : '设置解锁密码', '4–6 位数字，由路由器核对。忘了只能让这台手机退出、重新登录。'); if (a == null) return false;
 	const b = await pinBox('再输入一次', '确认刚才的密码。'); if (b == null) return false;
 	if (a !== b) { toast('两次输入的不一样，没有保存'); return false; }
-	const salt = lkB64(lkRnd(16));
-	lkSave(Object.assign({}, old || {}, { on: 1, salt, hash: await lkHash(a, salt), len: a.length, fails: 0, until: 0 }));
+	const salt = lkB64(lkRnd(16)), proof = await lkHash(a, salt);
+	// 6.0 第 13 项：交给路由器保管（路由器只存摘要），手机上只记盐和位数
+	try { await P('lock_set', { on: 1, salt, len: a.length, lkp: proof, old: oldProof || undefined, fp: !!(old && old.cred) }); } catch (e) { toast(e.message, true); return false; }
+	const n = Object.assign({}, old || {}, { on: 1, salt, len: a.length });
+	['hash', 'fails', 'until', 'total', 'n'].forEach((k) => delete n[k]);
+	lkSave(n);
 	return true;
 }
 async function fpTurnOn() {
-	try { const id = await fpCreate(); const c = lkCfg(); c.cred = id; lkSave(c); toast('已开启指纹解锁'); return true; }
+	try { const id = await fpCreate(); await P('lock_fp', { fp: true }); const c = lkCfg(); c.cred = id; lkSave(c); toast('已开启指纹解锁'); return true; }
 	catch (e) { toast(e && e.name === 'NotAllowedError' ? '已取消，没有开启指纹' : '这台手机暂时开不了指纹解锁'); return false; }
 }
 async function lockSettings() {
@@ -557,10 +614,10 @@ async function lockSettings() {
 		${c.cred ? '<button class="btn" data-v="fpoff">关闭指纹</button>' : fpOk ? '<button class="btn" data-v="fpon">开启指纹</button>' : ''}<button class="btn danger" data-v="off">关闭面板锁</button></div>
 		<button class="btn" data-v="close" style="width:100%;margin-top:10px">完成</button>`);
 	if (v === 'now') return lockNow();
-	if (v === 'pin') { if ((await lkCheckOld()) && (await lkSetPin(lkCfg()))) toast('密码已修改'); }
-	if (v === 'fpon' && (await lkCheckOld())) await fpTurnOn();
-	if (v === 'fpoff') { const n = lkCfg(); delete n.cred; lkSave(n); toast('已关闭指纹解锁'); }
-	if (v === 'off' && (await lkCheckOld())) { lkSave(null); toast('面板锁已关闭'); }
+	if (v === 'pin') { const ck = await lkCheckOld(); if (ck.ok && (await lkSetPin(lkCfg(), ck.proof))) toast('密码已修改'); }
+	if (v === 'fpon' && (await lkCheckOld()).ok) await fpTurnOn();
+	if (v === 'fpoff') { try { await P('lock_fp', { fp: false }); const n = lkCfg(); delete n.cred; lkSave(n); toast('已关闭指纹解锁'); } catch (e) { toast(e.message, true); } }
+	if (v === 'off') { const ck = await lkCheckOld(); if (ck.ok) { try { await P('lock_set', { on: 0, old: ck.proof }); lkSave(null); toast('面板锁已关闭'); } catch (e) { toast(e.message, true); } } }
 	lockLabel();
 }
 

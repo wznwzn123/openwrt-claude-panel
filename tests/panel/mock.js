@@ -155,6 +155,24 @@ function respond(method, p) {
 	case 'tools/call': return { content: [{ type: 'text', text: p.name === 'list_services' ? '服务 | 自启 | 状态\nopenclash | 是 | 运行中\nclaude-mcp | 是 | 运行中\ndnsmasq | 是 | 运行中' : '好的：' + p.name }] };
 	}
 	switch (m) {
+	// 6.0 第 6、13 项：手机钥匙 + 通行证、面板锁（模拟路由器：钥匙和通行证都认，锁屏密码看 PASSM.pin）
+	case 'pass_login': PASSM.logins++; return { dev: 'abcd1234.' + 'k'.repeat(32), id: 'abcd1234', name: p.name || '手机' };
+	case 'pass_new': {
+		PASSM.news++;
+		const E = (msg, code, data) => { const e = new Error(msg); e.code = code; e.data = Object.assign({ need_code: false }, data || {}); return e; };
+		if (PASSM.lock && p.lkp == null && !(p.prev && PASSM.passOk)) {
+			if (!PASSM.lock.fp) throw E('输面板锁密码解锁', -32014, { need_pin: true, salt: PASSM.lock.salt, len: PASSM.lock.len });
+			if (!PASSM.lkok) throw E('今天第一次解锁，要输一次面板锁密码', -32014, { need_pin: true, salt: PASSM.lock.salt, len: PASSM.lock.len });
+		}
+		if (PASSM.lock && p.lkp != null) { const why = pinCheck(p.lkp); if (why) throw why.revoked ? E(why.msg, -32010) : E(why.msg, -32014, { need_pin: true, bad: true, salt: PASSM.lock.salt, len: PASSM.lock.len }); PASSM.lkok = true; }
+		PASSM.passOk = true;
+		return { pass: 'p'.repeat(32), exp: Date.now() + 3600e3 };
+	}
+	case 'pass_drop': PASSM.drops++; PASSM.passOk = false; return { ok: true };
+	case 'lock_fp': if (!PASSM.lock) throw new Error('这台手机没开面板锁'); PASSM.lock.fp = !!p.fp; return { ok: true, fp: !!p.fp };
+	case 'lock_set': if (PASSM.lock) { const why = pinCheck(p.old); if (why) throw new Error(why.msg); } PASSM.lock = p.on ? { salt: p.salt, len: p.len, lkp: p.lkp, fp: !!p.fp } : null; PASSM.lkok = true; return { ok: true, on: !!p.on };
+	case 'lock_check': if (PASSM.lock) { const why = pinCheck(p.lkp); if (why) throw new Error(why.msg); } return { ok: true };
+	case 'login_link': return { token: 'testtoken1234567890', pw: false };
 	case 'overview': return { ...(PXM.px ? { px: PXM.px } : {}), clash: { running: OC.running, busy: !!OC.busy, line: OC.line || { t: '2026-10-28 22:09:34', lv: '提示', msg: 'OpenClash 启动成功，请等待服务器上线！' }, version: 'alpha-gbc76c13', mode: OC.mode, connections: 120, download_total: 1.1e9, upload_total: 2.8e8, config: '/etc/openclash/config/zou.yaml', custom_rules: true }, system: { model: 'Xiaomi AX3000T', firmware: 'Kwrt 24.10', uptime: 345678, load: '0.42', cpus: 2, cpu: 23.4, mem_total: 268435456, mem_avail: 100000000, temp: 58 }, wan: { up: true, proto: 'pppoe', ip: '36.1.2.3', uptime: 99999 }, speed: { dev: 'pppoe-wan', rx: 1234567, tx: 54321, rx_total: 9e10, tx_total: 1e10 } };
 	case 'oc_state': return state;
 	case 'oc_schema': return { settings, 'config-overwrite': overwrite, 'config-subscribe': subscribe, 'config-subscribe-edit': subEdit, 'custom-dns-edit': dnsEdit }[p.page];
@@ -264,6 +282,18 @@ function respond(method, p) {
 }
 const OC = { mode: 'rule', running: true };
 const LK = { key: 'lk123' }, KILLED = [];
+const PASSM = { logins: 0, news: 0, drops: 0, lock: null, lkok: false, fail: { n: 0, total: 0, k: 0, until: 0 } };
+// 模拟路由器核对面板锁密码（规则同 src/mcp/26-pass.uc 的 lk_verify）：每错 5 次等 30 秒起翻倍，累计 20 次让手机退出
+function pinCheck(lkp) {
+	const f = PASSM.fail, t = Date.now();
+	if (f.until > t) return { msg: `错误次数太多，${Math.ceil((f.until - t) / 1000)} 秒后再试` };
+	if (lkp === PASSM.lock.lkp) { PASSM.fail = { n: 0, total: 0, k: 0, until: 0 }; return null; }
+	f.n++; f.total++;
+	if (f.total >= 20) { PASSM.fail = { n: 0, total: 0, k: 0, until: 0 }; PASSM.lock = null; return { msg: '密码输错太多次，已经让这台手机退出，要重新登录', revoked: true }; }
+	if (f.n >= 5) { f.n = 0; f.k++; f.until = t + Math.min(30000 * 2 ** (f.k - 1), 900000); }
+	const left = 20 - f.total;
+	return { msg: left <= 5 ? `密码不对，再错 ${left} 次会让这台手机退出` : f.until > t ? '密码不对，30 秒后再试' : `密码不对，还能试 ${5 - f.n} 次` };
+}
 const WD = { cleared: false, base: Math.floor(Date.now() / 1000) };
 // 云端监测（Cloudflare Worker）的模拟返回
 const LABEL = { ok: '一切正常', partial: '在线，但有问题', tunnel: '隧道断开', noreport: '路由器报告中断', power: '路由器断电或死机', net: '家里断网', down: '路由器离线', wait: '等待数据' };
@@ -284,4 +314,6 @@ function cloudStatus(mode, tablet = true) {
 }
 const DYD = { d: null, runs: 0 };
 const FSUM = { v: 'S1', saved: [] };
-module.exports = { FSUM, DN, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU };
+// 一次 JSON-RPC 回答：方法报错时按路由器的格式回错误（带错误码，比如 6.0 的面板锁 -32014）
+function reply(id, method, params) { try { return { jsonrpc: '2.0', id, result: respond(method, params) }; } catch (e) { return { jsonrpc: '2.0', id, error: { code: e.code || -32000, message: e.message, data: e.data } }; } }
+module.exports = { reply, FSUM, DN, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU, PASSM };

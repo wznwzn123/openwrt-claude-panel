@@ -8,7 +8,7 @@ const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
 	const u = new URL(req.url, 'http://x');
-	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); let result; try { result = respond(body.method.replace(/^panel\//, ''), body.params || {}); } catch (e) { return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } })); } return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result })); }
+	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); let result; try { result = respond(body.method.replace(/^panel\//, ''), body.params || {}); } catch (e) { return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: e.code || -32000, message: e.message, data: e.data } })); } return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result })); }
 	if (u.pathname.startsWith('/cloud/')) { res.writeHead(403); return res.end('{}'); }
 	const p = u.pathname.replace(/^\/panel\//, '') || 'index.html', f = path.join(ROOT, p);
 	if (!fs.existsSync(f)) { res.writeHead(404); return res.end(''); }

@@ -6,7 +6,7 @@ const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problem
 	const browser = await chromium.launch(); const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
 	page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 	await ctx.route('http://panel.test/**', async (route) => { const u = new URL(route.request().url());
-		if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(route.request().postData() || '{}'); await new Promise((r) => setTimeout(r, 150)); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: body.id, result: respond(body.method, body.params || {}) }) }); }
+		if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(route.request().postData() || '{}'); await new Promise((r) => setTimeout(r, 150)); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(require('./mock').reply(body.id, body.method, body.params || {})) }); }
 		let f = path.join(ROOT, u.pathname); if (f.endsWith('/')) f += 'index.html'; if (!fs.existsSync(f)) return route.fulfill({ status: 404, body: 'nf' });
 		return route.fulfill({ status: 200, contentType: f.endsWith('.html') ? 'text/html' : 'application/octet-stream', body: fs.readFileSync(f) }); });
 	await ctx.route('http://192.168.5.1:9090/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>dash</title>ok' }));

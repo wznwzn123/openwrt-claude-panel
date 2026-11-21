@@ -13,10 +13,21 @@ function handle(msg) {
 		return is_notification ? null : rpc_error(id, -32001, '这是 Claude 连接器地址，不能用来打开面板');
 	// 官网「打开面板」的入口：只能拿票换手机钥匙
 	if (MODE == 'open') {
-		if (msg.method != 'panel/open_login') return is_notification ? null : rpc_error(id, -32601, 'not found');
-		try { return rpc_result(id, P.open_login(p)); }
+		// 6.0：手机不再存登录密钥，输登录码（官网的或应急的）也从这里进；登录码 8 位、10 分钟最多错 10 次
+		if (msg.method != 'panel/open_login' && msg.method != 'panel/device_approve') return is_notification ? null : rpc_error(id, -32601, 'not found');
+		try { return rpc_result(id, msg.method == 'panel/open_login' ? P.open_login(p) : P.device_approve(p)); }
 		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
+	// 6.0 第 6 项：通行证地址。只有「拿手机钥匙换通行证」不用带通行证；别的请求都要带，并且只给手机面板用
+	if (MODE == 'pass') {
+		if (msg.method == 'panel/pass_new') return is_notification ? null : pass_new_rpc(id, p);
+		if (!pass_ok(msg.pass)) return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32013, message: '通行证过期了' } };
+		if (msg.client != 'panel') return is_notification ? null : rpc_error(id, -32001, '这个地址只给手机面板用');
+	}
+	// 自建版开了「登录要输路由器密码」（第 12 项）：登录地址只能用来换手机钥匙，不能直接操作路由器
+	// （路由器自己的小工具带 local. 钥匙照常；Claude 用单独的连接器地址，不受影响）
+	if (MODE == 'token' && !NEED_DEV && login_pw_on() && msg.method != 'panel/pass_login' && !(type(msg.dev) == 'string' && dev_ok(msg.dev)))
+		return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32015, message: msg.client == 'panel' ? '这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码' : '这台路由器开了「登录要输路由器后台密码」，登录地址不能直接用。Claude 请用「我的主页 → 敏感信息」里的 Claude 连接器地址' } };
 	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（从官网打开面板时拿到的）
 	if (MODE == 'token' && NEED_DEV && msg.method != 'panel/device_approve' && !dev_ok(msg.dev)) {
 		if (is_notification) return null;
@@ -28,7 +39,7 @@ function handle(msg) {
 			data: { need_code: true, hub: h } } };
 	}
 	// 主账号 / 子账号：按这台手机属于哪个账号检查权限
-	if (MODE == 'token' && NEED_DEV && DEV) {
+	if (NEED_DEV && DEV) { // 托管版：登录密钥地址（旧手机）和通行证地址都按账号查权限
 		let why = fam_check();
 		if (why) {
 			if (is_notification) return null;
@@ -44,8 +55,9 @@ function handle(msg) {
 	if (substr(msg.method, 0, 6) == 'panel/') {
 		let fn = P[substr(msg.method, 6)];
 		if (type(fn) != 'function') return rpc_error(id, -32601, '面板接口不存在：' + msg.method);
+		ERR_CODE = null;
 		try { return rpc_result(id, fn(p)); }
-		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
+		catch (e) { return rpc_error(id, ERR_CODE ?? -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
 
 	switch (msg.method) {
@@ -113,11 +125,13 @@ function main() {
 		MODE = 'ai';
 	else if (path == '/open' && is_hosted())
 		MODE = 'open';
+	else if (path == '/pass')
+		MODE = 'pass';
 	else if (length(token) < 16 || path != '/' + token) {
 		reply('404 Not Found', { error: 'not found' });
 		return;
 	}
-	NEED_DEV = MODE == 'token' && is_hosted();
+	NEED_DEV = (MODE == 'token' || MODE == 'pass') && is_hosted();
 
 	let method = getenv('REQUEST_METHOD') ?? 'GET';
 	if (method == 'GET' || method == 'HEAD') {

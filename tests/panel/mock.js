@@ -170,7 +170,12 @@ function respond(method, p) {
 	case 'unlock': { const ST = { ytb: [0, ''], claude: [1, ''] }; return { results: (p.services || ['claude']).map((k) => ({ key: k, label: k, st: (ST[k] || [2])[0], region: (ST[k] || [2, 'HK'])[1], node: '🇭🇰香港02 专线 3x' })) }; }
 	case 'diag': return { text: 'OpenClash 连接诊断结果\n域名：' + p.addr };
 	case 'files': return { files: p.kind === 'overwrite' ? [{ name: 'default', size: 3000, mtime: 1793001360 }, { name: 'Tailscale', size: 300, mtime: 1793001360 }] : [{ name: 'rules.yaml', size: 1200, mtime: 1793001360 }] };
-	case 'file_read': return { name: p.name, size: 40, mtime: 1, content: p.name.endsWith('.list') ? 'rules:\n- DOMAIN-SUFFIX,douyin.com,🇹🇼台湾01\n' : 'mixed-port: 7893\nproxies: []\n' };
+	case 'file_save': {
+		// 打开以后文件被别处改过（FSUM.v 变了）：路由器拒绝保存，除非确认覆盖
+		if (p.base != null && !p.overwrite && p.base !== FSUM.v) throw new Error('这个文件在你打开以后被别处改过（原版页面、Claude 或别的手机），为了不把那边的改动盖掉，这次没有保存。');
+		FSUM.saved.push(p); return { ok: true };
+	}
+	case 'file_read': return { sum: FSUM.v, name: p.name, size: 40, mtime: 1, content: p.name.endsWith('.list') ? 'rules:\n- DOMAIN-SUFFIX,douyin.com,🇹🇼台湾01\n' : 'mixed-port: 7893\nproxies: []\n' };
 	case 'oc_sections': return { sections: p.type === 'dns_servers' ? [{ sid: 'cfg026193', enabled: '1', group: 'nameserver', ip: '114.114.114.114', type: 'udp' }, { sid: 'cfg036193', enabled: '0', group: 'fallback', ip: 'dns.google', type: 'https', port: '443', specific_group: 'Zou' }] : p.type === 'authentication' ? [{ sid: 'cfg28b425', enabled: '1', username: 'Clash', password: 'xx' }] : p.type === 'config_overwrite' ? [{ sid: 'cfg2741a1', name: 'default', enable: '0', url: 'https://raw.githubusercontent.com/x/default', type: 'http', order: '1', update_days: 'off', update_hour: 'off' }] : [] };
 	case 'rules': return { total: 3000, matched: p.filter ? 2 : 3000, rules: [{ i: 1, type: 'DomainSuffix', payload: 'douyin.com', proxy: '🇹🇼台湾01' }, { i: 2, type: 'RuleSet', payload: 'cn_domain', proxy: 'DIRECT', size: 8888 }, { i: 3, type: 'Match', payload: '', proxy: 'REJECT' }] };
 	case 'logs': return { plugin: '2026-10-28 12:31:17 [Info] 【1/10】Reload OpenClash Firewall Rules...\n2026-10-28 12:31:19 [Tip] DNS Hijacking Mode is Dnsmasq Redirect...', core: 'time="2026-10-28T04:37:02.593821622Z" level=warning msg="[TCP] dial DIRECT error"\ntime="2026-10-28T04:37:08.552444596Z" level=info msg="[TCP] 192.168.5.8 match GeoIP(cn) using DIRECT"', start: '2026-10-28 12:31:20 [Tip] Firewall Reload Successful!', level: 'warning', size: 12345 };
@@ -278,4 +283,5 @@ function cloudStatus(mode, tablet = true) {
 			: [{ t: st.outStart + 150e3, lvl: 'err', kind: 'cloud', msg: LABEL[mode] + '：' + st.msg, detail: '', from: Math.round(st.outStart / 1000), to: 0 }] };
 }
 const DYD = { d: null, runs: 0 };
-module.exports = { DN, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU };
+const FSUM = { v: 'S1', saved: [] };
+module.exports = { FSUM, DN, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU };

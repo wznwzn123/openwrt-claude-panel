@@ -267,6 +267,9 @@ cloud_beat() {
 	( curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" >/dev/null 2>&1 & )
 }
 
+# 一键更新正在装（15 分钟内的更新锁）：装的时候会重启面板服务和隧道，看门狗这时不去「修」，免得两边一起重启
+updating() { local l=${WD_UPDLOCK:-/tmp/cmcp_update.lock}; [ -d "$l" ] && [ $(( $(date +%s) - $(stat -c %Y "$l" 2>/dev/null || echo 0) )) -lt 900 ]; }
+
 check() {
 	mkdir /tmp/cmcp_wd.lock 2>/dev/null || return
 	load
@@ -327,7 +330,7 @@ $(tunlog)"
 		fi
 		# 外网是通的才重启隧道，断网时重启没用
 		# 自动处理里关掉了「隧道断了自动重启」：只记录，不重启
-		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && [ ! -f "$D/off.tunrestart" ] && restart_tunnel
+		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && [ ! -f "$D/off.tunrestart" ] && ! updating && restart_tunnel
 	fi
 
 	# 面板服务
@@ -338,7 +341,8 @@ $(tunlog)"
 		PFAIL=$((PFAIL + 1))
 		if [ "$PFAIL" -ge 2 ] && [ "$PANEL" = ok ]; then
 			PANEL=down
-			if [ -f "$D/off.panelrestart" ]; then ev err panel "面板服务没响应（自动重启已关掉，没有重启）" ""
+			if updating; then ev info panel "面板服务没响应：正在一键更新，等更新装完" ""
+			elif [ -f "$D/off.panelrestart" ]; then ev err panel "面板服务没响应（自动重启已关掉，没有重启）" ""
 			elif [ "$DRYRUN" = 1 ]; then ev err panel "面板服务没响应，已自动重启（测试模式，没有真的重启）" ""
 			else /etc/init.d/claude-mcp restart >/dev/null 2>&1; ev err panel "面板服务没响应，已自动重启" ""; fi
 		fi

@@ -68,6 +68,8 @@ P.auto = function(a) {
 		on, autosw: act?.kind == 'clash' ? !!cmcp_readj(D + '/autosw.json', { enabled: true }).enabled : null,
 		// 哪些用得上：云端备份要完整版或托管版；面板线路自动选择要 OpenClash
 		cloud: !!stat(D + '/cloud.conf'), route: !!stat('/etc/init.d/openclash'),
+		// 面板线路自动选择要「拉黑名单」规则集启用了才起作用（换路线就是刷新这个规则集）
+		route_ready: !!stat('/etc/init.d/openclash') ? bl_custom_ready() : null,
 	};
 };
 

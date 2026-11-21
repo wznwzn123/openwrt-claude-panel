@@ -250,7 +250,7 @@ function renderPz() {
 	const list = Object.entries(PZ.devs || {});
 	if (!list.length) { box.innerHTML = ''; return; }
 	box.innerHTML = `<div class="sectitle"><b>暂停 / 定时断网</b><span class="pill ${list.some(([, e]) => e.on) ? 'warnc' : ''}">${list.filter(([, e]) => e.on).length} 台暂停中</span></div>
-		<section class="card list">${list.map(([mac, e]) => `<div class="file" data-pzm="${esc(mac)}"><div><b>${esc(e.name || (devices.find((d) => d.mac === mac) || {}).name || mac)}</b><span class="muted pzl">${pzDesc(e)}</span></div><button class="btn sm ${e.on ? 'good' : ''}" data-pzset>${e.on && e.until ? '恢复' : '设置'}</button></div>`).join('')}</section>`;
+		<section class="card list">${list.map(([mac, e]) => `<div class="file" data-pzm="${esc(mac)}"><div><b>${esc((devices.find((d) => d.mac === mac) || {}).name || e.name || mac)}</b><span class="muted pzl">${pzDesc(e)}</span></div><button class="btn sm ${e.on ? 'good' : ''}" data-pzset>${e.on && e.until ? '恢复' : '设置'}</button></div>`).join('')}</section>`;
 }
 $('pzBox').addEventListener('click', (e) => {
 	const row = e.target.closest('[data-pzm]'); if (!row) return;
@@ -330,7 +330,7 @@ async function loadBlack() {
 		<p class="muted" style="margin-bottom:${ok ? 0 : 12}px">被拉黑的设备不走代理，只能用大陆网络（国内网站正常，海外网站打不开）。拉黑、解除都马上生效，不用重启。</p>
 		${ok ? '' : `<div class="notice w" style="margin-bottom:10px">${!blk.custom_on ? '「自定义规则」总开关是关着的，拉黑不会生效。' : '拉黑功能还没启用（需要重启 OpenClash 一次）。'}</div><button class="btn primary" data-setup style="width:100%;padding:12px">启用拉黑功能</button>`}</div>
 		<div class="sectitle"><b>已拉黑</b><span class="pill">${blk.entries.length} 台</span></div>
-		<section class="card list">${blk.entries.length ? blk.entries.map((e, i) => `<div class="file" data-e="${i}"><div><b>${esc(e.name || (devs.find((d) => d.mac && d.mac === e.mac) || {}).name || e.ip)}</b><span class="muted">${esc(e.ip)}${e.mac ? ' · ' + esc(e.mac) : ' · 按 IP'}${e.at ? ' · ' + ts(e.at) + ' 拉黑' : ''}</span></div><button class="btn sm good" data-un>解除</button></div>`).join('') : '<div class="empty">还没有拉黑任何设备</div>'}</section>
+		<section class="card list">${blk.entries.length ? blk.entries.map((e, i) => `<div class="file" data-e="${i}"><div><b>${esc((devs.find((d) => d.mac && d.mac === e.mac) || {}).name || e.name || e.ip)}</b><span class="muted">${esc(e.ip)}${e.mac ? ' · ' + esc(e.mac) : ' · 按 IP'}${e.at ? ' · ' + ts(e.at) + ' 拉黑' : ''}</span></div><button class="btn sm good" data-un>解除</button></div>`).join('') : '<div class="empty">还没有拉黑任何设备</div>'}</section>
 		<div class="sectitle"><b>其他设备</b><button class="btn sm" data-manual>按 IP 添加</button></div>
 		<section class="grid tasks" data-devs>${others.length ? others.map(([d, i]) => devCard(d, i, 'data-d')).join('') : '<div class="card empty">没有其他设备</div>'}</section>`;
 	box.onclick = async (e) => {
@@ -463,10 +463,11 @@ function autoItems(d) {
 	add('出问题时自动修', 'panelrestart', on.panelrestart !== false, '面板服务卡住自动重启', '面板没响应时自动重启面板服务。关掉后面板卡住只能自己重启路由器或服务');
 	add('出问题时自动修', 'cacheclean', on.cacheclean !== false, '内存快满时清理缓存', '内存快用完时先清理系统缓存，不影响上网');
 	if (d.oc) add('出问题时自动修', 'memguard', !!d.memguard, '内存不够时自动重启 ' + pn, '清理缓存后还不够，就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
-	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知（在「节点」页可以选看哪个策略组）');
+	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知；你手动换节点后 10 分钟内不会把它换走（在「节点」页可以选看哪个策略组）');
 	// 开关看「有没有打开」（want）；打开了但有的插件还没生效，下面另外提示
 	if (d.oc) add('网络', 'tunbypass', !!(d.tb && (d.tb.want ?? d.tb.on)), '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
-	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法');
+	// 面板线路自动选择靠「拉黑名单」那个规则集换路线：规则集没启用时开着也不起作用，要说清楚
+	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「拉黑名单」页启用规则集' : ''));
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
 	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
 	if (d.cloud) add('提醒和备份', 'cloudbackup', on.cloudbackup !== false, '云端自动备份', '每天 4:07 把路由器设置备份到云端，保留最近 10 份。关掉后「立即备份」照样能用');

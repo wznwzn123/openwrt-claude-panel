@@ -174,6 +174,8 @@ class Form {
 			try {
 				const r = await P('file_read', { kind: 'custom', name: base(o.file) });
 				this.files[o.file] = this.fileOrig[o.file] = r.content ?? '';
+				if (!this.fileSum) this.fileSum = {};
+				this.fileSum[o.file] = r.sum;
 			} catch (e) { this.files[o.file] = this.fileOrig[o.file] = ''; }
 			if (this.root) {
 				$$('[data-i]', this.root).forEach((row) => {
@@ -185,8 +187,9 @@ class Form {
 	async saveFiles(restartAfter) {
 		const fs = Object.keys(this.files).filter((f) => this.fileDirty(f));
 		for (const f of fs) {
-			await P('file_save', { kind: 'custom', name: base(f), content: this.files[f], restart: false });
+			await fileSave({ kind: 'custom', name: base(f), content: this.files[f], restart: false, base: (this.fileSum || {})[f] });
 			this.fileOrig[f] = this.files[f];
+			if (this.fileSum) delete this.fileSum[f]; // 存过以后不再比对（下次打开重新读）
 		}
 		return fs.length;
 	}

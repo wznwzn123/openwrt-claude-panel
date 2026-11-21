@@ -44,7 +44,7 @@ function renderAsw() {
 	const sday = (x) => { const y = new Date(x * 1000); return y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0'); };
 	const subRow = sb && (sb.total || sb.expire) ? `<div class="kv"><span>机场订阅</span><span class="${sbad ? 'badc' : ''}">${sb.total ? `剩 ${B(Math.max(0, sb.total - sb.up - sb.down))} / 共 ${B(sb.total)}` : ''}${sb.total && sb.expire ? ' · ' : ''}${sb.expire ? sday(sb.expire) + ' 到期' : ''}</span></div>
 		${sbad ? `<div class="notice w" style="margin-top:8px">${sbad === 'traffic' ? '订阅流量用光了' : '订阅已经到期'}：这时节点连不上是因为这个，换节点也没用，所以<b>不会自动切换</b>，只推送提醒你。续费或重置流量后自动恢复。</div>` : ''}` : '';
-	el.innerHTML = `<label class="kv aswon"><span><b>节点挂了自动换</b><span class="muted">每分钟测一次「${esc(s.group)}」正在用的节点，连不上就换到同地区延迟最低的节点（同地区都不通才换其他地区），并推送到微信</span></span><span class="sw"><input type="checkbox" data-aswon ${s.enabled ? 'checked' : ''}><i></i></span></label>
+	el.innerHTML = `<label class="kv aswon"><span><b>节点挂了自动换</b><span class="muted">每分钟测一次「${esc(s.group)}」正在用的节点，连不上就换到同地区延迟最低的节点（同地区都不通才换其他地区），并推送到微信；你手动换节点后 10 分钟内不会把它换走</span></span><span class="sw"><input type="checkbox" data-aswon ${s.enabled ? 'checked' : ''}><i></i></span></label>
 		${sel}
 		${subRow}
 		${s.enabled && isGroup ? `<div class="notice w" style="margin-top:8px">「${esc(s.group)}」现在选的是「${esc(s.now)}」（策略组），自动切换只在选了具体节点时才起作用。</div>` : ''}

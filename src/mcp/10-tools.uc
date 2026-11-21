@@ -108,6 +108,8 @@ T.switch_proxy = function(a) {
 
 	let before = g.now;
 	api('PUT', '/proxies/' + urlenc(a.group), { name: a.node });
+	// 记下「刚手动换过」：节点自动切换 10 分钟内不把它换走（不然你刚选的节点一测不通就被换掉）
+	writefile('/tmp/cmcp_autosw_manual', '' + time());
 	let after = api('GET', '/proxies/' + urlenc(a.group))?.now;
 	let msg = sprintf('已切换策略组 %s：%s → %s', a.group, before, after);
 	if (a.close_connections) {

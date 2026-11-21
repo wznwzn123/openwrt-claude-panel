@@ -1983,6 +1983,8 @@ class Form {
 			try {
 				const r = await P('file_read', { kind: 'custom', name: base(o.file) });
 				this.files[o.file] = this.fileOrig[o.file] = r.content ?? '';
+				if (!this.fileSum) this.fileSum = {};
+				this.fileSum[o.file] = r.sum;
 			} catch (e) { this.files[o.file] = this.fileOrig[o.file] = ''; }
 			if (this.root) {
 				$$('[data-i]', this.root).forEach((row) => {
@@ -1994,8 +1996,9 @@ class Form {
 	async saveFiles(restartAfter) {
 		const fs = Object.keys(this.files).filter((f) => this.fileDirty(f));
 		for (const f of fs) {
-			await P('file_save', { kind: 'custom', name: base(f), content: this.files[f], restart: false });
+			await fileSave({ kind: 'custom', name: base(f), content: this.files[f], restart: false, base: (this.fileSum || {})[f] });
 			this.fileOrig[f] = this.files[f];
+			if (this.fileSum) delete this.fileSum[f]; // 存过以后不再比对（下次打开重新读）
 		}
 		return fs.length;
 	}
@@ -2629,7 +2632,7 @@ function renderAsw() {
 	const sday = (x) => { const y = new Date(x * 1000); return y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0'); };
 	const subRow = sb && (sb.total || sb.expire) ? `<div class="kv"><span>机场订阅</span><span class="${sbad ? 'badc' : ''}">${sb.total ? `剩 ${B(Math.max(0, sb.total - sb.up - sb.down))} / 共 ${B(sb.total)}` : ''}${sb.total && sb.expire ? ' · ' : ''}${sb.expire ? sday(sb.expire) + ' 到期' : ''}</span></div>
 		${sbad ? `<div class="notice w" style="margin-top:8px">${sbad === 'traffic' ? '订阅流量用光了' : '订阅已经到期'}：这时节点连不上是因为这个，换节点也没用，所以<b>不会自动切换</b>，只推送提醒你。续费或重置流量后自动恢复。</div>` : ''}` : '';
-	el.innerHTML = `<label class="kv aswon"><span><b>节点挂了自动换</b><span class="muted">每分钟测一次「${esc(s.group)}」正在用的节点，连不上就换到同地区延迟最低的节点（同地区都不通才换其他地区），并推送到微信</span></span><span class="sw"><input type="checkbox" data-aswon ${s.enabled ? 'checked' : ''}><i></i></span></label>
+	el.innerHTML = `<label class="kv aswon"><span><b>节点挂了自动换</b><span class="muted">每分钟测一次「${esc(s.group)}」正在用的节点，连不上就换到同地区延迟最低的节点（同地区都不通才换其他地区），并推送到微信；你手动换节点后 10 分钟内不会把它换走</span></span><span class="sw"><input type="checkbox" data-aswon ${s.enabled ? 'checked' : ''}><i></i></span></label>
 		${sel}
 		${subRow}
 		${s.enabled && isGroup ? `<div class="notice w" style="margin-top:8px">「${esc(s.group)}」现在选的是「${esc(s.now)}」（策略组），自动切换只在选了具体节点时才起作用。</div>` : ''}
@@ -2885,6 +2888,15 @@ async function fileSheet(kind, f) {
 		return busy(null, async () => { await P('file_delete', { kind, name: f.name }); toast('已删除'); S.state = null; refresh(true); });
 	}
 }
+// 保存 OpenClash 的文件：别处改过（先问要不要覆盖）、格式检查没通过（先问要不要强制保存）都先问用户
+async function fileSave(args) {
+	try { return await P('file_save', args); }
+	catch (e) {
+		if (/被别处改过/.test(e.message) && !args.overwrite && await confirmBox('文件在别处改过', e.message + '\n\n要用你现在的内容覆盖吗？不覆盖的话，取消后重新打开就能看到最新的内容。', '覆盖', true)) return fileSave({ ...args, overwrite: true });
+		if (/校验没通过/.test(e.message) && !args.force && await confirmBox('格式检查没通过', e.message + '\n\n仍然要保存吗？', '强制保存', true)) return fileSave({ ...args, force: true });
+		throw e;
+	}
+}
 async function editFile(kind, name, active, opts = {}) {
 	let r;
 	try { toast('读取中…'); r = await P('file_read', { kind, name }); toastHide(); } catch (e) { return handleErr(e); }
@@ -2900,12 +2912,7 @@ async function editFile(kind, name, active, opts = {}) {
 		const ta = m.querySelector('[data-t]');
 		const save = (restart) => async () => {
 			if (restart && !(await confirmBox('保存并重启', '保存后重启 OpenClash，断网 10–30 秒。', '保存并重启'))) return;
-			let res;
-			try { res = await P('file_save', { kind, name, content: ta.value, restart }); }
-			catch (e) {
-				if (/校验没通过/.test(e.message) && await confirmBox('格式检查没通过', e.message + '\n\n仍然要保存吗？', '强制保存', true)) res = await P('file_save', { kind, name, content: ta.value, restart, force: true });
-				else throw e;
-			}
+			const res = await fileSave({ kind, name, content: ta.value, restart, base: r.sum });
 			close(true); toast(restart ? '已保存，OpenClash 正在重启' : '已保存' + (res && res.backup ? '（旧版本已备份）' : ''));
 			if (restart) watchJobs();
 			if (opts.after) opts.after();
@@ -2933,8 +2940,7 @@ async function newFile(kind) {
 			let name = n.value.trim();
 			if (!name) throw new Error('请填写文件名');
 			if (isCfg && !/\.ya?ml$/.test(name)) name += '.yaml';
-			try { await P('file_save', { kind, name, content: t.value }); }
-			catch (e) { if (/校验没通过/.test(e.message) && await confirmBox('格式检查没通过', e.message + '\n\n仍然要保存吗？', '强制保存', true)) await P('file_save', { kind, name, content: t.value, force: true }); else throw e; }
+			await fileSave({ kind, name, content: t.value });
 			close(true); toast('已保存'); S.state = null; refresh(true);
 		});
 	});
@@ -3564,7 +3570,7 @@ function renderPz() {
 	const list = Object.entries(PZ.devs || {});
 	if (!list.length) { box.innerHTML = ''; return; }
 	box.innerHTML = `<div class="sectitle"><b>暂停 / 定时断网</b><span class="pill ${list.some(([, e]) => e.on) ? 'warnc' : ''}">${list.filter(([, e]) => e.on).length} 台暂停中</span></div>
-		<section class="card list">${list.map(([mac, e]) => `<div class="file" data-pzm="${esc(mac)}"><div><b>${esc(e.name || (devices.find((d) => d.mac === mac) || {}).name || mac)}</b><span class="muted pzl">${pzDesc(e)}</span></div><button class="btn sm ${e.on ? 'good' : ''}" data-pzset>${e.on && e.until ? '恢复' : '设置'}</button></div>`).join('')}</section>`;
+		<section class="card list">${list.map(([mac, e]) => `<div class="file" data-pzm="${esc(mac)}"><div><b>${esc((devices.find((d) => d.mac === mac) || {}).name || e.name || mac)}</b><span class="muted pzl">${pzDesc(e)}</span></div><button class="btn sm ${e.on ? 'good' : ''}" data-pzset>${e.on && e.until ? '恢复' : '设置'}</button></div>`).join('')}</section>`;
 }
 $('pzBox').addEventListener('click', (e) => {
 	const row = e.target.closest('[data-pzm]'); if (!row) return;
@@ -3644,7 +3650,7 @@ async function loadBlack() {
 		<p class="muted" style="margin-bottom:${ok ? 0 : 12}px">被拉黑的设备不走代理，只能用大陆网络（国内网站正常，海外网站打不开）。拉黑、解除都马上生效，不用重启。</p>
 		${ok ? '' : `<div class="notice w" style="margin-bottom:10px">${!blk.custom_on ? '「自定义规则」总开关是关着的，拉黑不会生效。' : '拉黑功能还没启用（需要重启 OpenClash 一次）。'}</div><button class="btn primary" data-setup style="width:100%;padding:12px">启用拉黑功能</button>`}</div>
 		<div class="sectitle"><b>已拉黑</b><span class="pill">${blk.entries.length} 台</span></div>
-		<section class="card list">${blk.entries.length ? blk.entries.map((e, i) => `<div class="file" data-e="${i}"><div><b>${esc(e.name || (devs.find((d) => d.mac && d.mac === e.mac) || {}).name || e.ip)}</b><span class="muted">${esc(e.ip)}${e.mac ? ' · ' + esc(e.mac) : ' · 按 IP'}${e.at ? ' · ' + ts(e.at) + ' 拉黑' : ''}</span></div><button class="btn sm good" data-un>解除</button></div>`).join('') : '<div class="empty">还没有拉黑任何设备</div>'}</section>
+		<section class="card list">${blk.entries.length ? blk.entries.map((e, i) => `<div class="file" data-e="${i}"><div><b>${esc((devs.find((d) => d.mac && d.mac === e.mac) || {}).name || e.name || e.ip)}</b><span class="muted">${esc(e.ip)}${e.mac ? ' · ' + esc(e.mac) : ' · 按 IP'}${e.at ? ' · ' + ts(e.at) + ' 拉黑' : ''}</span></div><button class="btn sm good" data-un>解除</button></div>`).join('') : '<div class="empty">还没有拉黑任何设备</div>'}</section>
 		<div class="sectitle"><b>其他设备</b><button class="btn sm" data-manual>按 IP 添加</button></div>
 		<section class="grid tasks" data-devs>${others.length ? others.map(([d, i]) => devCard(d, i, 'data-d')).join('') : '<div class="card empty">没有其他设备</div>'}</section>`;
 	box.onclick = async (e) => {
@@ -3777,10 +3783,11 @@ function autoItems(d) {
 	add('出问题时自动修', 'panelrestart', on.panelrestart !== false, '面板服务卡住自动重启', '面板没响应时自动重启面板服务。关掉后面板卡住只能自己重启路由器或服务');
 	add('出问题时自动修', 'cacheclean', on.cacheclean !== false, '内存快满时清理缓存', '内存快用完时先清理系统缓存，不影响上网');
 	if (d.oc) add('出问题时自动修', 'memguard', !!d.memguard, '内存不够时自动重启 ' + pn, '清理缓存后还不够，就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
-	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知（在「节点」页可以选看哪个策略组）');
+	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知；你手动换节点后 10 分钟内不会把它换走（在「节点」页可以选看哪个策略组）');
 	// 开关看「有没有打开」（want）；打开了但有的插件还没生效，下面另外提示
 	if (d.oc) add('网络', 'tunbypass', !!(d.tb && (d.tb.want ?? d.tb.on)), '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
-	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法');
+	// 面板线路自动选择靠「拉黑名单」那个规则集换路线：规则集没启用时开着也不起作用，要说清楚
+	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「拉黑名单」页启用规则集' : ''));
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
 	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
 	if (d.cloud) add('提醒和备份', 'cloudbackup', on.cloudbackup !== false, '云端自动备份', '每天 4:07 把路由器设置备份到云端，保留最近 10 份。关掉后「立即备份」照样能用');

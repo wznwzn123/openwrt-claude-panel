@@ -42,6 +42,15 @@ async function fileSheet(kind, f) {
 		return busy(null, async () => { await P('file_delete', { kind, name: f.name }); toast('已删除'); S.state = null; refresh(true); });
 	}
 }
+// 保存 OpenClash 的文件：别处改过（先问要不要覆盖）、格式检查没通过（先问要不要强制保存）都先问用户
+async function fileSave(args) {
+	try { return await P('file_save', args); }
+	catch (e) {
+		if (/被别处改过/.test(e.message) && !args.overwrite && await confirmBox('文件在别处改过', e.message + '\n\n要用你现在的内容覆盖吗？不覆盖的话，取消后重新打开就能看到最新的内容。', '覆盖', true)) return fileSave({ ...args, overwrite: true });
+		if (/校验没通过/.test(e.message) && !args.force && await confirmBox('格式检查没通过', e.message + '\n\n仍然要保存吗？', '强制保存', true)) return fileSave({ ...args, force: true });
+		throw e;
+	}
+}
 async function editFile(kind, name, active, opts = {}) {
 	let r;
 	try { toast('读取中…'); r = await P('file_read', { kind, name }); toastHide(); } catch (e) { return handleErr(e); }
@@ -57,12 +66,7 @@ async function editFile(kind, name, active, opts = {}) {
 		const ta = m.querySelector('[data-t]');
 		const save = (restart) => async () => {
 			if (restart && !(await confirmBox('保存并重启', '保存后重启 OpenClash，断网 10–30 秒。', '保存并重启'))) return;
-			let res;
-			try { res = await P('file_save', { kind, name, content: ta.value, restart }); }
-			catch (e) {
-				if (/校验没通过/.test(e.message) && await confirmBox('格式检查没通过', e.message + '\n\n仍然要保存吗？', '强制保存', true)) res = await P('file_save', { kind, name, content: ta.value, restart, force: true });
-				else throw e;
-			}
+			const res = await fileSave({ kind, name, content: ta.value, restart, base: r.sum });
 			close(true); toast(restart ? '已保存，OpenClash 正在重启' : '已保存' + (res && res.backup ? '（旧版本已备份）' : ''));
 			if (restart) watchJobs();
 			if (opts.after) opts.after();
@@ -90,8 +94,7 @@ async function newFile(kind) {
 			let name = n.value.trim();
 			if (!name) throw new Error('请填写文件名');
 			if (isCfg && !/\.ya?ml$/.test(name)) name += '.yaml';
-			try { await P('file_save', { kind, name, content: t.value }); }
-			catch (e) { if (/校验没通过/.test(e.message) && await confirmBox('格式检查没通过', e.message + '\n\n仍然要保存吗？', '强制保存', true)) await P('file_save', { kind, name, content: t.value, force: true }); else throw e; }
+			await fileSave({ kind, name, content: t.value });
 			close(true); toast('已保存'); S.state = null; refresh(true);
 		});
 	});

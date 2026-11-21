@@ -122,9 +122,35 @@ reenc() {
 jset() { printf '{"op":"%s","id":"%s","state":"%s","msg":"%s","size":%s,"at":%s}\n' "$1" "$2" "$3" "$(printf '%s' "$4" | tr -d '"\\' | tr '\n\r\t' '   ' | cut -c1-300)" "${5:-0}" "$(date +%s)" > "$JOB.tmp" && mv -f "$JOB.tmp" "$JOB"; }
 # 还原时保持现在的：登录密钥和连接器钥匙、登录着的手机、原版页面门禁钥匙、「登录要输路由器密码」开关、路由器小工具钥匙、托管和云端钥匙、备份加密密钥
 # （不然之后移除的手机、换掉的登录地址又能用了）。Wi-Fi、插件这些设置照常还原；现在没有的文件，还原后也删掉
-KEEP="config.json devices.json luci_key luci_key.v6 login_pw local.key hub.conf cloud.conf bk.key"
-keep_save() { local f; rm -rf "$T/cmcp_keep"; mkdir -p "$T/cmcp_keep" && chmod 700 "$T/cmcp_keep" || return 1; for f in $KEEP; do if [ -e "$D/$f" ]; then cp -p "$D/$f" "$T/cmcp_keep/$f" || return 1; else : > "$T/cmcp_keep/$f.none"; fi; done; }
-keep_back() { local f; for f in $KEEP; do if [ -e "$T/cmcp_keep/$f.none" ]; then rm -f "$D/$f"; else cp -p "$T/cmcp_keep/$f" "$D/$f"; fi; done; true; }
+# 托管和隧道的身份（hub.conf、cloud.conf、tunnel_token、hostname）也保持现在的：备份之后隧道重新开过的话，换回旧的就连不上了
+# 面板自己的程序文件（version、luci-gate 等）也保持现在的版本，见下面 PROG
+KEEP="config.json devices.json luci_key luci_key.v6 login_pw local.key hub.conf cloud.conf tunnel_token hostname bk.key version luci-gate oc_cbi.lua oc_line.lua cfd.sums cfd.ram ucode.files"
+# 面板程序保持现在的版本（用户 11/22 定）：还原的只是设置，不会把面板换回备份时的旧版本
+PROG="/www-claude-mcp /usr/share/ucode/cmcp /usr/share/claude-mcp/ucrt /usr/libexec/cmcp-ucode /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced"
+prog_save() {
+	local p list=""
+	for p in $PROG; do [ -e "${BK_ROOT:-}$p" ] && list="$list ${BK_ROOT:-}$p"; done
+	for p in "${BK_ROOT:-}"/usr/sbin/cmcp-*; do [ -e "$p" ] && list="$list $p"; done
+	[ -n "$list" ] || return 0
+	# shellcheck disable=SC2086
+	tar czf "$T/cmcp_keep/prog.tgz" $list 2>/dev/null || return 1
+	grep -F '/usr/sbin/cmcp-' "${BK_ROOT:-}/etc/crontabs/root" > "$T/cmcp_keep/cron" 2>/dev/null
+	grep -E 'claude-mcp|cmcp' "${BK_ROOT:-}/etc/sysupgrade.conf" > "$T/cmcp_keep/sysup" 2>/dev/null
+	return 0
+}
+prog_back() {
+	local l
+	[ -s "$T/cmcp_keep/prog.tgz" ] && tar xzf "$T/cmcp_keep/prog.tgz" -C / 2>/dev/null
+	# 定时任务和「系统升级时保留」的清单：面板那几行换成现在的
+	if [ -f "${BK_ROOT:-}/etc/crontabs/root" ] || [ -s "$T/cmcp_keep/cron" ]; then
+		sed -i '/\/usr\/sbin\/cmcp-/d' "${BK_ROOT:-}/etc/crontabs/root" 2>/dev/null
+		cat "$T/cmcp_keep/cron" >> "${BK_ROOT:-}/etc/crontabs/root" 2>/dev/null
+	fi
+	[ -s "$T/cmcp_keep/sysup" ] && while IFS= read -r l; do grep -qxF "$l" "${BK_ROOT:-}/etc/sysupgrade.conf" 2>/dev/null || echo "$l" >> "${BK_ROOT:-}/etc/sysupgrade.conf"; done < "$T/cmcp_keep/sysup"
+	true
+}
+keep_save() { local f; rm -rf "$T/cmcp_keep"; mkdir -p "$T/cmcp_keep" && chmod 700 "$T/cmcp_keep" || return 1; for f in $KEEP; do if [ -e "$D/$f" ]; then cp -p "$D/$f" "$T/cmcp_keep/$f" || return 1; else : > "$T/cmcp_keep/$f.none"; fi; done; prog_save; }
+keep_back() { local f; prog_back; for f in $KEEP; do if [ -e "$T/cmcp_keep/$f.none" ]; then rm -f "$D/$f"; else cp -p "$T/cmcp_keep/$f" "$D/$f"; fi; done; true; }
 
 case "$1" in
 	decrypt) decrypt "$2" "$3"; exit $? ;;

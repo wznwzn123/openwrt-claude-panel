@@ -130,6 +130,34 @@ fs.rmSync(TMP + '/log', { force: true });
 r = (await bk(['job', 'restore', lastId]));
 ok('[任务] 还原失败：不重启，说明原因', !fs.existsSync(TMP + '/log') && job().state === 'error' && /没有重启/.test(job().msg), JSON.stringify(job()));
 
+// 5. 还原时面板程序保持现在的版本（用户 11/22 定）：只还原设置；托管和隧道的身份、定时任务里面板那几行也保持现在的
+{
+	const R = mk('cmcpbkroot-'), w = (f, t) => { fs.mkdirSync(path.dirname(R + f), { recursive: true }); fs.writeFileSync(R + f, t); };
+	fs.writeFileSync(BIN + '/sysupgrade', `#!/bin/sh\ncase "$1" in -l) echo ${FILES}/wifi ;; -r) tar xzf "$2" -C / && echo restored >> ${TMP}/log ;; esac\n`, { mode: 0o755 });
+	// 备份当时：旧版面板、旧的定时任务、旧的隧道
+	w('/www-claude-mcp/panel/index.html', 'OLD'); w('/usr/sbin/cmcp-x', 'OLD'); w('/usr/share/ucode/cmcp/lib.uc', 'OLD');
+	w('/etc/crontabs/root', '0 * * * * other-old\n5 4 * * * /usr/sbin/cmcp-old\n'); w('/etc/sysupgrade.conf', '/etc/claude-mcp/\n');
+	fs.writeFileSync(D + '/tunnel_token', 'OLDTT'); fs.writeFileSync(D + '/version', 'VER=5.2.3');
+	fs.writeFileSync(FILES + '/wifi', Buffer.concat([Buffer.from('OLDWIFI\n'), nc.randomBytes(3000)]));
+	const rel = (x) => x.slice(1);
+	execSync(`tar czf ${TMP}/prog.tgz -C / ${[R + '/www-claude-mcp', R + '/usr/sbin/cmcp-x', R + '/usr/share/ucode/cmcp', R + '/etc/crontabs/root', R + '/etc/sysupgrade.conf', D + '/tunnel_token', D + '/version', FILES + '/wifi'].map(rel).join(' ')}`);
+	store.set('prog1', { buf: fs.readFileSync(TMP + '/prog.tgz'), enc: true, at: 99 });
+	// 现在：新版面板、6.0 的定时任务、新的隧道
+	w('/www-claude-mcp/panel/index.html', 'NEW'); w('/usr/sbin/cmcp-x', 'NEW'); w('/usr/share/ucode/cmcp/lib.uc', 'NEW');
+	w('/etc/crontabs/root', '0 * * * * other-now\n7 4 * * * /usr/sbin/cmcp-backup auto\n'); w('/etc/sysupgrade.conf', '/etc/claude-mcp/\n/usr/sbin/cmcp-bkcrypt\n');
+	fs.writeFileSync(D + '/tunnel_token', 'NOWTT'); fs.writeFileSync(D + '/version', 'VER=6.0.0');
+	fs.writeFileSync(FILES + '/wifi', Buffer.concat([Buffer.from('NOWWIFI\n'), nc.randomBytes(3000)]));
+	fs.rmSync(TMP + '/log', { force: true });
+	// 云端那份是明文旧格式（测试里标成已加密，免得后台的「换成加密」去动它）
+	r = await run(['job', 'restore', 'prog1'], { ...ENV(false), BK_ROOT: R });
+	const rd = (f) => fs.readFileSync(R + f, 'utf8');
+	ok('[还原] 设置回到备份时（Wi-Fi 等）', fs.readFileSync(FILES + '/wifi').includes('OLDWIFI') && /reboot/.test(fs.readFileSync(TMP + '/log', 'utf8')), r.stdout + r.stderr + JSON.stringify(job()));
+	ok('[还原] 面板程序保持现在的版本（网页、小工具、程序库、版本号）', rd('/www-claude-mcp/panel/index.html') === 'NEW' && rd('/usr/sbin/cmcp-x') === 'NEW' && rd('/usr/share/ucode/cmcp/lib.uc') === 'NEW' && fs.readFileSync(D + '/version', 'utf8') === 'VER=6.0.0');
+	ok('[还原] 隧道的身份保持现在的（不会换回旧的连不上）', fs.readFileSync(D + '/tunnel_token', 'utf8') === 'NOWTT');
+	const cr = rd('/etc/crontabs/root');
+	ok('[还原] 定时任务：别的照常还原，面板那几行保持现在的', /other-old/.test(cr) && /cmcp-backup auto/.test(cr) && !/cmcp-old/.test(cr), cr);
+	ok('[还原] 「系统升级时保留」清单里面板现在的几行都在', /cmcp-bkcrypt/.test(rd('/etc/sysupgrade.conf')));
+}
 srv.close();
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

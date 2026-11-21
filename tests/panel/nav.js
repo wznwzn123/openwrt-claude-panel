@@ -135,6 +135,17 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	gateKey = 'lk999';
 	await page.click('#lfRetry'); await page.waitForTimeout(900);
 	ok('点重试恢复', await page.evaluate(() => document.getElementById('lfMask').classList.contains('hidden')));
+	// 6.0 第 53 项：在原版页面里点来点去时路由器换了门禁钥匙（换登录密钥、移除了别的手机）：自动拿新钥匙，回到刚点的那一页
+	ok('门禁钥匙只记在这次打开面板期间（不长期存在手机上）', await page.evaluate(() => !localStorage.getItem('rp_lk') && sessionStorage.getItem('rp_lk') === 'lk999'));
+	ok('门禁 cookie 不长期保存（关掉浏览器就没了）', (await ctx.cookies('http://panel.test/cgi-bin/luci/')).find((c) => c.name === 'cmcp_l')?.expires === -1);
+	for (const [k, n] of [['lk555', 1], ['lk777', 2]]) {
+		gateKey = k; LK.key = k;
+		const nk = calls.filter((c) => c.m === 'panel/luci_key').length;
+		await fr().click('#lfother'); await page.waitForTimeout(1500);
+		ok(`第 ${n} 次换钥匙：自动重新取，打开的是刚点的那一页，用户不用做什么`, (await fr()?.textContent('#lfbody')) === 'admin/whatever' && calls.filter((c) => c.m === 'panel/luci_key').length === nk + 1 && await page.evaluate(() => document.getElementById('lfMask').classList.contains('hidden')), await fr()?.textContent('#lfbody'));
+	}
+	gateKey = 'lk999'; LK.key = 'lk999';
+	await page.click('#refreshBtn'); await page.waitForTimeout(1500);
 
 	/* ---------- 路由器连不上（Cloudflare 错误页） ---------- */
 	luciMode = 'cf';

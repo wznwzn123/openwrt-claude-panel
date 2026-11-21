@@ -32,12 +32,14 @@ const server = http.createServer(async (req, res) => {
 await new Promise((z) => server.listen(8131, z));
 const B = 'http://localhost:8131';
 const breakCss = (t) => t.replace(/color-mix\(/g, 'xcolor-mix(').replace(/\b(oklch|oklab|lch|lab)\(from /g, 'x$1(from ').replace(/\b(oklch|oklab)\(/g, 'x$1(').replace(/:has\(/g, ':xhas(').replace(/(\d)(svh|dvh|lvh)\b/g, '$1xvh');
+// 只改样式、不改脚本：旧浏览器丢的是看不懂的样式，脚本照样是原样（改了脚本，内容安全策略的摘要就对不上、整段被拦，测的就不是真实情况了）
+const breakHtml = (t) => t.split(/(<script\b[\s\S]*?<\/script>)/i).map((x, i) => (i % 2 ? x : breakCss(x))).join('');
 const browser = await chromium.launch();
 const look = async (old) => {
 	const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 	if (old) {
 		await c.addInitScript(() => { for (const P of [Element.prototype, Document.prototype, DocumentFragment.prototype]) for (const k of ['querySelector', 'querySelectorAll', 'matches', 'closest']) { const f = P[k]; if (!f) continue; P[k] = function (s) { if (/:has\(/.test(s)) throw new DOMException('bad selector', 'SyntaxError'); return f.apply(this, arguments); }; } });
-		await c.route('**/*', async (r) => { const res = await r.fetch(); const ct = res.headers()['content-type'] || ''; if (/text\/(html|css)/.test(ct)) return r.fulfill({ response: res, body: breakCss(await res.text()) }); return r.fulfill({ response: res }); });
+		await c.route('**/*', async (r) => { const res = await r.fetch(); const ct = res.headers()['content-type'] || ''; if (/text\/(html|css)/.test(ct)) return r.fulfill({ response: res, body: /html/.test(ct) ? breakHtml(await res.text()) : breakCss(await res.text()) }); return r.fulfill({ response: res }); });
 	}
 	const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 	await p.goto(B + '/'); await p.waitForTimeout(1500);

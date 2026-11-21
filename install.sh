@@ -582,7 +582,8 @@ $UCX -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); if (ARGV
 	|| die "写入 config.json 失败"
 # 路由器自己的小工具调用面板接口用的钥匙（托管版不用输登录码）
 [ -s $D/local.key ] || rnd 40 > $D/local.key
-[ -s $D/luci_key ] || rnd 32 > $D/luci_key
+# 原版页面的门禁钥匙：6.0 起换登录密钥、移除手机时都会换；从 6.0 以前升上来先换一次（以前移除的手机手上可能还留着旧的）
+if [ ! -s $D/luci_key ] || [ ! -e $D/luci_key.v6 ]; then rnd 32 > $D/luci_key; : > $D/luci_key.v6; fi
 if [ ! -s $D/luci_pass ]; then rnd 32 > $D/luci_pass; NEWPASS=1; fi
 # 面板打开 LuCI 原版页面用的专用账号（只给面板内部自动登录用）
 if ! uci -q show rpcd | grep -q "username='cmcp'" || [ "$NEWPASS" = 1 ]; then

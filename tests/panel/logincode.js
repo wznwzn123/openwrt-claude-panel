@@ -114,8 +114,11 @@ const vis = (page, sel) => page.isVisible(sel);
 	ok('侧边栏底部有「退出登录」', await vis(page, '#sideOut'));
 	await page.click('#sideOut'); await W(400);
 	ok('退出前先确认，说明下次要从官网重新打开', /从官网/.test(await page.textContent('.modal')));
+	// 6.0 第 53 项：打开过原版页面的手机，退出时门禁钥匙也清掉
+	await page.evaluate(() => { sessionStorage.setItem('rp_lk', 'k'.repeat(32)); document.cookie = 'cmcp_l=' + 'k'.repeat(32) + '; path=/cgi-bin/'; });
 	calls.length = 0;
 	await page.locator('.modal').last().locator('button:has-text("退出登录")').click(); await W(900);
+	ok('退出：原版页面的门禁钥匙和 cookie 也清掉', !(await page.evaluate(() => sessionStorage.getItem('rp_lk'))) && !(await page.context().cookies('http://localhost:8143/cgi-bin/luci/')).some((c) => c.name === 'cmcp_l'));
 	ok('退出：路由器忘掉这台手机、手机上的密钥清掉、回到登录页', calls.some((c) => c.m === 'device_remove') && !DEVS.new00001 && (await page.evaluate(() => JSON.stringify([localStorage.getItem('rp_token'), localStorage.getItem('rp_dev')]))) === '[null,null]' && await vis(page, '#login') && !(await vis(page, '#needcode')));
 	// 5. 官网「打开面板」：#open=票，什么都不用输
 	calls.length = 0;

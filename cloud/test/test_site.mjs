@@ -439,7 +439,9 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-privacy.png' });
 	r = await page.goto(B + '/security'); await W(300); t = await page.textContent('body');
 	ok('[安全] 打开 /security：做了哪些措施、没覆盖的风险、被入侵了怎么办', r.status() === 200 && /做了哪些措施/.test(t) && /没覆盖的风险/.test(t) && /签过名的安装包/.test(t) && /先验签名、再核对 SHA256/.test(t) && !/没有签名/.test(t) && /Cloudflare 能看到流量/.test(t) && /换登录密钥/.test(t));
-	ok('[安全] 不写「所有安全问题都已解决」「进不了」这类绝对的话', !/所有安全问题|进不了|绝对安全|100%/.test(t));
+	// 只看页面上的文字（样式、脚本里的 100% 不算）
+	const words = await page.evaluate(() => { const c = document.body.cloneNode(true); c.querySelectorAll('style,script').forEach((e) => e.remove()); return c.textContent; });
+	ok('[安全] 不写「所有安全问题都已解决」「进不了」这类绝对的话', !/所有安全问题|进不了|绝对安全|100%/.test(words), (words.match(/.{0,30}(所有安全问题|进不了|绝对安全|100%).{0,30}/) || [''])[0]);
 	// 报告表单（6.0 第 67 项：要先登录官网账号）
 	ok('[报告] 没登录：不显示表单，提示先登录，有「登录 / 注册」按钮', !(await page.isVisible('#rpForm')) && await page.isVisible('#rpLogin') && (await page.getAttribute('#rpLogin a', 'href')) === '/app#login');
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-security.png', fullPage: true });

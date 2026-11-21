@@ -22,6 +22,8 @@ if [ -z "$SID" ]; then
 	printf 'Status: 500 Internal Server Error\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n自动登录失败\n'
 	exit 0
 fi
+# 记下这次自动登录的会话：换门禁钥匙（换登录密钥、移除手机）时一起退出（只留最近 50 个）
+{ cat /tmp/cmcp_luci_sid 2>/dev/null; echo "$SID"; } | tail -n 50 > /tmp/cmcp_luci_sid.$$ && mv -f /tmp/cmcp_luci_sid.$$ /tmp/cmcp_luci_sid
 TOK=$(head -c 16 /dev/urandom | md5sum | cut -c1-32)
 ubus call session set "{\"ubus_rpc_session\":\"$SID\",\"values\":{\"token\":\"$TOK\",\"username\":\"root\"}}" >/dev/null 2>&1
 CK="sysauth_https=$SID; Max-Age=31536000; path=/cgi-bin/luci/; SameSite=strict; HttpOnly; secure"

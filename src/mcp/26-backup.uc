@@ -127,7 +127,30 @@ const DEV_PATH = ETC + '/devices.json', SEEN_PATH = '/tmp/cmcp_devseen.json', LC
 function is_hosted() { return length(trim(readfile(ETC + '/hub.conf') ?? '')) > 0; }
 function rand_str(n) { let r = trim(sh(sprintf("tr -dc 'a-z0-9' < /dev/urandom | head -c %d", n)).out); return length(r) == n ? r : null; }
 function devs_read() { let d = null; try { d = json(readfile(DEV_PATH) ?? '{}'); } catch (e) {} return type(d) == 'object' ? d : {}; }
-function devs_write(d) { writefile(DEV_PATH + '.tmp', sprintf('%J\n', d)); sh('chmod 600 ' + shq(DEV_PATH + '.tmp')); rename(DEV_PATH + '.tmp', DEV_PATH); }
+/* ---------- 6.0 第 53 项：原版页面（LuCI）的门禁钥匙换新 ----------
+ * 面板在手机上打开原版页面靠一把门禁钥匙（luci_key，路由器上 luci-gate 核对）。换登录密钥、移除手机（包括钥匙被复制、
+ * 面板锁输错太多被退出）时一起换：旧钥匙马上作废，被移除的手机就算还留着它也打不开原版页面；门禁替手机自动登录的
+ * 原版后台会话（luci-gate 记在 /tmp/cmcp_luci_sid）也全部退出。还在用的手机下次打开原版页面会自动拿新钥匙，用户无感。 */
+const LUCI_KEY = ETC + '/luci_key', LUCI_SID = '/tmp/cmcp_luci_sid';
+function luci_key_new() {
+	if (!length(trim(readfile(LUCI_KEY) ?? ''))) return false; // 没装原版页面入口的老安装：不管
+	let k = rand_str(32);
+	if (!k) return false;
+	writefile(LUCI_KEY + '.tmp', k);
+	sh('chmod 600 ' + shq(LUCI_KEY + '.tmp'));
+	rename(LUCI_KEY + '.tmp', LUCI_KEY);
+	for (let sid in split(readfile(LUCI_SID) ?? '', '\n'))
+		if (match(sid, /^[0-9a-f]{32}$/)) sh(sprintf("ubus call session destroy '{\"ubus_rpc_session\":\"%s\"}' >/dev/null 2>&1", sid));
+	sh('rm -f ' + shq(LUCI_SID));
+	return true;
+}
+function devs_write(d) {
+	// 有手机被移除：原版页面的门禁钥匙一起换（换钥匙、改名字这类不算）
+	let old = devs_read(), gone = false;
+	for (let k in old) if (!d[k]) { gone = true; break; }
+	writefile(DEV_PATH + '.tmp', sprintf('%J\n', d)); sh('chmod 600 ' + shq(DEV_PATH + '.tmp')); rename(DEV_PATH + '.tmp', DEV_PATH);
+	if (gone) luci_key_new();
+}
 function seen_read() { let d = null; try { d = json(readfile(SEEN_PATH) ?? '{}'); } catch (e) {} return type(d) == 'object' ? d : {}; }
 function dev_ok(cred) {
 	if (type(cred) != 'string') return false;

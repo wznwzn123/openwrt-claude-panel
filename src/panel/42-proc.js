@@ -150,7 +150,7 @@ $('lgBtn').onclick = doLogin;
 $('lgInput').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
 $('lgPw').onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
 function logout(msg) {
-	store.del('rp_token'); store.del('cmcp_token'); store.del('rp_lock'); store.del('rp_dev'); store.del('rp_host'); passClear();
+	store.del('rp_token'); store.del('cmcp_token'); store.del('rp_lock'); store.del('rp_dev'); store.del('rp_host'); passClear(); luciForget();
 	token = null;
 	$('app').classList.add('hidden');
 	$('needcode').classList.add('hidden');

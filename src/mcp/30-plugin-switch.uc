@@ -75,7 +75,7 @@ P.auto = function(a) {
 
 /* ---------- 面板：内嵌 Kwrt 原版页面 / 系统日志 / 进程 ---------- */
 P.luci_key = function() {
-	return { key: trim(readfile('/etc/claude-mcp/luci_key') ?? '') };
+	return { key: trim(readfile(LUCI_KEY) ?? '') };
 };
 P.slog = function(a) {
 	let n = +a.lines || 300;

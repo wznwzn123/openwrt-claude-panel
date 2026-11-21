@@ -10,7 +10,7 @@ globalThis.fetch = async (input) => {
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest') { if (allDown) throw new Error('down'); return rel ? new Response('', { status: 302, headers: { location: 'https://github.com/wznwzn123/openwrt-claude-panel/releases/tag/' + rel.tag_name } }) : new Response('nf', { status: 404 }); }
 	if (url.startsWith('https://raw.githubusercontent.com/wznwzn123/openwrt-claude-panel/')) { raw.push(url); return rel ? new Response(rel.body) : new Response('nf', { status: 404 }); }
 	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/download/')) return rel && rel.assets.some((a) => url.endsWith('/' + a.name)) ? new Response(null, { status: 302, headers: { location: 'https://objects.example/x' } }) : new Response('nf', { status: 404 });
-	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/openwrt-claude-panel-') || url.endsWith('/latest/download/SHA256SUMS') || url.endsWith('/latest/download/SHA256SUMS.sig')) { dl.push(url); if (flaky > 0) { flaky--; return new Response('busy', { status: 502 }); } return rel ? new Response(new Uint8Array([31, 139, 8, 0]), { status: 200 }) : new Response('nf', { status: 404 }); }
+	if (url.startsWith('https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/openwrt-claude-panel-') || url.endsWith('/latest/download/SHA256SUMS') || url.endsWith('/latest/download/SHA256SUMS.sig') || url.endsWith('/latest/download/SHA256SUMS.sig2')) { dl.push(url); if (flaky > 0) { flaky--; return new Response('busy', { status: 502 }); } return rel ? new Response(new Uint8Array([31, 139, 8, 0]), { status: 200 }) : new Response('nf', { status: 404 }); }
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/app-version.json') return rel && rel.appver ? new Response(typeof rel.appver === 'string' ? rel.appver : JSON.stringify(rel.appver)) : new Response('Not Found', { status: 404 });
 	if (url === 'https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download/router-panel.apk') return rel ? new Response(new Uint8Array([80, 75, 3, 4, 1, 2]), { status: 200 }) : new Response('nf', { status: 404 });
 	return new Response('{}');
@@ -43,7 +43,7 @@ rel.body = '## 这个版本的更新\n\n- 小修复\n\n最低版本: v1.1';
 k = await (await get('/api/app/version')).json();
 ok('「最低版本」半角冒号、带 v、两段也认', k.force === false && k.min === '1.1', JSON.stringify(k));
 // 安装包也能从官网下载（转发 GitHub 最新发布）
-for (const n of ['openwrt-claude-panel-hosted-ai.tar.gz', 'openwrt-claude-panel-hosted-noai.tar.gz', 'openwrt-claude-panel-noai-lite.tar.gz', 'openwrt-claude-panel-ai-full.tar.gz', 'SHA256SUMS', 'SHA256SUMS.sig']) {
+for (const n of ['openwrt-claude-panel-hosted-ai.tar.gz', 'openwrt-claude-panel-hosted-noai.tar.gz', 'openwrt-claude-panel-noai-lite.tar.gz', 'openwrt-claude-panel-ai-full.tar.gz', 'SHA256SUMS', 'SHA256SUMS.sig', 'SHA256SUMS.sig2']) {
 	const x = await get('/dl/' + n); const bb = new Uint8Array(await x.arrayBuffer());
 	ok('官网下载安装包：' + n, x.status === 200 && (n.startsWith('SHA256SUMS') || (bb[0] === 31 && bb[1] === 139 && x.headers.get('content-type') === 'application/gzip')) && dl.some((u) => u.endsWith('/' + n)));
 }

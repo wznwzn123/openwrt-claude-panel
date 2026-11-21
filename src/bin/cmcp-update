@@ -14,7 +14,9 @@ LOG=/tmp/cmcp_update.log
 GH=${CMCP_GH:-https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download}
 # 安全加固：发布时用开发者的私钥给 SHA256SUMS 签名（私钥只在 GitHub 的仓库密钥里），这里用写死的公钥验签：
 # 官网（下载中转）被人控制了，也没法让路由器装上改过的安装包。UPUB 是 usign 格式的公钥，PPUB 是同一把公钥给 openssl 用的写法，
-# STSIG 是固定内容「cmcp release key selftest」的签名：先拿它试一下这台路由器的验签工具能不能用。换密钥：node tools/sign.mjs --consts
+# STSIG 是固定内容「cmcp release key selftest」的签名：先拿它试一下这台路由器的验签工具能不能用。
+# 6.0 第 52 项：换了新的签名密钥（私钥只在 GitHub 仓库密钥 RELEASE_SIGN_KEY_V6 里），新密钥的签名在 SHA256SUMS.sig2；
+# 旧密钥签的 SHA256SUMS.sig 只给还没升到 6.0 的老路由器用，这里不认。下面三个值由 Actions「写入新签名公钥」自动写入
 UPUB=${CMCP_UPUB:-RWTjaBd8Y8ESbCUksln6ozZ4pQfXiYVRTp/c+hEJr+rhh1iHxhShNPQc}
 PPUB=${CMCP_PPUB:-MCowBQYDK2VwAyEAJSSyWfqjNnilB9eJhVFOn9z6EQmv6uGHWIfGFKE09Bw=}
 STSIG=${CMCP_STSIG:-RWTjaBd8Y8ESbGEmi3Oe1i338aYi9HfAgEQzVRbvgzFhy3T/M64KHwFNEfIr+AqK8ZEbaew29n1kdoR8x9jWJ+PJQiAvSZ6TKgI=}
@@ -131,10 +133,10 @@ run)
 	echo "验签工具：$VT" >>"$LOG"
 	got=""; why=""; bad=""
 	for b in "$BASE" "$GH"; do
-		rm -f "$PKG" SHA256SUMS SHA256SUMS.sig one.sum
+		rm -f "$PKG" SHA256SUMS SHA256SUMS.sig2 one.sum
 		if ! curl -fsSL -m 180 -o "$PKG" "$b/$PKG" 2>>"$LOG" || ! curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG"; then why="下载失败：连不上官网和 GitHub，稍后再试"; continue; fi
-		if ! curl -fsSL -m 30 -o SHA256SUMS.sig "$b/SHA256SUMS.sig" 2>>"$LOG"; then bad="安装包没有签名，为了安全没有安装，稍后再试"; echo "没有签名：$b" >>"$LOG"; continue; fi
-		if ! $VT SHA256SUMS SHA256SUMS.sig; then bad="安装包的签名不对，为了安全没有安装，稍后再试"; echo "签名不对：$b" >>"$LOG"; continue; fi
+		if ! curl -fsSL -m 30 -o SHA256SUMS.sig2 "$b/SHA256SUMS.sig2" 2>>"$LOG"; then bad="安装包没有签名，为了安全没有安装，稍后再试"; echo "没有签名：$b" >>"$LOG"; continue; fi
+		if ! $VT SHA256SUMS SHA256SUMS.sig2; then bad="安装包的签名不对，为了安全没有安装，稍后再试"; echo "签名不对：$b" >>"$LOG"; continue; fi
 		grep " $PKG\$" SHA256SUMS > one.sum 2>/dev/null
 		if [ ! -s one.sum ] || ! sha256sum -c one.sum >>"$LOG" 2>&1; then bad="安装包校验没通过（可能下载不完整），没有安装，稍后再试"; continue; fi
 		got=$b; break

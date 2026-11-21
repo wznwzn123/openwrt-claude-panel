@@ -28,11 +28,19 @@ jobs:
           HUB_URL: ${{ vars.HUB_URL }}
           VERSION: ${{ inputs.version }}
         run: sh tools/pack.sh "$VERSION"
-      # 安全加固：给校验值文件签名，路由器一键更新时验签（官网被人改了也装不上假的安装包）。私钥只在仓库密钥 RELEASE_SIGN_KEY 里，没设置就不发布
-      - name: 给安装包签名
+      # 安全加固：给校验值文件签名，路由器一键更新时验签（官网被人改了也装不上假的安装包）。
+      # 6.0 起用新密钥（仓库密钥 RELEASE_SIGN_KEY_V6）签 SHA256SUMS.sig2，6.0 起的路由器只认它；没设置就不发布
+      - name: 给安装包签名（新密钥）
+        env:
+          RELEASE_SIGN_KEY_V6: ${{ secrets.RELEASE_SIGN_KEY_V6 }}
+        run: node tools/sign.mjs dist/SHA256SUMS
+      # 还没升到 6.0 的老路由器只认旧密钥：仓库里还有旧密钥 RELEASE_SIGN_KEY 就也签一份 SHA256SUMS.sig，让它们能升上来；
+      # 大家都升到 6.0 以后在仓库设置里删掉 RELEASE_SIGN_KEY，这一步就自动跳过
+      - name: 给安装包签名（旧密钥，给老路由器升级用）
         env:
           RELEASE_SIGN_KEY: ${{ secrets.RELEASE_SIGN_KEY }}
-        run: node tools/sign.mjs dist/SHA256SUMS
+        run: |
+          if [ -n "$RELEASE_SIGN_KEY" ]; then node tools/sign.mjs --old dist/SHA256SUMS; else echo "::notice::没有旧密钥 RELEASE_SIGN_KEY：只用新密钥签名（6.0 以前的老路由器没法一键更新了）"; fi
       # 来源证明：任何人都能用 gh attestation verify 查安装包是不是这个仓库的 GitHub Actions 打出来的；出错也不影响发布
       - name: 安装包来源证明
         continue-on-error: true
@@ -50,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
-          gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig dist/app-version.json \
+          gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig* dist/app-version.json \
             --target "$GITHUB_SHA" \
             --title "$VERSION：托管版 + 自建版 + 安卓 App" \
             --notes-file tools/release-notes.md

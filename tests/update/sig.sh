@@ -11,7 +11,7 @@ ok() { if [ "$2" = 0 ]; then pass=$((pass + 1)); echo "✓ $1"; else fail=$((fai
 
 # 临时测试密钥（不是发布用的那把）
 TK=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')
-eval "$(RELEASE_SIGN_KEY=$TK node tools/sign.mjs --consts | sed 's/^/K_/')"
+eval "$(RELEASE_SIGN_KEY_V6=$TK node tools/sign.mjs --consts | sed 's/^/K_/')"
 TK2=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')
 
 # 假路由器：现在装的是 ai-full 1.0
@@ -25,7 +25,7 @@ mk() { # mk 目录 内容标记
 	tar -C "$1/p" -czf "$1/openwrt-claude-panel-ai-full.tar.gz" openwrt-claude-panel && rm -rf "$1/p"
 	(cd "$1" && sha256sum *.tar.gz > SHA256SUMS)
 }
-sg() { (cd "$1" && RELEASE_SIGN_KEY=${2:-$TK} CMCP_SIGN_ANY=1 node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null); }
+sg() { (cd "$1" && RELEASE_SIGN_KEY_V6=${2:-$TK} CMCP_SIGN_ANY=1 node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null); }
 ST=$T/st.json
 run() { # run 官网目录 GitHub目录 [额外环境变量...]
 	b=$1; g=$2; shift 2
@@ -42,7 +42,7 @@ mk "$T/good" good; sg "$T/good"
 s=$(run "$T/good" "$T/good")
 ok "签名对：验过了、开始安装（openssl 验签）" $([ "$s" = rolledback ] && log | grep -q '验签工具：v_ossl' ; echo $?) "$s $(msg)"
 # 2. 官网被人改了：换了安装包、重算了校验值，但没有私钥 → 签名对不上；改从 GitHub 下载好的
-mk "$T/evil" evil; cp "$T/good/SHA256SUMS.sig" "$T/evil/"
+mk "$T/evil" evil; cp "$T/good/SHA256SUMS.sig2" "$T/evil/"
 s=$(run "$T/evil" "$T/good")
 ok "官网的安装包被换了（校验值也重算了）：签名对不上，不用它，改从 GitHub 下好的" $([ "$s" = rolledback ] && log | grep -q "签名不对：file://$T/evil" ; echo $?) "$s $(msg) $(log | tail -3)"
 # 3. 两边都是假的：不装
@@ -60,7 +60,7 @@ ok "没有签名文件：不装，提示没有签名" $([ "$s" = failed ] && msg
 s=$(run "$T/nosig" "$T/good")
 ok "官网拿不到签名、GitHub 有：用 GitHub 的" $([ "$s" = rolledback ] && log | grep -q "没有签名：file://$T/nosig" ; echo $?) "$s $(msg)"
 # 7. 签名对，但安装包下载坏了（跟校验值对不上）：不装
-mkdir -p "$T/torn"; cp "$T/good/SHA256SUMS" "$T/good/SHA256SUMS.sig" "$T/torn/"; head -c 100 "$T/good/openwrt-claude-panel-ai-full.tar.gz" > "$T/torn/openwrt-claude-panel-ai-full.tar.gz"
+mkdir -p "$T/torn"; cp "$T/good/SHA256SUMS" "$T/good/SHA256SUMS.sig2" "$T/torn/"; head -c 100 "$T/good/openwrt-claude-panel-ai-full.tar.gz" > "$T/torn/openwrt-claude-panel-ai-full.tar.gz"
 s=$(run "$T/torn" "$T/torn")
 ok "签名对但安装包不完整：不装，提示校验没通过" $([ "$s" = failed ] && msg | grep -q '校验没通过' ; echo $?) "$s $(msg)"
 # 8. 有 usign 的路由器（OpenWrt 一般都有）：用 usign 验签
@@ -102,12 +102,29 @@ s=$(sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' "$ST")
 ok "防回滚：强制更新也不装旧版本" $([ "$s" = failed ] && msg | grep -q '旧版本' ; echo $?) "$s $(msg)"
 s=$(run "$T/old" "$T/old" CMCP_ALLOW_OLD=1)
 ok "防回滚：在路由器终端明确要退回（CMCP_ALLOW_OLD=1）：可以装" $([ "$s" = rolledback ] ; echo $?) "$s $(msg)"
-# 12. 发布用的签名脚本：私钥跟脚本里写死的公钥对不上就不签（免得发出去路由器都验不过）
+# 12. 发布用的签名脚本（6.0 第 52 项：新密钥签 .sig2，旧密钥签 .sig 给老路由器）
 mk "$T/rel" rel
-(cd "$T/rel" && RELEASE_SIGN_KEY=$TK node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
-ok "发布签名：私钥跟一键更新脚本里的公钥对不上 → 报错、不签" $([ $r != 0 ] && [ ! -f "$T/rel/SHA256SUMS.sig" ] ; echo $?) "rc=$r"
-(cd "$T/rel" && RELEASE_SIGN_KEY= node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
-ok "发布签名：没设置私钥 → 报错" $([ $r != 0 ] ; echo $?) "rc=$r"
+(cd "$T/rel" && RELEASE_SIGN_KEY_V6=$TK node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
+ok "发布签名：新私钥跟一键更新脚本里的公钥对不上 → 报错、不签" $([ $r != 0 ] && [ ! -f "$T/rel/SHA256SUMS.sig2" ] ; echo $?) "rc=$r"
+(cd "$T/rel" && RELEASE_SIGN_KEY_V6= node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
+ok "发布签名：没设置新私钥 → 报错" $([ $r != 0 ] ; echo $?) "rc=$r"
+(cd "$T/rel" && RELEASE_SIGN_KEY_V6=short node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
+ok "发布签名：私钥太短（不到 32 个字符）→ 报错" $([ $r != 0 ] ; echo $?) "rc=$r"
+(cd "$T/rel" && RELEASE_SIGN_KEY=$TK2 node "$REPO/tools/sign.mjs" --old SHA256SUMS >/dev/null 2>&1); r=$?
+ok "发布签名：旧私钥不是原来那把 → 报错、不签 .sig" $([ $r != 0 ] && [ ! -f "$T/rel/SHA256SUMS.sig" ] ; echo $?) "rc=$r"
+# 用手机密码生成器生成的长字符串当私钥：签出来的能验过；同一个字符串每次签的公钥一样
+PW='k8#Qz!v2Lm9@xR4t$Wn7^pB3&yC6*hJ5dF1g'
+eval "$(RELEASE_SIGN_KEY_V6=$PW node tools/sign.mjs --consts | sed 's/^/P_/')"
+eval "$(RELEASE_SIGN_KEY_V6=$PW node tools/sign.mjs --consts | sed 's/^/P2_/')"
+mk "$T/pw" pw; (cd "$T/pw" && RELEASE_SIGN_KEY_V6=$PW CMCP_SIGN_ANY=1 node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null)
+printf 'CODE=ai-full\nVER=1.0\n' > "$T/root/etc/claude-mcp/version"
+s=$(run "$T/pw" "$T/pw" CMCP_UPUB="$P_UPUB" CMCP_PPUB="$P_PPUB" CMCP_STSIG="$P_STSIG")
+ok "用 32 个字符以上的随机字符串当私钥：签出来的能验过；每次算出来的公钥一样" $([ "$s" = rolledback ] && [ "$P_UPUB" = "$P2_UPUB" ] ; echo $?) "$s $(msg)"
+# 老路由器只认旧密钥签的 .sig：新版一键更新不去拿它，只认 .sig2
+rm -f "$T/good/SHA256SUMS.sig2"; cp "$T/good/SHA256SUMS" "$T/good/SHA256SUMS.sig" 2>/dev/null
+s=$(run "$T/good" "$T/good")
+ok "只有旧的 .sig、没有新密钥签的 .sig2：不装（6.0 起不认旧密钥）" $([ "$s" = failed ] && msg | grep -q '没有签名' ; echo $?) "$s $(msg)"
+sg "$T/good"
 # 13. 脚本里写死的测试签名跟公钥是一对（换密钥时忘了改其中一个，自检就会一直过不了）
 eval "$(grep -E '^(UPUB|PPUB|STSIG)=' src/bin/cmcp-update | sed 's/=\${CMCP_[A-Z]*:-/=/; s/}$//; s/^/R_/')"
 mkdir -p "$T/st"; printf 'cmcp release key selftest\n' > "$T/st/m"; printf 'untrusted comment: x\n%s\n' "$R_STSIG" > "$T/st/s"

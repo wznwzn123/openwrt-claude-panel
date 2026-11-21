@@ -1699,7 +1699,7 @@ async function appApk(env) {
 }
 
 // 安装包也从官网下载（从 GitHub 最新发布转过来）：大陆的路由器直连 GitHub 常常很慢或者下不动
-export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hosted(?:-(?:ai|noai))?))?\.tar\.gz|SHA256SUMS(?:\.sig)?)$/;
+export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hosted(?:-(?:ai|noai))?))?\.tar\.gz|SHA256SUMS(?:\.sig2?)?)$/;
 // 通用安装包（5.2 起，安装时在终端里选版本）：还没发布的旧版本里没有，就用能问版本的那个具体包顶上
 const DL_FALLBACK = { 'openwrt-claude-panel.tar.gz': 'openwrt-claude-panel-ai-full.tar.gz', 'openwrt-claude-panel-hosted.tar.gz': 'openwrt-claude-panel-hosted-ai.tar.gz' };
 async function dlFile(env, name) {

@@ -1,0 +1,44 @@
+# 写入新签名公钥（6.0 第 52 项）：Actions →「写入新签名公钥」→ 选分支（v6）→ Run workflow
+# 先在仓库 Settings → Secrets and variables → Actions 里新建 RELEASE_SIGN_KEY_V6（32 个字符以上的随机字符串，用密码生成器生成）。
+# 这里用它算出公钥和测试签名，写进 src/bin/cmcp-update 并提交到所选分支；私钥只在仓库密钥里，不会出现在代码和日志里。
+name: 写入新签名公钥
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  pubkey:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: 算出公钥并写进一键更新脚本
+        env:
+          RELEASE_SIGN_KEY_V6: ${{ secrets.RELEASE_SIGN_KEY_V6 }}
+        run: |
+          set -e
+          [ -n "$RELEASE_SIGN_KEY_V6" ] || { echo "::error::仓库密钥 RELEASE_SIGN_KEY_V6 还没设置"; exit 1; }
+          C=$(node tools/sign.mjs --consts)
+          U=$(printf '%s\n' "$C" | sed -n 's/^UPUB=//p'); P=$(printf '%s\n' "$C" | sed -n 's/^PPUB=//p'); S=$(printf '%s\n' "$C" | sed -n 's/^STSIG=//p')
+          OLD=$(sed -n 's/^const OLD_UPUB = .\([A-Za-z0-9+/=]*\).;$/\1/p' tools/sign.mjs)
+          [ -n "$U" ] && [ -n "$P" ] && [ -n "$S" ] || { echo "::error::算公钥失败"; exit 1; }
+          [ "$U" != "$OLD" ] || { echo "::error::RELEASE_SIGN_KEY_V6 跟旧密钥是同一把，要换一把新的"; exit 1; }
+          sed -i "s#^UPUB=\${CMCP_UPUB:-[A-Za-z0-9+/=]*}#UPUB=\${CMCP_UPUB:-$U}#; s#^PPUB=\${CMCP_PPUB:-[A-Za-z0-9+/=]*}#PPUB=\${CMCP_PPUB:-$P}#; s#^STSIG=\${CMCP_STSIG:-[A-Za-z0-9+/=]*}#STSIG=\${CMCP_STSIG:-$S}#" src/bin/cmcp-update
+          grep -q "^UPUB=\${CMCP_UPUB:-$U}" src/bin/cmcp-update || { echo "::error::写进脚本失败"; exit 1; }
+          echo "::notice::新签名公钥：$U"
+      # 写进去的三个值是一套：用 openssl 按路由器上的方法验一次测试签名
+      - name: 自检
+        run: |
+          set -e
+          eval "$(grep -E '^(PPUB|STSIG)=' src/bin/cmcp-update | sed 's/=\${CMCP_[A-Z]*:-/=/; s/}$//')"
+          printf 'cmcp release key selftest\n' > m
+          printf -- '-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----\n' "$PPUB" > p.pem
+          printf '%s' "$STSIG" | openssl base64 -d -A | tail -c 64 > s.bin
+          openssl pkeyutl -verify -pubin -inkey p.pem -rawin -in m -sigfile s.bin
+          rm -f m p.pem s.bin
+      - name: 提交
+        run: |
+          if git diff --quiet; then echo "::notice::公钥已经是这一把了，不用改"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "一键更新：写入新的签名公钥（6.0 第 52 项，Actions 自动生成）"
+          git push

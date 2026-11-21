@@ -101,6 +101,9 @@ const M = {
 		await this.ctx.storage.put('el', l.slice(0, 300));
 		await this.track('err');
 	},
+	// 管理后台读出错记录、邮件记录（路由代码拿到的是 Durable Object 的远程句柄，只能调方法，不能直接读存储）
+	async errList() { return (await this.ctx.storage.get('el')) || []; },
+	async mailList() { return (await this.ctx.storage.get('ml')) || []; },
 	async mailLog(to, subject, ok, err) {
 		const l = (await this.ctx.storage.get('ml')) || [];
 		l.unshift({ t: Date.now(), to: clip(to, 120), subject: clip(subject, 120), ok: !!ok, err: clip(err, 200) });
@@ -255,8 +258,8 @@ export async function opsAdmin(req, a, H, body, u, env = {}) {
 	if (a[0] === 'stats' && m === 'GET') return J({ ok: true, days: await H.statDays(u.searchParams.get('days')) });
 	if (a[0] === 'visitors' && m === 'GET') return J({ ok: true, list: await H.statVisitors(u.searchParams.get('day')) });
 	if (a[0] === 'logins' && m === 'GET') return J({ ok: true, list: await H.loginList() });
-	if (a[0] === 'errors' && m === 'GET') return J({ ok: true, list: (await H.ctx.storage.get('el')) || [] });
-	if (a[0] === 'mails' && m === 'GET') return J({ ok: true, list: (await H.ctx.storage.get('ml')) || [] });
+	if (a[0] === 'errors' && m === 'GET') return J({ ok: true, list: await H.errList() });
+	if (a[0] === 'mails' && m === 'GET') return J({ ok: true, list: await H.mailList() });
 	if (a[0] === 'badge' && m === 'GET') { const th = await H.chatThreads(), fb = await H.feedbacks(); return J({ ok: true, chat: th.reduce((x, t) => x + (t.ua || 0), 0), chatWaiting: th.filter((t) => t.ua > 0).length, fb: fb.filter((x) => !x.done && !x.nofix).length, last: th[0] ? th[0].last : 0 }); }
 	if (a[0] === 'chat') {
 		if (!a[1] && m === 'GET') return J({ ok: true, list: await H.chatThreads() });

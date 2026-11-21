@@ -365,7 +365,9 @@ try { cloud = JSON.parse(store.get('rp_cloud') || 'null'); cinfo = JSON.parse(st
 // 精简版没有 Cloudflare 云端：路由器说没配置云端，就不去请求 /cloud/，也不显示云端相关卡片
 const noCloud = () => !!cinfo && cinfo.enabled === false;
 // 读云端用的钥匙：托管版有单独的面板钥匙，自建版用登录密钥
-const cloudKey = () => (cinfo && cinfo.pkey) || ''; // 6.0：手机不再存登录密钥；自建完整版由路由器在云端信息里给
+// 6.0：手机不再存登录密钥，自建完整版 Worker 要的密钥由路由器在云端信息里给；
+// 还没换成手机钥匙的旧手机（比如升级后第一次打开时路由器正好离线）先用手上那把旧的，好看到断线原因
+const cloudKey = () => (cinfo && cinfo.pkey) || oldToken() || '';
 // 连不上时查一下是哪一段不通：官网（也在 Cloudflare 上）通不通、国内网站通不通（只看能不能连上，不读内容）
 async function netProbe(url, ms) {
 	const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 6000);

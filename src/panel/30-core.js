@@ -107,6 +107,8 @@ function forgetToken() { store.del('rp_token'); store.del('cmcp_token'); }
 // 拿手机钥匙换通行证（同时只换一次）
 function passGet() {
 	if (PS.pass && PS.exp - Date.now() > 60e3) return Promise.resolve(PS.pass);
+	// 正在换的那张没带面板锁密码，这次带了：等它结束再单独换一次（不然密码白输）
+	if (PS.p && PS.lkp) { const prev = PS.p; return prev.catch(() => {}).then(() => passGet()); }
 	if (PS.p) return PS.p;
 	PS.p = (async () => {
 		const lkp = PS.lkp; PS.lkp = null;
@@ -138,6 +140,8 @@ function devFromToken(pw) {
 }
 async function rpcOnce(method, params, timeoutMs, read, again) {
 	if (!store.get('rp_dev')) { if (!oldToken()) throw new AuthError('还没登录'); await devFromToken(); }
+	// 锁着的时候只有锁屏自己的请求能向路由器领通行证（不然后台的刷新会盖掉锁屏上「要等多久」之类的提示，也不该在锁着时取数据）
+	if (LK.on && !/^panel\/(pass_drop|lock_set|lock_check|lock_fp)$/.test(method)) throw new LockError('面板锁着，解锁后再操作');
 	const pass = await passGet();
 	const j = await rpcPost('cgi-bin/mcp/pass', { jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', pass }, timeoutMs, read);
 	// 通行证过期了（路由器重启、锁屏作废）：换一张再试一次

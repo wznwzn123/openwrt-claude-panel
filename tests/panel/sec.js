@@ -1,7 +1,7 @@
 // 面板锁防破解测试：用普通手段（点、按键、返回、链接、刷新、切后台、暴力试密码）都绕不过去
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
-const { respond } = require('./mock');
+const { respond, PASSM } = require('./mock');
 const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') : path.join(__dirname, '..', '..', 'src', 'www', 'panel'));
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
@@ -25,7 +25,8 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	for (let i = 0; i < 2; i++) { await page.fill('.modal:last-of-type input', '2468'); await page.click('.modal:last-of-type [data-ok]'); await W(700); }
 	if (await page.locator('.modal [data-v="false"]').count()) { await page.locator('.modal [data-v="false"]').last().click(); await W(400); }
 	const c = await page.evaluate(() => JSON.parse(localStorage.getItem('rp_lock')));
-	ok('密码不存明文，也不是简单哈希（PBKDF2 加盐）', c && c.on && !JSON.stringify(c).includes('2468') && c.salt && c.hash && c.hash.length === 44);
+	// 6.0 第 13 项：密码由路由器核对——手机上只有盐和位数；交给路由器的是 PBKDF2 加盐算过的值，不是明文
+	ok('手机上不存密码（也不存摘要），交给路由器的是 PBKDF2 加盐算过的值', c && c.on && !JSON.stringify(c).includes('2468') && c.salt && !c.hash && PASSM.lock && PASSM.lock.lkp.length === 44 && PASSM.lock.lkp !== '2468');
 	await page.evaluate(() => localStorage.setItem('rp_ov', JSON.stringify({ secretMarker: 'XYZZY-SECRET', clash: { mode: 'rule' } })));
 	const locked = () => page.evaluate(() => document.body.classList.contains('locked') && !document.getElementById('lock').classList.contains('hidden'));
 
@@ -35,7 +36,8 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		rpcCalls = [];
 		await page.goto('http://localhost:8102' + url); await W(2500);
 		const body = await page.evaluate(() => document.getElementById('app').innerText);
-		ok(`打开 ${url}：先锁住，不向路由器要任何数据`, (await locked()) && rpcCalls.length === 0, rpcCalls.join(','));
+		// 锁上时会让路由器作废这台手机的通行证（panel/pass_drop），这不是要数据
+		ok(`打开 ${url}：先锁住，不向路由器要任何数据`, (await locked()) && rpcCalls.filter((m) => m !== 'panel/pass_drop').length === 0, rpcCalls.join(','));
 		ok(`打开 ${url}：锁屏背后没有面板内容`, !/XYZZY|设备|云端备份/.test(body) || body.trim().length < 40 || (await page.evaluate(() => getComputedStyle(document.getElementById('app')).visibility === 'hidden')));
 	}
 	const appEmpty = await page.evaluate(() => document.querySelectorAll('#qGrid .qbtn').length === 0 || getComputedStyle(document.getElementById('app')).visibility === 'hidden');
@@ -67,28 +69,27 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.evaluate(() => sessionStorage.setItem('rp_lkact', String(Date.now() + 3600e3)));
 	await page.reload(); await W(1200);
 	ok('把「最近操作时间」改成未来时间也绕不过去', await locked());
-	// 7. 暴力试密码：越错等越久，刷新不清零，累计 20 次断开手机
+	// 7. 暴力试密码（6.0 起由路由器管：越错等越久，刷新、清掉手机上的数据都不清零，累计 20 次让这台手机退出）
 	const tryPin = async (v) => { await page.evaluate((v) => { for (const ch of v) document.querySelector(`#lkPad [data-k="${ch}"]`).click(); }, v); await W(1200); };
 	for (let i = 0; i < 5; i++) await tryPin('1111');
-	let cf = await page.evaluate(() => JSON.parse(localStorage.getItem('rp_lock')));
-	ok('错 5 次：要等 30 秒', cf.until - Date.now() > 25000 && cf.until - Date.now() <= 30000);
+	ok('错 5 次：路由器要求等 30 秒', PASSM.fail.until - Date.now() > 25000 && PASSM.fail.until - Date.now() <= 30000 && /后再试/.test(await page.textContent('#lkMsg')), await page.textContent('#lkMsg'));
 	await tryPin('2468');
-	ok('等待期间输对也打不开', await locked());
-	await page.reload(); await W(1500);
-	ok('刷新面板也不会清掉等待', /后再试/.test(await page.textContent('#lkMsg')));
-	const skip = () => page.evaluate(() => { const c = JSON.parse(localStorage.getItem('rp_lock')); c.until = Date.now() - 1; localStorage.setItem('rp_lock', JSON.stringify(c)); });
-	await skip(); await page.reload(); await W(1500);
+	ok('等待期间输对也打不开', (await locked()) && /后再试/.test(await page.textContent('#lkMsg')));
+	await page.evaluate(() => { localStorage.removeItem('rp_lock'); sessionStorage.clear(); }); await page.reload(); await W(1500);
+	await tryPin('2468');
+	ok('刷新面板、清掉手机上的设置也不会清掉等待（记在路由器上）', (await locked()) && /后再试/.test(await page.textContent('#lkMsg')), await page.textContent('#lkMsg'));
+	const skip = () => { PASSM.fail.until = 0; };
+	skip(); await page.reload(); await W(1500);
 	for (let i = 0; i < 5; i++) await tryPin('1111');
-	cf = await page.evaluate(() => JSON.parse(localStorage.getItem('rp_lock')));
-	ok('再错 5 次：等待翻倍到 1 分钟', cf.until - Date.now() > 55000 && cf.until - Date.now() <= 60000);
-	await skip(); await page.reload(); await W(1500);
+	ok('再错 5 次：等待翻倍到 1 分钟', PASSM.fail.until - Date.now() > 55000 && PASSM.fail.until - Date.now() <= 60000);
+	skip(); await page.reload(); await W(1500);
 	for (let i = 0; i < 5; i++) await tryPin('1111');
-	await skip(); await page.reload(); await W(1500);
+	skip(); await page.reload(); await W(1500);
 	for (let i = 0; i < 4; i++) await tryPin('1111');
-	ok('快到上限时提醒「再错几次会断开」', /再错 1 次会断开/.test(await page.textContent('#lkMsg')), await page.textContent('#lkMsg'));
+	ok('快到上限时提醒「再错几次会退出」', /再错 1 次会让这台手机退出/.test(await page.textContent('#lkMsg')), await page.textContent('#lkMsg'));
 	await tryPin('1111'); await W(800);
-	const after = await page.evaluate(() => ({ tok: localStorage.getItem('rp_token'), lock: localStorage.getItem('rp_lock'), login: !document.getElementById('login').classList.contains('hidden') }));
-	ok('累计错 20 次：断开这台手机（清掉密钥），只能重新粘贴连接器地址', !after.tok && !after.lock && after.login, JSON.stringify(after));
+	const after = await page.evaluate(() => ({ dev: localStorage.getItem('rp_dev'), tok: localStorage.getItem('rp_token'), lock: localStorage.getItem('rp_lock'), login: !document.getElementById('login').classList.contains('hidden') }));
+	ok('累计错 20 次：路由器让这台手机退出（手机上的钥匙也清掉），只能重新登录', !after.dev && !after.tok && !after.lock && after.login, JSON.stringify(after));
 	// 8. 正确流程不受影响：重新登录后没有锁，开锁后输对能进
 	await page.evaluate(() => localStorage.setItem('rp_token', 'testtoken1234567890'));
 	await page.goto('http://localhost:8102/panel/?p=home'); await W(1500);

@@ -95,6 +95,30 @@ const M = {
 	async admBlocked(ip) { const a = ((await this.ctx.storage.get('r:af:' + ip)) || []).filter((t) => t > Date.now() - 900e3); return a.length >= 10; },
 	async admFail(ip, ua, place, path, why) { await this.hit('af:' + ip, 1000, 900e3); await this.loginLog({ k: 'admin', who: '管理后台', ok: false, why: (why || '密钥不对') + ' · ' + clip(path, 40), ip, ua, place }); },
 	/* ---------- 出错记录、邮件记录 ---------- */
+	/* ---------- 第 66 项：人机验证和受攻击模式 ---------- */
+	// 返回 true：这次要人机验证；'slow'：受攻击模式但没配置人机验证，这个来源 10 分钟内试太多次了；false：照常
+	async capNeed(kind, ip, cap) {
+		const atk = await this.atkGet();
+		if (atk.on) return cap ? true : (await this.hit('ax:' + kind + ':' + ip, 3, 600e3)) ? false : 'slow';
+		if (!cap) return false;
+		const T = { login: [5, 900e3], code: [3, 3600e3], reg: [3, 3600e3], reset: [3, 3600e3], report: [2, 86400e3] }[kind] || [5, 900e3];
+		return !(await this.hit('cx:' + kind + ':' + ip, T[0], T[1]));
+	},
+	// 受攻击模式：后台一键开；最长 24 小时自动关（忘了关也不会一直打扰用户）
+	async atkGet() { const a = (await this.ctx.storage.get('atk')) || {}; return a.on && a.until > Date.now() ? a : { on: false }; },
+	async atkSet(on, hours) {
+		const h = Math.max(1, Math.min(24, +hours || 24));
+		const a = on ? { on: true, at: Date.now(), until: Date.now() + h * 3600e3 } : { on: false, off: Date.now() };
+		await this.ctx.storage.put('atk', a);
+		await this.alog(on ? 'atk_on' : 'atk_off', '', on ? '开启受攻击模式（' + h + ' 小时后自动关）' : '关闭受攻击模式', 'admin');
+		return this.atkGet();
+	},
+	// 第 8 项：浏览器报上来的「内容安全策略拦了什么」；全站每小时最多记 30 条（防止被刷）
+	async cspLog(page, dir, blocked) {
+		if (!(await this.hit('csp:all', 30, 3600e3))) return;
+		let pg = ''; try { pg = new URL(page).pathname; } catch (e) {}
+		await this.errLog('CSP ' + clip(pg, 60), '浏览器拦下了：' + clip(dir, 60) + ' ← ' + clip(String(blocked).replace(/\?.*$/, ''), 160));
+	},
 	async errLog(path, msg) {
 		const l = (await this.ctx.storage.get('el')) || [];
 		l.unshift({ t: Date.now(), path: clip(path, 120), msg: clip(msg, 500) });
@@ -254,12 +278,15 @@ export async function chatApi(req, env, H, body) {
 /* ---------- 管理后台用的接口（已经验过管理员密钥） ---------- */
 export async function opsAdmin(req, a, H, body, u, env = {}) {
 	const m = req.method;
+	if (a[0] === 'atk' && m === 'GET') return J({ ok: true, atk: await H.atkGet(), captcha: !!(env.TURNSTILE_SITE && env.TURNSTILE_SECRET) });
+	if (a[0] === 'atk' && m === 'POST') { const b = (await body()) || {}; return J({ ok: true, atk: await H.atkSet(!!b.on, b.hours), captcha: !!(env.TURNSTILE_SITE && env.TURNSTILE_SECRET) }); }
+	if (a[0] === 'health' && m === 'GET') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY, files: !!env.F }); // 第 7 项：原来 /api/ping 里的名额等
 	if (a[0] === 'overview' && m === 'GET') return J({ ok: true, ...(await H.overview()) });
 	if (a[0] === 'stats' && m === 'GET') return J({ ok: true, days: await H.statDays(u.searchParams.get('days')) });
 	if (a[0] === 'visitors' && m === 'GET') return J({ ok: true, list: await H.statVisitors(u.searchParams.get('day')) });
 	if (a[0] === 'logins' && m === 'GET') return J({ ok: true, list: await H.loginList() });
 	if (a[0] === 'errors' && m === 'GET') return J({ ok: true, list: await H.errList() });
-	if (a[0] === 'mails' && m === 'GET') return J({ ok: true, list: await H.mailList() });
+	if (a[0] === 'mails' && m === 'GET') return J({ ok: true, list: await H.mailList(), quota: await H.mailQuota() });
 	if (a[0] === 'badge' && m === 'GET') { const th = await H.chatThreads(), fb = await H.feedbacks(); return J({ ok: true, chat: th.reduce((x, t) => x + (t.ua || 0), 0), chatWaiting: th.filter((t) => t.ua > 0).length, fb: fb.filter((x) => !x.done && !x.nofix).length, last: th[0] ? th[0].last : 0 }); }
 	if (a[0] === 'chat') {
 		if (!a[1] && m === 'GET') return J({ ok: true, list: await H.chatThreads() });

@@ -1,0 +1,65 @@
+<script>
+// 返回（6.0 第 68 项）：手机侧滑、返回键、电脑后退键都先关最上面的弹窗 / 手机菜单，再回上一页；
+// 弹窗里填了内容还没提交，先问一句。每打开一个弹窗 / 菜单在浏览器历史里记一步（只记用户点出来的：
+// 浏览器不认没点过的历史，乱记会让返回直接退出网站）；用按钮关掉的，把那一步退掉，不会多出一次「按了没反应」
+(() => {
+  const ST = () => { try { return (history.state && history.state.kb) || null; } catch (e) { return null; } };
+  const act = () => !navigator.userActivation || navigator.userActivation.isActive;
+  const set = (v, push) => { try { history[push ? 'pushState' : 'replaceState'](Object.assign({}, history.state || {}, { kb: v }), ''); } catch (e) {} };
+  let skip = 0, pend = null, n = 0, goAfter = null;
+  const open = (el, kind) => {
+    if (el.dataset.kb) return;
+    const v = kind + ++n; el.dataset.kb = v;
+    if (pend) { clearTimeout(pend); pend = null; set(v); return; } // 刚关一个又开一个：换掉那一步
+    if (act()) set(v, true);
+  };
+  const gone = (el) => {
+    const v = el.dataset.kb; if (!v || el.dataset.kbg) return; el.dataset.kbg = '1';
+    if (ST() !== v) return;
+    if (pend) clearTimeout(pend);
+    pend = setTimeout(() => { pend = null; if (ST() === v) { skip++; history.back(); } }, 0);
+  };
+  const nav = () => document.querySelector('.nav');
+  const masks = () => [...document.querySelectorAll('body > .mask, body > .capm')];
+  // 填了还没提交的内容
+  const dirty = (m) => [...m.querySelectorAll('input, textarea, select')].some((i) => {
+    if (i.disabled || i.readOnly || i.type === 'hidden') return false;
+    if (i.type === 'checkbox' || i.type === 'radio') return i.checked !== i.defaultChecked;
+    if (i.tagName === 'SELECT') return [...i.options].some((o) => o.selected !== o.defaultSelected);
+    return i.value !== i.defaultValue;
+  });
+  const watch = () => {
+    new MutationObserver((rs) => rs.forEach((r) => {
+      r.addedNodes.forEach((x) => { if (x.classList && (x.classList.contains('mask') || x.classList.contains('capm'))) open(x, 'm'); });
+      r.removedNodes.forEach((x) => { if (x.classList && (x.classList.contains('mask') || x.classList.contains('capm'))) gone(x); });
+    })).observe(document.body, { childList: true });
+    const nv = nav(); if (nv) new MutationObserver((rs) => rs.forEach((r) => { const was = (r.oldValue || '').split(' ').includes('is-open'), now = nv.classList.contains('is-open'); if (was !== now) (now ? (delete nv.dataset.kb, delete nv.dataset.kbg, open(nv, 'nav')) : gone(nv)); })).observe(nv, { attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+  };
+  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
+  // 手机菜单开着时点去别的网页：先把菜单那一步退掉再走，回来时按一次返回就是上一页
+  document.addEventListener('click', (e) => {
+    const nv = nav(), a = e.target.closest && e.target.closest('a[href]');
+    if (!a || !nv || !nv.classList.contains('is-open') || !String(ST() || '').startsWith('nav')) return;
+    if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+    const u = new URL(a.href, location.href);
+    if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search) return; // 同一页里的 #跳转
+    e.preventDefault(); goAfter = u.href;
+    setTimeout(() => { if (goAfter) { const g = goAfter; goAfter = null; location.href = g; } }, 400);
+  }, true);
+  addEventListener('popstate', () => {
+    if (skip > 0) { skip--; if (goAfter) { const g = goAfter; goAfter = null; location.href = g; } return; }
+    const ms = masks(), m = ms[ms.length - 1];
+    if (m) {
+      if (dirty(m) && !confirm('填的内容还没提交，确定关掉吗？')) { set(m.dataset.kb || 'm0', true); return; }
+      m.dataset.kbg = '1';
+      const x = m.querySelector('[data-x]');
+      if (x) x.click(); else m.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      if (m.isConnected) m.remove();
+      return;
+    }
+    const nv = nav();
+    if (nv && nv.classList.contains('is-open')) { nv.dataset.kbg = '1'; const t = nv.querySelector('.nav__toggle'); if (t) t.click(); else nv.classList.remove('is-open'); return; }
+    if (ST()) history.back(); // 退到了一个已经关掉的弹窗 / 菜单那一步：再退一步
+  });
+})();
+</script>

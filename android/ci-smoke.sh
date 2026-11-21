@@ -83,3 +83,19 @@ adb logcat -d > $OUT/logcat.txt
 grep -A3 "识别二维码失败" $OUT/logcat.txt | head -8 | sed 's/^/::warning::/'
 if grep -E "FATAL EXCEPTION" $OUT/logcat.txt; then echo "::error::App 崩溃了"; grep -A30 "FATAL EXCEPTION" $OUT/logcat.txt | head -60; exit 1; fi
 echo "::notice::App 启动正常，没有崩溃"
+# 6.0 第 68 项：首页开着更新提示时按返回键 → 先关提示，App 不退出（截图里应是首页、没有提示）
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es homejs 'document.getElementById(\"umLater\").classList.remove(\"hidden\");document.getElementById(\"updModal\").classList.remove(\"hidden\")'"
+sleep 8
+adb exec-out screencap -p > $OUT/14-upd-modal.png
+adb shell input keyevent KEYCODE_BACK
+sleep 2
+adb exec-out screencap -p > $OUT/15-back-closes-modal.png
+echo "第 68 项：关提示后 App 还在前台：$(adb shell dumpsys activity activities | grep -c "mResumedActivity.*$PKG")"
+# 手动添加框里有没添加的地址：第一次按返回只提醒，第二次才退出
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es homejs 'document.getElementById(\"addr\").value=\"https://example\"'"
+sleep 6
+adb shell input keyevent KEYCODE_BACK
+sleep 2
+adb exec-out screencap -p > $OUT/16-back-warn-addr.png

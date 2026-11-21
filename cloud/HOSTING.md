@@ -80,7 +80,7 @@ npx wrangler secret put VAPID_PUB -c wrangler.hosted.toml
 
 官网页面在 `cloud/site/` 里，改完运行 `node tools/build-site.mjs` 再部署。
 
-打开 `https://example.com/api/ping`，看到 `{"ok":true,...}` 就部署好了。
+打开 `https://example.com/api/ping`，看到 `{"ok":true,...}` 就部署好了。（6.0 起这个公开地址只说在线和开没开邮件验证码；名额、文件存储这些在管理后台「设置」里看，或者带管理员密钥访问 `/api/admin/health`。）
 
 ### 4. 发邀请码
 
@@ -138,7 +138,48 @@ npx wrangler secret put RESEND_API_KEY -c wrangler.hosted.toml
 
 发件地址默认是 `noreply@example.com`，想换的话在 `wrangler.hosted.toml` 的 `[vars]` 里加 `MAIL_FROM = "你想要的地址"`。
 
+**每天的邮件上限（6.0）：**Resend 免费版每天最多 100 封。快用到八成时、用满时，管理后台会推送提醒你，「邮件记录」页最上面能看到今天发了多少。用满以后（以 Resend 的回复为准），注册、找回密码、新设备登录、确认本人这些要收验证码的操作当天先停，用户看到「明天再试」（提示里不说具体额度，也不会跳过验证）；报告问题、面板反馈、续期申请照常收，只是不发确认邮件。第二天自动恢复。升级了 Resend 套餐的话，在 `[vars]` 里加 `MAIL_DAILY = "每天的封数"`，提前提醒就按这个数算。
+
 **新申请提醒：**在 GitHub 仓库 **Settings → Secrets and variables → Actions → Variables** 加 `ADMIN_EMAIL` = 你的邮箱，再部署一次。以后有人提交续期申请就会发邮件给你。设好后在管理后台「设置与工具」里点「**发测试邮件**」（或者 **Actions → 发测试邮件**），确认能收到；发不出去的话会显示邮件服务给的原因。
+
+## 防攻击设置（6.0）
+
+官网自己已经有：登录、注册、验证码、报告问题的限次；同一来源短时间试太多次时要过人机验证；管理后台「设置 → 防攻击」里一键开「受攻击模式」（这些表单全部要人机验证，24 小时后自动关）。**路由器用的接口（心跳、开通、更新、面板反馈、安装上报）一律不受影响。**
+
+下面这几步在 Cloudflare 控制台里点，大约 10 分钟。顺序照做；每一步都不会挡到路由器。
+
+**1. 人机验证（Turnstile）**
+
+1. Cloudflare 控制台左边 **Turnstile → Add widget**
+2. Widget name 随便填（比如「官网」）；Hostname 填你的主域名（比如 `example.com`）；Widget Mode 选 **Managed**；Pre-clearance 选 **No**
+3. 创建后会看到两串：**Site Key**（公开的）和 **Secret Key**（私密的）
+4. GitHub 仓库 **Settings → Secrets and variables → Actions**：Variables 里加 `TURNSTILE_SITE` = Site Key；Secrets 里加 `TURNSTILE_SECRET` = Secret Key
+5. 重新部署一次（Actions → 部署托管服务 → Run workflow）。管理后台「设置 → 防攻击」里不再提示「还没设置人机验证」就好了
+
+**2. 托管规则和 DDoS 防护**：不用设置。Cloudflare 免费版自带的托管规则（Security → WAF → Managed rules 里的 Cloudflare Free Managed Ruleset）和 DDoS 防护默认就开着，确认一下没被关掉就行。
+
+**3. 登录、注册的限速规则**（免费版能建 1 条）
+
+Security → WAF → **Rate limiting rules → Create rule**：
+
+- Rule name：`官网表单限速`
+- 选 **Edit expression**，粘贴：
+  ```
+  (http.request.method eq "POST" and http.request.uri.path in {"/api/account/login" "/api/account/login2" "/api/account/register" "/api/account/code" "/api/account/reset" "/api/report"})
+  ```
+- With the same characteristics：**IP**
+- When rate exceeds：**20** requests per **10 seconds**
+- Then take action：**Block**，持续 **10 seconds**
+- Deploy
+
+正常人 10 秒内不可能点 20 次，所以不会误伤；先用这个宽松的数，在 **Security → Events** 里观察一两周，看有没有被拦的正常用户，再决定要不要收紧。
+
+**4. 不要开的两个开关**
+
+- **Bot Fight Mode（Security → Bots）保持关闭。** 免费版的这个开关没法给路由器开例外，路由器的心跳、开通、更新请求会被当成机器人拦掉，全部路由器都会显示断线
+- **Security Level（Security → Settings）不要调到 High 或 I'm Under Attack。** 官网自己的「受攻击模式」已经能挡住表单攻击，而且不影响路由器；Cloudflare 的全站模式会挡住路由器
+
+**5. 被攻击时**：管理后台「设置 → 防攻击」打开「受攻击模式」。攻击停了可以手动关，忘了关 24 小时后也会自动关。
 
 ## 安卓 App
 

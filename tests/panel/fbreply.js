@@ -4,6 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { respond } = require('./mock');
 const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') : path.join(__dirname, '..', '..', 'src', 'www', 'panel')), OUT = path.join(__dirname, 'shots');
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note || '']);
+let FBNOTE = null; // 6.0 第 77 项：官网今天发不了确认邮件时，路由器带回来的提醒
 // 弹窗里每一块（标题、文字、编号行、按钮）互相不重叠、不超出弹窗
 const noOverlap = (page, sel) => page.evaluate((sel) => {
 	const m = document.querySelector(sel); if (!m) return 'no modal';
@@ -22,7 +23,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, ''), a = body.params || {}; let r;
 		if (m === 'fb_replies') { FBN++; FBP.push(a); r = HOSTED ? { list: LIST, hosted: true, stale: STALE } : { list: [], hosted: false }; }
 		else if (m === 'fb_seen') { SEEN.push(a); LIST = LIST.map((x) => x.code === a.code ? { ...x, seen: a.updated } : x); r = { ok: true }; }
-		else if (m === 'feedback') r = { ok: true, sent: 'hub', images: 1, code: 'K7F2Q9AB', track: 'https://yrlove520.com/r/K7F2Q9AB' };
+		else if (m === 'feedback') r = { ok: true, sent: 'hub', images: 1, code: 'K7F2Q9AB', track: 'https://yrlove520.com/r/K7F2Q9AB', note: FBNOTE };
 		else if (m === 'cloud_info') r = { enabled: false };
 		else r = respond(m, a);
 		res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: r })); }
@@ -139,6 +140,20 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	}
 	await ctx.close();
 	}
+	// 6b 第 77 项：官网今天发不了确认邮件——反馈照常发出，卡片里多一句提醒
+	FBNOTE = '今天发不了确认邮件（邮件服务每天有上限），你提交的内容开发者已经收到';
+	for (const dark of [false, true]) {
+		({ ctx, page } = await open(dark)); await page.waitForTimeout(3000);
+		await page.evaluate(() => { const b = document.querySelector('[data-t="feedback"]'); b && b.click(); }); await page.waitForTimeout(800);
+		const ta2 = await page.$('.modal textarea'); if (ta2) await ta2.fill('首页的今日流量一直是 0，刷新也没用');
+		await page.evaluate(() => { const g = [...document.querySelectorAll('.modal button')].find((b) => /发送/.test(b.textContent)); g && g.click(); }); await page.waitForTimeout(1500);
+		const T2 = dark ? '（深色）' : '';
+		ok('邮件额度满了：反馈照常发出，卡片里提醒「今天发不了确认邮件」' + T2, /反馈已发送/.test(await page.textContent('.modal[data-fbsent]').catch(() => '')) && /发不了确认邮件/.test(await page.textContent('.modal[data-fbsent] [data-mailnote]').catch(() => '')));
+		ok('邮件额度满了：提醒卡片排版不重叠、不超出' + T2, (await noOverlap(page, '.modal[data-fbsent]')) === '', await noOverlap(page, '.modal[data-fbsent]'));
+		await page.screenshot({ path: OUT + '/fbreply-sent-mailnote' + (dark ? '-dark' : '') + '.png' });
+		await ctx.close();
+	}
+	FBNOTE = null;
 	// 7 「我的反馈」页面
 	const T = Date.now();
 	const MY = () => [

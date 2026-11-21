@@ -151,7 +151,10 @@ ok('路由器发心跳会告诉开通中心「还在用」', (await dev(B.sub)).
 // 首页和健康检查
 ok('官网首页能打开', (await api('GET', '/')).status === 200);
 const ping = await (await api('GET', '/api/ping')).json();
-ok('健康检查显示名额', ping.ok && ping.max === 100);
+ok('公开的健康检查只说在线、开没开邮件验证码（不露名额等细节，第 7 项）', ping.ok === true && Object.keys(ping).sort().join() === 'mail,ok', JSON.stringify(ping));
+const hp = await (await api('GET', '/api/admin/health', undefined, { authorization: 'Bearer ' + env.ADMIN_KEY })).json().catch(() => ({}));
+ok('名额在管理员的健康检查里', hp.ok && hp.max === 100 && typeof hp.count === 'number', JSON.stringify(hp));
+ok('管理员健康检查要密钥', (await api('GET', '/api/admin/health')).status === 401);
 ok('Cloudflare 接口一直带着令牌（没有未授权调用）', CF.calls.length > 0);
 
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));

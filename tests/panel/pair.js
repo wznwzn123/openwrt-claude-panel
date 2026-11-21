@@ -14,6 +14,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (m === 'cloud_info') result = hosted ? { enabled: true, url: 'https://ab3cd4ef.panel.example/cloud', tablet: 'x', pkey: 'p'.repeat(32), hosted: true, hub: 'https://panel.example' } : { enabled: false };
 		else if (m === 'hub_pair') result = { code: 'ABCD2345', exp: Date.now() + 600e3, url: 'https://panel.example/app?pair=ABCD2345' };
 		else if (m === 'hub_accounts') result = accs;
+		else if (m === 'sudo_local') result = body.params.pw === 'rootpw' ? { sudo: 'l'.repeat(24), exp: Date.now() + 600e3 } : null;
 		else if (m === 'hub_unbind') { accs = accs.filter((a) => a.uid !== body.params.uid); result = { ok: true }; }
 		else result = respond(m, body.params || {});
 		return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result })); }
@@ -31,7 +32,12 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.goto('http://localhost:8126/panel/?p=more'); await W(1500);
 	ok('自建版：没有「绑定到账号」', !(await page.evaluate(() => !!document.getElementById('hubBindBtn'))) && !/绑定到账号/.test(await page.textContent('#p-more')));
 	ok('二维码组件还没加载（用到才加载）', !(await page.evaluate(() => !!window.qrcode)));
-	await page.click('[data-t="addphone"]'); await W(800);
+	// 6.0 第 63 项：自建版的「添加新手机」只在「我的主页 → 敏感信息」里（验证路由器密码以后），系统操作里不显示
+	ok('自建版：系统操作里不显示「添加新手机」', !(await page.isVisible('[data-t="addphone"]')));
+	await page.goto('http://localhost:8126/panel/?p=me'); await W(1500);
+	ok('我的主页 → 敏感信息：没验证看不到「添加新手机」', (await page.locator('#meBox [data-mp="kphone"]').count()) === 0 && (await page.locator('#meBox [data-pw]').count()) === 1);
+	await page.fill('#meBox [data-pw]', 'rootpw'); await page.click('#meBox [data-pwok]'); await W(1200);
+	await page.click('#meBox [data-mp="kphone"]'); await W(800);
 	ok('添加新手机：显示二维码', (await page.locator('.modal .qrbox svg').count()) === 1);
 	ok('二维码先打码，点一下才显示', (await page.getAttribute('.modal .qrbox', 'class')).includes('blur'));
 	await page.click('.modal .qrbox'); await W(200);

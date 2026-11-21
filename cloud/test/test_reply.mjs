@@ -244,7 +244,7 @@ r = await api('HEAD', '/nope'); ok('[HEAD] 不存在的地址：还是 404', r.s
 r = await api('GET', '/admin?x=1'); ok('[网址] /admin 跳到 /admin/（推送只在 /admin/ 下面能开），参数带着', r.status === 301 && r.headers.get('location') === '/admin/?x=1', r.status + ' ' + r.headers.get('location'));
 for (const p of ['/notice', '/terms']) { const h = await api('HEAD', p), g = await api('GET', p); ok('[HEAD] ' + p + '：200', h.status === 200 && g.status === 200 && /frame-ancestors 'none'/.test(g.headers.get('content-security-policy') || '')); }
 const csp = async (p) => (await api('GET', p)).headers.get('content-security-policy') || '';
-ok('[统计] 官网各页放行 Cloudflare 网页统计（脚本和上报地址）', (await Promise.all(['/', '/app', '/r', '/security', '/privacy'].map(csp))).every((c) => c.includes("script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com") && c.includes("connect-src 'self' https://cloudflareinsights.com")));
+ok('[统计] 官网各页放行 Cloudflare 网页统计（脚本和上报地址）', (await Promise.all(['/', '/app', '/r', '/security', '/privacy'].map(csp))).every((c) => /script-src 'self' ('sha256-[^']+' )+https:\/\/static\.cloudflareinsights\.com/.test(c) && !/unsafe-inline';?[^;]*script|script-src[^;]*unsafe-inline/.test(c) && c.includes("connect-src 'self' https://cloudflareinsights.com")));
 ok('[统计] 管理页不放行（管理页不统计），其他安全设置不变', !(await csp('/admin/')).includes('cloudflareinsights') && /frame-ancestors 'none'/.test(await csp('/admin/')) && /frame-ancestors 'none'/.test(await csp('/')));
 r = await api('GET', '/privacy'); const phtml = await r.text();
 ok('[隐私] 隐私政策如实写了：Cloudflare 网页统计不用 Cookie；4.0 起官网记登录 IP（90 天）、访客 IP（30 天）；面板里没有统计', /Cloudflare 网页统计/.test(phtml) && /不用 Cookie/.test(phtml) && /你的面板里没有任何统计/.test(phtml) && /IP 30 天后自动删除/.test(phtml) && /90 天后自动删除/.test(phtml) && !/没有广告、统计、跟踪代码/.test(phtml));

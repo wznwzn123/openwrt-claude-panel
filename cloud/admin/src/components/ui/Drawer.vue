@@ -3,6 +3,7 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import IconButton from './IconButton.vue'
 import { originAtPointer, overlayEnter, overlayLeave } from '@/composables/motion'
 import { createFocusTrap } from '@/composables/focus'
+import { useBackLayer } from '@/composables/back'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -15,6 +16,7 @@ const props = withDefaults(defineProps<{
   width: 520,
 })
 const emit = defineEmits<{ (e: 'close'): void }>()
+useBackLayer(() => props.open, () => emit('close')) // 按返回先关抽屉（第 68 项）
 
 const panel = ref<HTMLElement | null>(null)
 const trap = createFocusTrap()

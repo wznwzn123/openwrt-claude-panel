@@ -5,6 +5,7 @@ import Icon from '@/components/Icon.vue'
 import { navGroups } from '@/composables/auth'
 import { overlayEnter, overlayLeave, slideThumb } from '@/composables/motion'
 import { createFocusTrap } from '@/composables/focus'
+import { useBackLayer } from '@/composables/back'
 
 /* 命令面板（Ctrl/⌘ K）：最近访问 / 页面 / 动作，一块玻璃滑块表示键盘焦点 */
 const props = defineProps<{ open: boolean }>()
@@ -19,6 +20,7 @@ const input = ref<HTMLInputElement | null>(null)
 const keyword = ref('')
 const active = ref(0)
 const trap = createFocusTrap()
+useBackLayer(() => props.open, () => emit('close')) // 按返回先关（第 68 项）
 
 interface Entry { key: string; group: string; label: string; sub?: string; icon?: string; run: () => void }
 

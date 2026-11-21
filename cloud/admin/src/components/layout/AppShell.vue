@@ -7,6 +7,7 @@ import CommandPalette from './CommandPalette.vue'
 import AppearanceDialog from './AppearanceDialog.vue'
 import { logout, startBadges, setNewChatHandler } from '@/composables/auth'
 import { pushToast } from '@/composables/toast'
+import { useBackLayer } from '@/composables/back'
 import { appearance } from '@/composables/appearance'
 import { pageEnter, pageLeave, playShellEntrance } from '@/composables/motion'
 import { confirm } from '@/composables/confirm'
@@ -20,6 +21,8 @@ const mobileOpen = ref(false)
 const commandOpen = ref(false)
 const appearanceOpen = ref(false)
 const scrolled = ref(false)
+// 手机上开着菜单时按返回：先收起菜单（第 68 项）
+useBackLayer(() => mobile.value && mobileOpen.value, () => { mobileOpen.value = false })
 
 // 内容滚动后顶栏凝结：只切换一层静态玻璃的 opacity，不补间 backdrop-filter
 function onContentScroll() {

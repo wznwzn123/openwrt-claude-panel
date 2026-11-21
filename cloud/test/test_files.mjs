@@ -38,9 +38,11 @@ async function upload(start, data) {
 // 1. 没开 R2：领不到上传票，提示清楚；ping 里 files=false
 let r = await chat(R1, { op: 'up', name: 'a.mp4', size: 100, type: 'video/mp4' });
 ok('没开文件存储：领上传票说清楚（现在只能发文字和截图）', r.st === 503 && /还没开文件存储/.test(r.j.error), JSON.stringify(r));
-ok('没开文件存储：/api/ping 里 files=false', (await (await go('/api/ping')).json()).files === false);
+const health = async () => (await go('/api/admin/health', { headers: { authorization: 'Bearer ' + env.ADMIN_KEY } })).json();
+ok('没开文件存储：管理员健康检查里 files=false', (await health()).files === false);
+ok('公开的 /api/ping 不说开没开文件存储（第 7 项）', !('files' in (await (await go('/api/ping')).json())));
 env.F = F;
-ok('开了：/api/ping 里 files=true', (await (await go('/api/ping')).json()).files === true);
+ok('开了：管理员健康检查里 files=true', (await health()).files === true);
 
 // 2. 对话：传一个 17MB 的视频（3 块），发出去，下载
 const vid = bytes(17 * 1024 * 1024);

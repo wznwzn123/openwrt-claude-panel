@@ -32,7 +32,19 @@ async function out() {
   if (!(await confirm({ title: '退出登录', message: '退出以后要重新输入管理员密钥。', confirmText: '退出' }))) return
   await logout(); router.replace({ name: 'login' })
 }
-onMounted(async () => { try { ping.value = await (await fetch('/api/ping', { cache: 'no-store' })).json() } catch { /* 忽略 */ } })
+onMounted(async () => { try { ping.value = await (await fetch('/api/ping', { cache: 'no-store' })).json() } catch { /* 忽略 */ } loadAtk() })
+/* 第 66 项：受攻击模式——注册、登录、发验证码、找回密码、报告问题都要先过人机验证（没配置人机验证时只收紧限速）；
+   路由器心跳、安装、更新不受影响；最长 24 小时自动关 */
+const atk = ref<{ on: boolean; until?: number } | null>(null)
+const capOk = ref(false)
+const atkBusy = ref(false)
+async function loadAtk() { try { const r = await get('atk'); atk.value = r.atk; capOk.value = !!r.captcha } catch { /* 忽略 */ } }
+async function setAtk(on: boolean) {
+  if (on && !(await confirm({ title: '开启受攻击模式', message: (capOk.value ? '注册、登录、发验证码、找回密码、报告问题都要先过一次人机验证' : '还没设置人机验证，这次只能收紧限速：同一来源 10 分钟内最多试 3 次') + '。\n路由器心跳、安装、更新不受影响。24 小时后自动关，也可以随时手动关。', confirmText: '开启' }))) return
+  atkBusy.value = true
+  try { const r = await post('atk', { on }); atk.value = r.atk; capOk.value = !!r.captcha; pushToast(on ? '已开启受攻击模式' : '已关闭受攻击模式') } catch (e) { toastError(e, '没改成') } finally { atkBusy.value = false }
+}
+const atkUntil = () => atk.value?.until ? new Date(atk.value.until).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : ''
 </script>
 
 <template>
@@ -40,7 +52,10 @@ onMounted(async () => { try { ping.value = await (await fetch('/api/ping', { cac
     <PageHeader title="设置与工具" desc="提醒音和外观只在这个浏览器里生效；对话提醒、两步验证、数据备份是托管服务的设置，换了设备也一样。" />
     <div class="hub-stack">
       <Panel title="提醒" class="reveal">
-        <div class="hub-row"><div class="hub-row-main"><div class="hub-row-title">有新的对话消息时响一声</div><div class="hub-row-meta">后台开着时每 15 秒看一次有没有新消息；侧边栏和顶栏上会显示红色数字，不在对话页时还会弹个提示。</div></div><div class="hub-row-acts"><Switch :model-value="sound" label="提示音" @update:model-value="setSound" /></div></div>
+        <div class="hub-row"><div class="hub-row-main"><div class="hub-row-title">有新的对话消息时响一声</div><div class="hub-row-meta">后台开着时每分钟看一次有没有新消息；侧边栏和顶栏上会显示红色数字，不在对话页时还会弹个提示。</div></div><div class="hub-row-acts"><Switch :model-value="sound" label="提示音" @update:model-value="setSound" /></div></div>
+      </Panel>
+      <Panel title="防攻击" class="reveal">
+        <div class="hub-row"><div class="hub-row-main"><div class="hub-row-title">受攻击模式</div><div class="hub-row-meta">{{ atk?.on ? '开着：' + atkUntil() + ' 自动关。' : '有人大量注册、乱试密码、刷验证码时打开。' }}{{ capOk ? '注册、登录、发验证码、找回密码、报告问题都要先过人机验证；' : '还没设置人机验证（TURNSTILE_SITE / TURNSTILE_SECRET），开启后只收紧限速；' }}路由器心跳、安装、更新不受影响。平时同一来源短时间试太多次也会自动要求人机验证。</div></div><Switch :model-value="!!atk?.on" :disabled="atkBusy || !atk" label="受攻击模式" @update:model-value="setAtk" /></div>
       </Panel>
       <DevProfilePanel />
       <ChatAlertPanel />

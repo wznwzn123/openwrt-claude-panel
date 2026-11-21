@@ -160,10 +160,10 @@ j = await (await adm('GET', '/errors')).json();
 ok('[出错] 记下出错的地址和原因', j.list[0].path === '/api/x' && /boom/.test(j.list[0].msg));
 // Worker 里真的出错
 const ofetch = H.stats; H.stats = async () => { throw new Error('模拟出错'); };
-r = await api('GET', '/api/ping');
+r = await adm('GET', '/health'); // 第 7 项起公开的 /api/ping 不再读名额，用管理员的健康检查模拟
 H.stats = ofetch;
 j = await (await adm('GET', '/errors')).json();
-ok('[出错] 官网接口出错：返回 500、不露细节，记进出错记录', r.status === 500 && !/模拟/.test(await r.text()) && j.list[0].path === '/api/ping' && /模拟出错/.test(j.list[0].msg), JSON.stringify(j.list[0]));
+ok('[出错] 官网接口出错：返回 500、不露细节，记进出错记录', r.status === 500 && !/模拟/.test(await r.text()) && j.list[0].path === '/api/admin/health' && /模拟出错/.test(j.list[0].msg), JSON.stringify(j.list[0]));
 
 /* ---------- 概览 ---------- */
 j = await (await adm('GET', '/overview')).json();

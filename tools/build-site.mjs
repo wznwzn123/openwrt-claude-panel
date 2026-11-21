@@ -10,7 +10,7 @@ const LEG = JSON.parse(fs.readFileSync(new URL('legacy-colors.json', dir), 'utf8
 const pages = { HOME: 'index.html', APP: 'app.html', ADMIN: 'admin.html', PRIVACY: 'privacy.html', SECURITY: 'security.html', REPLY: 'reply.html', NOTICE: 'notice.html', TERMS: 'terms.html', CHANGELOG: 'changelog.html', STATUS: 'status.html', HELP: 'help.html' };
 // 旧内核不认识 :has()：先把所有样式里的 :has(条件) 编好号（页面里的小脚本要用同一份编号）
 const HAS = { map: new Map(), list: [] };
-const expand = (html) => { for (let i = 0; i < 3; i++) html = html.replace(/<!--KIT_(HEAD|NAV|FOOT|JS|DOC|ME|HAS)-->/g, (m, n) => fs.readFileSync(new URL('_kit_' + n.toLowerCase() + '.html', dir), 'utf8')); return html; };
+const expand = (html) => { for (let i = 0; i < 3; i++) html = html.replace(/<!--KIT_(HEAD|NAV|FOOT|JS|DOC|ME|HAS|BACK|CAP)-->/g, (m, n) => fs.readFileSync(new URL('_kit_' + n.toLowerCase() + '.html', dir), 'utf8')); return html; };
 const kitCss = []; const walkCss = (rel) => { for (const e of fs.readdirSync(new URL('k/' + rel, dir), { withFileTypes: true })) { const r = rel + e.name; if (e.isDirectory()) walkCss(r + '/'); else if (r.endsWith('.css')) kitCss.push(fs.readFileSync(new URL('k/' + r, dir), 'utf8')); } };
 walkCss('');
 for (const t of kitCss) hasScan(t, HAS);
@@ -19,6 +19,9 @@ let out = '// 自动生成，不要直接改：改 cloud/site/ 里的文件后�
 // 页面里的截图单独由 /img/名字-内容摘要.webp 发（浏览器长期缓存；内容变了摘要跟着变），不再塞进页面：页面小一半，打开更快
 const IMG = {};
 const imgUrl = (n) => { const b = fs.readFileSync(new URL('img/' + n + '.webp', dir)), f = n + '-' + createHash('sha256').update(b).digest('hex').slice(0, 10) + '.webp'; IMG[f] = b.toString('base64'); return '/img/' + f; };
+// 6.0 第 8 项：官网的内容安全策略不再放行「随便哪段内联脚本」，只放行打包时算好摘要的这些（页面里自己写的 <script>）
+const CSP_SCRIPTS = {};
+const scriptHashes = (html) => [...html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)].filter((m) => !/\ssrc\s*=/i.test(m[1] || '')).map((m) => "'sha256-" + createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
 for (const [k, f] of Object.entries(pages)) {
 	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 /img/名字-摘要.webp（cloud/site/img/名字.webp，见上面的 imgUrl）
 	// 新设计的页面共用的顶栏、页脚、样式和脚本：写成 <!--KIT_HEAD--> 这样，打包时换成 cloud/site/_kit_*.html 的内容
@@ -29,7 +32,9 @@ for (const [k, f] of Object.entries(pages)) {
 	html = html.replace('/*COMMON_CSS*/', css)
 		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => imgUrl(n));
 	out += `export const ${k} = ${JSON.stringify(html)};\n`;
+	CSP_SCRIPTS[k] = [...new Set(scriptHashes(html))].join(' ');
 }
+out += `export const CSP_SCRIPTS = ${JSON.stringify(CSP_SCRIPTS)};\n`;
 // 官网字体 Geist（SIL OFL 1.1，见 cloud/site/img/geist-OFL.txt）：从本站 /fonts/geist.woff2 发，页面不从外部加载东西
 out += `export const FONT_GEIST = ${JSON.stringify(fs.readFileSync(new URL('img/geist.woff2', dir)).toString('base64'))};\n`;
 // 4.0 管理后台：cloud/admin 打包好的页面（cd cloud/admin && npm run build）；只有 js / css，全部放进 site.js，不从外部加载

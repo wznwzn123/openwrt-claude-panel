@@ -258,7 +258,7 @@ async function ncGo() {
 	}
 }
 $('lcBtn').onclick = ncGo;
-window.addEventListener('hashchange', () => { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (!m) return; history.replaceState(null, '', location.pathname + location.search); if (!$('needcode').classList.contains('hidden')) { $('lcInput').value = m[1].toUpperCase(); ncGo(); } else pendCode = m[1].toUpperCase(); });
+window.addEventListener('hashchange', () => { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (!m) return; history.replaceState(history.state, '', location.pathname + location.search); if (!$('needcode').classList.contains('hidden')) { $('lcInput').value = m[1].toUpperCase(); ncGo(); } else pendCode = m[1].toUpperCase(); });
 $('lcInput').onkeydown = (e) => { if (e.key === 'Enter') ncGo(); };
 $('lcOut').onclick = (e) => { e.preventDefault(); logout(''); };
 
@@ -290,7 +290,7 @@ function start() {
 		const o = JSON.parse(store.get('rp_ov') || 'null');
 		if (o) { delete o.speed; if (!validPage(p) || p === 'home') renderOv(o, true); else renderSub(o); setStatus(false, '连接中…'); }
 	} catch (e) {}
-	go(p);
+	go(p, 'boot');
 	if (validPage(p) && p !== 'home') setTimeout(() => P('overview').then((o) => { store.set('rp_ov', JSON.stringify(o)); renderSub(o); }).catch(() => {}), 1200);
 	mTick();
 	clearInterval(ticker);
@@ -317,28 +317,38 @@ function start() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 
-// 安卓：返回键要连续按两次才退出（第一次先关弹窗 / 侧边栏，或提示「再按一次返回键退出」）
-// 做法：在历史记录里多垫一层；按返回时先「吃掉」这一层。用户点过页面才垫（安卓 Chrome 不认没有点击过的历史记录）
+// 返回键、侧滑返回、电脑后退键（6.0 第 68 项，记步骤的办法见 30-core 的 HS）：
+// 先收键盘（安卓）→ 关最上面的弹窗（关不掉的弹窗不动）→ 关侧边栏 → 回上一页（有没保存的修改先问）。
+// 安卓在第一页：先提示「再按一次返回键退出」，再按才退出（App 里是回到 App 首页）
 (() => {
-	if (!/Android/i.test(navigator.userAgent)) return;
-	let armed = false;
-	const arm = () => {
-		if (armed || !token) return;
-		try { history.pushState({ cmcpBack: 1 }, '', location.href); armed = true; } catch (e) {}
-	};
+	const isTyping = (ae) => ae && (ae.tagName === 'TEXTAREA' || (ae.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|file|color)$/.test(ae.type)) || ae.isContentEditable);
+	// 安卓在第一页时多垫一步，用来提示「再按一次退出」；用户点过页面才垫
+	const arm = () => { if (!ANDROID || !HS.ready || !token || LK.on) return; const s = hsS(); if (s.root && hsAct()) hsSet({ p: page, guard: 1 }, true); };
 	['pointerup', 'keydown', 'touchend'].forEach((t) => addEventListener(t, arm, true));
-	addEventListener('popstate', () => {
-		if (!armed) return;
-		armed = false;
-		if (document.body.classList.contains('locked')) { lkMsg('再按一次返回键退出'); return; }
-		// 正在输入（键盘开着）：侧滑返回只收起键盘，不关弹窗、不退出（比如输验证码时想先把键盘收起来）
-		const ae = document.activeElement;
-		if (ae && (ae.tagName === 'TEXTAREA' || (ae.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|file|color)$/.test(ae.type)) || ae.isContentEditable)) { ae.blur(); return; }
-		const m = document.querySelector('.modal:not(.closing)');
-		// 下一次点页面时再垫回去
-		if (m) { if (!m.dataset.lock) m.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }
+	new MutationObserver((ms) => ms.forEach((r) => {
+		r.addedNodes.forEach((n) => { if (n.classList && n.classList.contains('modal') && !n.classList.contains('closing')) hsOpen(n); });
+		r.removedNodes.forEach((n) => { if (n.classList && n.classList.contains('modal')) hsShut(n); });
+	})).observe(document.body, { childList: true });
+	addEventListener('popstate', (e) => {
+		if (HS.skip > 0) { HS.skip--; HS.cur = hsS(); return; }
+		const from = HS.cur, s = hsS(); HS.cur = s;
+		if (!HS.ready) return;
+		if (!s.cmcp) return; // 不是面板记的（比如原版页面里自己的跳转）
+		const back = () => hsSet(from, true); // 这次返回不算数：把刚退掉的那一步补回去
+		if (LK.on || document.body.classList.contains('locked')) { back(); if (ANDROID) lkMsg('再按一次返回键退出'); return; }
+		if (ANDROID && isTyping(document.activeElement)) { document.activeElement.blur(); back(); return; }
+		const ms = $$('.modal:not(.closing)'), m = ms[ms.length - 1];
+		if (m) {
+			if (m.dataset.lock) { back(); return; }
+			m.dataset.hgone = 1; // 这一步已经退掉了，关的时候不用再退
+			m.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+			if (m.isConnected && !m.classList.contains('closing')) { m.dataset.hgone = ''; back(); } // 点背景关不掉的（比如正在保存）
+			return;
+		}
 		if ($('side').classList.contains('open')) { sideOpen(false); return; }
-		toast('再按一次返回键退出');
+		if (s.m || s.side) { if (s.p && s.p !== page) go(s.p, 'pop'); else history.back(); return; } // 退到一个已经关掉的弹窗那一步：再退一步
+		if (s.p && s.p !== page) { go(s.p, 'pop'); return; }
+		if (s.root && from.guard && ANDROID) toast(IN_APP ? '再按一次返回键回到 App 首页' : '再按一次返回键退出');
 	});
 })();
 /* ---------- 面板锁（指纹 / 密码，5 分钟没操作自动锁） ----------

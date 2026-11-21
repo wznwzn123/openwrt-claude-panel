@@ -142,9 +142,10 @@ public class MainActivity extends AppCompatActivity {
         ContextCompat.registerReceiver(this, onDownload, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), ContextCompat.RECEIVER_EXPORTED);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() {
+                // 网页（面板、官网）：交给网页自己的返回（先关弹窗、回上一页，6.0 第 68 项），退到头了回 App 首页
                 if (site.getVisibility() == View.VISIBLE) {
                     if (site.canGoBack()) site.goBack(); else showHome();
-                } else finish();
+                } else home.evaluateJavascript("window.appBack ? appBack() : false", r -> { if (!"true".equals(r)) finish(); }); // 首页：先关更新提示，再退出
             }
         });
         applyBars();

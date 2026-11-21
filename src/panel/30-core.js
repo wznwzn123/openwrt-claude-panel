@@ -197,6 +197,35 @@ function toastHide() {
 	toastX = setTimeout(() => { t.className = 'toast hidden'; }, 260);
 }
 $('toast').onclick = toastHide;
+/* ---------- 返回（6.0 第 68 项）：手机侧滑、返回键、电脑后退键都回到上一步 ----------
+   每打开一页、一个弹窗、侧边栏，就在浏览器历史里记一步；按返回时先关弹窗 / 侧边栏，再回上一页；
+   有没保存的修改先问。只有用户点出来的才记（浏览器不认没点过的历史，乱记会让返回直接退出）。 */
+const HS = { skip: 0, pend: null, id: 0, ready: false, cur: {} };
+const ANDROID = /Android/i.test(navigator.userAgent), IN_APP = /RouterPanelApp\//.test(navigator.userAgent);
+const hsS = () => { try { return history.state && history.state.cmcp ? history.state : {}; } catch (e) { return {}; } };
+const hsAct = () => !navigator.userActivation || navigator.userActivation.isActive;
+function hsSet(st, push) { st = Object.assign({ cmcp: 1 }, st); try { history[push ? 'pushState' : 'replaceState'](st, ''); HS.cur = st; } catch (e) {} }
+// 刚关掉的弹窗 / 侧边栏那一步还没退掉，接着又打开了别的：直接把那一步换成新的，不多记一步
+function hsAdopt(st) { if (!HS.pend) return false; clearTimeout(HS.pend.t); HS.pend = null; hsSet(st); return true; }
+function hsOpen(m) {
+	if (!HS.ready || m.dataset.hid) return;
+	const id = 'm' + ++HS.id; m.dataset.hid = id;
+	if (!hsAdopt({ p: page, m: id }) && hsAct()) hsSet({ p: page, m: id }, true);
+}
+// 用按钮关掉的：把它那一步退掉（下一个事件循环再退，好让紧接着打开的弹窗接上）
+function hsGone(key, val) {
+	if (hsS()[key] !== val) return;
+	if (HS.pend) clearTimeout(HS.pend.t);
+	HS.pend = { t: setTimeout(() => { HS.pend = null; if (hsS()[key] === val) { HS.skip++; history.back(); } }, 0) };
+}
+const hsShut = (m) => { if (m.dataset.hid && !m.dataset.hgone) { m.dataset.hgone = 1; hsGone('m', m.dataset.hid); } };
+function hsNav(p, how) {
+	if (how === 'pop') return;
+	if (how === 'boot') { HS.ready = true; hsSet({ p, root: 1 }); return; }
+	if (!HS.ready || p === page) return;
+	if (hsAdopt({ p }) || hsS().side) return hsSet({ p });
+	if (hsAct()) hsSet({ p }, true);
+}
 function modal(html, onMount) {
 	return new Promise((resolve) => {
 		const m = document.createElement('div');
@@ -205,6 +234,7 @@ function modal(html, onMount) {
 		const close = (v) => {
 			if (m.classList.contains('closing')) return;
 			m.classList.add('closing');
+			hsShut(m);
 			setTimeout(() => m.remove(), 300);
 			resolve(v);
 		};
@@ -552,9 +582,11 @@ function navReveal(p) {
 }
 let page = 'home';
 const DIRTY = {};
-async function go(p) {
+// how：'boot' 刚打开面板；'pop' 按了返回（历史里已经退了一步，不再记）
+async function go(p, how) {
 	if (!canPage(p)) { toast(PAGE_PERM[p] === 'owner' ? '只有主账号能用这个功能' : '主账号没有给你开这个功能'); p = 'main'; }
-	if (p !== page && DIRTY[page] && DIRTY[page]() && !(await confirmBox('还有没保存的修改', '离开这一页会丢掉这些修改。', '不保存，离开', true))) return;
+	if (p !== page && DIRTY[page] && DIRTY[page]() && !(await confirmBox('还有没保存的修改', '离开这一页会丢掉这些修改。', '不保存，离开', true))) { if (how === 'pop') hsSet({ p: page }, true); return; }
+	hsNav(p, how);
 	const prev = page;
 	page = p;
 	if (p === 'notice' && prev !== 'notice') NT.view = null;
@@ -578,7 +610,12 @@ async function go(p) {
 	};
 	if (sliding) requestAnimationFrame(() => setTimeout(swap, 16)); else swap();
 }
-function sideOpen(on) { $('side').classList.toggle('open', on); $('scrim').classList.toggle('open', on); if (on && token) loadMenu(); }
+function sideOpen(on) {
+	const was = $('side').classList.contains('open');
+	$('side').classList.toggle('open', on); $('scrim').classList.toggle('open', on); if (on && token) loadMenu();
+	if (on && !was && HS.ready && innerWidth < 900 && !hsS().side && !hsAdopt({ p: page, side: 1 }) && hsAct()) hsSet({ p: page, side: 1 }, true);
+	if (!on && was) hsGone('side', 1);
+}
 $('sidenav').addEventListener('click', (e) => {
 	const t = e.target.closest('button[data-ng]');
 	if (t) {
@@ -608,8 +645,19 @@ $('sideQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b
 renderNav();
 $('menuBtn').onclick = () => sideOpen(true);
 $('scrim').onclick = () => sideOpen(false);
-(() => { let x0 = null; addEventListener('touchstart', (e) => { const t = e.touches[0]; x0 = t.clientX < 24 || $('side').classList.contains('open') ? t.clientX : null; }, { passive: true });
-	addEventListener('touchend', (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; if (dx > 60) sideOpen(true); if (dx < -60) sideOpen(false); x0 = null; }, { passive: true }); })();
+// 从屏幕左边缘往右滑：能返回就返回（苹果手机添加到主屏幕后没有系统的侧滑返回），已经在第一页就打开菜单。
+// 苹果手机在 Safari 浏览器里：左边缘归 Safari 自己的侧滑返回，面板不抢
+(() => {
+	const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+	const SOLO = (() => { try { return navigator.standalone === true || matchMedia('(display-mode: standalone)').matches; } catch (e) { return false; } })();
+	let x0 = null, y0 = 0, edge = false;
+	addEventListener('touchstart', (e) => { const t = e.touches[0]; edge = t.clientX < 24; x0 = (edge && !(IOS && !SOLO)) || $('side').classList.contains('open') ? t.clientX : null; y0 = t.clientY; }, { passive: true });
+	addEventListener('touchend', (e) => {
+		if (x0 == null) return; const c = e.changedTouches[0], dx = c.clientX - x0, dy = Math.abs(c.clientY - y0); x0 = null;
+		if (dx > 60 && dy < 80 && edge && !$('side').classList.contains('open')) { const s = hsS(); if (s.cmcp && !s.root && HS.ready) history.back(); else sideOpen(true); return; }
+		if (dx < -60) sideOpen(false);
+	}, { passive: true });
+})();
 const topLine = () => $('topbar').classList.toggle('scrolled', scrollY > 2);
 addEventListener('scroll', topLine, { passive: true });
 function topH() { const t = $('topbar'); document.documentElement.style.setProperty('--toph', Math.round(t.offsetHeight + (parseFloat(getComputedStyle(t).marginTop) || 0)) - 2 + 'px'); }

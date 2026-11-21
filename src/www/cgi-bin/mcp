@@ -3045,7 +3045,8 @@ P.feedback = function(a) {
 			sh('rm -f ' + shq(fb_cache()));   // 「我的反馈」马上能看到这条
 		}
 		let ok = match(o.code ?? '', /^[a-z2-9]{8}$/);
-		return { ok: true, sent: 'hub', images: length(imgs), code: ok ? uc(o.code) : null, track: ok ? fb_track(o.code) : null };
+		// 第 77 项：官网今天发不了确认邮件时带一句提醒（反馈照常收到）
+		return { ok: true, sent: 'hub', images: length(imgs), code: ok ? uc(o.code) : null, track: ok ? fb_track(o.code) : null, note: type(o.mailNote) == 'string' ? substr(o.mailNote, 0, 120) : null };
 	}
 	// 自建版：没有开通中心，带着内容去 GitHub 提
 	let body = text + (contact ? '\n\n联系方式：' + contact : '') + (diag ? '\n\n---\n' + diag : '');

@@ -115,12 +115,13 @@ export function installFam(Hub) {
 			const d = await this.ctx.storage.get('d:' + sub), u = await this.ctx.storage.get('u:' + uid);
 			if (!d || !u || !(d.users || []).includes(uid)) return { st: 404, error: '这个账号不在这台路由器里' };
 			if (!this.env.RESEND_API_KEY) return { st: 200, ok: true, nomail: true };
+			{ const b = await this.mailBlock(); if (b) return b; } // 今天邮件额度满了：明天再试（不会跳过验证）
 			if (!(await this.hit('su1:' + uid, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
 			if (!(await this.hit('sud:' + uid, 20, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
 			const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
 			await this.ctx.storage.put('c:su:' + sub + ':' + uid, { code, exp: Date.now() + 600e3, tries: 0 });
 			const ok = await this.mail(u.email, `验证码 ${code}（确认是你本人）`, `<p>你正在路由器「${esc(d.name || d.sub)}」的面板里做需要确认身份的操作（管理家人、看敏感信息等），验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。<b>不是你本人在操作的话，不要告诉任何人这个验证码。</b></p>`);
-			if (!ok) return { st: 502, error: '验证码邮件没发出去，稍后再试' };
+			if (!ok) return (await this.mailBlock()) || { st: 502, error: '验证码邮件没发出去，稍后再试' };
 			return { st: 200, ok: true, mail: mask(u.email) };
 		},
 		async famSudo(sub, uid, code) {
@@ -148,12 +149,13 @@ export function installFam(Hub) {
 			const u = await this.ctx.storage.get('u:' + uid);
 			if (!u) return { st: 401, error: '请先登录' };
 			if (!this.env.RESEND_API_KEY) return { st: 200, ok: true, nomail: true };
+			{ const b = await this.mailBlock(); if (b) return b; }
 			if (!(await this.hit('ws1:' + uid, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
 			if (!(await this.hit('wsd:' + uid, 20, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
 			const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
 			await this.ctx.storage.put('c:ws:' + uid, { code, exp: Date.now() + 600e3, tries: 0 });
 			const ok = await this.mail(u.email, `验证码 ${code}（确认是你本人）`, `<p>你正在官网账号里做需要确认身份的操作，验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。不是你本人在操作的话，请马上改密码。</p>`);
-			if (!ok) return { st: 502, error: '验证码邮件没发出去，稍后再试' };
+			if (!ok) return (await this.mailBlock()) || { st: 502, error: '验证码邮件没发出去，稍后再试' };
 			return { st: 200, ok: true, mail: mask(u.email) };
 		},
 		async webSudo(uid, sid, code) {
@@ -209,13 +211,14 @@ export function installFam(Hub) {
 			if (!(d.users || []).includes(target)) return { st: 400, error: '只能从已经绑定这台路由器的账号里选' };
 			const t = await this.ctx.storage.get('u:' + target);
 			if (!t) return { st: 400, error: '这个账号不在了' };
+			if (this.env.RESEND_API_KEY) { const b = await this.mailBlock(); if (b) return b; }
 			if (!(await this.hit('pk1:' + sub, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
 			if (!(await this.hit('pkd:' + sub, 20, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
 			const code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
 			await this.ctx.storage.put('c:pick:' + sub, { code, target, by: uid, exp: Date.now() + 600e3, tries: 0 });
 			if (this.env.RESEND_API_KEY) {
 				const ok = await this.mail(t.email, `验证码 ${code}（确认当路由器「${d.name || d.sub}」的主账号）`, `<p>路由器「${esc(d.name || d.sub)}」现在要选一个主账号，你被选中了。主账号权限最大，家里其他人会变成你的子账号，能做什么由你决定。</p><p>验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。不想当主账号就不用管这封邮件。</p>`);
-				if (!ok) return { st: 502, error: '验证码邮件没发出去，稍后再试' };
+				if (!ok) return (await this.mailBlock()) || { st: 502, error: '验证码邮件没发出去，稍后再试' };
 			}
 			return { st: 200, ok: true, mail: mask(t.email), nomail: !this.env.RESEND_API_KEY ? code : undefined };
 		},

@@ -3,6 +3,7 @@ import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import IconButton from './IconButton.vue'
 import { overlayEnter, overlayLeave } from '@/composables/motion'
 import { createFocusTrap } from '@/composables/focus'
+import { useBackLayer } from '@/composables/back'
 
 const props = withDefaults(defineProps<{
   open: boolean
@@ -15,6 +16,8 @@ const props = withDefaults(defineProps<{
   width: 560,
 })
 const emit = defineEmits<{ (e: 'close'): void }>()
+// 按返回先关弹窗；点遮罩不关的是表单弹窗，按返回也不直接关（第 68 项）
+useBackLayer(() => props.open, () => emit('close'), () => !props.closeOnOverlay)
 
 const panel = ref<HTMLElement | null>(null)
 const trap = createFocusTrap()

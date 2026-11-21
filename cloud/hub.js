@@ -8,7 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES, CSP_SCRIPTS } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser, permsOf } from './fam.js';
@@ -138,11 +138,26 @@ export function parseDays(v) {
 	const m = /\d+/.exec(s); if (!m) return 0;
 	const n = +m[0]; return n >= 1 && n <= 3650 ? n : 0;
 }
+/* 6.0 第 77 项：邮件服务每天能发的封数有上限。用满了：要收邮件才能做完的事（注册、找回密码、新设备登录、确认本人）当天先不让做、说明原因；
+   影响小的（报告、反馈、续期申请）照常提交，只提醒「今天发不了确认邮件」；快用满和用满时推送给管理员。给用户的提示里不说具体额度。
+   不会因为邮件发不出就跳过验证。 */
+export const MAIL_FULL_MSG = '今天发邮件的次数满了（邮件服务每天有上限），这一步要收邮件验证码，请明天再试。你的账号没有问题';
+export const MAIL_NOTE = '今天发不了确认邮件（邮件服务每天有上限），你提交的内容开发者已经收到';
+export const mailDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10); // 邮件服务按世界时 0 点算一天
+// 发一封：{ ok, quota（额度用完了）}；被限速（每秒太多）时等一下再试一次
 async function sendMail(env, to, subject, html) {
-	try {
-		const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || 'noreply@' + env.BASE_DOMAIN, to: [to], subject, html }) });
-		return r.ok;
-	} catch (e) { return false; }
+	for (let i = 0; i < 2; i++) {
+		try {
+					const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + env.RESEND_API_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ from: env.MAIL_FROM || 'noreply@' + env.BASE_DOMAIN, to: [to], subject, html }) });
+			if (r.ok) return { ok: true };
+			let j = {}; try { j = await r.json(); } catch (e) {}
+			const name = String(j.name || ''), msg = String(j.message || '');
+			if (r.status === 429 && (/quota/i.test(name) || /quota/i.test(msg))) return { ok: false, quota: /month/i.test(name + msg) ? 'month' : 'day', err: '邮件服务今天的额度用完了' };
+			if (r.status === 429 && i === 0) { await new Promise((z) => setTimeout(z, 700)); continue; }
+			return { ok: false, err: '发信服务没收下（' + r.status + '）' };
+		} catch (e) { return { ok: false, err: '连不上发信服务' }; }
+	}
+	return { ok: false, err: '发信服务太忙' };
 }
 
 /* ---------- 开通中心（全局只有一个，所有登记都在这里排队处理） ---------- */
@@ -312,11 +327,34 @@ export class Hub extends DurableObject {
 	// 发邮件，并记到「邮件记录」里（没配置发信服务时不发、不记）
 	async mail(to, subject, html) {
 		if (!this.env.RESEND_API_KEY || !to) return false;
-		let ok = false;
-		try { ok = await sendMail(this.env, to, subject, html); } catch (e) {}
-		try { await this.mailLog(to, subject, ok, ok ? '' : '发信服务没收下'); } catch (e) {}
-		return ok;
+		if (await this.mailFull()) { try { await this.mailLog(to, subject, false, '今天的邮件额度用完了，没发'); } catch (e) {} return false; }
+		let r = { ok: false };
+		try { r = await sendMail(this.env, to, subject, html); } catch (e) {}
+		try { await this.mailCount(r); } catch (e) {}
+		try { await this.mailLog(to, subject, r.ok, r.ok ? '' : r.err || '发信服务没收下'); } catch (e) {}
+		return r.ok;
 	}
+	/* ---------- 邮件额度（第 77 项） ---------- */
+	mailCap() { const n = +this.env.MAIL_DAILY; return n >= 10 && n <= 100000 ? n : 100; } // 每天能发多少封（Resend 免费版 100），可以用 MAIL_DAILY 改
+	async mailStat() { const s = (await this.ctx.storage.get('mq')) || {}; return s.day === mailDay() ? s : { day: mailDay(), n: 0 }; }
+	// 满没满只听邮件服务的（它说额度用完了才算）；自己数的封数只用来提前提醒，套餐额度更大时也不会误拦
+	async mailFull() { if (!this.env.RESEND_API_KEY) return false; return !!(await this.mailStat()).full; }
+	// 发完记一笔：发出去的算一封；快用满（八成）、用满时各推送管理员一次
+	async mailCount(r) {
+		const s = await this.mailStat(), cap = this.mailCap();
+		if (r.ok) s.n = (s.n || 0) + 1;
+		if (r.quota) s.full = r.quota;
+		let say = null;
+		if (s.full && !s.toldFull) { s.toldFull = 1; say = { title: '📭 今天的邮件额度用完了', body: '注册、找回密码、新设备登录、确认本人这些要收验证码的操作今天先停了（用户会看到「明天再试」），报告和反馈照常收。明天自动恢复；要马上恢复得升级邮件服务套餐。' }; }
+		else if (!s.full && s.n >= Math.ceil(cap * 0.8) && !s.toldWarn) { s.toldWarn = 1; say = { title: '📬 今天的邮件快用完了', body: `今天已经发了 ${s.n} 封（每天 ${cap} 封）。用满以后，要收验证码的操作当天会先停。` }; }
+		await this.ctx.storage.put('mq', s);
+		if (say) { try { await this.admPush({ ...say, tag: 'mail-quota', url: '/admin/#/mails' }); } catch (e) {} try { await this.alog('mail_quota', '', say.title, 'system'); } catch (e) {} }
+	}
+	async mailQuota() { const s = await this.mailStat(), cap = this.mailCap(); return { day: s.day, sent: s.n || 0, cap, full: !!s.full, warn: !s.full && (s.n || 0) >= Math.ceil(cap * 0.8) }; }
+	// 给影响小的提交（报告、反馈、续期申请）附一句提醒
+	// 要收验证码才能做完的事：额度满了就返回这个错误（null 表示可以发）
+	async mailBlock() { return (await this.mailFull()) ? { st: 503, error: MAIL_FULL_MSG, mailFull: true } : null; }
+	async mailNote() { return (await this.mailFull()) ? { mailNote: MAIL_NOTE } : {}; }
 	async alog(op, target, detail, by) {
 		const l = (await this.ctx.storage.get('alog')) || [];
 		l.unshift({ t: Date.now(), op, target: String(target || ''), detail: noteText(detail, 300), by: by || 'admin' });
@@ -519,12 +557,13 @@ export class Hub extends DurableObject {
 	// 只留这个浏览器（改密码、退出其他所有设备以后，别的设备再登录都要重新验证）
 	async trustOnly(u, did) { const keep = did ? await sha256hex(did + ':' + u.uid) : ''; u.trust = (u.trust || []).filter((t) => t.h === keep && t.exp > Date.now()); }
 	async sendLoginCode(u, pl) {
+		if (await this.mailFull()) return { st: 503, error: MAIL_FULL_MSG, mailFull: true };
 		if (!(await this.hit('ml1:' + u.uid, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
 		if (!(await this.hit('mld:' + u.uid, 10, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
 		pl.code = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000)); pl.tries = 0;
 		const e = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 		const sent = await this.mail(u.email, `验证码 ${pl.code}（新设备登录）`, `<p>你的账号正在一台新设备上登录：</p><p><b>${e((pl.dev && pl.dev.ua) || '没认出是什么设备')}</b>${pl.dev && pl.dev.place ? '<br>大概位置：' + e(pl.dev.place) : ''}</p><p>验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${pl.code}</p><p>10 分钟内有效。<b>如果不是你本人在登录，说明密码可能泄露了，请马上登录官网改密码。</b></p>`);
-		if (!sent) return { st: 502, error: '验证码邮件没发出去，稍后再试' };
+		if (!sent) return (await this.mailFull()) ? { st: 503, error: MAIL_FULL_MSG, mailFull: true } : { st: 502, error: '验证码邮件没发出去，稍后再试' };
 		return null;
 	}
 	userLogin2(a) { return this.lock(() => this._userLogin2(a)); }
@@ -575,6 +614,7 @@ export class Hub extends DurableObject {
 		if (!email) return { st: 400, error: '邮箱格式不对' };
 		if (!['reg', 'reset'].includes(kind)) return { st: 400, error: 'bad kind' };
 		if (!this.env.RESEND_API_KEY) return { st: 501, error: '还没有开通邮件服务' };
+		if (await this.mailFull()) return { st: 503, error: MAIL_FULL_MSG, mailFull: true }; // 放在查邮箱前面：不让人借这个看出邮箱有没有注册
 		const has = await this.ctx.storage.get('e:' + email);
 		if (kind === 'reg' && has) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
 		if (kind === 'reset' && !has) return { st: 200, ok: true }; // 不告诉别人这个邮箱有没有注册
@@ -584,7 +624,7 @@ export class Hub extends DurableObject {
 		await this.ctx.storage.put('c:' + kind + ':' + email, { code, exp: Date.now() + 600e3, tries: 0 });
 		const what = kind === 'reg' ? '注册账号' : '重置密码';
 		const sent = await this.mail(email, `验证码 ${code}（${what}）`, `<p>你正在${what}，验证码是：</p><p style="font-size:28px;font-weight:700;letter-spacing:4px">${code}</p><p>10 分钟内有效。如果不是你本人操作，忽略这封邮件就行。</p>`);
-		if (!sent) return { st: 502, error: '邮件没发出去，稍后再试' };
+		if (!sent) return (await this.mailFull()) ? { st: 503, error: MAIL_FULL_MSG, mailFull: true } : { st: 502, error: '邮件没发出去，稍后再试' };
 		return { st: 200, ok: true };
 	}
 	async useCode(email, kind, code) {
@@ -922,7 +962,7 @@ export class Hub extends DurableObject {
 		const ap = { id: rnd(10), sub, uid, email, name: d.name || sub, source, contact, note, at: Date.now(), status: 'pending', exp: d.exp, expired: !!(d.off && d.offWhy === 'exp') };
 		await this.ctx.storage.put('ap:' + sub, ap);
 		await this.notifyAdmin('新的续期申请：' + ap.name, `账号：${email}\n从哪里知道的：${source}\n相关账号：${contact}${note ? '\n备注：' + note : ''}\n到期时间：${ymd(d.exp)}${ap.expired ? '（已到期暂停）' : ''}\n\n到管理页审核：https://${this.env.BASE_DOMAIN}/admin`);
-		return { st: 200, ok: true, at: ap.at };
+		return { st: 200, ok: true, at: ap.at, ...(await this.mailNote()) };
 	}
 	async applications() {
 		const pend = [...(await this.ctx.storage.list({ prefix: 'ap:' })).values()];
@@ -1028,7 +1068,7 @@ export class Hub extends DurableObject {
 		for (const x of drop) await this.fbImgRm(x);
 		await this.track('fb');
 		await this.notifyAdmin('问题反馈：' + fb.name, `受理编号：${fb.code.toUpperCase()}\n\n${text}\n\n${contact ? '联系方式：' + contact + '\n' : ''}账号：${emails.join('、') || '没有绑定'}\n路由器：${fb.name}（${sub}）${diag ? '\n\n' + diag : ''}${fb.imgs.length ? '\n\n附了 ' + fb.imgs.length + ' 张截图，在管理页看' : ''}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
-		return { st: 200, ok: true, code: fb.code };
+		return { st: 200, ok: true, code: fb.code, ...(await this.mailNote()) };
 	}
 	/* ---------- 官网公开的报告表单：安全问题、隐私和数据、滥用举报（不用登录；不记 IP，只按 IP 限次，限次记录一两天后自动清掉） ---------- */
 	// 安装失败上报：认出是谁的账号。全新安装凭这次用的安装码（官网领的，记着是哪个账号领的）；托管版升级凭路由器自己的钥匙（找主账号）
@@ -1077,7 +1117,7 @@ export class Hub extends DurableObject {
 			? '<p>你好，</p><p>我们收到了你在路由器上安装失败时上报的问题，会尽快查原因。处理好以后，重新运行一次安装命令就行，终端最上面也会显示处理结果。</p>'
 			: '<p>你好，</p><p>我们收到了你在官网提交的报告，会尽快处理。</p>');
 		await this.track(kind === 'install' ? 'install_fail' : 'report');
-		return { st: 200, ok: true, code: fb.code, mailed: own || inst ? 1 : 0, ...(acct ? { acct: maskEmail(acct.email) } : {}) };
+		return { st: 200, ok: true, code: fb.code, mailed: own || inst ? 1 : 0, ...(acct ? { acct: maskEmail(acct.email) } : {}), ...(await this.mailNote()) };
 	}
 	// 限次记录（r:…，里面的键带着 IP 或邮箱）：最长的限次窗口是 1 天，超过 2 天没动过的整条删掉；开通限流（rl）里过期的 IP 也清掉
 	async gcRate(now) {
@@ -1316,6 +1356,24 @@ export class Hub extends DurableObject {
 let FONT_BIN = null;
 const IMG_BIN = new Map();
 const hubObj = (env) => env.H.get(env.H.idFromName('hub'));
+/* 6.0 第 66 项：人机验证（Cloudflare Turnstile）。平时不要；同一来源短时间试太多次、或者后台开了「受攻击模式」时，
+   注册、登录、发验证码、找回密码、报告问题要先过验证（凭证在这里向 Cloudflare 核对，一次一用）。
+   路由器用的接口（心跳、安装、更新、面板反馈）不走这里，不会被挡。没配置 Turnstile 时，受攻击模式只收紧限速 */
+const capOn = (env) => !!(env.TURNSTILE_SITE && env.TURNSTILE_SECRET);
+async function captchaGate(env, H, kind, ip, tok) {
+	const need = await H.capNeed(kind, ip, capOn(env));
+	if (need === 'slow') return J({ error: '现在访问的人太多，10 分钟后再试' }, 429);
+	if (!need) return null;
+	const ask = (error) => J({ error, captcha: true, site: env.TURNSTILE_SITE }, 403);
+	if (!tok) return ask('先完成人机验证');
+	let ok = false;
+	try {
+		const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: String(tok).slice(0, 2048), remoteip: ip }), signal: AbortSignal.timeout(8000) });
+		ok = !!(await r.json()).success;
+	} catch (e) {}
+	return ok ? null : ask('人机验证没通过，再试一次');
+}
+const PGK = new Map([[HOME, 'HOME'], [APP, 'APP'], [ADMIN, 'ADMIN'], [PRIVACY, 'PRIVACY'], [SECURITY, 'SECURITY'], [REPLY, 'REPLY'], [NOTICE, 'NOTICE'], [TERMS, 'TERMS'], [CHANGELOG, 'CHANGELOG'], [STATUS, 'STATUS'], [HELP, 'HELP']]);
 export async function hubFetch(req, env) {
 	const u = new URL(req.url), p = u.pathname;
 	// www 开头的地址：跳到不带 www 的主域名（登录状态、收藏的网址都统一在主域名上）
@@ -1324,7 +1382,8 @@ export async function hubFetch(req, env) {
 	const H = hubObj(env);
 	// 5.2 发文件：上传（分块）、下载（带签名）
 	{ const fx = await filesRoute(req, env, H, p); if (fx) return fx; }
-	if (p === '/api/ping') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY, files: !!env.F });
+	// 6.0 第 7 项：公开的状态接口只回答「在线」和「开没开邮件验证码」（注册页要用）；名额、文件存储这些只在管理员的 /api/admin/health 里
+	if (p === '/api/ping') return J({ ok: true, mail: !!env.RESEND_API_KEY });
 	if (p === '/api/register' && req.method === 'POST') {
 		const b = await body();
 		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, ip: req.headers.get('cf-connecting-ip') || '' });
@@ -1354,6 +1413,7 @@ export async function hubFetch(req, env) {
 		// 终端里的安装失败上报（kind=install）不在这个范围：照旧按安装码 / 路由器钥匙认账号
 		const me = b.kind === 'install' ? null : await H.who(await sidFor(req, H));
 		if (b.kind !== 'install' && !me) return J({ error: '先登录官网账号再报告问题', login: true }, 401);
+		if (b.kind !== 'install') { const g = await captchaGate(env, H, 'report', req.headers.get('cf-connecting-ip') || '', String(b.cft || '')); if (g) return g; }
 		const { st, ...rest } = await H.report({ kind: String(b.kind || ''), text: String(b.text || ''), contact: String(b.contact || ''), log: String(b.log || ''), email: me ? me.email : String(b.email || '').trim(), uid: me ? me.uid : '', inv: String(b.inv || ''), sub: String(b.sub || ''), rkey: String(b.rkey || ''), ip: req.headers.get('cf-connecting-ip') || '' });
 		return J(rest, st);
 	}
@@ -1478,6 +1538,11 @@ export async function hubFetch(req, env) {
 		if (!f) return J({ error: 'not found' }, 404);
 		return new Response(req.method === 'HEAD' ? null : f.body, { headers: { 'content-type': f.type, 'cache-control': 'public, max-age=3600', 'x-content-type-options': 'nosniff' } });
 	}
+	// 6.0 第 8 项：脚本只放行本站文件和打包时算好摘要的页面内联脚本（不再 'unsafe-inline'）；违反的上报到 /api/csp，记进后台「出错记录」
+	if (p === '/api/csp' && req.method === 'POST') {
+		if (+(req.headers.get('content-length') || 0) <= 8192) { const b = await body(), r = (b && (b['csp-report'] || (Array.isArray(b) && b[0] && b[0].body))) || {}; try { await H.cspLog(String(r['document-uri'] || r.documentURL || ''), String(r['violated-directive'] || r.effectiveDirective || ''), String(r['blocked-uri'] || r.blockedURL || '')); } catch (e) {} }
+		return new Response(null, { status: 204 });
+	}
 	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog', '/status': 'status', '/help': 'help' };
 	// 安全加固：旧版管理页默认下线（新版在 /admin/），只在设了 OLD_ADMIN=1 时打开（测试用）；下线后打开它跳到新版
 	if (p === '/admin/old' && env.OLD_ADMIN !== '1') return new Response(null, { status: 301, headers: { location: '/admin/' } });
@@ -1488,7 +1553,9 @@ export async function hubFetch(req, env) {
 		// 访问统计：只算官网各页的打开次数、访客 IP（留 30 天）和国家/地区；管理页不算
 		if (req.method === 'GET' && pg !== ADMIN) { const ua = req.headers.get('user-agent') || ''; try { await H.track('pv', { page: PGN[p] || 'reply', ip: req.headers.get('cf-connecting-ip') || '', cc: (req.cf && req.cf.country) || '', bot: isBot(ua) }); } catch (e) {} }
 		const ins = pg === ADMIN ? '' : ' https://static.cloudflareinsights.com', insc = pg === ADMIN ? '' : ' https://cloudflareinsights.com';
-		return new Response(req.method === 'HEAD' ? null : pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'" + ins + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:" + (pg === ADMIN ? ' blob:' : '') + "; connect-src 'self'" + insc + "; frame-ancestors 'none'" } });
+		// 第 66 项：账号页和安全说明页（报告问题）要用人机验证时，放行 Cloudflare Turnstile 的脚本和验证框
+		const cap = capOn(env) && (pg === APP || pg === SECURITY), capS = cap ? ' https://challenges.cloudflare.com' : '', capF = cap ? "; frame-src https://challenges.cloudflare.com" : '';
+		return new Response(req.method === 'HEAD' ? null : pg, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'content-security-policy': "default-src 'self'; script-src 'self' " + (CSP_SCRIPTS[PGK.get(pg)] || '') + ins + capS + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:" + (pg === ADMIN ? ' blob:' : '') + "; connect-src 'self'" + insc + capF + "; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp" } });
 	}
 	return J({ error: 'not found' }, 404);
 }
@@ -1722,6 +1789,7 @@ async function accountApi0(req, env, H, p, body) {
 	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
 	{ const fx = await famDev(p, H, b); if (fx) return fx; }
 	const a = p.slice('/api/account/'.length);
+	{ const k = { code: 'code', register: 'reg', login: 'login', reset: 'reset' }[a]; if (k) { const g = await captchaGate(env, H, k, ip, s(b.cft)); if (g) return g; } }
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev, did }));

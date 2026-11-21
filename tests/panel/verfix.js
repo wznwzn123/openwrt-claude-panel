@@ -29,7 +29,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true });
 	await ctx.addInitScript((t) => { localStorage.setItem('rp_token', t); }, TOK);
 	const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
-	let navs = 0; page.on('framenavigated', (f) => { if (f === page.mainFrame()) navs++; });
+	let navs = 0; page.on('load', () => navs++); // 只数真正的页面加载（第 68 项起同一页里也会记返回步骤，framenavigated 会把它也算进去）
 	const ver = () => page.evaluate(() => document.querySelector('meta[name="panel-ver"]')?.content);
 	const ctl = () => page.evaluate(() => !!navigator.serviceWorker.controller);
 
@@ -76,7 +76,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	// 6. 开发版（没打版本号）：不管
 	S.panel = 'dev'; S.router = '2.0.4';
 	const c2 = await browser.newContext({ viewport: { width: 412, height: 915 } }); await c2.addInitScript((t) => { localStorage.setItem('rp_token', t); }, TOK);
-	const p2 = await c2.newPage(); let nv = 0; p2.on('framenavigated', (f) => { if (f === p2.mainFrame()) nv++; });
+	const p2 = await c2.newPage(); let nv = 0; p2.on('load', () => nv++);
 	await p2.goto('http://localhost:8171/panel/'); await W(6000);
 	ok('没打版本号的开发版：不自动刷新', nv === 1, `刷新了 ${nv} 次`);
 	await c2.close();

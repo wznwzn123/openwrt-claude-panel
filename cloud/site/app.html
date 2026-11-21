@@ -521,6 +521,7 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 <input type="file" id="avFile" accept="image/*" hidden>
 <div id="footLinks"><!--KIT_FOOT--></div>
 <!--KIT_JS-->
+<!--KIT_CAP-->
 <script>
 
 // 顶上的数字：从 0 数上去
@@ -533,6 +534,8 @@ function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove(
 async function api(path, body) {
 	const r = await fetch('/api/account/' + path, body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 	let j = {}; try { j = await r.json(); } catch (e) {}
+	// 第 66 项：服务器要人机验证——弹验证，过了带着凭证重新提交一次
+	if (r.status === 403 && j.captcha && body && !body.cft && window.capSolve) { const t = await window.capSolve(j.site); if (!t) throw new Error('已取消，没有提交'); return api(path, { ...body, cft: t }); }
 	if (!r.ok) { const e = new Error(j.error || '出错了（' + r.status + '）'); e.login = j.login; e.again = j.again; throw e; }
 	return j;
 }
@@ -959,7 +962,7 @@ function applyBox(d, email, auto) {
 		const err = f.querySelector('[data-err]'), btn = f.querySelector('button.primary'); err.textContent = '';
 		const source = f.src.value + (f.srcx.value.trim() ? '：' + f.srcx.value.trim() : '');
 		btn.disabled = true;
-		try { await api('apply', { sub: d.sub, source, contact: f.contact.value.trim(), note: f.note.value.trim() }); m.remove(); toast('申请已提交，等待审核'); await load(); }
+		try { const r = await api('apply', { sub: d.sub, source, contact: f.contact.value.trim(), note: f.note.value.trim() }); m.remove(); toast(r.mailNote ? '申请已提交。' + r.mailNote + '，审核结果在这一页看' : '申请已提交，等待审核'); await load(); }
 		catch (x) { err.textContent = x.message; } finally { btn.disabled = false; }
 	};
 	document.body.appendChild(m);

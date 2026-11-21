@@ -117,6 +117,15 @@ function tryAdd(t) {
 	if (u) { $('addr').value = ''; A.open(u); }
 	return !!u;
 }
+// 返回键（6.0 第 68 项，App 调）：开着能关的更新提示就先关；手动添加框里有没添加的地址，先提醒一次；返回 true 表示这次不退出
+let backWarned = false;
+window.appBack = () => {
+	const m = $('updModal');
+	if (m && !m.classList.contains('hidden')) { if ($('umLater').classList.contains('hidden')) return false; m.classList.add('hidden'); return true; }
+	if ($('addr').value.trim() && !backWarned) { backWarned = true; $('aerr').textContent = '地址还没添加。再按一次返回键退出'; return true; }
+	return false;
+};
+$('addr').addEventListener('input', () => { backWarned = false; });
 $('addForm').onsubmit = (e) => { e.preventDefault(); const t = $('addr').value.trim(); if (!t) { $('aerr').textContent = '先粘贴或输入登录地址'; $('addr').focus(); return; } tryAdd(t); };
 $('addr').oninput = () => ($('aerr').textContent = '');
 // 粘贴：用手机系统的剪贴板（网页自己读剪贴板在 App 里常被拦）；剪贴板里不是登录地址，就放进框里给你看

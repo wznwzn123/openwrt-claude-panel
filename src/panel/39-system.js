@@ -1215,6 +1215,7 @@ function fbSent(r) {
 	<p class="muted" style="margin:12px 0 0;line-height:1.6">谢谢！${r.images ? r.images + ' 张截图也一起发过去了。' : ''}开发者回复以后，你打开面板时会自动弹出来，不用自己去查。</p>
 	${fbCodeRow(r.code)}
 	<p class="muted" style="font-size:13px;margin:10px 0 0;line-height:1.6">随时可以在侧边栏「消息与帮助 → 我的反馈」里看处理到哪一步。</p>
+	${r.note ? `<p class="notice" data-mailnote style="margin:10px 0 0;line-height:1.6">${esc(r.note)}。处理进度照常在「我的反馈」里看。</p>` : ''}
 	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-track>查看处理进度</button><button class="btn primary" data-v="close">好的</button></div>`,
 	(m, close) => { m.dataset.fbsent = 1; fbCodeBind(m, r.code, close); if (page === 'myfb') refresh(true); });
 }

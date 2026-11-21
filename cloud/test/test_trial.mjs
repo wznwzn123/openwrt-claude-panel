@@ -122,8 +122,8 @@ const TRIAL2 = (await (await adm('POST', '/invites', { direct: true, max: 1, day
 const B = await (await reg(TRIAL2, '2.2.2.9')).json();
 T = B.exp + 60e3; await hub().cleanup();
 ok('另一台试用到期：暂停', (await dev(B.sub)).off);
-T += 31 * DAY; const cnt0 = (await (await api('GET', '/api/ping')).json()).count; await hub().cleanup();
-ok('暂停超过 30 天还没续：删掉，腾出名额', !(await dev(B.sub)) && (await (await api('GET', '/api/ping')).json()).count === cnt0 - 1);
+T += 31 * DAY; const cnt0 = (await (await api('GET', '/api/admin/health', undefined, { authorization: 'Bearer ' + env.ADMIN_KEY })).json()).count; await hub().cleanup();
+ok('暂停超过 30 天还没续：删掉，腾出名额', !(await dev(B.sub)) && (await (await api('GET', '/api/admin/health', undefined, { authorization: 'Bearer ' + env.ADMIN_KEY })).json()).count === cnt0 - 1);
 ok('作废续期码', (await adm('DELETE', '/renewals/' + K3)).status === 200 && !(await (await adm('GET', '/renewals')).json()).list.some((x) => x.code === K3));
 
 // ---- 续期申请表 ----

@@ -1,3 +1,4 @@
+import { backLayer } from '@/composables/back' // 要最先引入：比路由早一步记下「按了返回」
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 import { setUnauthorizedHandler } from '@/api'
 import { authed, clearSession, navGroups } from '@/composables/auth'
@@ -40,6 +41,10 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  // 按返回时开着弹窗：先关弹窗，不跳页面（第 68 项）
+  const b = backLayer()
+  if (b === 'form') { pushToast('这个窗口里的内容还没保存：先点「保存」或「取消」', 'info'); return false }
+  if (b === 'closed') return false
   if (to.meta.public) return authed.value && to.name === 'login' ? { path: '/' } : true
   if (!authed.value) return { name: 'login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : undefined }
   return true

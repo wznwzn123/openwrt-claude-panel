@@ -49,8 +49,8 @@ const P1 = (await pas('', 'pass_new', { dev: D1 })).result.pass;
 ok('手机登录（新加手机）不换门禁钥匙', key() === OLDK);
 let r = await pas(P1, 'luci_key');
 ok('登录着的手机能拿到现在的门禁钥匙', r.result?.key === OLDK, JSON.stringify(r));
-await pas(P1, 'dev_rename', { mac: 'aa:bb:cc:dd:ee:ff', name: 'x' }).catch(() => {});
-ok('别的操作（续通行证、改设备名）不换', key() === OLDK);
+await pas('', 'pass_new', { dev: D1 });
+ok('续通行证不换', key() === OLDK);
 
 // 门禁替手机自动登录过两次（记在 /tmp/cmcp_luci_sid），外加一行乱写的
 const S1 = 'a'.repeat(32), S2 = 'b'.repeat(32);

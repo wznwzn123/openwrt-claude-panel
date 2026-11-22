@@ -98,8 +98,20 @@ r = await (await call('POST', '/cloud/n/rk', { lvl: 'err', kind: 'dns', title: '
 ok('路由器通知推送出去了', r.sent === 1 && JSON.parse(decrypt(sent[1].body).text).title === '⚠️ DNS 解析失败');
 r = await (await call('POST', '/cloud/n/rk', { lvl: 'err', kind: 'dns', title: 'DNS 解析失败', body: '又来一次' })).json();
 ok('同一条 30 秒内不重复推', r.sent === 0 && sent.length === 2);
+// 6.0 第 2 项：新设备连上了 → 通知上有「暂停它上网」按钮，点了到面板设备页弹出暂停设置（在面板里确认才生效）
+{
+	const n0 = sent.length;
+	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'newdev', title: '新设备连上了：Redmi', body: 'IP 192.168.1.50', tag: 'newdev-aa:bb:cc:dd:ee:01' });
+	const m = JSON.parse(decrypt(sent[n0].body).text);
+	ok('[新设备] 点通知去设备页，有「暂停它上网」按钮，带着这台设备的 MAC', m.url === './?p=dev' && m.actions?.[0]?.action === 'pause' && m.actions[0].title === '暂停它上网' && m.actions[0].url === './?p=dev&ask=pause&mac=aa:bb:cc:dd:ee:01', JSON.stringify(m));
+	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'newdev', title: '新设备连上了：坏的', body: '', tag: 'newdev-x;y' });
+	const m2 = JSON.parse(decrypt(sent[sent.length - 1].body).text);
+	ok('[新设备] 标签不是正常的 MAC：不加按钮', !m2.actions);
+	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'ban', title: '已自动封禁 198.51.*.*', body: '', tag: 'ban-198.51.100.7' });
+	ok('[拉黑] 点通知去「自动任务」（能解封）', JSON.parse(decrypt(sent[sent.length - 1].body).text).url === './?p=auto');
+}
 r = await (await call('POST', '/cloud/n/rk', { lvl: 'ok', kind: 'dns', title: 'DNS 恢复正常', body: '' })).json();
-ok('不同的通知照常推', r.sent === 1 && JSON.parse(decrypt(sent[2].body).text).title === '✅ DNS 恢复正常');
+ok('不同的通知照常推', r.sent === 1 && JSON.parse(decrypt(sent[sent.length - 1].body).text).title === '✅ DNS 恢复正常');
 
 // 断线 → 推送（走状态判断）
 await call('POST', '/cloud/beat/r/rk', { wan: 'ok', net: 'ok', dns: 'ok', tun: 'ok', panel: 'ok', clash: 'ok', ready: 4 });

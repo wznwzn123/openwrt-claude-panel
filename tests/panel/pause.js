@@ -86,6 +86,20 @@ const MAC = 'aa:bb:cc:dd:ee:ff';
 	ok('定时断网时间里：卡片显示已暂停，并注明现在就在这个时间里', (await card().locator('.pill').first().textContent()) === '已暂停' && /现在就在这个时间里/.test(await card().textContent()));
 	await card().locator('[data-pause]').click(); await page.waitForTimeout(500);
 	ok('定时断网时间里：面板说明要恢复得删掉定时', /删掉下面对应的定时/.test(await box()));
+	// 6.0 第 2 项：推送「新设备连上了」里点「暂停它上网」→ 面板打开设备页、弹出这台设备的暂停设置（选多久才生效，不会直接断网）
+	{
+		delete PZ.devs[MAC]; PZ.schedOn = false;
+		const c2 = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+		const p2 = await c2.newPage(); p2.on('pageerror', (e) => problems.push('页面错误：' + e.message));
+		await p2.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await p2.goto('http://localhost:8096/panel/?p=dev&ask=pause&mac=' + MAC); await p2.waitForTimeout(3500);
+		ok('[推送按钮] 打开设备页，弹出这台设备（iPhone）的暂停设置', (await p2.textContent('#pageTitle')) === '设备' && /iPhone/.test(await p2.textContent('.modal')) && /30 分钟/.test(await p2.textContent('.modal')));
+		ok('[推送按钮] 只是打开设置，没有直接暂停（要自己选多久）', !PZ.devs[MAC] || !PZ.devs[MAC].until);
+		ok('[推送按钮] 地址栏里的参数去掉了（刷新不会再弹）', !/ask=/.test(p2.url()));
+		await p2.goto('http://localhost:8096/panel/?p=dev&ask=pause&mac=x;rm'); await p2.waitForTimeout(3000);
+		ok('[推送按钮] MAC 不对：不弹', (await p2.locator('.modal').count()) === 0);
+		await c2.close();
+	}
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));
 	console.log(`\n通过 ${results.filter((r) => r[1]).length}/${results.length}`);

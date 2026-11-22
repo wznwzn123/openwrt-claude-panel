@@ -272,6 +272,15 @@ $('pzBox').addEventListener('click', (e) => {
 });
 // 明天早上 7 点（现在 7 点前就是今天 7 点）
 function next7() { const x = new Date(); x.setHours(7, 0, 0, 0); if (x <= new Date()) x.setDate(x.getDate() + 1); return Math.floor(x / 1000); }
+// 推送「新设备连上了」里点「暂停它上网」：到设备页弹出暂停设置（没有「家长控制」权限就说明）
+async function askPause(mac) {
+	if (!/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(mac || '')) return;
+	if (!canPerm('parent')) return toast('主账号没有给你开「家长控制」，不能暂停设备上网', true);
+	if (page !== 'dev') await go('dev');
+	try { await loadDev(); } catch (e) {}
+	const d = devices.find((x) => x.mac === mac) || { mac, name: '' };
+	pauseSheet({ mac, name: d.name || '' });
+}
 function pauseSheet(d) {
 	if (!d.mac) return toast('这台设备读不到 MAC 地址，没法暂停', true);
 	const name = d.name || d.ip || d.mac;
@@ -484,6 +493,12 @@ function autoItems(d) {
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
 	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
 	if (d.cloud) add('提醒和备份', 'cloudbackup', on.cloudbackup !== false, '云端自动备份', '每天 4:07 把路由器设置备份到云端，保留最近 10 份。关掉后「立即备份」照样能用');
+	// 6.0 第 3、4 项：安全和状态提醒、自动拉黑
+	add('安全', 'loginalert', on.loginalert !== false, '有人登录后台或 SSH 时提醒', '有人登录了路由器原版后台（LuCI）或 SSH 就推送，写明从哪台设备、哪个地址登录。面板自己替手机登录的不算');
+	add('安全', 'autoban', on.autoban !== false, '自动拉黑试密码的外网地址', '同一个外网地址 10 分钟内后台或 SSH 密码错 5 次，就封 1 小时（再犯翻倍，最长 1 天）并推送。家里的设备、用面板的手机不会被封' + (d.ban && d.ban.tool === null ? '。这台路由器的防火墙没法自动封禁（没有 nftables、ipset），只推送提醒' : ''));
+	add('安全', 'ipchange', on.ipchange === true, '公网 IP 变了提醒', '宽带的 IPv4 地址或 IPv6 前缀变了就推送（只显示前半段）。宽带每天重新拨号的，会每天推一次');
+	add('状态提醒', 'health', on.health !== false, '温度、负载过高提醒', '温度到 90°C 以上，或者负载连续 5 分钟很高，就推送并说怎么办。同一类 6 小时最多推一次');
+	add('状态提醒', 'diskfull', on.diskfull !== false, '存储快满提醒', '闪存剩不到 2 MB，或者挂载的硬盘用了 95% 以上，就推送。一天最多推一次');
 	return L;
 }
 function renderAuto() {
@@ -498,7 +513,8 @@ function renderAuto() {
 	for (const x of items) { let g = groups.find((y) => y.g === x.g); if (!g) groups.push(g = { g: x.g, list: [] }); g.list.push(x); }
 	const note = (x) => x.k !== 'tunbypass' ? '' : x.v ? (d.tb.status === '还没生效' ? '<div class="notice" style="margin:2px 0 8px">已打开，还有代理插件没生效：Nikki 要等它下次重启；其他的过几分钟会自动补上。</div>' : '') : d.tb.auto ? `<div class="notice w" style="margin:2px 0 8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>` : '';
 	// 「节点挂了自动换」的详细设置（看哪个策略组、最近切换、模拟一次）放在它下面：同一个设置只在这一页改（节点页只显示状态）
-	const more = (x) => (x.k === 'autosw' ? '<div id="aswCard" class="aswin"></div>' : '');
+	const bans = d.ban && d.ban.ips ? Object.entries(d.ban.ips).sort((a, b) => b[1].at - a[1].at) : [];
+	const more = (x) => (x.k === 'autosw' ? '<div id="aswCard" class="aswin"></div>' : x.k === 'autoban' && bans.length ? `<div class="banlist">${bans.map(([ip, b]) => `<div class="kv" style="align-items:center"><span><b style="color:var(--text)">${esc(ip)}</b><span class="muted" style="display:block;font-size:12px">${b.noblock ? '没能封（防火墙不支持），只提醒了' : '封到 ' + day(b.until)}</span></span><button class="btn sm" data-unban="${esc(ip)}">解封</button></div>`).join('')}</div>` : '');
 	let html = groups.map((g) => `<div class="sectitle"><b>${esc(g.g)}</b></div><section class="card aucard">${g.list.map((x) => row(x) + note(x) + more(x)).join('')}</section>`).join('');
 	if (!d.oc) html += '<p class="muted" style="font-size:12.5px;margin:10px 4px 0">这台路由器没装代理插件，跟代理插件有关的几项不显示。</p>';
 	el.innerHTML = html;
@@ -507,7 +523,14 @@ function renderAuto() {
 	pl.textContent = n === items.length ? '全部开启' : n ? `开了 ${n} / ${items.length} 项` : '全部关闭';
 	pl.className = 'pill ' + (n === items.length ? 'good' : '');
 }
-$('auCard').addEventListener('click', (ev) => { const au = ev.target.closest('[data-au]'); if (au && ev.target.matches('input')) setAuto(au); });
+$('auCard').addEventListener('click', (ev) => {
+	const ub = ev.target.closest('[data-unban]');
+	if (ub) return busy(ub, async () => {
+		if (!(await confirmBox('解封 ' + ub.dataset.unban, '这个地址马上就能再连路由器的后台和 SSH。确认是你自己（或者认识的人）再解封。', '解封'))) return;
+		await P('ban_del', { ip: ub.dataset.unban }, 20000); toast('已解封'); await loadAuto({});
+	}, false);
+	const au = ev.target.closest('[data-au]'); if (au && ev.target.matches('input')) setAuto(au);
+});
 function setAuto(lb) {
 	const k = lb.dataset.au, inp = lb.querySelector('input'), on = inp.checked;
 	const it = AU.d ? autoItems(AU.d).find((x) => x.k === k) : null;
@@ -736,7 +759,7 @@ async function pushTest() {
 	pushRender();
 }
 // 点通知打开面板时，后台服务会告诉面板该去哪一页
-try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => { const p = e.data && e.data.go; if (p && validPage(p) && token) go(p); if (e.data && e.data.pushed && $('pushCard')) pushState(true).then(pushRender).catch(() => {}); }); } catch (e) {}
+try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => { const p = e.data && e.data.go; if (p && validPage(p) && token) go(p); if (e.data && e.data.ask === 'pause' && token) askPause(e.data.mac); if (e.data && e.data.pushed && $('pushCard')) pushState(true).then(pushRender).catch(() => {}); }); } catch (e) {}
 
 function tabletHelp() {
 	const u = cinfo && cinfo.tablet;

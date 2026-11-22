@@ -358,7 +358,7 @@ body.chatp .dock{display:none}body.chatp main.wrap{padding-bottom:0}
 .wdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
 .wdot.ok{background:var(--ok)}.wdot.err{background:var(--danger)}.wdot.warn{background:var(--warn)}.wdot.info{background:var(--brand)}
 .okc{color:var(--ok)!important}.badc{color:var(--danger)!important}
-.aucard{padding-top:4px;padding-bottom:4px}.aucard .kv.aswon:last-child{border-bottom:0}
+.aucard{padding-top:4px;padding-bottom:4px}.banlist{margin-bottom:8px}.banlist .kv{padding-left:10px}.banlist .kv:last-child{border-bottom:.5px solid var(--line)}.aucard .kv.aswon:last-child{border-bottom:0}
 .kv.aswon{align-items:center;padding-top:2px;cursor:pointer}.kv.aswon>span:first-child{flex:1;min-width:0;color:var(--text)}.kv.aswon>span:first-child>span{display:block;font-size:12.5px;margin-top:3px;line-height:1.5}.kv.aswon>.sw{flex:none}
 .kv.aswh{font-size:13px;align-items:baseline}.kv.aswh>span:last-child{font-weight:500}.kv.aswh i{font-style:normal;display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--warn);background:var(--wsoft);padding:0 6px;border-radius:99px}
 /* 节点页：「节点挂了自动换」只显示状态，点了去「自动任务」页设置；自动任务页里它下面的详细设置 */

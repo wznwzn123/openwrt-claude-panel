@@ -109,8 +109,18 @@ for (let ip in devs) {
 }
 if (first || length(fresh)) L.writej(KNOWN, known);
 // 自动处理里关掉了「新设备连上提醒」：照样记下来（面板「设备」里能看到），只是不推送
-if (readfile(L.D + '/off.newdev') == null) for (let d in fresh)
-	L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备'), sprintf('IP %s · MAC %s\n不认识的话，可以在面板「设备」里把它暂停上网', d.ip, d.mac), 'newdev-' + d.mac);
+// 6.0 第 2 项：手机的「私有 Wi-Fi 地址」（随机 MAC：第一个字节第二位是 2、6、A、E）——同一台手机换了地址会被当成新设备；
+// 名字跟以前见过的设备一样就说明「可能是它换了地址」，不吓人；推送上有「暂停它上网」按钮，在面板里选多久、确认了才生效
+const rnd_mac = (m) => match(m, /^.[26ae]:/) != null;
+const generic = (n) => !n || match(lc(n), /^(unknown|android|iphone|ipad|localhost|\*|未知设备)$/) != null;
+if (readfile(L.D + '/off.newdev') == null) for (let d in fresh) {
+	let same = null;
+	if (rnd_mac(d.mac) && !generic(d.name)) for (let m in known) if (m != d.mac && known[m].name == d.name) { same = known[m]; break; }
+	if (same)
+		L.notify('info', 'newdev', '「' + d.name + '」换了一个地址连上来', sprintf('IP %s · MAC %s（私有地址）\n手机打开「私有 Wi-Fi 地址」时就会这样，是你自己的设备就不用管；不认识的话点「暂停它上网」', d.ip, d.mac), 'newdev-' + d.mac);
+	else
+		L.notify('warn', 'newdev', '新设备连上了：' + (d.name ?? '未知设备') + (rnd_mac(d.mac) ? '（私有地址）' : ''), sprintf('IP %s · MAC %s\n不认识的话，点「暂停它上网」，或者在面板「设备」里管它', d.ip, d.mac), 'newdev-' + d.mac);
+}
 
 // 3) 每台设备在线多久（面板「设备」里显示）：第一次看到在线时记下时间，离线就清掉；
 //    Wi-Fi 设备用无线驱动报的「连上多久」（路由器重启后也准），有线设备从路由器看到它开始算

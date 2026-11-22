@@ -1,0 +1,206 @@
+#!/usr/bin/ucode
+// 6.0 第 3、4 项：安全和状态提醒 + 自动拉黑（看门狗每分钟调用一次，不管代理插件在不在跑）
+//   登录提醒（loginalert）：有人登录了路由器后台（LuCI）或 SSH 就推送（面板自己替手机登录的不算）
+//   公网 IP 变化（ipchange，默认关）：宽带的 IPv4 地址或 IPv6 前缀变了就推送（公网地址只显示前半段）
+//   温度、负载（health）：温度到 90°C 以上、或者负载连续 5 分钟很高就推送，同一类 6 小时最多一次
+//   存储快满（diskfull）：闪存剩不到 2 MB、或者挂载的硬盘用了 95% 以上就推送，一天最多一次
+//   自动拉黑（autoban）：同一个外部地址 10 分钟内后台或 SSH 密码错 5 次，封 1 小时（再犯翻倍，最长 1 天），推送；
+//     家里局域网、路由器自己、私有地址（含 Tailscale 的 100.64.0.0/10）一律不封；封禁到期自动解开，面板「自动任务」里能手动解封
+// 开关：off.名字（关掉）；ipchange 默认关，打开 = on.ipchange
+// 用法：cmcp-guard            每分钟检查一次
+//       cmcp-guard unban 地址  手动解封    cmcp-guard list  列出封着的地址（JSON）
+// 测试用环境变量：CMCP_GUARD_ETC（代替 /etc/claude-mcp）、CMCP_GUARD_TMP（代替 /tmp）、CMCP_TEST_PATH（放在 PATH 最前面的假命令目录）、
+//                 CMCP_GUARD_ROOT（读 /proc、/sys、DHCP 租约时加在前面的目录）
+'use strict';
+import { readfile, writefile, popen, rename, stat, glob, mkdir } from 'fs';
+
+const E = getenv('CMCP_GUARD_ETC') || '/etc/claude-mcp', T = getenv('CMCP_GUARD_TMP') || '/tmp';
+const TP = getenv('CMCP_TEST_PATH'), R = getenv('CMCP_GUARD_ROOT') || '';
+const ST = T + '/cmcp_guard.json', BAN = T + '/cmcp_ban.json';
+const now = time();
+function shq(s) { return "'" + replace('' + s, "'", "'\\''") + "'"; }
+function sh(cmd) { let p = popen('export PATH=' + (TP ? TP + ':' : '') + '/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ' + cmd + ' 2>/dev/null', 'r'); if (!p) return ''; let o = p.read('all') ?? ''; p.close(); return o; }
+function readj(f, d) { try { let s = readfile(f); return s ? json(s) : d; } catch (e) { return d; } }
+function writej(f, o) { writefile(f + '.tmp', sprintf('%J', o)); rename(f + '.tmp', f); }
+function on(k) { return k == 'ipchange' ? !!stat(E + '/on.' + k) : !stat(E + '/off.' + k); }
+function notify(lvl, kind, title, body, tag) { sh(sprintf('cmcp-notify %s %s %s %s %s', shq(lvl), shq(kind), shq(title), shq(body ?? ''), shq(tag ?? kind))); }
+
+// ---------- 地址 ----------
+function v4n(ip) { let m = match(ip, /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/); if (!m) return null; for (let i = 1; i <= 4; i++) if (+m[i] > 255) return null; return ((+m[1]) << 24 | (+m[2]) << 16 | (+m[3]) << 8 | +m[4]) & 0xffffffff; }
+function in4(n, base, bits) { let b = v4n(base); let mask = bits == 0 ? 0 : (0xffffffff << (32 - bits)) & 0xffffffff; return (n & mask) == (b & mask); }
+// 不封、也不当成「外面的人」：路由器自己、局域网、私有地址、Tailscale、链路本地
+function private_ip(ip) {
+	let n = v4n(ip);
+	if (n != null) return in4(n, '127.0.0.0', 8) || in4(n, '10.0.0.0', 8) || in4(n, '172.16.0.0', 12) || in4(n, '192.168.0.0', 16) || in4(n, '100.64.0.0', 10) || in4(n, '169.254.0.0', 16) || in4(n, '0.0.0.0', 8);
+	let l = lc(ip);
+	return l == '::1' || match(l, /^(fe8|fe9|fea|feb|fc|fd)/) || match(l, /^::ffff:/) != null;
+}
+function valid_ip(ip) { return v4n(ip) != null || (match(lc(ip), /^[0-9a-f:]+$/) && index(ip, ':') >= 0 && length(ip) <= 39); }
+// 推送里的公网地址只显示前半段
+function mask(ip) {
+	if (private_ip(ip)) return ip;
+	let m = match(ip, /^(\d+)\.(\d+)\./);
+	if (m) return m[1] + '.' + m[2] + '.*.*';
+	let p = split(ip, ':');
+	return join(':', slice(p, 0, 2)) + ':…';
+}
+function lan_name(ip) {
+	for (let l in split(readfile(R + '/tmp/dhcp.leases') ?? '', '\n')) { let f = split(l, ' '); if (f[2] == ip && f[3] && f[3] != '*') return f[3]; }
+	return null;
+}
+function who(ip) { let n = lan_name(ip); return n ? sprintf('%s（%s）', n, ip) : mask(ip); }
+
+// ---------- 封禁（fw4 用自己的 nftables 表，fw3 用 ipset；都没有就只提醒） ----------
+function ban_tool() {
+	if (length(sh('command -v nft')) && sh('nft list tables >/dev/null 2>&1 && echo y') != '') return 'nft';
+	if (length(sh('command -v iptables')) && sh('ipset list -n >/dev/null 2>&1 && echo y') != '') return 'ipset';
+	return null;
+}
+function ban_setup(tool) {
+	if (tool == 'nft') {
+		if (sh('nft list table inet cmcp_ban >/dev/null 2>&1 && echo y') == '') {
+			let f = T + '/cmcp_ban.nft';
+			writefile(f, 'table inet cmcp_ban {\n\tset v4 { type ipv4_addr; flags timeout; }\n\tset v6 { type ipv6_addr; flags timeout; }\n\tchain input { type filter hook input priority -5; policy accept; ip saddr @v4 drop; ip6 saddr @v6 drop; }\n\tchain fwd { type filter hook forward priority -5; policy accept; ip saddr @v4 drop; ip6 saddr @v6 drop; }\n}\n');
+			sh('nft -f ' + shq(f));
+		}
+		return true;
+	}
+	if (tool == 'ipset') {
+		sh('ipset -exist create cmcp_ban hash:ip timeout 0; ipset -exist create cmcp_ban6 hash:ip family inet6 timeout 0');
+		sh('iptables -C INPUT -m set --match-set cmcp_ban src -j DROP || iptables -I INPUT -m set --match-set cmcp_ban src -j DROP');
+		sh('ip6tables -C INPUT -m set --match-set cmcp_ban6 src -j DROP || ip6tables -I INPUT -m set --match-set cmcp_ban6 src -j DROP');
+		return true;
+	}
+	return false;
+}
+function ban_apply(tool, ip, secs) {
+	let v6 = v4n(ip) == null;
+	if (tool == 'nft') sh(sprintf('nft add element inet cmcp_ban %s { %s timeout %ds }', v6 ? 'v6' : 'v4', ip, secs));
+	if (tool == 'ipset') sh(sprintf('ipset -exist add %s %s timeout %d', v6 ? 'cmcp_ban6' : 'cmcp_ban', ip, secs));
+}
+function ban_remove(tool, ip) {
+	let v6 = v4n(ip) == null;
+	if (tool == 'nft') sh(sprintf('nft delete element inet cmcp_ban %s { %s }', v6 ? 'v6' : 'v4', ip));
+	if (tool == 'ipset') sh(sprintf('ipset -exist del %s %s', v6 ? 'cmcp_ban6' : 'cmcp_ban', ip));
+}
+function bans() { let b = readj(BAN, {}); if (type(b) != 'object') b = {}; b.ips ??= {}; b.hist ??= {}; for (let ip in keys(b.ips)) if (b.ips[ip].until <= now) delete b.ips[ip]; return b; }
+
+if (ARGV[0] == 'list') { let b = bans(); print(sprintf('%J\n', { tool: ban_tool(), ips: b.ips })); exit(0); }
+if (ARGV[0] == 'unban') {
+	let ip = ARGV[1] ?? '', b = bans();
+	if (!valid_ip(ip)) { print('地址不对\n'); exit(1); }
+	ban_remove(ban_tool(), ip); delete b.ips[ip]; delete b.hist[ip]; writej(BAN, b);
+	print('ok\n'); exit(0);
+}
+
+let S = readj(ST, null);
+let first = type(S) != 'object';
+if (first) S = {};
+S.seen ??= []; S.fail ??= {}; S.last ??= {}; S.hi ??= 0;
+
+// ---------- 1. 系统日志：登录成功提醒、密码错误计数 ----------
+let lines = filter(split(sh('logread -l 400'), '\n'), (l) => length(l));
+let old = {}; for (let l in S.seen) old[l] = 1;
+let fresh = first ? [] : filter(lines, (l) => !old[l]);
+S.seen = slice(lines, -400);
+function src_of(l) {
+	let m = match(l, /from (\d+\.\d+\.\d+\.\d+)/) ?? match(l, /from \[?([0-9a-fA-F:]+:[0-9a-fA-F]*)\]?:\d+\s*$/) ?? match(l, /from ([0-9a-fA-F:]+) port/);
+	return m ? m[1] : null;
+}
+let logins = [], fails = [];
+for (let l in fresh) {
+	let ip = src_of(l), kind = null, ok = null;
+	if (match(l, /luci: accepted login/)) { kind = '路由器后台（LuCI）'; ok = true; }
+	else if (match(l, /luci: failed login/)) { kind = '路由器后台（LuCI）'; ok = false; }
+	else if (match(l, /(dropbear|sshd)\[\d+\]: (Password auth succeeded|Pubkey auth succeeded|Accepted (password|publickey))/)) { kind = 'SSH'; ok = true; }
+	else if (match(l, /(dropbear|sshd)\[\d+\]: (Bad password attempt|Login attempt for nonexistent user|Failed password|Invalid user)/)) { kind = 'SSH'; ok = false; }
+	if (!kind || !ip || !valid_ip(ip)) continue;
+	if (ok) push(logins, { kind, ip }); else push(fails, { kind, ip });
+}
+if (on('loginalert')) for (let x in logins) {
+	// 面板替手机自动登录走的是路由器内部（127.0.0.1），不算
+	if (x.ip == '127.0.0.1' || x.ip == '::1') continue;
+	notify(private_ip(x.ip) ? 'info' : 'warn', 'login', '有人登录了' + x.kind, sprintf('来自 %s%s。不是你自己的话，马上改路由器密码%s。', who(x.ip), private_ip(x.ip) ? '（家里的设备）' : '（外网）', x.kind == 'SSH' ? '，并在「系统 → 管理权」里关掉不用的 SSH' : ''), 'login-' + x.ip);
+}
+// 自动拉黑：同一个外部地址 10 分钟内错 5 次
+let B = bans(), tool = null, changed = false;
+for (let x in fails) {
+	if (private_ip(x.ip)) continue;
+	S.fail[x.ip] = filter([...(S.fail[x.ip] ?? []), now], (t) => now - t < 600);
+}
+for (let ip in keys(S.fail)) {
+	S.fail[ip] = filter(S.fail[ip], (t) => now - t < 600);
+	if (!length(S.fail[ip])) { delete S.fail[ip]; continue; }
+	if (length(S.fail[ip]) < 5 || B.ips[ip] || !on('autoban')) continue;
+	tool ??= ban_tool();
+	let n = (B.hist[ip]?.n ?? 0) + 1, secs = 3600 * (1 << (n - 1));
+	if (secs > 86400) secs = 86400;
+	B.hist[ip] = { n, at: now };
+	B.ips[ip] = { until: now + secs, at: now, n: length(S.fail[ip]) };
+	delete S.fail[ip];
+	changed = true;
+	if (tool && ban_setup(tool)) {
+		ban_apply(tool, ip, secs);
+		notify('warn', 'ban', '已自动封禁 ' + mask(ip), sprintf('这个外网地址 10 分钟内后台或 SSH 密码错了 5 次，封 %s（到期自动解开；面板「自动任务」里能马上解封）。家里的设备不会被封。', secs >= 86400 ? '1 天' : (secs / 3600) + ' 小时'), 'ban-' + ip);
+	} else {
+		B.ips[ip].noblock = true;
+		notify('warn', 'ban', '有人在试路由器密码：' + mask(ip), '这个外网地址 10 分钟内后台或 SSH 密码错了 5 次。这台路由器的防火墙没法自动封禁（没有 nftables，也没有 ipset），建议改一个强密码，并关掉外网访问后台和 SSH。', 'ban-' + ip);
+	}
+}
+// 清掉太久以前的封禁记录（一周没再犯，再犯从 1 小时算起）
+for (let ip in keys(B.hist)) if (now - B.hist[ip].at > 7 * 86400 && !B.ips[ip]) { delete B.hist[ip]; changed = true; }
+if (changed || length(keys(B.ips))) {
+	writej(BAN, B);
+	// 路由器重启、防火墙重载后补回封禁
+	if (length(keys(B.ips))) { tool ??= ban_tool(); if (tool && ban_setup(tool)) for (let ip in B.ips) if (!B.ips[ip].noblock) ban_apply(tool, ip, B.ips[ip].until - now); }
+}
+
+// ---------- 2. 公网 IP 变化 ----------
+if (on('ipchange')) {
+	let w4 = null, w6 = null;
+	try { let j = json(sh('ubus call network.interface.wan status')); w4 = j?.['ipv4-address']?.[0]?.address; } catch (e) {}
+	try { let j = json(sh('ubus call network.interface.wan6 status')); w6 = j?.['ipv6-prefix']?.[0]?.address ?? j?.['ipv6-address']?.[0]?.address; } catch (e) {}
+	for (let x in [['v4', w4, '宽带 IPv4 地址'], ['v6', w6, 'IPv6 前缀']]) {
+		let k = x[0], v = x[1];
+		if (!v) continue;
+		let prev = S.last['ip' + k];
+		if (prev && prev != v) notify('info', 'ipchange', x[2] + '变了', sprintf('%s → %s%s', mask(prev), mask(v), k == 'v4' && private_ip(v) ? '（是上级路由器分的内网地址）' : ''), 'ipchange-' + k);
+		S.last['ip' + k] = v;
+	}
+}
+
+// ---------- 3. 温度、负载 ----------
+if (on('health')) {
+	let tmax = null;
+	for (let f in glob(R + '/sys/class/thermal/thermal_zone*/temp') ?? []) { let v = +trim(readfile(f) ?? ''); if (v > 1000) v /= 1000; if (v > 0 && (tmax == null || v > tmax)) tmax = v; }
+	if (tmax != null && tmax >= 90 && now - (S.last.temp ?? 0) > 6 * 3600) {
+		S.last.temp = now;
+		notify('warn', 'health', sprintf('路由器温度很高：%d°C', tmax), '太热会自动降速、死机甚至损坏。放到通风的地方，别堆东西在上面；一直这么热的话考虑加个散热风扇。', 'temp');
+	}
+	let la = +split(trim(readfile(R + '/proc/loadavg') ?? '0'), ' ')[0], cpus = length(filter(split(readfile(R + '/proc/cpuinfo') ?? '', '\n'), (l) => match(l, /^processor\s*:/))) || 1;
+	S.hi = la >= cpus * 3 ? (S.hi ?? 0) + 1 : 0;
+	if (S.hi >= 5 && now - (S.last.load ?? 0) > 6 * 3600) {
+		S.last.load = now;
+		notify('warn', 'health', '路由器负载一直很高', sprintf('最近 5 分钟负载都在 %.1f 以上（%d 核）。可能有设备在大量下载，或者某个插件卡住了；面板「进程」里能看到谁在占着。', la, cpus), 'load');
+	}
+}
+
+// ---------- 4. 存储快满 ----------
+if (on('diskfull') && (now - (S.last.diskchk ?? 0) >= 600)) {
+	S.last.diskchk = now;
+	S.last.disk ??= {};
+	for (let l in split(sh('df -kP'), '\n')) {
+		let f = split(replace(trim(l), /\s+/g, ' '), ' ');
+		if (length(f) < 6 || !match(f[1], /^\d+$/)) continue;
+		let mp = f[5], size = +f[1], free = +f[3], pct = size ? 100 - free * 100 / size : 0;
+		let full = null;
+		if (mp == '/overlay' && size > 0 && free < 2048) full = sprintf('闪存只剩 %d KB', free);
+		else if (match(mp, /^\/mnt\//) && size > 102400 && pct >= 95) full = sprintf('%s 用了 %d%%', mp, int(pct));
+		if (full && now - (S.last.disk[mp] ?? 0) > 86400) {
+			S.last.disk[mp] = now;
+			notify('warn', 'diskfull', '存储快满了：' + full, mp == '/overlay' ? '闪存满了会装不了插件、设置保存失败。在面板「文件管理」或「系统 → 软件包」里删掉不用的东西。' : '硬盘满了下载、备份会失败。清理一下不用的文件。', 'disk-' + mp);
+		}
+	}
+}
+
+writej(ST, S);

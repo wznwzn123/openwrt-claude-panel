@@ -292,7 +292,9 @@ function start() {
 	setTimeout(loadMenu, 2500);
 	// 我是谁（托管版：身份和权限；所有版本：装的是不是 AI 版，敏感信息里要不要放连接器地址）
 	setTimeout(loadRole, 400);
-	const qp = new URLSearchParams(location.search).get('p');
+	const usp = new URLSearchParams(location.search), qp = usp.get('p');
+	// 6.0 第 2 项：推送里点了「暂停它上网」（?p=dev&ask=pause&mac=…）：打开设备页后弹出暂停设置，自己选多久才生效
+	if (usp.get('ask') === 'pause' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(usp.get('mac') || '')) setTimeout(() => askPause(usp.get('mac')), 1600);
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}
 	const p = validPage(qp) ? qp : validPage(sp) ? sp : 'main';

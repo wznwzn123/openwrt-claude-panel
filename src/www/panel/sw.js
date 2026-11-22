@@ -68,7 +68,9 @@ self.addEventListener('push', (e) => {
 	e.waitUntil((async () => {
 		let shown = true, err = null;
 		try {
-			await self.registration.showNotification(d.title || '我的路由器', { body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, icon: 'icon-192.png', badge: 'icon-192.png', timestamp: d.t || Date.now(), requireInteraction: d.lvl === 'err', data: { url: d.url || './?p=wd' } });
+			// 6.0 第 2 项：通知上的按钮（比如新设备的「暂停它上网」）：点了打开面板对应的地方，在面板里确认才生效
+			const acts = Array.isArray(d.actions) ? d.actions.filter((a) => a && /^[a-z]{1,16}$/.test(a.action || '') && typeof a.title === 'string' && /^\.\/\?p=/.test(a.url || '')).slice(0, 2) : [];
+			await self.registration.showNotification(d.title || '我的路由器', { body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, icon: 'icon-192.png', badge: 'icon-192.png', timestamp: d.t || Date.now(), requireInteraction: d.lvl === 'err', actions: acts.map((a) => ({ action: a.action, title: a.title.slice(0, 20) })), data: { url: d.url || './?p=wd', acts: Object.fromEntries(acts.map((a) => [a.action, a.url])) } });
 		} catch (x) { shown = false; err = String((x && x.message) || x); }
 		// 告诉云端「这台手机收到了」，面板上能看到推送到底有没有送达
 		if (d.id) {
@@ -81,12 +83,13 @@ self.addEventListener('push', (e) => {
 });
 self.addEventListener('notificationclick', (e) => {
 	e.notification.close();
-	const url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
-	const p = new URL(url).searchParams.get('p');
+	const dt = e.notification.data || {}, au = e.action && dt.acts && dt.acts[e.action];
+	const url = new URL(au || dt.url || './', self.registration.scope).href;
+	const sp = new URL(url).searchParams, p = sp.get('p'), ask = sp.get('ask'), mac = sp.get('mac');
 	e.waitUntil((async () => {
 		const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 		for (const c of cs) {
-			if (c.url.startsWith(BASE)) { if (p) c.postMessage({ go: p }); return c.focus(); }
+			if (c.url.startsWith(BASE)) { if (p) c.postMessage({ go: p, ask, mac }); return c.focus(); }
 		}
 		return self.clients.openWindow(url);
 	})());

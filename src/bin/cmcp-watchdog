@@ -392,6 +392,8 @@ $(tunlog)"
 		[ "$NET" = ok ] && [ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-autosw ] && ( /usr/sbin/cmcp-autosw >/dev/null 2>&1 & )
 		# 每台设备的流量统计 + 新设备连上时提醒
 		[ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-traffic ] && ( /usr/sbin/cmcp-traffic >/dev/null 2>&1 & )
+		# 安全和状态提醒、自动拉黑（6.0 第 3、4 项）：跟代理插件无关，一直跑
+		[ -x /usr/sbin/cmcp-guard ] && ( /usr/sbin/cmcp-guard >/dev/null 2>&1 & )
 	fi
 	# 隧道直连 Cloudflare（不经过 OpenClash）：路由器重启后 /tmp 里的设置没了就补回来；自动关掉的过一天再试
 	if [ $(( t - TB_T )) -ge 300 ] && [ "$DRYRUN" != 1 ] && [ -x /usr/sbin/cmcp-tunbypass ]; then

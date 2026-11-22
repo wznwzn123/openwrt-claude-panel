@@ -2748,7 +2748,7 @@ const FAM_GROUPS = {
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
 	net: ['luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch'],
-	sys: ['update_start', 'auto', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
+	sys: ['update_start', 'auto', 'ban_del', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };
 function fam_group(m, p) {
@@ -3554,7 +3554,9 @@ P.px_delay = function(a) {
 };
 
 /* ---------- 自动处理的开关：内存不够时自动重启代理插件、隧道直连 Cloudflare ---------- */
-const AUTO_KEYS = ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup'];
+const AUTO_KEYS = ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup', 'loginalert', 'health', 'diskfull', 'autoban'];
+// 默认关、要自己打开的（打开 = on.名字）：公网 IP 变化（宽带每天重拨的会天天推）
+const AUTO_OPTIN = ['ipchange'];
 P.auto = function(a) {
 	let D = '/etc/claude-mcp', px = px_detect(), oc = length(px.list ?? []) > 0, mg = D + '/memguard.off';
 	if (a?.set) {
@@ -3571,11 +3573,18 @@ P.auto = function(a) {
 			if (a[k]) sh('rm -f ' + D + '/off.' + k);
 			else writefile(D + '/off.' + k, sprintf('%d 面板关闭\n', time()));
 		}
+		for (let k in AUTO_OPTIN) if (a[k] != null) {
+			if (a[k]) writefile(D + '/on.' + k, sprintf('%d 面板打开\n', time()));
+			else sh('rm -f ' + D + '/on.' + k);
+		}
 		if (a.autosw != null) { let f = D + '/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' }); c.enabled = !!a.autosw; cmcp_writej(f, c); }
 	}
 	let st = oc ? trim(sh('/usr/sbin/cmcp-tunbypass status').out) : '', off = trim(readfile(D + '/tunbypass.off') ?? '');
 	let act = null; for (let x in px.list ?? []) if (x.id == px.active) act = x;
 	let on = {}; for (let k in AUTO_KEYS) on[k] = !stat(D + '/off.' + k);
+	for (let k in AUTO_OPTIN) on[k] = !!stat(D + '/' + 'on.' + k);
+	// 自动拉黑：封着的地址、这台路由器能不能封（6.0 第 4 项）
+	let ban = null; try { ban = json(sh(SBIN + '/cmcp-guard list').out); } catch (e) {}
 	return {
 		oc, px: act?.name ?? '', memguard: !stat(mg),
 		tb: { on: st == '已开启', want: oc && !stat(D + '/tunbypass.off'), auto: !!match(off, /^自动/), at: +(split(off, ' ')[1] ?? 0) || 0, status: st },
@@ -3584,10 +3593,19 @@ P.auto = function(a) {
 		cloud: !!stat(D + '/cloud.conf'), route: !!stat('/etc/init.d/openclash'),
 		// 面板线路自动选择要「不走代理」（以前叫「拉黑名单」）规则集启用了才起作用（换路线就是刷新这个规则集）
 		route_ready: !!stat('/etc/init.d/openclash') ? bl_custom_ready() : null,
+		ban: ban ? { tool: ban.tool, ips: ban.ips } : null,
 	};
 };
 
 /* ---------- 面板：内嵌 Kwrt 原版页面 / 系统日志 / 进程 ---------- */
+// 自动拉黑：手动解封
+P.ban_del = function(a) {
+	let ip = '' + (a?.ip ?? '');
+	if (!match(ip, /^[0-9a-fA-F.:]{3,39}$/)) die('地址不对');
+	let r = sh(sprintf('%s/cmcp-guard unban %s', SBIN, shq(ip)));
+	if (trim(r.out) != 'ok') die('解封失败：' + trim(r.out));
+	return { ok: true };
+};
 P.luci_key = function() {
 	return { key: trim(readfile(LUCI_KEY) ?? '') };
 };

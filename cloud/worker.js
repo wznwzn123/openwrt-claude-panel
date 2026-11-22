@@ -538,7 +538,10 @@ async function handle(req, env) {
 			try { b = await req.json(); } catch (e) {}
 			if (!b.title) return J({ error: 'no title' }, 400);
 			const icon = { err: '⚠️ ', warn: '', ok: '✅ ', info: '' }[b.lvl] ?? '';
-			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info', nolog: true, ...(b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : {}) });
+			// 6.0 第 2 项：新设备连上了 → 点开去设备页，按钮「暂停它上网」（在面板里选多久、确认了才生效）
+			const nm = b.kind === 'newdev' ? /^newdev-([0-9a-f]{2}(?::[0-9a-f]{2}){5})$/.exec(String(b.tag || '')) : null;
+			const extra = b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : nm ? { url: './?p=dev', actions: [{ action: 'pause', title: '暂停它上网', url: './?p=dev&ask=pause&mac=' + nm[1] }] } : b.kind === 'ban' || b.kind === 'login' ? { url: './?p=auto' } : {};
+			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info', nolog: true, ...extra });
 			return J({ ok: true, sent });
 		}
 		// 云端备份（只有路由器拿着 RKEY 能用；面板经路由器转发）

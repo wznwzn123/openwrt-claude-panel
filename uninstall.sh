@@ -25,8 +25,15 @@ for t in iptables ip6tables; do
 done
 # 隧道直连的设置（dnsmasq、OpenClash 局域网名单里加的那一行）删掉
 [ -x /usr/sbin/cmcp-tunbypass ] && /usr/sbin/cmcp-tunbypass remove
+# 自动拉黑（6.0）：自己的防火墙表 / ipset 规则一起删掉
+command -v nft >/dev/null 2>&1 && nft delete table inet cmcp_ban 2>/dev/null
+if command -v ipset >/dev/null 2>&1; then
+	iptables -D INPUT -m set --match-set cmcp_ban src -j DROP 2>/dev/null; ip6tables -D INPUT -m set --match-set cmcp_ban6 src -j DROP 2>/dev/null
+	ipset destroy cmcp_ban 2>/dev/null; ipset destroy cmcp_ban6 2>/dev/null
+fi
+rm -f /tmp/cmcp_ban.json /tmp/cmcp_guard.json /tmp/cmcp_ban.nft
 sed -i '/\/usr\/sbin\/cmcp-/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
-rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-lfull /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz
+rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz
 # 小闪存模式下载到内存里的 cloudflared
 rm -rf /tmp/cmcp-cfd
 rm -rf /usr/share/ucode/cmcp /www-claude-mcp

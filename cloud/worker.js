@@ -55,7 +55,7 @@ export function judge({ r, t, probe }, now) {
 	}
 	// 隧道断了：只有在隧道开始失败「之后」路由器还发过心跳，才说明路由器本身是好的；否则可能是刚断电，先等心跳过期再判断
 	if (rFresh && tunDown && r.last < (probe.firstFail || 0) - 5000) return null;
-	if (rFresh && tunDown) return { state: 'tunnel', msg: '路由器本身正常，但隧道断了（面板和 Claude 暂时连不上，看门狗会自动修）' + (r.rep && r.rep.tcause ? '。路由器报告：' + r.rep.tcause : '') };
+	if (rFresh && tunDown) return { state: 'tunnel', msg: '路由器本身正常，但隧道断了（面板和 AI 暂时连不上，看门狗会自动修）' + (r.rep && r.rep.tcause ? '。路由器报告：' + r.rep.tcause : '') };
 	// 路由器没心跳了
 	if (!tunDown && probeOk) return { state: 'noreport', msg: '路由器能连上，但它的报告发不出来（可能是代理节点或 DNS 出了问题）' };
 	if (!tunDown) return null; // 隧道只失败了 1 次，还没确定，保持原状态等下一次探测
@@ -538,7 +538,7 @@ async function handle(req, env) {
 			try { b = await req.json(); } catch (e) {}
 			if (!b.title) return J({ error: 'no title' }, 400);
 			const icon = { err: '⚠️ ', warn: '', ok: '✅ ', info: '' }[b.lvl] ?? '';
-			// 6.0 第 11 项：Claude 想做危险操作 → 点开面板弹出「允许 / 拒绝」（只在面板里点，推送上不能直接允许）
+			// 6.0 第 11 项：AI 想做危险操作 → 点开面板弹出「允许 / 拒绝」（只在面板里点，推送上不能直接允许）
 			// 6.0 第 2 项：新设备连上了 → 点开去设备页，按钮「暂停它上网」（在面板里选多久、确认了才生效）
 			const nm = b.kind === 'newdev' ? /^newdev-([0-9a-f]{2}(?::[0-9a-f]{2}){5})$/.exec(String(b.tag || '')) : null;
 			const extra = b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : nm ? { url: './?p=dev', actions: [{ action: 'pause', title: '暂停它上网', url: './?p=dev&ask=pause&mac=' + nm[1] }] } : b.kind === 'ban' || b.kind === 'login' ? { url: './?p=auto' } : b.kind === 'ai' && /^aiask-[a-z0-9]{10}$/.test(String(b.tag || '')) ? { url: './?p=home&ask=ai', actions: [{ action: 'ai', title: '去确认', url: './?p=home&ask=ai' }] } : {};

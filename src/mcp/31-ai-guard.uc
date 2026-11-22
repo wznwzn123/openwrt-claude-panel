@@ -1,14 +1,14 @@
-/* 6.0 第 11 项：Claude 能做什么（只给 Claude 连接器用，手机面板不受影响）
+/* 6.0 第 11 项：AI 能做什么（只给 AI 连接器用，手机面板不受影响）
    - 只读（ro）：只能查看；命令行只能跑「只看」的命令
    - 危险操作要确认（ask，默认，新装和升级都是这一档）：查看、换节点、换模式、断开连接照常；重启、改设置、装卸软件、改规则、
      其他命令要先推送到手机，主账号（或有「完全控制」的家人）在面板里点「允许」才执行。连接器地址泄露了，别人也做不了这些
    - 完全放开（full）：跟 6.0 以前一样
-   设置在 config.json 的 ai_mode；在面板「我的主页 → 敏感信息 → Claude 连接器地址」里改（要先确认本人）
+   设置在 config.json 的 ai_mode；在面板「我的主页 → 敏感信息 → AI 连接器地址」里改（要先确认本人）
    等确认的请求记在内存里（/tmp/cmcp_ai_ask.json，重启就没了）：5 分钟内有效、批准一次只能执行一次、参数要完全一样 */
 const AI_ASK = '/tmp/cmcp_ai_ask.json';
 const AI_TTL = 300, AI_LOCK = '/tmp/cmcp_ai_wait';
 const AI_WAIT = +(getenv('CMCP_AI_WAIT') ?? '') || 30; // 测试用的环境变量（网页请求改不了 CGI 的环境变量）
-let AI_STOP = false; // 这次不是出错，是在等确认 / 被挡下（回给 Claude 的话前面不加「出错：」）
+let AI_STOP = false; // 这次不是出错，是在等确认 / 被挡下（回给 AI 的话前面不加「出错：」）
 const AI_READ = { router_status: 1, list_proxy_groups: 1, test_delay: 1, list_connections: 1, list_rules: 1, get_logs: 1, get_custom_rules: 1, openclash_log: 1,
 	oaf_show: 1, oaf_find_app: 1, system_info: 1, net_speed: 1, device_list: 1, network_info: 1, list_services: 1, firewall_overview: 1, uci_show: 1, system_log: 1 };
 // 日常操作：随时能改回来、不断网
@@ -67,7 +67,7 @@ function ai_class(name, a) {
 	if (name == 'run_command') return ro_command(a?.command) ? 'read' : 'danger';
 	return 'danger';
 }
-// 手机上要看清楚 Claude 想做什么（设置里的密码类值打码）
+// 手机上要看清楚 AI 想做什么（设置里的密码类值打码）
 function ai_detail(name, a) {
 	let cut = (s, n) => (length(s) > n ? substr(s, 0, n) + '…' : s);
 	switch (name) {
@@ -102,11 +102,11 @@ function ai_write(o) { cmcp_writej(AI_ASK, o); sh('chmod 600 ' + AI_ASK + ' 2>/d
 function ai_find(o, id) { for (let x in o.list) if (x.id == id) return x; return null; }
 function ai_stop(msg) { AI_STOP = true; die(msg); }
 
-/* 工具调用前问一下：能直接做就返回；要等确认就推送到手机，最多等 30 秒；等不到就让 Claude 稍后原样再调一次 */
+/* 工具调用前问一下：能直接做就返回；要等确认就推送到手机，最多等 30 秒；等不到就让 AI 稍后原样再调一次 */
 function ai_gate(name, a) {
 	let mode = ai_mode(), cls = ai_class(name, a);
 	if (mode == 'full' || cls == 'read') return;
-	if (mode == 'ro') ai_stop('Claude 现在是「只读」：只能查看，不能修改' + (name == 'run_command' ? '（命令行只能跑只看的命令，比如 cat、ls、logread、uci show）' : '') + '。要改的话，请用户在手机面板「我的主页 → 敏感信息 → Claude 连接器地址」里把「Claude 能做什么」改成「危险操作要确认」。');
+	if (mode == 'ro') ai_stop('AI 现在是「只读」：只能查看，不能修改' + (name == 'run_command' ? '（命令行只能跑只看的命令，比如 cat、ls、logread、uci show）' : '') + '。要改的话，请用户在手机面板「我的主页 → 敏感信息 → AI 连接器地址」里把「AI 能做什么」改成「危险操作要确认」。');
 	if (cls == 'light') return;
 	let args = sprintf('%J', a ?? {}), now = time(), o = ai_read(), x = null;
 	// 同样的请求已经在等 / 已经批准：接着用这条（不会重复推送）
@@ -116,10 +116,10 @@ function ai_gate(name, a) {
 		if (w >= 10) ai_stop('手机上已经有 10 个请求在等确认了，请用户先在手机面板里处理。');
 		x = { id: rand_str(10), name, title: AI_NAMES[name] ?? name, detail: ai_detail(name, a), args, at: now, exp: now + AI_TTL, st: 'wait' };
 		push(o.list, x); ai_write(o);
-		try { sh(sprintf('CMCP_NOLOG=1 %s/cmcp-notify warn ai %s %s %s >/dev/null 2>&1 </dev/null &', SBIN, shq('Claude 想要：' + x.title), shq('点开面板确认，点「允许」才会执行，5 分钟内有效。' + (length(x.detail) ? '\n' + substr(x.detail, 0, 120) : '')), shq('aiask-' + x.id))); } catch (e) {}
+		try { sh(sprintf('CMCP_NOLOG=1 %s/cmcp-notify warn ai %s %s %s >/dev/null 2>&1 </dev/null &', SBIN, shq('AI 想要：' + x.title), shq('点开面板确认，点「允许」才会执行，5 分钟内有效。' + (length(x.detail) ? '\n' + substr(x.detail, 0, 120) : '')), shq('aiask-' + x.id))); } catch (e) {}
 	}
 	let id = x.id;
-	// 面板服务同时只能处理 4 个请求：同一时间只让一个请求在这里等，别的直接让 Claude 稍后再调（免得把手机面板堵住）
+	// 面板服务同时只能处理 4 个请求：同一时间只让一个请求在这里等，别的直接让 AI 稍后再调（免得把手机面板堵住）
 	let lk = stat(AI_LOCK);
 	if (lk && time() - lk.mtime > AI_WAIT + 10) sh('rmdir ' + AI_LOCK + ' 2>/dev/null');
 	if (x.st == 'wait' && mkdir(AI_LOCK)) {
@@ -141,12 +141,12 @@ P.ai_asks = function(a) {
 P.ai_answer = function(a) {
 	let o = ai_read(), x = ai_find(o, '' + (a?.id ?? ''));
 	if (!x) die('找不到这个请求了');
-	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 Claude 再发一次' : '这个请求已经处理过了');
+	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 AI 再发一次' : '这个请求已经处理过了');
 	x.st = a?.ok === true ? 'ok' : 'no'; x.by = substr('' + (DEV?.name ?? (DEV_ID ? '手机' : '面板')), 0, 40); x.ans = time();
 	ai_write(o);
 	return { ok: true, st: x.st };
 };
-// 改「Claude 能做什么」：要先确认本人，只有主账号
+// 改「AI 能做什么」：要先确认本人，只有主账号
 P.ai_mode = function(a) {
 	need_sudo(a, true);
 	let m = '' + (a?.mode ?? '');
@@ -157,10 +157,10 @@ P.ai_mode = function(a) {
 	CONF = null;
 	// 改严了：在等的请求一律作废
 	if (m != 'full') { let o = ai_read(); for (let x in o.list) if (x.st == 'wait' || x.st == 'ok') x.st = 'exp'; ai_write(o); }
-	try { sh(sprintf('%s/cmcp-notify info key %s %s key', SBIN, shq('Claude 能做什么：改成了「' + AI_MODES[m] + '」'), shq(m == 'full' ? 'Claude 连接器现在什么都能直接做。不是你改的话，马上在「我的主页 → 敏感信息」里改回来，并换一下 Claude 连接器地址。' : '在「我的主页 → 敏感信息 → Claude 连接器地址」里随时能改。'))); } catch (e) {}
+	try { sh(sprintf('%s/cmcp-notify info key %s %s key', SBIN, shq('AI 能做什么：改成了「' + AI_MODES[m] + '」'), shq(m == 'full' ? 'AI 连接器现在什么都能直接做。不是你改的话，马上在「我的主页 → 敏感信息」里改回来，并换一下 AI 连接器地址。' : '在「我的主页 → 敏感信息 → AI 连接器地址」里随时能改。'))); } catch (e) {}
 	return { ok: true, mode: m };
 };
-// 「Claude 连接器地址」那一页顺便带上现在的档位和最近的请求
+// 「AI 连接器地址」那一页顺便带上现在的档位和最近的请求
 const CKEY_INFO0 = P.ckey_info;
 P.ckey_info = function(a) {
 	let r = CKEY_INFO0(a);

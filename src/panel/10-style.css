@@ -677,7 +677,7 @@ section.page{display:none}section.page.on{display:block}
 :root.lowfx .top,:root.lowfx .dock,:root.lowfx .savebar,:root.lowfx .side{background:rgba(249,249,251,.98)!important}
 :root.lowfx.dark .top,:root.lowfx.dark .dock,:root.lowfx.dark .savebar,:root.lowfx.dark .side{background:rgba(24,24,28,.98)!important}
 
-/* 6.0 第 11 项：Claude 能做什么、危险操作确认 */
+/* 6.0 第 11 项：AI 能做什么、危险操作确认 */
 .aimodes{display:grid;gap:8px}
 .aimode{display:flex;flex-direction:column;gap:3px;width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card2);color:var(--text);text-align:left;font:inherit;cursor:pointer}
 .aimode b{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:15px;font-weight:600}

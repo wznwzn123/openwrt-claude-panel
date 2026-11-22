@@ -1,4 +1,4 @@
-// 6.0 第 11 项：Claude 能做什么——只读 / 危险操作要手机确认（默认）/ 完全放开；「只看」的命令直接执行
+// 6.0 第 11 项：AI 能做什么——只读 / 危险操作要手机确认（默认）/ 完全放开；「只看」的命令直接执行
 // 需要本机能跑 ucode：UCODE="ucode 命令（含 -L 参数）" node test/test_cgi_ai.mjs（在 cloud 目录里运行）
 import fs from 'fs';
 import os from 'os';
@@ -38,7 +38,7 @@ ok('默认（危险操作要确认）：只看的命令直接执行', !isErr(r) 
 r = await ai('run_command', { command: 'touch ' + MARK });
 ok('会改东西的命令：不执行，推送到手机，告诉 Claude 等用户确认后原样再调', isErr(r) && !fs.existsSync(MARK) && /手机上确认/.test(txt(r)) && !/^出错/.test(txt(r)), txt(r));
 let P = pushes();
-ok('推送：写着 Claude 想做什么和命令内容，标签 aiask-编号，不记进断线记录', P.length === 1 && /Claude 想要：执行命令/.test(P[0]) && P[0].includes('touch ') && /\|aiask-[a-z0-9]{10}$/.test(P[0]), P.join('\n'));
+ok('推送：写着 Claude 想做什么和命令内容，标签 aiask-编号，不记进断线记录', P.length === 1 && /AI 想要：执行命令/.test(P[0]) && P[0].includes('touch ') && /\|aiask-[a-z0-9]{10}$/.test(P[0]), P.join('\n'));
 let L = (await panel('ai_asks')).result;
 ok('面板：看得到在等确认的请求（标题、内容、5 分钟后过期）', L && L.mode === 'ask' && L.list.length === 1 && L.list[0].st === 'wait' && L.list[0].title === '执行命令' && L.list[0].detail.includes('touch ') && L.list[0].exp - L.list[0].at === 300, JSON.stringify(L));
 ok('面板看到的请求里没有原始参数', !JSON.stringify(L).includes('"args"'));
@@ -131,7 +131,7 @@ ok('完全放开：跟以前一样直接执行', fs.existsSync(MARK) && pushes()
 // ---- 改档位：要先确认本人 ----
 setConf({});
 r = await panel('ai_mode', { mode: 'full' });
-ok('面板改「Claude 能做什么」：没确认本人不行', /确认是你本人/.test(r.error?.message || ''), JSON.stringify(r));
+ok('面板改「AI 能做什么」：没确认本人不行', /确认是你本人/.test(r.error?.message || ''), JSON.stringify(r));
 fs.writeFileSync('/tmp/cmcp_sudo.json', JSON.stringify({ ['s'.repeat(24)]: { exp: Math.floor(Date.now() / 1000) + 600, dev: '', kind: 'local' } }));
 r = await panel('ai_mode', { mode: 'nope', sudo: 's'.repeat(24) });
 ok('乱填的档位：拒绝', /只能是/.test(r.error?.message || ''), JSON.stringify(r));

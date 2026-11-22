@@ -487,7 +487,7 @@ function autoItems(d) {
 	if (d.oc) add('出问题时自动修', 'memguard', !!d.memguard, '内存不够时自动重启 ' + pn, '清理缓存后还不够，就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
 	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连不上就换到同地区延迟最低的节点，并推送通知；你手动换节点后 10 分钟内不会把它换走');
 	// 开关看「有没有打开」（want）；打开了但有的插件还没生效，下面另外提示
-	if (d.oc) add('网络', 'tunbypass', !!(d.tb && (d.tb.want ?? d.tb.on)), '隧道直连 Cloudflare', '面板和 Claude 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
+	if (d.oc) add('网络', 'tunbypass', !!(d.tb && (d.tb.want ?? d.tb.on)), '隧道直连 Cloudflare', '面板和 AI 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
 	// 面板线路自动选择靠「不走代理」那个规则集换路线：规则集没启用时开着也不起作用，要说清楚
 	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「不走代理」页启用' : ''));
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
@@ -1702,9 +1702,9 @@ async function updStart(noConfirm) {
 	});
 }
 
-// 换一把新的登录密钥：这台手机自动换成新的；其他手机、Claude 连接器要重新填
+// 换一把新的登录密钥：这台手机自动换成新的；其他手机、AI 连接器要重新填
 async function rotateKey() {
-	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 已经登录的手机（包括这台）用的是各自的钥匙，不受影响；不认识的手机在下面「登录着的设备」里移除\n· 用「Claude 连接器地址」加的 Claude 连接器不受影响；用旧登录地址加的要换', '换新密钥', true))) return;
+	if (!(await confirmBox('换一把新的登录密钥', '换了之后：\n· 旧的登录地址马上作废，谁拿到旧地址都进不来\n· 已经登录的手机（包括这台）用的是各自的钥匙，不受影响；不认识的手机在下面「登录着的设备」里移除\n· 用「AI 连接器地址」加的 AI 连接器不受影响；用旧登录地址加的要换', '换新密钥', true))) return;
 	let r;
 	try { r = await secP('rotate_key', { confirm: 'ROTATE' }, 30000); } catch (e) { return toast(e.message, true); }
 	// 6.0：手机用的是自己的钥匙，换登录密钥不影响这台手机，新密钥也不存在手机上
@@ -1713,11 +1713,11 @@ async function rotateKey() {
 	<p class="muted" style="margin:0 0 10px">旧的登录地址已经作废。这是新的登录地址，点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(login)}<span>点一下显示</span></div>
 	${r.selfcloud ? '<div class="notice w" style="margin-top:12px">你用的是自建完整版：还要把 Cloudflare Worker 的密钥 <b>PANEL_TOKEN</b> 换成新的登录密钥（地址最后那一串），不然推送和云端备份会连不上。</div>' : ''}
-	<div class="notice" style="margin-top:12px">已经登录的手机照常能用。以后添加新手机用「我的主页 → 敏感信息 → 添加新手机」扫码。Claude 里如果用的是旧的登录地址，换成「Claude 连接器地址」。</div>
+	<div class="notice" style="margin-top:12px">已经登录的手机照常能用。以后添加新手机用「我的主页 → 敏感信息 → 添加新手机」扫码。AI 应用里如果用的是旧的登录地址，换成「AI 连接器地址」。</div>
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制新地址</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(login); });
 }
-// 「系统操作」里按版本显示的项：已登录的手机（应急登录码进来的）、Claude 连接器地址（AI 版）
+// 「系统操作」里按版本显示的项：已登录的手机（应急登录码进来的）、AI 连接器地址（AI 版）
 // 托管服务的到期时间：系统操作里显示；还剩 3 天以内首页提示去申请续期
 const ymd = (ms) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
 let SVC = null;
@@ -1877,7 +1877,7 @@ async function famSudo(op, args, why) {
 	try { return await P('fam', { op, sudo: tok, ...args }, 30000); }
 	catch (e) { if (/确认是你本人/.test(e.message)) { sudoSet(null); tok = await needSudo(why); if (!tok) return null; return P('fam', { op, sudo: tok, ...args }, 30000); } throw e; }
 }
-/* 6.0 第 63 项：路由器上的钥匙（登录密钥、Claude 连接器地址、平板网址、登录着的手机）只在「我的主页 → 敏感信息」里；
+/* 6.0 第 63 项：路由器上的钥匙（登录密钥、AI 连接器地址、平板网址、登录着的手机）只在「我的主页 → 敏感信息」里；
    路由器那边没确认本人就不给（凭证只认发给的这台手机）。有官网账号的用邮箱验证码；自建版、应急登录的用路由器后台密码 */
 async function secP(method, args, tmo) {
 	if (!sudoOn()) { toast('先在「我的主页 → 敏感信息」里验证是你本人', true); go('me'); throw new Error('要先确认是你本人'); }
@@ -1893,7 +1893,7 @@ function mpKeysHtml() {
 	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
 	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b><span class="muted">${d}</span></div><span class="muted">›</span></button>`;
 	const lpw = store.get('rp_lpw') === '1';
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'Claude 连接器地址', '在 Claude 里添加连接器、设置 Claude 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -1907,7 +1907,7 @@ function mpLocalDraw() {
 	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? '应急登录' : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? '你是用路由器终端的应急登录码进来的，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
 	if (!ver) {
 		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
-		if (store.get('rp_ai') === '1') L.push(['Claude 连接器地址', '能让 AI 控制路由器的地址']);
+		if (store.get('rp_ai') === '1') L.push(['AI 连接器地址', '能让 AI 控制路由器的地址']);
 		if (cinfo && cinfo.tablet) L.push(['平板（证人）网址', '平板报平安用的网址']);
 		L.push(['登录着的设备', '哪些手机能打开这个面板，不认识的马上移除']);
 		if (!hosted) L.push(['登录要输路由器后台密码', '开了以后光有登录地址进不来']);
@@ -2047,7 +2047,7 @@ function mpDraw() {
 	if (!sudoOn() || !MP.sec) {
 		h += `<div class="sectitle"><b>敏感信息</b><span class="muted" style="font-size:13px">🔒 要验证</span></div><section class="card mp-lock">${LOCK_IC}
 		<h3>验证一下才能看</h3>
-		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机能打开这个面板，不认识的马上移除</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录官网，成功还是失败</span></li>${ME_ROLE.role === 'sub' ? '' : '<li><b>这台路由器的钥匙</b><span>' + (store.get('rp_ai') === '1' ? 'Claude 连接器地址、' : '') + (cinfo && cinfo.tablet ? '平板网址、' : '') + '换登录密钥</span></li>'}</ul>
+		<ul class="mp-lockl"><li><b>联系方式</b><span>完整的登录邮箱</span></li><li><b>登录着的设备</b><span>哪些手机能打开这个面板，不认识的马上移除</span></li><li><b>登录记录</b><span>最近 30 天什么时候、在哪登录官网，成功还是失败</span></li>${ME_ROLE.role === 'sub' ? '' : '<li><b>这台路由器的钥匙</b><span>' + (store.get('rp_ai') === '1' ? 'AI 连接器地址、' : '') + (cinfo && cinfo.tablet ? '平板网址、' : '') + '换登录密钥</span></li>'}</ul>
 		<div data-cwrap>${codeHtml(me.email)}</div>
 		<p class="mp-note">验证一次，这个页面 10 分钟内不用再输</p></section>`;
 	} else {
@@ -2172,7 +2172,7 @@ $('meBox').addEventListener('click', async (e) => {
 	// 6.0 第 12 项：自建版「登录要输路由器后台密码」
 	else if (k === 'kpw') {
 		const on = store.get('rp_lpw') !== '1';
-		if (!(await confirmBox(on ? '登录要输路由器后台密码' : '关掉登录时的路由器密码', on ? '开启后：新手机打开登录地址时，还要输一次路由器后台（root）密码才能登录；光有登录地址的人进不来，也不能直接用它操作路由器。\n已经登录的手机不受影响。Claude 请用「Claude 连接器地址」。' : '关掉后：拿到登录地址就能登录新手机。', on ? '开启' : '关掉', !on))) return;
+		if (!(await confirmBox(on ? '登录要输路由器后台密码' : '关掉登录时的路由器密码', on ? '开启后：新手机打开登录地址时，还要输一次路由器后台（root）密码才能登录；光有登录地址的人进不来，也不能直接用它操作路由器。\n已经登录的手机不受影响。AI 请用「AI 连接器地址」。' : '关掉后：拿到登录地址就能登录新手机。', on ? '开启' : '关掉', !on))) return;
 		try { const r = await secP('login_pw_set', { on }); store.set('rp_lpw', r.on ? '1' : '0'); toast(r.on ? '已开启：登录要输路由器后台密码' : '已关掉'); mpLocalDraw(); } catch (e) { toast(e.message, true); }
 	}
 	else if (k === 'kckey') ckeySheet();
@@ -2221,7 +2221,7 @@ async function svcSheet() {
 		};
 	});
 }
-// 6.0：已登录的手机、Claude 连接器地址、换登录密钥、自建版的「添加新手机」都只在「我的主页 → 敏感信息」里；系统操作里只留托管版的「添加新手机」（扫码只是打开官网）
+// 6.0：已登录的手机、AI 连接器地址、换登录密钥、自建版的「添加新手机」都只在「我的主页 → 敏感信息」里；系统操作里只留托管版的「添加新手机」（扫码只是打开官网）
 function moreBtns() { const a = document.querySelector('#p-more [data-t="addphone"]'); if (a) a.classList.toggle('hidden', !isHosted()); }
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 // 平板（证人）网址：带着平板的钥匙，只在「我的主页 → 敏感信息」验证后给
@@ -2236,7 +2236,7 @@ async function tabletUrlSheet() {
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(r.url); });
 }
-/* 6.0 第 11 项：Claude 能做什么（只读 / 危险操作要确认 / 完全放开），危险操作的请求推送到手机，点「允许」才执行 */
+/* 6.0 第 11 项：AI 能做什么（只读 / 危险操作要确认 / 完全放开），危险操作的请求推送到手机，点「允许」才执行 */
 const AI_MODES = [['ro', '只读', '只能查看状态、设置和日志，什么都改不了'], ['ask', '危险操作要确认', '查看、换节点照常；重启、改设置、装卸软件、改规则要你在手机上点「允许」'], ['full', '完全放开', '什么都能直接做（6.0 以前就是这样）。连接器地址泄露了，别人也能直接改']];
 function aiModesHtml(cur) {
 	return AI_MODES.map(([k, t, d]) => `<button class="aimode${k === cur ? ' on' : ''}" data-aim="${k}" aria-pressed="${k === cur}"><b>${t}${k === 'ask' ? ' <span class="pill blue">推荐</span>' : ''}</b><span class="muted">${d}</span></button>`).join('');
@@ -2246,12 +2246,12 @@ function aiModesBind(box) {
 	box.onclick = async (e) => {
 		const b = e.target.closest('[data-aim]'); if (!b || b.classList.contains('on')) return;
 		const k = b.dataset.aim;
-		if (k === 'full' && !(await confirmBox('改成「完全放开」？', 'Claude 做任何事都不用你确认了，包括重启路由器、改设置、执行命令。拿到连接器地址的人也一样。', '改成完全放开', true))) return;
+		if (k === 'full' && !(await confirmBox('改成「完全放开」？', 'AI 做任何事都不用你确认了，包括重启路由器、改设置、执行命令。拿到连接器地址的人也一样。', '改成完全放开', true))) return;
 		busy(b, async () => { const r = await secP('ai_mode', { mode: k }); box.innerHTML = aiModesHtml(r.mode); toast('已改成「' + AI_MODES.find((x) => x[0] === r.mode)[1] + '」'); });
 	};
 }
 const AIQ = { on: true, at: 0, busy: false };
-// 查一下有没有 Claude 在等确认的请求：打开面板、回到面板、点了推送时查；开着的时候「危险操作要确认」才每 12 秒查一次
+// 查一下有没有 AI 在等确认的请求：打开面板、回到面板、点了推送时查；开着的时候「危险操作要确认」才每 12 秒查一次
 async function aiCheck(force) {
 	if (!token || LK.on || AIQ.busy || store.get('rp_ai') !== '1' || !canPerm('net')) return;
 	if (!force && (!AIQ.on || document.hidden || document.querySelector('.modal'))) return;
@@ -2264,18 +2264,18 @@ async function aiCheck(force) {
 function aiAskBox(x, n) {
 	const left = () => Math.max(0, Math.round(x.exp - Date.now() / 1000));
 	const mmss = () => Math.floor(left() / 60) + ':' + String(left() % 60).padStart(2, '0');
-	modal(`<div class="aiask"><div class="aiask-ic" aria-hidden="true">✦</div><h3>Claude 想要：${esc(x.title)}</h3>
-	<p class="muted" style="margin:6px 0 0;line-height:1.65">Claude 连接器发来的请求，你点「允许」才会执行。</p>
+	modal(`<div class="aiask"><div class="aiask-ic" aria-hidden="true">✦</div><h3>AI 想要：${esc(x.title)}</h3>
+	<p class="muted" style="margin:6px 0 0;line-height:1.65">AI 连接器发来的请求，你点「允许」才会执行。</p>
 	${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
 	<p class="muted aiask-t"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
-	<div class="notice" style="margin-top:10px;text-align:left">不是你让 Claude 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 Claude 连接器地址。</div>
+	<div class="notice" style="margin-top:10px;text-align:left">不是你让 AI 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 AI 连接器地址。</div>
 	<div class="btngrid" style="margin:14px 0 0"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div></div>`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const t = setInterval(() => { const el = m.querySelector('[data-left]'); if (!el || !el.isConnected) return clearInterval(t); el.textContent = mmss(); if (!left()) { clearInterval(t); toast('这个请求过期了', true); close(null); } }, 1000);
 		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = () => busy(b, async () => {
 			const ok = b.dataset.ans === 'ok';
-			try { await P('ai_answer', { id: x.id, ok }, 20000); toast(ok ? '已允许，Claude 会接着做' : '已拒绝'); }
+			try { await P('ai_answer', { id: x.id, ok }, 20000); toast(ok ? '已允许，AI 会接着做' : '已拒绝'); }
 			catch (e) { toast(e.message, true); }
 			clearInterval(t); close(null);
 			setTimeout(() => aiCheck(true), 600);
@@ -2285,22 +2285,22 @@ function aiAskBox(x, n) {
 async function ckeySheet() {
 	let r;
 	try { r = await secP('ckey_info'); } catch (e) { return toast(e.message, true); }
-	if (!r.ai) return toast('这台路由器装的是纯面板版，没有 Claude 连接器', true);
-	modal(`<div class="sheethead"><h3>Claude 连接器地址</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 10px">在 Claude「设置 → 连接器 → 添加自定义连接器」里填这个地址，就能在对话里管理路由器。它只给 Claude 用，打不开面板。点一下显示：</p>
+	if (!r.ai) return toast('这台路由器装的是纯面板版，没有 AI 连接器', true);
+	modal(`<div class="sheethead"><h3>AI 连接器地址</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<p class="muted" style="margin:0 0 10px">在 AI 应用里添加连接器时填这个地址，就能在对话里管理路由器：Claude 在「设置 → 连接器 → 添加自定义连接器」；ChatGPT、Cherry Studio（接 DeepSeek、通义千问等）怎么加，看官网常见问题「能接哪些 AI」。它只给 AI 用，打不开面板。点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(r.url || '（还没有网址）')}<span>点一下显示</span></div>
 	<div class="notice w" style="margin-top:12px">⚠️ 拿到这个地址就能让 AI 控制你的路由器：不要发给别人。泄露了就点「换一个地址」，旧的马上作废。</div>
-	<div class="subhd">Claude 能做什么</div>
+	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
 	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
-	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 Claude 里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
+	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 AI 应用里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
 	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m, close) => {
 		qrReveal(m);
 		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
 		aiModesBind(m.querySelector('[data-aimodes]'));
 		m.querySelector('[data-rot]').onclick = async () => {
-			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，Claude 里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
+			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，AI 应用里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
 			try { await secP('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }
 		};
 	});

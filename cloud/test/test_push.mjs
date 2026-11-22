@@ -110,7 +110,7 @@ ok('同一条 30 秒内不重复推', r.sent === 0 && sent.length === 2);
 	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'ban', title: '已自动封禁 198.51.*.*', body: '', tag: 'ban-198.51.100.7' });
 	ok('[拉黑] 点通知去「自动任务」（能解封）', JSON.parse(decrypt(sent[sent.length - 1].body).text).url === './?p=auto');
 	// 6.0 第 11 项：Claude 想做危险操作 → 点开面板弹出「允许 / 拒绝」（推送上只有「去确认」，不能直接允许）
-	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'ai', title: 'Claude 想要：重启路由器', body: '点开面板确认', tag: 'aiask-abcdefgh23' });
+	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'ai', title: 'AI 想要：重启路由器', body: '点开面板确认', tag: 'aiask-abcdefgh23' });
 	const m3 = JSON.parse(decrypt(sent[sent.length - 1].body).text);
 	ok('[Claude 请求] 点通知打开面板弹出确认，按钮只有「去确认」', m3.url === './?p=home&ask=ai' && m3.actions?.length === 1 && m3.actions[0].title === '去确认' && m3.actions[0].url === './?p=home&ask=ai', JSON.stringify(m3));
 	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'ai', title: 'x', body: '', tag: 'aiask-../../x' });

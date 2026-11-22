@@ -1,5 +1,5 @@
 #!/usr/bin/ucode
-// Claude 路由器连接器 (MCP over HTTP, CGI)
+// 路由器 AI 连接器（OpenWrt AI Panel） (MCP over HTTP, CGI)
 // 运行在 OpenWrt 自带的 ucode + uhttpd 上，无需安装额外运行环境。
 'use strict';
 
@@ -65,7 +65,7 @@ function now_str() {
 }
 
 let CONF = null;
-let MODE = 'token', NEED_DEV = false; // MODE：token（登录密钥地址）或 ai（Claude 连接器地址）
+let MODE = 'token', NEED_DEV = false; // MODE：token（登录密钥地址）或 ai（AI 连接器地址）
 function conf() {
 	if (CONF)
 		return CONF;

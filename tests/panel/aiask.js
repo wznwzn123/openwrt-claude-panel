@@ -1,4 +1,4 @@
-// 6.0 第 11 项：Claude 想做危险操作 → 面板弹出「允许 / 拒绝」；「Claude 连接器地址」里选 Claude 能做什么（只读 / 危险操作要确认 / 完全放开）
+// 6.0 第 11 项：Claude 想做危险操作 → 面板弹出「允许 / 拒绝」；「AI 连接器地址」里选 AI 能做什么（只读 / 危险操作要确认 / 完全放开）
 const { chromium } = require('playwright');
 const http = require('http');
 const fs = require('fs');
@@ -50,8 +50,8 @@ const SHOT = path.join(__dirname, 'shots');
 		await page.goto('http://localhost:8097/panel/?p=home&ask=ai'); await W(2600);
 		const box = async () => (await page.locator('.modal .aiask').count()) ? page.textContent('.modal .aiask') : '';
 		let t = await box();
-		ok('推送点进来：马上弹出 Claude 的请求，写着想做什么、具体内容、多久后过期' + T, /Claude 想要：执行命令/.test(t) && /opkg install luci-app-ttyd/.test(t) && /后过期/.test(t) && /后面还有 1 个/.test(t), t.slice(0, 120));
-		ok('说清楚不是自己让做的怎么办' + T, /点「拒绝」/.test(t) && /换一下 Claude 连接器地址/.test(t));
+		ok('推送点进来：马上弹出 Claude 的请求，写着想做什么、具体内容、多久后过期' + T, /AI 想要：执行命令/.test(t) && /opkg install luci-app-ttyd/.test(t) && /后过期/.test(t) && /后面还有 1 个/.test(t), t.slice(0, 120));
+		ok('说清楚不是自己让做的怎么办' + T, /点「拒绝」/.test(t) && /换一下 AI 连接器地址/.test(t));
 		ok('点外面关不掉（必须选允许或拒绝）' + T, await (async () => { await page.mouse.click(5, 5); await W(400); return (await page.locator('.modal .aiask').count()) === 1; })());
 		const ov = await page.evaluate(() => { const W = document.documentElement.clientWidth, b = document.querySelector('.modal .modalbox').getBoundingClientRect(); return { sw: document.documentElement.scrollWidth, W, l: b.left, r: b.right }; });
 		ok('弹窗不超出屏幕、不横向滚动' + T, ov.sw <= ov.W && ov.l >= 0 && ov.r <= ov.W + 0.5, JSON.stringify(ov));
@@ -59,7 +59,7 @@ const SHOT = path.join(__dirname, 'shots');
 		await page.click('.modal [data-ans="ok"]'); await W(1600);
 		ok('点「允许」：告诉路由器允许了这一个' + T, S.list[0].st === 'ok' && S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa1' && c.p.ok === true));
 		t = await box();
-		ok('接着弹出下一个（重启路由器，写着会断网多久）' + T, /Claude 想要：重启路由器/.test(t) && /1–3 分钟/.test(t) && !/后面还有/.test(t), t.slice(0, 80));
+		ok('接着弹出下一个（重启路由器，写着会断网多久）' + T, /AI 想要：重启路由器/.test(t) && /1–3 分钟/.test(t) && !/后面还有/.test(t), t.slice(0, 80));
 		await page.click('.modal [data-ans="no"]'); await W(1400);
 		ok('点「拒绝」：告诉路由器拒绝了，弹窗关掉' + T, S.list[1].st === 'no' && (await page.locator('.modal .aiask').count()) === 0);
 		// 开着面板时有新请求：每 12 秒查一次
@@ -68,11 +68,11 @@ const SHOT = path.join(__dirname, 'shots');
 		t = await box();
 		ok('开着面板时来了新请求：十几秒内自己弹出来；密码打码' + T, /修改路由器设置/.test(t) && /key=\*\*\*\*\*\*/.test(t), t.slice(0, 80));
 		await page.click('.modal [data-ans="no"]'); await W(800);
-		// Claude 连接器地址：选档位
+		// AI 连接器地址：选档位
 		await page.goto('http://localhost:8097/panel/?p=me'); await W(2200);
 		await page.click('#meBox [data-mp="kckey"]'); await W(1200);
 		t = await page.textContent('.modal');
-		ok('「Claude 连接器地址」里有「Claude 能做什么」三档，现在是「危险操作要确认」（推荐）' + T, /Claude 能做什么/.test(t) && /只读/.test(t) && /完全放开/.test(t) && (await page.getAttribute('.modal [data-aim="ask"]', 'aria-pressed')) === 'true' && /推荐/.test(t));
+		ok('「AI 连接器地址」里有「AI 能做什么」三档，现在是「危险操作要确认」（推荐）' + T, /AI 能做什么/.test(t) && /只读/.test(t) && /完全放开/.test(t) && (await page.getAttribute('.modal [data-aim="ask"]', 'aria-pressed')) === 'true' && /推荐/.test(t));
 		ok('最近的请求：已拒绝、已执行、过期了，时间写对' + T, /已拒绝/.test(t) && /已执行/.test(t) && /过期了/.test(t) && /1 小时前/.test(t) && !/天前/.test(t), t);
 		const ov2 = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, W: document.documentElement.clientWidth, bad: [...document.querySelectorAll('.modal .aimode, .modal .ailog .kv')].filter((e) => e.scrollWidth > e.clientWidth + 1).length }));
 		ok('档位和请求列表不超出、不截断' + T, ov2.sw <= ov2.W && !ov2.bad, JSON.stringify(ov2));

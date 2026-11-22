@@ -1,4 +1,4 @@
-// 6.0 第 63 项：敏感信息只有一个入口——路由器这边没确认本人就不返回登录密钥、Claude 连接器地址、平板网址、登录着的手机
+// 6.0 第 63 项：敏感信息只有一个入口——路由器这边没确认本人就不返回登录密钥、AI 连接器地址、平板网址、登录着的手机
 // 托管版用官网发的凭证（邮箱验证码），自建版 / 应急登录用路由器后台密码换的凭证
 // 需要本机能跑 ucode：UCODE="ucode 命令（含 -L 参数）" node test/test_cgi_fam.mjs
 import fs from 'fs';
@@ -71,7 +71,7 @@ const devB = (await open(await ticketOf(ub), 'B 的手机')).result.dev;
 const err = (r) => (r && r.error && r.error.message) || '';
 
 // ---------- 托管版：没确认本人，什么钥匙都拿不到 ----------
-ok('[托管] Claude 连接器地址：没确认本人不给', /确认是你本人/.test(err(await call(devA, 'ckey_info'))));
+ok('[托管] AI 连接器地址：没确认本人不给', /确认是你本人/.test(err(await call(devA, 'ckey_info'))));
 ok('[托管] 平板网址：没确认本人不给', /确认是你本人/.test(err(await call(devA, 'tablet_url'))));
 ok('[托管] 登录着的手机：没确认本人不给', /确认是你本人/.test(err(await call(devA, 'device_list'))));
 ok('[托管] 移除别的手机：没确认本人不行', /确认是你本人/.test(err(await call(devA, 'device_remove', { id: devB.slice(0, 8) }))) && !!devs()[devB.slice(0, 8)]);

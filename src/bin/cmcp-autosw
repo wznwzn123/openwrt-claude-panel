@@ -68,7 +68,7 @@ const px = L.api('GET', '/proxies', null, 8).json?.proxies ?? {};
 const isNode = (n) => px[n] && !(px[n].type in GROUPS) && !(px[n].type in ['Direct', 'Reject', 'RejectDrop', 'Pass', 'Compatible']) && !match(n, INFO);
 // 当前选的是另一个策略组（比如「自动选择」）或直连：它自己会处理，不管
 if (!isNode(cur) && !T) done();
-// 10 分钟内刚手动换过节点（面板或 Claude 换的）：先照你的选择来，不自动换走；过了 10 分钟它还连不上才换
+// 10 分钟内刚手动换过节点（面板或 AI 换的）：先照你的选择来，不自动换走；过了 10 分钟它还连不上才换
 if (!T && t - (+(readfile(getenv('CMCP_ASW_MANUAL') ?? '/tmp/cmcp_autosw_manual') ?? 0) || 0) < 600) done();
 
 const delay = (n, tmo) => +(L.api('GET', '/proxies/' + L.enc(n) + '/delay?timeout=' + tmo + '&url=' + L.enc(TEST), null, tmo / 1000 + 3).json?.delay ?? 0);

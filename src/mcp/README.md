@@ -6,7 +6,7 @@
 | 文件 | 内容 |
 |---|---|
 | 00-base.uc | 公共函数（命令、读写文件、uci、OpenClash 接口） |
-| 10-tools.uc | 给 Claude 用的工具 |
+| 10-tools.uc | 给 AI 用的工具 |
 | 20-panel-core.uc | 面板接口：概览 |
 | 21-devices.uc | 设备 |
 | 22-openclash.uc | OpenClash 设置、文件、配置切换、规则 |

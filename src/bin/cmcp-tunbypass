@@ -1,6 +1,6 @@
 #!/bin/sh
 # 隧道直连：cloudflared 连 Cloudflare 的流量不经过代理插件。
-# 不这样的话，隧道会走代理插件（OpenClash 还会给假 IP 198.18.x），插件一重启、节点一卡，面板和 Claude 就跟着断。
+# 不这样的话，隧道会走代理插件（OpenClash 还会给假 IP 198.18.x），插件一重启、节点一卡，面板和 AI 就跟着断。
 # 做法（都不用重启代理插件，不断网）：
 #   1. dnsmasq 把 argotunnel.com / cftunnel.com 交给国内 DNS 解析，拿到真实 IP（不经过插件的 DNS）
 #   2. 把 Cloudflare 隧道的地址段 198.41.192.0/20 写进每个装了的代理插件自己的「直连名单」：

@@ -111,14 +111,14 @@ P.file_read = function(a) {
 	if (bin) return { name: a.name, size: st.size, mtime: st.mtime, binary: true };
 	return { name: a.name, size: st.size, mtime: st.mtime, content: s, sum: oc_file_sum(p) };
 };
-// 文件内容的指纹：面板打开时记下，保存时对一下，防止把别处（原版页面、Claude、别的手机）刚改的内容盖掉
+// 文件内容的指纹：面板打开时记下，保存时对一下，防止把别处（原版页面、AI、别的手机）刚改的内容盖掉
 function oc_file_sum(p) { return stat(p) ? trim(split(sh('md5sum ' + shq(p) + ' 2>/dev/null').out, ' ')[0] ?? '') : ''; }
 
 P.file_save = function(a) {
 	if (type(a.content) != 'string') die('缺少文件内容');
 	// 打开以后文件被别处改过：先不保存，让用户决定（a.overwrite = 确认覆盖）
 	if (a.base != null && !a.overwrite && oc_file_sum(oc_file_path(a.kind, a.name)) != a.base)
-		die('这个文件在你打开以后被别处改过（原版页面、Claude 或别的手机），为了不把那边的改动盖掉，这次没有保存。');
+		die('这个文件在你打开以后被别处改过（原版页面、AI 或别的手机），为了不把那边的改动盖掉，这次没有保存。');
 	if (a.kind == 'custom' && (a.name == 'openclash_custom_rules.list' || a.name == 'openclash_custom_rules_2.list'))
 		return { ok: true, msg: T.set_custom_rules({ content: a.content, file: a.name == 'openclash_custom_rules.list' ? 1 : 2, apply: !!a.restart, enable: true, force: !!a.force }) };
 	let p = oc_file_path(a.kind, a.name);

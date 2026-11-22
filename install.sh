@@ -4,7 +4,7 @@
 #   sh install.sh            按安装包的版本安装（从源码目录运行时会问你装哪个版本）
 #
 # 一共四个版本 = 「AI 版 / 纯面板版」 ×「精简版 / 完整版」：
-#   --ai         AI 版：可以在 Claude 里用对话管理路由器，也带手机面板
+#   --ai         AI 版：可以用 Claude、ChatGPT 等 AI 对话管理路由器，也带手机面板
 #   --no-ai      纯面板版：只有手机面板，自己动手管理，不接 AI
 #   --lite       精简版：手机面板 + 本地看门狗（不需要 Cloudflare 账号）
 #   --full       完整版：再加 Cloudflare 云端（手机/微信推送、云端备份、断电断网判断）
@@ -263,7 +263,7 @@ if [ -z "$AI" ]; then
 	[ $UPGRADE = 1 ] && { grep -q '"ai": *false' "$D/config.json" && def=2 || def=1; }
 	echo
 	echo "  装哪个版本？"
-	echo "  1) AI 版：手机面板 + 能在 Claude 里用对话管理路由器"
+	echo "  1) AI 版：手机面板 + 能用 Claude、ChatGPT 等 AI 对话管理路由器"
 	echo "  2) 纯面板版：只有手机面板，自己动手管理，不接 AI"
 	echo "  （以后想换，再运行一次安装命令选另一个就行，网址和设置都保留）"
 	ask PICK "输入 1 或 2，回车" "$def"
@@ -592,7 +592,7 @@ else
 fi
 [ ${#TOKEN} -ge 16 ] || die "config.json 里的 token 不对"
 # AI 开关：纯面板版在 config.json 里写 "ai": false，连接器只接受手机面板的请求
-# AI 版另外生成一个「Claude 连接器地址」的钥匙（ckey）：只给 Claude 用，打不开面板；托管版的面板要登录码，连接器不用
+# AI 版另外生成一个「AI 连接器地址」的钥匙（ckey）：只给 AI 用，打不开面板；托管版的面板要登录码，连接器不用
 CKEY=$(jsonfilter -i $D/config.json -e '@.ckey' 2>/dev/null || true)
 [ "$AI" = 1 ] && [ ${#CKEY} -lt 16 ] && CKEY=$(rnd 40)
 UCX=ucode; [ "$UC_PRIV" = 1 ] && UCX=$UCW
@@ -679,7 +679,7 @@ fi
 # ---------- 隧道 ----------
 if [ -z "$HUB" ] && { [ $UPGRADE = 0 ] || [ -n "$DOMAIN$TTOK" ]; }; then
 	echo
-	echo "  Claude 要通过公网 HTTPS 访问路由器，这里用 Cloudflare 隧道（不用开端口、不用公网 IP）。"
+	echo "  AI 要通过公网 HTTPS 访问路由器，这里用 Cloudflare 隧道（不用开端口、不用公网 IP）。"
 	echo "  · 有自己的域名：在 Cloudflare Zero Trust 建一条隧道，把 域名 → http://127.0.0.1:18765，然后把隧道 token 填进来"
 	echo "  · 没有域名：直接回车，用临时隧道（xxx.trycloudflare.com，地址每次重启都会变）"
 	[ -n "$TTOK" ] || ask TTOK "隧道 token（可留空）" "$(cat $D/tunnel_token 2>/dev/null)"
@@ -739,7 +739,7 @@ printf 'VER=%s\nCODE=%s\nAT=%s\n' "${PKG_VER:-dev}" "$CODE" "$(date +%s)" > $D/v
 # 认出装了哪些代理插件（OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+），面板按它显示
 PXL=$(/usr/sbin/cmcp-proxy list 2>/dev/null | cut -d' ' -f4- | tr '\n' '、' | sed 's/、$//')
 [ -n "$PXL" ] && ok "认出代理插件：$PXL" || ok "没装代理插件（以后装了 OpenClash、PassWall 等，面板会自动认出来）"
-[ "$(/usr/sbin/cmcp-tunbypass apply 2>/dev/null)" = changed ] && ok "隧道改成直连 Cloudflare：代理插件重启或节点卡住时，面板和 Claude 不会再跟着断"
+[ "$(/usr/sbin/cmcp-tunbypass apply 2>/dev/null)" = changed ] && ok "隧道改成直连 Cloudflare：代理插件重启或节点卡住时，面板和 AI 不会再跟着断"
 
 # ---------- 启动 ----------
 say "启动服务"
@@ -818,7 +818,7 @@ if [ -n "$HUB" ]; then
 	echo
 	echo "---------- 备用信息（一般用不到） ----------"
 	echo "面板地址：https://$H/panel/（要从官网「打开面板」进去才能登录）"
-	[ "$AI" = 1 ] && echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填，只有你自己能看）：https://$H/cgi-bin/mcp/$CKEY"
+	[ "$AI" = 1 ] && echo "AI 连接器地址（在 AI 应用里添加连接器时填，比如 Claude「设置 → 连接器 → 添加自定义连接器」；只有你自己能看）：https://$H/cgi-bin/mcp/$CKEY"
 	echo "官网打不开、急着用：在这里运行 cmcp-logincode 拿一个应急登录码，在面板「官网打不开、急着用？」里输入"
 else
 	echo
@@ -839,7 +839,7 @@ else
 	esac
 	if [ "$AI" = 1 ]; then
 		echo
-		echo "Claude 连接器地址（在 Claude「设置 → 连接器 → 添加自定义连接器」里填它；只给 Claude 用，打不开面板）："
+		echo "AI 连接器地址（在 AI 应用里添加连接器时填它，比如 Claude「设置 → 连接器 → 添加自定义连接器」；只给 AI 用，打不开面板）："
 		echo "  https://$H/cgi-bin/mcp/$CKEY"
 	fi
 	echo

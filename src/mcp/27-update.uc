@@ -53,7 +53,7 @@ P.rotate_key = function(a) {
 	let cc = readfile('/etc/claude-mcp/cloud.conf') ?? '';
 	// 自建完整版：云端（Worker）用登录密钥来认面板，要提醒用户把 Worker 的 PANEL_TOKEN 也换掉
 	let selfcloud = match(cc, /(^|\n)URL=./) && !match(cc, /(^|\n)PKEY=./);
-	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废，原版页面的门禁钥匙也一起换了。已经登录的手机照常能用；用旧登录地址加的 Claude 连接器要换成「Claude 连接器地址」。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废，原版页面的门禁钥匙也一起换了。已经登录的手机照常能用；用旧登录地址加的 AI 连接器要换成「AI 连接器地址」。'))); } catch (e) {}
 	return { token: nt, host: trim(readfile('/etc/claude-mcp/hostname') ?? ''), selfcloud: !!selfcloud };
 };
 P.cloud_info = function() {

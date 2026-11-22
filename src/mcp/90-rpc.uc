@@ -10,7 +10,7 @@ function handle(msg) {
 
 	// 连接器地址：只给 AI 用，不能调面板接口
 	if (MODE == 'ai' && substr(msg.method, 0, 6) == 'panel/')
-		return is_notification ? null : rpc_error(id, -32001, '这是 Claude 连接器地址，不能用来打开面板');
+		return is_notification ? null : rpc_error(id, -32001, '这是 AI 连接器地址，不能用来打开面板');
 	// 官网「打开面板」的入口：只能拿票换手机钥匙
 	if (MODE == 'open') {
 		// 6.0：手机不再存登录密钥，输登录码（官网的或应急的）也从这里进；登录码 8 位、10 分钟最多错 10 次
@@ -25,9 +25,9 @@ function handle(msg) {
 		if (msg.client != 'panel') return is_notification ? null : rpc_error(id, -32001, '这个地址只给手机面板用');
 	}
 	// 自建版开了「登录要输路由器密码」（第 12 项）：登录地址只能用来换手机钥匙，不能直接操作路由器
-	// （路由器自己的小工具带 local. 钥匙照常；Claude 用单独的连接器地址，不受影响）
+	// （路由器自己的小工具带 local. 钥匙照常；AI 用单独的连接器地址，不受影响）
 	if (MODE == 'token' && !NEED_DEV && login_pw_on() && msg.method != 'panel/pass_login' && !(type(msg.dev) == 'string' && dev_ok(msg.dev)))
-		return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32015, message: msg.client == 'panel' ? '这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码' : '这台路由器开了「登录要输路由器后台密码」，登录地址不能直接用。Claude 请用「我的主页 → 敏感信息」里的 Claude 连接器地址' } };
+		return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32015, message: msg.client == 'panel' ? '这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码' : '这台路由器开了「登录要输路由器后台密码」，登录地址不能直接用。AI 请用「我的主页 → 敏感信息」里的 AI 连接器地址' } };
 	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（从官网打开面板时拿到的）
 	if (MODE == 'token' && NEED_DEV && msg.method != 'panel/device_approve' && !dev_ok(msg.dev)) {
 		if (is_notification) return null;
@@ -35,7 +35,7 @@ function handle(msg) {
 		return { jsonrpc: '2.0', id, error: { code: -32010,
 			message: msg.client == 'panel'
 				? '这台手机还没登录：从官网「我的路由器」点「打开面板」进来'
-				: '托管版的 Claude 连接器要用单独的「Claude 连接器地址」：在手机面板「我的主页 → 敏感信息」（验证后）的「Claude 连接器地址」里复制，然后在 Claude 里把这个连接器删掉，用新地址重新添加',
+				: '托管版的 AI 连接器要用单独的「AI 连接器地址」：在手机面板「我的主页 → 敏感信息」（验证后）的「AI 连接器地址」里复制，然后在 AI 应用里把这个连接器删掉，用新地址重新添加',
 			data: { need_code: true, hub: h } } };
 	}
 	// 主账号 / 子账号：按这台手机属于哪个账号检查权限
@@ -48,7 +48,7 @@ function handle(msg) {
 		let m = msg.method == 'tools/call' ? 'tools:' + (p.name ?? '') : substr(msg.method, 0, 6) == 'panel/' ? substr(msg.method, 6) : null;
 		if (m && !fam_allowed(m, p)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m, p));
 	}
-	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
+	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')
 		return is_notification ? null : rpc_error(id, -32001, '这台路由器装的是纯面板版，没有开启 AI 连接器');
 
@@ -73,7 +73,7 @@ function handle(msg) {
 		return rpc_result(id, {});
 	case 'tools/list':
 	{
-		// 6.0 第 11 项：Claude「只读」时只列出查看类的工具（命令行留着，只能跑只看的命令）
+		// 6.0 第 11 项：AI「只读」时只列出查看类的工具（命令行留着，只能跑只看的命令）
 		let ro = MODE == 'ai' || msg.client != 'panel' ? ai_mode() == 'ro' : false;
 		return rpc_result(id, { tools: filter(TOOLS, (t) => !(t.name == 'run_command' && conf().allow_shell === false) && (!ro || t.name == 'run_command' || AI_READ[t.name] || t.name == 'packages' || t.name == 'uci_backups')) });
 	}
@@ -83,7 +83,7 @@ function handle(msg) {
 			return rpc_error(id, -32602, '未知工具：' + p.name);
 		AI_STOP = false;
 		try {
-			// 6.0 第 11 项：Claude 连接器（和不是手机面板的客户端）做危险操作要先在手机上确认
+			// 6.0 第 11 项：AI 连接器（和不是手机面板的客户端）做危险操作要先在手机上确认
 			if (MODE == 'ai' || msg.client != 'panel') ai_gate(p.name, p.arguments ?? {});
 			let text = fn(p.arguments ?? {});
 			return rpc_result(id, { content: [{ type: 'text', text: '' + text }] });

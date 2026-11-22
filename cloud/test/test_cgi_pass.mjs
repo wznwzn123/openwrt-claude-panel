@@ -131,7 +131,7 @@ r = await pas(MP, 'login_pw_set', { on: 1, sudo: su });
 ok('[12] 确认本人以后能开启「登录要输路由器密码」', r.result?.on === true && fs.existsSync(E + '/login_pw'));
 r = await tok('whoami');
 ok('[12] 开了以后：光有登录地址不能直接操作路由器（-32015）', code(r) === -32015, JSON.stringify(r));
-ok('[12] 开了以后：别的客户端拿登录地址也不行，提示用 Claude 连接器地址', /连接器地址/.test(err(await tok('whoami', {}, { client: 'claude' }))));
+ok('[12] 开了以后：别的客户端拿登录地址也不行，提示用 AI 连接器地址', /连接器地址/.test(err(await tok('whoami', {}, { client: 'claude' }))));
 r = await tok('pass_login', { name: '新手机' });
 ok('[12] 开了以后：换手机钥匙要输路由器密码（-32015）', code(r) === -32015 && /路由器后台/.test(err(r)), JSON.stringify(r));
 ok('[12] 路由器密码不对：不给钥匙', /密码不对/.test(err(await tok('pass_login', { name: '新手机', pw: 'wrong' }))));

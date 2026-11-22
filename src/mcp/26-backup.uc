@@ -101,7 +101,7 @@ P.hub_unbind = function(a) {
 /* ---------- 托管版：每台手机第一次打开面板要输一次登录码 ----------
  * 登录码在官网账号里拿（只有绑定了这台路由器的账号才能拿），或者在路由器后台终端运行 cmcp-logincode 拿一个应急的。
  * 输对以后给这台手机发一个「手机钥匙」（存在手机浏览器里），以后每次请求都带上；没有它，光有登录密钥也进不来。
- * Claude 连接器用单独的连接器地址（config.json 的 ckey），不用登录码，但打不开面板。 */
+ * AI 连接器用单独的连接器地址（config.json 的 ckey），不用登录码，但打不开面板。 */
 const DEV_PATH = ETC + '/devices.json', SEEN_PATH = '/tmp/cmcp_devseen.json', LC_PATH = '/tmp/cmcp_logincode', LCFAIL_PATH = '/tmp/cmcp_lcfail';
 // DEV_ID、DEV、ROLE、PERMS 在 00-base.uc 里声明（更早的模块也要用到，比如网站访问检测）
 function is_hosted() { return length(trim(readfile(ETC + '/hub.conf') ?? '')) > 0; }
@@ -189,7 +189,7 @@ P.device_approve = function(a) {
 	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除（用应急登录码进来的手机在「我的主页 → 敏感信息 → 登录着的设备」）。'))); } catch (e) {}
 	return { dev: id + '.' + sec, id, name };
 };
-/* ---------- 敏感信息（6.0 第 63 项）：登录密钥、Claude 连接器地址、平板网址、登录着的手机 ----------
+/* ---------- 敏感信息（6.0 第 63 项）：登录密钥、AI 连接器地址、平板网址、登录着的手机 ----------
  * 只在「我的主页 → 敏感信息」里给，路由器这边没确认本人就不返回（不靠界面藏起来）。
  * 确认本人的凭证（10 分钟）两种：
  *   · 有官网账号的（托管版从官网打开）：官网发的，邮箱验证码换来的；路由器问一下官网它还有效没有
@@ -417,7 +417,7 @@ P.open_login = function(a) {
 // 我是谁：面板「我的主页」用
 P.whoami = function() {
 	let h = hub_conf(true);
-	// ai：装的是不是 AI 版（有没有 Claude 连接器）；连接器地址本身只在敏感信息里给
+	// ai：装的是不是 AI 版（有没有 AI 连接器）；连接器地址本身只在敏感信息里给
 	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null,
 		// 6.0：自建版是否开了「登录要输路由器密码」；这台手机在路由器上有没有面板锁
 		login_pw: !h && trim(readfile(ETC + '/login_pw') ?? '') == '1', lock: DEV?.lk ? { on: true, len: DEV.lk.len, salt: DEV.lk.salt } : { on: false } };
@@ -442,7 +442,7 @@ P.fam = function(a) {
 	return r;
 };
 
-/* Claude 连接器地址：只给 AI 用，打不开面板（托管版的面板要登录码，连接器不用） */
+/* AI 连接器地址：只给 AI 用，打不开面板（托管版的面板要登录码，连接器不用） */
 function ckey_get(make) {
 	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 	if (length(c.ckey ?? '') >= 16 || !make) return c.ckey ?? null;
@@ -463,14 +463,14 @@ P.ckey_info = function(a) {
 P.ckey_rotate = function(a) {
 	if (a?.confirm != 'CKEY') die('需要确认');
 	need_sudo(a, true);
-	if (conf().ai === false) die('纯面板版没有 Claude 连接器');
+	if (conf().ai === false) die('纯面板版没有 AI 连接器');
 	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 	c.ckey = rand_str(40);
 	if (!c.ckey) die('生成连接器地址失败，再试一次');
 	writefile(CONF_PATH + '.tmp', sprintf('%.J\n', c));
 	rename(CONF_PATH + '.tmp', CONF_PATH);
 	CONF = null;
-	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('Claude 连接器地址已更换'), shq('旧的连接器地址已经作废，在 Claude 里把连接器换成新地址。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('AI 连接器地址已更换'), shq('旧的连接器地址已经作废，在 AI 应用里把连接器换成新地址。'))); } catch (e) {}
 	return { url: ckey_url(c.ckey) };
 };
 /* ---------- 一键更新：查最新版本、开始更新、看进度（真正的更新由 cmcp-update 在后台做） ---------- */

@@ -1,5 +1,5 @@
 #!/usr/bin/ucode
-// Claude 路由器连接器 (MCP over HTTP, CGI)
+// 路由器 AI 连接器（OpenWrt AI Panel） (MCP over HTTP, CGI)
 // 运行在 OpenWrt 自带的 ucode + uhttpd 上，无需安装额外运行环境。
 'use strict';
 
@@ -65,7 +65,7 @@ function now_str() {
 }
 
 let CONF = null;
-let MODE = 'token', NEED_DEV = false; // MODE：token（登录密钥地址）或 ai（Claude 连接器地址）
+let MODE = 'token', NEED_DEV = false; // MODE：token（登录密钥地址）或 ai（AI 连接器地址）
 function conf() {
 	if (CONF)
 		return CONF;
@@ -1434,14 +1434,14 @@ P.file_read = function(a) {
 	if (bin) return { name: a.name, size: st.size, mtime: st.mtime, binary: true };
 	return { name: a.name, size: st.size, mtime: st.mtime, content: s, sum: oc_file_sum(p) };
 };
-// 文件内容的指纹：面板打开时记下，保存时对一下，防止把别处（原版页面、Claude、别的手机）刚改的内容盖掉
+// 文件内容的指纹：面板打开时记下，保存时对一下，防止把别处（原版页面、AI、别的手机）刚改的内容盖掉
 function oc_file_sum(p) { return stat(p) ? trim(split(sh('md5sum ' + shq(p) + ' 2>/dev/null').out, ' ')[0] ?? '') : ''; }
 
 P.file_save = function(a) {
 	if (type(a.content) != 'string') die('缺少文件内容');
 	// 打开以后文件被别处改过：先不保存，让用户决定（a.overwrite = 确认覆盖）
 	if (a.base != null && !a.overwrite && oc_file_sum(oc_file_path(a.kind, a.name)) != a.base)
-		die('这个文件在你打开以后被别处改过（原版页面、Claude 或别的手机），为了不把那边的改动盖掉，这次没有保存。');
+		die('这个文件在你打开以后被别处改过（原版页面、AI 或别的手机），为了不把那边的改动盖掉，这次没有保存。');
 	if (a.kind == 'custom' && (a.name == 'openclash_custom_rules.list' || a.name == 'openclash_custom_rules_2.list'))
 		return { ok: true, msg: T.set_custom_rules({ content: a.content, file: a.name == 'openclash_custom_rules.list' ? 1 : 2, apply: !!a.restart, enable: true, force: !!a.force }) };
 	let p = oc_file_path(a.kind, a.name);
@@ -2534,7 +2534,7 @@ P.hub_unbind = function(a) {
 /* ---------- 托管版：每台手机第一次打开面板要输一次登录码 ----------
  * 登录码在官网账号里拿（只有绑定了这台路由器的账号才能拿），或者在路由器后台终端运行 cmcp-logincode 拿一个应急的。
  * 输对以后给这台手机发一个「手机钥匙」（存在手机浏览器里），以后每次请求都带上；没有它，光有登录密钥也进不来。
- * Claude 连接器用单独的连接器地址（config.json 的 ckey），不用登录码，但打不开面板。 */
+ * AI 连接器用单独的连接器地址（config.json 的 ckey），不用登录码，但打不开面板。 */
 const DEV_PATH = ETC + '/devices.json', SEEN_PATH = '/tmp/cmcp_devseen.json', LC_PATH = '/tmp/cmcp_logincode', LCFAIL_PATH = '/tmp/cmcp_lcfail';
 // DEV_ID、DEV、ROLE、PERMS 在 00-base.uc 里声明（更早的模块也要用到，比如网站访问检测）
 function is_hosted() { return length(trim(readfile(ETC + '/hub.conf') ?? '')) > 0; }
@@ -2622,7 +2622,7 @@ P.device_approve = function(a) {
 	try { sh(sprintf('/usr/sbin/cmcp-notify info login %s %s login', shq('新手机登录了面板：' + name), shq('用' + via + ' 登录。不是你自己的话，马上在面板「我的主页 → 敏感信息 → 登录着的设备」里把它移除（用应急登录码进来的手机在「我的主页 → 敏感信息 → 登录着的设备」）。'))); } catch (e) {}
 	return { dev: id + '.' + sec, id, name };
 };
-/* ---------- 敏感信息（6.0 第 63 项）：登录密钥、Claude 连接器地址、平板网址、登录着的手机 ----------
+/* ---------- 敏感信息（6.0 第 63 项）：登录密钥、AI 连接器地址、平板网址、登录着的手机 ----------
  * 只在「我的主页 → 敏感信息」里给，路由器这边没确认本人就不返回（不靠界面藏起来）。
  * 确认本人的凭证（10 分钟）两种：
  *   · 有官网账号的（托管版从官网打开）：官网发的，邮箱验证码换来的；路由器问一下官网它还有效没有
@@ -2850,7 +2850,7 @@ P.open_login = function(a) {
 // 我是谁：面板「我的主页」用
 P.whoami = function() {
 	let h = hub_conf(true);
-	// ai：装的是不是 AI 版（有没有 Claude 连接器）；连接器地址本身只在敏感信息里给
+	// ai：装的是不是 AI 版（有没有 AI 连接器）；连接器地址本身只在敏感信息里给
 	return { hosted: !!h, hub: h?.HUB ?? null, ai: conf().ai !== false, role: ROLE, perms: ROLE == 'sub' ? PERMS : keys(PERM_NAMES), uid: DEV?.uid ?? null, emerg: !!DEV?.emerg, dev: DEV_ID, devName: DEV?.name ?? null,
 		// 6.0：自建版是否开了「登录要输路由器密码」；这台手机在路由器上有没有面板锁
 		login_pw: !h && trim(readfile(ETC + '/login_pw') ?? '') == '1', lock: DEV?.lk ? { on: true, len: DEV.lk.len, salt: DEV.lk.salt } : { on: false } };
@@ -2875,7 +2875,7 @@ P.fam = function(a) {
 	return r;
 };
 
-/* Claude 连接器地址：只给 AI 用，打不开面板（托管版的面板要登录码，连接器不用） */
+/* AI 连接器地址：只给 AI 用，打不开面板（托管版的面板要登录码，连接器不用） */
 function ckey_get(make) {
 	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 	if (length(c.ckey ?? '') >= 16 || !make) return c.ckey ?? null;
@@ -2896,14 +2896,14 @@ P.ckey_info = function(a) {
 P.ckey_rotate = function(a) {
 	if (a?.confirm != 'CKEY') die('需要确认');
 	need_sudo(a, true);
-	if (conf().ai === false) die('纯面板版没有 Claude 连接器');
+	if (conf().ai === false) die('纯面板版没有 AI 连接器');
 	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 	c.ckey = rand_str(40);
 	if (!c.ckey) die('生成连接器地址失败，再试一次');
 	writefile(CONF_PATH + '.tmp', sprintf('%.J\n', c));
 	rename(CONF_PATH + '.tmp', CONF_PATH);
 	CONF = null;
-	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('Claude 连接器地址已更换'), shq('旧的连接器地址已经作废，在 Claude 里把连接器换成新地址。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('AI 连接器地址已更换'), shq('旧的连接器地址已经作废，在 AI 应用里把连接器换成新地址。'))); } catch (e) {}
 	return { url: ckey_url(c.ckey) };
 };
 /* ---------- 一键更新：查最新版本、开始更新、看进度（真正的更新由 cmcp-update 在后台做） ---------- */
@@ -3186,7 +3186,7 @@ P.rotate_key = function(a) {
 	let cc = readfile('/etc/claude-mcp/cloud.conf') ?? '';
 	// 自建完整版：云端（Worker）用登录密钥来认面板，要提醒用户把 Worker 的 PANEL_TOKEN 也换掉
 	let selfcloud = match(cc, /(^|\n)URL=./) && !match(cc, /(^|\n)PKEY=./);
-	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废，原版页面的门禁钥匙也一起换了。已经登录的手机照常能用；用旧登录地址加的 Claude 连接器要换成「Claude 连接器地址」。'))); } catch (e) {}
+	try { sh(sprintf('/usr/sbin/cmcp-notify info key %s %s key', shq('登录密钥已更换'), shq('旧的登录地址已经作废，原版页面的门禁钥匙也一起换了。已经登录的手机照常能用；用旧登录地址加的 AI 连接器要换成「AI 连接器地址」。'))); } catch (e) {}
 	return { token: nt, host: trim(readfile('/etc/claude-mcp/hostname') ?? ''), selfcloud: !!selfcloud };
 };
 P.cloud_info = function() {
@@ -3847,17 +3847,17 @@ const TOOLS = [
 
 /* ---------------- MCP / JSON-RPC ---------------- */
 
-/* 6.0 第 11 项：Claude 能做什么（只给 Claude 连接器用，手机面板不受影响）
+/* 6.0 第 11 项：AI 能做什么（只给 AI 连接器用，手机面板不受影响）
    - 只读（ro）：只能查看；命令行只能跑「只看」的命令
    - 危险操作要确认（ask，默认，新装和升级都是这一档）：查看、换节点、换模式、断开连接照常；重启、改设置、装卸软件、改规则、
      其他命令要先推送到手机，主账号（或有「完全控制」的家人）在面板里点「允许」才执行。连接器地址泄露了，别人也做不了这些
    - 完全放开（full）：跟 6.0 以前一样
-   设置在 config.json 的 ai_mode；在面板「我的主页 → 敏感信息 → Claude 连接器地址」里改（要先确认本人）
+   设置在 config.json 的 ai_mode；在面板「我的主页 → 敏感信息 → AI 连接器地址」里改（要先确认本人）
    等确认的请求记在内存里（/tmp/cmcp_ai_ask.json，重启就没了）：5 分钟内有效、批准一次只能执行一次、参数要完全一样 */
 const AI_ASK = '/tmp/cmcp_ai_ask.json';
 const AI_TTL = 300, AI_LOCK = '/tmp/cmcp_ai_wait';
 const AI_WAIT = +(getenv('CMCP_AI_WAIT') ?? '') || 30; // 测试用的环境变量（网页请求改不了 CGI 的环境变量）
-let AI_STOP = false; // 这次不是出错，是在等确认 / 被挡下（回给 Claude 的话前面不加「出错：」）
+let AI_STOP = false; // 这次不是出错，是在等确认 / 被挡下（回给 AI 的话前面不加「出错：」）
 const AI_READ = { router_status: 1, list_proxy_groups: 1, test_delay: 1, list_connections: 1, list_rules: 1, get_logs: 1, get_custom_rules: 1, openclash_log: 1,
 	oaf_show: 1, oaf_find_app: 1, system_info: 1, net_speed: 1, device_list: 1, network_info: 1, list_services: 1, firewall_overview: 1, uci_show: 1, system_log: 1 };
 // 日常操作：随时能改回来、不断网
@@ -3916,7 +3916,7 @@ function ai_class(name, a) {
 	if (name == 'run_command') return ro_command(a?.command) ? 'read' : 'danger';
 	return 'danger';
 }
-// 手机上要看清楚 Claude 想做什么（设置里的密码类值打码）
+// 手机上要看清楚 AI 想做什么（设置里的密码类值打码）
 function ai_detail(name, a) {
 	let cut = (s, n) => (length(s) > n ? substr(s, 0, n) + '…' : s);
 	switch (name) {
@@ -3951,11 +3951,11 @@ function ai_write(o) { cmcp_writej(AI_ASK, o); sh('chmod 600 ' + AI_ASK + ' 2>/d
 function ai_find(o, id) { for (let x in o.list) if (x.id == id) return x; return null; }
 function ai_stop(msg) { AI_STOP = true; die(msg); }
 
-/* 工具调用前问一下：能直接做就返回；要等确认就推送到手机，最多等 30 秒；等不到就让 Claude 稍后原样再调一次 */
+/* 工具调用前问一下：能直接做就返回；要等确认就推送到手机，最多等 30 秒；等不到就让 AI 稍后原样再调一次 */
 function ai_gate(name, a) {
 	let mode = ai_mode(), cls = ai_class(name, a);
 	if (mode == 'full' || cls == 'read') return;
-	if (mode == 'ro') ai_stop('Claude 现在是「只读」：只能查看，不能修改' + (name == 'run_command' ? '（命令行只能跑只看的命令，比如 cat、ls、logread、uci show）' : '') + '。要改的话，请用户在手机面板「我的主页 → 敏感信息 → Claude 连接器地址」里把「Claude 能做什么」改成「危险操作要确认」。');
+	if (mode == 'ro') ai_stop('AI 现在是「只读」：只能查看，不能修改' + (name == 'run_command' ? '（命令行只能跑只看的命令，比如 cat、ls、logread、uci show）' : '') + '。要改的话，请用户在手机面板「我的主页 → 敏感信息 → AI 连接器地址」里把「AI 能做什么」改成「危险操作要确认」。');
 	if (cls == 'light') return;
 	let args = sprintf('%J', a ?? {}), now = time(), o = ai_read(), x = null;
 	// 同样的请求已经在等 / 已经批准：接着用这条（不会重复推送）
@@ -3965,10 +3965,10 @@ function ai_gate(name, a) {
 		if (w >= 10) ai_stop('手机上已经有 10 个请求在等确认了，请用户先在手机面板里处理。');
 		x = { id: rand_str(10), name, title: AI_NAMES[name] ?? name, detail: ai_detail(name, a), args, at: now, exp: now + AI_TTL, st: 'wait' };
 		push(o.list, x); ai_write(o);
-		try { sh(sprintf('CMCP_NOLOG=1 %s/cmcp-notify warn ai %s %s %s >/dev/null 2>&1 </dev/null &', SBIN, shq('Claude 想要：' + x.title), shq('点开面板确认，点「允许」才会执行，5 分钟内有效。' + (length(x.detail) ? '\n' + substr(x.detail, 0, 120) : '')), shq('aiask-' + x.id))); } catch (e) {}
+		try { sh(sprintf('CMCP_NOLOG=1 %s/cmcp-notify warn ai %s %s %s >/dev/null 2>&1 </dev/null &', SBIN, shq('AI 想要：' + x.title), shq('点开面板确认，点「允许」才会执行，5 分钟内有效。' + (length(x.detail) ? '\n' + substr(x.detail, 0, 120) : '')), shq('aiask-' + x.id))); } catch (e) {}
 	}
 	let id = x.id;
-	// 面板服务同时只能处理 4 个请求：同一时间只让一个请求在这里等，别的直接让 Claude 稍后再调（免得把手机面板堵住）
+	// 面板服务同时只能处理 4 个请求：同一时间只让一个请求在这里等，别的直接让 AI 稍后再调（免得把手机面板堵住）
 	let lk = stat(AI_LOCK);
 	if (lk && time() - lk.mtime > AI_WAIT + 10) sh('rmdir ' + AI_LOCK + ' 2>/dev/null');
 	if (x.st == 'wait' && mkdir(AI_LOCK)) {
@@ -3990,12 +3990,12 @@ P.ai_asks = function(a) {
 P.ai_answer = function(a) {
 	let o = ai_read(), x = ai_find(o, '' + (a?.id ?? ''));
 	if (!x) die('找不到这个请求了');
-	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 Claude 再发一次' : '这个请求已经处理过了');
+	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 AI 再发一次' : '这个请求已经处理过了');
 	x.st = a?.ok === true ? 'ok' : 'no'; x.by = substr('' + (DEV?.name ?? (DEV_ID ? '手机' : '面板')), 0, 40); x.ans = time();
 	ai_write(o);
 	return { ok: true, st: x.st };
 };
-// 改「Claude 能做什么」：要先确认本人，只有主账号
+// 改「AI 能做什么」：要先确认本人，只有主账号
 P.ai_mode = function(a) {
 	need_sudo(a, true);
 	let m = '' + (a?.mode ?? '');
@@ -4006,10 +4006,10 @@ P.ai_mode = function(a) {
 	CONF = null;
 	// 改严了：在等的请求一律作废
 	if (m != 'full') { let o = ai_read(); for (let x in o.list) if (x.st == 'wait' || x.st == 'ok') x.st = 'exp'; ai_write(o); }
-	try { sh(sprintf('%s/cmcp-notify info key %s %s key', SBIN, shq('Claude 能做什么：改成了「' + AI_MODES[m] + '」'), shq(m == 'full' ? 'Claude 连接器现在什么都能直接做。不是你改的话，马上在「我的主页 → 敏感信息」里改回来，并换一下 Claude 连接器地址。' : '在「我的主页 → 敏感信息 → Claude 连接器地址」里随时能改。'))); } catch (e) {}
+	try { sh(sprintf('%s/cmcp-notify info key %s %s key', SBIN, shq('AI 能做什么：改成了「' + AI_MODES[m] + '」'), shq(m == 'full' ? 'AI 连接器现在什么都能直接做。不是你改的话，马上在「我的主页 → 敏感信息」里改回来，并换一下 AI 连接器地址。' : '在「我的主页 → 敏感信息 → AI 连接器地址」里随时能改。'))); } catch (e) {}
 	return { ok: true, mode: m };
 };
-// 「Claude 连接器地址」那一页顺便带上现在的档位和最近的请求
+// 「AI 连接器地址」那一页顺便带上现在的档位和最近的请求
 const CKEY_INFO0 = P.ckey_info;
 P.ckey_info = function(a) {
 	let r = CKEY_INFO0(a);
@@ -4028,7 +4028,7 @@ function handle(msg) {
 
 	// 连接器地址：只给 AI 用，不能调面板接口
 	if (MODE == 'ai' && substr(msg.method, 0, 6) == 'panel/')
-		return is_notification ? null : rpc_error(id, -32001, '这是 Claude 连接器地址，不能用来打开面板');
+		return is_notification ? null : rpc_error(id, -32001, '这是 AI 连接器地址，不能用来打开面板');
 	// 官网「打开面板」的入口：只能拿票换手机钥匙
 	if (MODE == 'open') {
 		// 6.0：手机不再存登录密钥，输登录码（官网的或应急的）也从这里进；登录码 8 位、10 分钟最多错 10 次
@@ -4043,9 +4043,9 @@ function handle(msg) {
 		if (msg.client != 'panel') return is_notification ? null : rpc_error(id, -32001, '这个地址只给手机面板用');
 	}
 	// 自建版开了「登录要输路由器密码」（第 12 项）：登录地址只能用来换手机钥匙，不能直接操作路由器
-	// （路由器自己的小工具带 local. 钥匙照常；Claude 用单独的连接器地址，不受影响）
+	// （路由器自己的小工具带 local. 钥匙照常；AI 用单独的连接器地址，不受影响）
 	if (MODE == 'token' && !NEED_DEV && login_pw_on() && msg.method != 'panel/pass_login' && !(type(msg.dev) == 'string' && dev_ok(msg.dev)))
-		return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32015, message: msg.client == 'panel' ? '这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码' : '这台路由器开了「登录要输路由器后台密码」，登录地址不能直接用。Claude 请用「我的主页 → 敏感信息」里的 Claude 连接器地址' } };
+		return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32015, message: msg.client == 'panel' ? '这台路由器开了「登录要输路由器后台密码」：输一下路由器后台（root）密码' : '这台路由器开了「登录要输路由器后台密码」，登录地址不能直接用。AI 请用「我的主页 → 敏感信息」里的 AI 连接器地址' } };
 	// 托管版的登录密钥地址：每个请求都要带上这台手机的钥匙（从官网打开面板时拿到的）
 	if (MODE == 'token' && NEED_DEV && msg.method != 'panel/device_approve' && !dev_ok(msg.dev)) {
 		if (is_notification) return null;
@@ -4053,7 +4053,7 @@ function handle(msg) {
 		return { jsonrpc: '2.0', id, error: { code: -32010,
 			message: msg.client == 'panel'
 				? '这台手机还没登录：从官网「我的路由器」点「打开面板」进来'
-				: '托管版的 Claude 连接器要用单独的「Claude 连接器地址」：在手机面板「我的主页 → 敏感信息」（验证后）的「Claude 连接器地址」里复制，然后在 Claude 里把这个连接器删掉，用新地址重新添加',
+				: '托管版的 AI 连接器要用单独的「AI 连接器地址」：在手机面板「我的主页 → 敏感信息」（验证后）的「AI 连接器地址」里复制，然后在 AI 应用里把这个连接器删掉，用新地址重新添加',
 			data: { need_code: true, hub: h } } };
 	}
 	// 主账号 / 子账号：按这台手机属于哪个账号检查权限
@@ -4066,7 +4066,7 @@ function handle(msg) {
 		let m = msg.method == 'tools/call' ? 'tools:' + (p.name ?? '') : substr(msg.method, 0, 6) == 'panel/' ? substr(msg.method, 6) : null;
 		if (m && !fam_allowed(m, p)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m, p));
 	}
-	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，Claude 等 AI 客户端连不上
+	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')
 		return is_notification ? null : rpc_error(id, -32001, '这台路由器装的是纯面板版，没有开启 AI 连接器');
 
@@ -4091,7 +4091,7 @@ function handle(msg) {
 		return rpc_result(id, {});
 	case 'tools/list':
 	{
-		// 6.0 第 11 项：Claude「只读」时只列出查看类的工具（命令行留着，只能跑只看的命令）
+		// 6.0 第 11 项：AI「只读」时只列出查看类的工具（命令行留着，只能跑只看的命令）
 		let ro = MODE == 'ai' || msg.client != 'panel' ? ai_mode() == 'ro' : false;
 		return rpc_result(id, { tools: filter(TOOLS, (t) => !(t.name == 'run_command' && conf().allow_shell === false) && (!ro || t.name == 'run_command' || AI_READ[t.name] || t.name == 'packages' || t.name == 'uci_backups')) });
 	}
@@ -4101,7 +4101,7 @@ function handle(msg) {
 			return rpc_error(id, -32602, '未知工具：' + p.name);
 		AI_STOP = false;
 		try {
-			// 6.0 第 11 项：Claude 连接器（和不是手机面板的客户端）做危险操作要先在手机上确认
+			// 6.0 第 11 项：AI 连接器（和不是手机面板的客户端）做危险操作要先在手机上确认
 			if (MODE == 'ai' || msg.client != 'panel') ai_gate(p.name, p.arguments ?? {});
 			let text = fn(p.arguments ?? {});
 			return rpc_result(id, { content: [{ type: 'text', text: '' + text }] });

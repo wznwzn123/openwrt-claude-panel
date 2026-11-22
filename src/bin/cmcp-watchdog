@@ -303,7 +303,7 @@ check() {
 	# 隧道
 	TP=$(tpid); RDY=$(ready)
 	if [ -n "$TP" ] && [ "${RDY:-0}" -gt 0 ] 2>/dev/null; then
-		if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 Claude 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE$([ "$RSN" -gt 0 ] && echo "，期间自动重启了 $RSN 次隧道")" "$TUN_T" "$t"; TUN=ok; fi
+		if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 AI 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE$([ "$RSN" -gt 0 ] && echo "，期间自动重启了 $RSN 次隧道")" "$TUN_T" "$t"; TUN=ok; fi
 		TFAIL=0; TCAUSE=; RSN=0; TGONE=0
 	else
 		TFAIL=$((TFAIL + 1))
@@ -318,7 +318,7 @@ check() {
 		if [ "$TUN" = ok ] && [ "$TFAIL" -ge 2 ]; then
 			TUN=down; TUN_T=$((t - INTERVAL)); TCAUSE=$cause
 			case "$cause" in 宽带断开|外网不通) det="跟着$cause一起断的，网络恢复后隧道会自己连回来" ;; *) det=$(tunlog) ;; esac
-			ev err tunnel "隧道断开：$cause（这段时间面板和 Claude 都连不上路由器）" "$det"
+			ev err tunnel "隧道断开：$cause（这段时间面板和 AI 都连不上路由器）" "$det"
 		fi
 		[ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TCAUSE" != "$cause" ] && TCAUSE="$TCAUSE → $cause"
 		# 直连 Cloudflare 断了 15 分钟还连不上（外网是通的、隧道也没被删）：可能直连被挡了，改回走 OpenClash 代理

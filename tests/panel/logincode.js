@@ -1,4 +1,4 @@
-// 5.2 托管版：新手机从官网打开（#open=票）；应急登录码；子账号只看到给了的功能；已登录的手机；Claude 连接器地址；退出登录
+// 5.2 托管版：新手机从官网打开（#open=票）；应急登录码；子账号只看到给了的功能；已登录的手机；AI 连接器地址；退出登录
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const { respond } = require('./mock');
@@ -84,9 +84,9 @@ const vis = (page, sel) => page.isVisible(sel);
 	ok('手机上不再存登录密钥（6.0 第 6 项）', !(await page.evaluate(() => localStorage.getItem('rp_token'))));
 	await page.reload(); await W(1500);
 	ok('刷新后不用再登录', !(await vis(page, '#needcode')));
-	// 3. 已登录的手机、Claude 连接器地址：6.0 起只在「我的主页 → 敏感信息」（应急登录的用路由器后台密码验证）；添加新手机（托管版：扫码打开官网）还在系统操作
+	// 3. 已登录的手机、AI 连接器地址：6.0 起只在「我的主页 → 敏感信息」（应急登录的用路由器后台密码验证）；添加新手机（托管版：扫码打开官网）还在系统操作
 	await page.goto('http://localhost:8143/panel/?p=more'); await W(1500);
-	ok('「系统操作」里没有「已登录的手机」「Claude 连接器地址」了', (await page.locator('#devsBtn, #ckeyBtn').count()) === 0);
+	ok('「系统操作」里没有「已登录的手机」「AI 连接器地址」了', (await page.locator('#devsBtn, #ckeyBtn').count()) === 0);
 	await page.goto('http://localhost:8143/panel/?p=me'); await W(1800);
 	ok('我的主页：没验证看不到手机列表', !/iPhone · Safari/.test(await page.textContent('#meBox')) && (await page.locator('#meBox [data-pw]').count()) === 1);
 	await page.fill('#meBox [data-pw]', 'rootpw'); await page.click('#meBox [data-pwok]'); await W(1200);
@@ -98,7 +98,7 @@ const vis = (page, sel) => page.isVisible(sel);
 	ok('移除别的手机（带着凭证）', !DEVS.old00001 && (await page.$$('#meBox [data-mp="drm"]')).length === 0 && calls.some((c) => c.m === 'device_remove' && c.p && c.p.sudo));
 	await page.click('#meBox [data-mp="kckey"]'); await W(800);
 	t = await page.textContent('.modal');
-	ok('Claude 连接器地址：先打码，说明打不开面板，提醒旧连接器要换', (await page.getAttribute('.modal .keybox', 'class')).includes('blur') && /打不开面板/.test(t) && /重新添加/.test(t) && t.includes('c'.repeat(40)));
+	ok('AI 连接器地址：先打码，说明打不开面板，提醒旧连接器要换', (await page.getAttribute('.modal .keybox', 'class')).includes('blur') && /打不开面板/.test(t) && /重新添加/.test(t) && t.includes('c'.repeat(40)));
 	await page.click('.modal button:has-text("完成")'); await W(400);
 	await page.goto('http://localhost:8143/panel/?p=more'); await W(1500);
 	const addBtn = await page.$('[data-t="addphone"], #addPhoneBtn, button:has-text("添加新手机")');
@@ -154,7 +154,7 @@ const vis = (page, sel) => page.isVisible(sel);
 	const p2 = await mk('dark');
 	await p2.goto('http://localhost:8143/panel/'); await p2.evaluate((t) => localStorage.setItem('rp_token', t), TOK);
 	await p2.goto('http://localhost:8143/panel/?p=more'); await W(1800);
-	ok('自建版：不弹登录页；没有「已登录的手机」；纯面板版没有「Claude 连接器地址」', !(await vis(p2, '#needcode')) && !(await vis(p2, '#devsBtn')) && !(await vis(p2, '#ckeyBtn')));
+	ok('自建版：不弹登录页；没有「已登录的手机」；纯面板版没有「AI 连接器地址」', !(await vis(p2, '#needcode')) && !(await vis(p2, '#devsBtn')) && !(await vis(p2, '#ckeyBtn')));
 	ok('「退出登录」也在系统操作里', /退出登录/.test(await p2.textContent('[data-t="logout"]')));
 	// 9. 老链接 #login= 照样存密钥（之后托管版要从官网打开）
 	hosted = true;

@@ -66,22 +66,30 @@ function handle(msg) {
 			protocolVersion: index(PROTOCOLS, p.protocolVersion) >= 0 ? p.protocolVersion : PROTOCOLS[1],
 			capabilities: { tools: { listChanged: false } },
 			serverInfo: { name: 'openwrt-router', title: '我的路由器', version: VERSION },
-			instructions: '这是用户家里 OpenWrt 路由器（可能装有 OpenClash、OAF 应用过滤等插件，先用工具查看实际情况）的完整管理工具，可查看状态、设备、网速，控制服务，读写任意 uci 配置，执行命令。断网类操作（改 network/firewall、重启路由器或网络、停止服务）一旦出错，用户会失去网络、你也会失去连接，执行前必须说明影响并得到用户确认。修改规则前先 get_custom_rules 读取原文件并在其基础上修改；节点名必须用 list_proxy_groups 返回的准确名称（含国旗和空格）。set_custom_rules / restart_openclash 会让网络中断 10–30 秒，执行前告诉用户。'
+			instructions: '这是用户家里 OpenWrt 路由器（可能装有 OpenClash、OAF 应用过滤等插件，先用工具查看实际情况）的完整管理工具，可查看状态、设备、网速，控制服务，读写任意 uci 配置，执行命令。断网类操作（改 network/firewall、重启路由器或网络、停止服务）一旦出错，用户会失去网络、你也会失去连接，执行前必须说明影响并得到用户确认。修改规则前先 get_custom_rules 读取原文件并在其基础上修改；节点名必须用 list_proxy_groups 返回的准确名称（含国旗和空格）。set_custom_rules / restart_openclash 会让网络中断 10–30 秒，执行前告诉用户。' +
+				(MODE == 'ai' || msg.client != 'panel' ? (ai_mode() == 'ro' ? '\n现在是「只读」：只能查看，不能修改；命令行只能跑只看的命令（cat、ls、logread、uci show 等，不能用 ; & $ > <）。' : ai_mode() == 'ask' ? '\n重启、改设置、装卸软件、改规则、执行会改东西的命令，要用户先在手机上点「允许」：工具会推送到手机并等 30 秒，等不到会告诉你，等用户确认后原样再调用一次。只看的命令（cat、ls、logread、uci show 等）直接执行。' : '') : '')
 		});
 	case 'ping':
 		return rpc_result(id, {});
 	case 'tools/list':
-		return rpc_result(id, { tools: filter(TOOLS, (t) => !(t.name == 'run_command' && conf().allow_shell === false)) });
+	{
+		// 6.0 第 11 项：Claude「只读」时只列出查看类的工具（命令行留着，只能跑只看的命令）
+		let ro = MODE == 'ai' || msg.client != 'panel' ? ai_mode() == 'ro' : false;
+		return rpc_result(id, { tools: filter(TOOLS, (t) => !(t.name == 'run_command' && conf().allow_shell === false) && (!ro || t.name == 'run_command' || AI_READ[t.name] || t.name == 'packages' || t.name == 'uci_backups')) });
+	}
 	case 'tools/call': {
 		let fn = T[p.name];
 		if (!fn)
 			return rpc_error(id, -32602, '未知工具：' + p.name);
+		AI_STOP = false;
 		try {
+			// 6.0 第 11 项：Claude 连接器（和不是手机面板的客户端）做危险操作要先在手机上确认
+			if (MODE == 'ai' || msg.client != 'panel') ai_gate(p.name, p.arguments ?? {});
 			let text = fn(p.arguments ?? {});
 			return rpc_result(id, { content: [{ type: 'text', text: '' + text }] });
 		} catch (e) {
 			let m = type(e) == 'object' ? e.message : '' + e;
-			return rpc_result(id, { content: [{ type: 'text', text: '出错：' + m }], isError: true });
+			return rpc_result(id, { content: [{ type: 'text', text: (AI_STOP ? '' : '出错：') + m }], isError: true });
 		}
 	}
 	default:

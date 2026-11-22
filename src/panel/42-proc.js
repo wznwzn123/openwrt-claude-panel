@@ -275,7 +275,7 @@ window.addEventListener('hashchange', () => { const m = /^#code=([A-Za-z0-9]{8})
 $('lcInput').onkeydown = (e) => { if (e.key === 'Enter') ncGo(); };
 $('lcOut').onclick = (e) => { e.preventDefault(); logout(''); };
 
-let ticker, wdTick = 0;
+let ticker, wdTick = 0, aiTick = 0;
 function start() {
 	$('login').classList.add('hidden');
 	$('app').classList.remove('hidden');
@@ -295,6 +295,8 @@ function start() {
 	const usp = new URLSearchParams(location.search), qp = usp.get('p');
 	// 6.0 第 2 项：推送里点了「暂停它上网」（?p=dev&ask=pause&mac=…）：打开设备页后弹出暂停设置，自己选多久才生效
 	if (usp.get('ask') === 'pause' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(usp.get('mac') || '')) setTimeout(() => askPause(usp.get('mac')), 1600);
+	// 6.0 第 11 项：推送里点了「Claude 想要…」：打开面板马上弹出「允许 / 拒绝」；平时打开 2 秒后查一次
+	setTimeout(() => aiCheck(true), usp.get('ask') === 'ai' ? 900 : 2500);
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}
 	const p = validPage(qp) ? qp : validPage(sp) ? sp : 'main';
@@ -318,6 +320,7 @@ function start() {
 		if (page === 'proc' && ++wdTick % 2 === 0) refresh(true);
 		if (page === 'traf' && ++wdTick % 15 === 0) refresh(true);
 		if (page === 'myfb' && ++wdTick % 15 === 0) refresh(true);
+		if (++aiTick % 3 === 0) aiCheck(false);
 		updMaybe();
 	}, 4000);
 	if (!$('about').textContent) setTimeout(() =>
@@ -330,7 +333,7 @@ function start() {
 	// 通知：打开 6 秒后查一次（铃铛上的数字、重要公告弹一次），之后每分钟一次
 	setTimeout(ntCheck, 6000);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { setTimeout(() => aiCheck(true), 800); refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 
 // 返回键、侧滑返回、电脑后退键（6.0 第 68 项，记步骤的办法见 30-core 的 HS）：
 // 先收键盘（安卓）→ 关最上面的弹窗（关不掉的弹窗不动）→ 关侧边栏 → 回上一页（有没保存的修改先问）。

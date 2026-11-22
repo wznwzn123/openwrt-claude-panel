@@ -759,7 +759,7 @@ async function pushTest() {
 	pushRender();
 }
 // 点通知打开面板时，后台服务会告诉面板该去哪一页
-try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => { const p = e.data && e.data.go; if (p && validPage(p) && token) go(p); if (e.data && e.data.ask === 'pause' && token) askPause(e.data.mac); if (e.data && e.data.pushed && $('pushCard')) pushState(true).then(pushRender).catch(() => {}); }); } catch (e) {}
+try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => { const p = e.data && e.data.go; if (p && validPage(p) && token) go(p); if (e.data && e.data.ask === 'pause' && token) askPause(e.data.mac); if (e.data && e.data.ask === 'ai' && token) aiCheck(true); if (e.data && e.data.pushed && $('pushCard')) pushState(true).then(pushRender).catch(() => {}); }); } catch (e) {}
 
 function tabletHelp() {
 	const u = cinfo && cinfo.tablet;
@@ -1893,7 +1893,7 @@ function mpKeysHtml() {
 	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
 	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b><span class="muted">${d}</span></div><span class="muted">›</span></button>`;
 	const lpw = store.get('rp_lpw') === '1';
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'Claude 连接器地址', '在 Claude 里添加连接器用，打不开面板') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'Claude 连接器地址', '在 Claude 里添加连接器、设置 Claude 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -2236,6 +2236,52 @@ async function tabletUrlSheet() {
 	<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m) => { qrReveal(m); m.querySelector('[data-copy]').onclick = () => copyText(r.url); });
 }
+/* 6.0 第 11 项：Claude 能做什么（只读 / 危险操作要确认 / 完全放开），危险操作的请求推送到手机，点「允许」才执行 */
+const AI_MODES = [['ro', '只读', '只能查看状态、设置和日志，什么都改不了'], ['ask', '危险操作要确认', '查看、换节点照常；重启、改设置、装卸软件、改规则要你在手机上点「允许」'], ['full', '完全放开', '什么都能直接做（6.0 以前就是这样）。连接器地址泄露了，别人也能直接改']];
+function aiModesHtml(cur) {
+	return AI_MODES.map(([k, t, d]) => `<button class="aimode${k === cur ? ' on' : ''}" data-aim="${k}" aria-pressed="${k === cur}"><b>${t}${k === 'ask' ? ' <span class="pill blue">推荐</span>' : ''}</b><span class="muted">${d}</span></button>`).join('');
+}
+function aiModesBind(box) {
+	if (!box) return;
+	box.onclick = async (e) => {
+		const b = e.target.closest('[data-aim]'); if (!b || b.classList.contains('on')) return;
+		const k = b.dataset.aim;
+		if (k === 'full' && !(await confirmBox('改成「完全放开」？', 'Claude 做任何事都不用你确认了，包括重启路由器、改设置、执行命令。拿到连接器地址的人也一样。', '改成完全放开', true))) return;
+		busy(b, async () => { const r = await secP('ai_mode', { mode: k }); box.innerHTML = aiModesHtml(r.mode); toast('已改成「' + AI_MODES.find((x) => x[0] === r.mode)[1] + '」'); });
+	};
+}
+const AIQ = { on: true, at: 0, busy: false };
+// 查一下有没有 Claude 在等确认的请求：打开面板、回到面板、点了推送时查；开着的时候「危险操作要确认」才每 12 秒查一次
+async function aiCheck(force) {
+	if (!token || LK.on || AIQ.busy || store.get('rp_ai') !== '1' || !canPerm('net')) return;
+	if (!force && (!AIQ.on || document.hidden || document.querySelector('.modal'))) return;
+	AIQ.at = Date.now(); AIQ.busy = true;
+	let r; try { r = await P('ai_asks', {}, 20000); } catch (e) { AIQ.busy = false; return; } finally { AIQ.busy = false; }
+	AIQ.on = !!(r && r.ai && r.mode === 'ask');
+	const w = ((r && r.list) || []).filter((x) => x.st === 'wait' && x.exp * 1000 > Date.now() + 3000);
+	if (w.length && !document.querySelector('.modal')) aiAskBox(w[0], w.length);
+}
+function aiAskBox(x, n) {
+	const left = () => Math.max(0, Math.round(x.exp - Date.now() / 1000));
+	const mmss = () => Math.floor(left() / 60) + ':' + String(left() % 60).padStart(2, '0');
+	modal(`<div class="aiask"><div class="aiask-ic" aria-hidden="true">✦</div><h3>Claude 想要：${esc(x.title)}</h3>
+	<p class="muted" style="margin:6px 0 0;line-height:1.65">Claude 连接器发来的请求，你点「允许」才会执行。</p>
+	${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
+	<p class="muted aiask-t"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
+	<div class="notice" style="margin-top:10px;text-align:left">不是你让 Claude 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 Claude 连接器地址。</div>
+	<div class="btngrid" style="margin:14px 0 0"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div></div>`,
+	(m, close) => {
+		m.dataset.lock = '1';
+		const t = setInterval(() => { const el = m.querySelector('[data-left]'); if (!el || !el.isConnected) return clearInterval(t); el.textContent = mmss(); if (!left()) { clearInterval(t); toast('这个请求过期了', true); close(null); } }, 1000);
+		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = () => busy(b, async () => {
+			const ok = b.dataset.ans === 'ok';
+			try { await P('ai_answer', { id: x.id, ok }, 20000); toast(ok ? '已允许，Claude 会接着做' : '已拒绝'); }
+			catch (e) { toast(e.message, true); }
+			clearInterval(t); close(null);
+			setTimeout(() => aiCheck(true), 600);
+		})));
+	});
+}
 async function ckeySheet() {
 	let r;
 	try { r = await secP('ckey_info'); } catch (e) { return toast(e.message, true); }
@@ -2244,11 +2290,15 @@ async function ckeySheet() {
 	<p class="muted" style="margin:0 0 10px">在 Claude「设置 → 连接器 → 添加自定义连接器」里填这个地址，就能在对话里管理路由器。它只给 Claude 用，打不开面板。点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(r.url || '（还没有网址）')}<span>点一下显示</span></div>
 	<div class="notice w" style="margin-top:12px">⚠️ 拿到这个地址就能让 AI 控制你的路由器：不要发给别人。泄露了就点「换一个地址」，旧的马上作废。</div>
+	<div class="subhd">Claude 能做什么</div>
+	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
+	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
 	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 Claude 里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
 	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m, close) => {
 		qrReveal(m);
 		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
+		aiModesBind(m.querySelector('[data-aimodes]'));
 		m.querySelector('[data-rot]').onclick = async () => {
 			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，Claude 里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
 			try { await secP('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }

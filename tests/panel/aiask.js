@@ -48,9 +48,9 @@ const SHOT = path.join(__dirname, 'shots');
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_ai', '1'); if (!sessionStorage.getItem('rp_sudo')) sessionStorage.setItem('rp_sudo', JSON.stringify({ tok: 's'.repeat(24), exp: Date.now() + 600e3, kind: 'local' })); });
 		// 推送里点进来：?ask=ai
 		await page.goto('http://localhost:8097/panel/?p=home&ask=ai'); await W(2600);
-		const box = async () => (await page.locator('.modal .aiask').count()) ? page.textContent('.modal .aiask') : '';
+		const box = async () => (await page.locator('.modal .aiask').count()) ? page.textContent('.modal:has(.aiask) .modalbox') : '';
 		let t = await box();
-		ok('推送点进来：马上弹出 Claude 的请求，写着想做什么、具体内容、多久后过期' + T, /AI 想要：执行命令/.test(t) && /opkg install luci-app-ttyd/.test(t) && /后过期/.test(t) && /后面还有 1 个/.test(t), t.slice(0, 120));
+		ok('推送点进来：马上弹出 AI 的请求，写着想做什么、具体内容、多久后过期' + T, /AI 想要：执行命令/.test(t) && /opkg install luci-app-ttyd/.test(t) && /后过期/.test(t) && /后面还有 1 个/.test(t), t.slice(0, 120));
 		ok('说清楚不是自己让做的怎么办' + T, /点「拒绝」/.test(t) && /换一下 AI 连接器地址/.test(t));
 		ok('点外面关不掉（必须选允许或拒绝）' + T, await (async () => { await page.mouse.click(5, 5); await W(400); return (await page.locator('.modal .aiask').count()) === 1; })());
 		const ov = await page.evaluate(() => { const W = document.documentElement.clientWidth, b = document.querySelector('.modal .modalbox').getBoundingClientRect(); return { sw: document.documentElement.scrollWidth, W, l: b.left, r: b.right }; });

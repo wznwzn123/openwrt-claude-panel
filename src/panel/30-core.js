@@ -298,10 +298,12 @@ function hsNav(p, how) {
 	if (hsAdopt({ p }) || hsS().side) return hsSet({ p });
 	if (hsAct()) hsSet({ p }, true);
 }
-function modal(html, onMount) {
+// opts.compact：打开面板时自己弹出来的（必须更新、重要公告、反馈有回复）——手机上也是居中的小卡片，不占满屏幕；
+// 长内容放在卡片里的 .cscroll 里上下滑，按钮一直在下面
+function modal(html, onMount, opts) {
 	return new Promise((resolve) => {
 		const m = document.createElement('div');
-		m.className = 'modal';
+		m.className = 'modal' + (opts && opts.compact ? ' compact' : '');
 		m.innerHTML = `<div class="modalbox" role="dialog">${html}</div>`;
 		const close = (v) => {
 			if (m.classList.contains('closing')) return;

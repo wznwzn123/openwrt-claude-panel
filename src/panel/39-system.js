@@ -1225,15 +1225,21 @@ $('rUpdLater').onclick = () => { store.set('rp_upd_later', updLaterKey()); $('rU
 async function updSheet(forced) {
 	if (!forced) { const r = await updCheck(true); if (!r) return; }
 	const u = UPD;
-	modal(`<div class="sheethead"><h3>${u.newer ? '路由器有新版本' : '检查更新'}</h3>${u.force ? '' : '<button class="btn sm" data-v="close">关闭</button>'}</div>
+	// 有新版本（尤其是必须更新、打开面板就弹出来的）：居中的小卡片，更新内容在卡片里上下滑，按钮一直看得到
+	if (u.newer) {
+		modal(`<div class="sheethead"><h3>${u.force ? '这个版本必须更新' : '路由器有新版本'}</h3>${u.force ? '' : '<button class="btn sm" data-v="close">关闭</button>'}</div>
+		<p class="cver"><span>${esc(u.cur ? 'v' + u.cur : '旧版')}</span><span aria-hidden="true">→</span><b>${esc('v' + u.latest)}</b></p>
+		<div class="cscroll"><div class="notice" style="white-space:pre-line;line-height:1.6;margin:0">${esc(u.notes || '修复了一些问题')}</div></div>
+		<div class="cfoot"><p class="muted" style="font-size:12.5px;margin:0 0 10px;line-height:1.55">${u.force ? '更新后才能继续使用。' : ''}设置都保留，面板断开 10–30 秒，不会断网。</p>
+		<div class="btngrid${u.force ? ' one' : ''}">${u.force ? '' : '<button class="btn" data-v="close">以后再说</button>'}<button class="btn primary" data-go>一键更新</button></div></div>`,
+		(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; m.querySelector('[data-go]').onclick = () => { close(null); updStart(true); }; }, { compact: true });
+		return;
+	}
+	modal(`<div class="sheethead"><h3>检查更新</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<div class="kv"><span>现在的版本</span><b>${esc(u.cur ? 'v' + u.cur : '旧版（没有记录版本号）')}</b></div>
 	<div class="kv"><span>最新版本</span><b>${esc('v' + u.latest)}</b></div>
-	${u.newer ? `<div class="notice" style="white-space:pre-line;margin-top:10px;line-height:1.6">${esc(u.notes || '修复了一些问题')}</div>
-	${u.force ? '<div class="notice w" style="margin-top:10px">这个版本必须更新，更新后才能继续使用。</div>' : ''}
-	<p class="muted" style="font-size:13px;margin:10px 0 0">路由器自己下载同一种安装包，在后台装好。网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。装完起不来会自动退回现在的版本。</p>
-	<div class="btngrid" style="margin:12px 0 0">${u.force ? '' : '<button class="btn" data-v="close">以后再说</button>'}<button class="btn primary" data-go>一键更新</button></div>`
-	: '<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>'}`,
-	(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; const g = m.querySelector('[data-go]'); if (g) g.onclick = () => { close(null); updStart(true); }; });
+	<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>`,
+	(m) => { m.dataset.upd = 1; });
 }
 // 反馈编号：一行显示编号 + 复制按钮（发送成功、收到回复时都用）
 const fbCodeRow = (code) => `<div data-fbcode style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fill);padding:10px 12px;border-radius:12px;margin-top:12px">
@@ -1375,13 +1381,14 @@ async function ntCheck() {
 	if (a) ntAnnPop(a);
 }
 function ntAnnPop(a) {
+	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
 	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
-	<p class="muted" style="font-size:13px;margin:0">开发者发布的重要公告 · ${esc(fbWhen(a.at))}</p>
-	${a.body ? `<div class="notice" style="white-space:pre-wrap;line-height:1.65;margin-top:12px;max-height:50vh;overflow:auto">${esc(a.body)}</div>` : ''}
+	<p class="muted" style="font-size:13px;margin:0 0 10px">重要公告 · ${esc(fbWhen(a.at))}</p>
+	<div class="cscroll">${a.body ? `<div class="notice" style="white-space:pre-wrap;line-height:1.65;margin:0">${esc(a.body)}</div>` : ''}
 	${a.files && a.files.length ? `<div style="margin-top:12px">${filesHtml(a.files)}</div>` : ''}
-	<p class="muted" style="font-size:12.5px;margin:10px 0 0">以后在「通知」里还能看到这条。</p>
-	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-nt>打开通知</button><button class="btn primary" data-v="close">知道了</button></div>`,
-	(m, close) => { m.dataset.ann = 1; m.querySelector('[data-nt]').onclick = () => { close(null); go('notice'); }; });
+	<p class="muted" style="font-size:12.5px;margin:10px 0 0">以后在「通知」里还能看到这条。</p></div>
+	<div class="cfoot"><div class="btngrid"><button class="btn" data-nt>打开通知</button><button class="btn primary" data-v="close">知道了</button></div></div>`,
+	(m, close) => { m.dataset.ann = 1; m.querySelector('[data-nt]').onclick = () => { close(null); go('notice'); }; }, { compact: true });
 	NT.d.seen.pop = [...((NT.d.seen && NT.d.seen.pop) || []), a.id];
 	P('notices_seen', { pop: a.id }).catch(() => {});
 }
@@ -1644,12 +1651,13 @@ async function fbCheck() {
 	const when = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	const stage = Math.max(x.stage || (x.done || x.nofix ? 3 : 1), x.reply ? 2 : 1);
 	modal(`<div class="sheethead"><h3>${x.done ? '你反馈的问题修好了' : x.nofix ? '你反馈的问题暂时没法修复' : x.reply ? '你的反馈有新的说明' : '开发人员已收到你的反馈'}</h3></div>
+	<div class="cscroll">
 	<p class="muted" style="font-size:13px;margin:0">${esc(when(x.at))} 发的反馈</p>
 	${fbSteps(stage, !!x.nofix)}
 	${x.reply ? `<p class="muted" style="font-size:13px;margin:12px 0 6px">${x.nofix ? '开发者说明的原因' : '开发者的说明'}</p><div class="notice"><div data-txt style="white-space:pre-wrap;line-height:1.65;max-height:9.9em;overflow:hidden">${esc(x.reply)}</div></div><button class="btn sm hidden" data-more style="margin-top:8px">查看全部</button>` : ''}
 	${fbCodeRow(x.code)}
-	${x.done ? '<p class="muted" style="font-size:13px;margin:10px 0 0">如果还有问题，在「系统操作 → 问题反馈」里再发一次就行。</p>' : x.nofix ? '<p class="muted" style="font-size:13px;margin:10px 0 0">以后情况有变化，可以在「系统操作 → 问题反馈」里再发一次。</p>' : ''}
-	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-track>查看完整记录</button><button class="btn primary" data-v="close">知道了</button></div>`,
+	${x.done ? '<p class="muted" style="font-size:13px;margin:10px 0 0">如果还有问题，在「系统操作 → 问题反馈」里再发一次就行。</p>' : x.nofix ? '<p class="muted" style="font-size:13px;margin:10px 0 0">以后情况有变化，可以在「系统操作 → 问题反馈」里再发一次。</p>' : ''}</div>
+	<div class="cfoot">	<div class="btngrid"><button class="btn" data-track>查看完整记录</button><button class="btn primary" data-v="close">知道了</button></div></div>`,
 	(m, close) => {
 		m.dataset.fbr = 1; fbCodeBind(m, x.code, close);
 		// 回复太长（超过 6 行）：先折叠，点「查看全部」展开，再点收起
@@ -1658,7 +1666,7 @@ async function fbCheck() {
 		const fold = (on) => { t.style.maxHeight = on ? '9.9em' : 'none'; t.style.webkitMaskImage = t.style.maskImage = on ? 'linear-gradient(180deg,#000 70%,transparent)' : 'none'; b.textContent = on ? '查看全部' : '收起'; };
 		if (t.scrollHeight > t.clientHeight + 4) { b.classList.remove('hidden'); fold(true); b.onclick = () => fold(t.style.maxHeight === 'none'); }
 		else t.style.maxHeight = 'none';
-	});
+	}, { compact: true });
 	P('fb_seen', { code: x.code, updated: x.updated, done: x.done || x.nofix ? 1 : 0 }).catch(() => {});
 }
 const UPD_STEPS = [['downloading', '下载新版安装包'], ['installing', '安装（保留所有设置）'], ['check', '重新启动面板服务'], ['done', '完成']];
@@ -2265,11 +2273,11 @@ function aiAskBox(x, n) {
 	const left = () => Math.max(0, Math.round(x.exp - Date.now() / 1000));
 	const mmss = () => Math.floor(left() / 60) + ':' + String(left() % 60).padStart(2, '0');
 	modal(`<div class="aiask"><div class="aiask-ic" aria-hidden="true">✦</div><h3>AI 想要：${esc(x.title)}</h3>
-	<p class="muted" style="margin:6px 0 0;line-height:1.65">AI 连接器发来的请求，你点「允许」才会执行。</p>
-	${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
-	<p class="muted aiask-t"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
-	<div class="notice" style="margin-top:10px;text-align:left">不是你让 AI 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 AI 连接器地址。</div>
-	<div class="btngrid" style="margin:14px 0 0"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div></div>`,
+	<p class="muted" style="margin:6px 0 0;line-height:1.65">AI 连接器发来的请求，你点「允许」才会执行。</p></div>
+	<div class="cscroll">${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
+	<p class="muted aiask-t" style="text-align:center"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
+	<div class="notice" style="margin-top:10px;text-align:left">不是你让 AI 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 AI 连接器地址。</div></div>
+	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div></div>`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const t = setInterval(() => { const el = m.querySelector('[data-left]'); if (!el || !el.isConnected) return clearInterval(t); el.textContent = mmss(); if (!left()) { clearInterval(t); toast('这个请求过期了', true); close(null); } }, 1000);
@@ -2280,7 +2288,7 @@ function aiAskBox(x, n) {
 			clearInterval(t); close(null);
 			setTimeout(() => aiCheck(true), 600);
 		})));
-	});
+	}, { compact: true });
 }
 async function ckeySheet() {
 	let r;

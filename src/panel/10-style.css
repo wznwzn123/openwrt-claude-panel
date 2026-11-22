@@ -690,5 +690,18 @@ section.page{display:none}section.page.on{display:block}
 .aiask{text-align:center}
 .aiask-ic{display:grid;place-items:center;width:46px;height:46px;margin:0 auto 10px;border-radius:15px;background:var(--card2);color:var(--brand);font-size:22px}
 .aiask h3{margin:0;font-size:18px;overflow-wrap:anywhere}
-.aiask-d{margin:12px 0 0;text-align:left;max-height:34vh}
+.aiask-d{margin:12px 0 0;text-align:left;max-height:none}
 .aiask-t{margin:10px 0 0;font-size:13px}
+
+/* 打开面板时自己弹出来的弹窗（必须更新、重要公告、反馈有回复）：手机上也是居中的小卡片，不占满屏幕 */
+.modal.compact{place-items:center;padding:20px 16px}
+.modal.compact .modalbox{width:min(440px,100%);max-height:min(70vh,600px);display:flex;flex-direction:column;overflow:hidden;padding:20px 18px 16px;border-radius:26px;animation:popIn .32s var(--spring) both}
+.modal.compact .modalbox::before{display:none}
+.modal.compact.closing .modalbox{animation:dimOut .25s both;opacity:0}
+.modal.compact .sheethead{margin-bottom:6px}
+.modal.compact .cscroll{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.modal.compact .cfoot{flex:none;padding-top:12px}
+.modal.compact .cfoot .btngrid{margin:0!important}
+.modal.compact .btngrid.one{grid-template-columns:1fr}
+.cver{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:0 0 10px}
+.cver b{color:var(--text);font-size:15px}

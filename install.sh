@@ -454,7 +454,7 @@ cfd_ram_check() {
 	[ -z "$why" ] && [ "$m" -lt 120 ] && why="可用内存只有 $m MB，小闪存模式要 120 MB 以上"
 	[ -z "$why" ] && ! have_pkg sha256sum && why="系统里没有 sha256sum，没法校验下载的程序"
 	[ -z "$why" ] && [ ! -s "$SRC/etc/cfd.sums" ] && why="这个安装包里没有 cloudflared 的校验值"
-	[ -n "$why" ] && die "$1，小闪存模式也用不了：$why。可以先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），让闪存剩 40 MB 以上再装一次"
+	[ -n "$why" ] && die "$1，小闪存模式也用不了：$why。可以先删掉用不上的插件（在路由器后台「系统 → 软件包」里卸载），让闪存剩 ${CFD_NEED:-40} MB 以上再装一次"
 	return 0
 }
 # 以前装过面板自带的 ucode、而且还能用：系统的 ucode 就不用管了
@@ -505,29 +505,47 @@ if [ -n "$need" ]; then
 fi
 # cloudflared（远程访问必需，约 30 MB）：闪存放得下就装进闪存（跟以前一样）；
 # 放不下、或者软件源里没有，但内存够的，用小闪存模式：不装进闪存，开机时下载到内存里运行
-CFD_RAM=0
-if ! have_pkg cloudflared; then
+# 闪存是压缩的文件系统（UBIFS、JFFS2：大多数家用路由器的闪存）时，cloudflared 实际只占一半左右：剩 22 MB 以上就先试着装进闪存
+# （以前一律要 40 MB，压缩闪存剩 37 MB 的路由器明明放得下也装不上）
+ovl_fs() { awk '$2 == "/overlay" { t = $3 } END { print t }' "${CMCP_MOUNTS:-/proc/mounts}" 2>/dev/null; }
+cfd_need() { case "$(ovl_fs)" in ubifs|jffs2) echo 22 ;; *) echo 40 ;; esac; }
+pkg_rm() { if have_pkg apk; then apk del "$@" >/dev/null 2>&1; elif have_pkg opkg; then opkg remove "$@" >/dev/null 2>&1; fi; return 0; }
+# 装进闪存还是用小闪存模式：设置 CFD_RAM（0 = 装进闪存了，1 = 要用小闪存模式）
+cfd_place() {
+	CFD_RAM=0
+	have_pkg cloudflared && return 0
+	CFD_NEED=$(cfd_need)
 	FREE=$(free_mb); FREE=${FREE:-0}
-	if [ "$FREE" -ge 40 ]; then
-		say "安装 cloudflared（远程访问用，约 30 MB）"
-		if ! pkg_add cloudflared; then
-			[ "$PKGERR" = crash ] && pkg_die cloudflared
-			[ "$PKGERR" = nopm ] && pkg_die cloudflared
-			warn "cloudflared 没装上（软件源里可能没有），改用小闪存模式"
-			cfd_ram_check "cloudflared 装不上"
-			CFD_RAM=1
-		fi
-	else
+	if [ "$FREE" -lt "$CFD_NEED" ]; then
 		cfd_ram_check "闪存只剩 $FREE MB，放不下远程访问要用的 cloudflared（约 30 MB）"
+		CFD_RAM=1; return 0
+	fi
+	say "安装 cloudflared（远程访问用，约 30 MB$([ "$CFD_NEED" -lt 40 ] && echo '；这台路由器的闪存是压缩的，实际占得少一半左右')）"
+	if ! pkg_add cloudflared; then
+		[ "$PKGERR" = crash ] && pkg_die cloudflared
+		[ "$PKGERR" = nopm ] && pkg_die cloudflared
+		pkg_rm cloudflared # 装到一半空间不够：装了一半的清掉
+		warn "cloudflared 没装上（闪存放不下，或者软件源里没有），改用小闪存模式"
+		cfd_ram_check "cloudflared 装不上（闪存剩 $(free_mb) MB）"
+		CFD_RAM=1; return 0
+	fi
+	# 装进去以后，面板自己还要 6 MB：不够就卸掉，改用小闪存模式
+	local left; left=$(free_mb); left=${left:-0}
+	if [ "$left" -lt 6 ]; then
+		pkg_rm cloudflared
+		warn "装完 cloudflared 闪存只剩 $left MB，不够放面板，已经卸掉，改用小闪存模式"
+		cfd_ram_check "闪存放下 cloudflared 以后不够放面板"
 		CFD_RAM=1
 	fi
-	if [ $CFD_RAM = 1 ]; then
-		say "小闪存模式：闪存只剩 $FREE MB，cloudflared 不装进闪存，每次开机下载到内存里运行（约 35 MB，网速慢的话要一两分钟）"
-		cfh=$HUB; [ -z "$cfh" ] && [ -s "$D/hub.conf" ] && cfh=$(sed -n 's/^HUB=//p' "$D/hub.conf")
-		CFD_SUMS="$SRC/etc/cfd.sums" CFD_HUB="$cfh" sh "$SRC/bin/cmcp-cfd" fetch \
-			|| die "下载 cloudflared 失败：官网和 GitHub 都没下成，或者下载的文件校验不对。检查路由器能不能上网，过一会儿再装一次"
-		ok "cloudflared 已下载到内存，校验通过（不占闪存；路由器重启后会自动重新下载）"
-	fi
+	return 0
+}
+cfd_place
+if [ "$CFD_RAM" = 1 ]; then
+	say "小闪存模式：闪存只剩 $FREE MB，cloudflared 不装进闪存，每次开机下载到内存里运行（约 35 MB，网速慢的话要一两分钟）"
+	cfh=$HUB; [ -z "$cfh" ] && [ -s "$D/hub.conf" ] && cfh=$(sed -n 's/^HUB=//p' "$D/hub.conf")
+	CFD_SUMS="$SRC/etc/cfd.sums" CFD_HUB="$cfh" sh "$SRC/bin/cmcp-cfd" fetch \
+		|| die "下载 cloudflared 失败：官网和 GitHub 都没下成，或者下载的文件校验不对。检查路由器能不能上网，过一会儿再装一次"
+	ok "cloudflared 已下载到内存，校验通过（不占闪存；路由器重启后会自动重新下载）"
 fi
 ok "依赖齐全"
 

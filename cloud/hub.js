@@ -16,6 +16,7 @@ import { installInst, instAccount, instAdmin } from './inst.js';
 import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } from './files.js';
 import { changelogOf } from './changelog.js';
 import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
+import { installTotp } from './totp.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -385,7 +386,7 @@ export class Hub extends DurableObject {
 		const devs = new Map((await this.devices()).map((d) => [d.sub, d])), out = [];
 		const ae = String(this.env.ADMIN_EMAIL || '').trim().toLowerCase();
 		for (const [k, u] of await this.ctx.storage.list({ prefix: 'u:' })) {
-			out.push({ uid: u.uid, email: u.email, created: u.created, verified: !!u.verified, lastAt: u.lastAt || 0, admin: !!ae && u.email === ae,
+			out.push({ uid: u.uid, email: u.email, created: u.created, verified: !!u.verified, totp: !!u.totp, lastAt: u.lastAt || 0, admin: !!ae && u.email === ae,
 				devs: (u.devs || []).map((x) => ({ sub: x.sub, name: x.alias || devs.get(x.sub)?.name || x.sub, gone: !devs.has(x.sub) })), links: (u.links || []).length });
 		}
 		for (const [k, u] of await this.ctx.storage.list({ prefix: 'xu:' }))
@@ -573,6 +574,7 @@ export class Hub extends DurableObject {
 		const u = await this.ctx.storage.get('u:' + pl.uid);
 		if (!u) { await this.ctx.storage.delete(k); return { st: 400, error: '这个账号已经不在了', again: true }; }
 		const L = (ok, why) => this.loginLog({ k: 'user', who: u.email, ok, why, ip, place: dev && dev.place, ua: dev && dev.ua });
+		if (pl.k === 'totp') return this.login2Totp(u, pl, k, code, op, L, did, dev);
 		if (op === 'resend') { const er = await this.sendLoginCode(u, pl); if (er) return er; await this.ctx.storage.put(k, pl); return { st: 200, ok: true }; }
 		if (!safeEq(String(code || '').trim(), pl.code)) {
 			pl.tries = (pl.tries || 0) + 1;
@@ -587,6 +589,27 @@ export class Hub extends DurableObject {
 		const sid = await this.newSession(u, dev); // newSession 会把 u（连同 trust）存回去
 		if (dev && dev.ua && seen.length && !seen.includes(dev.ua)) await this.loginAlert(u, dev);
 		return { st: 200, sid, did: nd };
+	}
+	// 6.0 第 5 项：新设备登录第二步是两步验证（验证器上的码或恢复码）
+	async login2Totp(u, pl, k, code, op, L, did, dev) {
+		if (op === 'resend') return { st: 400, error: '开了两步验证，要输验证器 App 上的码，不发邮件' };
+		if (!u.totp) { await this.ctx.storage.delete(k); return { st: 400, error: '两步验证已经关了，请重新输入密码登录', again: true }; }
+		const r = await this.totpTry(u, code);
+		if (!r.ok) {
+			if (r.locked) { await this.ctx.storage.delete(k); await L(false, '两步验证的码错太多次，被限制'); return { st: 429, error: '验证码错太多次了，15 分钟后再登录', again: true }; }
+			pl.tries = (pl.tries || 0) + 1;
+			if (pl.tries >= 5) { await this.ctx.storage.delete(k); await L(false, '两步验证的码错了 5 次'); return { st: 400, error: '验证码错太多次了，请重新输入密码登录', again: true }; }
+			await this.ctx.storage.put(k, pl); await L(false, '两步验证的码不对');
+			return { st: 400, error: '验证码不对' };
+		}
+		await this.ctx.storage.delete(k);
+		await L(true, r.how === 'rc' ? '用备用恢复码登录成功' : '两步验证通过，登录成功');
+		const seen = (await this.sessionList(u, '')).map((x) => x.ua);
+		const nd = await this.trust(u, did);
+		const sid = await this.newSession(u, dev); // 连同 totp（用过的码、用掉的恢复码）一起存回去
+		if (r.how === 'rc') { const n = u.totp.rc.length; try { await this.mail(u.email, '你用备用恢复码登录了账号', `<p>你好，</p><p>你的官网账号刚刚用一个备用恢复码登录了，还剩 <b>${n}</b> 个。</p><p>${n <= 3 ? '<b>剩得不多了</b>，' : ''}登录以后可以在「账号设置 → 两步验证」里重新生成一组。<b>不是你本人</b>的话，请马上改密码。</p>`); } catch (x) {} }
+		else if (dev && dev.ua && seen.length && !seen.includes(dev.ua)) await this.loginAlert(u, dev);
+		return r.how === 'rc' ? { st: 200, sid, did: nd, rcLeft: u.totp.rc.length } : { st: 200, sid, did: nd };
 	}
 	async loginAlert(u, dev) {
 		if (!this.env.RESEND_API_KEY || this.env.LOGIN_ALERT === '0') return;
@@ -661,6 +684,13 @@ export class Hub extends DurableObject {
 		if (!u) { const xu = await this.ctx.storage.get('xe:' + email).then((x) => x && this.ctx.storage.get('xu:' + x)); if (xu) { const h0 = await pwHash(password, xu.salt); if (safeEq(h0, xu.pw)) return { st: 403, error: '这个账号已经' + (xu.delWhy === 'self' ? '注销' : '被停用') + '，' + ymd(xu.delAt + TRASH_DAYS * DAY) + ' 前联系提供服务的人可以恢复' }; } }
 		const h = await pwHash(password, u ? u.salt : 'x'.repeat(16)); // 账号不存在也算一遍，别让人从响应时间看出来
 		if (!u || !safeEq(h, u.pw)) { await this.hit(fk, 10, 900e3); await L(false, u ? '密码不对' : '没有这个账号'); return { st: 401, error: '邮箱或密码不对' }; }
+		// 6.0 第 5 项：开了两步验证，没验证过的设备要输验证器上的码（或恢复码），不发邮箱验证码
+		if (u.totp && !(await this.trusted(u, did))) {
+			const token = rnd(24);
+			await this.ctx.storage.put('pl:' + token, { uid: u.uid, exp: Date.now() + 600e3, dev, ip, k: 'totp' });
+			await L(false, '密码对了，新设备要输两步验证的码');
+			return { st: 200, ok: true, need: 'totp', token };
+		}
 		if (this.newDeviceCode() && !(await this.trusted(u, did))) {
 			// 密码对了，但这是没验证过的设备：先发邮箱验证码，输对了才登录
 			const token = rnd(24), pl = { uid: u.uid, exp: Date.now() + 600e3, dev, ip };
@@ -692,7 +722,7 @@ export class Hub extends DurableObject {
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		const td = this.trialDays(), ts = td ? await this.trialState(u) : null, inst = await this.instList(u);
-		return { email: maskEmail(u.email), name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: ts && ts.max ? { days: td, max: ts.max, used: ts.used, left: ts.left, open: ts.open } : null, inst };
+		return { email: maskEmail(u.email), name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '', layout: u.layout || [], created: u.created, lastAt: u.lastAt || 0, verified: !!u.verified, devs, links, mail: !!this.env.RESEND_API_KEY, trial: ts && ts.max ? { days: td, max: ts.max, used: ts.used, left: ts.left, open: ts.open } : null, inst, totp: this.totpBrief(u) };
 	}
 	// 个人主页：名字和头像。头像是浏览器里裁成正方形、压缩好的小图（data:image/...;base64），单独存一份，不放进账号记录里
 	async brief(uid) { const u = await this.ctx.storage.get('u:' + uid); if (!u) return null; return { email: maskEmail(u.email), name: u.name || '', avatar: (await this.ctx.storage.get('av:' + uid)) || '' }; }
@@ -837,16 +867,26 @@ export class Hub extends DurableObject {
 		u.salt = rnd(16); u.pw = await pwHash(password, u.salt); u.verified = true;
 		await this.dropSessions(u, null);
 		await this.trustOnly(u, ''); // 找回密码：以前记住的设备都作废，只记住这一台（刚收过邮箱验证码）
+		// 6.0 第 5 项：开了两步验证的，光有邮箱还不够：密码改好了，登录还要输验证器上的码（或恢复码）
+		if (u.totp) {
+			await this.ctx.storage.put('u:' + uid, u);
+			await L(true, '找回密码成功，还要输两步验证的码');
+			const token = rnd(24);
+			await this.ctx.storage.put('pl:' + token, { uid: u.uid, exp: Date.now() + 600e3, dev, ip, k: 'totp' });
+			return { st: 200, ok: true, need: 'totp', token };
+		}
 		const nd = this.newDeviceCode() ? await this.trust(u, did) : '';
 		await this.ctx.storage.put('u:' + uid, u);
 		await L(true, '找回密码成功');
 		return { st: 200, sid: await this.newSession(u, dev), did: nd };
 	}
-	delAccount(uid, password) { return this.lock(() => this._delAccount(uid, password)); }
-	async _delAccount(uid, password) {
+	delAccount(uid, password, code) { return this.lock(() => this._delAccount(uid, password, code)); }
+	async _delAccount(uid, password, code) {
 		const u = await this.ctx.storage.get('u:' + uid);
 		if (!u) return { st: 401, error: '请先登录' };
 		if (!safeEq(await pwHash(String(password || ''), u.salt), u.pw)) return { st: 403, error: '密码不对' };
+		// 开了两步验证：注销还要输验证器上的码（光有密码和这次登录不够）
+		if (u.totp) { if (!code) return { st: 403, error: '开了两步验证，要输验证器上的码', totp: true }; const r = await this.totpTry(u, code); if (!r.ok) return { st: r.locked ? 429 : 403, error: r.locked ? '错太多次了，15 分钟后再试' : '验证码不对', totp: true }; await this.ctx.storage.put('u:' + uid, u); }
 		// 也先放进回收站：30 天内提供服务的人能帮忙恢复，之后自动彻底删除
 		await this._trashUserRec(u, 'self');
 		await this.alog('user-delete', u.email, '用户自己注销了账号（30 天内能恢复）', 'user');
@@ -1822,12 +1862,18 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));
 	if (a === 'password') return out(await H.userPassword(me.uid, sid, s(b.old), s(b.password), did));
-	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password)); const res = out(r); if (r.st === 200) { res.headers.append('set-cookie', sidCookie('', 0)); res.headers.append('set-cookie', sidOld); } return res; }
+	// 6.0 第 5 项：两步验证
+	if (a === 'totp_setup') return out(await H.totpSetup(me.uid, sid));
+	if (a === 'totp_on') return out(await H.totpOn(me.uid, sid, s(b.code), did));
+	if (a === 'totp_off') return out(await H.totpOff(me.uid, s(b.code)));
+	if (a === 'totp_rc') return out(await H.totpRc(me.uid, s(b.code)));
+	if (a === 'delete') { const r = await H.delAccount(me.uid, s(b.password), s(b.code)); const res = out(r); if (r.st === 200) { res.headers.append('set-cookie', sidCookie('', 0)); res.headers.append('set-cookie', sidOld); } return res; }
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
 export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); }
 installOps(Hub);
+installTotp(Hub);
 installV5(Hub);
 installFam(Hub);
 installInst(Hub);

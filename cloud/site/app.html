@@ -234,6 +234,25 @@ body.setmode #vDash { display: none !important; }
 .s-lock b { font-size: 15px; }
 .s-lock span { font-size: 13px; color: var(--muted); line-height: 1.6; }
 .s-lock .btn { margin-top: 6px; }
+.s-2fa { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
+.s-2fa .l { flex: 1 1 280px; min-width: 0; }
+.s-2fa .l b { display: flex; align-items: center; gap: 8px; font-size: 15.5px; font-weight: 600; }
+.s-2fa .l span { display: block; margin-top: 4px; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+.s-2fa .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill.ok { background: color-mix(in oklab, #4ade80 16%, transparent); color: #86efac; }
+.tf-qr { display: grid; place-items: center; width: 184px; height: 184px; margin: 16px auto 0; padding: 10px; border-radius: 18px; background: #fff; }
+.tf-qr svg { display: block; width: 100%; height: 100%; }
+.tf-key { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: color-mix(in oklab, var(--ink) 6%, transparent); border: 1px solid var(--hair); text-align: left; }
+.tf-key code { flex: 1; min-width: 0; font-size: 13.5px; letter-spacing: .06em; overflow-wrap: anywhere; color: var(--ink); }
+.tf-steps { margin: 14px 0 0; padding: 0; list-style: none; text-align: left; font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+.tf-steps li + li { margin-top: 6px; }
+.tf-steps b { color: var(--ink); font-weight: 600; }
+.tf-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.tf-codes li { padding: 9px 6px; border-radius: 12px; background: color-mix(in oklab, var(--ink) 6%, transparent); border: 1px solid var(--hair); font: 600 15px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em; color: var(--ink); }
+.mask .card .tf-in { margin-top: 14px; text-align: center; font-size: 20px; letter-spacing: .2em; }
+.mask .card .tf-in:placeholder-shown { letter-spacing: 0; font-size: 16px; }
+#fTotp a { white-space: nowrap; }
+.s-2fa .nw { white-space: nowrap; }
 .s-del { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
 .s-del span { flex: 1 1 260px; min-width: 0; font-size: 14px; line-height: 1.7; color: var(--muted); }
 a.d-stat { color: inherit; text-decoration: none; transition: border-color .2s, background-color .2s; }
@@ -374,6 +393,14 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 			<p style="text-align:center;margin:14px 0 0"><a href="#" data-resend>重新发送</a><span class="muted" aria-hidden="true">　·　</span><a href="#" data-codeback>换个账号</a></p>
 			<p class="fine" style="text-align:center">验证过以后，这台设备 30 天内登录只要密码。</p>
 		</form>
+		<form id="fTotp" class="hidden">
+			<div class="codehd"><b>两步验证</b><p class="muted" data-tf-tip>密码对了。打开手机上的验证器 App，输入「路由器面板」下面现在显示的 6 位数字。</p></div>
+			<label class="f" data-tf-lbl>验证器上的 6 位数字</label><input class="input" name="code" inputmode="numeric" maxlength="9" placeholder="6 位数字" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" required>
+			<div class="err" data-err></div>
+			<button class="btn primary">验证并登录</button>
+			<p style="text-align:center;margin:14px 0 0"><a href="#" data-tf-rc>手机不在身边？用备用恢复码</a><span class="muted" aria-hidden="true">　·　</span><a href="#" data-codeback>换个账号</a></p>
+			<p class="fine" style="text-align:center">验证过以后，这台设备 30 天内登录只要密码。</p>
+		</form>
 		<form id="fReg" class="hidden">
 			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="常用邮箱，找回密码要用" required>
 			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
@@ -506,6 +533,10 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 			</div>
 		</section>
 		<section>
+			<div class="sech"><h2>两步验证</h2></div>
+			<div class="card" id="tfCard"><p class="muted" style="margin:0">读取中…</p></div>
+		</section>
+		<section>
 			<div class="sech"><h2>登录邮箱和登录着的设备</h2><button class="btn sm hidden" id="sessAll">退出其他所有设备</button></div>
 			<div class="card"><div id="sessList"><p class="muted" style="margin:0">读取中…</p></div>
 			<p class="s-note">这里是登录着官网账号的手机和电脑。能打开路由器面板的手机在面板里管。</p></div>
@@ -536,7 +567,7 @@ async function api(path, body) {
 	let j = {}; try { j = await r.json(); } catch (e) {}
 	// 第 66 项：服务器要人机验证——弹验证，过了带着凭证重新提交一次
 	if (r.status === 403 && j.captcha && body && !body.cft && window.capSolve) { const t = await window.capSolve(j.site); if (!t) throw new Error('已取消，没有提交'); return api(path, { ...body, cft: t }); }
-	if (!r.ok) { const e = new Error(j.error || '出错了（' + r.status + '）'); e.login = j.login; e.again = j.again; throw e; }
+	if (!r.ok) { const e = new Error(j.error || '出错了（' + r.status + '）'); e.login = j.login; e.again = j.again; e.data = j; throw e; }
 	return j;
 }
 const pair = new URLSearchParams(location.search).get('pair') || '';
@@ -544,8 +575,8 @@ const joinCode = (new URLSearchParams(location.search).get('join') || '').toUppe
 let mailOn = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
-	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'code' ? 'login' : t)));
-	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code');
+	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'code' || t === 'totp' ? 'login' : t)));
+	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); $('fTotp').classList.toggle('hidden', t !== 'totp'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code' || t === 'totp');
 }
 document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
 // 欢迎页 ↔ 登录 / 注册卡片：网址带 #login、#reg（手机上按返回键回到欢迎页；直接打开 /app#reg 就是注册）
@@ -615,6 +646,7 @@ function form(id, fn) {
 let codeTok = '';
 form('fLogin', async (d) => {
 	const r = await api('login', d);
+	if (r.need === 'totp') return totpStep(r.token);
 	if (r.need === 'code') { codeTok = r.token; $('fCode').querySelector('[data-mail]').textContent = r.mail || '你的邮箱'; $('fCode').reset(); tab('code'); setTimeout(() => $('fCode').code.focus(), 50); return; }
 	await load('login');
 });
@@ -624,8 +656,29 @@ form('fCode', async (d, f) => {
 });
 $('fCode').querySelector('[data-resend]').onclick = async (e) => { e.preventDefault(); try { await api('login2', { token: codeTok, op: 'resend' }); toast('验证码已重新发送'); } catch (x) { if (x.again) { codeTok = ''; tab('login'); } toast(x.message); } };
 $('fCode').querySelector('[data-codeback]').onclick = (e) => { e.preventDefault(); codeTok = ''; tab('login'); };
+// 6.0 第 5 项：开了两步验证的账号，新设备登录（和找回密码以后）要输验证器上的码，手机不在身边就输备用恢复码
+let tfTok = '';
+function tfMode(rc) {
+	const f = $('fTotp'), i = f.code;
+	f.dataset.rc = rc ? '1' : '';
+	f.querySelector('[data-tf-lbl]').textContent = rc ? '备用恢复码' : '验证器上的 6 位数字';
+	f.querySelector('[data-tf-tip]').textContent = rc ? '输入开启两步验证时保存的备用恢复码（8 位，比如 abcd-2345），每个只能用一次。恢复码也找不到了，请联系提供服务的人。' : '密码对了。打开手机上的验证器 App，输入「路由器面板」下面现在显示的 6 位数字。';
+	f.querySelector('[data-tf-rc]').textContent = rc ? '改用验证器上的 6 位数字' : '手机不在身边？用备用恢复码';
+	i.inputMode = rc ? 'text' : 'numeric'; i.placeholder = rc ? 'xxxx-xxxx' : '6 位数字'; i.autocomplete = rc ? 'off' : 'one-time-code';
+	f.querySelector('[data-err]').textContent = ''; i.value = ''; setTimeout(() => i.focus(), 50);
+}
+function totpStep(token) { tfTok = token; $('fTotp').reset(); tab('totp'); tfMode(false); }
+form('fTotp', async (d, f) => {
+	let r;
+	try { r = await api('login2', { token: tfTok, code: d.code }); } catch (e) { if (e.again) { tfTok = ''; tab('login'); $('fLogin').querySelector('[data-err]').textContent = e.message; return; } throw e; }
+	f.reset(); tfTok = '';
+	if (r && r.rcLeft != null) toast('用掉了 1 个恢复码，还剩 ' + r.rcLeft + ' 个');
+	await load('login');
+});
+$('fTotp').querySelector('[data-tf-rc]').onclick = (e) => { e.preventDefault(); tfMode(!$('fTotp').dataset.rc); };
+$('fTotp').querySelector('[data-codeback]').onclick = (e) => { e.preventDefault(); tfTok = ''; tab('login'); };
 form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load('reg'); });
-form('fReset', async (d) => { await api('reset', d); toast('密码已重置'); await load('reset'); });
+form('fReset', async (d, f) => { const r = await api('reset', d); f.reset(); if (r && r.need === 'totp') { toast('密码已重置，再输一下验证器上的码'); return totpStep(r.token); } toast('密码已重置'); await load('reset'); });
 form('fBind', async (d, f) => {
 	const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app');
 	const me = await load(), dv = me && me.devs.find((x) => x.sub === r.sub);
@@ -646,7 +699,9 @@ $('outBtn').onclick = async () => { await api('logout', {}).catch(() => {}); was
 $('delBtn').onclick = async () => {
 	const pw = prompt('注销后马上登录不了，绑定的路由器也会解除（路由器本身不受影响）。30 天内反悔可以联系提供服务的人恢复，之后彻底删除。输入密码确认：');
 	if (!pw) return;
-	try { await api('delete', { password: pw }); wasIn.set(false); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message); }
+	let code = '';
+	if (ME && ME.totp && ME.totp.on) { code = (prompt('开了两步验证：再输一下验证器 App 上的 6 位数字（或备用恢复码）') || '').trim(); if (!code) return; }
+	try { await api('delete', { password: pw, code }); wasIn.set(false); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message); }
 };
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
@@ -710,8 +765,9 @@ function devActs(d, left, ap) {
 // 确认是本人（邮箱验证码）：主账号解绑之类的操作前要做一次，10 分钟内有效
 function sudoBox(next) {
 	const m = document.createElement('div'); m.className = 'mask';
-	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>先确认是你本人</h3><p class="muted" style="font-size:13.5px;line-height:1.7;margin:8px 0 0">这个操作比较重要，要输一次邮箱验证码。确认以后 10 分钟内不用再输。</p>
-		<label class="f" style="text-align:left">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" data-c inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send>发送</button></div>
+	const tf = !!(ME && ME.totp && ME.totp.on);
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>先确认是你本人</h3><p class="muted" style="font-size:13.5px;line-height:1.7;margin:8px 0 0">这个操作比较重要，要输一次邮箱验证码${tf ? '，或者直接输验证器 App 上的 6 位数字（不用发邮件）' : ''}。确认以后 10 分钟内不用再输。</p>
+		<label class="f" style="text-align:left">${tf ? '邮箱验证码或验证器上的码' : '邮箱验证码'}</label><div class="row" style="flex-wrap:nowrap"><input class="input" data-c inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send>发送</button></div>
 		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn primary" data-ok>确认</button></div></div>`;
 	const er = m.querySelector('[data-err]');
 	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
@@ -827,9 +883,82 @@ function renderMe(me) {
 	$('meName').textContent = me.name || me.email.split('@')[0];
 	avPaint($('meAvImg'), me); avPaint($('setAvImg'), me);
 	$('setName').textContent = me.name || me.email.split('@')[0]; $('setWho').textContent = me.email;
+	renderTotp(me.totp);
 	const d = new Date(me.created || Date.now());
 	$('meSince').textContent = '注册于 ' + d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
 	if (window.navMe) window.navMe(me);
+}
+// ===== 6.0 第 5 项：两步验证（验证器 App）=====
+function renderTotp(t) {
+	const c = $('tfCard'); if (!c) return;
+	t = t || { on: false };
+	if (!t.on) {
+		c.innerHTML = `<div class="s-2fa"><div class="l"><b>没开启</b><span>开启后，在没登录过的手机或电脑上登录，输对密码还要输手机验证器 App 上的 6 位数字。密码被人知道了，他也登录不了。</span></div><button type="button" class="btn" data-tf-on>开启两步验证</button></div>
+			<p class="s-note">要装一个验证器 App，比如 Google Authenticator、Microsoft Authenticator，iPhone 自带的「密码」App 也行。</p>`;
+	} else {
+		const low = t.rc <= 3;
+		c.innerHTML = `<div class="s-2fa"><div class="l"><b>已开启 <span class="pill ok">保护中</span></b><span>${t.at ? ymd(t.at) + ' 开启 · ' : ''}<span class="nw">备用恢复码还剩 ${t.rc} 个</span>${low ? '，<b style="display:inline;font-size:inherit;color:#fde68a">剩得不多了，建议重新生成</b>' : ''}</span></div><div class="row"><button type="button" class="btn sm${low ? ' primary' : ''}" data-tf-rc>重新生成恢复码</button><button type="button" class="btn sm danger" data-tf-off>关闭</button></div></div>
+			<p class="s-note">新设备登录、找回密码以后、注销账号，都要输验证器上的码。手机丢了用备用恢复码登录；恢复码也没了，请联系提供服务的人。</p>`;
+	}
+}
+$('tfCard').onclick = (e) => {
+	if (e.target.closest('[data-tf-on]')) tfSetup();
+	else if (e.target.closest('[data-tf-off]')) tfAsk({ title: '关闭两步验证', text: '关掉以后，新设备登录只要密码和邮箱验证码，账号没那么安全了。输一下验证器上的 6 位数字（或备用恢复码）确认：', ok: '关闭两步验证', danger: true }, async (code) => { await api('totp_off', { code }); toast('两步验证已关闭'); await load(); });
+	else if (e.target.closest('[data-tf-rc]')) tfAsk({ title: '重新生成备用恢复码', text: '生成一组新的 10 个恢复码，以前的全部作废。输一下验证器上的 6 位数字确认：', ok: '重新生成' }, async (code) => { const r = await api('totp_rc', { code }); await load(); tfCodes(r.codes); });
+};
+const tfLoadQr = () => window.qrcode ? Promise.resolve() : new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = '/k/qr.js'; sc.onload = ok; sc.onerror = () => no(new Error('二维码没加载出来')); document.head.appendChild(sc); });
+async function tfSetup() {
+	let r;
+	try { r = await api('totp_setup', {}); } catch (x) { if (x.data && x.data.sudo) return sudoBox(() => tfSetup()); return toast(x.message); }
+	let qr = '';
+	try { await tfLoadQr(); const q = window.qrcode(0, 'M'); q.addData(r.uri); q.make(); qr = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (x) {}
+	const key = r.secret.replace(/(.{4})/g, '$1 ').trim();
+	const m = document.createElement('div'); m.className = 'mask';
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="tfH"><h3 id="tfH">开启两步验证</h3>
+		<ol class="tf-steps"><li><b>1.</b> 打开手机上的验证器 App，点「添加」→「扫描二维码」，扫下面这个码${qr ? '' : '（二维码没显示出来，就用下面的密钥手动添加）'}。</li></ol>
+		${qr ? `<div class="tf-qr" aria-label="两步验证二维码">${qr}</div>` : ''}
+		<p class="muted" style="font-size:13px;margin:12px 0 0">就在这台手机上？<a href="${esc(r.uri)}">用验证器 App 打开</a>，或者手动输入密钥：</p>
+		<div class="tf-key"><code data-key>${esc(key)}</code><button type="button" class="btn sm" data-copy>复制</button></div>
+		<ol class="tf-steps"><li><b>2.</b> 输入验证器 App 里「路由器面板」下面现在显示的 6 位数字：</li></ol>
+		<input class="input tf-in" data-c inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code" aria-label="验证器上的 6 位数字">
+		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn primary" data-ok>开启</button></div></div>`;
+	const er = m.querySelector('[data-err]'), inp = m.querySelector('[data-c]');
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
+	m.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(r.secret); toast('密钥已复制'); } catch (x) { toast('复制不了，请手动抄下来'); } };
+	const go = async () => {
+		const b = m.querySelector('[data-ok]'); b.disabled = true; er.textContent = '';
+		try { const x = await api('totp_on', { code: inp.value.trim() }); m.remove(); await load(); tfCodes(x.codes, true); }
+		catch (x) { er.textContent = x.message; if (x.again) setTimeout(() => m.remove(), 2400); }
+		finally { b.disabled = false; }
+	};
+	m.querySelector('[data-ok]').onclick = go;
+	inp.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+	document.body.appendChild(m); setTimeout(() => inp.focus(), 60);
+}
+// 备用恢复码：只显示这一次。复制、存成文件；点「我存好了」才关
+function tfCodes(codes, fresh) {
+	const txt = '路由器面板 官网账号（' + location.host + '）两步验证备用恢复码\n每个只能用一次。手机丢了、验证器删了，登录时点「用备用恢复码」输入其中一个。\n\n' + codes.join('\n') + '\n\n生成时间：' + new Date().toLocaleString() + '\n';
+	const m = document.createElement('div'); m.className = 'mask';
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true" aria-labelledby="tfC">${fresh ? '<div class="muted" style="font-size:13.5px;margin-bottom:4px">✓ 两步验证已开启</div>' : ''}<h3 id="tfC">存好备用恢复码</h3>
+		<p class="muted" style="font-size:13.5px;line-height:1.7;margin:8px 0 0">手机丢了、验证器删了，用它们登录，每个只能用一次。<b style="color:var(--ink)">这里只显示这一次</b>，请存到密码管理器或者抄在纸上。</p>
+		<ul class="tf-codes">${codes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+		<div class="acts"><button type="button" class="btn" data-copy>复制</button><button type="button" class="btn" data-dl>存成文件</button><button type="button" class="btn primary" data-x>我存好了</button></div></div>`;
+	m.querySelector('[data-x]').onclick = () => m.remove();
+	m.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(txt); toast('恢复码已复制'); } catch (x) { toast('复制不了，请手动抄下来'); } };
+	m.querySelector('[data-dl]').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' })); a.download = '路由器面板-恢复码.txt'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); };
+	document.body.appendChild(m);
+}
+// 输一次验证器上的码再做（关闭、重新生成恢复码）
+function tfAsk(o, fn) {
+	const m = document.createElement('div'); m.className = 'mask';
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>${esc(o.title)}</h3><p class="muted" style="font-size:13.5px;line-height:1.7;margin:8px 0 0">${esc(o.text)}</p>
+		<input class="input tf-in" data-c maxlength="9" placeholder="6 位数字或恢复码" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" aria-label="验证器上的码或备用恢复码">
+		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn ${o.danger ? 'danger' : 'primary'}" data-ok>${esc(o.ok)}</button></div></div>`;
+	const er = m.querySelector('[data-err]'), inp = m.querySelector('[data-c]');
+	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
+	const go = async () => { const b = m.querySelector('[data-ok]'); b.disabled = true; er.textContent = ''; try { await fn(inp.value.trim()); m.remove(); } catch (x) { er.textContent = x.message; } finally { b.disabled = false; } };
+	m.querySelector('[data-ok]').onclick = go; inp.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+	document.body.appendChild(m); setTimeout(() => inp.focus(), 60);
 }
 // 图片裁成正方形、缩到 192×192、压缩（能用 webp 就用 webp），一般 10KB 左右
 function shrink(file) {

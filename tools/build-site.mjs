@@ -54,6 +54,8 @@ if (fs.existsSync(new URL('index.html', ad))) {
 const kit = {}, KT = { js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8', svg: 'image/svg+xml', txt: 'text/plain; charset=utf-8' };
 const walk = (rel) => { for (const e of fs.readdirSync(new URL('k/' + rel, dir), { withFileTypes: true })) { const r = rel + e.name; if (e.isDirectory()) walk(r + '/'); else { const ext = e.name.split('.').pop(); if (!KT[ext]) throw new Error('cloud/site/k 里有不认识的文件：' + r); let body = fs.readFileSync(new URL('k/' + r, dir), 'utf8'); if (ext === 'css') body = applyLegacy(body, LEG, legMiss, HAS); kit[r] = { type: KT[ext], body }; } } };
 walk('');
+// 6.0 第 5 项：账号设置里开两步验证要显示二维码——跟面板用同一个生成二维码的脚本（MIT，文件开头写着），由 /k/qr.js 发，只在开启时才加载
+kit['qr.js'] = { type: KT.js, body: fs.readFileSync(new URL('../src/www/panel/qr.js', import.meta.url), 'utf8') };
 out += `export const KIT_FILES = ${JSON.stringify(kit)};\n`;
 out += `export const IMG_FILES = ${JSON.stringify(IMG)};\n`;
 out += `export const ADMIN_APP = ${JSON.stringify(adminHtml)};\nexport const ADMIN_FILES = ${JSON.stringify(files)};\n`;

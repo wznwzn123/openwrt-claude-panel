@@ -43,16 +43,16 @@ async function op(u: any, o: 'delete' | 'restore' | 'purge') {
   try { const r = await post(`users/${u.uid}/${o}`, body); pushToast(o === 'delete' ? '已放进回收站，' + day(r.purgeAt) + ' 前可以恢复' : o === 'restore' ? '已恢复，重新绑定了 ' + r.devs + ' 台路由器' : '已彻底删除'); load() } catch (e) { toastError(e, '没成功') }
 }
 // 账号丢了 / 被盗：让他所有设备退出；本人邮箱不能用了：改登录邮箱（确认是本人以后）。都要写原因，会发邮件
-async function acct(u: any, o: 'kick' | 'email') {
+async function acct(u: any, o: 'kick' | 'email' | 'totp_off') {
   let email = ''
   if (o === 'email') {
     const e = await ask({ title: '改登录邮箱：' + u.email, message: '先确认对方是本人（比如他用原来的邮箱联系过你，或者能说出绑定的路由器）。改了以后旧邮箱登录不了，他要用新邮箱在官网「忘记密码」里重设密码；所有设备都会退出。新旧两个邮箱都会收到通知。', input: { label: '新的登录邮箱', placeholder: 'name@example.com', required: '要填新邮箱' }, confirmText: '下一步' })
     if (!e) return
     email = e.value.trim()
   }
-  const v = await ask({ title: o === 'kick' ? '让 ' + u.email + ' 所有设备退出' : '把登录邮箱改成 ' + email, message: o === 'kick' ? '官网要重新登录（新设备要收邮箱验证码），各台路由器面板要从官网重新打开。会发邮件告诉他。' : '确认修改？', input: { label: '原因（会写进操作记录和发给他的邮件）', required: '要写一句原因', multiline: true, maxlength: 200 }, confirmText: o === 'kick' ? '全部退出' : '改邮箱', danger: true })
+  const v = await ask({ title: o === 'kick' ? '让 ' + u.email + ' 所有设备退出' : o === 'totp_off' ? '关掉 ' + u.email + ' 的两步验证' : '把登录邮箱改成 ' + email, message: o === 'kick' ? '官网要重新登录（新设备要收邮箱验证码），各台路由器面板要从官网重新打开。会发邮件告诉他。' : o === 'totp_off' ? '只在他验证器和备用恢复码都丢了时用。先确认对方是本人（比如用注册邮箱联系过你，并且能说出绑定的路由器）。关掉以后新设备登录只要密码和邮箱验证码，会发邮件告诉他。' : '确认修改？', input: { label: '原因（会写进操作记录和发给他的邮件）', required: '要写一句原因', multiline: true, maxlength: 200 }, confirmText: o === 'kick' ? '全部退出' : '改邮箱', danger: true })
   if (!v || v.value.trim().length < 2) return
-  try { await post(`famuser/${u.uid}/${o}`, { why: v.value, email }); pushToast(o === 'kick' ? '已让他所有设备退出，已发邮件' : '登录邮箱改好了，已发邮件到新旧两个邮箱'); load() } catch (e) { toastError(e, '没成功') }
+  try { await post(`famuser/${u.uid}/${o}`, { why: v.value, email }); pushToast(o === 'kick' ? '已让他所有设备退出，已发邮件' : o === 'totp_off' ? '两步验证已关掉，已发邮件' : '登录邮箱改好了，已发邮件到新旧两个邮箱'); load() } catch (e) { toastError(e, '没成功') }
 }
 const devs = (u: any) => (u.devs.length ? u.devs.map((x: any) => x.name + (x.gone ? '（已删除）' : '')).join('、') : '没有绑定路由器')
 onMounted(load)
@@ -72,14 +72,14 @@ onMounted(load)
       <div class="hub-list">
         <div v-for="u in shown" :key="u.uid" class="hub-row">
           <div class="hub-row-main">
-            <div class="hub-row-title">{{ u.deleted ? '🗑 ' : '' }}{{ u.email }}<Tag v-if="u.admin" tone="ok">管理员</Tag><Tag v-if="!u.verified && !u.deleted" tone="neutral">邮箱没验证</Tag></div>
+            <div class="hub-row-title">{{ u.deleted ? '🗑 ' : '' }}{{ u.email }}<Tag v-if="u.admin" tone="ok">管理员</Tag><Tag v-if="!u.verified && !u.deleted" tone="neutral">邮箱没验证</Tag><Tag v-if="u.totp && !u.deleted" tone="ok">两步验证</Tag></div>
             <div v-if="u.deleted" class="hub-row-meta">{{ day(u.delAt) }} {{ u.delWhy === 'self' ? '自己注销' : '被删除' }} · <b class="bad">{{ day(u.purgeAt) }} 彻底删除</b></div>
             <div v-else class="hub-row-meta">{{ day(u.created) }} 注册 · 最近登录 {{ u.lastAt ? ago(u.lastAt) : '—' }}<template v-if="lastIp[u.email]"> · IP <b class="mono" style="cursor: pointer" @click="router.push({ path: '/logins', query: { q: lastIp[u.email].ip } })">{{ lastIp[u.email].ip }}</b>（{{ lastIp[u.email].place || '未知地点' }} · {{ lastIp[u.email].ua || '未知设备' }}）</template></div>
             <div class="hub-row-meta">{{ u.deleted ? '原来的路由器' : '路由器' }}：{{ devs(u) }}</div>
           </div>
           <div class="hub-row-acts">
             <template v-if="u.deleted"><Button size="sm" variant="primary" @click="op(u, 'restore')">恢复</Button><Button size="sm" variant="danger" @click="op(u, 'purge')">彻底删除</Button></template>
-            <template v-else><Button size="sm" @click="router.push({ path: '/logins', query: { q: u.email } })">登录记录</Button><Button size="sm" @click="acct(u, 'kick')">所有设备退出</Button><Button size="sm" @click="acct(u, 'email')">改登录邮箱</Button><Button v-if="!u.admin" size="sm" variant="ghost" @click="op(u, 'delete')">删除</Button></template>
+            <template v-else><Button size="sm" @click="router.push({ path: '/logins', query: { q: u.email } })">登录记录</Button><Button size="sm" @click="acct(u, 'kick')">所有设备退出</Button><Button size="sm" @click="acct(u, 'email')">改登录邮箱</Button><Button v-if="u.totp" size="sm" @click="acct(u, 'totp_off')">关两步验证</Button><Button v-if="!u.admin" size="sm" variant="ghost" @click="op(u, 'delete')">删除</Button></template>
           </div>
         </div>
         <EmptyState v-if="!loading && !shown.length" title="没有账号" icon="users" />

@@ -87,7 +87,7 @@ export function installFam(Hub) {
 			const role = this.famRole(d, uid);
 			if (!['main', 'sub', 'off', 'expired', 'pick'].includes(role)) return { st: 403, error: '你已经不是这台路由器的成员了' };
 			const f = this.famOf(d), sx = f.subs[uid], x = (u.devs || []).find((y) => y.sub === sub) || {};
-			return { st: 200, ok: true, me: { uid, name: u.name || mask(u.email).split('@')[0], email: mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '', created: u.created || 0, verified: !!u.verified, joined: x.at || 0 },
+			return { st: 200, ok: true, me: { uid, name: u.name || mask(u.email).split('@')[0], email: mask(u.email), avatar: (await this.ctx.storage.get('av:' + uid)) || '', created: u.created || 0, verified: !!u.verified, joined: x.at || 0, totp: !!u.totp },
 				role, perms: role === 'main' ? PERM_KEYS : sx ? permsOf(sx) : [], subExp: sx ? sx.exp || 0 : 0, owner: f.owner && f.owner !== uid ? await this.famPerson(f.owner) : null, nsub: Object.keys(f.subs).length,
 				router: { name: d.name || sub, model: d.model || '', created: d.created || 0, exp: d.exp || 0 } };
 		},
@@ -114,7 +114,7 @@ export function installFam(Hub) {
 		async famSudoCode(sub, uid) {
 			const d = await this.ctx.storage.get('d:' + sub), u = await this.ctx.storage.get('u:' + uid);
 			if (!d || !u || !(d.users || []).includes(uid)) return { st: 404, error: '这个账号不在这台路由器里' };
-			if (!this.env.RESEND_API_KEY) return { st: 200, ok: true, nomail: true };
+			if (!this.env.RESEND_API_KEY) return { st: 200, ok: true, nomail: true, totp: !!u.totp };
 			{ const b = await this.mailBlock(); if (b) return b; } // 今天邮件额度满了：明天再试（不会跳过验证）
 			if (!(await this.hit('su1:' + uid, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
 			if (!(await this.hit('sud:' + uid, 20, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
@@ -126,9 +126,12 @@ export function installFam(Hub) {
 		},
 		async famSudo(sub, uid, code) {
 			const k = 'c:su:' + sub + ':' + uid;
-			if (this.env.RESEND_API_KEY) {
+			// 6.0 第 5 项：开了两步验证的，输验证器上的码也算确认了本人（不用等邮件）；没开邮件服务的，开了两步验证就一定要输
+			const tv = await this.totpSudoOk(uid, code);
+			if (!tv && !this.env.RESEND_API_KEY && (await this.totpHas(uid))) return { st: 400, error: '输验证器 App 上的 6 位数字' };
+			if (this.env.RESEND_API_KEY && !tv) {
 				const c = await this.ctx.storage.get(k);
-				if (!c || c.exp < Date.now()) return { st: 400, error: '验证码过期了，重新发一个' };
+				if (!c || c.exp < Date.now()) return { st: 400, error: (await this.totpHas(uid)) ? '验证码不对' : '验证码过期了，重新发一个' };
 				if (!safeEq(String(code || '').trim(), c.code)) { c.tries++; if (c.tries >= 5) await this.ctx.storage.delete(k); else await this.ctx.storage.put(k, c); return { st: 400, error: '验证码不对' }; }
 				await this.ctx.storage.delete(k);
 			}
@@ -148,7 +151,7 @@ export function installFam(Hub) {
 		async webSudoCode(uid) {
 			const u = await this.ctx.storage.get('u:' + uid);
 			if (!u) return { st: 401, error: '请先登录' };
-			if (!this.env.RESEND_API_KEY) return { st: 200, ok: true, nomail: true };
+			if (!this.env.RESEND_API_KEY) return { st: 200, ok: true, nomail: true, totp: !!u.totp };
 			{ const b = await this.mailBlock(); if (b) return b; }
 			if (!(await this.hit('ws1:' + uid, 1, 60e3))) return { st: 429, error: '发得太快了，1 分钟后再试' };
 			if (!(await this.hit('wsd:' + uid, 20, DAY))) return { st: 429, error: '今天发的验证码太多了，明天再试' };
@@ -158,10 +161,13 @@ export function installFam(Hub) {
 			if (!ok) return (await this.mailBlock()) || { st: 502, error: '验证码邮件没发出去，稍后再试' };
 			return { st: 200, ok: true, mail: mask(u.email) };
 		},
+		async totpHas(uid) { const u = await this.ctx.storage.get('u:' + uid); return !!(u && u.totp); },
 		async webSudo(uid, sid, code) {
-			if (this.env.RESEND_API_KEY) {
+			const tv = await this.totpSudoOk(uid, code);
+			if (!tv && !this.env.RESEND_API_KEY && (await this.totpHas(uid))) return { st: 400, error: '输验证器 App 上的 6 位数字' };
+			if (this.env.RESEND_API_KEY && !tv) {
 				const k = 'c:ws:' + uid, c = await this.ctx.storage.get(k);
-				if (!c || c.exp < Date.now()) return { st: 400, error: '验证码过期了，重新发一个' };
+				if (!c || c.exp < Date.now()) return { st: 400, error: (await this.totpHas(uid)) ? '验证码不对' : '验证码过期了，重新发一个' };
 				if (!safeEq(String(code || '').trim(), c.code)) { c.tries++; if (c.tries >= 5) await this.ctx.storage.delete(k); else await this.ctx.storage.put(k, c); return { st: 400, error: '验证码不对' }; }
 				await this.ctx.storage.delete(k);
 			}
@@ -506,7 +512,7 @@ export async function famAdmin(a, H, body, m) {
 	if (a[2] === 'sub') return out(await H.famAdminSub(sub, { target: String(b.target || ''), remove: !!b.remove, perms: b.perms, off: b.off, subExp: b.subExp }, why));
 	return J({ error: 'not found' }, 404);
 }
-// 账号相关（让所有设备退出、改登录邮箱）：/api/admin/famuser/<uid>/kick|email
+// 账号相关（让所有设备退出、改登录邮箱、关掉两步验证）：/api/admin/famuser/<uid>/kick|email|totp_off
 export async function famAdminUser(a, H, body, m) {
 	if (a[0] !== 'famuser' || m !== 'POST' || !UID_RE.test(a[1] || '')) return null;
 	const b = (await body()) || {}, why = String(b.why || '').trim().slice(0, 200);
@@ -514,5 +520,6 @@ export async function famAdminUser(a, H, body, m) {
 	const out = (r) => { const { st, ...rest } = r; return J(rest, st || 200); };
 	if (a[2] === 'kick') return out(await H.famAdminKick(a[1], why));
 	if (a[2] === 'email') return out(await H.famAdminEmail(a[1], String(b.email || ''), why));
+	if (a[2] === 'totp_off') return out(await H.totpAdminOff(a[1], why));
 	return J({ error: 'not found' }, 404);
 }

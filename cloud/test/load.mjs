@@ -6,7 +6,7 @@ import { pathToFileURL } from 'url';
 const SHIM = 'class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }';
 export async function load() {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcp-w-'));
-	for (const f of ['worker.js', 'hub.js', 'ops.js', 'v5.js', 'fam.js', 'inst.js', 'files.js', 'changelog.js', 'help.js', 'faq-default.js', 'site.js']) {
+	for (const f of ['worker.js', 'hub.js', 'ops.js', 'v5.js', 'fam.js', 'inst.js', 'totp.js', 'files.js', 'changelog.js', 'help.js', 'faq-default.js', 'site.js']) {
 		let src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 		// site.js 只有页面和文件内容（里面官网组件的 import 是给浏览器的，不能改）
 		if (f !== 'site.js') src = src.replace("import { DurableObject } from 'cloudflare:workers';", SHIM).replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'");

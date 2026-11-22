@@ -1772,7 +1772,7 @@ function sudoSet(x) { SUDO = x; try { if (x) sessionStorage.setItem('rp_sudo', J
 // 发过验证码：10 分钟内一直显示输入框（去邮箱复制验证码再回来、页面刷新、侧滑返回都不会丢）；1 分钟内不能重发（官网也这么限制）
 const SENT_MS = 600e3, RESEND_S = 60;
 const devTag = () => (store.get('rp_dev') || '').slice(0, 8);
-const CODE = { val: '', tried: '' }; // 输到一半的验证码（只在内存里）
+const CODE = { val: '', tried: '', tf: false }; // 输到一半的验证码（只在内存里）；tf：改成输验证器上的码（6.0 第 5 项，官网账号开了两步验证的）
 function sentGet() { try { const x = JSON.parse(store.get('rp_sudo_sent') || 'null'); return x && x.dev === devTag() && Date.now() >= x.at && Date.now() - x.at < SENT_MS ? x : null; } catch (e) { return null; } }
 function sentSet(x) { if (x) store.set('rp_sudo_sent', JSON.stringify({ ...x, dev: devTag() })); else store.del('rp_sudo_sent'); CODE.val = ''; CODE.tried = ''; }
 const resendLeft = () => { const s = sentGet(); return s ? Math.max(0, RESEND_S - Math.floor((Date.now() - s.at) / 1000)) : 0; };
@@ -1787,9 +1787,15 @@ function resendTick() {
 	rsTimer = setInterval(upd, 1000); upd();
 }
 // 验证码这一块（敏感信息里、「先确认是你本人」弹窗里共用）：没发过显示「发验证码」，发过了显示输入框
+const tfOn = () => !!(ME && ME.me && ME.me.totp);
 function codeHtml(email) {
 	const s = sentGet();
-	if (!s) return `<button class="btn primary" data-send style="width:100%">发验证码到 ${esc(email || '我的邮箱')}</button>`;
+	// 开了两步验证的：直接输验证器上的 6 位数字，不用等邮件
+	if (!s && CODE.tf) return `<div class="mpcode"><p class="mphint muted">打开手机上的验证器 App，输「路由器面板」下面现在显示的 6 位数字</p>
+	<input class="input nccode" data-code inputmode="numeric" autocomplete="one-time-code" placeholder="6 位数字" aria-label="验证器上的 6 位数字">
+	<button class="btn primary" data-ok style="width:100%;margin-top:10px">确认</button>
+	<button class="btn" data-send style="width:100%;margin-top:8px">改成发验证码到邮箱</button></div>`;
+	if (!s) return `<button class="btn primary" data-send style="width:100%">发验证码到 ${esc(email || '我的邮箱')}</button>${tfOn() ? '<button class="btn" data-tf style="width:100%;margin-top:8px">用验证器 App 上的码</button>' : ''}`;
 	return `<div class="mpcode"><p class="mphint muted">验证码发到了 ${esc(s.mail || email || '你的邮箱')}，10 分钟内有效</p>
 	<input class="input nccode" data-code inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" aria-label="验证码">
 	<button class="btn primary" data-ok style="width:100%;margin-top:10px">确认</button>
@@ -1798,7 +1804,9 @@ function codeHtml(email) {
 // 发验证码：官网没开邮件服务时直接确认（返回 ok）；发出去了返回 sent；出错已经提示过，返回 undefined
 async function sudoSend(btn, want) {
 	return busy(btn, async () => {
+		CODE.tf = false;
 		const r = await P('fam', { op: 'sudo_code' }, 30000);
+		if (r.nomail && r.totp) { CODE.tf = true; CODE.val = ''; CODE.tried = ''; return { sent: true }; } // 没开邮件服务、开了两步验证：要输验证器上的码
 		if (r.nomail) { const x = await P('fam', { op: 'sudo', code: '', want: want ? 'secret' : undefined }, 30000); sudoSet({ tok: x.sudo, exp: x.exp }); sentSet(null); return { ok: true, secret: x.secret }; }
 		sentSet({ at: Date.now(), mail: r.mail || '' });
 		return { sent: true };
@@ -1809,7 +1817,7 @@ async function sudoVerify(btn, code, want) {
 	return busy(btn, async () => {
 		try {
 			const x = await P('fam', { op: 'sudo', code, want: want ? 'secret' : undefined }, 30000);
-			sudoSet({ tok: x.sudo, exp: x.exp }); sentSet(null);
+			sudoSet({ tok: x.sudo, exp: x.exp }); sentSet(null); CODE.tf = false;
 			return { ok: true, secret: x.secret };
 		} catch (e) { if (/过期/.test(e.message)) { sentSet(null); return { expired: true, msg: e.message }; } throw e; }
 	}, '核对中');
@@ -1845,6 +1853,8 @@ function codeBind(root, opts) {
 		if (r && r.ok) opts.done(r);
 		else if (r && r.sent) opts.redraw(true);
 	};
+	const tb = root.querySelector('[data-tf]');
+	if (tb) tb.onclick = () => { CODE.tf = true; CODE.val = ''; CODE.tried = ''; opts.redraw(true); };
 	resendTick();
 }
 const codeFocus = (root) => setTimeout(() => { const i = root.querySelector('[data-code]'); if (i && i.isConnected) i.focus(); }, 60);
@@ -1853,7 +1863,7 @@ function needSudo(why) {
 	if (sudoOn()) return Promise.resolve(SUDO.tok);
 	const email = (ME && ME.me && ME.me.email) || '';
 	return modal(`<div class="sheethead"><h3>先确认是你本人</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 12px;line-height:1.7">${esc(why || '这个操作要先确认是你本人')}：发一个验证码到你的官网账号邮箱，输进来就行。10 分钟内不用再输。</p>
+	<p class="muted" style="margin:0 0 12px;line-height:1.7">${esc(why || '这个操作要先确认是你本人')}：${tfOn() ? '输验证器 App 上的 6 位数字，或者发一个验证码到你的官网账号邮箱' : '发一个验证码到你的官网账号邮箱，输进来就行'}。10 分钟内不用再输。</p>
 	<div data-cwrap>${codeHtml(email)}</div>`,
 	(m, close) => {
 		const w = m.querySelector('[data-cwrap]');

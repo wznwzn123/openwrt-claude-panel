@@ -22,12 +22,12 @@ function famOp(a) {
 	const needSudo = ['secret', 'sess_out', 'join_create', 'join_cancel', 'sub_set', 'sub_remove', 'transfer'];
 	if (needSudo.includes(a.op) && (!a.sudo || a.sudo !== F.sudo)) return { error: '要先确认是你本人（邮箱验证码）' };
 	switch (a.op) {
-		case 'me': return { ok: true, me: { uid: 'abcdefghijk2', name: F.name, email: 'xi***@qq.com', avatar: F.avatar, created: Date.now() - 5 * 864e5 }, role: main ? 'main' : 'sub', perms: main ? ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'] : ['msg', 'node', 'speed'], subExp: 0, router: { name: '客厅 Kwrt', model: 'Xiaomi AX3000T', created: Date.now() - 5 * 864e5, exp: Date.now() + 7 * 864e5 } };
+		case 'me': return { ok: true, me: { uid: 'abcdefghijk2', name: F.name, email: 'xi***@qq.com', avatar: F.avatar, created: Date.now() - 5 * 864e5, totp: !!F.totp }, role: main ? 'main' : 'sub', perms: main ? ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'] : ['msg', 'node', 'speed'], subExp: 0, router: { name: '客厅 Kwrt', model: 'Xiaomi AX3000T', created: Date.now() - 5 * 864e5, exp: Date.now() + 7 * 864e5 } };
 		case 'members': return main ? { ok: true, owner: { uid: 'abcdefghijk2', name: F.name, email: 'xi***@qq.com', avatar: F.avatar }, subs: F.subs, joins: F.joins } : { ok: true, owner: { uid: 'own000000002', name: '妈妈', email: 'ma***@qq.com', avatar: '' }, subs: [], joins: [] };
 		case 'log': return { ok: true, list: LOG };
 		case 'profile': if (a.name !== undefined) F.name = a.name; if (a.avatar !== undefined) F.avatar = a.avatar; return { ok: true };
 		case 'sudo_code': return { ok: true, mail: 'xi***@qq.com' };
-		case 'sudo': if (a.code !== '123456') return { error: '验证码不对' }; F.sudo = 'sudotokensudotokensudotok'; return { ok: true, sudo: F.sudo, exp: Date.now() + 600e3, ...(a.want === 'secret' ? { secret: famOp({ op: 'secret', sudo: F.sudo }) } : {}) };
+		case 'sudo': if (a.code !== '123456' && !(F.totp && a.code === '654321')) return { error: '验证码不对' }; F.sudo = 'sudotokensudotokensudotok'; return { ok: true, sudo: F.sudo, exp: Date.now() + 600e3, ...(a.want === 'secret' ? { secret: famOp({ op: 'secret', sudo: F.sudo }) } : {}) };
 		case 'page': return { ok: true, me: famOp({ op: 'me' }), members: famOp({ op: 'members' }), log: LOG, secret: a.sudo && a.sudo === F.sudo ? famOp({ op: 'secret', sudo: a.sudo }) : null };
 		case 'secret': return { ok: true, email: 'xiaoming2026@qq.com', verified: true, sessions: F.sessOut ? [] : [{ id: 's1', ua: '安卓手机 · Edge', place: '台北', at: Date.now() - 864e5, last: Date.now() - 3600e3 }, { id: 's2', ua: 'Windows 电脑 · Chrome', place: '台北', at: Date.now() - 2 * 864e5, last: Date.now() - 7200e3 }], logins: [{ t: Date.now() - 864e5, k: 'user', ok: true, why: '登录成功', place: '台北', ua: '安卓手机' }, { t: Date.now() - 864e5 - 60e3, k: 'user', ok: false, why: '密码错了', place: '台北', ua: '安卓手机' }, { t: Date.now() - 5 * 864e5, k: 'reg', ok: true, why: '注册', place: '台北', ua: 'Windows 电脑' }] };
 		case 'sess_out': F.sessOut++; return { ok: true };
@@ -225,6 +225,21 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		await p4.click('#meBox [data-mp="ktab"]'); await W(700);
 		ok('[应急登录码] 平板网址：带着凭证才拿到，先打码' + T, /beat\/t\//.test(await p4.locator('.modal').last().textContent()) && (await p4.locator('.modal .keybox.blur').count()) === 1 && calls.some((c) => c.m === 'tablet_url' && c.p.sudo === LSU));
 		await c4.close(); EMERG = false;
+		// 6.0 第 5 项：官网账号开了两步验证的，确认本人可以直接输验证器上的码，不用发邮件
+		F.totp = true; F.sudo = '';
+		const c5 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });
+		const p5 = await c5.newPage(); p5.on('pageerror', (e) => problems.push('页面错误5' + T + '：' + e.message));
+		await p5.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); localStorage.setItem('rp_dev', 'abcd1234.' + 'x'.repeat(32)); sessionStorage.clear(); localStorage.removeItem('rp_sudo_sent'); });
+		await p5.goto('http://localhost:8181/panel/?p=me'); await W(2400);
+		ok('[两步验证] 敏感信息锁着时：除了发邮箱验证码，还有「用验证器 App 上的码」' + T, await p5.isVisible('#meBox [data-cwrap] [data-tf]') && await p5.isVisible('#meBox [data-cwrap] [data-send]'));
+		const s5 = calls.filter((c) => c.m === 'fam' && c.p.op === 'sudo_code').length;
+		await p5.click('#meBox [data-cwrap] [data-tf]'); await W(400);
+		ok('[两步验证] 点了：出现输入框，说清楚输验证器上的 6 位数字，没发邮件' + T, await p5.isVisible('#meBox [data-code]') && /验证器 App/.test(await p5.textContent('#meBox [data-cwrap]')) && calls.filter((c) => c.m === 'fam' && c.p.op === 'sudo_code').length === s5);
+		ok('[两步验证] 整页不横向滚动' + T, (await p5.evaluate(() => document.documentElement.scrollWidth)) <= w);
+		await p5.locator('#meBox [data-cwrap]').screenshot({ path: path.join(SHOT, `me-tf-${w}.png`) });
+		await p5.fill('#meBox [data-code]', '654321'); await W(1500);
+		ok('[两步验证] 输对验证器上的码：直接解锁敏感信息' + T, /xiaoming2026@qq\.com/.test(await p5.textContent('#meBox')));
+		await c5.close(); F.totp = false; F.sudo = '';
 		// 自建版：顶部没有头像；侧边栏有「我的主页」（只有敏感信息）
 		hosted = false; ROLE = 'owner';
 		const ctx2 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900 });

@@ -1,6 +1,8 @@
 #!/bin/sh
 # 一键更新：下载跟现在同一种的最新安装包 → 校验 → 备份现在的程序 → 后台安装（保留所有设置）→ 检查面板 → 不行就自动退回
 # 用法：cmcp-update start    面板点「一键更新」时调用：把自己复制到 /tmp 再转到后台运行，马上返回
+#       cmcp-update start beta v6.0.2   更新到尝鲜版（6.0 第 58 项：官网挑中的尝鲜用户；照样验签）
+#       cmcp-update start stable        退回正式版（尝鲜版比正式版新，退回时允许装比现在旧的正式版；只从「最新正式版」下载）
 #       cmcp-update status   看进度（/tmp/cmcp_update.json）
 #       cmcp-update run      真正干活（start 会调用它，一般不用手动运行）
 # 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_DL / CMCP_GH（下载地址）、CMCP_ST（进度文件）、CMCP_NOSVC=1（不重启服务）
@@ -11,7 +13,8 @@ LOCK=/tmp/cmcp_update.lock
 W=/tmp/cmcp_upd
 BK=/tmp/cmcp_upd_backup.tgz
 LOG=/tmp/cmcp_update.log
-GH=${CMCP_GH:-https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download}
+GHR=${CMCP_GHR:-https://github.com/wznwzn123/openwrt-claude-panel/releases}
+GH=${CMCP_GH:-$GHR/latest/download}
 # 安全加固：发布时用开发者的私钥给 SHA256SUMS 签名（私钥只在 GitHub 的仓库密钥里），这里用写死的公钥验签：
 # 官网（下载中转）被人控制了，也没法让路由器装上改过的安装包。UPUB 是 usign 格式的公钥，PPUB 是同一把公钥给 openssl 用的写法，
 # STSIG 是固定内容「cmcp release key selftest」的签名：先拿它试一下这台路由器的验签工具能不能用。
@@ -99,9 +102,9 @@ start)
 	# 转到后台：用 setsid 脱离面板进程（面板重启也不会带走它）。
 	# 不用 start-stop-daemon：BusyBox 版的 -x /bin/sh 看到别的 sh 在跑（比如看门狗）就以为「已经在跑」而不启动
 	if command -v setsid >/dev/null 2>&1; then
-		( setsid /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
+		( setsid /bin/sh /tmp/cmcp-update.run run "$2" "$3" </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	else
-		( trap '' HUP; /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
+		( trap '' HUP; /bin/sh /tmp/cmcp-update.run run "$2" "$3" </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	fi
 	# 等后台真的跑起来（拿到锁、或者进度已经变了）再返回：免得面板这边一结束就把还没脱离的后台进程带走。
 	# 最多等 10 次（BusyBox 的 sleep 不认小数时每次 1 秒，也不会超过面板等待的 20 秒）
@@ -117,6 +120,13 @@ run)
 	mkdir "$LOCK" 2>/dev/null || exit 0
 	trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 	: > "$LOG"
+	# 尝鲜版：从指定版本下载（官网 /dl/t/版本/，不行再直连 GitHub 这个版本）；退回正式版：允许装比现在旧的「最新正式版」
+	CH=""
+	case "$2" in
+		beta) echo "$3" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { state failed "尝鲜版的版本号不对"; exit 1; }
+			CH=beta; BASE="${CMCP_DL:-${HUB:-https://yrlove520.com}/dl}/t/$3"; GH="$GHR/download/$3" ;;
+		stable) CH=stable; CMCP_ALLOW_OLD=1 ;;
+	esac
 	rm -rf "$W"; mkdir -p "$W" && cd "$W" || { state failed "临时目录建不了"; exit 1; }
 	# 1. 下载：先走官网（大陆快），不行再直连 GitHub
 	# 2. 校验：校验值文件的签名对得上、安装包跟校验值对得上才装（6.0 起一律验签，没有验签工具先自动装）；官网那份不对就再试 GitHub 的
@@ -125,6 +135,7 @@ run)
 		echo "这台路由器没有能用的验签工具（usign，或者能验 Ed25519 签名的 openssl）：先自动安装" >>"$LOG"
 		state downloading "正在安装验签工具（usign）"
 		if ! inst_v; then
+			[ -x "$R/usr/sbin/cmcp-compat" ] && "$R/usr/sbin/cmcp-compat" fail update "没有验签工具（usign / openssl），自动安装 usign 也没成功" >/dev/null 2>&1
 			state failed "这台路由器没有能验证安装包签名的工具（usign），自动安装也没成功（可能连不上软件源），为了安全没有更新。在路由器后台「系统 → 软件包」里装 usign 后再试，或者在路由器终端运行官网上的安装命令手动更新"
 			exit 1
 		fi
@@ -132,7 +143,9 @@ run)
 	fi
 	echo "验签工具：$VT" >>"$LOG"
 	got=""; why=""; bad=""
-	for b in "$BASE" "$GH"; do
+	# 退回正式版时先直连 GitHub（官网那份万一被人换成更旧的版本也装不上；签名照样要对）
+	if [ "$CH" = stable ]; then set -- "$GH" "$BASE"; else set -- "$BASE" "$GH"; fi
+	for b in "$@"; do
 		rm -f "$PKG" SHA256SUMS SHA256SUMS.sig2 one.sum
 		if ! curl -fsSL -m 180 -o "$PKG" "$b/$PKG" 2>>"$LOG" || ! curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG"; then why="下载失败：连不上官网和 GitHub，稍后再试"; continue; fi
 		if ! curl -fsSL -m 30 -o SHA256SUMS.sig2 "$b/SHA256SUMS.sig2" 2>>"$LOG"; then bad="安装包没有签名，为了安全没有安装，稍后再试"; echo "没有签名：$b" >>"$LOG"; continue; fi
@@ -144,7 +157,7 @@ run)
 	[ -n "$got" ] || { state failed "${bad:-$why}"; exit 1; }
 	tar xzf "$PKG" 2>>"$LOG" && [ -f openwrt-claude-panel/install.sh ] || { state failed "安装包解压失败"; exit 1; }
 	TO=$(sed -n 's/^PKG_VER=//p' openwrt-claude-panel/EDITION 2>/dev/null)
-	if [ -n "$TO" ] && [ "$TO" = "$FROM" ] && [ "$2" != force ]; then state done "已经是最新版（v$TO）"; rm -rf "$W"; exit 0; fi
+	if [ -n "$TO" ] && [ "$TO" = "$FROM" ] && [ "$2" != force ] && [ "$CH" != stable ]; then state done "已经是最新版（v$TO）"; rm -rf "$W"; exit 0; fi
 	# 安全加固（第二轮）：不装比现在旧的版本——有人把以前发布过、签名也对的旧安装包放到下载地址，路由器也不会退回到有已知问题的旧版本。
 	# 真要退回旧版：在路由器终端运行 CMCP_ALLOW_OLD=1 cmcp-update run
 	if [ -n "$TO" ] && [ -n "$FROM" ] && vlt "$TO" "$FROM" && [ "$CMCP_ALLOW_OLD" != 1 ]; then echo "下载到的版本 $TO 比现在的 $FROM 旧，没有安装" >>"$LOG"; state failed "下载到的是旧版本（v$TO，比现在的 v$FROM 旧），为了安全没有安装"; rm -rf "$W"; exit 1; fi

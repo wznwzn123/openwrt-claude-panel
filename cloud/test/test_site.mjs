@@ -444,6 +444,7 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 	ok('[安全] 不写「所有安全问题都已解决」「进不了」这类绝对的话', !/所有安全问题|进不了|绝对安全|100%/.test(words), (words.match(/.{0,30}(所有安全问题|进不了|绝对安全|100%).{0,30}/) || [''])[0]);
 	// 报告表单（6.0 第 67 项：要先登录官网账号）
 	ok('[报告] 没登录：不显示表单，提示先登录，有「登录 / 注册」按钮', !(await page.isVisible('#rpForm')) && await page.isVisible('#rpLogin') && (await page.getAttribute('#rpLogin a', 'href')) === '/app#login');
+	{ const li = await page.$$eval('ul.measures > li', (xs) => xs.map((x) => x.textContent.trim())); ok('[安全] 措施列表没有重复的条目', li.length > 10 && new Set(li).size === li.length, li.length + ' 条'); }
 	if (SHOTS) await page.screenshot({ path: SHOTS + '/site-security.png', fullPage: true });
 	ok('[隐私/安全] 页面没有报错', !e2.length, e2.join(' | '));
 	await ctx.close();

@@ -20,6 +20,7 @@ export const navGroups = ref<NavGroup[]>([
   { key: 'g-dev', label: '用户与路由器', icon: 'router', items: [
     { key: 'devices', label: '路由器', icon: 'router', path: '/devices' },
     { key: 'users', label: '账号', icon: 'users', path: '/users' },
+    { key: 'compat', label: '兼容性', icon: 'layers', path: '/compat' },
   ] },
   { key: 'g-svc', label: '开通与续期', icon: 'ticket', items: [
     { key: 'applications', label: '续期申请', icon: 'mail', path: '/applications' },

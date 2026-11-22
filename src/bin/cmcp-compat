@@ -1,0 +1,132 @@
+#!/usr/bin/ucode
+// 6.0 第 57、58、60 项：兼容情况（匿名）、尝鲜、修好了通知
+// 用法：cmcp-compat fail 功能 原因   某个功能开不了：记下来（下次上报时一起报，同一个问题只记一条）
+//       cmcp-compat probe            看这台路由器哪些功能能用（打印 JSON，不上报）
+//       cmcp-compat send [now]       上报一次（定时任务每天一次，先随机等 0–30 分钟；now 马上报）
+//       cmcp-compat show             看上一次报了什么（打印 JSON）
+// 报的只有：随机编号（这台路由器自己生成的，不跟账号挂钩）、面板版本、型号、平台、系统版本、内核、内存和闪存大小、
+// 哪些功能能用、开不了的功能和原因。不报账号、IP、设备、网址、钥匙、任何设置的内容。
+// 关掉：面板「我的主页 → 设置 → 帮助改进兼容性」，或者 touch /etc/claude-mcp/compat_off
+// 报名了尝鲜的（面板「一键更新」里报名，/etc/claude-mcp/beta_want）：上报时一起说「想尝鲜」，官网挑中了会告诉这台路由器
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile, writefile, stat, unlink } from 'fs';
+
+const D = getenv('CMCP_COMPAT_D') || L.D;
+const FAIL = D + '/compat_fail.json', RES = D + '/compat_res.json', ID = D + '/compat_id', OFF = D + '/compat_off', BW = D + '/beta_want', NOTED = D + '/compat_noted.json';
+const FEATS = ['install', 'tunnel', 'update', 'pause', 'ban', 'backup', 'lfull', 'sudo', 'proxy', 'wifi', 'other'];
+const has = (c) => length(trim(L.sh('command -v ' + c))) > 0;
+const ok = (cmd) => trim(L.sh(cmd + ' >/dev/null 2>&1 && echo Y')) == 'Y';
+
+function hub() {
+	let h = getenv('CMCP_COMPAT_HUB');
+	if (h) return h;
+	h = match(readfile(L.D + '/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/)?.[2];
+	return h ?? 'https://yrlove520.com';
+}
+function myid() {
+	let s = trim(readfile(ID) ?? '');
+	if (match(s, /^[a-z2-9]{16}$/)) return s;
+	const A = 'abcdefghijkmnpqrstuvwxyz23456789';
+	let r = trim(L.sh('head -c 64 /dev/urandom 2>/dev/null | od -An -tu1 2>/dev/null')), n = map(filter(split(r, /\s+/), (x) => length(x)), (x) => +x);
+	if (length(n) < 16) return null;
+	s = join('', map(slice(n, 0, 16), (x) => substr(A, x % 32, 1)));
+	writefile(ID, s);
+	return s;
+}
+function ver() {
+	let o = {};
+	for (let l in split(readfile(L.D + '/version') ?? '', '\n')) { let m = match(l, /^([A-Z]+)=(.*)$/); if (m) o[m[1]] = m[2]; }
+	return o;
+}
+// 哪些功能能用（只看有没有对应的工具，不改任何东西）
+function probe() {
+	let rel = {};
+	for (let l in split(readfile('/etc/openwrt_release') ?? '', '\n')) { let m = match(l, /^([A-Z_]+)='?([^']*)'?$/); if (m) rel[m[1]] = m[2]; }
+	let model = trim(L.sh("ubus call system board 2>/dev/null | sed -n 's/.*\"model\": *\"\\([^\"]*\\)\".*/\\1/p' | head -n1")) || trim(readfile('/tmp/sysinfo/model') ?? '');
+	let mi = readfile('/proc/meminfo') ?? '', mem = int(+(match(mi, /MemTotal:\s+(\d+)/)?.[1] ?? 0) / 1024);
+	let fl = +trim(L.sh("df -k /overlay 2>/dev/null | awk 'NR>1{s=$2} END{print int(s/1024)}'")) || +trim(L.sh("df -k / 2>/dev/null | awk 'NR>1{s=$2} END{print int(s/1024)}'")) || 0;
+	let nft = ok('nft list tables'), ipset = has('ipset') && ok('ipset list -n');
+	let usign = has('usign'), ossl = has('openssl');
+	let cfd = has('cloudflared') ? 'flash' : stat(L.D + '/cfd.ram') ? 'ram' : 'none';
+	let wifi = +trim(L.sh("uci -q show wireless 2>/dev/null | grep -c '=wifi-device$'")) || 0;
+	let px = [];
+	for (let p in ['openclash', 'nikki', 'passwall', 'passwall2', 'homeproxy', 'shadowsocksr']) if (stat('/etc/init.d/' + p)) push(px, p);
+	return {
+		model: substr(model, 0, 80), plat: (rel.DISTRIB_TARGET ?? '?') + ' · ' + (rel.DISTRIB_ARCH ?? '?'), sys: substr(rel.DISTRIB_DESCRIPTION ?? '', 0, 80),
+		kernel: trim(L.sh('uname -r')), mem, flash: fl,
+		caps: {
+			fw: has('fw4') ? 'fw4' : has('fw3') ? 'fw3' : '?', pkg: has('apk') ? 'apk' : has('opkg') ? 'opkg' : '?',
+			nft: nft ? 'ok' : 'no', ipset: ipset ? 'ok' : 'no', pause: nft ? 'nft' : ipset ? 'ipset' : 'no',
+			verify: usign ? 'usign' : ossl ? 'openssl' : 'no', crypt: ossl ? 'openssl' : 'builtin',
+			rpcd: ok('ubus list session') ? 'ok' : 'no', cfd, wifi: '' + wifi,
+			ucode: stat('/usr/libexec/cmcp-ucode') ? 'private' : 'system', proxy: join(',', px) || 'none',
+		},
+	};
+}
+// 原因里不能带个人信息：网址、邮箱、MAC、IP、像钥匙的长串一律换掉再记（官网收到后还会再洗一遍）
+function scrub(t) {
+	t = replace('' + (t ?? ''), /[[:cntrl:]]/g, ' ');
+	t = replace(t, /[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^ "'<>]*/g, '<网址>');
+	t = replace(t, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<邮箱>');
+	t = replace(t, /[0-9a-fA-F]{2}([:-][0-9a-fA-F]{2}){5}/g, '<MAC>');
+	t = replace(t, /([0-9a-fA-F]{1,4}:){3,7}[0-9a-fA-F]{1,4}/g, '<IP>');
+	t = replace(t, /([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{0,4}::[0-9a-fA-F:]*/g, '<IP>');
+	t = replace(t, /[0-9]{1,3}(\.[0-9]{1,3}){3}/g, '<IP>');
+	t = replace(t, /[A-Za-z0-9_+\/=-]{24,}/g, '<…>');
+	return t;
+}
+function fail(f, why) {
+	f = index(FEATS, f) >= 0 ? f : 'other';
+	why = substr(scrub(why), 0, 300);
+	if (!length(trim(why))) return;
+	let l = L.readj(FAIL, []);
+	if (type(l) != 'array') l = [];
+	for (let x in l) if (x.f == f && x.why == why) { x.n = (x.n ?? 1) + 1; x.last = L.now(); L.writej(FAIL, l); return; }
+	push(l, { f, why, at: L.now(), last: L.now(), n: 1 });
+	L.writej(FAIL, slice(l, -20));
+}
+function send() {
+	let beta = !!stat(BW);
+	if (stat(OFF) && !beta) return { off: true };
+	let id = myid();
+	if (!id) return { error: 'no id' };
+	let v = ver(), p = probe();
+	let fails = stat(OFF) ? [] : L.readj(FAIL, []);
+	let body = stat(OFF) ? { id, ver: v.VER ?? '', beta } : { id, ver: v.VER ?? '', code: v.CODE ?? '', ...p, fails: map(type(fails) == 'array' ? fails : [], (x) => ({ f: x.f, why: x.why })), beta };
+	let tmp = '/tmp/cmcp_compat_body.json';
+	writefile(tmp, sprintf('%J', body));
+	let out = L.sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary @%s %s", tmp, L.shq(hub() + '/api/compat')));
+	unlink(tmp);
+	let r = null; try { r = json(out); } catch (e) {}
+	if (type(r) != 'object' || !r.ok) return { error: '没报上去', out: substr(out ?? '', 0, 200) };
+	// 报上去了：开不了的功能清掉（官网那边记着），留着回复给面板看（尝鲜挑中没有、哪些问题修好了）
+	if (!stat(OFF)) L.writej(FAIL, []);
+	r.at = L.now(); r.sent = body;
+	L.writej(RES, r);
+	// 修好了：比现在的版本新，就推送一次（同一个问题只推一次）
+	let noted = L.readj(NOTED, []), cur = v.VER ?? '';
+	if (type(noted) != 'array') noted = [];
+	for (let x in r.fixed ?? []) {
+		if (index(noted, x.key) >= 0 || !match('' + x.ver, /^\d+\.\d+\.\d+$/)) continue;
+		let nv = map(split(x.ver, '.'), (n) => +n), cv = map(split(cur || '0.0.0', '.'), (n) => +n || 0), newer = false;
+		for (let i = 0; i < 3; i++) if (nv[i] != cv[i]) { newer = nv[i] > cv[i]; break; }
+		push(noted, x.key);
+		if (!newer) continue;
+		L.notify('ok', 'fix', '你遇到的问题修好了：' + (x.title ?? '') , '更新到 v' + x.ver + ' 就好' + (x.note ? '（' + x.note + '）' : '') + '。点开面板一键更新，设置都会保留。', 'fix-' + x.key);
+	}
+	L.writej(NOTED, slice(noted, -50));
+	return r;
+}
+
+let cmd = ARGV[0] ?? '';
+if (cmd == 'fail') { fail(ARGV[1], ARGV[2]); exit(0); }
+if (cmd == 'probe') { print(sprintf('%J\n', probe())); exit(0); }
+if (cmd == 'show') { print(sprintf('%J\n', L.readj(RES, {}))); exit(0); }
+if (cmd == 'send') {
+	if (ARGV[1] != 'now') { let n = (+trim(L.sh('echo $RANDOM')) || 0) % 1800; if (n > 0) L.sh('sleep ' + n); }
+	print(sprintf('%J\n', send()));
+	exit(0);
+}
+print('用法：cmcp-compat fail 功能 原因 | probe | send [now] | show\n');
+exit(1);

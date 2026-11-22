@@ -711,20 +711,22 @@ fi
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
 touch $CR
-sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann/d' $CR
+sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann\|\/usr\/sbin\/cmcp-compat/d' $CR
 echo '0 9 * * * /usr/sbin/cmcp-daily >/dev/null 2>&1' >> $CR
 # 面板走直连还是走代理，自动选能打开的那条
 echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 # 公告：每 30 分钟取一次（脚本里再随机等 0–10 分钟，大家错开），重要的推送到手机
 echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
 [ "$ED" = full ] && echo '7 4 * * * /usr/sbin/cmcp-backup auto >/dev/null 2>&1' >> $CR
+# 6.0 第 57 项：兼容情况每天匿名报一次（脚本里再随机等 0–30 分钟；每台路由器的钟点不一样，大家错开）。面板「设置」里能关
+echo "$(( $(date +%s) % 50 + 5 )) $(( $(date +%s) % 11 + 10 )) * * * /usr/sbin/cmcp-compat send >/dev/null 2>&1" >> $CR
 /etc/init.d/cron enable >/dev/null 2>&1 || true
 /etc/init.d/cron restart >/dev/null 2>&1 || true
 
 # ---------- 升级系统时保留 ----------
 [ "$UC_PRIV" = 1 ] && for p in $UCRT/ $UCW; do grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf; done
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -784,10 +786,14 @@ if [ -z "$DOMAIN" ]; then
 fi
 
 H=${DOMAIN:-<你的隧道域名>}
+# 6.0 第 57 项：装好先匿名报一次（后台，不等）：型号、系统、哪些功能能用；面板「系统操作 → 帮助改进、尝鲜」里能关
+( /usr/sbin/cmcp-compat send now >/dev/null 2>&1 & ) >/dev/null 2>&1
 echo
 echo "================ 安装完成 ================"
 echo
 echo "已安装：$NAME"
+echo "（帮助改进：路由器每天匿名报一次型号、系统版本、哪些功能能用，不含账号、IP 和任何设置，用来做兼容性表、修好问题后通知你；"
+echo "  不想报的话在面板「系统操作 → 帮助改进、尝鲜」里关掉）"
 if [ -n "$HUB" ]; then
 	# 5.2 托管版：路由器已经在官网账号里了（用官网给的安装码装的），回官网点「打开面板」就行，不用抄任何地址和码
 	echo

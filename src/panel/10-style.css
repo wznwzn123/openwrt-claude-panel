@@ -705,3 +705,6 @@ section.page{display:none}section.page.on{display:block}
 .modal.compact .btngrid.one{grid-template-columns:1fr}
 .cver{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:0 0 10px}
 .cver b{color:var(--text);font-size:15px}
+
+/* 6.0 第 57、58 项：帮助改进、尝鲜 */
+.kv.cpk{align-items:center;gap:14px}.kv.cpk>div{flex:1;min-width:0}.kv.cpk b{display:block;font-size:15px}.kv.cpk .muted{display:block;font-size:12.5px;line-height:1.55;margin-top:3px}

@@ -72,7 +72,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	U.force = false; U.latest = U.cur = '1.4.0';
 	await page.goto('http://localhost:8183/panel/?p=more'); await W(2500);
 	await page.click('[data-t="update"]'); await W(800);
-	ok('已经是最新版：检查更新说明是最新', /已经是最新版/.test(await page.textContent('.modal')) && !(await page.isVisible('.modal [data-go]')));
+	ok('已经是最新版：检查更新说明是最新', /已经是最新(版|的正式版)/.test(await page.textContent('.modal')) && !(await page.isVisible('.modal [data-go]')));
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));
 	console.log(`\n通过 ${results.filter((r) => r[1]).length}/${results.length}`);

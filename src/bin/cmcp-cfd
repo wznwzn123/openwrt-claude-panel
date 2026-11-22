@@ -86,8 +86,10 @@ n=0
 while :; do
 	fetch >/dev/null; rc=$?
 	[ $rc -eq 0 ] && break
-	[ $rc -eq 2 ] && exit 1   # 不支持的架构、没有校验值：重试也没用
+	[ $rc -eq 2 ] && { /usr/sbin/cmcp-compat fail tunnel "小闪存模式：这个架构（$(uname -m)）没有官方 cloudflared，或者安装包里没有校验值" >/dev/null 2>&1; exit 1; }   # 不支持的架构、没有校验值：重试也没用
 	n=$((n + 1))
+	# 6.0 第 57 项：开机后一直下不下来（第 6 次还不行）：记下来，下次兼容情况上报时一起报
+	[ $n -eq 6 ] && /usr/sbin/cmcp-compat fail tunnel "小闪存模式：开机后下载 cloudflared 一直失败" >/dev/null 2>&1
 	[ "$CFD_NOSLEEP" = 1 ] && exit 1
 	# 10、20、30… 秒，最多隔 2 分钟再试
 	w=$((n * 10)); [ $w -gt 120 ] && w=120

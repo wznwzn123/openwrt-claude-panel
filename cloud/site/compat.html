@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="pill" data-ground="sage" data-motion>
+<head>
+<meta charset="utf-8">
+<title>兼容性 · 路由器面板</title>
+<meta name="description" content="路由器面板在哪些路由器型号、哪些系统版本上实际装过，哪些功能能用。数据来自路由器匿名上报，只写实测到的。">
+<!--KIT_HEAD-->
+<style>
+/* ---------- 兼容性表（6.0 第 56 项）：只写路由器实际报上来的；按型号一行，五个功能各一格 ---------- */
+.cp-hero { padding-bottom: clamp(24px, 4vw, 36px); }
+.cp-sum { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: clamp(18px, 3vw, 26px); font-size: 14px; color: var(--muted); }
+.cp-sum b { color: var(--ink); font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.cp-body { padding: clamp(22px, 4vw, 36px) 0 clamp(56px, 8vw, 96px); }
+.cp-h { margin: 0 0 12px; font-size: 15px; font-weight: 650; color: var(--muted); }
+.cp-sec + .cp-sec { margin-top: clamp(30px, 5vw, 44px); }
+.cp-find { display: flex; gap: 10px; margin: 0 0 14px; }
+.cp-find input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--hair); background: var(--glass); color: var(--ink); font: inherit; font-size: 15px; }
+.cp-find input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cp-list { margin: 0; padding: 0; list-style: none; border-radius: 22px; background: var(--p-surface); border: 1px solid var(--hair); }
+.cp-row { padding: 14px clamp(14px, 2vw, 20px); }
+.cp-row + .cp-row { border-top: 1px solid var(--hair); }
+.cp-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cp-top h3 { margin: 0; font-size: 15.5px; font-weight: 650; overflow-wrap: anywhere; }
+.cp-top span { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cp-sys { margin: 3px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.cp-feats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cp-f { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--c); background: var(--cb); white-space: nowrap; }
+.cp-f::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.cp-ok { --c: var(--accent); --cb: rgb(74 222 128 / .12); } .cp-part { --c: #fbbf24; --cb: rgb(251 191 36 / .12); } .cp-no { --c: #f87171; --cb: rgb(248 113 113 / .12); }
+.cp-empty { padding: 18px; border-radius: 16px; background: var(--glass); border: 1px solid var(--hair); font-size: 14.5px; color: var(--muted); }
+.cp-more { display: block; width: 100%; margin-top: 12px; }
+.cp-note { margin: clamp(24px, 4vw, 34px) 0 0; font-size: 13px; line-height: 1.8; color: var(--muted); }
+.cp-note a { color: var(--accent); }
+</style>
+</head>
+<body>
+<!--KIT_NAV-->
+<main id="main">
+  <div class="pg-hero cp-hero">
+    <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="31" aria-hidden="true"></div>
+    <div class="wrap">
+      <h1>兼容性。</h1>
+      <p class="pg-sub">哪些路由器实际装过、哪些功能能用。数据来自路由器每天的匿名上报（型号、系统版本、功能能不能用），只写实测到的，每小时更新。</p>
+      <div class="cp-sum" id="cpSum" aria-live="polite"><span>正在读取…</span></div>
+    </div>
+  </div>
+  <div class="cp-body">
+    <div class="wrap">
+      <section class="cp-sec" aria-labelledby="cpMH">
+        <h2 class="cp-h" id="cpMH">按型号</h2>
+        <div class="cp-find"><input id="cpQ" type="search" placeholder="搜型号，比如 AX3000T、R4S、x86" aria-label="搜型号" autocomplete="off"></div>
+        <ul class="cp-list" id="cpModels"><li class="cp-row"><p class="cp-empty" style="margin:0">正在读取…</p></li></ul>
+        <button type="button" class="btn cp-more" id="cpMore" hidden>显示更多型号</button>
+      </section>
+      <section class="cp-sec" aria-labelledby="cpSH">
+        <h2 class="cp-h" id="cpSH">按系统版本</h2>
+        <ul class="cp-list" id="cpSys"></ul>
+      </section>
+      <p class="cp-note">「能用」按报上来的路由器算：比如「暂停上网 9/10 台」是 10 台里有 9 台能用。没列出来的型号不代表不能装，只是还没有人报过；装不上的时候，安装程序会问你要不要把出错信息发给我们。每台路由器只报一个随机编号、型号、系统和功能，不报账号、IP 和任何设置，面板「系统操作 → 帮助改进、尝鲜」里能关。说明见 <a href="/privacy">隐私政策</a>，系统要求见 <a href="/help">常见问题</a>。</p>
+    </div>
+  </div>
+</main>
+<!--KIT_FOOT-->
+<!--KIT_JS-->
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let T = null, shown = 40;
+  const chip = (name, f) => {
+    if (!f || !f.n) return '';
+    const cls = f.ok === f.n ? 'cp-ok' : f.ok === 0 ? 'cp-no' : 'cp-part';
+    return '<span class="cp-f ' + cls + '">' + esc(name) + ' ' + (f.ok === f.n ? (f.n > 1 ? f.n + ' 台都能用' : '能用') : f.ok === 0 ? '用不了' : f.ok + '/' + f.n + ' 台') + '</span>';
+  };
+  const feats = (x) => Object.entries(T.feats).map(([k, name]) => chip(name, x.feats[k])).join('');
+  function render() {
+    const q = $('cpQ').value.trim().toLowerCase();
+    const list = T.models.filter((m) => !q || m.model.toLowerCase().includes(q) || (m.plat || '').toLowerCase().includes(q));
+    $('cpModels').innerHTML = list.length ? list.slice(0, shown).map((m) => '<li class="cp-row"><div class="cp-top"><h3>' + esc(m.model) + '</h3><span>' + m.n + ' 台</span></div><p class="cp-sys">' + esc([m.plat, (m.sys || []).join('、')].filter(Boolean).join(' · ')) + '</p><div class="cp-feats">' + feats(m) + '</div></li>').join('')
+      : '<li class="cp-row"><p class="cp-empty" style="margin:0">' + (T.models.length ? '没找到「' + esc(q) + '」：还没有人报过这个型号，不代表不能装。' : '还没有路由器报上来。') + '</p></li>';
+    $('cpMore').hidden = list.length <= shown;
+    $('cpSys').innerHTML = T.systems.length ? T.systems.map((s) => '<li class="cp-row"><div class="cp-top"><h3>' + esc(s.sys) + '</h3><span>' + s.n + ' 台</span></div><div class="cp-feats">' + feats(s) + '</div></li>').join('') : '<li class="cp-row"><p class="cp-empty" style="margin:0">还没有数据。</p></li>';
+  }
+  $('cpQ').addEventListener('input', () => { shown = 40; render(); });
+  $('cpMore').onclick = () => { shown += 60; render(); };
+  fetch('/api/compat/table').then((r) => r.json()).then((j) => {
+    T = j; T.models = T.models || []; T.systems = T.systems || []; T.feats = T.feats || {};
+    $('cpSum').innerHTML = '<span><b>' + (T.routers || 0) + '</b>台路由器报过</span><span><b>' + T.models.length + '</b>种型号</span><span><b>' + T.systems.length + '</b>种系统版本</span>';
+    render();
+  }).catch(() => { $('cpSum').innerHTML = '<span>暂时读不出来，稍后刷新再看</span>'; $('cpModels').innerHTML = ''; });
+})();
+</script>
+</body>
+</html>

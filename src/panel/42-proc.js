@@ -297,6 +297,8 @@ function start() {
 	if (usp.get('ask') === 'pause' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(usp.get('mac') || '')) setTimeout(() => askPause(usp.get('mac')), 1600);
 	// 6.0 第 11 项：推送里点了「AI 想要…」：打开面板马上弹出「允许 / 拒绝」；平时打开 2 秒后查一次
 	setTimeout(() => aiCheck(true), usp.get('ask') === 'ai' ? 900 : 2500);
+	// 6.0 第 60 项：推送「你遇到的问题修好了」点进来：打开检查更新
+	if (usp.get('ask') === 'update') setTimeout(() => updSheet(false), 1400);
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}
 	const p = validPage(qp) ? qp : validPage(sp) ? sp : 'main';

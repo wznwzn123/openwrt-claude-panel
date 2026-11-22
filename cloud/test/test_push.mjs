@@ -115,6 +115,10 @@ ok('同一条 30 秒内不重复推', r.sent === 0 && sent.length === 2);
 	ok('[Claude 请求] 点通知打开面板弹出确认，按钮只有「去确认」', m3.url === './?p=home&ask=ai' && m3.actions?.length === 1 && m3.actions[0].title === '去确认' && m3.actions[0].url === './?p=home&ask=ai', JSON.stringify(m3));
 	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'ai', title: 'x', body: '', tag: 'aiask-../../x' });
 	ok('[Claude 请求] 标签不对：不加按钮', !JSON.parse(decrypt(sent[sent.length - 1].body).text).actions);
+	// 6.0 第 60 项：你遇到的问题修好了 → 点开面板打开「检查更新」
+	await call('POST', '/cloud/n/rk', { lvl: 'ok', kind: 'fix', title: '你遇到的问题修好了：一键更新', body: '更新到 v6.0.1 就好', tag: 'fix-update-0123456789' });
+	const m4 = JSON.parse(decrypt(sent[sent.length - 1].body).text);
+	ok('[修好了] 点通知打开面板的「检查更新」，按钮「去更新」', m4.url === './?p=home&ask=update' && m4.actions?.[0]?.title === '去更新', JSON.stringify(m4));
 }
 r = await (await call('POST', '/cloud/n/rk', { lvl: 'ok', kind: 'dns', title: 'DNS 恢复正常', body: '' })).json();
 ok('不同的通知照常推', r.sent === 1 && JSON.parse(decrypt(sent[sent.length - 1].body).text).title === '✅ DNS 恢复正常');

@@ -146,10 +146,10 @@ async function rpcOnce(method, params, timeoutMs, read, again) {
 	const j = await rpcPost('cgi-bin/mcp/pass', { jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', pass }, timeoutMs, read);
 	// 通行证过期了（路由器重启、锁屏作废）：换一张再试一次
 	if (j.error && j.error.code === -32013 && !again) { if (PS.pass === pass) passClear(); return rpcOnce(method, params, timeoutMs, read, true); }
-	return rpcResult(j).result;
+	return rpcResult(j, method).result;
 }
 // 路由器的回答：出错就按错误码报出来
-function rpcResult(j) {
+function rpcResult(j, method) {
 	const e = j && j.error;
 	if (!e) return j;
 	if (e.code === -32010 || e.code === -32011) {
@@ -160,6 +160,8 @@ function rpcResult(j) {
 	}
 	if (e.code === -32014) { const err = new LockError(e.message, e.data); try { lkNeedPin(err); } catch (x) {} throw err; }
 	if (e.code === -32015) throw new NeedPwError(e.message);
+	// 6.0 第 60 项：这台路由器开不了这个功能（路由器那边已经记下，下次兼容情况上报时报）：弹一个小卡片，能直接「报告这个问题」
+	if (e.code === -32020) { try { compatFailPop(e.message, method); } catch (x) {} const err = new Error(e.message); err.quiet = true; throw err; }
 	throw new Error(e.message);
 }
 async function rpcPost(path, bodyObj, timeoutMs, read) {
@@ -248,8 +250,10 @@ const base = (p) => String(p || '').split('/').pop();
 
 /* ---------- 提示与弹窗 ---------- */
 let toastT = 0, toastX = 0;
+let TOAST_MUTE = '';
 function toast(s, err) {
 	s = String(s ?? '');
+	if (err && TOAST_MUTE && s === TOAST_MUTE) return; // 已经弹过「开不了这个功能」的卡片，不再重复提示
 	const t = $('toast'), dur = Math.min(7000, 2800 + Math.max(0, s.length - 24) * 60);
 	const shown = !t.classList.contains('hidden') && !t.classList.contains('out');
 	clearTimeout(toastT); clearTimeout(toastX);

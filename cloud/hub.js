@@ -8,7 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES, CSP_SCRIPTS } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, COMPAT, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES, CSP_SCRIPTS } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser, permsOf } from './fam.js';
@@ -17,6 +17,7 @@ import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } fro
 import { changelogOf } from './changelog.js';
 import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 import { installTotp } from './totp.js';
+import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -1413,7 +1414,7 @@ async function captchaGate(env, H, kind, ip, tok) {
 	} catch (e) {}
 	return ok ? null : ask('人机验证没通过，再试一次');
 }
-const PGK = new Map([[HOME, 'HOME'], [APP, 'APP'], [ADMIN, 'ADMIN'], [PRIVACY, 'PRIVACY'], [SECURITY, 'SECURITY'], [REPLY, 'REPLY'], [NOTICE, 'NOTICE'], [TERMS, 'TERMS'], [CHANGELOG, 'CHANGELOG'], [STATUS, 'STATUS'], [HELP, 'HELP']]);
+const PGK = new Map([[HOME, 'HOME'], [APP, 'APP'], [ADMIN, 'ADMIN'], [PRIVACY, 'PRIVACY'], [SECURITY, 'SECURITY'], [REPLY, 'REPLY'], [NOTICE, 'NOTICE'], [TERMS, 'TERMS'], [CHANGELOG, 'CHANGELOG'], [STATUS, 'STATUS'], [HELP, 'HELP'], [COMPAT, 'COMPAT']]);
 export async function hubFetch(req, env) {
 	const u = new URL(req.url), p = u.pathname;
 	// www 开头的地址：跳到不带 www 的主域名（登录状态、收藏的网址都统一在主域名上）
@@ -1445,6 +1446,7 @@ export async function hubFetch(req, env) {
 		return J(rest, st);
 	}
 	// 安装失败上报前：问一下这次的安装码（或者路由器钥匙）认不认得出账号，认得出就不用填邮箱
+	{ const cx = await compatPublic(req, p, H, body); if (cx) return cx; }
 	if (p === '/api/report/who' && req.method === 'POST') { const b = await body(); const { st, ...rest } = await H.reportWho({ inv: String(b.inv || ''), sub: String(b.sub || ''), rkey: String(b.rkey || '') }, req.headers.get('cf-connecting-ip') || ''); return J(rest, st); }
 	if (p === '/api/report' && req.method === 'POST') {
 		const b = await body();
@@ -1495,6 +1497,7 @@ export async function hubFetch(req, env) {
 		if (fx) return fx;
 		// 管理后台传文件（公告附件、回复里的文件）：先领上传票
 		if (a[0] === 'up' && req.method === 'POST') { const b = await body(), r = await fileStartFor(env, H, 'admin', b.ctx === 'ann' ? 'ann' : 'chat', b); const { st, ...rest } = r; return J(rest, st); }
+		{ const cx = await compatAdminApi(req, a, H, body); if (cx) return cx; }
 		const ox = await opsAdmin(req, a, H, body, u, env);
 		if (ox) return ox;
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
@@ -1551,6 +1554,8 @@ export async function hubFetch(req, env) {
 	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
 	if (p.startsWith('/dl/cfd/') && (req.method === 'GET' || req.method === 'HEAD')) return dlCfd(p.slice(8));
+	// 6.0 第 58 项：尝鲜版（指定版本）的安装包：/dl/t/v6.0.2/文件名，只转发 GitHub 上这个版本的发布文件（路由器照样验签）
+	if (p.startsWith('/dl/t/') && (req.method === 'GET' || req.method === 'HEAD')) { const m = /^\/dl\/t\/(v\d+\.\d+\.\d+)\/([^/]+)$/.exec(p); return m ? dlFile(env, m[2], m[1]) : J({ error: '没有这个文件' }, 404); }
 	if (p.startsWith('/dl/') && (req.method === 'GET' || req.method === 'HEAD')) return dlFile(env, p.slice(4));
 	// 管理后台（4.0 新版）：打包好的页面和静态文件都在 site.js 里，不从任何外部网站加载东西
 	// /admin 跳到 /admin/：手机推送的后台程序只管 /admin/ 下面的页面，不带 / 打开时推送开不了
@@ -1583,10 +1588,10 @@ export async function hubFetch(req, env) {
 		if (+(req.headers.get('content-length') || 0) <= 8192) { const b = await body(), r = (b && (b['csp-report'] || (Array.isArray(b) && b[0] && b[0].body))) || {}; try { await H.cspLog(String(r['document-uri'] || r.documentURL || ''), String(r['violated-directive'] || r.effectiveDirective || ''), String(r['blocked-uri'] || r.blockedURL || '')); } catch (e) {} }
 		return new Response(null, { status: 204 });
 	}
-	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog', '/status': 'status', '/help': 'help' };
+	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog', '/status': 'status', '/help': 'help', '/compat': 'compat' };
 	// 安全加固：旧版管理页默认下线（新版在 /admin/），只在设了 OLD_ADMIN=1 时打开（测试用）；下线后打开它跳到新版
 	if (p === '/admin/old' && env.OLD_ADMIN !== '1') return new Response(null, { status: 301, headers: { location: '/admin/' } });
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG, '/status': STATUS, '/help': HELP }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG, '/status': STATUS, '/help': HELP, '/compat': COMPAT }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
 	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {
@@ -1742,9 +1747,9 @@ async function appApk(env) {
 export const DL_RE = /^(openwrt-claude-panel(?:-(?:(?:ai|noai)-(?:lite|full)|hosted(?:-(?:ai|noai))?))?\.tar\.gz|SHA256SUMS(?:\.sig2?)?)$/;
 // 通用安装包（5.2 起，安装时在终端里选版本）：还没发布的旧版本里没有，就用能问版本的那个具体包顶上
 const DL_FALLBACK = { 'openwrt-claude-panel.tar.gz': 'openwrt-claude-panel-ai-full.tar.gz', 'openwrt-claude-panel-hosted.tar.gz': 'openwrt-claude-panel-hosted-ai.tar.gz' };
-async function dlFile(env, name) {
+async function dlFile(env, name, tag) {
 	if (!DL_RE.test(name)) return J({ error: '没有这个文件' }, 404);
-	const get0 = (n) => fetch('https://github.com/' + repoOf(env) + '/releases/latest/download/' + n, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } }).catch(() => ({ ok: false, status: 0 }));
+	const get0 = (n) => fetch('https://github.com/' + repoOf(env) + (tag ? '/releases/download/' + tag + '/' : '/releases/latest/download/') + n, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } }).catch(() => ({ ok: false, status: 0 }));
 	// GitHub 偶尔会失败一次（十几次里有一次）：不行就马上再试一次，免得路由器一键更新时官网这条路白走
 	const get = async (n) => { const r = await get0(n); return r.ok ? r : get0(n); };
 	let r = await get(name);
@@ -1871,9 +1876,10 @@ async function accountApi0(req, env, H, p, body) {
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { const t = await H.meta('prerelAt'); if (!t || Date.now() - t > 3600e3) { await H.setMeta('prerelAt', Date.now()); await prereleaseRefresh(env, H, repoOf(env)); } } catch (e) {} try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); }
 installOps(Hub);
 installTotp(Hub);
+installCompat(Hub);
 installV5(Hub);
 installFam(Hub);
 installInst(Hub);

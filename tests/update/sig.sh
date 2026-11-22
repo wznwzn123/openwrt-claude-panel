@@ -102,6 +102,34 @@ s=$(sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' "$ST")
 ok "防回滚：强制更新也不装旧版本" $([ "$s" = failed ] && msg | grep -q '旧版本' ; echo $?) "$s $(msg)"
 s=$(run "$T/old" "$T/old" CMCP_ALLOW_OLD=1)
 ok "防回滚：在路由器终端明确要退回（CMCP_ALLOW_OLD=1）：可以装" $([ "$s" = rolledback ] ; echo $?) "$s $(msg)"
+# 6.0 第 58 项：尝鲜版（指定版本，从官网 /dl/t/版本/ 或 GitHub 这个版本下载）、退回正式版（允许比现在旧，先直连 GitHub）
+runch() { # runch 官网目录 GitHub发布目录 参数...
+	b=$1; g=$2; shift 2
+	rm -f "$ST"; rmdir /tmp/cmcp_update.lock 2>/dev/null
+	env CMCP_ROOT="$T/root" CMCP_DL="file://$b" CMCP_GHR="file://$g" CMCP_ST="$ST" CMCP_NOSVC=1 \
+		CMCP_UPUB="$K_UPUB" CMCP_PPUB="$K_PPUB" CMCP_STSIG="$K_STSIG" sh "$REPO/src/bin/cmcp-update" run "$@" >/dev/null 2>&1
+	sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' "$ST"
+}
+printf 'CODE=ai-full\nVER=1.0\n' > "$T/root/etc/claude-mcp/version"
+s=$(runch "$T/none" "$T/none" beta 'v9.9.9;reboot')
+ok "尝鲜版：版本号不对（混了别的命令）：不装" $([ "$s" = failed ] && msg | grep -q '版本号不对' ; echo $?) "$s $(msg)"
+mkdir -p "$T/bh/t" "$T/bg/download"; cp -r "$T/good" "$T/bh/t/v9.9.9"
+s=$(runch "$T/bh" "$T/bg" beta v9.9.9)
+ok "尝鲜版：从官网 /dl/t/v9.9.9/ 下载，验签过了开始装" $([ "$s" = rolledback ] && log | grep -q '验签工具' ; echo $?) "$s $(msg)"
+rm -rf "$T/bh/t/v9.9.9"; cp -r "$T/good" "$T/bg/download/v9.9.9"
+s=$(runch "$T/bh" "$T/bg" beta v9.9.9)
+ok "尝鲜版：官网没有，直连 GitHub 这个版本下载" $([ "$s" = rolledback ] ; echo $?) "$s $(msg)"
+cp -r "$T/evil" "$T/bg/download/v9.9.9b"; rm -rf "$T/bg/download/v9.9.9"; mv "$T/bg/download/v9.9.9b" "$T/bg/download/v9.9.9"
+s=$(runch "$T/bh" "$T/bg" beta v9.9.9)
+ok "尝鲜版：签名不对照样不装" $([ "$s" = failed ] ; echo $?) "$s $(msg)"
+# 现在用的是尝鲜版 9.9.9，正式版是 1.0：退回正式版
+printf 'CODE=ai-full\nVER=9.9.9\n' > "$T/root/etc/claude-mcp/version"
+mkdir -p "$T/sg"; cp -r "$T/old" "$T/sg/latest"; mv "$T/sg/latest" "$T/sg/latest-tmp"; mkdir -p "$T/sg/latest"; mv "$T/sg/latest-tmp" "$T/sg/latest/download"
+s=$(runch "$T/evil" "$T/sg" stable)
+ok "退回正式版：允许装比现在旧的正式版（1.0 < 9.9.9），先直连 GitHub（官网那份没用到）" $([ "$s" = rolledback ] && ! log | grep -q "签名不对：file://$T/evil" ; echo $?) "$s $(msg) $(log | tail -2)"
+s=$(run "$T/old" "$T/old")
+ok "不是退回正式版（普通更新）：照样不装旧版本" $([ "$s" = failed ] && msg | grep -q '旧版本' ; echo $?) "$s $(msg)"
+printf 'CODE=ai-full\nVER=1.0\n' > "$T/root/etc/claude-mcp/version"
 # 12. 发布用的签名脚本（6.0 第 52 项：新密钥签 .sig2，旧密钥签 .sig 给老路由器）
 mk "$T/rel" rel
 (cd "$T/rel" && RELEASE_SIGN_KEY_V6=$TK node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?

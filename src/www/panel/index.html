@@ -721,6 +721,9 @@ section.page{display:none}section.page.on{display:block}
 .modal.compact .btngrid.one{grid-template-columns:1fr}
 .cver{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:0 0 10px}
 .cver b{color:var(--text);font-size:15px}
+
+/* 6.0 第 57、58 项：帮助改进、尝鲜 */
+.kv.cpk{align-items:center;gap:14px}.kv.cpk>div{flex:1;min-width:0}.kv.cpk b{display:block;font-size:15px}.kv.cpk .muted{display:block;font-size:12.5px;line-height:1.55;margin-top:3px}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1152,6 +1155,7 @@ section.page{display:none}section.page.on{display:block}
 	<div class="sectitle"><b>管理</b></div>
 	<section class="card list">
 		<button class="file" data-t="update"><div><b>检查更新</b><span class="muted" id="updState">路由器面板的版本</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="compat"><div><b>帮助改进、尝鲜</b><span class="muted" id="compatState">匿名报告型号和哪些功能能用；先试新版本</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
@@ -1328,10 +1332,10 @@ async function rpcOnce(method, params, timeoutMs, read, again) {
 	const j = await rpcPost('cgi-bin/mcp/pass', { jsonrpc: '2.0', id: ++seq, method, params: params || {}, client: 'panel', pass }, timeoutMs, read);
 	// 通行证过期了（路由器重启、锁屏作废）：换一张再试一次
 	if (j.error && j.error.code === -32013 && !again) { if (PS.pass === pass) passClear(); return rpcOnce(method, params, timeoutMs, read, true); }
-	return rpcResult(j).result;
+	return rpcResult(j, method).result;
 }
 // 路由器的回答：出错就按错误码报出来
-function rpcResult(j) {
+function rpcResult(j, method) {
 	const e = j && j.error;
 	if (!e) return j;
 	if (e.code === -32010 || e.code === -32011) {
@@ -1342,6 +1346,8 @@ function rpcResult(j) {
 	}
 	if (e.code === -32014) { const err = new LockError(e.message, e.data); try { lkNeedPin(err); } catch (x) {} throw err; }
 	if (e.code === -32015) throw new NeedPwError(e.message);
+	// 6.0 第 60 项：这台路由器开不了这个功能（路由器那边已经记下，下次兼容情况上报时报）：弹一个小卡片，能直接「报告这个问题」
+	if (e.code === -32020) { try { compatFailPop(e.message, method); } catch (x) {} const err = new Error(e.message); err.quiet = true; throw err; }
 	throw new Error(e.message);
 }
 async function rpcPost(path, bodyObj, timeoutMs, read) {
@@ -1430,8 +1436,10 @@ const base = (p) => String(p || '').split('/').pop();
 
 /* ---------- 提示与弹窗 ---------- */
 let toastT = 0, toastX = 0;
+let TOAST_MUTE = '';
 function toast(s, err) {
 	s = String(s ?? '');
+	if (err && TOAST_MUTE && s === TOAST_MUTE) return; // 已经弹过「开不了这个功能」的卡片，不再重复提示
 	const t = $('toast'), dur = Math.min(7000, 2800 + Math.max(0, s.length - 24) * 60);
 	const shown = !t.classList.contains('hidden') && !t.classList.contains('out');
 	clearTimeout(toastT); clearTimeout(toastX);
@@ -4273,7 +4281,7 @@ async function pushTest() {
 	pushRender();
 }
 // 点通知打开面板时，后台服务会告诉面板该去哪一页
-try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => { const p = e.data && e.data.go; if (p && validPage(p) && token) go(p); if (e.data && e.data.ask === 'pause' && token) askPause(e.data.mac); if (e.data && e.data.ask === 'ai' && token) aiCheck(true); if (e.data && e.data.pushed && $('pushCard')) pushState(true).then(pushRender).catch(() => {}); }); } catch (e) {}
+try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', (e) => { const p = e.data && e.data.go; if (p && validPage(p) && token) go(p); if (e.data && e.data.ask === 'pause' && token) askPause(e.data.mac); if (e.data && e.data.ask === 'ai' && token) aiCheck(true); if (e.data && e.data.ask === 'update' && token) updSheet(false); if (e.data && e.data.pushed && $('pushCard')) pushState(true).then(pushRender).catch(() => {}); }); } catch (e) {}
 
 function tabletHelp() {
 	const u = cinfo && cinfo.tablet;
@@ -4460,6 +4468,7 @@ const T = {
 	rotatekey() { rotateKey(); },
 	svc() { svcSheet(); },
 	ckey() { ckeySheet(); },
+	compat() { compatSheet(); },
 	update() { updSheet(); },
 	hubbind() { hubBind(); },
 	logout() { signOut(); },
@@ -4490,7 +4499,7 @@ function shrinkImg(file, lim) {
 	});
 }
 // 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
-async function feedbackSheet() {
+async function feedbackSheet(prefill) {
 	let dg = '', hosted = true;
 	try { const r = await P('feedback_diag', {}, 15000); dg = r.text || ''; hosted = r.hosted !== false; } catch (e) {}
 	// 6.0 第 67 项：托管版要登录着官网账号才能反馈（用应急登录码进来的，先从官网打开面板）
@@ -4500,7 +4509,7 @@ async function feedbackSheet() {
 	const IM = [];
 	modal(`<div class="sheethead"><h3>问题反馈 / 建议</h3><button class="btn sm" data-v="close">关闭</button></div>
 		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。</p>
-		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px"></textarea>
+		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px">${esc(typeof prefill === 'string' ? prefill : '')}</textarea>
 		<div class="fbims" data-ims></div>
 		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
 		${hosted && SVC && SVC.files ? `<div class="atts hidden" data-atts style="margin-top:8px"></div><label class="btn fbadd"><input type="file" multiple data-any style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加视频或文件（200MB 以内）</span></label>` : ''}
@@ -4750,10 +4759,20 @@ async function updSheet(forced) {
 		return;
 	}
 	modal(`<div class="sheethead"><h3>检查更新</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<div class="kv"><span>现在的版本</span><b>${esc(u.cur ? 'v' + u.cur : '旧版（没有记录版本号）')}</b></div>
-	<div class="kv"><span>最新版本</span><b>${esc('v' + u.latest)}</b></div>
-	<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>`,
-	(m) => { m.dataset.upd = 1; });
+	<div class="kv"><span>现在的版本</span><b>${esc(u.cur ? 'v' + u.cur : '旧版（没有记录版本号）')}${u.ahead ? ' <span class="pill">尝鲜版</span>' : ''}</b></div>
+	<div class="kv"><span>最新正式版</span><b>${esc('v' + u.latest)}</b></div>
+	${u.beta ? `<div class="notice" style="margin-top:12px;line-height:1.6">你是尝鲜用户：可以先装 <b>v${esc(u.beta.ver)}</b>（还没正式发布）。有问题随时能退回正式版。</div>` : ''}
+	${u.ahead ? '<p class="muted" style="font-size:13px;margin:12px 0 0;line-height:1.6">你用的是尝鲜版，比正式版新。不好用的话可以退回正式版，设置都保留。</p>' : '<p class="muted" style="margin:12px 0 0">已经是最新的正式版了。</p>'}
+	<div class="btngrid" style="margin:12px 0 0">${u.beta ? '<button class="btn primary" data-ch="beta">装尝鲜版 v' + esc(u.beta.ver) + '</button>' : u.ahead ? '<button class="btn" data-ch="stable">退回正式版 v' + esc(u.latest) + '</button>' : ''}<button class="btn${u.beta || u.ahead ? '' : ' primary'}" data-v="close">好的</button></div>`,
+	(m, close) => {
+		m.dataset.upd = 1;
+		m.querySelectorAll('[data-ch]').forEach((b) => (b.onclick = async () => {
+			const beta = b.dataset.ch === 'beta';
+			if (!(await confirmBox(beta ? '装尝鲜版' : '退回正式版', beta ? '更新到 v' + u.beta.ver + '（尝鲜版）？\n设置都保留，面板断开 10–30 秒，不会断网；装完起不来会自动退回。用着有问题，在「系统操作 → 问题反馈」里告诉我们。' : '退回正式版 v' + u.latest + '？\n设置都保留，面板断开 10–30 秒，不会断网。', beta ? '装尝鲜版' : '退回正式版'))) return;
+			close(null);
+			updStart(true, beta ? 'beta' : 'stable');
+		}));
+	});
 }
 // 反馈编号：一行显示编号 + 复制按钮（发送成功、收到回复时都用）
 const fbCodeRow = (code) => `<div data-fbcode style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fill);padding:10px 12px;border-radius:12px;margin-top:12px">
@@ -5184,10 +5203,10 @@ async function fbCheck() {
 	P('fb_seen', { code: x.code, updated: x.updated, done: x.done || x.nofix ? 1 : 0 }).catch(() => {});
 }
 const UPD_STEPS = [['downloading', '下载新版安装包'], ['installing', '安装（保留所有设置）'], ['check', '重新启动面板服务'], ['done', '完成']];
-async function updStart(noConfirm) {
+async function updStart(noConfirm, channel) {
 	if (!UPD) await updCheck(true);
 	if (!noConfirm && !(await confirmBox('一键更新', '更新到 v' + (UPD?.latest || '最新版') + '？\n网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。', '开始更新'))) return;
-	try { await P('update_start', { confirm: 'UPDATE' }, 20000); } catch (e) { return toast(e.message, true); }
+	try { await P('update_start', channel ? { confirm: 'UPDATE', channel } : { confirm: 'UPDATE' }, 20000); } catch (e) { return toast(e.message, true); }
 	let lost = 0, t0 = Date.now(), fin = false;
 	modal(`<h3>正在更新路由器面板</h3><ul class="updsteps" data-steps></ul><p class="muted" data-msg style="font-size:13px;margin:6px 0 0">开始…</p><div class="btngrid hidden" data-end style="margin:12px 0 0"><button class="btn primary" data-done>完成</button></div>`,
 	(m, close) => {
@@ -5853,6 +5872,42 @@ function hubBind() {
 }
 themeLabel();
 
+
+/* 6.0 第 57、58 项：帮助改进（兼容情况匿名上报，默认开）、尝鲜（报名后官网挑人，先试新版本，随时退回） */
+async function compatSheet() {
+	let r;
+	try { r = await P('compat_info', {}, 15000); } catch (e) { return toast(e.message, true); }
+	const owner = ME_ROLE.role !== 'sub';
+	const sw = (k, on, dis) => `<label class="sw"><input type="checkbox" data-sw="${k}"${on ? ' checked' : ''}${dis ? ' disabled' : ''} aria-label="${k === 'on' ? '帮助改进兼容性' : '参加尝鲜'}"><i></i></label>`;
+	const draw = (m) => {
+		const b = r.beta || {};
+		m.querySelector('[data-body]').innerHTML = `<div class="kv cpk"><div><b>帮助改进兼容性</b><span class="muted">每天匿名报一次：路由器型号、系统版本、面板版本、哪些功能能用、开不了的功能和原因。不报账号、IP、设备、网址、钥匙。用来做官网的兼容性表、找出哪些型号有问题，修好后告诉你。</span></div>${sw('on', r.on, !owner)}</div>
+		${r.last ? `<p class="muted" style="font-size:12.5px;margin:6px 0 0">最近一次：${esc(new Date(r.last * 1000).toLocaleString('zh-CN', { hour12: false }))}</p>` : ''}
+		<div class="kv cpk" style="margin-top:12px"><div><b>参加尝鲜</b><span class="muted">${b.want ? (b.ok ? '你被选上了' + (b.ver ? '：尝鲜版 v' + esc(b.ver) + ' 可以在「检查更新」里装' : '，有尝鲜版时会在「检查更新」里出现') : '已经报名，开发者挑人以后会告诉你') : '新版本正式发布前先给你试；只给自愿报名的人，随时能退回正式版'}</span></div>${sw('beta', !!b.want, !owner)}</div>
+		${owner ? '' : '<p class="muted" style="font-size:12.5px;margin:10px 0 0">只有主账号能改。</p>'}`;
+		m.querySelectorAll('[data-sw]').forEach((x) => (x.onchange = async () => {
+			const on = x.checked; x.disabled = true;
+			try {
+				r = x.dataset.sw === 'on' ? await P('compat_set', { on }, 15000) : await P('beta_set', { want: on }, 15000);
+				toast(x.dataset.sw === 'on' ? (on ? '已打开，谢谢帮忙' : '已关掉，不再上报') : on ? '已报名尝鲜' : '已退出尝鲜');
+			} catch (e) { toast(e.message, true); }
+			draw(m); compatLabel(r);
+		}));
+	};
+	modal(`<div class="sheethead"><h3>帮助改进、尝鲜</h3><button class="btn sm" data-v="close">关闭</button></div><div data-body></div>
+	<p class="muted" style="font-size:12.5px;margin:12px 0 0;line-height:1.6">详细说明见官网<a href="${esc((store.get('rp_hub') || 'https://yrlove520.com') + '/privacy')}" target="_blank" rel="noopener">隐私政策</a>。</p>`, (m) => draw(m));
+}
+function compatLabel(r) { const el = $('compatState'); if (el && r) el.textContent = (r.on ? '帮助改进：开' : '帮助改进：关') + (r.beta && r.beta.want ? ' · 已报名尝鲜' : ''); }
+// 开不了这个功能：路由器已经记下来了；这里给个「报告这个问题」，内容自动填好
+function compatFailPop(msg, method) {
+	TOAST_MUTE = msg; setTimeout(() => { if (TOAST_MUTE === msg) TOAST_MUTE = ''; }, 3000);
+	if (document.querySelector('.modal[data-cpf]')) return;
+	modal(`<div class="sheethead"><h3>这台路由器开不了这个功能</h3></div>
+	<div class="cscroll"><div class="notice" style="line-height:1.6;margin:0">${esc(msg)}</div>
+	<p class="muted" style="font-size:12.5px;margin:10px 0 0;line-height:1.6">已经记下来了（开着「帮助改进兼容性」的话，会匿名报给开发者，修好后推送告诉你）。想让开发者马上知道，点「报告这个问题」，内容已经填好。</p></div>
+	<div class="cfoot"><div class="btngrid"><button class="btn" data-v="close">知道了</button><button class="btn primary" data-rep>报告这个问题</button></div></div>`,
+	(m, close) => { m.dataset.cpf = 1; m.querySelector('[data-rep]').onclick = () => { close(null); feedbackSheet('功能开不了：' + msg + (method ? '（' + method + '）' : '')); }; }, { compact: true });
+}
 /* =====================================================================
    Kwrt 原版页面（在面板里打开，自动登录）
    ===================================================================== */
@@ -6315,6 +6370,8 @@ function start() {
 	if (usp.get('ask') === 'pause' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(usp.get('mac') || '')) setTimeout(() => askPause(usp.get('mac')), 1600);
 	// 6.0 第 11 项：推送里点了「AI 想要…」：打开面板马上弹出「允许 / 拒绝」；平时打开 2 秒后查一次
 	setTimeout(() => aiCheck(true), usp.get('ask') === 'ai' ? 900 : 2500);
+	// 6.0 第 60 项：推送「你遇到的问题修好了」点进来：打开检查更新
+	if (usp.get('ask') === 'update') setTimeout(() => updSheet(false), 1400);
 	// 新打开面板默认是首页；同一个标签页里刷新（下拉刷新）还停在原来那页
 	let sp = null; try { sp = sessionStorage.getItem('rp_page'); } catch (e) {}
 	const p = validPage(qp) ? qp : validPage(sp) ? sp : 'main';

@@ -232,7 +232,7 @@ function rootpw_check(pw, what) {
 	// 没设后台密码的路由器：不能拿空密码当验证（先去原版后台设一个）
 	let sh0 = match(readfile(getenv('CMCP_SHADOW') ?? '/etc/shadow') ?? '', /(^|\n)root:([^:\n]*):/);
 	if (sh0 && !length(sh0[2])) die('路由器还没设后台密码：先在原版后台「系统 → 管理权」设一个，再回来验证');
-	if (!match(sh('ubus list session 2>/dev/null').out, /session/)) die('这台路由器没有登录服务（rpcd），验证不了后台密码');
+	if (!match(sh('ubus list session 2>/dev/null').out, /session/)) compat_die('sudo', '这台路由器没有登录服务（rpcd），验证不了后台密码');
 	let tf = trim(sh('mktemp /tmp/cmcp_pw.XXXXXX').out);
 	if (!match(tf, /^\/tmp\/cmcp_pw\.[A-Za-z0-9]+$/)) die('路由器上建不了临时文件');
 	writefile(tf, sprintf('%J', { username: 'root', password: pw, timeout: 30 }));
@@ -304,7 +304,7 @@ const FAM_PATH = '/tmp/cmcp_fam.json', FAM_LOCK = '/tmp/cmcp_fam.lock', FAM_STAL
 const EMERG_VIA = '路由器终端的应急登录码';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
@@ -315,7 +315,7 @@ const FAM_GROUPS = {
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
 	net: ['luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch', 'ai_asks', 'ai_answer', 'ai_mode'],
-	sys: ['update_start', 'auto', 'ban_del', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
+	sys: ['compat_set', 'beta_set', 'update_start', 'auto', 'ban_del', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };
 function fam_group(m, p) {

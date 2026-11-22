@@ -130,6 +130,12 @@ sh install.sh --no-ai --full --tunnel-token <隧道token> --domain router.exampl
 
 **命名隧道设置：** Cloudflare 控制台 → Zero Trust → Networks → Tunnels → 新建隧道（类型 Cloudflared）→ 复制安装命令里 `--token` 后面那串 → 在「Public Hostname」里添加 `router.example.com`，服务填 `HTTP` / `127.0.0.1:18765`。把 token 和域名填进安装脚本即可。
 
+## 兼容性、尝鲜（6.0）
+
+- 哪些路由器实际装过、哪些功能能用：看官网的 [兼容性表](https://yrlove520.com/compat)。数据来自路由器每天的匿名上报（随机编号、型号、系统版本、功能能不能用，不报账号、IP 和设置），面板「系统操作 → 帮助改进、尝鲜」里能关。
+- 某个功能开不了：面板说明原因，有「报告这个问题」按钮；修好后推送告诉你更新到哪个版本。
+- 想先试新版本：同一处打开「参加尝鲜」，被挑中后新版本会先出现在「检查更新」里，随时能退回正式版。
+
 ## 连接 AI（AI 版）
 
 「AI 连接器地址」是标准的远程 MCP 连接器（Streamable HTTP，不用登录），支持添加远程 MCP 连接器的 AI 都能接：

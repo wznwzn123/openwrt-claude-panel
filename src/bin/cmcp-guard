@@ -144,6 +144,8 @@ for (let ip in keys(S.fail)) {
 		notify('warn', 'ban', '已自动封禁 ' + mask(ip), sprintf('这个外网地址 10 分钟内后台或 SSH 密码错了 5 次，封 %s（到期自动解开；面板「自动任务」里能马上解封）。家里的设备不会被封。', secs >= 86400 ? '1 天' : (secs / 3600) + ' 小时'), 'ban-' + ip);
 	} else {
 		B.ips[ip].noblock = true;
+		// 6.0 第 57 项：记下来，下次兼容情况上报时一起报（用户关了上报就只记在本机）
+		sh('/usr/sbin/cmcp-compat fail ban ' + shq('防火墙没法自动封禁：没有 nftables，也没有 ipset') + ' >/dev/null 2>&1');
 		notify('warn', 'ban', '有人在试路由器密码：' + mask(ip), '这个外网地址 10 分钟内后台或 SSH 密码错了 5 次。这台路由器的防火墙没法自动封禁（没有 nftables，也没有 ipset），建议改一个强密码，并关掉外网访问后台和 SSH。', 'ban-' + ip);
 	}
 }

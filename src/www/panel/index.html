@@ -4717,7 +4717,15 @@ function panelVerCheck(cur) {
 	refreshPanel();
 	return true;
 }
-const updLaterKey = () => (UPD ? UPD.latest : '') + '@' + new Date().toDateString();
+// 6.0 第 85 项：普通新版本每个版本只弹一次小卡片。弹过（或点了「以后再说」）记在路由器上，换手机、清缓存也不再弹；
+// 首页横幅跟着收起，直到发了更新的版本。必须更新不受影响：没更新前照样每次拦着
+const updSeen = () => !!UPD && (UPD.seen === UPD.latest || store.get('rp_upd_seen') === UPD.latest);
+// hide：点了「以后再说」才马上收起首页横幅；只是看过卡片的，这次横幅先留着（下次打开就不再出现）
+function updMarkSeen(hide = true) {
+	if (!UPD || !UPD.latest) return;
+	if (UPD.seen !== UPD.latest) { UPD.seen = UPD.latest; store.set('rp_upd_seen', UPD.latest); P('notices_seen', { upd: UPD.latest }).catch(() => {}); }
+	if (hide) $('rUpd').classList.add('hidden');
+}
 let updAt = 0;
 // 面板一直开着（App 放后台再切回来、或者一直亮着）时，隔一会儿再查一次，这样发布了必须更新的版本也能弹出来
 const updMaybe = () => { if (token && !LK.on && Date.now() - updAt > 600e3) updCheck(false); };
@@ -4729,7 +4737,7 @@ async function updCheck(force) {
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
 	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
-	const later = store.get('rp_upd_later') === updLaterKey();
+	const later = updSeen();
 	$('rUpd').classList.toggle('hidden', !UPD.newer || (later && !UPD.force));
 	if (UPD.newer) {
 		$('rUpdV').textContent = 'v' + UPD.latest;
@@ -4739,23 +4747,29 @@ async function updCheck(force) {
 		$('rUpdLater').classList.toggle('hidden', !!UPD.force);
 		// 必须更新：弹窗关不掉
 		if (UPD.force && !document.querySelector('.modal[data-upd]')) updSheet(true);
+		// 普通新版本：自动检查时（不是用户自己点开的）没弹过就弹一次；有别的弹窗、面板锁着时先不弹，下次检查再弹
+		else if (!force && !UPD.force && !later && !document.querySelector('.modal') && !LK.on) updSheet(true);
 	}
 	return UPD;
 }
 $('rUpdGo').onclick = () => updStart();
 $('rUpdMore').onclick = () => updSheet(true);
-$('rUpdLater').onclick = () => { store.set('rp_upd_later', updLaterKey()); $('rUpd').classList.add('hidden'); };
+$('rUpdLater').onclick = () => updMarkSeen();
 async function updSheet(forced) {
 	if (!forced) { const r = await updCheck(true); if (!r) return; }
 	const u = UPD;
 	// 有新版本（尤其是必须更新、打开面板就弹出来的）：居中的小卡片，更新内容在卡片里上下滑，按钮一直看得到
 	if (u.newer) {
+		// 普通新版本：不管是自动弹的、还是点推送 / 横幅 / 检查更新打开的，看过一次就记下（每个版本只弹一次）
+		if (!u.force) updMarkSeen(false);
 		modal(`<div class="sheethead"><h3>${u.force ? '这个版本必须更新' : '路由器有新版本'}</h3>${u.force ? '' : '<button class="btn sm" data-v="close">关闭</button>'}</div>
 		<p class="cver"><span>${esc(u.cur ? 'v' + u.cur : '旧版')}</span><span aria-hidden="true">→</span><b>${esc('v' + u.latest)}</b></p>
 		<div class="cscroll"><div class="notice" style="white-space:pre-line;line-height:1.6;margin:0">${esc(u.notes || '修复了一些问题')}</div></div>
 		<div class="cfoot"><p class="muted" style="font-size:12.5px;margin:0 0 10px;line-height:1.55">${u.force ? '更新后才能继续使用。' : ''}设置都保留，面板断开 10–30 秒，不会断网。</p>
 		<div class="btngrid${u.force ? ' one' : ''}">${u.force ? '' : '<button class="btn" data-v="close">以后再说</button>'}<button class="btn primary" data-go>一键更新</button></div></div>`,
-		(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; m.querySelector('[data-go]').onclick = () => { close(null); updStart(true); }; }, { compact: true });
+		(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; m.querySelector('[data-go]').onclick = () => { close(null); updStart(true); };
+			// 卡片底部的「以后再说」：首页横幅也一起收起，直到发了更新的版本（顶部的「关闭」只关卡片）
+			const lt = m.querySelector('.cfoot [data-v="close"]'); if (lt) lt.addEventListener('click', () => updMarkSeen(true)); }, { compact: true });
 		return;
 	}
 	modal(`<div class="sheethead"><h3>检查更新</h3><button class="btn sm" data-v="close">关闭</button></div>
@@ -4921,7 +4935,10 @@ async function ntCheck() {
 	ntBadge();
 	if (document.querySelector('.modal')) return;
 	const pop = (NT.d.seen && NT.d.seen.pop) || [];
-	const a = (NT.d.ann || []).find((x) => x.level === 'important' && !pop.includes(x.id));
+	// 6.0 第 85 项：新装的路由器只弹开始记之前 7 天以内发的重要公告（更早的在「通知」里能翻到，不一打开就刷屏）。
+	// 从老版本升上来的没有 since，照旧（弹过的都记着，不会重弹）
+	const since = +(NT.d.seen && NT.d.seen.since) || 0;
+	const a = (NT.d.ann || []).find((x) => x.level === 'important' && !pop.includes(x.id) && ntMs(x.at || x.upd) >= since - 7 * 864e5);
 	if (a) ntAnnPop(a);
 }
 function ntAnnPop(a) {

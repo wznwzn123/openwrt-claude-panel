@@ -26,6 +26,9 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light' });
 		const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 		await page.addInitScript((t) => { localStorage.setItem('rp_token', t); }, TOK);
+		// 6.0 第 85 项：没弹过的新版本会先弹小卡片、弹过横幅就收起。首页横幅只在「打开面板时正好有别的弹窗开着」
+		// （比如重要公告）卡片先不弹时出现：这里放一个隐藏的弹窗占位，模拟这种情况来检查横幅排版
+		await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const d = document.createElement('div'); d.className = 'modal'; d.style.display = 'none'; d.dataset.testHold = '1'; document.body.appendChild(d); }));
 		await page.goto('http://localhost:8161/panel/'); await W(5000);
 		const tag = `${w}px${dark ? ' 深色' : ''}`;
 		const g = await page.evaluate(() => {

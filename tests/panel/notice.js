@@ -17,7 +17,8 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (m === 'notices') r = { now: Math.round(Date.now() / 1000), app: a.app ? { version: '3.2.0', notes: 'App 修了一些问题', rel: new Date(T - 864e5).toISOString() } : null, ann: ANN, annAt: S, annFail: false, events: EV, fb: FB, hosted: true, seen: JSON.parse(JSON.stringify(SEEN)) };
 		else if (m === 'notices_seen') { SEENCALLS.push(a); if (a.t) SEEN.t = Math.max(SEEN.t, a.t); if (a.pop) SEEN.pop.push(a.pop); r = { ok: true }; }
 		else if (m === 'fb_replies') r = { list: FB, hosted: true };
-		else if (m === 'update_check') r = UPDNEW ? { cur: '3.1.3', code: 'hosted-ai', latest: '4.0.0', notes: '新加了「通知」', rel: new Date(T - 1800e3).toISOString(), newer: true, force: false } : respond(m, a);
+		// seen：这个新版本已经弹过（6.0 第 85 项：没弹过的会先弹新版本卡片，这里测的是公告，所以当成弹过了）
+		else if (m === 'update_check') r = UPDNEW ? { cur: '3.1.3', code: 'hosted-ai', latest: '4.0.0', notes: '新加了「通知」', rel: new Date(T - 1800e3).toISOString(), newer: true, force: false, seen: '4.0.0' } : respond(m, a);
 		else r = respond(m, a);
 		res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: r })); }
 	if (u.pathname === '/cloud/s') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(CLOUD)); }
@@ -118,6 +119,24 @@ const OUT = path.join(__dirname, 'shots');
 		await p.click('#bellBtn'); await p.waitForTimeout(900);
 		ok('不在 App 里打开：没有 App 新版本那条', !(await p.textContent('#ntList')).includes('安卓 App'));
 		ok('都看过了：标「都看过了」', /都看过了/.test(await p.textContent('#ntPill')));
+		await c.close(); }
+	// 6.0 第 85 项：新装的路由器（since = 刚开始记）只弹 7 天以内发的重要公告；更早的不弹，在「通知」里能看到
+	ANN.push({ id: 'cdefghijkm', title: '十天前的重要公告', body: '旧的', level: 'important', at: T - 10 * 864e5, upd: T - 10 * 864e5 });
+	SEEN = { t: T, since: T, pop: [] }; SEENCALLS = [];
+	{ const c = await b.newContext({ viewport: { width: 390, height: 844 } }); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest')); await p.clock.install();
+		await p.goto('http://localhost:8155/panel/'); await p.clock.runFor(9000); await p.waitForTimeout(600);
+		ok('新装的路由器：7 天内的重要公告照样弹', await p.isVisible('.modal[data-ann]') && /4\.0 发布了/.test(await p.textContent('.modal[data-ann]')));
+		await p.click('.modal[data-ann] [data-v="close"]'); await p.waitForTimeout(300);
+		await p.clock.runFor(75000); await p.waitForTimeout(800);
+		ok('新装的路由器：十天前的重要公告不弹', !(await p.isVisible('.modal[data-ann]')) && !SEENCALLS.some((x) => x.pop === 'cdefghijkm'), JSON.stringify(SEENCALLS));
+		await p.click('#bellBtn'); await p.waitForTimeout(900);
+		ok('十天前的那条在「通知」里还能看到', (await p.textContent('#ntList')).includes('十天前的重要公告'));
+		await c.close(); }
+	// 从老版本升上来的（没有 since）：照旧，没弹过的重要公告都弹（弹过的记着，不会重弹）
+	SEEN = { t: T - 3 * 3600e3, pop: ['abcdefghij'] }; SEENCALLS = [];
+	{ const c = await b.newContext({ viewport: { width: 390, height: 844 } }); const p = await c.newPage(); await p.addInitScript(() => localStorage.setItem('rp_token', 'testtokentesttokentest')); await p.clock.install();
+		await p.goto('http://localhost:8155/panel/'); await p.clock.runFor(9000); await p.waitForTimeout(600);
+		ok('老版本升上来的：没弹过的重要公告照旧弹（不管多久以前）', await p.isVisible('.modal[data-ann]') && /十天前的重要公告/.test(await p.textContent('.modal[data-ann]')));
 		await c.close(); }
 	console.log(R.join('\n')); const pass = R.filter((x) => x.startsWith('✓')).length; console.log('\n通过 ' + pass + '/' + R.length);
 	await b.close(); server.close();

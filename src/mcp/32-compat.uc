@@ -25,6 +25,7 @@ P.update_check = function(a) {
 	if (b?.ok && match('' + (b.tag ?? ''), /^v\d+\.\d+\.\d+$/) && ver_newer(b.ver, r.cur ?? '0') && ver_newer(b.ver, r.latest ?? '0')) r.beta = { ver: b.ver, tag: b.tag };
 	if (length(r.cur ?? '') && ver_newer(r.cur, r.latest ?? '0')) r.ahead = true; // 现在用的比正式版新（尝鲜版）
 	r.auto = !stat(AU_OFF); // 6.0 第 86 项：必须更新夜里自动装（默认开）
+	r.seen = '' + (nt_seen().upd ?? ''); // 6.0 第 85 项：哪个新版本已经弹过（记在路由器上，换手机也不再弹）
 	return r;
 };
 // 6.0 第 86 项：必须更新（安全修复）每天夜里自动装，默认开；关掉以后只能自己点「一键更新」。只有主账号能改

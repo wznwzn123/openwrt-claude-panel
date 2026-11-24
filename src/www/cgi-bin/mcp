@@ -3394,12 +3394,13 @@ function chat_peek() {
 	return type(c) == 'object' ? c : null;
 }
 /* 通知（4.0）：路由器上的断线/故障记录、公告、反馈进度一次给面板；云端的（断电、托管服务）面板自己去云端拿。
-   看到哪儿了记在 notices.seen（t：这个时间以前的都看过了；pop：弹过的重要公告），换手机打开也一样 */
-const NT_SEEN = '/etc/claude-mcp/notices.seen';
+   看到哪儿了记在 notices.seen（t：这个时间以前的都看过了；pop：弹过的重要公告），换手机打开也一样。
+   6.0 第 85 项：since：从什么时候开始记（新装的路由器只弹 since 前 7 天以内发的重要公告）；upd：弹过的新版本（每个版本只弹一次） */
+const NT_SEEN = ETC + '/notices.seen'; // 路由器上就是 /etc/claude-mcp/notices.seen（ETC 在测试时可以换目录）
 function nt_seen() {
 	let s = null; try { s = json(readfile(NT_SEEN) ?? 'null'); } catch (e) {}
 	// 第一次（刚装好 / 刚升级）：以前的记录都算看过，不然一打开就是一大堆「新」
-	if (type(s) != 'object' || type(s.t) != 'int' && type(s.t) != 'double') { s = { t: time() * 1000, pop: [] }; writefile(NT_SEEN, sprintf('%J', s)); }
+	if (type(s) != 'object' || type(s.t) != 'int' && type(s.t) != 'double') { s = { t: time() * 1000, since: time() * 1000, pop: [] }; writefile(NT_SEEN, sprintf('%J', s)); }
 	if (type(s.pop) != 'array') s.pop = [];
 	return s;
 }
@@ -3421,14 +3422,17 @@ P.notices = function(a) {
 		}
 	}
 	let cp = null; try { cp = chat_peek(); } catch (e) {}
-	return { now: time(), app, chat: cp, ann: an?.list ?? [], annAt: an?.at ?? 0, annFail: !!an?.fail, events: ev, fb: fb?.list ?? [], hosted: !!fb?.hosted, seen: { t: s.t, pop: s.pop } };
+	return { now: time(), app, chat: cp, ann: an?.list ?? [], annAt: an?.at ?? 0, annFail: !!an?.fail, events: ev, fb: fb?.list ?? [], hosted: !!fb?.hosted, seen: { t: s.t, pop: s.pop, since: +(s.since ?? 0), upd: '' + (s.upd ?? '') } };
 };
 P.notices_seen = function(a) {
 	let s = nt_seen(), ch = false, t = +(a?.t ?? 0), lim = time() * 1000 + 60000;
 	if (t > s.t) { s.t = t > lim ? lim : t; ch = true; }
 	let id = '' + (a?.pop ?? '');
 	if (length(id)) { if (!match(id, /^[a-z2-9]{10}$/)) die('公告编号不对'); if (index(s.pop, id) < 0) { push(s.pop, id); s.pop = slice(s.pop, -50); ch = true; } }
-	if (ch) writefile(NT_SEEN, sprintf('%J', s));
+	// 6.0 第 85 项：这个新版本已经弹过（每个版本只弹一次；换手机、清缓存也不再弹）。不算「看了公告」，不上报
+	let uv = '' + (a?.upd ?? ''), wr = ch;
+	if (length(uv)) { if (!match(uv, /^[0-9]+(\.[0-9]+){1,3}$/)) die('版本号不对'); if (s.upd != uv) { s.upd = uv; wr = true; } }
+	if (wr) writefile(NT_SEEN, sprintf('%J', s));
 	// 公告统计（5.0）：告诉开发者「这台点开看了哪几条」（匿名编号；后台发，不等它）
 	if (ch) {
 		let ids = [], c = null;
@@ -4052,6 +4056,7 @@ P.update_check = function(a) {
 	if (b?.ok && match('' + (b.tag ?? ''), /^v\d+\.\d+\.\d+$/) && ver_newer(b.ver, r.cur ?? '0') && ver_newer(b.ver, r.latest ?? '0')) r.beta = { ver: b.ver, tag: b.tag };
 	if (length(r.cur ?? '') && ver_newer(r.cur, r.latest ?? '0')) r.ahead = true; // 现在用的比正式版新（尝鲜版）
 	r.auto = !stat(AU_OFF); // 6.0 第 86 项：必须更新夜里自动装（默认开）
+	r.seen = '' + (nt_seen().upd ?? ''); // 6.0 第 85 项：哪个新版本已经弹过（记在路由器上，换手机也不再弹）
 	return r;
 };
 // 6.0 第 86 项：必须更新（安全修复）每天夜里自动装，默认开；关掉以后只能自己点「一键更新」。只有主账号能改

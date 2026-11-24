@@ -131,6 +131,24 @@ c = await cgi(A, 'update_check');
 ok('检查更新：关掉以后 auto 是 false', c.result && c.result.auto === false, JSON.stringify(c.result));
 fs.writeFileSync(A + '/autoupd_fail', '9.9.9 3\n');
 c = await cgi(A, 'autoupd_set', { on: true });
+// 6.0 第 85 项：新版本弹过记在路由器上（notices.seen 的 upd）；第一次建这个文件时记下 since（新装的只弹 7 天内的重要公告）
+{
+	const NS = A + '/notices.seen', had = fs.existsSync(NS) ? fs.readFileSync(NS, 'utf8') : null;
+	if (fs.existsSync(NS)) fs.unlinkSync(NS);
+	const t0 = Date.now();
+	let u = await cgi(A, 'update_check');
+	const s0 = fs.existsSync(NS) ? JSON.parse(fs.readFileSync(NS, 'utf8')) : null;
+	ok('第一次：建 notices.seen 时带上 since（开始记的时间）', s0 && s0.since >= t0 - 5000 && s0.since <= Date.now() + 5000 && s0.t === s0.since && Array.isArray(s0.pop), JSON.stringify(s0));
+	ok('检查更新：还没弹过任何版本（seen 是空的）', u.result && u.result.seen === '', JSON.stringify(u.result && u.result.seen));
+	let w = await cgi(A, 'notices_seen', { upd: '9.9.9' });
+	const s1 = JSON.parse(fs.readFileSync(NS, 'utf8'));
+	ok('记下弹过的版本（upd），不改「看到哪儿了」', w.result && w.result.ok && s1.upd === '9.9.9' && s1.t === s0.t && s1.since === s0.since, JSON.stringify(s1));
+	u = await cgi(A, 'update_check');
+	ok('检查更新：告诉面板这个版本弹过了', u.result && u.result.seen === '9.9.9', JSON.stringify(u.result && u.result.seen));
+	w = await cgi(A, 'notices_seen', { upd: '9.9.9; rm -rf /' });
+	ok('版本号不对：拒绝，不写', !!w.error && JSON.parse(fs.readFileSync(NS, 'utf8')).upd === '9.9.9', JSON.stringify(w));
+	if (had != null) fs.writeFileSync(NS, had); else fs.unlinkSync(NS);
+}
 ok('面板：重新打开（删掉 autoupd_off 和失败次数）', c.result && c.result.auto === true && !fs.existsSync(A + '/autoupd_off') && !fs.existsSync(A + '/autoupd_fail'), JSON.stringify(c));
 await new Promise((z) => setTimeout(z, 1500));
 r = await cp(A, 'send', 'now');

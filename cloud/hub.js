@@ -18,6 +18,7 @@ import { changelogOf } from './changelog.js';
 import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 import { installTotp } from './totp.js';
 import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
+import { installOldVer, ovScheduled } from './oldver.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -445,7 +446,10 @@ export class Hub extends DurableObject {
 		for (const a of (await this.ctx.storage.get('aplog')) || []) if (a.status === 'ok') rs.add(a.sub);
 		// 路由器上的面板版本（路由器心跳报上来的）：管理页看谁还是旧版
 		const vers = await Promise.all(list.map(async (d) => { if (d.state !== 'ok') return ''; try { return String((await this.watch(d.sub).brief()).ver || '').replace(/^v/, ''); } catch (e) { return ''; } }));
-		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		// 6.0 第 86 项：上次提醒升级是什么时候、提醒了几次
+		const ovm = new Map();
+		for (let i = 0; i < list.length; i += 100) for (const [k, v] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ov:' + d.sub))) ovm.set(k.slice(3), v);
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], ov: ovm.get(d.sub) || null, prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
@@ -1513,6 +1517,16 @@ export async function hubFetch(req, env) {
 			if (op === 'extend') { const r = await H.extend(sub, b.days); return J(r.st === 200 ? r : { error: r.error }, r.st); }
 			if (op === 'note') return done({ ok: await H.setNote(sub, b.note) }, '备注：' + noteText(b.note, 100));
 		}
+		// 6.0 第 86 项：提醒旧版本路由器升级（推送 + 给主账号发邮件；同一台 12 小时内只提醒一次）
+		if (a[0] === 'oldver' && !a[1] && req.method === 'POST') {
+			const b = await body(), subs = [...new Set((Array.isArray(b.subs) ? b.subs : []).map(String).filter((s) => SUB_RE.test(s)))].slice(0, 200);
+			if (!subs.length) return J({ error: '没有选路由器' }, 400);
+			const rv = await routerVerInfo(env).catch(() => null);
+			if (!rv) return J({ error: '查不到最新版本，稍后再试' }, 502);
+			const r = await H.ovTick(rv, { subs });
+			await H.alog('oldver', subs.length + ' 台', `提醒升级到 v${rv.version}：提醒了 ${r.sent} 台，跳过 ${r.skip} 台（已是最新、12 小时内提醒过、停用或很久没上线）`);
+			return J({ ok: true, version: rv.version, ...r });
+		}
 		if (a[0] === 'users' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminUsers(), trashDays: TRASH_DAYS });
 		if (a[0] === 'users' && /^[a-z2-9]{12}$/.test(a[1] || '') && req.method === 'POST') {
 			const b = await body();
@@ -1723,17 +1737,21 @@ export function mustUpdate(body, ver) {
 	const re = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})\s*【必须更新】/, m = re.exec(body);
 	return !!((m && m[1] === ver) || body.replace(re, '').includes('【必须更新】'));
 }
+// 路由器的最新版本（版本号、更新说明、是不是必须更新、最低版本）：路由器检查更新和提醒旧版本（6.0 第 86 项）共用
+export function routerVerInfo(env) {
+	return cached('router-version', 600, async () => {
+		const x = await latestRelease(env);
+		if (!x) { try { return (await hubObj(env).meta('rver')) || null; } catch (e) { return null; } }
+		if (x.none || !x.tag) return null;
+		const mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(x.body);
+		const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), at: x.at, force: mustUpdate(x.body, x.tag), min: mv ? mv[1] : '' };
+		try { await hubObj(env).setMeta('rver', o); } catch (e) {}
+		return o;
+	});
+}
 async function routerVersion(env) {
 	try {
-		const v = await cached('router-version', 600, async () => {
-			const x = await latestRelease(env);
-			if (!x) { try { return (await hubObj(env).meta('rver')) || null; } catch (e) { return null; } }
-			if (x.none || !x.tag) return null;
-			const mv = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})/.exec(x.body);
-			const o = { version: x.tag.replace(/^v/, ''), notes: notesOf(x.body), at: x.at, force: mustUpdate(x.body, x.tag), min: mv ? mv[1] : '' };
-			try { await hubObj(env).setMeta('rver', o); } catch (e) {}
-			return o;
-		});
+		const v = await routerVerInfo(env);
 		return v ? J({ ok: true, ...v }) : J({ ok: false, error: '还没有发布' }, 404);
 	} catch (e) { return J({ ok: false, error: '检查更新失败' }, 502); }
 }
@@ -1876,10 +1894,11 @@ async function accountApi0(req, env, H, p, body) {
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { const t = await H.meta('prerelAt'); if (!t || Date.now() - t > 3600e3) { await H.setMeta('prerelAt', Date.now()); await prereleaseRefresh(env, H, repoOf(env)); } } catch (e) {} try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { const t = await H.meta('prerelAt'); if (!t || Date.now() - t > 3600e3) { await H.setMeta('prerelAt', Date.now()); await prereleaseRefresh(env, H, repoOf(env)); } } catch (e) {} try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); try { await ovScheduled(H, await routerVerInfo(env)); } catch (e) {} }
 installOps(Hub);
 installTotp(Hub);
 installCompat(Hub);
+installOldVer(Hub);
 installV5(Hub);
 installFam(Hub);
 installInst(Hub);

@@ -32,7 +32,8 @@ const FS: Record<string, { n: string; f: (d: any) => boolean }> = {
   soon: { n: '7 天内到期', f: d => live(d) && d.exp && !d.off && d.exp - Date.now() < 7 * 864e5 },
   off: { n: '已停用', f: d => live(d) && d.off },
   idle: { n: '7 天没上线', f: d => live(d) && !d.off && Date.now() - (d.seen || d.created) > 7 * 864e5 },
-  old: { n: '旧版本', f: d => live(d) && !!d.ver && !!latest.value && vNewer(latest.value, d.ver) },
+  // 报不上版本的（心跳里没有版本号，v1.3.0 及更早）也算旧版本：它们最需要手动升级
+  old: { n: '旧版本', f: d => live(d) && !!latest.value && (d.ver ? vNewer(latest.value, d.ver) : !!d.seen) },
   bin: { n: '回收站', f: d => d.offWhy === 'deleted' },
 }
 const hit = (d: any) => { const k = q.value.trim().toLowerCase(); return !k || [d.sub, d.name, d.model, d.anote].join(' ').toLowerCase().includes(k) }
@@ -77,6 +78,17 @@ async function op(d: any, o: string) {
     load()
   } catch (e) { toastError(e, '没成功') }
 }
+// 6.0 第 86 项：提醒旧版本路由器升级（推送 + 给主账号发邮件）。必须更新时官网每周自动提醒；这里是马上手动提醒一次
+async function remind() {
+  const L = shown.value.filter(d => live(d) && !d.off)
+  if (!L.length) return
+  if (!(await confirm({ title: '提醒升级', message: `给这 ${L.length} 台路由器推送升级提醒，并给主账号发邮件：v2.0.2 起的告诉他「打开面板点一键更新」，更老的给升级命令。同一台 12 小时内只提醒一次。`, confirmText: '提醒' }))) return
+  try {
+    const r = await post('oldver', { subs: L.map(d => d.sub) })
+    pushToast(`提醒了 ${r.sent} 台` + (r.skip ? `，跳过 ${r.skip} 台（12 小时内提醒过、已经是最新或很久没上线）` : ''))
+    load()
+  } catch (e) { toastError(e, '没提醒成功') }
+}
 async function cleanup() {
   if (!(await confirm({ title: '清理不用的路由器', message: '把 90 天没上线的路由器放进回收站？（受保护的不动；30 天内能恢复，之后自动彻底删除）', confirmText: '清理' }))) return
   try { const r = await post('cleanup'); pushToast('处理了 ' + (r.removed?.length ?? 0) + ' 台'); load() } catch (e) { toastError(e, '没成功') }
@@ -97,6 +109,7 @@ onMounted(load)
           <TextInput v-model="q" icon="search" placeholder="搜编号、名称、型号、备注" clearable />
         </div>
         <p v-if="vdist.length" class="hub-row-meta" style="margin-top: 0; margin-bottom: 6px">各版本：<template v-for="(x, i) in vdist" :key="x.v"><b :class="x.old && 'bad'">{{ x.v === '?' ? '版本未知' : 'v' + x.v }}</b> {{ x.n }} 台<template v-if="i < vdist.length - 1"> · </template></template><template v-if="latest"> · 最新 v{{ latest }}</template></p>
+        <div v-if="f === 'old'" class="hub-note ov-bar"><span>必须更新时官网会自动提醒这些路由器的主人（发现后马上一次，之后每周一次，升级了就停）。也可以现在手动提醒一次。</span><Button size="sm" variant="primary" icon="bell" :disabled="!shown.some(d => live(d) && !d.off)" @click="remind">提醒升级</Button></div>
         <p v-if="f === 'bin'" class="hub-row-meta">回收站：网址已停用，隧道和数据都还在，随时可以恢复；到期自动彻底删除。</p>
         <div class="hub-list">
           <div v-for="d in shown" :key="d.sub" class="hub-row">
@@ -104,10 +117,11 @@ onMounted(load)
               <div class="hub-row-title">{{ d.offWhy === 'deleted' ? '🗑 ' : '' }}{{ d.name || d.sub }} <code>{{ d.sub }}</code>
                 <Tag v-if="d.prot" tone="ok">受保护</Tag>
                 <Tag v-if="d.ver" :tone="latest && vNewer(latest, d.ver) ? 'danger' : 'neutral'">v{{ d.ver }}{{ latest && vNewer(latest, d.ver) ? ' · 旧版' : '' }}</Tag>
+                <Tag v-else-if="live(d) && d.seen" tone="danger">版本未知 · 很旧</Tag>
                 <Tag v-if="d.off && d.offWhy !== 'deleted'" tone="danger" dot>{{ d.offWhy === 'exp' ? '到期暂停' : '已封禁' }}</Tag>
               </div>
               <div v-if="d.offWhy === 'deleted'" class="hub-row-meta">{{ day(d.delAt) }} {{ d.delWhy === 'idle' ? '因为 90 天没上线被放进回收站' : '删除' }} · <b class="bad">{{ day(d.purgeAt) }} 彻底删除</b> · {{ (d.users || []).length }} 个账号</div>
-              <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号{{ d.owner ? '' : (d.users || []).length > 1 ? '（还没选主账号）' : '' }} · 邀请码 {{ d.invite || '—' }}</div>
+              <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号{{ d.owner ? '' : (d.users || []).length > 1 ? '（还没选主账号）' : '' }} · 邀请码 {{ d.invite || '—' }}{{ d.ov ? ` · 提醒过升级 ${d.ov.n || 1} 次（最近 ${ago(d.ov.at)}）` : '' }}</div>
               <div v-if="d.anote" class="hub-note">📝 {{ d.anote }}</div>
             </div>
             <div class="hub-row-acts">
@@ -129,3 +143,9 @@ onMounted(load)
     <FamDrawer :sub="fam.sub" :name="fam.name" @close="fam = { sub: '', name: '' }" @changed="load" />
   </div>
 </template>
+
+<style scoped>
+/* 「旧版本」上面的提醒条：文字在左、按钮在右；窄屏放不下时按钮换到下一行 */
+.ov-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 6px; }
+.ov-bar > span { flex: 1 1 220px; min-width: 0; }
+</style>

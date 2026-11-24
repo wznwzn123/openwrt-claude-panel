@@ -83,7 +83,8 @@ for (const dark of [false, true]) {
 	await page.reload(); await W(800);
 	ok('路由器发心跳后：显示在线', /在线/.test(await page.textContent('#devs .meta')));
 	ok('显示路由器的版本号（心跳里报的）', /v1\.3\.1/.test(await page.textContent('#devs .meta')));
-	ok('比最新版旧：标「可更新」', /可更新到 v1\.3\.2/.test(await page.textContent('#devs .meta .pill.up')));
+	// 6.0 第 86 项：v2.0.1 及更早的一键更新用不了，标「要手动升级一次」，点一下复制升级命令（v2.0.2 起照旧标「可更新到」）
+	ok('比最新版旧、又早于 v2.0.2：标「要手动升级一次」，是能点的按钮', /要手动升级一次/.test(await page.textContent('#devs .meta .pill.up')) && (await page.$('#devs .meta button.pill.up[data-upcmd]')) !== null);
 	// 试用期：显示到期时间、续期
 	if (!dark) {
 		const H = env.H.get('hub'), dk = 'd:' + R1.sub, dv = await H.ctx.storage.get(dk); dv.exp = Date.now() + 2 * 86400e3; await H.ctx.storage.put(dk, dv);

@@ -160,6 +160,7 @@ body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 .expline.bad { background: rgb(248 113 113 / .1); color: #fca5a5; border: 1px solid rgb(248 113 113 / .25); }
 .pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
 .pill.up { background: rgb(251 191 36 / .14); color: #fcd34d; }
+button.pill { border: 0; font-family: inherit; line-height: inherit; cursor: pointer; flex-wrap: wrap; column-gap: .3em; text-align: left; } button.pill > span { white-space: nowrap; } button.pill:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .empty { text-align: center; padding: 34px 20px !important; }
 .empty .big { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 20px; display: grid; place-items: center; color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, transparent); animation: floaty 4s ease-in-out infinite; }
 .empty .big svg { width: 32px; height: 32px; }
@@ -708,6 +709,11 @@ const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.
 // 5.2 装新路由器：安装码（试用领的、邀请码兑换的）+ 带着它的安装命令；装好自动加到账号里
 // 托管版只有一条命令：装 AI 版还是纯面板版，运行后在终端里输 1 或 2 选
 const cmdOf = (code) => 'cd /tmp && wget -O p.tar.gz https://' + location.host + '/dl/openwrt-claude-panel-hosted.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh --invite ' + code;
+// 6.0 第 86 项：v2.0.1 及更早的路由器一键更新用不了（没有或有毛病），要在路由器终端运行一次升级命令（不带安装码：网址和设置都保留）。
+// 发过心跳却报不上版本号的是 v1.3.0 及更早（v1.3.1 起心跳里都带版本号），也算
+
+const oldSelf = (v) => newer('2.0.2', String(v || '').replace(/^v/, ''));
+const upCmd = () => 'cd /tmp && wget -O p.tar.gz https://' + location.host + '/dl/openwrt-claude-panel-hosted.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh';
 function renderInst(me) {
 	const t = me.trial, tr = $('trialRow');
 	tr.innerHTML = t && t.left > 0 ? `<div class="trialrow"><div><b>🎁 免费试用 ${t.days} 天</b><span>${t.max > 1 ? '每个账号能领 ' + t.max + ' 次，还剩 ' + t.left + ' 次' : '每个账号能领一次'}</span></div><button class="btn primary sm" id="trialGo">领取</button></div>` : '';
@@ -842,7 +848,7 @@ function render(me) {
 		const expTxt = d.trashed ? `<div class="expline bad">⚠️ 托管服务已被提供服务的人停用，专属网址暂时打不开（家里上网和路由器设置都不受影响）。<b>${esc(ymd(d.trashed))}</b> 前联系他可以恢复，恢复后什么都不用做。<a href="/#faq-restore">怎么恢复 ›</a></div>` : !d.exp ? '' : d.expired ? `<div class="expline bad">⚠️ 托管服务已到期，已暂停（家里上网不受影响）。点下面「申请续期」填表，审核通过后马上恢复；有续期码的点「续期」输入${apTxt}</div>`
 			: `<div class="expline${left <= 3 ? ' warn' : ''}">托管服务到期：${esc(ymd(d.exp))}（还剩 ${left} 天）${left <= 3 ? '，快到期了，可以点「申请续期」' : ''}${apTxt}</div>`;
 		return `${famHead(d, i, L)}<div class="card dev fxc${on && !d.expired && !d.off ? ' is-on' : ''}" data-sub="${esc(d.sub)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 16.5h.01M11 16.5h.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M6 7a8.5 8.5 0 0 1 12 0"/><path d="M12 13v-1.5"/></svg></div><b>${esc(d.name)}</b>
-		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : d.last ? '离线 · 最后上线 ' + ago(d.last) : '还没上线'}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(String(d.ver).replace(/^v/, '')) : ''}${d.ver && latest && newer(latest, d.ver) ? ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>' : ''}${famPill(d) ? '<span class="frole">' + famPill(d) + '</span>' : ''}</div>
+		<div class="meta"><i class="dot ${d.off ? 'off' : on ? 'on' : ''}"></i>${d.expired ? '已到期' : d.off ? '已被停用' : on ? '在线' : d.last ? '离线 · 最后上线 ' + ago(d.last) : '还没上线'}${d.model ? ' · ' + esc(d.model) : ''}${d.ver ? ' · v' + esc(String(d.ver).replace(/^v/, '')) : ''}${latest && (d.ver ? newer(latest, d.ver) : d.last) ? (oldSelf(d.ver) ? ' <button type="button" class="pill up" data-upcmd title="这个版本的一键更新用不了：复制升级命令，到路由器终端里运行一次"><span>要手动升级一次</span><span>· 复制命令</span></button>' : ' <span class="pill up" title="在面板「系统操作 → 检查更新」里一键更新">可更新到 v' + esc(latest) + '</span>') : ''}${famPill(d) ? '<span class="frole">' + famPill(d) + '</span>' : ''}</div>
 		${expTxt}
 		<div class="acts">${devActs(d, left, ap)}</div></div>`;
 	}).join('') + links.map((l) => `<div class="card dev fxc" data-link="${esc(l.id)}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg></div><b>${esc(l.name)}</b>
@@ -871,6 +877,7 @@ function render(me) {
 		const go = async () => { await api('unbind', { sub }); toast('已解绑'); await load(); };
 		try { await go(); } catch (x) { if (/确认是你本人/.test(x.message)) sudoBox(() => go().catch((e) => toast(e.message))); else toast(x.message); }
 	}));
+	$('devs').querySelectorAll('[data-upcmd]').forEach((b) => (b.onclick = async () => { const c = upCmd(); try { await navigator.clipboard.writeText(c); toast('已复制升级命令：在路由器后台「服务 → 终端」里粘贴运行，问装哪个版本时直接回车；网址和设置都保留'); } catch (e) { prompt('复制升级命令，到路由器后台「服务 → 终端」里运行：', c); } }));
 	$('devs').querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => openPanel(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub), b)));
 	$('devs').querySelectorAll('[data-leave]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub); if (!confirm('退出「' + d.name + '」？退出以后你的手机就打不开这台路由器的面板了，要主账号重新发加入码才能回来。')) return; try { await api('fam/leave', { sub }); toast('已退出'); await load(); } catch (x) { toast(x.message); } }));
 }

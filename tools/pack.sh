@@ -79,8 +79,16 @@ for ai in ai noai; do
 		if [ "$ed" = lite ]; then
 			rm -f "$d/src/bin/cmcp-backup" "$d/src/bin/cmcp-bkcrypt"
 		else
-			# worker.js 要用 hub.js、ops.js、site.js（自己部署 Worker 时 wrangler 会一起打包）
-			mkdir -p "$d/cloud" && cp cloud/worker.js cloud/hub.js cloud/ops.js cloud/v5.js cloud/fam.js cloud/inst.js cloud/files.js cloud/site.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
+			# worker.js 要用 hub.js 和它引用的所有模块（自己部署 Worker 时 wrangler 会一起打包）。
+			# 以前是一个个写死的，漏了 changelog.js、help.js、faq-default.js 等，自建完整版部署 Worker 会失败：现在整个复制，再查一遍有没有漏的
+			mkdir -p "$d/cloud" && cp cloud/*.js cloud/wrangler.toml cloud/gen-vapid.mjs cloud/README.md "$d/cloud/"
+			for f in "$d"/cloud/*.js; do
+				# site.js 里是官网页面的内容（里面的 import 是给浏览器用的），不是 Worker 的模块引用
+				[ "${f##*/}" = site.js ] && continue
+				for m in $(grep -o "from '\./[A-Za-z0-9_-]*\.js'" "$f" | sed "s/^from '\.\///; s/'\$//"); do
+					[ -f "$d/cloud/$m" ] || { echo "打包出错：${f##*/} 要用 $m，但没有复制进自建版的 cloud 目录" >&2; exit 1; }
+				done
+			done
 		fi
 		tar -C dist/tmp/$k -czf dist/openwrt-claude-panel-$k.tar.gz openwrt-claude-panel
 	done

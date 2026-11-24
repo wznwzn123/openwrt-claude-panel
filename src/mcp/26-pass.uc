@@ -10,7 +10,6 @@
  *     指纹解锁保留，但每天至少要输一次密码（你 11/21 定）；一直输错会让这台手机退出 */
 const PASS_F = '/tmp/cmcp_pass.json', LKOK_F = '/tmp/cmcp_lkok.json', LKF_F = '/tmp/cmcp_lkfail.json', LOGINPW_F = ETC + '/login_pw';
 const PASS_TTL = 3600, DEV_ROT = 43200, LK_DAY = 86400, LK_WIPE = 20;
-let ERR_CODE = null; // 报错时要给手机的特殊错误码（比如 -32015 要输路由器密码），见 90-rpc
 function pass_read() { let m = cmcp_readj(PASS_F, {}); return type(m) == 'object' ? m : {}; }
 function pass_write(m) {
 	let t = time();

@@ -711,7 +711,7 @@ fi
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
 touch $CR
-sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann\|\/usr\/sbin\/cmcp-compat/d' $CR
+sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann\|\/usr\/sbin\/cmcp-compat\|\/usr\/sbin\/cmcp-update/d' $CR
 echo '0 9 * * * /usr/sbin/cmcp-daily >/dev/null 2>&1' >> $CR
 # 面板走直连还是走代理，自动选能打开的那条
 echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
@@ -720,6 +720,9 @@ echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
 [ "$ED" = full ] && echo '7 4 * * * /usr/sbin/cmcp-backup auto >/dev/null 2>&1' >> $CR
 # 6.0 第 57 项：兼容情况每天匿名报一次（脚本里再随机等 0–30 分钟；每台路由器的钟点不一样，大家错开）。面板「设置」里能关
 echo "$(( $(date +%s) % 50 + 5 )) $(( $(date +%s) % 11 + 10 )) * * * /usr/sbin/cmcp-compat send >/dev/null 2>&1" >> $CR
+# 6.0 第 86 项：必须更新（安全修复）每天夜里自动装一次（3:00–5:59 之间每台路由器的时间不一样，大家错开）；
+# 普通更新照样等用户点。面板「系统操作 → 检查更新」里能关
+echo "$(( $(date +%s) / 7 % 60 )) $(( $(date +%s) / 13 % 3 + 3 )) * * * /usr/sbin/cmcp-update auto >/dev/null 2>&1" >> $CR
 /etc/init.d/cron enable >/dev/null 2>&1 || true
 /etc/init.d/cron restart >/dev/null 2>&1 || true
 

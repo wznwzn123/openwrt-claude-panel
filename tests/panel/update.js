@@ -6,12 +6,13 @@ const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') 
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const TOK = 'testtoken1234567890abc';
-const U = { cur: '1.3.0', latest: '1.3.1', force: false, notes: '• 一键更新\n• 配对码更醒目', seq: [], down: 0, started: 0, startArgs: null };
+const U = { cur: '1.3.0', latest: '1.3.1', force: false, notes: '• 一键更新\n• 配对码更醒目', seq: [], down: 0, started: 0, startArgs: null, auto: true, auSets: [] };
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { const u = new URL(req.url, 'http://x');
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, '');
 		if (U.down > 0 && m !== 'update_start') { U.down--; req.socket.destroy(); return; }   // 面板服务在重启：连不上
 		let result;
-		if (m === 'update_check') result = { cur: U.cur, code: 'hosted-ai', latest: U.latest, notes: U.notes, newer: U.cur !== U.latest, force: U.force && U.cur !== U.latest };
+		if (m === 'update_check') result = { cur: U.cur, code: 'hosted-ai', latest: U.latest, notes: U.notes, newer: U.cur !== U.latest, force: U.force && U.cur !== U.latest, auto: U.auto };
+		else if (m === 'autoupd_set') { U.auSets.push(body.params); U.auto = body.params.on !== false; result = { auto: U.auto }; }
 		else if (m === 'update_start') { U.started++; U.startArgs = body.params; result = { started: true }; }
 		else if (m === 'update_status') { const st = U.seq.shift() || { state: 'idle' }; if (st.down) { U.down = st.down; req.socket.destroy(); return; } if (st.state === 'done') U.cur = U.latest; result = { ...st, cur: U.cur }; }
 		else if (m === 'cloud_info') result = { enabled: false };
@@ -73,6 +74,30 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.goto('http://localhost:8183/panel/?p=more'); await W(2500);
 	await page.click('[data-t="update"]'); await W(800);
 	ok('已经是最新版：检查更新说明是最新', /已经是最新(版|的正式版)/.test(await page.textContent('.modal')) && !(await page.isVisible('.modal [data-go]')));
+	// 6.0 第 86 项：必须更新夜里自动装（默认开，关掉要确认）
+	ok('检查更新里有「必须更新自动装」开关，默认开', /必须更新自动装/.test(await page.textContent('.modal')) && await page.isChecked('.modal [data-au]'));
+	await page.screenshot({ path: path.join(__dirname, 'shots', 'update-05-auto.png') });
+	await page.click('.modal label.sw'); await W(500);
+	ok('关掉时先问一句（说清楚安全修复要等自己点）', (await page.locator('.modal').count()) === 2 && /要等你打开面板/.test(await page.locator('.modal').last().textContent()));
+	await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(400);
+	ok('取消：开关还是开着，没有改路由器', await page.isChecked('.modal [data-au]') && U.auSets.length === 0);
+	await page.click('.modal label.sw'); await W(500);
+	await page.locator('.modal').last().locator('[data-v="true"]').click(); await W(800);
+	ok('确认关掉：路由器收到关掉，开关变成关', U.auSets.length === 1 && U.auSets[0].on === false && !(await page.isChecked('.modal [data-au]')) && U.auto === false);
+	await page.click('.modal label.sw'); await W(800);
+	ok('重新打开：不用确认，直接打开', U.auSets.length === 2 && U.auSets[1].on === true && await page.isChecked('.modal [data-au]') && (await page.locator('.modal').count()) === 1);
+	// 布局：手机常见宽度、深浅色都不横向滚动、开关不被挤出卡片
+	for (const dark of [false, true]) for (const w of [320, 390, 430]) {
+		const c2 = await browser.newContext({ viewport: { width: w, height: 760 }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' });
+		const p2 = await c2.newPage(); p2.on('pageerror', (e) => problems.push('页面错误：' + e.message));
+		await p2.addInitScript((t) => { localStorage.setItem('rp_token', t); localStorage.setItem('rp_theme', 'auto'); }, TOK);
+		await p2.goto('http://localhost:8183/panel/?p=more'); await W(3500);
+		await p2.click('[data-t="update"]'); await W(900);
+		const g = await p2.evaluate(() => { const m = document.querySelector('.modal'), s = document.querySelector('.modal label.sw'); const mr = m.getBoundingClientRect(), sr = s.getBoundingClientRect(); return { over: document.documentElement.scrollWidth > document.documentElement.clientWidth || m.scrollWidth > m.clientWidth + 1, inside: sr.right <= mr.right + 1 && sr.left >= mr.left - 1 }; });
+		ok(`布局 ${w} 宽${dark ? '（深色）' : ''}：不横向滚动，开关在卡片里`, !g.over && g.inside, JSON.stringify(g));
+		await p2.screenshot({ path: path.join(__dirname, 'shots', `update-06-auto-${w}${dark ? '-dark' : ''}.png`) });
+		await c2.close();
+	}
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));
 	console.log(`\n通过 ${results.filter((r) => r[1]).length}/${results.length}`);

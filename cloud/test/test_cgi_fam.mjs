@@ -93,6 +93,8 @@ const wb = await call(devB, 'whoami');
 ok('子账号：whoami 是 sub，权限是主账号给的', wb.result && wb.result.role === 'sub' && wb.result.perms.join() === 'msg,node,speed', JSON.stringify(wb));
 const code = async (dev, m, p) => { const r = await call(dev, m, p); return r.error ? r.error.code : 0; };
 ok('子账号：看首页可以（不是权限错误）', (await code(devB, 'overview')) !== -32012);
+// 6.0 第 86 项：「必须更新自动装」只有主账号能关
+{ const r = await call(devB, 'autoupd_set', { on: false }); ok('子账号：不能关「必须更新自动装」', !!r.error && !fs.existsSync(ETC + '/autoupd_off'), JSON.stringify(r)); }
 ok('子账号：切换节点可以（给了）', (await code(devB, 'px_set', {})) !== -32012);
 ok('子账号：改代理设置不行（没给）', (await code(devB, 'oc_set', {})) === -32012);
 ok('子账号：终端不行（只有主账号）', (await code(devB, 'term', {})) === -32012);

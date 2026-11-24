@@ -5,6 +5,8 @@
 #       cmcp-update start stable        退回正式版（尝鲜版比正式版新，退回时允许装比现在旧的正式版；只从「最新正式版」下载）
 #       cmcp-update status   看进度（/tmp/cmcp_update.json）
 #       cmcp-update run      真正干活（start 会调用它，一般不用手动运行）
+#       cmcp-update auto     6.0 第 86 项：定时任务每天夜里跑一次，最新版是「必须更新」才自动装（普通更新照样等用户点）。
+#                            面板「系统操作 → 检查更新」里能关（$D/autoupd_off）；同一个版本自动装连续失败 3 次就不再自动试
 # 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_DL / CMCP_GH（下载地址）、CMCP_ST（进度文件）、CMCP_NOSVC=1（不重启服务）
 R=${CMCP_ROOT:-}
 D=$R/etc/claude-mcp
@@ -86,6 +88,19 @@ if [ -z "$CODE" ]; then
 fi
 [ -n "$FROM" ] || FROM=旧版
 TO=""
+AU_OFF=$D/autoupd_off AU_FAIL=$D/autoupd_fail
+notify() { [ -x "$R/usr/sbin/cmcp-notify" ] && [ "$CMCP_NOSVC" != 1 ] && "$R/usr/sbin/cmcp-notify" "$@" >/dev/null 2>&1; }
+# 自动更新没成功：记下这个版本失败了几次（「版本 次数」），第一次失败推送告诉用户
+autofail() {
+	local f n=0
+	f=$(cat "$AU_FAIL" 2>/dev/null)
+	[ "${f%% *}" = "$1" ] && n=${f##* }
+	case "$n" in ''|*[!0-9]*) n=0 ;; esac
+	n=$((n + 1))
+	echo "$1 $n" > "$AU_FAIL"
+	[ "$n" = 1 ] && notify warn update "必须更新的 v$1 没能自动装上" "已经退回原来的版本，家里上网不受影响。打开面板「系统操作 → 检查更新」点「一键更新」再试，那里能看到原因" update
+	return 0
+}
 HUB=$(sed -n 's/^HUB=//p' $D/hub.conf 2>/dev/null)
 BASE=${CMCP_DL:-${HUB:-https://yrlove520.com}/dl}
 PKG=openwrt-claude-panel-$CODE.tar.gz
@@ -116,9 +131,28 @@ start)
 		i=$((i + 1))
 	done
 	echo '{"started":true}' ;;
+auto)
+	[ -e "$AU_OFF" ] && exit 0
+	# 已经在更新（用户自己点了）就不插手
+	[ -d "$LOCK" ] && exit 0
+	# 问官网最新版本：跟面板「检查更新」同一个地址
+	VJ=$(curl -fsS -m 20 "${CMCP_VER_URL:-${HUB:-https://yrlove520.com}/api/router/version}" 2>/dev/null)
+	# OpenWrt 都有 jsonfilter；没有时（测试机）用 sed 读这几个简单字段
+	jget() { if command -v jsonfilter >/dev/null 2>&1; then printf '%s' "$VJ" | jsonfilter -e "@.$1" 2>/dev/null; else printf '%s' "$VJ" | sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",}]*\).*/\1/p" | head -n 1; fi; }
+	LV=$(jget version); FC=$(jget force); MN=$(jget min)
+	case "$LV" in ''|*[!0-9.]*) exit 0 ;; esac
+	# 现在的比最新的旧才装（现在的版本号不是纯数字，比如开发版，不管；尝鲜版比正式版新，也不会被换回去）
+	vlt "$FROM" "$LV" || exit 0
+	# 只装必须更新：发布说明写了【必须更新】，或者现在的版本低于「最低版本」
+	[ "$FC" = true ] || { [ -n "$MN" ] && vlt "$FROM" "$MN"; } || exit 0
+	f=$(cat "$AU_FAIL" 2>/dev/null)
+	if [ "${f%% *}" = "$LV" ]; then n=${f##* }; case "$n" in ''|*[!0-9]*) n=0 ;; esac; [ "$n" -ge 3 ] && exit 0; fi
+	"$0" start auto "$LV" ;;
 run)
 	mkdir "$LOCK" 2>/dev/null || exit 0
-	trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+	AUTO=""; [ "$2" = auto ] && AUTO=$3
+	# 自动更新（必须更新）没成功的：退出时记一笔、第一次推送告诉用户
+	trap 'rc=$?; rmdir "$LOCK" 2>/dev/null; [ -n "$AUTO" ] && [ $rc != 0 ] && autofail "$AUTO"' EXIT
 	: > "$LOG"
 	# 尝鲜版：从指定版本下载（官网 /dl/t/版本/，不行再直连 GitHub 这个版本）；退回正式版：允许装比现在旧的「最新正式版」
 	CH=""
@@ -183,7 +217,8 @@ run)
 	fi
 	if [ $ok = 1 ]; then
 		state done "已更新到 v$TO"
-		[ -x "$R/usr/sbin/cmcp-notify" ] && [ "$CMCP_NOSVC" != 1 ] && "$R/usr/sbin/cmcp-notify" info update "路由器面板已更新到 v$TO" "从 v$FROM 一键更新" update >/dev/null 2>&1
+		if [ -n "$AUTO" ]; then rm -f "$AU_FAIL"; notify info update "路由器面板已自动更新到 v$TO" "这是必须更新（安全修复），夜里自动装好了，设置都保留。不想自动装：面板「系统操作 → 检查更新」里关掉" update
+		else notify info update "路由器面板已更新到 v$TO" "从 v$FROM 一键更新" update; fi
 		rm -rf "$W" "$BK"
 		exit 0
 	fi
@@ -194,5 +229,5 @@ run)
 	state rolledback "更新没成功，已经退回 v$FROM，一切照旧。原因：$(tail -n 3 "$LOG" | tr '\n' ' ' | cut -c1-200)" "$TO"
 	exit 1 ;;
 *)
-	echo "用法：$0 start | status | run"; exit 1 ;;
+	echo "用法：$0 start | status | run | auto"; exit 1 ;;
 esac

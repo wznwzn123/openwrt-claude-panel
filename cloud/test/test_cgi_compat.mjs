@@ -122,6 +122,16 @@ c = await cgi(A, 'compat_set', { on: true });
 ok('面板：打开上报', c.result && c.result.on === true && !fs.existsSync(A + '/compat_off'));
 c = await cgi(A, 'beta_set', { want: false });
 ok('面板：退出尝鲜', c.result && c.result.beta.want === false && !fs.existsSync(A + '/beta_want'));
+// 6.0 第 86 项：必须更新夜里自动装（默认开；关掉写 autoupd_off；重新打开时把失败次数也清掉，让它重新试）
+c = await cgi(A, 'update_check');
+ok('检查更新：告诉面板「必须更新自动装」默认开', c.result && c.result.auto === true, JSON.stringify(c.result));
+c = await cgi(A, 'autoupd_set', { on: false });
+ok('面板：关掉自动装（写 autoupd_off）', c.result && c.result.auto === false && fs.existsSync(A + '/autoupd_off'), JSON.stringify(c));
+c = await cgi(A, 'update_check');
+ok('检查更新：关掉以后 auto 是 false', c.result && c.result.auto === false, JSON.stringify(c.result));
+fs.writeFileSync(A + '/autoupd_fail', '9.9.9 3\n');
+c = await cgi(A, 'autoupd_set', { on: true });
+ok('面板：重新打开（删掉 autoupd_off 和失败次数）', c.result && c.result.auto === true && !fs.existsSync(A + '/autoupd_off') && !fs.existsSync(A + '/autoupd_fail'), JSON.stringify(c));
 await new Promise((z) => setTimeout(z, 1500));
 r = await cp(A, 'send', 'now');
 ok('退出后：官网那边也不再算尝鲜用户', !(await H().ctx.storage.get('cp:' + id)).beta && !(await H().ctx.storage.get('cp:' + id)).betaOk);

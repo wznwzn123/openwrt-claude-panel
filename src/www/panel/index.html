@@ -4761,11 +4761,22 @@ async function updSheet(forced) {
 	modal(`<div class="sheethead"><h3>检查更新</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<div class="kv"><span>现在的版本</span><b>${esc(u.cur ? 'v' + u.cur : '旧版（没有记录版本号）')}${u.ahead ? ' <span class="pill">尝鲜版</span>' : ''}</b></div>
 	<div class="kv"><span>最新正式版</span><b>${esc('v' + u.latest)}</b></div>
+	${'auto' in u ? `<div class="kv cpk" style="margin-top:12px"><div><b>必须更新自动装</b><span class="muted">安全修复不用等你打开面板：每天夜里检查一次，只自动装「必须更新」，装不好自动退回原来的版本，装好后推送告诉你。普通更新还是你自己点。</span></div><label class="sw"><input type="checkbox" data-au${u.auto ? ' checked' : ''}${ME_ROLE.role === 'sub' ? ' disabled' : ''} aria-label="必须更新自动装"><i></i></label></div>${ME_ROLE.role === 'sub' ? '<p class="muted" style="font-size:12.5px;margin:6px 0 0">只有主账号能改。</p>' : ''}` : ''}
 	${u.beta ? `<div class="notice" style="margin-top:12px;line-height:1.6">你是尝鲜用户：可以先装 <b>v${esc(u.beta.ver)}</b>（还没正式发布）。有问题随时能退回正式版。</div>` : ''}
 	${u.ahead ? '<p class="muted" style="font-size:13px;margin:12px 0 0;line-height:1.6">你用的是尝鲜版，比正式版新。不好用的话可以退回正式版，设置都保留。</p>' : '<p class="muted" style="margin:12px 0 0">已经是最新的正式版了。</p>'}
 	<div class="btngrid" style="margin:12px 0 0">${u.beta ? '<button class="btn primary" data-ch="beta">装尝鲜版 v' + esc(u.beta.ver) + '</button>' : u.ahead ? '<button class="btn" data-ch="stable">退回正式版 v' + esc(u.latest) + '</button>' : ''}<button class="btn${u.beta || u.ahead ? '' : ' primary'}" data-v="close">好的</button></div>`,
 	(m, close) => {
 		m.dataset.upd = 1;
+		// 6.0 第 86 项：必须更新夜里自动装（默认开）。关掉时多问一句：安全修复会等到你自己点了才装
+		const au = m.querySelector('[data-au]');
+		if (au) au.onchange = async () => {
+			const on = au.checked;
+			if (!on && !(await confirmBox('关掉自动安装', '关掉以后，必须更新（安全修复）要等你打开面板、自己点「一键更新」才会装。确定关掉？', '关掉'))) { au.checked = true; return; }
+			au.disabled = true;
+			try { const r = await P('autoupd_set', { on }, 15000); UPD.auto = r.auto; au.checked = r.auto; toast(r.auto ? '已打开：必须更新会在夜里自动装好' : '已关掉：必须更新要你自己点「一键更新」'); }
+			catch (e) { au.checked = !on; toast(e.message, true); }
+			au.disabled = false;
+		};
 		m.querySelectorAll('[data-ch]').forEach((b) => (b.onclick = async () => {
 			const beta = b.dataset.ch === 'beta';
 			if (!(await confirmBox(beta ? '装尝鲜版' : '退回正式版', beta ? '更新到 v' + u.beta.ver + '（尝鲜版）？\n设置都保留，面板断开 10–30 秒，不会断网；装完起不来会自动退回。用着有问题，在「系统操作 → 问题反馈」里告诉我们。' : '退回正式版 v' + u.latest + '？\n设置都保留，面板断开 10–30 秒，不会断网。', beta ? '装尝鲜版' : '退回正式版'))) return;

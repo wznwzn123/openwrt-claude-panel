@@ -139,3 +139,13 @@ function last_delay(p) {
 
 /* ---------------- 工具实现 ---------------- */
 
+
+// 报错时要给手机的特殊错误码（比如 -32015 要输路由器密码、-32020 功能开不了），见 90-rpc。
+// 放在最前面：26-backup.uc 等更早的文件里也会用到（ucode 要先声明后用）
+let ERR_CODE = null;
+// 6.0 第 57 项：功能开不了：记下来（下次上报时一起报），面板上的提示带「报告这个问题」按钮（错误码 -32020）
+function compat_die(f, why) {
+	try { sh(sprintf('CMCP_COMPAT_D=%s %s/cmcp-compat fail %s %s >/dev/null 2>&1', shq(ETC), SBIN, shq(f), shq(why))); } catch (e) {}
+	ERR_CODE = -32020;
+	die(why);
+}

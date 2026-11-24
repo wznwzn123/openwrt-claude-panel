@@ -13,6 +13,10 @@ on:
         description: 先发给尝鲜用户（标成「预发布」；正式用户收不到，觉得没问题再在 GitHub 上把「预发布」去掉，就变成正式版）
         type: boolean
         default: false
+      drop_old_key:
+        description: 不再给 6.0 以前的老路由器签名（只有大家都升到 6.0、已经删掉旧密钥 RELEASE_SIGN_KEY 时才勾；不勾时缺旧密钥会拒绝发布）
+        type: boolean
+        default: false
 permissions:
   contents: write
   id-token: write      # 安装包来源证明（GitHub 签发，说明是这个仓库的这次构建打出来的）
@@ -38,13 +42,17 @@ jobs:
         env:
           RELEASE_SIGN_KEY_V6: ${{ secrets.RELEASE_SIGN_KEY_V6 }}
         run: node tools/sign.mjs dist/SHA256SUMS
-      # 还没升到 6.0 的老路由器只认旧密钥：仓库里还有旧密钥 RELEASE_SIGN_KEY 就也签一份 SHA256SUMS.sig，让它们能升上来；
-      # 大家都升到 6.0 以后在仓库设置里删掉 RELEASE_SIGN_KEY，这一步就自动跳过
+      # 还没升到 6.0 的老路由器（v5.2.1–5.2.3 会验签）只认旧密钥：用旧密钥 RELEASE_SIGN_KEY 再签一份 SHA256SUMS.sig，让它们能升上来。
+      # 6.0 第 86 项：缺旧密钥就拒绝发布（以前只提示一句照样发，老路由器会因此升不上来）。
+      # 大家都升到 6.0、在仓库设置里删掉 RELEASE_SIGN_KEY 以后，发布时勾上「不再给 6.0 以前的老路由器签名」
       - name: 给安装包签名（旧密钥，给老路由器升级用）
         env:
           RELEASE_SIGN_KEY: ${{ secrets.RELEASE_SIGN_KEY }}
+          DROP_OLD: ${{ inputs.drop_old_key }}
         run: |
-          if [ -n "$RELEASE_SIGN_KEY" ]; then node tools/sign.mjs --old dist/SHA256SUMS; else echo "::notice::没有旧密钥 RELEASE_SIGN_KEY：只用新密钥签名（6.0 以前的老路由器没法一键更新了）"; fi
+          if [ -n "$RELEASE_SIGN_KEY" ]; then node tools/sign.mjs --old dist/SHA256SUMS
+          elif [ "$DROP_OLD" = true ]; then echo "::notice::按选择不再用旧密钥签名：6.0 以前的老路由器没法一键更新了，只能用安装命令手动升级"
+          else echo "::error::没有旧密钥 RELEASE_SIGN_KEY：v5.2.1–5.2.3 的路由器会验签失败、升不上来，已停止发布。把旧密钥加回仓库设置再发；确定不再管老路由器的话，发布时勾上「不再给 6.0 以前的老路由器签名」"; exit 1; fi
       # 来源证明：任何人都能用 gh attestation verify 查安装包是不是这个仓库的 GitHub Actions 打出来的；出错也不影响发布
       - name: 安装包来源证明
         continue-on-error: true

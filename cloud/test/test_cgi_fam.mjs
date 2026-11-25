@@ -74,7 +74,7 @@ ok('同一张票不能用第二次', !!(await open(ta, 'x')).error);
 ok('乱写的票不行', !!(await open('abcdefghijkmnpqrstuvwxyz', 'x')).error);
 ok('/open 地址只能换钥匙，调别的接口不行', (await cgi('/open', { jsonrpc: '2.0', id: 1, method: 'panel/overview', params: {}, client: 'panel' })).error?.code === -32601);
 const wa = await call(devA, 'whoami');
-ok('主账号：whoami 是 owner，有全部权限', wa.result && wa.result.role === 'owner' && wa.result.uid === ua && wa.result.perms.length === 7, JSON.stringify(wa));
+ok('主账号：whoami 是 owner，有全部权限', wa.result && wa.result.role === 'owner' && wa.result.uid === ua && wa.result.perms.length === 8, JSON.stringify(wa));
 ok('手机管理：没确认本人看不到登录着的手机（6.0 第 63 项）', /确认是你本人/.test((await call(devA, 'device_list')).error?.message || ''));
 
 // 2. 主账号确认本人 → 发加入码 → B 加入

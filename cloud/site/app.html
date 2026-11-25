@@ -818,11 +818,12 @@ function pickBox(d, r) {
 	document.body.appendChild(m);
 }
 // 加入家人的路由器：先看一眼（谁邀请的、什么权限），再加入
-const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、设备不走代理', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
+const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、设备不走代理', alldev: '看和管所有设备', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
 async function joinBox(code) {
 	let r; try { r = await api('fam/join_info', { code }); } catch (x) { toast(x.message); return; }
 	const m = document.createElement('div'); m.className = 'mask';
-	const perms = ['看状态、设备、流量、断线记录', ...r.perms.map((k) => PERM_NAMES[k]).filter(Boolean)];
+	// 6.0 第 17 项：没有「看和管所有设备」的只看得到自己名下的设备
+	const perms = [r.perms.includes('alldev') ? '看状态、所有设备和流量、断线记录' : '看状态、断线记录，只看得到自己名下的设备', ...r.perms.filter((k) => k !== 'alldev').map((k) => PERM_NAMES[k]).filter(Boolean)];
 	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><span class="av big"${r.ownerAvatar ? ` style="background-image:url('${esc(r.ownerAvatar)}')"` : ''}>${r.ownerAvatar ? '' : esc(r.owner.slice(0, 1))}</span>
 		<h3 style="margin-top:12px">${esc(r.owner)} 邀请你加入</h3><p class="muted" style="margin:6px 0 0;font-size:14px">路由器「${esc(r.router)}」 · 你会成为子账号</p>
 		<div class="jperm"><b>你能做的</b><ul>${perms.map((x) => '<li>' + esc(x) + '</li>').join('')}</ul>${r.subExp ? '<p class="muted" style="margin:6px 0 0;font-size:13px">' + esc(ymd(r.subExp)) + ' 到期</p>' : ''}</div>

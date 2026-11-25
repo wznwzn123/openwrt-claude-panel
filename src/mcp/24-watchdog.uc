@@ -84,6 +84,8 @@ P.pause_set = function(a) {
 	let f = '/etc/claude-mcp/pause.json', p = cmcp_readj(f, {}), e = p[mac] ?? {};
 	if (a.name) e.name = substr('' + a.name, 0, 40);
 	if (a.resume) delete e.until;
+	// 6.0 第 17 项：记下是谁设的暂停（设备归某个子账号时，别人设的他改不了）
+	if (+a.minutes > 0 || +a.until > time() || type(a.sched) == 'array') e.by = DEV?.uid ?? null;
 	if (+a.minutes > 0) e.until = time() + int(+a.minutes * 60);
 	if (+a.until > time()) e.until = int(+a.until);
 	if (type(a.sched) == 'array') {

@@ -304,7 +304,7 @@ const FAM_PATH = '/tmp/cmcp_fam.json', FAM_LOCK = '/tmp/cmcp_fam.lock', FAM_STAL
 const EMERG_VIA = '路由器终端的应急登录码';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
@@ -369,7 +369,7 @@ function fam_check() {
 	let s = v.subs?.[DEV.uid];
 	if (type(s) == 'object') {
 		if (!s.ok) return '主账号暂时停用了你在这台路由器上的权限，或者使用期限到了';
-		ROLE = 'sub'; PERMS = (v.age ?? 0) < FAM_STALE ? (s.perms ?? []) : [];
+		ROLE = 'sub'; PERMS = (v.age ?? 0) < FAM_STALE ? (s.perms ?? []) : []; FAM_PV = +(v.pv ?? 0);
 		return null;
 	}
 	if (v.pick) { ROLE = 'sub'; PERMS = []; return null; } // 老路由器还没选主账号：先只能看
@@ -380,7 +380,7 @@ function fam_allowed(m, p) {
 	let g = fam_group(m, p);
 	return g == 'view' || (g != null && index(PERMS, g) >= 0);
 }
-const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
+const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', alldev: '所有设备', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
 function fam_deny_msg(m, p) { let g = fam_group(m, p); return g && PERM_NAMES[g] ? '主账号没有给你开「' + PERM_NAMES[g] + '」权限' : '只有主账号能用这个功能'; }
 
 // 官网「打开面板」：拿票换手机钥匙（这个请求走 /cgi-bin/mcp/open，不需要登录密钥）

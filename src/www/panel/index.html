@@ -799,6 +799,8 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .plwk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:12px}.plwk .chip{padding:8px 0;text-align:center;min-width:0}
 .plrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line)}.plrow>span{flex:1;min-width:0;font-weight:600;font-size:14px;line-height:1.4;overflow-wrap:anywhere;text-wrap:pretty}.plrow>.btn{flex:none}
 .pzadd.pladd{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.pzadd.pladd>.btn{grid-column:1/-1}
+.ownrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line)}.ownrow:last-child{border-bottom:0}.ownrow>span:first-child{min-width:0;flex:1}.ownrow b{display:block;font-size:15px;overflow-wrap:anywhere}.ownrow .muted{display:block;font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}.ownbtn{display:flex;gap:6px;flex:none}
+#ownBox:empty{display:none}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1046,8 +1048,9 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 	<div class="hero">
 		<div class="herohead"><h1 id="dvHead">设备</h1><span class="pill good" id="dvOnline">—</span></div>
 	</div>
+	<div id="ownBox"></div>
 	<div id="pzBox"></div>
-	<div class="sectitle"><b>全部设备</b><span class="dvsec"><button class="btn sm hidden" id="dvClear">清除离线设备</button><span class="pill" id="dvCount">—</span></span></div>
+	<div class="sectitle"><b id="dvAllT">全部设备</b><span class="dvsec"><button class="btn sm hidden" id="dvClaim">认领设备</button><button class="btn sm hidden" id="dvClear">清除离线设备</button><span class="pill" id="dvCount">—</span></span></div>
 	<section id="dvList" class="grid tasks"></section>
 </section>
 
@@ -3622,6 +3625,80 @@ function renderLog() {
 }
 
 
+/* ---------- 6.0 第 17 项：家人只管自己的设备 ----------
+ * 只管自己的家人（没有「看和管所有设备」）：设备页只有自己名下的设备，「认领设备」选哪台是自己的，主账号确认后才算。
+ * 主账号：设备页上方列出等确认的认领；设备「更多 → 归谁」指定给某个家人。 */
+const OWN = { d: null };
+const ownCan = () => ME_ROLE.role !== 'sub' && !!ME_ROLE.uid; // 托管版的主账号（有官网账号才有家人）
+// 家人的名字（主账号的「我的主页 → 家人」里读过的）
+function ownName(uid) { const x = ((MP.mem && MP.mem.subs) || []).find((y) => y.uid === uid); return x ? meName(x) : uid === (ME && ME.me && ME.me.uid) ? '我' : '一位家人'; }
+function ownWho(mac) { const e = OWN.d && OWN.d.own && OWN.d.own[mac]; return !e ? '没指定' : ownName(e.uid) + (e.ok ? '' : '（等确认）'); }
+async function ownMembers() {
+	if (MP.mem) return MP.mem;
+	try { MP.mem = (await P('fam', { op: 'members' }, 20000)) || null; } catch (e) {}
+	return MP.mem;
+}
+function ownRender() {
+	const box = $('ownBox'); if (!box) return;
+	const d = OWN.d, own = (d && d.own) || {}, limit = !!(blk && blk.own);
+	$('dvHead').textContent = limit ? '我的设备' : '设备';
+	$('dvAllT').textContent = limit ? '我名下的设备' : '全部设备';
+	$('dvClaim').classList.toggle('hidden', !(ME_ROLE.role === 'sub' && d && d.limit));
+	const pend = Object.entries(own).filter(([, e]) => !e.ok);
+	if (!pend.length) { box.innerHTML = ''; return; }
+	const nm = (mac) => (devices.find((x) => x.mac === mac) || {}).name || ((d.cands || []).find((x) => x.mac === mac) || {}).name || mac;
+	if (ME_ROLE.role === 'sub') {
+		box.innerHTML = `<section class="card" style="margin-top:12px"><div class="ownrow"><span><b>等主账号确认</b><span class="muted">${pend.map(([m]) => esc(nm(m))).join('、')}</span></span></div></section>`;
+		return;
+	}
+	box.innerHTML = `<div class="sectitle"><b>家人认领的设备</b><span class="pill warnc">${pend.length} 台等确认</span></div><section class="card list">${pend.map(([mac, e]) => `<div class="ownrow" data-om="${esc(mac)}"><span><b>${esc(nm(mac))}</b><span class="muted">${esc(ownName(e.uid))}说是他的</span></span><span class="ownbtn"><button class="btn sm" data-oa="no">不是</button><button class="btn sm primary" data-oa="ok">确认</button></span></div>`).join('')}</section>`;
+	if (!MP.mem) ownMembers().then((m) => { if (m) ownRender(); });
+}
+$('ownBox').addEventListener('click', (e) => {
+	const b = e.target.closest('[data-oa]'), row = e.target.closest('[data-om]'); if (!b || !row) return;
+	const mac = row.dataset.om, en = OWN.d.own[mac];
+	busy(b, async () => {
+		const r = await P('dev_own_set', { mac, uid: b.dataset.oa === 'ok' ? en.uid : null });
+		OWN.d.own = r.own; ownRender();
+		toast(b.dataset.oa === 'ok' ? '已确认：这台设备归' + ownName(en.uid) : '已拒绝');
+	}, false);
+});
+// 子账号：认领
+$('dvClaim').addEventListener('click', async () => {
+	let d = OWN.d;
+	try { d = OWN.d = await P('dev_own'); } catch (e) {}
+	const c = (d && d.cands) || [];
+	const html = () => `<div class="sheethead"><h3>哪台是你的？</h3><button class="btn sm" data-v="close">关闭</button></div>
+		${c.length ? `<section class="card list" style="box-shadow:none;padding:2px 14px">${c.map((x) => `<div class="ownrow"><span><b>${esc(x.name || x.mac)}</b><span class="muted">${x.online ? '在线' : '离线'} · ${esc(x.mac)}</span></span>${(OWN.d.own || {})[x.mac] ? '<span class="pill">等确认</span>' : `<button class="btn sm blue" data-cl="${esc(x.mac)}">这是我的</button>`}</div>`).join('')}</section>` : '<p class="muted" style="margin:0">没有能认领的设备</p>'}`;
+	modal(html(), (m) => {
+		m.querySelector('.modalbox').addEventListener('click', (ev) => {
+			const b = ev.target.closest('[data-cl]'); if (!b) return;
+			busy(b, async () => {
+				const r = await P('dev_claim', { mac: b.dataset.cl });
+				OWN.d.own = { ...(OWN.d.own || {}), [b.dataset.cl]: r.own };
+				m.querySelector('.modalbox').innerHTML = html(); ownRender();
+				toast('已发给主账号确认');
+			}, false);
+		});
+	});
+});
+// 主账号：指定归谁
+async function ownPick(d) {
+	const mm = await ownMembers();
+	const subs = ((mm && mm.subs) || []).filter((x) => !x.off);
+	const cur = OWN.d && OWN.d.own && OWN.d.own[d.mac];
+	const v = await moreSheet({ t: '「' + (d.name || d.mac) + '」归谁', sub: '现在：' + ownWho(d.mac) }, [
+		{ items: subs.map((x) => ({ v: 'u:' + x.uid, ic: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>', t: meName(x) + (cur && cur.uid === x.uid && cur.ok ? '（现在）' : ''), sub: (x.perms || []).includes('alldev') ? '能看和管所有设备' : '' })) },
+		{ items: [cur && { v: 'none', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '谁的都不是' }] },
+	]);
+	if (!v || v === 'close') return;
+	try {
+		const r = await P('dev_own_set', { mac: d.mac, uid: v === 'none' ? null : v.slice(2) });
+		OWN.d = { ...(OWN.d || {}), own: r.own }; ownRender();
+		toast(v === 'none' ? '这台设备谁的都不是了' : '这台设备归' + ownName(v.slice(2)) + '了');
+	} catch (e) { toast(e.message, true); }
+}
+
 /* ---------- 6.0 第 16 项：孩子上网计划 ----------
  * 每台设备按星期设能上网的时段，其余时间断网（路由器的时间为准）。快到停网时间推送给设计划的家长，
  * 点开能临时延长 30 分钟 / 1 小时（推送上的按钮只是打开面板，在这里再点一次才生效）。
@@ -3847,17 +3924,18 @@ const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.dev
 		: `${bl ? '<button class="btn sm good" data-unblack>恢复走代理</button>' : '<button class="btn sm" data-black>不走代理</button>'}<button class="btn sm" data-conns>看连接</button>`}</div>
 </article>`; };
 async function loadDev() {
-	const [b, pz] = await Promise.all([P('black_state'), P('pause_list').catch(() => null)]);
+	const [b, pz, ow] = await Promise.all([P('black_state'), P('pause_list').catch(() => null), P('dev_own').catch(() => null)]);
 	blk = b;
 	if (pz) PZ = pz;
+	OWN.d = ow;
 	devices = blk.devices || [];
-	renderPz();
+	renderPz(); ownRender();
 	setStatus(true, '在线');
 	const online = devices.filter((d) => d.online).length, off = devices.length - online;
 	$('dvOnline').textContent = online + ' 台在线';
 	$('dvCount').textContent = devices.length + ' 台';
 	const cl = $('dvClear'); if (cl) cl.classList.toggle('hidden', !off || !canPerm('parent'));
-	if (!devices.length) { $('dvList').innerHTML = '<div class="card empty">没有发现设备</div>'; return; }
+	if (!devices.length) { $('dvList').innerHTML = `<div class="card empty">${blk.own ? '还没有你名下的设备：点「认领设备」' : '没有发现设备'}</div>`; return; }
 	$('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join('');
 	const ds = devices;
 	dvImgLoad().then((ch) => { if (ch && ds === devices) $('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join(''); }).catch(() => {});
@@ -3980,6 +4058,7 @@ function devMore(d) {
 		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网' },
 			d.mac && par && { v: 'plan', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', t: '上网计划', sub: pz && pz.plan ? plState(pz) || pz.plan.slots.map(plSlot).join('、') : '' },
 			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理' })] },
+		{ items: [d.mac && ownCan() && { v: 'owner', ic: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>', t: '归谁', sub: ownWho(d.mac) }] },
 		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', danger: true }] }
 	]).then((v) => {
 		if (v === 'conns') { $('cnFilter').value = d.ip; go('conn'); }
@@ -3987,6 +4066,7 @@ function devMore(d) {
 		else if (v === 'icon') devIconSheet(d);
 		else if (v === 'pause') pauseSheet(d);
 		else if (v === 'plan') planSheet(d);
+		else if (v === 'owner') ownPick(d);
 		else if (v === 'black') blackToggle(d, true, null);
 		else if (v === 'unblack') blackToggle(d, false, null);
 		else if (v === 'forget') devForget(d);
@@ -5867,8 +5947,10 @@ const AV_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
 function avHtml(p, cls) { const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; const n = (p && (p.name || (p.email || '').split('@')[0])) || '?'; return `<span class="av${a ? ' img' : ''}${cls ? ' ' + cls : ''}"${a ? ` style="background-image:url('${a}')"` : ''}>${a ? '' : esc(n.trim().slice(0, 1))}</span>`; }
 function avPaint(el, p) { if (!el) return; const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; el.classList.toggle('img', !!a); el.style.backgroundImage = a ? `url('${a}')` : ''; el.textContent = a ? '' : ((p && (p.name || (p.email || '').split('@')[0])) || '?').trim().slice(0, 1); }
 const meName = (p) => (p && (p.name || (p.email || '').split('@')[0])) || '';
-const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
-const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'proxy', 'sys']] };
+const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', alldev: '看和管所有设备', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
+const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'alldev', 'proxy', 'sys']] };
+// 6.0 第 17 项：模板名不看「看和管所有设备」（家人列表里另外写「所有设备 / 只管自己的设备」）
+const tplKey = (p) => (p || []).filter((k) => k !== 'alldev').slice().sort().join();
 // 安全加固（第二轮）：「完全控制」能在路由器上以 root 运行任何东西（原版后台、OpenClash 自定义脚本和覆写、恢复备份），有了就跟主账号一样；「几乎全部」不含它
 const PERM_RISK = ['net'];
 // 新给了高风险权限的：先确认一次（原来就有的不再问）
@@ -5877,7 +5959,7 @@ async function mpRiskOk(perms, old, who) {
 	if (!add.length) return true;
 	return confirmBox('给' + (who ? '「' + who + '」' : '他') + '完全控制？', '有「完全控制」的人能进路由器原版后台、改 OpenClash 运行的脚本、恢复备份，能做主账号能做的一切，而且收回权限以后也可能留下自己的改动。只给完全信任的家人。', '确定给', true);
 }
-const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
+const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => tplKey(TPLS[t][1]) === tplKey(perms)); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
 	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
 	// 侧边栏的「我的主页」谁都有：没有官网账号的（自建版、应急登录）里面只有这台路由器的敏感信息
@@ -6162,7 +6244,10 @@ function mpDraw() {
 	h += `<div class="sectitle"><b>${main ? '家人（子账号）' : '这台路由器的主账号'}</b>${main && mm ? `<span class="muted" style="font-size:13px">${(mm.subs || []).length} / 10</span>` : ''}</div><section class="card">`;
 	if (!mm) h += '<p class="muted" style="margin:0">读不到，稍后再试</p>';
 	else if (main) {
-		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms))}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span>${!x.off && !x.expired && (x.perms || []).includes('net') ? '<span class="pill red mp-root">有完全控制</span>' : ''}</div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
+		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms)) + ' · ' + ((x.perms || []).includes('alldev') ? '所有设备' : '只管自己的设备')}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span>${!x.off && !x.expired && (x.perms || []).includes('net') ? '<span class="pill red mp-root">有完全控制</span>' : ''}</div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
+		// 6.0 第 17 项（风险 16）：6.0 以前加入的家人照旧能看和管所有设备，提示主账号自己决定
+		const olds = (mm.subs || []).filter((x) => x.old && (x.perms || []).includes('alldev') && !x.off);
+		if (olds.length) h += `<div class="notice" style="margin:8px 0 0">${olds.map((x) => '「' + esc(meName(x)) + '」').join('')}是 6.0 以前加入的，还能看和管所有设备。要改成只管自己的设备，点「管理」取消「看和管所有设备」。</div>`;
 		h += (mm.joins || []).map((j) => `<div class="mp-fb"><div><b>加入码 <span class="mono">${esc(j.code)}</span></b><span>给「${esc(j.name || '家人')}」 · ${esc(tplName(j.perms))} · ${esc(ymdhm(j.exp))} 过期 · 还没人用</span></div><button class="btn sm" data-mp="jcancel" data-c="${esc(j.code)}">撤回</button></div>`).join('');
 		h += `<div class="mp-acts"><button class="btn primary" data-mp="join"${(mm.subs || []).length + (mm.joins || []).length >= 10 ? ' disabled' : ''}>添加家人</button><button class="btn" data-mp="transfer"${(mm.subs || []).length ? '' : ' disabled'}>转让主账号</button></div>`;
 	} else {
@@ -6231,7 +6316,7 @@ function mpPermForm(perms, exp) {
 	<label class="lglabel" style="margin-top:0">能用多久</label><select class="input" data-exp><option value="0">一直能用</option><option value="7">7 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">一年</option>${exp ? `<option value="keep" selected>到 ${esc(ymd(exp))}（不变）</option>` : ''}</select>`;
 }
 function mpPermBind(m) {
-	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', TPLS[b.dataset.tpl][1].slice().sort().join() === p.slice().sort().join())); const w = m.querySelector('[data-risk]'); if (w) w.hidden = !PERM_RISK.some((k) => p.includes(k)); };
+	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', tplKey(TPLS[b.dataset.tpl][1]) === tplKey(p))); const w = m.querySelector('[data-risk]'); if (w) w.hidden = !PERM_RISK.some((k) => p.includes(k)); };
 	m.querySelectorAll('[data-tpl]').forEach((b) => (b.onclick = () => { const want = TPLS[b.dataset.tpl][1]; m.querySelectorAll('.mp-perms input').forEach((x) => (x.checked = want.includes(x.value))); sync(); }));
 	m.querySelectorAll('.mp-perms input').forEach((x) => (x.onchange = sync)); sync();
 	return () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value), e = m.querySelector('[data-exp]').value; return { perms: p, subExp: e === 'keep' ? undefined : +e ? Date.now() + +e * 86400e3 : 0 }; };
@@ -7230,6 +7315,8 @@ function start() {
 	if (usp.get('ask') === 'ext' && MRE.test(askMac)) setTimeout(() => askExt(askMac, +usp.get('min') || 0), 1600);
 	if (usp.get('ask') === 'plancopy' && MRE.test(askMac)) setTimeout(() => askPlanCopy(askMac, usp.get('src') || ''), 1600);
 	setTimeout(pushTag, 6000);
+	// 6.0 第 17 项：推送「有家人认领了设备」点进来：设备页上方就是等确认的列表
+	if (usp.get('ask') === 'claims') setTimeout(() => { if (page !== 'dev') go('dev'); }, 900);
 	// 6.0 第 14 项：改完 Wi-Fi 手机断开、重新连上：接着问「保留」还是「改回去」
 	setTimeout(wfResume, 700);
 	// 6.0 第 60 项：推送「你遇到的问题修好了」点进来：打开检查更新

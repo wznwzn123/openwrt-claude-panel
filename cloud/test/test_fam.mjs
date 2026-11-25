@@ -97,7 +97,7 @@ let op = (await call(A, '/api/account/fam/open', { sub: R1.sub })).j;
 const tk = (op.url || '').split('#open=')[1];
 ok('主账号点「打开面板」：拿到带一次性票的面板地址', op.url && op.url.startsWith('https://' + R1.sub + '.panel.example/panel/#open=') && /^[a-z2-9]{24}$/.test(tk));
 let tt = (await post('/api/dev/ticket', { sub: R1.sub, rkey: R1.rkey, ticket: tk })).j;
-ok('路由器拿票换身份：主账号、全部权限', tt.ok && tt.uid === ua && tt.role === 'main' && tt.perms.length === 7, JSON.stringify(tt));
+ok('路由器拿票换身份：主账号、全部权限', tt.ok && tt.uid === ua && tt.role === 'main' && tt.perms.length === 8 && tt.perms.includes('alldev'), JSON.stringify(tt));
 ok('同一张票不能再用', (await post('/api/dev/ticket', { sub: R1.sub, rkey: R1.rkey, ticket: tk })).st === 400);
 op = (await call(B, '/api/account/fam/open', { sub: R1.sub })).j;
 tt = (await post('/api/dev/ticket', { sub: R1.sub, rkey: R1.rkey, ticket: op.url.split('#open=')[1] })).j;
@@ -136,7 +136,7 @@ ok('主账号移除子账号：他的账号里就没有这台了，还发邮件�
 // 转让
 await fam(R1, 'transfer', { uid: ua, sudo: SU, target: ub });
 view = (await post('/api/dev/fam/view', { sub: R1.sub, rkey: R1.rkey })).j;
-ok('转让：B 成了主账号，A 变成子账号（几乎全部，不含「完全控制」）、A 原来的手机钥匙作废', view.owner === ub && view.subs[ua] && view.subs[ua].perms.length === 6 && !view.subs[ua].perms.includes('net') && view.kick[ua] > 0);
+ok('转让：B 成了主账号，A 变成子账号（几乎全部，不含「完全控制」）、A 原来的手机钥匙作废', view.owner === ub && view.subs[ua] && view.subs[ua].perms.length === 7 && view.subs[ua].perms.includes('alldev') && !view.subs[ua].perms.includes('net') && view.kick[ua] > 0);
 ok('原主账号的凭证不能再做主账号的事', /主账号/.test((await fam(R1, 'join_create', { uid: ua, sudo: SU, name: 'x' })).j.error || ''));
 // 老路由器：好几个账号平等绑定，第一次打开面板选主账号
 delete env.RESEND_API_KEY;
@@ -186,6 +186,14 @@ ok('主账号确认本人后解绑：所有人（包括子账号）的账号里�
 	ok('[完全控制] 「几乎全部」模板不含完全控制', !TPL.most.includes('net'));
 }
 
+// 6.0 第 17 项：「看和管所有设备」（alldev）
+{
+	const F = await import('../fam.js');
+	ok('[第 17 项] 6.0 以前加入的家人（v < 3）：照旧能看和管所有设备', F.permsOf({ perms: ['msg', 'node', 'speed'], v: 2 }).includes('alldev'));
+	ok('[第 17 项] 6.0 以后加入、没勾：只管自己的设备', !F.permsOf({ perms: ['msg', 'node', 'speed'], v: 3 }).includes('alldev'));
+	ok('[第 17 项] 更老的数据（有代理设置算完全控制）照样算对，也带上所有设备', JSON.stringify(F.permsOf({ perms: ['proxy'] })) === JSON.stringify(['proxy', 'net', 'alldev']));
+	ok('[第 17 项] 模板：家人不含所有设备、几乎全部含', !F.TPL.family.includes('alldev') && F.TPL.most.includes('alldev') && F.PERM_KEYS.includes('alldev') && /看和管所有设备/.test(F.PERM_NAMES.alldev));
+}
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

@@ -22,7 +22,7 @@ function shq(s) {
 }
 
 // 这次请求是谁（托管版按手机钥匙认）：在最前面声明，后面所有模块都能用；在 26-backup.uc 里赋值
-let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [];
+let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [], FAM_PV = 0; // FAM_PV：官网的权限版本（6.0 第 17 项，3 起有「看和管所有设备」）
 
 function sh(cmd) {
 	let p = popen('export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ' + cmd + ' 2>&1', 'r');
@@ -2350,6 +2350,8 @@ P.pause_set = function(a) {
 	let f = '/etc/claude-mcp/pause.json', p = cmcp_readj(f, {}), e = p[mac] ?? {};
 	if (a.name) e.name = substr('' + a.name, 0, 40);
 	if (a.resume) delete e.until;
+	// 6.0 第 17 项：记下是谁设的暂停（设备归某个子账号时，别人设的他改不了）
+	if (+a.minutes > 0 || +a.until > time() || type(a.sched) == 'array') e.by = DEV?.uid ?? null;
 	if (+a.minutes > 0) e.until = time() + int(+a.minutes * 60);
 	if (+a.until > time()) e.until = int(+a.until);
 	if (type(a.sched) == 'array') {
@@ -2836,7 +2838,7 @@ const FAM_PATH = '/tmp/cmcp_fam.json', FAM_LOCK = '/tmp/cmcp_fam.lock', FAM_STAL
 const EMERG_VIA = '路由器终端的应急登录码';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
@@ -2901,7 +2903,7 @@ function fam_check() {
 	let s = v.subs?.[DEV.uid];
 	if (type(s) == 'object') {
 		if (!s.ok) return '主账号暂时停用了你在这台路由器上的权限，或者使用期限到了';
-		ROLE = 'sub'; PERMS = (v.age ?? 0) < FAM_STALE ? (s.perms ?? []) : [];
+		ROLE = 'sub'; PERMS = (v.age ?? 0) < FAM_STALE ? (s.perms ?? []) : []; FAM_PV = +(v.pv ?? 0);
 		return null;
 	}
 	if (v.pick) { ROLE = 'sub'; PERMS = []; return null; } // 老路由器还没选主账号：先只能看
@@ -2912,7 +2914,7 @@ function fam_allowed(m, p) {
 	let g = fam_group(m, p);
 	return g == 'view' || (g != null && index(PERMS, g) >= 0);
 }
-const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
+const PERM_NAMES = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', alldev: '所有设备', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
 function fam_deny_msg(m, p) { let g = fam_group(m, p); return g && PERM_NAMES[g] ? '主账号没有给你开「' + PERM_NAMES[g] + '」权限' : '只有主账号能用这个功能'; }
 
 // 官网「打开面板」：拿票换手机钥匙（这个请求走 /cgi-bin/mcp/open，不需要登录密钥）
@@ -4692,6 +4694,211 @@ P.guest_set = function(a) {
 	s.token = tok; s.wait = tok ? NG_WAIT : 0;
 	return s;
 };
+
+/* ---------------- 6.0 第 17 项：家人只管自己的设备 ----------------
+ * 子账号没有「看和管所有设备」（alldev）权限时：设备、流量、连接、暂停 / 计划只看得到自己名下的设备，也只能管这些（在路由器上过滤和检查）。
+ * 设备归谁：/etc/claude-mcp/devown.json { MAC: { uid, ok, how: auto|claim|set, at } }
+ *   auto  = 他打开面板用的那台手机（局域网直连看来源地址；走隧道时看代理插件里谁在连面板的域名，只有一台才算）
+ *   claim = 他自己点「这是我的」，主账号确认后 ok 才是 true
+ *   set   = 主账号指定
+ * 另外（风险 16、用户 11/24 定的「孩子改不了自己的计划」）：设备归某个子账号，而暂停 / 上网计划是别人设的，这个子账号改不了。
+ * 官网还是旧版（没有 alldev 这一项）时不限制（FAM_PV < 3）。 */
+const OWN_PATH = ETC + '/devown.json', OWN_AUTO = '/tmp/cmcp_ownauto.json';
+const MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
+function own_load() { let o = cmcp_readj(OWN_PATH, {}); return type(o) == 'object' ? o : {}; }
+function own_save(o) { cmcp_writej(OWN_PATH, o); }
+function own_only() { return ROLE == 'sub' && FAM_PV >= 3 && index(PERMS, 'alldev') < 0; }
+function own_mine(o) { o = o ?? own_load(); let m = {}; for (let k in o) if (o[k]?.uid && o[k].uid == DEV?.uid && o[k].ok) m[k] = 1; return m; }
+// 他打开面板用的那台设备：IPv4 地址 → MAC
+function own_ip_mac(ip) {
+	let lm = lease_map();
+	if (lm[ip]?.mac) return lm[ip].mac;
+	let m = match(sh('ip neigh show ' + shq(ip) + ' 2>/dev/null').out, /lladdr ([0-9a-f:]{17})/);
+	return m ? m[1] : null;
+}
+// 局域网直连进来的：来源地址就是这台手机
+function own_lan_ip() {
+	let ra = replace(getenv('REMOTE_ADDR') ?? '', /^::ffff:/, '');
+	return match(ra, /^\d+\.\d+\.\d+\.\d+$/) && !match(ra, /^127\./) ? ra : null;
+}
+// 走隧道进来的：代理插件里正在连面板域名的局域网设备；只有一台才算（几个人同时开着面板就认不出来）
+function own_clash_ip() {
+	let dom = CL.panel_domain();
+	if (!dom) return null;
+	let d = null;
+	try { d = CL.api('GET', '/connections', null, 4).json; } catch (e) {}
+	let ips = {};
+	for (let c in (d?.connections ?? [])) {
+		let h = lc(c.metadata?.host ?? ''), s = c.metadata?.sourceIP ?? '';
+		if (length(h) && (h == dom || substr(h, -length(dom) - 1) == '.' + dom) && match(s, /^\d+\.\d+\.\d+\.\d+$/) && !match(s, /^127\./)) ips[s] = 1;
+	}
+	let k = keys(ips);
+	return length(k) == 1 ? k[0] : null;
+}
+// 自动认：子账号打开面板时。局域网直连每次都看；走隧道要问代理插件，同一台手机 10 分钟最多问一次。这台设备已经归别人就不动
+function own_auto() {
+	if (ROLE != 'sub' || !DEV?.uid || !DEV_ID) return;
+	let ip = own_lan_ip();
+	if (!ip) {
+		let st = cmcp_readj(OWN_AUTO, {});
+		if (type(st) != 'object') st = {};
+		if (time() - (st[DEV_ID] ?? 0) < 600) return;
+		st[DEV_ID] = time();
+		for (let k in keys(st)) if (time() - st[k] > 86400) delete st[k];
+		cmcp_writej(OWN_AUTO, st);
+		ip = own_clash_ip();
+	}
+	let mac = ip ? own_ip_mac(ip) : null;
+	if (!mac || !match(mac, MAC_RE)) return;
+	let o = own_load();
+	if (o[mac] && (o[mac].uid != DEV.uid || o[mac].ok)) return;
+	o[mac] = { uid: DEV.uid, ok: true, how: 'auto', at: time() };
+	own_save(o);
+}
+// 这个子账号能不能管这台设备
+function own_check(mac) {
+	if (!own_only()) return;
+	if (!match(lc('' + (mac ?? '')), MAC_RE) || !own_mine()[lc(mac)]) die('这台设备不是你的：只能管自己名下的设备');
+}
+// 设备归这个子账号、但暂停 / 计划是别人设的：改不了
+function own_guard_pause(mac) {
+	if (ROLE != 'sub' || !DEV?.uid) return;
+	let o = own_load(), e = o[lc('' + mac)];
+	if (!e || e.uid != DEV.uid) return;
+	let p = cmcp_readj('/etc/claude-mcp/pause.json', {})[lc('' + mac)];
+	let by = p?.plan?.by ?? p?.by ?? null;
+	if (p && by && by != DEV.uid) die('这台设备的暂停和上网计划是家长设的，你改不了');
+}
+
+/* ---- 看：只留自己的设备 ---- */
+function own_ips(mine) {
+	let ips = {};
+	let lm = lease_map();
+	for (let ip in lm) if (mine[lm[ip].mac]) ips[ip] = 1;
+	for (let l in split(sh('ip neigh show 2>/dev/null').out, '\n')) { let m = match(l, /^(\S+) .*lladdr ([0-9a-f:]{17})/); if (m && mine[m[2]]) ips[m[1]] = 1; }
+	return ips;
+}
+const OWN_DEVICES = P.devices;
+P.devices = function(a) {
+	own_auto();
+	let r = OWN_DEVICES(a);
+	if (own_only()) { let mine = own_mine(); r.devices = filter(r.devices ?? [], (d) => d.mac && mine[d.mac]); r.own = true; }
+	return r;
+};
+const OWN_BLACK = P.black_state;
+P.black_state = function(a) {
+	let r = OWN_BLACK(a);
+	if (own_only()) {
+		let mine = own_mine(), ips = own_ips(mine);
+		r.entries = filter(r.entries ?? [], (e) => (e.mac && mine[lc(e.mac)]) || (!e.mac && ips[e.ip]));
+		r.own = true;
+	}
+	return r;
+};
+const OWN_PAUSE_LIST = P.pause_list;
+function own_pz(r) {
+	if (own_only() && type(r?.devs) == 'object') { let mine = own_mine(); for (let k in keys(r.devs)) if (!mine[k]) delete r.devs[k]; }
+	return r;
+}
+P.pause_list = function(a) { return own_pz(OWN_PAUSE_LIST(a)); };
+const OWN_PAUSE_SET = P.pause_set;
+P.pause_set = function(a) { own_check(a?.mac); own_guard_pause(a?.mac); return own_pz(OWN_PAUSE_SET(a)); };
+const OWN_IMGS = P.dev_imgs;
+P.dev_imgs = function(a) {
+	let r = OWN_IMGS(a);
+	if (own_only() && type(r?.imgs) == 'object') { let mine = own_mine(); for (let k in keys(r.imgs)) if (!mine[k]) delete r.imgs[k]; }
+	return r;
+};
+const OWN_CONNS = P.connections;
+P.connections = function(a) {
+	let r = OWN_CONNS(a);
+	if (own_only()) { let ips = own_ips(own_mine()); r.connections = filter(r.connections ?? [], (c) => ips[c.src]); r.total = length(r.connections); delete r.download_total; delete r.upload_total; r.own = true; }
+	return r;
+};
+const OWN_TRAFFIC = P.traffic;
+P.traffic = function(a) {
+	let r = OWN_TRAFFIC(a);
+	if (own_only()) {
+		let mine = own_mine();
+		for (let d in r.days ?? {}) { let x = r.days[d]; if (type(x) == 'object') for (let k in keys(x)) if (!mine[k]) delete x[k]; }
+		for (let k in keys(r.names ?? {})) if (!mine[k]) delete r.names[k];
+		r.own = true;
+	}
+	return r;
+};
+/* ---- 管：只能管自己的设备 ---- */
+const OWN_RENAME = P.dev_rename;
+P.dev_rename = function(a) { own_check(a?.mac); return OWN_RENAME(a); };
+const OWN_BLSET = P.black_set;
+P.black_set = function(a) {
+	if (own_only()) {
+		let mac = a?.mac;
+		if (!mac) { let lm = lease_map(); mac = lm[a?.ip]?.mac; }
+		own_check(mac);
+	}
+	return OWN_BLSET(a);
+};
+const OWN_FORGET = P.dev_forget;
+P.dev_forget = function(a) {
+	if (own_only()) for (let it in (a?.items ?? [])) own_check(it?.mac);
+	return OWN_FORGET(a);
+};
+
+/* ---- 设备归谁 ---- */
+// 子账号：自己名下的（含等确认的）、没主的设备（能认领）；主账号：全部
+P.dev_own = function() {
+	let o = own_load(), out = {};
+	if (ROLE != 'sub') out = o;
+	else for (let k in o) if (o[k]?.uid == DEV?.uid) out[k] = o[k];
+	let r = { own: out, limit: own_only() };
+	if (ROLE == 'sub') {
+		// 没主的设备（在线的排前面，最多 50 台）：只给名字和图标，看不到流量和连接
+		let c = [];
+		for (let d in (OWN_DEVICES().devices ?? [])) if (d.mac && !o[d.mac]) push(c, { mac: d.mac, name: d.name, icon: d.icon ?? null, online: !!d.online });
+		r.cands = slice(sort(c, (x, y) => (y.online ? 1 : 0) - (x.online ? 1 : 0)), 0, 50);
+	}
+	return r;
+};
+// 子账号点「这是我的」：等主账号确认
+P.dev_claim = function(a) {
+	if (ROLE != 'sub' || !DEV?.uid) die('主账号不用认领：在设备的「更多 → 归谁」里指定');
+	let mac = lc('' + (a?.mac ?? ''));
+	if (!match(mac, MAC_RE)) die('设备地址不对');
+	let o = own_load();
+	if (o[mac] && o[mac].uid != DEV.uid) die('这台设备已经有主人了，找主账号改');
+	if (o[mac]?.ok) return { ok: true, own: o[mac] };
+	let n = 0;
+	for (let k in o) if (o[k]?.uid == DEV.uid && !o[k].ok) n++;
+	if (n >= 10) die('等确认的设备太多了，先让主账号确认');
+	let d = null;
+	for (let x in (OWN_DEVICES().devices ?? [])) if (x.mac == mac) d = x;
+	if (!d) die('找不到这台设备');
+	o[mac] = { uid: DEV.uid, ok: false, how: 'claim', at: time() };
+	own_save(o);
+	let owner = fam_read()?.owner ?? '';
+	sh(sprintf('%s/cmcp-notify info claim %s %s %s %s >/dev/null 2>&1 &', SBIN, shq('有家人认领了设备「' + (d.name ?? mac) + '」'), shq('确认以后，这台设备算他的：他能看到、能管。点开确认。'), shq('claim-' + mac), shq(owner)));
+	return { ok: true, own: o[mac] };
+};
+// 主账号：确认 / 拒绝认领、指定归谁（uid: null = 谁的都不是）
+P.dev_own_set = function(a) {
+	if (ROLE == 'sub') die('只有主账号能改设备归谁');
+	let mac = lc('' + (a?.mac ?? ''));
+	if (!match(mac, MAC_RE)) die('设备地址不对');
+	let o = own_load(), uid = a?.uid;
+	if (uid == null || uid === '') delete o[mac];
+	else {
+		uid = '' + uid;
+		if (!match(uid, /^[a-z2-9]{12}$/)) die('账号不对');
+		o[mac] = { uid, ok: true, how: o[mac]?.uid == uid && o[mac]?.how ? o[mac].how : 'set', at: time() };
+	}
+	own_save(o);
+	return { ok: true, own: o };
+};
+// AI 工具里的设备列表、连接列表：只管自己的家人不给（面板「设备」页里看自己的）
+for (let tn in ['device_list', 'list_connections']) {
+	let orig = T[tn];
+	if (type(orig) == 'function') T[tn] = function(a) { if (own_only()) die('你只能看自己的设备：到面板「设备」页里看'); return orig(a); };
+}
 function rpc_result(id, result) { return { jsonrpc: '2.0', id, result }; }
 function rpc_error(id, code, message) { return { jsonrpc: '2.0', id, error: { code, message } }; }
 

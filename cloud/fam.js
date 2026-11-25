@@ -14,18 +14,27 @@ const SUB_RE = /^[a-z0-9]{6,20}$/;
 const UID_RE = /^[a-z2-9]{12}$/;
 
 // 权限：「看」一直有；下面这些主账号可以单独开关
-export const PERM_KEYS = ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'];
+// 6.0 第 17 项：alldev = 看和管所有设备；没有它的家人只能看、只能管自己名下的设备（路由器上检查）
+export const PERM_KEYS = ['msg', 'node', 'speed', 'parent', 'alldev', 'proxy', 'net', 'sys'];
 // 安全加固（第二轮）：net 改成「完全控制」——原版路由器后台、OpenClash 自定义脚本和覆写、恢复备份都归它（这些都能在路由器上以 root 运行任何东西）；
 // 「几乎全部」不再包含它。改之前给过「代理设置」或「网络设置」的子账号（v < 2），照旧能做原来能做的事，算作有「完全控制」，主页上标出来让主账号自己决定
-export const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、设备不走代理', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
-export const TPL = { look: ['msg'], family: ['msg', 'node', 'speed'], most: ['msg', 'node', 'speed', 'parent', 'proxy', 'sys'] };
-export const PV = 2;
+export const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、设备不走代理', alldev: '看和管所有设备（不勾只能看自己的设备）', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
+export const TPL = { look: ['msg'], family: ['msg', 'node', 'speed'], most: ['msg', 'node', 'speed', 'parent', 'alldev', 'proxy', 'sys'] };
+export const PV = 3;
 // 子账号实际有的权限（老数据：给过「代理设置」的，以前就能写脚本，算作有「完全控制」）
-export const permsOf = (s) => { const p = s && Array.isArray(s.perms) ? s.perms : []; return !s || s.v >= PV || !p.includes('proxy') || p.includes('net') ? p : PERM_KEYS.filter((k) => k === 'net' || p.includes(k)); };
+// 6.0 第 17 项（v < 3）：6.0 以前加入的家人照旧能看和管所有设备，主账号在家人列表里看到提示后自己决定要不要改
+export const permsOf = (s) => {
+	let p = s && Array.isArray(s.perms) ? s.perms : [];
+	if (!s) return p;
+	if (!(s.v >= 2) && p.includes('proxy') && !p.includes('net')) p = PERM_KEYS.filter((k) => k === 'net' || p.includes(k));
+	if (!(s.v >= 3) && !p.includes('alldev')) p = [...p, 'alldev'];
+	return p;
+};
 export const TPL_NAMES = { look: '只看', family: '家人', most: '几乎全部', custom: '自定义' };
 export const MAX_SUBS = 10, MAX_OWN = 20, MAX_JOINED = 20;
 const cleanPerms = (p) => PERM_KEYS.filter((k) => Array.isArray(p) && p.includes(k));
-const tplOf = (perms) => { for (const [k, v] of Object.entries(TPL)) if (v.length === perms.length && v.every((x) => perms.includes(x))) return k; return 'custom'; };
+// 模板名不看「所有设备」这一项（家人列表里另外标出来）
+const tplOf = (perms) => { const p = perms.filter((x) => x !== 'alldev'); for (const [k, v0] of Object.entries(TPL)) { const v = v0.filter((x) => x !== 'alldev'); if (v.length === p.length && v.every((x) => p.includes(x))) return k; } return 'custom'; };
 const cleanName = (n) => String(n || '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
 
 export function installFam(Hub) {
@@ -60,7 +69,7 @@ export function installFam(Hub) {
 			if (!d) return null;
 			const f = this.famOf(d), now = Date.now();
 			const subs = [];
-			for (const [uid, s] of Object.entries(f.subs)) { const p = await this.famPerson(uid, full); if (p) subs.push({ ...p, tpl: tplOf(permsOf(s)), perms: permsOf(s), exp: s.exp || 0, off: !!s.off, expired: !!(s.exp && s.exp < now), at: s.at || 0 }); }
+			for (const [uid, s] of Object.entries(f.subs)) { const p = await this.famPerson(uid, full); if (p) subs.push({ ...p, tpl: tplOf(permsOf(s)), perms: permsOf(s), old: !(s.v >= 3), exp: s.exp || 0, off: !!s.off, expired: !!(s.exp && s.exp < now), at: s.at || 0 }); }
 			const joins = [];
 			for (const c of d.joins || []) { const j = await this.ctx.storage.get('jc:' + c); if (j && j.exp > now) joins.push({ code: c, name: j.name, tpl: j.tpl, perms: j.perms, exp: j.exp, subExp: j.subExp || 0 }); }
 			const users = [];
@@ -74,7 +83,8 @@ export function installFam(Hub) {
 			if (!d) return null;
 			const f = this.famOf(d), now = Date.now(), subs = {};
 			for (const [uid, s] of Object.entries(f.subs)) subs[uid] = { perms: permsOf(s), ok: !s.off && !(s.exp && s.exp < now) };
-			return { owner: f.owner, subs, pick: f.pick, kick: d.kick || {} };
+			// pv：权限版本（3 = 有「看和管所有设备」这一项）。路由器看到 3 才按「只管自己的设备」限制，免得官网还没更新时把家人都限制住
+			return { owner: f.owner, subs, pick: f.pick, kick: d.kick || {}, pv: PV };
 		},
 		// 这台路由器的操作记录（面板「我的主页 → 操作记录」）：只记谁、做了什么，不记邮箱；留最近 100 条
 		async rlog(sub, ic, x) { const k = 'rl:' + sub, l = (await this.ctx.storage.get(k)) || []; l.unshift({ t: Date.now(), ic, x: String(x).slice(0, 120) }); await this.ctx.storage.put(k, l.slice(0, 100)); },

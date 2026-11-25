@@ -141,6 +141,7 @@ const MENU = { items: [...JSON.parse(require('fs').readFileSync(__dirname + '/re
 	{ p: 'admin/vpn/zerotier', t: 'ZeroTier', g: 'VPN', kids: [['admin/vpn/zerotier/base', '基本设置'], ['admin/vpn/zerotier/interface', '接口信息']] },
 ] };
 const PZ = { devs: {}, calls: [], schedOn: false };
+const OWNM = { own: {}, limit: false, sub: false, cands: [], calls: [] };
 // 设备改名字（5.2.3）：MAC → 名字
 const DN = {}, DI = {}, DH = {}, DEVFORGET = [], DIMG = {};
 // 6.0 第 14 项：Wi-Fi 设置（WIFI.reset() 回到初始：两个频段名字不同、密码一样）
@@ -277,6 +278,10 @@ function respond(method, p) {
 	case 'net_confirm': case 'net_revert': { WIFI.calls.push([method, p.token]); const g = wfPend(); if (!g || g.token !== p.token) return { ok: false, gone: true }; if (method === 'net_revert' && WIFI.gwhat) Object.assign(WIFI.g, { on: false, until: 0, left: 0, key: null, bands: [], net: null }); WIFI.pend = null; WIFI.gwhat = null; return { ok: true }; }
 	case 'net_pending': return { pending: wfPend() };
 	case 'push_id': return { uid: 'dadaaaaaaaa2', sig: 'a'.repeat(64) };
+	// 6.0 第 17 项：设备归谁（OWNM.limit = 这台手机是只管自己的家人）
+	case 'dev_own': return { own: JSON.parse(JSON.stringify(OWNM.own)), limit: OWNM.limit, ...(OWNM.sub ? { cands: OWNM.cands } : {}) };
+	case 'dev_claim': OWNM.calls.push(['claim', p.mac]); OWNM.own[p.mac] = { uid: 'kidaaaaaaaa2', ok: false, how: 'claim', at: 1 }; return { ok: true, own: OWNM.own[p.mac] };
+	case 'dev_own_set': OWNM.calls.push(['set', p.mac, p.uid]); if (p.uid) OWNM.own[p.mac] = { uid: p.uid, ok: true, how: 'set', at: 1 }; else delete OWNM.own[p.mac]; return { ok: true, own: JSON.parse(JSON.stringify(OWNM.own)) };
 	case 'guest_get': return { ...JSON.parse(JSON.stringify(WIFI.g)), pending: wfPend() };
 	case 'guest_set': {
 		WIFI.gsets.push(p); const G = WIFI.g, now = Math.floor(Date.now() / 1000);
@@ -290,7 +295,7 @@ function respond(method, p) {
 	}
 	case 'dev_imgs': return { imgs: Object.fromEntries((p.macs || []).filter((m) => DIMG[m]).map((m) => [m, DIMG[m].u])) };
 	case 'dev_forget': { let n = 0; for (const it of p.items || []) { const k = it.mac || 'ip:' + it.ip; if (p.only_plain && it.mac && (DN[it.mac] || DI[it.mac] || PZ.devs[it.mac])) continue; DH[k] = 1; if (it.mac) { delete DN[it.mac]; delete DI[it.mac]; delete PZ.devs[it.mac]; } n++; } DEVFORGET.push(p); return { ok: true, n, skip: { online: 0, set: 0 } }; }
-	case 'black_state': return { entries: BL, devices: dnApply([{ ip: '192.168.5.8', mac: 'aa:bb:cc:dd:ee:ff', name: 'iPhone', online: true, stats: { conns: 12, dl: 123456789, ul: 1234567, proxied: 3 } }, { ip: '192.168.5.20', mac: '11:22:33:44:55:66', name: 'TV', online: true }, { ip: '192.168.5.9', mac: null, name: null, online: false }, { ip: '192.168.5.30', mac: '5c:cf:7f:12:34:56', name: 'ESP_1A2B3C', online: false }, { ip: '192.168.5.31', mac: '7a:11:22:33:44:55', name: null, online: false }, { ip: '192.168.5.32', mac: '00:11:32:aa:bb:cc', name: 'DiskStation', online: false }]).map((d) => (d.mac === '11:22:33:44:55:66' ? { ...d, since: Math.floor(Date.now() / 1000) - 8100 } : d)), ready: BLREADY.v, live: BLREADY.v, custom_on: true, lan_ac_mode: '0' };
+	case 'black_state': { const r = (() => { return { entries: BL, devices: dnApply([{ ip: '192.168.5.8', mac: 'aa:bb:cc:dd:ee:ff', name: 'iPhone', online: true, stats: { conns: 12, dl: 123456789, ul: 1234567, proxied: 3 } }, { ip: '192.168.5.20', mac: '11:22:33:44:55:66', name: 'TV', online: true }, { ip: '192.168.5.9', mac: null, name: null, online: false }, { ip: '192.168.5.30', mac: '5c:cf:7f:12:34:56', name: 'ESP_1A2B3C', online: false }, { ip: '192.168.5.31', mac: '7a:11:22:33:44:55', name: null, online: false }, { ip: '192.168.5.32', mac: '00:11:32:aa:bb:cc', name: 'DiskStation', online: false }]).map((d) => (d.mac === '11:22:33:44:55:66' ? { ...d, since: Math.floor(Date.now() / 1000) - 8100 } : d)), ready: BLREADY.v, live: BLREADY.v, custom_on: true, lan_ac_mode: '0' }; })(); if (OWNM.limit) { r.devices = r.devices.filter((d) => d.mac && OWNM.own[d.mac] && OWNM.own[d.mac].ok); r.own = true; } return r; }
 	case 'black_set': if (p.on) BL.push({ mac: p.mac || null, ip: p.ip, name: p.name || null, pinned: !!p.mac, at: 1793169000 }); else BL.splice(BL.findIndex((e) => (e.mac || e.ip) === (p.mac || p.ip)), 1); return { ok: true, ip: p.ip, pinned: !!p.mac, live: BLREADY.v, need_setup: !BLREADY.v };
 	case 'black_setup': BLREADY.v = true; return { ok: true, restarting: true };
 	case 'term': return { out: p.cmd.startsWith('cd ') ? '' : 'output of ' + p.cmd + '\nline2', code: p.cmd === 'false' ? 1 : 0, cwd: p.cmd.startsWith('cd ') ? p.cmd.slice(3) : p.cwd };
@@ -358,4 +363,4 @@ const DYD = { d: null, runs: 0 };
 const FSUM = { v: 'S1', saved: [] };
 // 一次 JSON-RPC 回答：方法报错时按路由器的格式回错误（带错误码，比如 6.0 的面板锁 -32014）
 function reply(id, method, params) { try { return { jsonrpc: '2.0', id, result: respond(method, params) }; } catch (e) { return { jsonrpc: '2.0', id, error: { code: e.code || -32000, message: e.message, data: e.data } }; } }
-module.exports = { reply, WIFI, FSUM, DN, DI, DH, DEVFORGET, DIMG, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU, PASSM };
+module.exports = { reply, WIFI, OWNM, FSUM, DN, DI, DH, DEVFORGET, DIMG, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU, PASSM };

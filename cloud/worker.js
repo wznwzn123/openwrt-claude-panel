@@ -551,6 +551,7 @@ async function handle(req, env) {
 			const pc = b.kind === 'planmac' ? /^planmac-([0-9a-f]{2}(?::[0-9a-f]{2}){5})-([0-9a-f]{2}(?::[0-9a-f]{2}){5})$/.exec(String(b.tag || '')) : null;
 			const extra = pm ? { url: './?p=dev&ask=ext&mac=' + pm[1], actions: [{ action: 'ext30', title: '延长 30 分钟', url: './?p=dev&ask=ext&min=30&mac=' + pm[1] }, { action: 'ext60', title: '延长 1 小时', url: './?p=dev&ask=ext&min=60&mac=' + pm[1] }] }
 				: pc ? { url: './?p=dev&ask=plancopy&mac=' + pc[1] + '&src=' + pc[2], actions: [{ action: 'plancopy', title: '计划也管它', url: './?p=dev&ask=plancopy&mac=' + pc[1] + '&src=' + pc[2] }] }
+				: b.kind === 'claim' ? { url: './?p=dev&ask=claims' }
 				: b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : nm ? { url: './?p=dev', actions: [{ action: 'pause', title: '暂停它上网', url: './?p=dev&ask=pause&mac=' + nm[1] }] } : b.kind === 'ban' || b.kind === 'login' ? { url: './?p=auto' } : b.kind === 'ai' && /^aiask-[a-z0-9]{10}$/.test(String(b.tag || '')) ? { url: './?p=home&ask=ai', actions: [{ action: 'ai', title: '去确认', url: './?p=home&ask=ai' }] } : b.kind === 'fix' ? { url: './?p=home&ask=update', actions: [{ action: 'upd', title: '去更新', url: './?p=home&ask=update' }] } : {};
 			const to = /^[a-z2-9]{12}$/.test(String(b.to || '')) ? b.to : null;
 			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info', nolog: true, to, ...extra });

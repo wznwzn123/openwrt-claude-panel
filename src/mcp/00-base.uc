@@ -22,7 +22,7 @@ function shq(s) {
 }
 
 // 这次请求是谁（托管版按手机钥匙认）：在最前面声明，后面所有模块都能用；在 26-backup.uc 里赋值
-let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [];
+let DEV_ID = null, DEV = null, ROLE = 'owner', PERMS = [], FAM_PV = 0; // FAM_PV：官网的权限版本（6.0 第 17 项，3 起有「看和管所有设备」）
 
 function sh(cmd) {
 	let p = popen('export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH; ' + cmd + ' 2>&1', 'r');

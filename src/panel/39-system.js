@@ -74,17 +74,18 @@ const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.dev
 		: `${bl ? '<button class="btn sm good" data-unblack>恢复走代理</button>' : '<button class="btn sm" data-black>不走代理</button>'}<button class="btn sm" data-conns>看连接</button>`}</div>
 </article>`; };
 async function loadDev() {
-	const [b, pz] = await Promise.all([P('black_state'), P('pause_list').catch(() => null)]);
+	const [b, pz, ow] = await Promise.all([P('black_state'), P('pause_list').catch(() => null), P('dev_own').catch(() => null)]);
 	blk = b;
 	if (pz) PZ = pz;
+	OWN.d = ow;
 	devices = blk.devices || [];
-	renderPz();
+	renderPz(); ownRender();
 	setStatus(true, '在线');
 	const online = devices.filter((d) => d.online).length, off = devices.length - online;
 	$('dvOnline').textContent = online + ' 台在线';
 	$('dvCount').textContent = devices.length + ' 台';
 	const cl = $('dvClear'); if (cl) cl.classList.toggle('hidden', !off || !canPerm('parent'));
-	if (!devices.length) { $('dvList').innerHTML = '<div class="card empty">没有发现设备</div>'; return; }
+	if (!devices.length) { $('dvList').innerHTML = `<div class="card empty">${blk.own ? '还没有你名下的设备：点「认领设备」' : '没有发现设备'}</div>`; return; }
 	$('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join('');
 	const ds = devices;
 	dvImgLoad().then((ch) => { if (ch && ds === devices) $('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join(''); }).catch(() => {});
@@ -207,6 +208,7 @@ function devMore(d) {
 		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网' },
 			d.mac && par && { v: 'plan', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', t: '上网计划', sub: pz && pz.plan ? plState(pz) || pz.plan.slots.map(plSlot).join('、') : '' },
 			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理' })] },
+		{ items: [d.mac && ownCan() && { v: 'owner', ic: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>', t: '归谁', sub: ownWho(d.mac) }] },
 		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', danger: true }] }
 	]).then((v) => {
 		if (v === 'conns') { $('cnFilter').value = d.ip; go('conn'); }
@@ -214,6 +216,7 @@ function devMore(d) {
 		else if (v === 'icon') devIconSheet(d);
 		else if (v === 'pause') pauseSheet(d);
 		else if (v === 'plan') planSheet(d);
+		else if (v === 'owner') ownPick(d);
 		else if (v === 'black') blackToggle(d, true, null);
 		else if (v === 'unblack') blackToggle(d, false, null);
 		else if (v === 'forget') devForget(d);
@@ -2094,8 +2097,10 @@ const AV_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
 function avHtml(p, cls) { const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; const n = (p && (p.name || (p.email || '').split('@')[0])) || '?'; return `<span class="av${a ? ' img' : ''}${cls ? ' ' + cls : ''}"${a ? ` style="background-image:url('${a}')"` : ''}>${a ? '' : esc(n.trim().slice(0, 1))}</span>`; }
 function avPaint(el, p) { if (!el) return; const a = p && p.avatar && AV_RE.test(p.avatar) ? p.avatar : ''; el.classList.toggle('img', !!a); el.style.backgroundImage = a ? `url('${a}')` : ''; el.textContent = a ? '' : ((p && (p.name || (p.email || '').split('@')[0])) || '?').trim().slice(0, 1); }
 const meName = (p) => (p && (p.name || (p.email || '').split('@')[0])) || '';
-const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
-const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'proxy', 'sys']] };
+const PERM_N = { msg: '反馈和联系开发者', node: '切换节点', speed: '测速', parent: '家长控制', alldev: '看和管所有设备', proxy: '代理设置', net: '完全控制', sys: '系统操作' };
+const TPLS = { look: ['只看', ['msg']], family: ['家人', ['msg', 'node', 'speed']], most: ['几乎全部', ['msg', 'node', 'speed', 'parent', 'alldev', 'proxy', 'sys']] };
+// 6.0 第 17 项：模板名不看「看和管所有设备」（家人列表里另外写「所有设备 / 只管自己的设备」）
+const tplKey = (p) => (p || []).filter((k) => k !== 'alldev').slice().sort().join();
 // 安全加固（第二轮）：「完全控制」能在路由器上以 root 运行任何东西（原版后台、OpenClash 自定义脚本和覆写、恢复备份），有了就跟主账号一样；「几乎全部」不含它
 const PERM_RISK = ['net'];
 // 新给了高风险权限的：先确认一次（原来就有的不再问）
@@ -2104,7 +2109,7 @@ async function mpRiskOk(perms, old, who) {
 	if (!add.length) return true;
 	return confirmBox('给' + (who ? '「' + who + '」' : '他') + '完全控制？', '有「完全控制」的人能进路由器原版后台、改 OpenClash 运行的脚本、恢复备份，能做主账号能做的一切，而且收回权限以后也可能留下自己的改动。只给完全信任的家人。', '确定给', true);
 }
-const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => TPLS[t][1].slice().sort().join() === (perms || []).slice().sort().join()); return k ? TPLS[k][0] : '自定义'; };
+const tplName = (perms) => { const k = Object.keys(TPLS).find((t) => tplKey(TPLS[t][1]) === tplKey(perms)); return k ? TPLS[k][0] : '自定义'; };
 function meRender() {
 	const p = ME && ME.me, on = !!(SVC && SVC.hosted && p);
 	// 侧边栏的「我的主页」谁都有：没有官网账号的（自建版、应急登录）里面只有这台路由器的敏感信息
@@ -2389,7 +2394,10 @@ function mpDraw() {
 	h += `<div class="sectitle"><b>${main ? '家人（子账号）' : '这台路由器的主账号'}</b>${main && mm ? `<span class="muted" style="font-size:13px">${(mm.subs || []).length} / 10</span>` : ''}</div><section class="card">`;
 	if (!mm) h += '<p class="muted" style="margin:0">读不到，稍后再试</p>';
 	else if (main) {
-		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms))}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span>${!x.off && !x.expired && (x.perms || []).includes('net') ? '<span class="pill red mp-root">有完全控制</span>' : ''}</div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
+		h += (mm.subs || []).map((x) => `<div class="mp-fb"><div class="mp-acc">${avHtml(x, 'mp-av sm')}<div><b>${esc(meName(x))}</b><span>${esc(x.email || '')} · ${x.off ? '已停用' : x.expired ? '期限到了' : esc(tplName(x.perms)) + ' · ' + ((x.perms || []).includes('alldev') ? '所有设备' : '只管自己的设备')}${x.exp && !x.expired ? ' · 到 ' + esc(ymd(x.exp)) : ''}</span>${!x.off && !x.expired && (x.perms || []).includes('net') ? '<span class="pill red mp-root">有完全控制</span>' : ''}</div></div><button class="btn sm" data-mp="sub" data-u="${esc(x.uid)}">管理</button></div>`).join('') || '<p class="muted" style="margin:0 0 4px;font-size:13.5px;line-height:1.7">还没有子账号。家里人也想用：给他生成一个加入码，他注册官网账号后加入，能做什么由你决定。</p>';
+		// 6.0 第 17 项（风险 16）：6.0 以前加入的家人照旧能看和管所有设备，提示主账号自己决定
+		const olds = (mm.subs || []).filter((x) => x.old && (x.perms || []).includes('alldev') && !x.off);
+		if (olds.length) h += `<div class="notice" style="margin:8px 0 0">${olds.map((x) => '「' + esc(meName(x)) + '」').join('')}是 6.0 以前加入的，还能看和管所有设备。要改成只管自己的设备，点「管理」取消「看和管所有设备」。</div>`;
 		h += (mm.joins || []).map((j) => `<div class="mp-fb"><div><b>加入码 <span class="mono">${esc(j.code)}</span></b><span>给「${esc(j.name || '家人')}」 · ${esc(tplName(j.perms))} · ${esc(ymdhm(j.exp))} 过期 · 还没人用</span></div><button class="btn sm" data-mp="jcancel" data-c="${esc(j.code)}">撤回</button></div>`).join('');
 		h += `<div class="mp-acts"><button class="btn primary" data-mp="join"${(mm.subs || []).length + (mm.joins || []).length >= 10 ? ' disabled' : ''}>添加家人</button><button class="btn" data-mp="transfer"${(mm.subs || []).length ? '' : ' disabled'}>转让主账号</button></div>`;
 	} else {
@@ -2458,7 +2466,7 @@ function mpPermForm(perms, exp) {
 	<label class="lglabel" style="margin-top:0">能用多久</label><select class="input" data-exp><option value="0">一直能用</option><option value="7">7 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">一年</option>${exp ? `<option value="keep" selected>到 ${esc(ymd(exp))}（不变）</option>` : ''}</select>`;
 }
 function mpPermBind(m) {
-	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', TPLS[b.dataset.tpl][1].slice().sort().join() === p.slice().sort().join())); const w = m.querySelector('[data-risk]'); if (w) w.hidden = !PERM_RISK.some((k) => p.includes(k)); };
+	const sync = () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value); m.querySelectorAll('[data-tpl]').forEach((b) => b.classList.toggle('on', tplKey(TPLS[b.dataset.tpl][1]) === tplKey(p))); const w = m.querySelector('[data-risk]'); if (w) w.hidden = !PERM_RISK.some((k) => p.includes(k)); };
 	m.querySelectorAll('[data-tpl]').forEach((b) => (b.onclick = () => { const want = TPLS[b.dataset.tpl][1]; m.querySelectorAll('.mp-perms input').forEach((x) => (x.checked = want.includes(x.value))); sync(); }));
 	m.querySelectorAll('.mp-perms input').forEach((x) => (x.onchange = sync)); sync();
 	return () => { const p = [...m.querySelectorAll('.mp-perms input:checked')].map((x) => x.value), e = m.querySelector('[data-exp]').value; return { perms: p, subExp: e === 'keep' ? undefined : +e ? Date.now() + +e * 86400e3 : 0 }; };

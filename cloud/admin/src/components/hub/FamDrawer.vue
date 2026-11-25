@@ -13,7 +13,7 @@ import { day } from '@/utils/fmt'
    主账号丢了、家里有争议时由开发者处理；每次都要写原因，记进操作记录，双方都会收到邮件 */
 const props = defineProps<{ sub: string; name?: string }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>()
-const PERMS: Array<[string, string]> = [['msg', '反馈和联系开发者'], ['node', '切换节点'], ['speed', '测速'], ['parent', '家长控制'], ['proxy', '代理设置'], ['net', '完全控制'], ['sys', '系统操作']]
+const PERMS: Array<[string, string]> = [['msg', '反馈和联系开发者'], ['node', '切换节点'], ['speed', '测速'], ['parent', '家长控制'], ['alldev', '所有设备'], ['proxy', '代理设置'], ['net', '完全控制'], ['sys', '系统操作']]
 const TPL: Record<string, string> = { look: '只看', family: '家人', most: '几乎全部', custom: '自定义' }
 // 「完全控制」能在路由器上以 root 运行任何东西（原版后台、OpenClash 脚本和覆写、恢复备份），有了就跟主账号一样
 const RISK = ['net']

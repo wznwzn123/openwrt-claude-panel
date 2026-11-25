@@ -302,6 +302,8 @@ function start() {
 	if (usp.get('ask') === 'ext' && MRE.test(askMac)) setTimeout(() => askExt(askMac, +usp.get('min') || 0), 1600);
 	if (usp.get('ask') === 'plancopy' && MRE.test(askMac)) setTimeout(() => askPlanCopy(askMac, usp.get('src') || ''), 1600);
 	setTimeout(pushTag, 6000);
+	// 6.0 第 17 项：推送「有家人认领了设备」点进来：设备页上方就是等确认的列表
+	if (usp.get('ask') === 'claims') setTimeout(() => { if (page !== 'dev') go('dev'); }, 900);
 	// 6.0 第 14 项：改完 Wi-Fi 手机断开、重新连上：接着问「保留」还是「改回去」
 	setTimeout(wfResume, 700);
 	// 6.0 第 60 项：推送「你遇到的问题修好了」点进来：打开检查更新

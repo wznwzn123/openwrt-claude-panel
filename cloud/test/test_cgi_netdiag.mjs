@@ -31,6 +31,10 @@ fake('nslookup', {
 	nx: "Server:\t\t127.0.0.1\nAddress:\t127.0.0.1:53\n\n** server can't find nope.invalid: NXDOMAIN\n",
 	fake: 'Server:\t\t127.0.0.1\nAddress:\t127.0.0.1:53\n\nName:\twww.google.com\nAddress: 198.18.0.12\n',
 });
+// ip：-4 / -6 用同一个假命令，按第一个参数分
+fs.writeFileSync(E + '/ip4', 'default via 192.168.0.1 dev eth0 proto static src 192.168.0.2 metric 10\n192.168.0.0/24 dev eth0 proto kernel scope link src 192.168.0.2\n192.168.1.0/24 dev br-lan proto kernel scope link src 192.168.1.1\nunreachable 10.9.0.0/16 proto static metric 5\n');
+fs.writeFileSync(E + '/ip6', 'default from 240e::/64 via fe80::1 dev pppoe-wan proto static metric 512 pref medium\n240e:1:2::/64 dev br-lan proto static metric 1024 pref medium\nfe80::/64 dev br-lan proto kernel metric 256 pref medium\nmulticast ff00::/8 dev br-lan proto kernel metric 256 pref medium\n');
+fs.writeFileSync(`${BIN}/ip`, `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a"; done >> ${ARGS}.ip\n[ "$1" = -6 ] && cat ${E}/ip6 || cat ${E}/ip4\n`, { mode: 0o755 });
 const cgi = (method, params, xenv = {}) => new Promise((z) => {
 	const msg = { jsonrpc: '2.0', id: 1, method: 'panel/' + method, params: params || {}, client: 'panel' }, body = JSON.stringify(msg);
 	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/' + TOKEN, REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_ND_BIN: BIN, ...xenv } });
@@ -70,13 +74,23 @@ r = await cgi('netdiag', { tool: 'dns', addr: 'www.google.com' }, { ND_MODE: 'fa
 ok('域名查询：Fake-IP 标出来', r.result && r.result.fake === true);
 r = await cgi('netdiag', { tool: 'dns', addr: '8.8.8.8' });
 ok('域名查询：只能输域名', r.error && /只能输入域名/.test(r.error.message));
+// 路由表（第 33 项）：只读，不用填地址
+r = await cgi('netdiag', { tool: 'route' });
+const v4 = r.result && r.result.v4, v6 = r.result && r.result.v6;
+ok('路由表：IPv4 每条的目标、网关、接口、跃点', v4 && v4.length === 4 && v4[0].dst === 'default' && v4[0].via === '192.168.0.1' && v4[0].dev === 'eth0' && v4[0].metric === 10 && v4[2].dst === '192.168.1.0/24' && v4[2].dev === 'br-lan' && !v4[2].via, JSON.stringify(r).slice(0, 400));
+ok('路由表：不可达类型标出来', v4 && v4[3].type === 'unreachable' && v4[3].dst === '10.9.0.0/16' && v4[3].metric === 5, JSON.stringify(v4 && v4[3]));
+ok('路由表：IPv6 不列 fe80 和组播', v6 && v6.length === 2 && v6[0].dst === 'default' && v6[0].dev === 'pppoe-wan' && v6[1].dst === '240e:1:2::/64', JSON.stringify(v6));
+ok('路由表：只运行 ip -4/-6 route show', fs.readFileSync(ARGS + '.ip', 'utf8').trim().split('\n').join(' ') === '-4 route show -6 route show');
 // 固件没带
 fs.renameSync(BIN + '/traceroute', E + '/traceroute.bak');
 r = await cgi('netdiag', { tool: 'trace', addr: '1.1.1.1' });
 ok('没有 traceroute：说原因', r.error && /固件没带 traceroute/.test(r.error.message), JSON.stringify(r).slice(0, 200));
 r = await cgi('netdiag_caps', {});
-ok('能用哪几个：一次告诉面板', r.result && r.result.ping === true && r.result.trace === false && r.result.dns === true, JSON.stringify(r));
+ok('能用哪几个：一次告诉面板', r.result && r.result.ping === true && r.result.trace === false && r.result.dns === true && r.result.route === true, JSON.stringify(r));
 fs.renameSync(E + '/traceroute.bak', BIN + '/traceroute');
+fs.renameSync(BIN + '/ip', E + '/ip.bak');
+r = await cgi('netdiag', { tool: 'route' });
+ok('没有 ip 命令：说原因', r.error && /固件没带 ip 命令/.test(r.error.message), JSON.stringify(r).slice(0, 200));
 
 fs.rmSync(E, { recursive: true, force: true });
 let fail = 0;

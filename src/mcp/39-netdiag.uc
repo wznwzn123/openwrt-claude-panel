@@ -75,7 +75,32 @@ function nd_dns(addr) {
 	r.fake = length(filter(r.ips, (ip) => match(ip, ND_FAKE))) > 0;
 	return r;
 }
+// 6.0 第 33 项：路由表（只看）。主表里的 IPv4、IPv6（不列 fe80 链路本地、组播）
+function nd_route() {
+	if (!nd_has('ip')) die('读不了路由表：固件没带 ip 命令');
+	let out = { v4: [], v6: [] };
+	for (let f in ['4', '6']) {
+		let txt = sh(ND_BIN + 'ip -' + f + ' route show 2>/dev/null').out ?? '';
+		for (let l in split(txt, '\n')) {
+			let w = split(trim(l), /[ \t]+/);
+			if (!length(w[0]) || match(w[0], /^(fe80|ff00|multicast|broadcast|local|anycast)/)) continue;
+			let typ = null;
+			if (index(['unreachable', 'blackhole', 'prohibit', 'throw'], w[0]) >= 0) { typ = w[0]; w = slice(w, 1); }
+			let r = { dst: w[0] == 'default' ? 'default' : w[0], type: typ };
+			for (let i = 1; i < length(w) - 1; i++) {
+				if (w[i] == 'via') r.via = w[i + 1];
+				else if (w[i] == 'dev') r.dev = w[i + 1];
+				else if (w[i] == 'metric') r.metric = +w[i + 1];
+				else if (w[i] == 'proto') r.proto = w[i + 1];
+				else if (w[i] == 'src') r.src = w[i + 1];
+			}
+			if (length(out['v' + f]) < 200) push(out['v' + f], r);
+		}
+	}
+	return { tool: 'route', ...out };
+}
 P.netdiag = function(a) {
+	if (a?.tool == 'route') return nd_route();
 	let addr = nd_addr(a?.addr), t = a?.tool;
 	if (t == 'ping') return nd_ping(addr);
 	if (t == 'trace') return nd_trace(addr);
@@ -83,5 +108,5 @@ P.netdiag = function(a) {
 	die('不支持的诊断');
 };
 P.netdiag_caps = function() {
-	return { ping: nd_has('ping'), trace: nd_has('traceroute'), dns: nd_has('nslookup') };
+	return { ping: nd_has('ping'), trace: nd_has('traceroute'), dns: nd_has('nslookup'), route: nd_has('ip') };
 };

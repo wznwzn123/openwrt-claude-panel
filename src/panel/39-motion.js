@@ -6,7 +6,7 @@
    4. 来新通知时铃铛摇一下
    系统开了「减少动态效果」时，这些都不做（白块直接放到位） */
 const RM = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const SEG_SEL = '#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"]';
+const SEG_SEL = '#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"]';
 function segPlace(box, now) {
 	if (!box.isConnected) return;
 	box.classList.add('segon');

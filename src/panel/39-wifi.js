@@ -164,12 +164,13 @@ function wfConfirm(tok, secs, ssid, what, after) {
 	const T = gu ? { h: '访客网络加好了，家里还能上网吗？', s: '秒后自动撤销', kept: '访客 Wi-Fi 已打开', auto: '没有确认，访客 Wi-Fi 已撤销', back: '撤销', going: '正在撤销访客 Wi-Fi' }
 		: what === '端口转发' ? { h: '保留新的端口转发？', kept: '已保留', auto: '没有确认，端口转发已改回原来的' }
 		: what === '上网设置' ? { h: '能上网了吗？', kept: '已保留新的上网设置', auto: '没有确认，已改回原来的上网设置' }
+		: what === '局域网设置' ? { h: '新的局域网设置要保留吗？', kept: '已保留新的局域网设置', auto: '没有确认，已改回原来的局域网设置', note: '手机断开的话，重连 Wi-Fi 再点「保留」。' }
 		: { h: '新的 Wi-Fi 设置要保留吗？', kept: '已保留新的 Wi-Fi 设置', auto: '没有确认，已改回原来的 Wi-Fi 设置' };
 	store.set('rp_ng', JSON.stringify({ tok, until, ssid, what }));
-	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (['wifi', 'pf', 'wan'].includes(page)) setTimeout(() => refresh(), 600); };
+	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (['wifi', 'pf', 'wan', 'lanset'].includes(page)) setTimeout(() => refresh(), 600); };
 	modal(`<h3>${T.h}</h3>
 		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>${T.s || '秒后改回原来的'}</span></div>
-		${ssid ? `<div class="notice">手机断开的话，先连上「${esc(ssid)}」再点「保留」。</div>` : ''}
+		${ssid ? `<div class="notice">手机断开的话，先连上「${esc(ssid)}」再点「保留」。</div>` : T.note ? `<div class="notice">${T.note}</div>` : ''}
 		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>${T.back || '改回去'}</button><button class="btn primary" data-keep>保留</button></div>`,
 	(m, close) => {
 		m.dataset.ng = 1; m.dataset.lock = 1;
@@ -188,7 +189,7 @@ function wfConfirm(tok, secs, ssid, what, after) {
 				if (m2 === 'net_confirm' && !r.gone && after) after();
 			} catch (x) {
 				keep.disabled = back.disabled = false;
-				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : what === '上网设置' ? '连不上路由器，等网络恢复后再点' : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
+				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : what === '上网设置' || what === '局域网设置' ? '连不上路由器，等网络恢复后再点' : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
 			}
 		};
 		keep.onclick = () => act(keep, 'net_confirm');

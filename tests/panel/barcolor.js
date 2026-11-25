@@ -31,10 +31,12 @@ const dark = (hex, k) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slic
 	const set = async (kv) => { await page.evaluate((kv) => { for (const [k, v] of Object.entries(kv)) v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); }, kv); await page.reload(); await page.waitForTimeout(1500); };
 	await page.goto('http://localhost:8097/panel/?p=main'); await page.waitForTimeout(1500);
 	ok('只有一个状态栏颜色，不再按系统深浅色分两个', (await page.$$('meta[name=theme-color]')).length === 1);
-	ok('默认（浅色、玻璃、晨雾背景）：状态栏是晨雾顶部的颜色', (await tc()) === '#e3e2f8', await tc());
+	ok('默认（6.0 石墨主题，不开毛玻璃）浅色：页面顶部的灰 #eceef2', (await tc()) === '#eceef2', await tc());
 	await page.evaluate(() => A.theme ? A.theme() : null).catch(() => {});
 	await set({ rp_dark: '1' });
-	ok('夜间模式（星空背景，压暗 28%）', (await tc()) === dark('#191e4a', .72), await tc());
+	ok('默认深色：#0b0c0f', (await tc()) === '#0b0c0f', await tc());
+	await set({ rp_glass: '1' });
+	ok('开了毛玻璃 + 夜间（星空背景，压暗 28%）', (await tc()) === dark('#191e4a', .72), await tc());
 	await set({ rp_wall: 'aurora' });
 	ok('夜间 + 极光背景', (await tc()) === dark('#2d5586', .72), await tc());
 	await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(300);
@@ -42,11 +44,11 @@ const dark = (hex, k) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slic
 	await set({ rp_dark: '0', rp_wall: 'sunset', rp_wdim: '30' });
 	ok('浅色 + 日落 + 背景变暗 30%', (await tc()) === dark('#ffcca8', .7), await tc());
 	await set({ rp_glass: '0', rp_wdim: null });
-	ok('简洁样式（没背景）浅色：页面底色 #f2f2f7', (await tc()) === '#f2f2f7', await tc());
+	ok('关掉毛玻璃浅色：#eceef2', (await tc()) === '#eceef2', await tc());
 	await set({ rp_dark: '1' });
-	ok('简洁样式深色：黑色', (await tc()) === '#000000', await tc());
+	ok('关掉毛玻璃深色：#0b0c0f', (await tc()) === '#0b0c0f', await tc());
 	// 当场切换：不用刷新就跟着变
-	await set({ rp_glass: null, rp_dark: '0', rp_wall: 'ocean' });
+	await set({ rp_glass: '1', rp_dark: '0', rp_wall: 'ocean' });
 	const before = await tc();
 	await page.evaluate(() => { document.documentElement.classList.add('dark'); rpBar(); });
 	ok('切换深色时当场跟着变', before === '#baddfe' && (await tc()) === dark('#baddfe', .72), before + ' → ' + (await tc()));

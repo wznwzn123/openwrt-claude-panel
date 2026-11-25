@@ -19,6 +19,17 @@ function ls_lease_norm(v) {
 	for (let k in keys(LS_LEASE)) if ({ '1h': 3600, '12h': 43200, '1d': 86400, '7d': 604800 }[k] == sec) return k;
 	return v;
 }
+// 设备的固定地址（dhcp host）。名字先用面板里给设备起的，没有再用配置里的
+function ls_hosts() {
+	let al = {}, out = [];
+	try { for (let m, x in CL.dev_aliases()) if (type(x) == 'object' && x.name) al[lc(m)] = x.name; } catch (e) {}
+	for (let s in (uci_load('dhcp') ?? [])) {
+		if (s['.type'] != 'host') continue;
+		let macs = map(type(s.mac) == 'array' ? s.mac : as_list(s.mac), lc), mac = macs[0] ?? '';
+		push(out, { id: s['.name'], mac, ip: s.ip ?? '', name: al[mac] ?? s.name ?? '', edit: length(macs) == 1 && v4int(s.ip ?? '') != null && !s.tag && !s.duid, black: s.cmcp_black == '1' });
+	}
+	return out;
+}
 P.lanset_get = function() {
 	let lan = pf_lan();
 	if (!lan) return { none: '没有家里网络（lan）的设置' };
@@ -29,7 +40,7 @@ P.lanset_get = function() {
 	return {
 		ip: lan.ip, mask: v4mask(lan.pl), pl: lan.pl,
 		dhcp: d ? { on: (d.ignore ?? '0') != '1', from: ls_int2ip(from), to: ls_int2ip(to), lease: ls_lease_norm(d.leasetime) } : null,
-		port: +trim(readfile(ETC + '/lan_port') ?? '') || 906, owner: ROLE == 'owner', pending: ng_pending()
+		port: +trim(readfile(ETC + '/lan_port') ?? '') || 906, owner: ROLE == 'owner', pending: ng_pending(), hosts: ls_hosts()
 	};
 };
 // a: { ip, mask, dhcp_on, from, to, lease }
@@ -154,4 +165,54 @@ P.lan_keep = function(a) {
 	if (a?.revert) { bg(sprintf('sleep 1; CMCP_NG=%s CMCP_UCI_DIR=%s CMCP_SBIN=%s %s/cmcp-netguard revert %s', shq(NG), shq(ucdir()), shq(SBIN), SBIN, t)); return { ok: true }; }
 	sh('rm -rf ' + shq(NG));
 	return { ok: true };
+};
+// 固定地址：加、改、删（不会断网，直接生效，不走 90 秒确认）
+// a: { op: add | edit | del, id, mac, ip, name }
+P.lan_host_set = function(a) {
+	let op = a?.op, lan = pf_lan();
+	if (index(['add', 'edit', 'del'], op) < 0) die('不支持的操作');
+	if (!lan) die('没有家里网络（lan）的设置');
+	if (!stat(ucdir() + '/dhcp')) die('路由器没有 DHCP 设置');
+	let L = ls_hosts(), cur = null;
+	if (op != 'add') { for (let x in L) if (x.id == a?.id) cur = x; if (!cur) die('没有这个固定地址'); }
+	let U = conf().uci, cmds = [], what = '';
+	if (op == 'del') {
+		if (cur.black) die('不能删：不走代理要用');
+		push(cmds, U + ' delete ' + shq('dhcp.' + cur.id));
+		what = '去掉了「' + (cur.name || cur.mac) + '」的固定地址';
+	} else {
+		if (op == 'edit' && !cur.edit) die('这个固定地址有面板不认识的设置，在原版后台里改');
+		let mac = op == 'edit' ? cur.mac : lc(trim('' + (a?.mac ?? '')));
+		if (!match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('MAC 地址不对，比如 aa:bb:cc:dd:ee:ff');
+		let ip = trim('' + (a?.ip ?? ''));
+		wan_ip_check(ip, 'IP 地址');
+		if (!cidr_has(lan.ip, lan.pl, ip)) die('要在家里网段（' + lan.ip + '/' + lan.pl + '）里');
+		if (ip == lan.ip) die('不能用路由器自己的地址');
+		let size = pow2(32 - lan.pl), off = v4int(ip) % size;
+		if (off == 0 || off == size - 1) die('不能用网段的第一个或最后一个地址');
+		for (let x in L) {
+			if (cur && x.id == cur.id) continue;
+			if (x.ip == ip) die(ip + ' 已经固定给「' + (x.name || x.mac) + '」了');
+			if (op == 'add' && x.mac == mac) die('这台设备已经有固定地址了（' + x.ip + '）');
+		}
+		let nm = trim('' + (a?.name ?? ''));
+		if (op == 'add') {
+			let sid = 'cmcp_h' + replace(mac, /:/g, '');
+			push(cmds, U + ' set ' + shq('dhcp.' + sid + '=host'));
+			push(cmds, U + ' set ' + shq('dhcp.' + sid + '.mac=' + mac));
+			push(cmds, U + ' set ' + shq('dhcp.' + sid + '.ip=' + ip));
+			// dnsmasq 的名字只能是英文字母、数字和横杠：中文名不写（面板里的名字另外存着）
+			if (match(nm, /^[A-Za-z0-9][A-Za-z0-9-]{0,62}$/)) push(cmds, U + ' set ' + shq('dhcp.' + sid + '.name=' + nm));
+			what = '「' + (nm || mac) + '」固定用 ' + ip;
+		} else {
+			if (ip == cur.ip) return { changed: false };
+			push(cmds, U + ' set ' + shq('dhcp.' + cur.id + '.ip=' + ip));
+			what = '「' + (cur.name || cur.mac) + '」改成固定用 ' + ip;
+		}
+	}
+	let r = sh(join(' && ', cmds) + ' && ' + U + ' commit dhcp');
+	if (r.code != 0) { sh(U + ' revert dhcp'); die('保存失败，没有改：' + trim_nl(r.out)); }
+	let f = getenv('CMCP_NG_RUN');
+	bg(f ? 'echo /etc/init.d/dnsmasq reload >> ' + shq(f) : '/etc/init.d/dnsmasq reload');
+	return { changed: true, what, hosts: ls_hosts() };
 };

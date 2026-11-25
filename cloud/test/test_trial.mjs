@@ -57,6 +57,8 @@ const PERM = (await (await adm('POST', '/invites', { direct: true, max: 5 })).js
 const A = await (await reg(TRIAL, '2.2.2.1')).json();
 ok('用试用码开通：到期时间 = 7 天后', A.sub && A.exp && Math.abs(A.exp - (T + 7 * DAY)) < 5000, JSON.stringify({ exp: A.exp }));
 const P = await (await reg(PERM, '2.2.2.2')).json();
+// 路由器装好后马上会连上官网（6.0 第 90 项：开通后 1 天都没连上的会被收回）
+await hub().seen(A.sub, T); await hub().seen(P.sub, T);
 ok('普通邀请码开通：不限期', P.sub && P.exp === 0);
 // 绑定到 alice 的账号
 await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }], sids: [sid] });
@@ -120,6 +122,7 @@ await adm('POST', '/devices/' + A.sub + '/on');
 // 暂停 30 天还没续：删掉，腾出名额
 const TRIAL2 = (await (await adm('POST', '/invites', { direct: true, max: 1, days: 1, svc: 7 })).json()).invite.code;
 const B = await (await reg(TRIAL2, '2.2.2.9')).json();
+if (B.sub) await hub().seen(B.sub, T);
 T = B.exp + 60e3; await hub().cleanup();
 ok('另一台试用到期：暂停', (await dev(B.sub)).off);
 T += 31 * DAY; const cnt0 = (await (await api('GET', '/api/admin/health', undefined, { authorization: 'Bearer ' + env.ADMIN_KEY })).json()).count; await hub().cleanup();
@@ -129,6 +132,7 @@ ok('作废续期码', (await adm('DELETE', '/renewals/' + K3)).status === 200 &&
 // ---- 续期申请表 ----
 const TRIAL3 = (await (await adm('POST', '/invites', { direct: true, max: 2, days: 1, svc: 7 })).json()).invite.code;
 const C = await (await reg(TRIAL3, '2.2.3.1')).json(), D2 = await (await reg(TRIAL3, '2.2.3.2')).json();
+for (const x of [C, D2]) if (x.sub) await hub().seen(x.sub, T);
 await hub().ctx.storage.put('u:u1', { uid: 'u1', email: 'alice@x.com', devs: [{ sub: A.sub, at: T }, { sub: P.sub, at: T }, { sub: C.sub, at: T }, { sub: D2.sub, at: T }], sids: [sid] });
 T = C.exp + 60e3; await hub().cleanup();
 await hub().ctx.storage.put({ ['s:' + sid]: { uid: 'u1', exp: T + 30 * DAY }, ['s:' + sidB]: { uid: 'u2', exp: T + 30 * DAY } }); // 时间往后跳了很多，会话重新续上

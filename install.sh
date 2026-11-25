@@ -656,10 +656,21 @@ if [ -n "$HUB" ]; then
 			inv=$(printf '%s' "$INV" | tr -cd 'A-Za-z0-9')
 			[ -n "$inv" ] || die "托管版需要安装码：手机打开 $HUB/app 注册账号，在「添加路由器 → 装新路由器」里拿，复制那里的安装命令运行"
 			say "向托管服务申请专属网址"
-			R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\"}" "$HUB/api/register" || true)
+			# 6.0 第 90 项：这台路由器这次安装的随机编号（只存在路由器上）。没收到回复（超时、断网、按了 Ctrl+C）再装一次时带上同一个，
+			# 官网把上次的开通结果再给一次，安装码不会再扣
+			mkdir -p $D
+			RID=$(cat $D/reg_rid 2>/dev/null | tr -cd 'a-f0-9')
+			if [ ${#RID} -lt 16 ]; then
+				RID=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -cd 'a-f0-9')
+				[ ${#RID} -ge 16 ] || RID=$(printf '%s%s%s' "$(date +%s)" "$$" "$(cat /proc/sys/kernel/random/uuid 2>/dev/null)" | md5sum | cut -c1-32)
+				(umask 077; printf '%s\n' "$RID" > $D/reg_rid)
+			fi
+			R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\",\"rid\":\"$RID\"}" "$HUB/api/register" || true)
 			SUB=$(jf sub)
 			[ -n "$SUB" ] && break
 			e=$(jf error)
+			# 没收到回复：官网那边可能已经开通好了，带同一个编号再问一次就能拿回结果（不会多扣安装码）
+			if [ -z "$e" ] && [ $try -lt 3 ]; then warn "托管服务没回应，5 秒后再试一次（安装码不会重复扣）"; sleep 5; continue; fi
 			# 邀请码输错了（或者过期、用完）：一共给三次机会
 			case "$e" in 邀请码*|安装码*) if [ "$YES" != 1 ] && [ $try -lt 3 ]; then warn "$e"; INV=""; continue; fi ;; esac
 			die "开通失败：${e:-连不上托管服务 $HUB}"
@@ -670,6 +681,7 @@ if [ -n "$HUB" ]; then
 		 printf 'URL=%s\nRKEY=%s\nTKEY=%s\nPKEY=%s\n' "$(jf url)" "$(jf rkey)" "$(jf tkey)" "$(jf pkey)" > $D/cloud.conf
 		 printf 'HUB=%s\nSUB=%s\n' "$HUB" "$SUB" > $D/hub.conf)
 		printf '%s\n' "$HOST" > $D/hostname
+		rm -f $D/reg_rid
 		ok "开通成功：https://$HOST"
 		[ "$(jf bound)" = true ] && { BOUND=1; ok "路由器已经自动加到你的官网账号里，你是它的主账号"; }
 		EXP=$(jf exp); [ "${EXP:-0}" -gt 0 ] 2>/dev/null && SVC_END=$(date -d "@$((EXP / 1000))" '+%Y-%m-%d' 2>/dev/null || echo "")

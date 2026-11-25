@@ -184,15 +184,41 @@ export class Hub extends DurableObject {
 		return true;
 	}
 	register(a) { return this.lock(() => this._register(a)); }
-	async _register({ invite, ip, name, model }) {
+	/* 6.0 第 90 项：开通中途断了，安装码不再白白用掉（用户 11/25 定：三样都做）
+	 * ① 路由器每次安装带一个自己生成的随机编号（rid，只存在路由器上）。官网开通成功后把回复留 1 天（rr:<rid 的哈希>），
+	 *    同一台路由器拿同一个安装码、同一个 rid 再来，直接把上次的结果给它，不再扣码；路由器第一次连上官网就删掉
+	 * ② 开通出错（建隧道之后的步骤也算）：删掉建了一半的、退回安装码
+	 * ③ 开通好了但路由器 1 天都没连上过官网（没拿到回复、装到一半放弃了）：收回网址、退回安装码（每天清理时做） */
+	async _refund(code, sub) {
+		const inv = await this.ctx.storage.get('i:' + code);
+		if (!inv) return;
+		inv.used = Math.max(0, (inv.used || 0) - 1);
+		await this.ctx.storage.put('i:' + code, inv);
+		if (!inv.uid) return;
+		const u = await this.ctx.storage.get('u:' + inv.uid);
+		if (!u) return;
+		if (inv.exp ? Date.now() < inv.exp : true) u.inst = [...new Set([...(u.inst || []), code])];
+		if (inv.trial && u.trial && u.trial.sub === sub) { u.trialUsed = Math.max(0, (u.trialUsed || 1) - 1); u.trial = { ...u.trial, used: 0, sub: '' }; }
+		await this.ctx.storage.put('u:' + inv.uid, u);
+	}
+	async _register({ invite, ip, name, model, rid }) {
 		const now = Date.now();
 		const code = String(invite || '').trim().toUpperCase();
 		const inv = code && (await this.ctx.storage.get('i:' + code));
 		if (!inv || inv.off) return { st: 403, error: '邀请码（安装码）不对' };
 		// 5.2：托管版要先在官网注册账号。管理后台发的邀请码要在官网兑换成安装码，才能在路由器上装（装好自动加到账号里）
 		if (!inv.uid && !inv.direct) return { st: 403, error: '邀请码要先在官网兑换成安装码：手机打开 https://' + this.env.BASE_DOMAIN + '/app 注册账号，在「添加路由器 → 装新路由器」里输入邀请码，复制那里给的安装命令到路由器上运行' };
+		// 同一台路由器重试：拿回上一次的开通结果（只认同一个安装码 + 同一个 rid，别人拿不到）
+		const rh = /^[A-Za-z0-9]{16,64}$/.test(String(rid || '')) ? await sha256hex('rid:' + rid) : '';
+		if (rh) {
+			const rr = await this.ctx.storage.get('rr:' + rh);
+			if (rr && rr.code === code && now - rr.at < DAY) {
+				const d = await this.ctx.storage.get('d:' + rr.sub);
+				if (d && d.state === 'ok') { await this.alog('reg-again', rr.sub, '路由器重新拿回了开通结果（上次没收到回复），没有再扣安装码', 'router'); return { st: 200, ...rr.res, again: true }; }
+			}
+		}
 		if (inv.exp && now > inv.exp) return { st: 403, error: inv.uid ? '安装码已经过期了：回官网「添加路由器 → 装新路由器」重新拿一个' : '邀请码已经过期' };
-		if (inv.used >= inv.max) return { st: 403, error: '邀请码已经用完了' };
+		if (inv.used >= inv.max) return { st: 403, error: inv.uid ? '这个安装码已经用过了：每个安装码只能装一台。回官网「添加路由器 → 装新路由器」重新拿一个' : '邀请码已经用完了' };
 		if ((await this.count()) >= this.max()) return { st: 403, error: '名额已满，暂时不能开通' };
 		// 上次开通时 Cloudflare 的子域名名额满了：一天内、路由器数量没减少之前直接说名额已满，不再去建隧道（过一天再试一次，升级了套餐也能自己恢复）
 		const full = await this.ctx.storage.get('dnsfull');
@@ -208,8 +234,7 @@ export class Hub extends DurableObject {
 		try {
 			made = await provision(this.env, sub);
 		} catch (e) {
-			const cur = await this.ctx.storage.get('i:' + code);
-			if (cur) { cur.used = Math.max(0, cur.used - 1); await this.ctx.storage.put('i:' + code, cur); }
+			await this._refund(code, sub);
 			await this.ctx.storage.delete('d:' + sub);
 			await this.addCount(-1);
 			if (dnsFull(e)) {
@@ -219,31 +244,45 @@ export class Hub extends DurableObject {
 				await this.notifyAdmin('托管名额满了', `开通新路由器时 Cloudflare 提示子域名（DNS 记录）名额用完了，现在有 ${n} 台路由器。\n\n新用户会看到「名额已满，暂时不能开通」。删掉不用的路由器、或者升级 Cloudflare 套餐后就能继续开通。\n\nCloudflare 原话：${e.message}\n\n管理页：https://${this.env.BASE_DOMAIN}/admin`);
 				return { st: 403, error: '名额已满，暂时不能开通' };
 			}
-			return { st: 502, error: '开通失败：' + e.message };
+			return { st: 502, error: '开通失败：' + e.message + '（安装码没扣，可以再装一次）' };
 		}
-		if (full) await this.ctx.storage.delete('dnsfull');
-		const keys = { rkey: rnd(32), tkey: rnd(32), pkey: rnd(32) };
-		const h = host(this.env, sub);
-		await this.watch(sub).setup({ sub, ...keys, probe: 'https://' + h + '/panel/manifest.json' });
-		// 试用码：开通后只能用 svc 天，到期前找提供服务的人要续期码；普通邀请码不限期
-		const exp = +inv.svc > 0 ? now + inv.svc * DAY : 0;
-		const dv = { sub, state: 'ok', created: now, seen: now, invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp };
-		// 官网账号领的试用码：开通后直接加到这个账号里，不用再配对
-		let bound = false;
-		if (inv.uid) {
-			const u = await this.ctx.storage.get('u:' + inv.uid);
-			if (u && !(u.devs || []).some((x) => x.sub === sub)) { u.devs = [...(u.devs || []), { sub, at: now }]; dv.users = [inv.uid]; dv.owner = inv.uid; await this.ctx.storage.put('u:' + inv.uid, u); bound = true; }
-			if (u) {
-				if (inv.trial) { u.trialUsed = Math.max(u.trialUsed || 0, u.trial && u.trial.used ? 1 : 0) + 1; u.trial = { ...(u.trial || {}), used: now, sub }; }
-				u.inst = (u.inst || []).filter((x) => x !== code);
-				await this.ctx.storage.put('u:' + inv.uid, u);
+		// 隧道建好了先记下来：后面哪一步出错（或者官网这边中途断了），清理时能把隧道和子域名删掉
+		await this.ctx.storage.put('d:' + sub, { sub, state: 'pending', created: now, invite: code, tunnel: made.tunnel, dns: made.dns });
+		try {
+			if (full) await this.ctx.storage.delete('dnsfull');
+			const keys = { rkey: rnd(32), tkey: rnd(32), pkey: rnd(32) };
+			const h = host(this.env, sub);
+			await this.watch(sub).setup({ sub, ...keys, probe: 'https://' + h + '/panel/manifest.json' });
+			// 试用码：开通后只能用 svc 天，到期前找提供服务的人要续期码；普通邀请码不限期
+			const exp = +inv.svc > 0 ? now + inv.svc * DAY : 0;
+			// fresh：路由器还没连上过官网；连上过一次就去掉（1 天都没连上的会被收回，见 _cleanup）
+			const dv = { sub, state: 'ok', created: now, seen: now, fresh: true, invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp };
+			// 官网账号领的试用码：开通后直接加到这个账号里，不用再配对
+			let bound = false;
+			if (inv.uid) {
+				const u = await this.ctx.storage.get('u:' + inv.uid);
+				if (u && !(u.devs || []).some((x) => x.sub === sub)) { u.devs = [...(u.devs || []), { sub, at: now }]; dv.users = [inv.uid]; dv.owner = inv.uid; await this.ctx.storage.put('u:' + inv.uid, u); bound = true; }
+				if (u) {
+					if (inv.trial) { u.trialUsed = Math.max(u.trialUsed || 0, u.trial && u.trial.used ? 1 : 0) + 1; u.trial = { ...(u.trial || {}), used: now, sub }; }
+					u.inst = (u.inst || []).filter((x) => x !== code);
+					await this.ctx.storage.put('u:' + inv.uid, u);
+				}
 			}
+			const res = { sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, bound, ...keys };
+			if (rh) { dv.rr = rh; await this.ctx.storage.put('rr:' + rh, { code, sub, at: now, res }); }
+			await this.ctx.storage.put('d:' + sub, dv);
+			await this.rlog(sub, '✨', '开通托管服务' + (dv.exp ? '（' + Math.round((dv.exp - now) / DAY) + ' 天）' : '') + (bound ? '，自动加到 ' + (await this.rname(inv.uid)) + ' 的账号里，他是主账号' : ''));
+			if (inv.uid) await this.alog(inv.trial ? 'trial-used' : 'inst-used', sub, (inv.trial ? '用官网领的试用码开通' : '用安装码开通（邀请码 ' + (inv.from || '?') + '）') + (bound ? '，已自动加到账号里' : ''), 'router');
+			await this.track('dev_reg');
+			return { st: 200, ...res };
+		} catch (e) {
+			// 建好隧道以后出错：删掉建了一半的，退回安装码
+			try { await this._remove(sub); } catch (x) { try { await deprovision(this.env, made); } catch (y) {} await this.ctx.storage.delete('d:' + sub); await this.addCount(-1); }
+			await this._refund(code, sub);
+			if (rh) await this.ctx.storage.delete('rr:' + rh);
+			await this.alog('reg-fail', sub, '开通到一半出错，已删掉建了一半的、退回安装码：' + e.message, 'system');
+			return { st: 502, error: '开通失败：' + e.message + '（安装码没扣，可以再装一次）' };
 		}
-		await this.ctx.storage.put('d:' + sub, dv);
-		await this.rlog(sub, '✨', '开通托管服务' + (dv.exp ? '（' + Math.round((dv.exp - now) / DAY) + ' 天）' : '') + (bound ? '，自动加到 ' + (await this.rname(inv.uid)) + ' 的账号里，他是主账号' : ''));
-		if (inv.uid) await this.alog(inv.trial ? 'trial-used' : 'inst-used', sub, (inv.trial ? '用官网领的试用码开通' : '用安装码开通（邀请码 ' + (inv.from || '?') + '）') + (bound ? '，已自动加到账号里' : ''), 'router');
-		await this.track('dev_reg');
-		return { st: 200, sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, bound, ...keys };
 	}
 	// 删除一台：删子域名和隧道、清空它的云端数据、腾出名额
 	remove(sub) { return this.lock(() => this._remove(sub)); }
@@ -272,7 +311,11 @@ export class Hub extends DurableObject {
 	}
 	async seen(sub, t) {
 		const d = await this.ctx.storage.get('d:' + sub);
-		if (d) { d.seen = t; await this.ctx.storage.put('d:' + sub, d); }
+		if (!d) return;
+		d.seen = t;
+		// 第一次连上官网：开通结果不用再留了（6.0 第 90 项）
+		if (d.fresh) { delete d.fresh; if (d.rr) { await this.ctx.storage.delete('rr:' + d.rr); delete d.rr; } }
+		await this.ctx.storage.put('d:' + sub, d);
 	}
 	/* ---------- 删除先进回收站：30 天内只是停用（网址打不开），隧道和云端数据都留着，随时一键恢复；30 天后才彻底删除 ---------- */
 	// 受保护：手动标了「保护」，或者绑定在管理员邮箱（ADMIN_EMAIL）的账号上（管理员自己的路由器）
@@ -1355,10 +1398,29 @@ export class Hub extends DurableObject {
 					const d2 = await this.ctx.storage.get('d:' + d.sub); d2.delAt = now; d2.delWhy = 'idle'; await this.ctx.storage.put('d:' + d.sub, d2);
 					await this.mailOwners(d2, 'trash');
 					await this.alog('idle', d.sub, (d.name || '') + ' ' + LIMITS.idleDays + ' 天没上线，放进回收站', 'system');
-				} else { await this.ctx.storage.delete('d:' + d.sub); await this.addCount(-1); }
+				} else {
+					// 开通到一半卡住的：删掉建了一半的隧道和子域名，退回安装码（6.0 第 90 项；以前只删记录，安装码白白用掉）
+					if (d.tunnel || d.dns) await deprovision(this.env, d).catch(() => {});
+					await this.ctx.storage.delete('d:' + d.sub); await this.addCount(-1);
+					if (d.invite) await this._refund(d.invite, d.sub);
+					await this.alog('reg-stuck', d.sub, '开通到一半卡住超过 1 小时，已清掉、退回安装码', 'system');
+				}
 				out.push(d.sub);
 			} catch (e) {}
 		}
+		// 开通好了、路由器 1 天都没连上过官网（没收到开通回复、装到一半放弃）：收回网址、退回安装码（6.0 第 90 项）
+		for (const d of await this.devices()) {
+			if (d.state !== 'ok' || !d.fresh || now - d.created < DAY || d.off || (await this.isProtected(d))) continue;
+			try {
+				await this._remove(d.sub);
+				if (d.rr) await this.ctx.storage.delete('rr:' + d.rr);
+				if (d.invite) await this._refund(d.invite, d.sub);
+				await this.alog('reg-unused', d.sub, '开通后 1 天都没连上官网（多半没装完），已收回网址、退回安装码' + (d.name ? '（' + d.name + '）' : ''), 'system');
+				out.push(d.sub);
+			} catch (e) {}
+		}
+		// 开通结果只留 1 天
+		for (const [k, v] of await this.ctx.storage.list({ prefix: 'rr:' })) if (!v || now - (v.at || 0) > DAY) await this.ctx.storage.delete(k);
 		// 回收站里满 30 天的：彻底删除（先发邮件告诉绑定的账号怎么重新开通）
 		for (const d of await this.devices()) {
 			if (d.offWhy !== 'deleted' || !d.delAt || now - d.delAt < TRASH_DAYS * DAY) continue;
@@ -1431,7 +1493,7 @@ export async function hubFetch(req, env) {
 	if (p === '/api/ping') return J({ ok: true, mail: !!env.RESEND_API_KEY });
 	if (p === '/api/register' && req.method === 'POST') {
 		const b = await body();
-		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, ip: req.headers.get('cf-connecting-ip') || '' });
+		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, rid: b.rid, ip: req.headers.get('cf-connecting-ip') || '' });
 		const { st, ...rest } = r;
 		return J(rest, st);
 	}

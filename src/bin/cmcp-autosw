@@ -1,6 +1,6 @@
 #!/usr/bin/ucode
 // 节点自动切换（看门狗每分钟调用一次）
-// 当前节点连续测不通 → 按「同地区同类型同倍率 → 同地区同类型 → 同地区 → 其他地区」挑延迟最低的（6.0 第 92 项，认法见 cmcp.lib 的 node_meta）
+// 当前节点连续 3 分钟测不通（谷歌、Cloudflare 两个网址都不通才算） → 按「同地区同类型同倍率 → 同地区同类型 → 同地区 → 其他地区」挑延迟最低的（6.0 第 92 项，认法见 cmcp.lib 的 node_meta）
 // → 断开走旧节点的连接 → 通知；原来的节点连续正常 10 分钟后自动换回去（中间手动切过就不换）
 // 设置：/etc/claude-mcp/autosw.json {"enabled":true,"group":"Zou"}
 'use strict';
@@ -8,7 +8,7 @@ import * as L from 'cmcp.lib';
 import { mkdir, stat, readfile } from 'fs';
 
 const CF = L.D + '/autosw.json', SF = '/tmp/cmcp_autosw.json', HF = L.D + '/autosw_hist.json';
-const TEST = 'https://www.gstatic.com/generate_204';
+const TEST = 'https://www.gstatic.com/generate_204', TEST2 = 'http://cp.cloudflare.com/generate_204';
 const cfg = L.readj(CF, { enabled: true, group: 'Zou' });
 const arg = ARGV[0];
 if (!cfg.enabled && arg != 'test') exit(0);
@@ -70,7 +70,9 @@ const manual = +(readfile(getenv('CMCP_ASW_MANUAL') ?? '/tmp/cmcp_autosw_manual'
 if (!T && st.orig && (cur != st.orig.to || manual > st.orig.at)) { st.orig = null; save(); }
 if (!T && t - manual < 600) done();
 
-const delay = (n, tmo) => +(L.api('GET', '/proxies/' + L.enc(n) + '/delay?timeout=' + tmo + '&url=' + L.enc(TEST), null, tmo / 1000 + 3).json?.delay ?? 0);
+const delay = (n, tmo, url) => +(L.api('GET', '/proxies/' + L.enc(n) + '/delay?timeout=' + tmo + '&url=' + L.enc(url ?? TEST), null, tmo / 1000 + 3).json?.delay ?? 0);
+// 通不通：先测谷歌的，测不通再换 Cloudflare 的测一次，任何一个通就算通（用户 11/25：只测一个网址，它偶尔抽风也会被当成节点挂了）
+const alive = (n, tmo) => delay(n, tmo) || delay(n, tmo, TEST2);
 // 断开还挂在某个节点上的连接，让它们马上走新节点（面板自己的连接保留）
 function cut(from) {
 	const hp = split(trim(readfile('/etc/claude-mcp/hostname') ?? ''), '.');
@@ -89,7 +91,7 @@ function back() {
 	let o = st.orig;
 	if (!o) return;
 	if (!(o.from in all) || !isNode(o.from)) { st.orig = null; return; }
-	if (delay(o.from, 3000) <= 0) { o.ok = 0; return; }
+	if (alive(o.from, 3000) <= 0) { o.ok = 0; return; }
 	if (!o.ok) { o.ok = t; return; }
 	if (t - o.ok < 600) return;
 	L.api('PUT', '/proxies/' + L.enc(cfg.group), { name: o.from }, 6);
@@ -98,7 +100,7 @@ function back() {
 	st.orig = null; st.last = t;
 	L.notify('ok', 'node', '节点已换回：' + o.from, '「' + o.from + '」已经连续正常 10 分钟，从「' + cur + '」换回来了，断开了 ' + n + ' 条旧连接', 'node');
 }
-let d1 = delay(cur, 5000);
+let d1 = alive(cur, 5000);
 if (!T) {
 	if (d1 > 0) {
 		st.fail = 0; st.allfail = false;
@@ -108,7 +110,10 @@ if (!T) {
 		back();
 		save(); done();
 	}
-	L.sh('sleep 3'); if (delay(cur, 5000) > 0) { save(); done(); }
+	L.sh('sleep 3'); if (alive(cur, 5000) > 0) { st.fail = 0; save(); done(); }
+	// 连续 3 分钟（看门狗每分钟查一次，连着 3 次）都不通才换（用户 11/25 定）：节点高峰时卡十几秒不算挂；中间通过一次就重新数
+	st.fail = t - (+st.failT || 0) < 150 ? (+st.fail || 0) + 1 : 1; st.failT = t;
+	if (st.fail < 3) { save(); done(); }
 	// 3 分钟内刚换过就先不换，避免来回跳
 	if (t - (st.last ?? 0) < 180) done();
 	// 订阅流量用光或到期了：换节点也没用，不切换，只提醒一次

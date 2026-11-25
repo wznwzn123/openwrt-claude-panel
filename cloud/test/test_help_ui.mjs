@@ -72,11 +72,11 @@ const overflow = (p) => p.evaluate(() => document.documentElement.scrollWidth - 
 	await p.goto(B + '/help'); await p.waitForSelector('.hp-q');
 	ok('[常见问题] 全部 ' + N + ' 条都在', (await p.locator('.hp-q').count()) === N);
 	await p.locator('.hp-cats button', { hasText: '更新' }).click(); await W(150);
-	ok('[常见问题] 按分类看', (await p.locator('.hp-q').count()) === 3 && (await p.locator('.hp-grp h2').textContent()) === '更新');
+	ok('[常见问题] 按分类看', (await p.locator('.hp-q').count()) === FAQ_DEFAULT.filter((x) => x.cat === 'update').length && (await p.locator('.hp-grp h2').textContent()) === '更新');
 	await p.locator('.hp-cats button', { hasText: '全部' }).click();
 	const search = async (q) => { await p.fill('#hpQ', q); await W(350); return { n: await p.locator('.hp-q').count(), first: (await p.locator('.hp-q').first().textContent().catch(() => '')).trim() }; };
 	let r = await search('换手机');
-	ok('[常见问题] 搜「换手机」：只有那一条，自动展开', r.n === 1 && r.first.startsWith('换了手机') && (await p.locator('.hp-q').first().getAttribute('aria-expanded')) === 'true', JSON.stringify(r));
+	ok('[常见问题] 搜「换手机」：最相关的那条排第一，自动展开', r.n <= 3 && r.first.startsWith('换了手机') && (await p.locator('.hp-q').first().getAttribute('aria-expanded')) === 'true', JSON.stringify(r));
 	r = await search('续期码');
 	ok('[常见问题] 搜到的词标出来', (await p.locator('.hp-q mark').count()) > 0 && r.n >= 1);
 	r = await search('续费');

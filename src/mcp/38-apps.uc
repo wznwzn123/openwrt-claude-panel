@@ -81,7 +81,8 @@ P.app_list = function() {
 	let r = app_scan(), wk = time() - 7 * 86400;
 	for (let x in r.list) {
 		x.title = app_title(x.name);
-		x.plugin = !!match(x.name, /^luci-(app|theme)-/);
+		x.plugin = !!match(x.name, /^luci-(app|theme)-/) || !!match(x.name, /^app-meta-/);
+		if (match(x.name, /^app-meta-/) && length(x.desc) && length(x.desc) <= 24) x.title = x.desc; // iStore 的应用：用它的中文名
 		x.no = app_protect(x.name, x);
 		x.recent = !x.rom && !!x.at && x.at >= wk;
 		x.net = !!match(x.name, APP_NET);
@@ -105,7 +106,9 @@ P.app_remove = function(a) {
 	let us = filter(x.users, (u) => u != n);
 	if (length(us)) die('被' + join('、', map(slice(us, 0, 5), app_title)) + (length(us) > 5 ? ' 等 ' + length(us) + ' 个' : '') + '使用，先卸它们');
 	let f0 = match(sh('df -k /overlay 2>/dev/null | awk \'NR==2 { print $4 }\'').out, /(\d+)/);
-	let cmd = r.pm == 'apk' ? 'apk del ' + shq(n) : 'opkg remove --autoremove ' + shq(n);
+	// iStore 装的应用（app-meta-*）交给 is-opkg 卸，它会把为这个应用装的东西一起卸掉
+	let isapp = !!match(n, /^app-meta-/) && (getenv('CMCP_STORE_ISTORE') == '1' || (getenv('CMCP_STORE_ISTORE') == null && length(trim(sh('command -v is-opkg').out)) > 0));
+	let cmd = isapp ? 'is-opkg remove ' + shq(n) : r.pm == 'apk' ? 'apk del ' + shq(n) : 'opkg remove --autoremove ' + shq(n);
 	let o;
 	if (getenv('CMCP_APPS_RUN')) { writefile(getenv('CMCP_APPS_RUN'), cmd + '\n'); o = { code: +(getenv('CMCP_APPS_RC') ?? 0), out: getenv('CMCP_APPS_OUT') ?? '' }; }
 	else o = sh(cmd + ' 2>&1');

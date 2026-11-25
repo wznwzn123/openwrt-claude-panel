@@ -25,7 +25,9 @@ mk('/usr/lib/opkg/status', [
 	`Package: cloudflared\nVersion: 2024.1\nStatus: install user installed\nInstalled-Time: ${now - 10 * DAY}`,
 	`Package: luci-app-firewall\nVersion: 1\nStatus: install user installed\nInstalled-Time: ${now - 300 * DAY}`,
 	`Package: luci-base\nVersion: 1\nStatus: install user installed\nInstalled-Time: ${now - 300 * DAY}`,
+	`Package: app-meta-ddnsto\nVersion: 1.0.0\nStatus: install user installed\nInstalled-Time: ${now - 3 * DAY}`,
 ].join('\n\n') + '\n');
+mk('/usr/lib/opkg/info/app-meta-ddnsto.control', 'Package: app-meta-ddnsto\nDescription: DDNSTO 远程控制\n');
 mk('/usr/lib/opkg/info/luci-app-openclash.control', 'Package: luci-app-openclash\nInstalled-Size: 3145728\nDescription: A Clash Client For OpenWrt\n');
 mk('/usr/lib/opkg/info/luci-app-wol.control', 'Package: luci-app-wol\nInstalled-Size: 20480\nDescription: Wake on LAN\n');
 for (const n of ['base-files', 'luci-app-firewall', 'luci-base']) mk('/rom/usr/lib/opkg/info/' + n + '.control', 'Package: ' + n + '\n');
@@ -49,7 +51,7 @@ const rd = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { retur
 
 let r = await cgi('app_list');
 const L = r.result?.list || [], by = (n) => L.find((x) => x.name === n);
-ok('opkg：列出全部装着的包', r.result?.pm === 'opkg' && L.length === 10, JSON.stringify(r).slice(0, 300));
+ok('opkg：列出全部装着的包', r.result?.pm === 'opkg' && L.length === 11, JSON.stringify(r).slice(0, 300));
 ok('按安装时间排，最近装的在前面', L[0].at >= L[1].at && L[1].at >= L[2].at && ['luci-app-ddns', 'ddns-scripts'].includes(L[0].name));
 ok('插件名字换成好认的（OpenClash、网络唤醒、动态 DNS）', by('luci-app-openclash').title === 'OpenClash' && by('luci-app-wol').title === '网络唤醒' && by('luci-app-ddns').title === '动态 DNS');
 ok('大小、说明从 control 里读', by('luci-app-openclash').size === 3145728 && /Clash Client/.test(by('luci-app-openclash').desc));
@@ -64,6 +66,11 @@ r = await cgi('app_remove', { name: 'luci-app-wol' });
 ok('没确认：不卸', /需要确认/.test(err(r)));
 r = await cgi('app_remove', { name: 'luci-app-wol', confirm: 'REMOVE' });
 ok('卸载：opkg remove --autoremove，回来好认的名字', r.result?.ok && r.result.title === '网络唤醒' && rd(RUN).trim() === "opkg remove --autoremove 'luci-app-wol'", JSON.stringify(r) + rd(RUN));
+fs.rmSync(RUN, { force: true });
+r = await cgi('app_list');
+ok('iStore 装的应用：算插件，用它的中文名', r.result.list.some((x) => x.name === 'app-meta-ddnsto' && x.plugin && x.title === 'DDNSTO 远程控制'));
+r = await cgi('app_remove', { name: 'app-meta-ddnsto', confirm: 'REMOVE' }, { CMCP_STORE_ISTORE: '1' });
+ok('卸 iStore 装的应用：交给 is-opkg remove', r.result?.ok && rd(RUN).trim() === "is-opkg remove 'app-meta-ddnsto'", JSON.stringify(r) + rd(RUN));
 fs.rmSync(RUN, { force: true });
 r = await cgi('app_remove', { name: 'base-files', confirm: 'REMOVE' });
 ok('系统组件：不让卸，说原因', /不能卸：系统组件/.test(err(r)) && !rd(RUN));

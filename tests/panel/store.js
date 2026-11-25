@@ -12,11 +12,13 @@ const LIST = () => [
 	{ name: 'luci-app-ddns', title: '动态 DNS', ver: '2.9-r1', size: 20480, plugin: true, installed: '2.8-r1', upd: true, desc: '' },
 	{ name: 'luci-app-wol', title: '网络唤醒', ver: '1.0-r1', size: 10240, plugin: true, installed: null, upd: false, desc: 'Wake on LAN' },
 	{ name: 'luci-app-firewall', title: '防火墙', ver: '1', size: 4000, plugin: true, installed: '1', upd: false, desc: '' },
+	{ name: 'luci-app-passwall', title: 'PassWall', ver: '4.7', size: 90000, plugin: true, installed: null, upd: false, desc: '', src: 'kenzo' },
+	{ name: 'app-meta-ddnsto', title: 'DDNSTO 远程控制', ver: '1.0.0', size: 2000, plugin: true, installed: null, upd: false, desc: '', src: 'iStore' },
 ];
 const S = { list: LIST(), calls: [], state: null, age: 3 * 86400, polls: 0, role: 'owner' };
 function handle(m, p) {
 	S.calls.push({ m, p });
-	if (m === 'store_list') { const l = p.q ? [...S.list, { name: 'dnsmasq-full', title: 'dnsmasq-full', ver: '2.90', size: 200000, plugin: false, installed: '2.89', upd: false }].filter((x) => (x.name + x.title + x.desc).toLowerCase().includes(p.q.toLowerCase())) : S.list; return { pm: 'opkg', age: S.age, feeds: ['openwrt_core'], total: l.length, list: S.age == null ? [] : l, upd: S.list.filter((x) => x.upd).length, free: 20480, state: S.state }; }
+	if (m === 'store_list') { const l = p.q ? [...S.list, { name: 'dnsmasq-full', title: 'dnsmasq-full', ver: '2.90', size: 200000, plugin: false, installed: '2.89', upd: false }].filter((x) => (x.name + x.title + x.desc).toLowerCase().includes(p.q.toLowerCase())) : S.list; return { pm: 'opkg', age: S.age, feeds: [{ name: 'openwrt_core', kind: 'dist' }, { name: 'kenzo', kind: 'custom' }, { name: 'istore_meta', kind: 'istore' }], istore: true, total: l.length, list: S.age == null ? [] : l, upd: S.list.filter((x) => x.upd).length, free: 20480, state: S.state }; }
 	if (m === 'store_install' || m === 'store_upgrade' || m === 'store_refresh') { S.state = { st: 'run', what: m === 'store_install' ? '安装「网络唤醒」' : m === 'store_upgrade' ? '更新「动态 DNS」' : '更新软件源', at: 1 }; S.polls = 0; return { ok: true, started: true }; }
 	if (m === 'store_state') { if (S.state && S.state.st === 'run' && ++S.polls >= 2) { S.state = { ...S.state, st: S.state.what.includes('动态') ? 'fail' : 'ok', log: 'Collected errors:\n * opkg_install_cmd: Cannot install package luci-app-ddns.' }; if (S.state.st === 'ok') { const w = S.list.find((x) => x.name === 'luci-app-wol'); w.installed = w.ver; } } return { state: S.state }; }
 	if (m === 'whoami') return { ...mock.respond(m, p), role: S.role, perms: S.role === 'sub' ? ['sys'] : [] };
@@ -42,15 +44,24 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8179/panel/?p=store'); await W(1800);
 		const rows = page.locator('#stList .strow');
-		ok('插件：四个，已装的标「已装」，能更新的标「可更新」' + T, (await rows.count()) === 4 && /已装/.test(await page.locator('.strow[data-n="luci-app-firewall"]').textContent()) && /可更新/.test(await page.locator('.strow[data-n="luci-app-ddns"]').textContent()));
+		ok('插件：六个（含第三方、iStore 的），已装的标「已装」，能更新的标「可更新」' + T, (await rows.count()) === 6 && /已装/.test(await page.locator('.strow[data-n="luci-app-firewall"]').textContent()) && /可更新/.test(await page.locator('.strow[data-n="luci-app-ddns"]').textContent()));
 		ok('没装的有「安装」，可更新的有「更新」，装了的没按钮' + T, (await page.locator('.strow[data-n="luci-app-wol"] [data-act="install"]').count()) === 1 && (await page.locator('.strow[data-n="luci-app-ddns"] [data-act="upgrade"]').count()) === 1 && !(await page.locator('.strow[data-n="luci-app-firewall"] [data-act]').count()));
-		ok('软件源多久没更新、闪存剩多少' + T, /3 天前更新/.test(await page.textContent('#stAge')) && /剩 20 MB/.test(await page.textContent('#stFree')));
-		ok('分类一行放下，写着可更新几个' + T, /可更新 1/.test(await page.textContent('#stView')) && await page.evaluate(() => { const c = [...document.querySelectorAll('#stView .chip')]; return new Set(c.map((x) => Math.round(x.getBoundingClientRect().top))).size === 1; }));
+		ok('第三方的标软件源名，iStore 的标 iStore' + T, /kenzo/.test(await page.locator('.strow[data-n="luci-app-passwall"]').textContent()) && /iStore/.test(await page.locator('.strow[data-n="app-meta-ddnsto"]').textContent()) && !(await page.locator('.strow[data-n="luci-app-wol"] .stsrc').count()));
+		ok('软件源多久没更新、几个软件源、闪存剩多少' + T, /3 天前更新 · 3 个软件源/.test(await page.textContent('#stAge')) && /剩 20 MB/.test(await page.textContent('#stFree')));
+		ok('装了 iStore：分类多一个「iStore」，三个一行放下，写着可更新几个' + T, /iStore/.test(await page.textContent('#stView')) && await page.isVisible('#stIs') && /可更新 1/.test(await page.textContent('#stView')) && await page.evaluate(() => { const c = [...document.querySelectorAll('#stView .chip')]; return new Set(c.map((x) => Math.round(x.getBoundingClientRect().top))).size === 1; }));
 		ok('不横向滚动' + T, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
 		await page.screenshot({ path: path.join(SHOT, `store-${w}${dark ? '-dark' : ''}.png`) });
 		await page.click('#stView [data-v="upd"]'); await W(300);
 		ok('「可更新」：只有动态 DNS' + T, (await rows.count()) === 1 && /动态 DNS/.test(await rows.nth(0).textContent()) && /2\.8-r1 → 2\.9-r1/.test(await rows.nth(0).textContent()));
+		await page.click('#stView [data-v="istore"]'); await W(300);
+		ok('「iStore」：只有 iStore 的应用' + T, (await rows.count()) === 1 && /DDNSTO/.test(await rows.nth(0).textContent()));
+		await page.click('#stList [data-act="install"]'); await W(500);
+		ok('装 iStore 的应用：确认框写来自 iStore' + T, /来自 iStore。/.test(await page.locator('.modal').last().textContent()));
+		await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(300);
 		await page.click('#stView [data-v="plugin"]'); await W(300);
+		await page.click('.strow[data-n="luci-app-passwall"] [data-act="install"]'); await W(500);
+		ok('装第三方的：确认框写来自哪个第三方软件源' + T, /来自第三方软件源「kenzo」/.test(await page.locator('.modal').last().textContent()));
+		await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(300);
 		// 搜索：问路由器
 		await page.fill('#stFilter', 'dns'); await W(1000);
 		ok('搜索：问路由器，插件以外的也出来' + T, S.calls.some((c) => c.m === 'store_list' && c.p.q === 'dns') && /dnsmasq-full/.test(await page.textContent('#stList')) && /搜索结果/.test(await page.textContent('#stTitle')));

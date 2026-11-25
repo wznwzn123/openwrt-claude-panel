@@ -5,7 +5,7 @@
    安装、更新、更新软件源都在路由器后台跑，这里每 2 秒问一次进度；卸载在「应用管理」 */
 const ST_CATN = { proxy: '代理', net: '网络', disk: '存储', sys: '系统', theme: '主题', other: '其他' };
 const ST_SRC = { all: '全部', dist: '官方', custom: '第三方', istore: 'iStore' };
-let stOpen = { upd: 1 };
+let stOpen = { upd: 1 }, stJust = null;
 let SC = null, stView = 'all', stQ = '', stPollT = 0, stSeq = 0, stAuto = false;
 const stAge = (s) => (s == null ? '' : s < 3600 ? '刚更新' : s < 86400 ? Math.floor(s / 3600) + ' 小时前更新' : Math.floor(s / 86400) + ' 天前更新');
 const stKind = (x) => (x.src == null ? 'dist' : x.src === 'iStore' ? 'istore' : 'custom');
@@ -50,7 +50,11 @@ function stDraw() {
 	// 搜索：直接列结果；平时：每个用途一行，点开才展开（软件太多，全展开太长）；可更新的默认展开
 	if (stQ) { $('stList').innerHTML = l.slice(0, 150).map((x) => stRow(x, owner, run, src)).join(''); return; }
 	$('stList').innerHTML = G.filter((g) => g[2].length).map((g) => { const op = !!stOpen[g[0]];
-		return `<button class="file stgrp${op ? ' open' : ''}" data-g="${g[0]}" aria-expanded="${op}"><b style="flex:1;text-align:left">${g[1]}</b><span class="muted">${g[2].length}</span><i class="stchev" aria-hidden="true"></i></button>` + (op ? g[2].slice(0, 200).map((x) => stRow(x, owner, run, src)).join('') : ''); }).join('');
+		const rows = op ? g[2].slice(0, 200).map((x) => stRow(x, owner, run, src)) : [];
+		// 刚点开的那一组：行依次出来
+		if (op && stJust === g[0]) rows.forEach((r, k) => { rows[k] = r.replace('class="file strow"', `class="file strow rowin" style="--i:${Math.min(k, 10)}"`); });
+		return `<button class="file stgrp${op ? ' open' : ''}" data-g="${g[0]}" aria-expanded="${op}"><b style="flex:1;text-align:left">${g[1]}</b><span class="muted">${g[2].length}</span><i class="stchev" aria-hidden="true"></i></button>` + rows.join(''); }).join('');
+	stJust = null;
 }
 // 等后台做完：成功 / 失败都说一声，然后刷新列表
 function stPoll() {
@@ -90,7 +94,7 @@ $$('#stView .chip').forEach((b) => (b.onclick = () => { stView = b.dataset.v; if
 $('stList').addEventListener('click', (e) => {
 	if (e.target.closest('[data-ref]')) return stRefresh();
 	const g = e.target.closest('.stgrp');
-	if (g) { stOpen[g.dataset.g] = !stOpen[g.dataset.g]; stDraw(); return; }
+	if (g) { stOpen[g.dataset.g] = !stOpen[g.dataset.g]; stJust = stOpen[g.dataset.g] ? g.dataset.g : null; stDraw(); return; }
 	const b = e.target.closest('[data-act]');
 	if (!b) return;
 	const x = SC.list.find((y) => y.name === b.closest('.strow').dataset.n);

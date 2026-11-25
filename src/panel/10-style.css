@@ -912,3 +912,88 @@ html,body{overscroll-behavior-y:contain}
 .nodes .file+.file{border-top:1px solid var(--line)}
 .nodes .file.cur{background:var(--soft);border-top-color:transparent}
 .nodes .file.cur+.file{border-top-color:transparent}
+/* ===== 动效（用户 11/26：所有动效都做好，尤其细节和弹窗）=====
+   一套节奏：进场 .3–.46s 带一点回弹（--in），退场更快 .2–.26s 往外加速（--out）；按下 .12s 缩一点；
+   系统开了「减少动态效果」时全部关掉（上面的全局规则），转圈除外。 */
+:root{--in:cubic-bezier(.16,1,.3,1);--out:cubic-bezier(.4,0,1,1);--pop:cubic-bezier(.34,1.4,.64,1)}
+/* 弹窗：手机上从底部滑上来，到顶稍微回弹；关的时候更快地滑下去；遮罩跟着淡入淡出 */
+.modal{animation:dimIn .32s var(--ease) both}
+.modalbox{animation:sheetIn .46s var(--in) both}
+@keyframes sheetIn{from{transform:translateY(100%)}to{transform:none}}
+.modal.closing{animation:dimOut .26s var(--ease) both}
+.modal.closing .modalbox{animation:sheetOut .24s var(--out) both}
+@keyframes sheetOut{to{transform:translateY(100%)}}
+.modalbox.drag{animation:none!important;transition:none!important}
+.modalbox.back{transition:transform .32s var(--in)!important}
+/* 居中的小卡片（必须更新、公告、确认）和电脑上的弹窗：从 .94 放大、往上浮一点；关的时候缩一点、淡出 */
+.modal.compact .modalbox{animation:cardIn .38s var(--in) both}
+.modal.compact.closing .modalbox{animation:cardOut .2s var(--out) both}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes cardOut{to{opacity:0;transform:scale(.96)}}
+@media(min-width:761px){.modalbox{animation:cardIn .38s var(--in) both}.modal.closing .modalbox{animation:cardOut .2s var(--out) both}}
+/* 弹窗里的内容晚一拍跟上来（只动前几块） */
+.modalbox>*:nth-child(-n+4){animation:rise .42s var(--in) both}
+.modalbox>*:nth-child(2){animation-delay:.03s}.modalbox>*:nth-child(3){animation-delay:.06s}.modalbox>*:nth-child(4){animation-delay:.09s}
+.modal.closing .modalbox>*{animation:none}
+/* 换页：新页面的前几块依次浮上来（一次，不是每个元素都动） */
+.page.pgin>*:nth-child(-n+6){animation:rise .4s var(--in) both}
+.page.pgin>*:nth-child(2){animation-delay:.035s}.page.pgin>*:nth-child(3){animation-delay:.07s}.page.pgin>*:nth-child(4){animation-delay:.1s}.page.pgin>*:nth-child(5){animation-delay:.13s}.page.pgin>*:nth-child(6){animation-delay:.16s}
+/* 侧边菜单：打开时菜单项依次滑进来 */
+.side.open .sidenav>*:nth-child(-n+14){animation:navIn .42s var(--in) both}
+.side.open .sidenav>*:nth-child(2){animation-delay:.02s}.side.open .sidenav>*:nth-child(3){animation-delay:.04s}.side.open .sidenav>*:nth-child(4){animation-delay:.06s}.side.open .sidenav>*:nth-child(5){animation-delay:.08s}.side.open .sidenav>*:nth-child(6){animation-delay:.1s}.side.open .sidenav>*:nth-child(7){animation-delay:.12s}.side.open .sidenav>*:nth-child(8){animation-delay:.14s}.side.open .sidenav>*:nth-child(n+9){animation-delay:.16s}
+@keyframes navIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@media(min-width:900px){body.app .side.open .sidenav>*{animation:none}}
+/* 分段开关：选中的白块滑过去（.segthumb 由脚本放），不是一下跳过去 */
+.segon{position:relative;isolation:isolate}
+.segon>.chip{position:relative;z-index:1;transition:color .25s var(--ease)}
+.segon>.chip.on{background:transparent!important;box-shadow:none!important}
+.segthumb{position:absolute;z-index:0;top:2px;bottom:2px;left:0;border-radius:9px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12);transition:transform .38s var(--in),width .38s var(--in);pointer-events:none}
+:root.dark .segthumb{background:#3a3e48}
+.segthumb.now{transition:none}
+/* 开关：按住时圆钮拉长一点（像 iPhone），松开弹回去 */
+.sw i::after{transition:transform .34s var(--pop),width .2s var(--ease)}
+.sw:active i::after{width:33px}
+.sw:active input:checked+i::after{transform:translateX(14px)}
+.sw i{transition:background-color .28s var(--ease),box-shadow .28s var(--ease)}
+/* 按下：按钮、选项、能点的行都有回馈 */
+.chip{transition:background-color .22s var(--ease),color .22s var(--ease),transform .2s var(--pop)}
+.chip:active{transform:scale(.94)}
+.btn{transition:transform .2s var(--pop),opacity .15s,background-color .25s var(--ease),color .25s,box-shadow .25s}
+.btn:active{transform:scale(.95);opacity:.8}
+:is(button.file,.file[role=button],.file[data-n],.pfrow,.strow,.stgrp,.kv[role=button]){transition:background-color .18s var(--ease),transform .2s var(--pop)}
+:is(button.file,.file[role=button],.pfrow,.stgrp):active{background-color:var(--fill)!important;transform:scale(.99)}
+.card.tap:active,.stat4 .card.tap:active{transform:scale(.97)}
+.dock button{transition:transform .22s var(--pop),background-color .2s,color .2s}
+.dock button:active{transform:scale(.88)}
+.bell{transition:transform .22s var(--pop),background-color .2s}
+.bell:active{transform:scale(.9)}
+/* 铃铛来新通知时摇一下 */
+.bell.ring svg{animation:bellRing .9s var(--ease)}
+@keyframes bellRing{0%,100%{transform:rotate(0)}15%{transform:rotate(14deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}}
+/* 展开收起：软件中心分组里的行依次出来，箭头转过去 */
+.rowin{animation:rise .34s var(--in) both;animation-delay:calc(var(--i,0) * 22ms)}
+.stchev{transition:transform .3s var(--in)}
+/* 状态点：在线的点慢慢呼吸一下；连接中闪 */
+#statusDot.on{animation:dotBreath 3.2s var(--ease) infinite}
+@keyframes dotBreath{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 45%,transparent)}50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 0%,transparent)}}
+/* 数字变化：轻轻往上换 */
+.tick{animation:tick .36s var(--in)}
+@keyframes tick{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* 输入框聚焦：边框和光晕渐变出来 */
+.input,input.input,select,textarea{transition:box-shadow .2s var(--ease),background-color .2s var(--ease)}
+.input:focus,input.input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 45%,transparent)}
+/* 下拉刷新转完：圆圈收回去 */
+.ptr{transition:opacity .22s var(--ease),transform .34s var(--in)}
+/* 电脑上（有鼠标）：能点的东西鼠标移上去就有回应（参考 taste-skill：每个按钮、能点的卡片都要回应指针，不歪斜） */
+@media(hover:hover) and (pointer:fine){
+.btn:hover{filter:brightness(.96)}
+:root.dark .btn:hover{filter:brightness(1.12)}
+.chip:not(.on):hover{background-color:var(--fill2)}
+.segon>.chip:not(.on):hover{background-color:transparent;color:var(--text)}
+:is(button.file,.file[role=button],.pfrow,.stgrp,.strow):hover{background-color:var(--fill)}
+.card.tap{transition:transform .25s var(--in),box-shadow .25s var(--ease)}
+.card.tap:hover{transform:translateY(-2px)}
+.dock button:hover,.bell:hover{background-color:var(--fill)}
+.sidenav button:not(.on):hover{background-color:var(--fill)}
+.top .toplogo:hover{transform:scale(1.04)}
+}

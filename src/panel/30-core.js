@@ -328,6 +328,7 @@ function modal(html, onMount, opts) {
 			const b = e.target.closest('[data-v]');
 			if (b) close(b.dataset.v === 'true' ? true : b.dataset.v === 'false' ? false : b.dataset.v);
 		});
+		m._close = close; // 往下拖关掉时用（39-motion.js）
 		document.body.appendChild(m);
 		if (onMount) onMount(m, close);
 	});

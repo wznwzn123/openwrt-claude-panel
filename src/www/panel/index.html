@@ -930,6 +930,91 @@ html,body{overscroll-behavior-y:contain}
 .nodes .file+.file{border-top:1px solid var(--line)}
 .nodes .file.cur{background:var(--soft);border-top-color:transparent}
 .nodes .file.cur+.file{border-top-color:transparent}
+/* ===== 动效（用户 11/26：所有动效都做好，尤其细节和弹窗）=====
+   一套节奏：进场 .3–.46s 带一点回弹（--in），退场更快 .2–.26s 往外加速（--out）；按下 .12s 缩一点；
+   系统开了「减少动态效果」时全部关掉（上面的全局规则），转圈除外。 */
+:root{--in:cubic-bezier(.16,1,.3,1);--out:cubic-bezier(.4,0,1,1);--pop:cubic-bezier(.34,1.4,.64,1)}
+/* 弹窗：手机上从底部滑上来，到顶稍微回弹；关的时候更快地滑下去；遮罩跟着淡入淡出 */
+.modal{animation:dimIn .32s var(--ease) both}
+.modalbox{animation:sheetIn .46s var(--in) both}
+@keyframes sheetIn{from{transform:translateY(100%)}to{transform:none}}
+.modal.closing{animation:dimOut .26s var(--ease) both}
+.modal.closing .modalbox{animation:sheetOut .24s var(--out) both}
+@keyframes sheetOut{to{transform:translateY(100%)}}
+.modalbox.drag{animation:none!important;transition:none!important}
+.modalbox.back{transition:transform .32s var(--in)!important}
+/* 居中的小卡片（必须更新、公告、确认）和电脑上的弹窗：从 .94 放大、往上浮一点；关的时候缩一点、淡出 */
+.modal.compact .modalbox{animation:cardIn .38s var(--in) both}
+.modal.compact.closing .modalbox{animation:cardOut .2s var(--out) both}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes cardOut{to{opacity:0;transform:scale(.96)}}
+@media(min-width:761px){.modalbox{animation:cardIn .38s var(--in) both}.modal.closing .modalbox{animation:cardOut .2s var(--out) both}}
+/* 弹窗里的内容晚一拍跟上来（只动前几块） */
+.modalbox>*:nth-child(-n+4){animation:rise .42s var(--in) both}
+.modalbox>*:nth-child(2){animation-delay:.03s}.modalbox>*:nth-child(3){animation-delay:.06s}.modalbox>*:nth-child(4){animation-delay:.09s}
+.modal.closing .modalbox>*{animation:none}
+/* 换页：新页面的前几块依次浮上来（一次，不是每个元素都动） */
+.page.pgin>*:nth-child(-n+6){animation:rise .4s var(--in) both}
+.page.pgin>*:nth-child(2){animation-delay:.035s}.page.pgin>*:nth-child(3){animation-delay:.07s}.page.pgin>*:nth-child(4){animation-delay:.1s}.page.pgin>*:nth-child(5){animation-delay:.13s}.page.pgin>*:nth-child(6){animation-delay:.16s}
+/* 侧边菜单：打开时菜单项依次滑进来 */
+.side.open .sidenav>*:nth-child(-n+14){animation:navIn .42s var(--in) both}
+.side.open .sidenav>*:nth-child(2){animation-delay:.02s}.side.open .sidenav>*:nth-child(3){animation-delay:.04s}.side.open .sidenav>*:nth-child(4){animation-delay:.06s}.side.open .sidenav>*:nth-child(5){animation-delay:.08s}.side.open .sidenav>*:nth-child(6){animation-delay:.1s}.side.open .sidenav>*:nth-child(7){animation-delay:.12s}.side.open .sidenav>*:nth-child(8){animation-delay:.14s}.side.open .sidenav>*:nth-child(n+9){animation-delay:.16s}
+@keyframes navIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@media(min-width:900px){body.app .side.open .sidenav>*{animation:none}}
+/* 分段开关：选中的白块滑过去（.segthumb 由脚本放），不是一下跳过去 */
+.segon{position:relative;isolation:isolate}
+.segon>.chip{position:relative;z-index:1;transition:color .25s var(--ease)}
+.segon>.chip.on{background:transparent!important;box-shadow:none!important}
+.segthumb{position:absolute;z-index:0;top:2px;bottom:2px;left:0;border-radius:9px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12);transition:transform .38s var(--in),width .38s var(--in);pointer-events:none}
+:root.dark .segthumb{background:#3a3e48}
+.segthumb.now{transition:none}
+/* 开关：按住时圆钮拉长一点（像 iPhone），松开弹回去 */
+.sw i::after{transition:transform .34s var(--pop),width .2s var(--ease)}
+.sw:active i::after{width:33px}
+.sw:active input:checked+i::after{transform:translateX(14px)}
+.sw i{transition:background-color .28s var(--ease),box-shadow .28s var(--ease)}
+/* 按下：按钮、选项、能点的行都有回馈 */
+.chip{transition:background-color .22s var(--ease),color .22s var(--ease),transform .2s var(--pop)}
+.chip:active{transform:scale(.94)}
+.btn{transition:transform .2s var(--pop),opacity .15s,background-color .25s var(--ease),color .25s,box-shadow .25s}
+.btn:active{transform:scale(.95);opacity:.8}
+:is(button.file,.file[role=button],.file[data-n],.pfrow,.strow,.stgrp,.kv[role=button]){transition:background-color .18s var(--ease),transform .2s var(--pop)}
+:is(button.file,.file[role=button],.pfrow,.stgrp):active{background-color:var(--fill)!important;transform:scale(.99)}
+.card.tap:active,.stat4 .card.tap:active{transform:scale(.97)}
+.dock button{transition:transform .22s var(--pop),background-color .2s,color .2s}
+.dock button:active{transform:scale(.88)}
+.bell{transition:transform .22s var(--pop),background-color .2s}
+.bell:active{transform:scale(.9)}
+/* 铃铛来新通知时摇一下 */
+.bell.ring svg{animation:bellRing .9s var(--ease)}
+@keyframes bellRing{0%,100%{transform:rotate(0)}15%{transform:rotate(14deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}}
+/* 展开收起：软件中心分组里的行依次出来，箭头转过去 */
+.rowin{animation:rise .34s var(--in) both;animation-delay:calc(var(--i,0) * 22ms)}
+.stchev{transition:transform .3s var(--in)}
+/* 状态点：在线的点慢慢呼吸一下；连接中闪 */
+#statusDot.on{animation:dotBreath 3.2s var(--ease) infinite}
+@keyframes dotBreath{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 45%,transparent)}50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 0%,transparent)}}
+/* 数字变化：轻轻往上换 */
+.tick{animation:tick .36s var(--in)}
+@keyframes tick{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
+/* 输入框聚焦：边框和光晕渐变出来 */
+.input,input.input,select,textarea{transition:box-shadow .2s var(--ease),background-color .2s var(--ease)}
+.input:focus,input.input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 45%,transparent)}
+/* 下拉刷新转完：圆圈收回去 */
+.ptr{transition:opacity .22s var(--ease),transform .34s var(--in)}
+/* 电脑上（有鼠标）：能点的东西鼠标移上去就有回应（参考 taste-skill：每个按钮、能点的卡片都要回应指针，不歪斜） */
+@media(hover:hover) and (pointer:fine){
+.btn:hover{filter:brightness(.96)}
+:root.dark .btn:hover{filter:brightness(1.12)}
+.chip:not(.on):hover{background-color:var(--fill2)}
+.segon>.chip:not(.on):hover{background-color:transparent;color:var(--text)}
+:is(button.file,.file[role=button],.pfrow,.stgrp,.strow):hover{background-color:var(--fill)}
+.card.tap{transition:transform .25s var(--in),box-shadow .25s var(--ease)}
+.card.tap:hover{transform:translateY(-2px)}
+.dock button:hover,.bell:hover{background-color:var(--fill)}
+.sidenav button:not(.on):hover{background-color:var(--fill)}
+.top .toplogo:hover{transform:scale(1.04)}
+}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1797,6 +1882,7 @@ function modal(html, onMount, opts) {
 			const b = e.target.closest('[data-v]');
 			if (b) close(b.dataset.v === 'true' ? true : b.dataset.v === 'false' ? false : b.dataset.v);
 		});
+		m._close = close; // 往下拖关掉时用（39-motion.js）
 		document.body.appendChild(m);
 		if (onMount) onMount(m, close);
 	});
@@ -4230,6 +4316,96 @@ async function loadMon() {
 }
 // 概览的 CPU、内存格：点一下进实时监控
 for (const id of ['sCpu', 'sMem']) { const c = $(id).closest('.card'); c.classList.add('tap'); c.setAttribute('role', 'button'); c.tabIndex = 0; c.onclick = () => go('mon'); c.onkeydown = (e) => { if (e.key === 'Enter') go('mon'); }; }
+/* ---------- 6.0 动效（用户 11/26：所有动效都做好，尤其细节和弹窗） ----------
+   样式在 10-style.css 最后「动效」那段；这里只做 CSS 自己做不到的：
+   1. 换页时给新页面加 .pgin（前几块依次浮上来）
+   2. 分段开关的白块滑到选中的那一项（.segthumb）
+   3. 底部弹出的弹窗能往下拖关掉（拖过 1/4 高度或甩一下）
+   4. 来新通知时铃铛摇一下
+   系统开了「减少动态效果」时，这些都不做（白块直接放到位） */
+const RM = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SEG_SEL = '#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"]';
+function segPlace(box, now) {
+	if (!box.isConnected) return;
+	box.classList.add('segon');
+	let t = box.querySelector(':scope>.segthumb');
+	if (!t) { t = document.createElement('i'); t.className = 'segthumb'; t.setAttribute('aria-hidden', 'true'); box.prepend(t); now = true; }
+	const on = box.querySelector(':scope>.chip.on:not(.hidden)');
+	if (!on || !box.offsetWidth) { t.style.opacity = '0'; return; }
+	const bl = box.getBoundingClientRect().left, r = on.getBoundingClientRect();
+	t.classList.toggle('now', !!now || RM() || t.style.opacity === '0');
+	t.style.opacity = '1';
+	t.style.width = r.width + 'px';
+	t.style.transform = `translateX(${r.left - bl - box.clientLeft}px)`;
+	if (t.classList.contains('now')) requestAnimationFrame(() => t.classList.remove('now'));
+}
+const segAll = (now) => document.querySelectorAll(SEG_SEL).forEach((b) => segPlace(b, now));
+{
+	let segQ = 0;
+	const segSoon = (now) => { if (!segQ) segQ = requestAnimationFrame(() => { segQ = 0; segAll(now); }); };
+	let bellN0 = 0;
+	new MutationObserver((ms) => {
+		let seg = false, segNew = false;
+		for (const m of ms) {
+			const t = m.target;
+			if (m.type === 'attributes') {
+				if (t.classList?.contains('page') && t.classList.contains('on') && !(m.oldValue || '').split(' ').includes('on') && !RM()) {
+					t.classList.remove('pgin'); void t.offsetWidth; t.classList.add('pgin');
+					clearTimeout(t._pg); t._pg = setTimeout(() => t.classList.remove('pgin'), 700);
+					segNew = true;
+				}
+				if (t.classList?.contains('chip') && t.parentElement?.matches?.(SEG_SEL)) seg = true;
+			} else if (m.type === 'childList') {
+				if (t.matches?.(SEG_SEL) || t.querySelector?.(SEG_SEL)) { seg = true; segNew = true; }
+				if (t.id === 'bellN') {
+					const n = +(t.textContent || 0) || 0;
+					if (n > bellN0 && !RM()) { const b = $('bellBtn'); b.classList.remove('ring'); void b.offsetWidth; b.classList.add('ring'); }
+					bellN0 = n;
+				}
+			}
+		}
+		if (seg) segSoon(segNew);
+	}).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+	addEventListener('resize', () => segSoon(true));
+	setTimeout(() => segAll(true), 300);
+}
+/* 底部弹窗往下拖关掉：只在弹窗内容已经在最上面、手指往下拖时才算；锁住的弹窗（必须处理的）不能拖 */
+{
+	let box = null, y0 = 0, dy = 0, t0 = 0;
+	addEventListener('touchstart', (e) => {
+		const b = e.target.closest?.('.modal:not(.compact) > .modalbox');
+		box = null;
+		if (!b || e.touches.length !== 1 || matchMedia('(min-width:761px)').matches) return;
+		const m = b.parentElement;
+		if (m.dataset.lock || m.classList.contains('closing') || RM()) return;
+		// 里面能滚的内容没滚到顶：不拖
+		let s = e.target;
+		while (s && s !== b) { if (s.scrollHeight > s.clientHeight + 2 && s.scrollTop > 0 && /(auto|scroll)/.test(getComputedStyle(s).overflowY)) return; s = s.parentElement; }
+		if (b.scrollTop > 0 || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+		box = b; y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
+	}, { passive: true });
+	addEventListener('touchmove', (e) => {
+		if (!box) return;
+		dy = e.touches[0].clientY - y0;
+		if (dy <= 0) { box.classList.remove('drag'); box.style.transform = ''; return; }
+		box.classList.add('drag'); box.classList.remove('back');
+		box.style.transform = `translateY(${dy}px)`;
+	}, { passive: true });
+	addEventListener('touchend', () => {
+		if (!box) return;
+		const b = box, m = b.parentElement, v = dy / Math.max(1, Date.now() - t0);
+		box = null;
+		if (!b.classList.contains('drag')) return;
+		b.classList.remove('drag');
+		if (dy > b.offsetHeight / 4 || (dy > 40 && v > 0.6)) {
+			b.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)'; b.style.transform = 'translateY(100%)';
+			if (m._close) m._close(null); else m.remove();
+		} else {
+			b.classList.add('back'); b.style.transform = '';
+			setTimeout(() => b.classList.remove('back'), 340);
+		}
+	}, { passive: true });
+}
 /* ---------- 6.0 第 21 项：网络诊断（Ping、路由追踪、域名查询） ----------
    路由器那边只收域名或 IP；固件没带的工具，按钮点了说原因。最近查过的 5 个记在本机，点一下再查 */
 let ndTool = 'ping', ndCaps = null;
@@ -4602,7 +4778,7 @@ async function pushTag() {
    安装、更新、更新软件源都在路由器后台跑，这里每 2 秒问一次进度；卸载在「应用管理」 */
 const ST_CATN = { proxy: '代理', net: '网络', disk: '存储', sys: '系统', theme: '主题', other: '其他' };
 const ST_SRC = { all: '全部', dist: '官方', custom: '第三方', istore: 'iStore' };
-let stOpen = { upd: 1 };
+let stOpen = { upd: 1 }, stJust = null;
 let SC = null, stView = 'all', stQ = '', stPollT = 0, stSeq = 0, stAuto = false;
 const stAge = (s) => (s == null ? '' : s < 3600 ? '刚更新' : s < 86400 ? Math.floor(s / 3600) + ' 小时前更新' : Math.floor(s / 86400) + ' 天前更新');
 const stKind = (x) => (x.src == null ? 'dist' : x.src === 'iStore' ? 'istore' : 'custom');
@@ -4647,7 +4823,11 @@ function stDraw() {
 	// 搜索：直接列结果；平时：每个用途一行，点开才展开（软件太多，全展开太长）；可更新的默认展开
 	if (stQ) { $('stList').innerHTML = l.slice(0, 150).map((x) => stRow(x, owner, run, src)).join(''); return; }
 	$('stList').innerHTML = G.filter((g) => g[2].length).map((g) => { const op = !!stOpen[g[0]];
-		return `<button class="file stgrp${op ? ' open' : ''}" data-g="${g[0]}" aria-expanded="${op}"><b style="flex:1;text-align:left">${g[1]}</b><span class="muted">${g[2].length}</span><i class="stchev" aria-hidden="true"></i></button>` + (op ? g[2].slice(0, 200).map((x) => stRow(x, owner, run, src)).join('') : ''); }).join('');
+		const rows = op ? g[2].slice(0, 200).map((x) => stRow(x, owner, run, src)) : [];
+		// 刚点开的那一组：行依次出来
+		if (op && stJust === g[0]) rows.forEach((r, k) => { rows[k] = r.replace('class="file strow"', `class="file strow rowin" style="--i:${Math.min(k, 10)}"`); });
+		return `<button class="file stgrp${op ? ' open' : ''}" data-g="${g[0]}" aria-expanded="${op}"><b style="flex:1;text-align:left">${g[1]}</b><span class="muted">${g[2].length}</span><i class="stchev" aria-hidden="true"></i></button>` + rows.join(''); }).join('');
+	stJust = null;
 }
 // 等后台做完：成功 / 失败都说一声，然后刷新列表
 function stPoll() {
@@ -4687,7 +4867,7 @@ $$('#stView .chip').forEach((b) => (b.onclick = () => { stView = b.dataset.v; if
 $('stList').addEventListener('click', (e) => {
 	if (e.target.closest('[data-ref]')) return stRefresh();
 	const g = e.target.closest('.stgrp');
-	if (g) { stOpen[g.dataset.g] = !stOpen[g.dataset.g]; stDraw(); return; }
+	if (g) { stOpen[g.dataset.g] = !stOpen[g.dataset.g]; stJust = stOpen[g.dataset.g] ? g.dataset.g : null; stDraw(); return; }
 	const b = e.target.closest('[data-act]');
 	if (!b) return;
 	const x = SC.list.find((y) => y.name === b.closest('.strow').dataset.n);

@@ -166,6 +166,7 @@ ok('后台：已经拒绝的不能再拒绝', !r.ok);
 const C3 = mkRouter();
 await env.W.get('dev:hostabcd').setup({ sub: 'hostabcd', rkey: 'r'.repeat(32), tkey: 't'.repeat(32), probe: '' });
 await H().ctx.storage.put('d:hostabcd', { sub: 'hostabcd', state: 'ok', owner: 'uidowner123' });
+await H().ctx.storage.put('u:uidowner123', { uid: 'uidowner123', email: 'owner@x.com', devs: [] });
 fs.writeFileSync(C3 + '/hub.conf', 'HUB=' + HUB + '\nSUB=hostabcd\n'); fs.writeFileSync(C3 + '/cloud.conf', 'URL=' + HUB + '/cloud\nRKEY=' + 'r'.repeat(32) + '\n');
 fs.writeFileSync(C3 + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000), note: '' }));
 r = await cp(C3, 'send', 'now');
@@ -179,6 +180,7 @@ ok('托管版钥匙不对：认不出，不算申请', r.beta && r.beta.st === '
 await api('/api/admin/compat/beta', { id: id3, act: 'ok' }, ADM);
 const nl = (await env.W.get('dev:hostabcd').ctx.storage.get('nlog')) || [];
 ok('托管版通过：推送到手机（通知里记着）', nl.some((x) => /尝鲜申请通过了/.test(x.title)), JSON.stringify(nl).slice(0, 200));
+ok('托管版通过：也发邮件到主账号的邮箱', MAIL.some((m) => (Array.isArray(m.to) ? m.to : [m.to]).includes('owner@x.com') && /尝鲜申请通过了/.test(m.subject)));
 for (const d of [B2, C3]) fs.rmSync(d, { recursive: true, force: true });
 for (const k of [id2, id3]) await H().ctx.storage.delete('cp:' + k);
 { const l = await H().ctx.storage.list({ prefix: 'cp:' }); for (const [k] of l) if (!cpBefore.has(k) && k !== 'cp:' + id) await H().ctx.storage.delete(k); }

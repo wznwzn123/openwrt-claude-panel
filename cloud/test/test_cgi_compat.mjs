@@ -147,6 +147,17 @@ c = await cgi(A, 'autoupd_set', { on: true });
 	ok('检查更新：告诉面板这个版本弹过了', u.result && u.result.seen === '9.9.9', JSON.stringify(u.result && u.result.seen));
 	w = await cgi(A, 'notices_seen', { upd: '9.9.9; rm -rf /' });
 	ok('版本号不对：拒绝，不写', !!w.error && JSON.parse(fs.readFileSync(NS, 'utf8')).upd === '9.9.9', JSON.stringify(w));
+	// 6.0 第 93 项：老版本弹过的重要公告升级后算「知道了」（只在第一次补一次，之后新弹的不算）
+	{ const o = JSON.parse(fs.readFileSync(NS, 'utf8')); delete o.ack; o.pop = ['bcdefghijk']; fs.writeFileSync(NS, JSON.stringify(o)); }
+	await cgi(A, 'notices');
+	await cgi(A, 'notices_seen', { pop: 'cdefghijkm' });
+	{ const n0 = await cgi(A, 'notices'); ok('升级上来：以前弹过的算知道了；之后新弹的不算', n0.result && n0.result.seen.ack.join() === 'bcdefghijk' && n0.result.seen.pop.includes('cdefghijkm'), JSON.stringify(n0.result && n0.result.seen)); }
+	// 6.0 第 93 项：重要公告点了「知道了」
+	w = await cgi(A, 'notices_seen', { ack: 'abcdefghij' });
+	let n = await cgi(A, 'notices');
+	ok('重要公告点「知道了」：记下来（ack），通知里带回来', w.result && w.result.ok && n.result && n.result.seen.ack.includes('abcdefghij'), JSON.stringify(n.result && n.result.seen));
+	w = await cgi(A, 'notices_seen', { ack: '../etc/x' });
+	ok('公告编号不对：拒绝', !!w.error);
 	if (had != null) fs.writeFileSync(NS, had); else fs.unlinkSync(NS);
 }
 ok('面板：重新打开（删掉 autoupd_off 和失败次数）', c.result && c.result.auto === true && !fs.existsSync(A + '/autoupd_off') && !fs.existsSync(A + '/autoupd_fail'), JSON.stringify(c));

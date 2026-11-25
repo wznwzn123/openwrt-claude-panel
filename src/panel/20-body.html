@@ -262,17 +262,17 @@
 
 <!-- 我的反馈：这台路由器发过的反馈和开发者的处理进度（托管版） -->
 <section class="page" id="p-notice">
-	<div class="hero">
-		<div class="nthead"><h1>通知</h1><span class="pill" id="ntPill">—</span></div>
-		<p class="muted ntsub">路由器出的问题和自动修复、云端监测、托管服务、开发者公告、版本更新、反馈进度都汇总在这里；重要的也会推送到手机。</p>
-		<div class="ntent">
-			<button type="button" data-goto="chat"><i style="background:#34c759"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z"/><path d="M9 9.5h6M9 12.5h3.5"/></svg></i><div><b>实时联系开发者</b><span id="ntChatSub">遇到问题直接问</span></div><em class="hidden" id="ntChatN"></em></button>
-			<button type="button" data-goto="myfb"><i style="background:#5e5ce6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M10 12l1.8 1.8L15 10.5"/></svg></i><div><b>我的反馈</b><span id="ntFbSub">处理到哪一步</span></div></button>
+	<div class="hero nthero">
+		<h1 id="ntHead">通知</h1>
+		<p class="ntsum" id="ntSum"></p>
+		<div class="ntstrip" id="ntStrip"></div>
+		<div class="ntqb">
+			<button type="button" data-goto="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z"/><path d="M9 9.5h6M9 12.5h3.5"/></svg><span>联系开发者</span><em class="hidden" id="ntChatN"></em></button>
+			<button type="button" data-goto="myfb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M10 12l1.8 1.8L15 10.5"/></svg><span>我的反馈</span><em class="hidden" id="ntFbN"></em></button>
 		</div>
-		<div class="chips tfseg ntseg" id="ntChips" style="margin-top:14px"></div>
 	</div>
 	<div id="ntPin"></div>
-	<div id="ntList" style="margin-top:4px"><section class="card empty" style="margin-top:14px">读取中…</section></div>
+	<div id="ntList"><section class="card empty" style="margin-top:14px">读取中…</section></div>
 </section>
 <section class="page" id="p-chat">
 	<div class="hero chhero">

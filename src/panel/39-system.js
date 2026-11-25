@@ -1534,7 +1534,6 @@ $('myfbList').onclick = (e) => {
    路由器那边一次给：断线记录、公告、反馈进度、开发者有没有新回复、看到哪儿了（notices.seen，换手机也一样）；云端的面板自己去拿 */
 const NT = { d: null, at: 0, f: 'all', view: null, n: 0, more: 0 };
 try { NT.d = JSON.parse(store.get('rp_nt') || 'null'); } catch (e) {}
-const NT_CAT = [['all', '全部'], ['sys', '系统'], ['ann', '公告'], ['upd', '更新'], ['fb', '反馈']];
 const APP_VER = (navigator.userAgent.match(/RouterPanelApp\/([\d.]+)/) || [])[1] || '';
 const ntMs = (v) => typeof v === 'number' ? (v < 1e11 ? v * 1000 : v) : Date.parse(v || '') || 0;
 const verNewer = (a, b) => { const x = String(a || '').replace(/^v/, '').split('.').map((n) => +n || 0), y = String(b || '').replace(/^v/, '').split('.').map((n) => +n || 0); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
@@ -1548,21 +1547,21 @@ const NT_IC = {
 const ntSvg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${NT_IC[k] || NT_IC.bell}</svg>`;
 function ntItems() {
 	const d = NT.d || {}, L = [];
-	for (const e of d.events || []) L.push({ c: 'sys', ic: e.lvl === 'ok' ? 'ok' : 'sys', t: ntMs(e.t), lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '路由器', go: 'wd', k: 'e' + e.t + e.kind });
+	for (const e of d.events || []) L.push({ c: 'sys', ic: e.lvl === 'ok' ? 'ok' : 'sys', t: ntMs(e.t), lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '路由器', kind: e.kind || '', go: 'wd', k: 'e' + e.t + e.kind });
 	if (cloud) {
-		for (const e of cloud.events || []) L.push({ c: 'sys', ic: 'cloud', t: e.t, lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '云端监测', go: 'wd', k: 'c' + e.t });
-		for (const x of cloud.notes || []) L.push({ c: 'sys', ic: 'svc', t: x.t, lvl: x.lvl || 'info', title: x.title || '', body: x.body || '', src: x.tag === 'svc' ? '托管服务' : '云端', k: 'n' + x.t });
+		for (const e of cloud.events || []) L.push({ c: 'sys', ic: 'cloud', t: e.t, lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '云端监测', kind: 'cloud', go: 'wd', k: 'c' + e.t });
+		for (const x of cloud.notes || []) L.push({ c: 'sys', ic: 'svc', t: x.t, lvl: x.lvl || 'info', title: String(x.title || '').replace(/^[\u2600-\u27bf\u{1f300}-\u{1faff}\ufe0f\s]+/u, ''), body: x.body || '', src: x.tag === 'svc' ? '托管服务' : '云端', tag: x.tag === 'svc' ? '托管' : '', k: 'n' + x.t });
 	}
-	for (const a of d.ann || []) L.push({ c: 'ann', ic: 'ann', t: a.upd || a.at, lvl: a.level === 'important' ? 'warn' : 'info', title: a.title, body: a.body || '', src: a.level === 'important' ? '重要公告' : '公告', imp: a.level === 'important', ann: a, k: 'a' + a.id });
-	if (UPD && UPD.newer) L.push({ c: 'upd', ic: 'upd', t: ntMs(UPD.rel), lvl: UPD.force ? 'warn' : 'info', title: '路由器面板有新版本 v' + UPD.latest + (UPD.force ? '（必须更新）' : ''), body: UPD.notes || '', src: '版本更新', upd: 'router', k: 'u' + UPD.latest });
-	if (APP_VER && d.app && d.app.version && verNewer(d.app.version, APP_VER)) L.push({ c: 'upd', ic: 'upd', t: ntMs(d.app.rel), lvl: 'info', title: '安卓 App 有新版本 ' + d.app.version + '（现在 ' + APP_VER + '）', body: d.app.notes || '', src: '版本更新', upd: 'app', k: 'p' + d.app.version });
+	for (const a of d.ann || []) L.push({ c: 'ann', ic: 'ann', t: a.upd || a.at, lvl: a.level === 'important' ? 'warn' : 'info', title: a.title, body: a.body || '', src: a.level === 'important' ? '重要公告' : '公告', tag: a.level === 'important' ? '重要' : '公告', imp: a.level === 'important', ann: a, k: 'a' + a.id });
+	if (UPD && UPD.newer) L.push({ c: 'upd', ic: 'upd', t: ntMs(UPD.rel), lvl: UPD.force ? 'warn' : 'info', title: '新版本 v' + UPD.latest, body: UPD.notes || '', src: '版本更新', upd: 'router', force: !!UPD.force, k: 'u' + UPD.latest });
+	if (APP_VER && d.app && d.app.version && verNewer(d.app.version, APP_VER)) L.push({ c: 'upd', ic: 'upd', t: ntMs(d.app.rel), lvl: 'info', title: 'App 新版本 ' + d.app.version, body: (d.app.notes || '') + '（现在是 ' + APP_VER + '）', src: '版本更新', upd: 'app', k: 'p' + d.app.version });
 	for (const x of d.fb || []) {
 		const evs = (x.history || []).map((h) => ({ at: h.at, st: h.st, note: h.note || '' }));
 		if (x.ackAt) evs.push({ at: x.ackAt, st: 'ack', note: '' });
-		for (const e of evs) L.push({ c: 'fb', ic: 'fb', t: e.at, lvl: e.st === 'fixed' ? 'ok' : e.st === 'nofix' ? 'err' : 'info', title: '反馈 ' + x.code + '：' + (e.st === 'ack' ? '开发人员已收到' : FB_EV[e.st] || '有新进展'), body: e.note || x.text || '', src: '反馈进度', fb: x.code, k: 'f' + x.code + e.at });
+		for (const e of evs) L.push({ c: 'fb', ic: 'fb', t: e.at, lvl: e.st === 'fixed' ? 'ok' : e.st === 'nofix' ? 'err' : 'info', title: '反馈 ' + x.code + ' ' + (e.st === 'ack' ? '开发者已收到' : FB_EV[e.st] || '有新进展'), body: e.note ? '开发者：' + e.note : x.text || '', src: '反馈进度', tag: '反馈', fb: x.code, k: 'f' + x.code + e.at });
 	}
 	const ch = d.chat;
-	if (ch && ch.uu > 0) L.push({ c: 'fb', ic: 'chat', t: ntMs(ch.at), lvl: 'info', title: '开发者回复了你（' + ch.uu + ' 条没看）', body: '点开「实时联系开发者」看看', src: '实时对话', go: 'chat', k: 'ch' + ch.seq });
+	if (ch && ch.uu > 0) L.push({ c: 'fb', ic: 'chat', t: ntMs(ch.at), lvl: 'info', title: '开发者回复了你', body: ch.uu + ' 条没看', src: '实时对话', go: 'chat', k: 'ch' + ch.seq });
 	return L.filter((x) => x.title).sort((a, b) => b.t - a.t);
 }
 const ntSeenT = () => +(NT.d && NT.d.seen && NT.d.seen.t) || 0;
@@ -1603,9 +1602,9 @@ function ntAnnPop(a) {
 	<p class="muted" style="font-size:13px;margin:0 0 10px">重要公告 · ${esc(fbWhen(a.at))}</p>
 	<div class="cscroll">${a.body ? `<div class="notice" style="white-space:pre-wrap;line-height:1.65;margin:0">${esc(a.body)}</div>` : ''}
 	${a.files && a.files.length ? `<div style="margin-top:12px">${filesHtml(a.files)}</div>` : ''}
-	<p class="muted" style="font-size:12.5px;margin:10px 0 0">以后在「通知」里还能看到这条。</p></div>
+	</div>
 	<div class="cfoot"><div class="btngrid"><button class="btn" data-nt>打开通知</button><button class="btn primary" data-v="close">知道了</button></div></div>`,
-	(m, close) => { m.dataset.ann = 1; m.querySelector('[data-nt]').onclick = () => { close(null); go('notice'); }; }, { compact: true });
+	(m, close) => { m.dataset.ann = 1; m.querySelector('[data-nt]').onclick = () => { close(null); go('notice'); }; m.querySelector('[data-v="close"]').addEventListener('click', () => ntAck(a.id)); }, { compact: true });
 	NT.d.seen.pop = [...((NT.d.seen && NT.d.seen.pop) || []), a.id];
 	P('notices_seen', { pop: a.id }).catch(() => {});
 }
@@ -1619,61 +1618,161 @@ async function loadNotice(quiet) {
 	ntRender();
 	ntBadge();
 }
+// 重要公告点了「知道了」：记在路由器上（换手机也算），从「待处理」移到时间线
+function ntAck(id) {
+	if (!NT.d || !NT.d.seen) return;
+	const ack = NT.d.seen.ack || (NT.d.seen.ack = []);
+	if (!ack.includes(id)) ack.push(id);
+	P('notices_seen', { ack: id }).catch(() => {});
+}
+/* 6.0 第 93 项：通知页改版（用户 11/25 选的方案 A）。
+   顶部：现在的状态 + 近 7 天具体出了什么事 + 7 天健康条；「待处理」放要你动手的；下面按天的时间线，同一件事「停了 → 恢复」合成一条 */
 const ntDay = (t) => { if (!t) return '更早'; const x = new Date(t), n = new Date(); return x.toDateString() === n.toDateString() ? '今天' : x.toDateString() === new Date(n - 864e5).toDateString() ? '昨天' : `${x.getMonth() + 1} 月 ${x.getDate()} 日`; };
+const ntHm = (t) => new Date(t).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+const ntRel = (t) => { const s = (Date.now() - t) / 1000; if (s < 60) return '刚刚'; if (s < 3600) return Math.floor(s / 60) + ' 分钟前'; if (s < 6 * 3600 && ntDay(t) === '今天') return Math.floor(s / 3600) + ' 小时前'; return ntHm(t); };
+const NT_OUT = ['cloud', 'wan', 'net'];
+const NT_AUTO = ['clash', 'panel', 'watchdog'];
+const NT_STOPW = { cloud: '断开', wan: '断网', net: '断网', clash: '停止', panel: '没响应', tunnel: '断开', dns: '出问题' };
+function ntLabel(x) {
+	const K = { wan: '宽带断开', net: '外网断开', tunnel: '隧道断开', dns: 'DNS 出问题', panel: '面板服务没响应', mem: '内存不够', kernel: '内核报错', watchdog: '隧道重启' };
+	if (x.kind === 'clash') return ((pxAct() || {}).name || '代理插件') + ' 停止';
+	if (x.kind === 'cloud') { const h = String(x.title).split(/[：:（(]/)[0]; return h.length <= 10 ? h : '断开'; }
+	return K[x.kind] || String(x.title).split(/[：:（(，,]/)[0].slice(0, 12);
+}
+const ntProb = (x) => x.c === 'sys' && x.kind && (x.lvl === 'err' || x.lvl === 'warn');
+// 同一件事：出问题（err / warn）之后同一类的「恢复」（ok）合成一条；3 天内的才合
+function ntMerge(all) {
+	const asc = all.slice().sort((a, b) => a.t - b.t), open = {}, gone = new Set(), out = [];
+	for (const x of asc) {
+		if (x.c !== 'sys' || !x.kind) { out.push(x); continue; }
+		const key = x.src + '/' + x.kind;
+		if (ntProb(x)) { open[key] = x; out.push(x); continue; }
+		const p = open[key];
+		if (x.lvl === 'ok' && p && x.t - p.t < 3 * 864e5) {
+			// 合成一条：标题写「什么事 + 多久 + 已恢复」，下面写当时的原因
+			gone.add(p); delete open[key];
+			const why = p.body || (String(p.title).split(/[：:]/)[1] || '').trim();
+			out.push({ ...x, title: ntLabel(p) + ' ' + dur(Math.max(60, (x.t - p.t) / 1000)) + (NT_AUTO.includes(x.kind) ? '，已自动重启' : '，已恢复'), body: why, lvl: NT_OUT.includes(x.kind) && p.lvl === 'err' ? 'err' : 'ok', from: p.t, to: x.t, merged: true, kind: x.kind });
+			continue;
+		}
+		out.push(x);
+	}
+	return { list: out.filter((x) => !gone.has(x)).sort((a, b) => b.t - a.t), open };
+}
+// 近 7 天：每天一格（红：断电断网；橙：别的问题，一般已自动修好；绿：没事）；按种类数次数
+function ntWeek(all) {
+	const days = [], now = new Date(); now.setHours(0, 0, 0, 0);
+	for (let i = 6; i >= 0; i--) { const d = new Date(now - i * 864e5); days.push({ s: +d, e: +d + 864e5, lv: 'n', name: i === 0 ? '今天' : i === 1 ? '昨天' : '周' + '日一二三四五六'[d.getDay()], day: ntDay(+d) }); }
+	const probs = all.filter((x) => ntProb(x) && x.t >= days[0].s);
+	for (const x of probs) { const d = days.find((y) => x.t >= y.s && x.t < y.e); if (!d) continue; const lv = NT_OUT.includes(x.kind) && x.lvl === 'err' ? 'e' : 'w'; if (lv === 'e' || d.lv === 'n') d.lv = lv; }
+	return { days, probs };
+}
+function ntSummary(probs, merged) {
+	if (!probs.length) return '近 7 天没出问题';
+	const g = new Map();
+	for (const x of probs) { const l = ntLabel(x); const o = g.get(l) || { n: 0, fixed: 0, auto: NT_AUTO.includes(x.kind) }; o.n++; if (merged.some((m) => m.merged && m.from === x.t && m.kind === x.kind)) o.fixed++; g.set(l, o); }
+	const lines = [...g.entries()].sort((a, b) => b[1].n - a[1].n).map(([l, o]) => `${l} ${o.n} 次` + (o.fixed === o.n ? (o.n > 1 ? '，都已' : '，已') + (o.auto ? '自动重启' : '恢复') : o.fixed ? `，${o.n - o.fixed} 次还没恢复` : ''));
+	const more = lines.length > 3 ? lines.length - 2 : 0;
+	const show = more ? lines.slice(0, 2).concat('还有 ' + more + ' 类问题') : lines;
+	show[0] = '近 7 天' + (/^[A-Za-z0-9]/.test(show[0]) ? ' ' : '') + show[0];
+	return show.map(esc).join('<br>');
+}
+// 「待处理」：要你动手的事
+function ntPending(all, mg, seen) {
+	const d = NT.d || {}, ack = (d.seen && d.seen.ack) || [], out = [];
+	// 还没恢复的问题（一天以内、最新一条是出问题）
+	for (const x of Object.values(mg.open)) if (x.lvl === 'err' && Date.now() - x.t < 864e5) out.push({ k: x.k, ic: 'sys', col: 'red', title: ntLabel(x) + '，还没恢复', body: x.title, btns: [['wd', '看断线记录', 1]] });
+	const u = all.find((x) => x.upd === 'router');
+	if (u && u.force) out.push({ k: u.k, ic: 'upd', col: 'red', tag: '必须更新', title: u.title, body: ntFirst(u.body), btns: [['upd', '一键更新', 1], ['updinfo', '更新内容']] });
+	for (const x of all.filter((y) => y.imp && !ack.includes(y.ann.id) && Date.now() - y.t < 30 * 864e5)) out.push({ k: x.k, ic: 'ann', col: 'orange', tag: '重要', title: x.title, body: x.body, ann: x.ann, btns: [['annfull', '看全文'], ['ack', '知道了']] });
+	if (u && !u.force) out.push({ k: u.k, ic: 'upd', col: 'blue', title: u.title, body: ntFirst(u.body), btns: [['upd', '一键更新', 1], ['updinfo', '更新内容']] });
+	const fbs = new Map();
+	for (const x of all) if (x.fb && x.t > seen && !fbs.has(x.fb)) fbs.set(x.fb, x);
+	for (const x of fbs.values()) out.push({ k: x.k, ic: 'fb', col: x.lvl === 'err' ? 'red' : 'green', title: x.title, body: x.body, fb: x.fb, btns: [['fb', '查看回复']] });
+	const c = all.find((x) => x.go === 'chat');
+	if (c) out.push({ k: c.k, ic: 'chat', col: 'green', title: c.title, body: c.body, btns: [['chat', '去看看']] });
+	const a = all.find((x) => x.upd === 'app');
+	if (a) out.push({ k: a.k, ic: 'upd', col: 'blue', title: a.title, body: a.body, btns: [['app', '怎么更新']] });
+	return out;
+}
+const ntFirst = (t) => String(t || '').split('\n').map((l) => l.replace(/^[\s•\-*·]+/, '').trim()).filter(Boolean)[0] || '';
 function ntRender() {
 	const box = $('ntList'); if (!box) return;
 	const all = ntItems(), seen = NT.view ?? ntSeenT(), d = NT.d || {};
-	const cnt = (c) => all.filter((x) => c === 'all' || x.c === c).length;
-	const fresh = all.filter((x) => x.t > seen).length;
-	$('ntPill').textContent = fresh ? fresh + ' 条新的' : '都看过了'; $('ntPill').className = 'pill' + (fresh ? ' warnc' : ' good');
-	// 两个入口卡片：对话（没看的回复数）、我的反馈（还在处理的条数）
-	const cu = +(d.chat && d.chat.uu) || 0;
+	const mg = ntMerge(all), wk = ntWeek(all), pend = ntPending(all, mg, seen), pk = new Set(pend.map((x) => x.k));
+	const first = !box.dataset.drawn, prev = new Set((box._items || []).map((x) => x.k));
+	// 顶部
+	const bad = pend.find((x) => x.ic === 'sys');
+	$('ntHead').textContent = bad ? bad.title : '运行正常';
+	$('ntSum').innerHTML = ntSummary(wk.probs, mg.list);
+	$('ntStrip').innerHTML = `<div class="ntbars">${wk.days.map((x) => `<button class="${x.lv}" data-day="${esc(x.day)}" aria-label="${esc(x.name)}：${x.lv === 'e' ? '断电或断网' : x.lv === 'w' ? '出过问题' : '正常'}"></button>`).join('')}</div><div class="ntdays">${wk.days.map((x, i) => `<span${i === 6 ? ' class="now"' : ''}>${esc(x.name)}</span>`).join('')}</div>`;
+	const cu = +(d.chat && d.chat.uu) || 0, fu = pend.filter((x) => x.fb).length;
 	$('ntChatN').textContent = cu > 99 ? '99+' : cu; $('ntChatN').classList.toggle('hidden', !cu);
-	$('ntChatSub').textContent = cu ? '开发者回复了你' : d.chat ? '接着聊' : '遇到问题直接问';
-	const fo = (d.fb || []).filter((x) => !x.done && !x.nofix).length;
-	$('ntFbSub').textContent = (d.fb || []).length ? (fo ? fo + ' 条还在处理' : '都处理好了') : '处理到哪一步';
-	$('ntChips').innerHTML = NT_CAT.map(([c, n]) => `<button class="chip${NT.f === c ? ' on' : ''}" data-ntf="${c}">${n}${cnt(c) ? '<small>' + (cnt(c) > 99 ? '99+' : cnt(c)) + '</small>' : ''}</button>`).join('');
-	// 置顶：还在显示期内的重要公告（最新一条）
-	const pin = (NT.f === 'all' || NT.f === 'ann') ? all.find((x) => x.c === 'ann' && x.imp) : null;
-	const popened = $('ntPin').querySelector('.ntpin.open');
-	$('ntPin').innerHTML = pin ? `<div class="ntpin${popened ? ' open' : ''}" data-k="${esc(pin.k)}" role="button" tabindex="0"><div class="pt">${ntSvg('ann').replace('<svg', '<svg style="width:15px;height:15px"')}置顶 · 重要公告</div><b>${esc(pin.title)}</b>${pin.body ? `<p>${esc(pin.body)}</p>` : ''}${pin.ann && pin.ann.files ? filesHtml(pin.ann.files) : ''}<div class="pm"><span>${esc(fbWhen(pin.t))}</span><span>${pin.body ? (popened ? '收起' : '点开看全文') : ''}</span></div></div>` : '';
-	const list = all.filter((x) => (NT.f === 'all' || x.c === NT.f) && x !== pin), lim = 60 + NT.more;
-	const opened = new Set([...box.querySelectorAll('.ntit.open')].map((x) => x.dataset.k));
+	$('ntFbN').textContent = fu; $('ntFbN').classList.toggle('hidden', !fu);
+	// 待处理
+	const pcol = { red: 'red', orange: 'orange', blue: 'blue', green: 'green' };
+	$('ntPin').innerHTML = pend.length ? `<div class="ntsec"><b>待处理</b><span>${pend.length}</span></div>` + pend.map((x) => `<div class="card ntact${prev.size && !prev.has(x.k) && !first ? ' fresh' : ''}" data-k="${esc(x.k)}"><span class="ntic ${pcol[x.col]}">${ntSvg(x.ic)}</span><div class="ntab"><b>${x.tag ? `<span class="nttag ${x.col === 'red' ? 'red' : 'orange'}">${esc(x.tag)}</span>` : ''}${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}${x.ann && x.ann.files ? filesHtml(x.ann.files) : ''}<div class="ntbtns">${x.btns.map(([v, t, pri]) => `<button class="btn sm${pri ? ' primary' : ''}" data-pa="${v}">${t}</button>`).join('')}</div></div></div>`).join('') : '';
+	// 时间线（待处理里的不重复放）
+	const list = mg.list.filter((x) => !pk.has(x.k) && !x.upd && x.go !== 'chat'), lim = 60 + NT.more;
+	const opened = new Set([...box.querySelectorAll('.ntev.open')].map((x) => x.dataset.k));
 	const warn = [];
 	if (d.annFail) warn.push('暂时连不上官网，公告是上次取到的');
 	if (!noCloud() && cloudErr) warn.push('云端的记录读不到（' + cloudErr + '）');
-	const EMPTY = { all: ['都很安静', '路由器一切正常，也没有新公告'], sys: ['没有系统通知', '路由器、云端监测、托管服务的消息会出现在这里'], ann: ['没有公告', '开发者发布公告后会出现在这里'], upd: ['已经是最新版', '有新版本时会出现在这里'], fb: ['没有反馈进度', '你发的反馈有进展、开发者回复你时会出现在这里'] };
 	let html = warn.length ? `<div class="notice w" style="margin-top:14px">${esc(warn.join('；'))}</div>` : '';
-	if (!list.length) { box.innerHTML = html + (pin ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg(NT.f === 'all' ? 'bell' : NT.f === 'sys' ? 'sys' : NT.f)}<b>${EMPTY[NT.f][0]}</b><p>${EMPTY[NT.f][1]}</p></section>`); box._items = []; return; }
-	let cur = null, rows = [], nd = 0;
-	const flush = () => { if (rows.length) html += `<div class="ntday"><span>${esc(cur)}</span>${nd ? `<span style="color:var(--brand)">${nd} 条新的</span>` : ''}</div><section class="card ntlist">${rows.join('')}</section>`; rows = []; nd = 0; };
+	if (!list.length) html += pend.length ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg('bell')}<b>还没有通知</b></section>`;
+	let cur = null, rows = [];
+	const tag = (x) => x.tag ? `<span class="nttag ${x.imp || x.c === 'ann' ? 'orange' : x.fb ? 'green' : 'gray'}">${esc(x.tag)}</span>` : '';
+	const flush = () => { if (rows.length) html += `<div class="ntday" data-day="${esc(cur)}">${esc(cur)}</div><section class="card ntl">${rows.join('')}</section>`; rows = []; };
 	for (const x of list.slice(0, lim)) {
 		const dd = ntDay(x.t); if (dd !== cur) { flush(); cur = dd; }
-		const isNew = x.t > seen; if (isNew) nd++;
-		const tm = x.t ? new Date(x.t).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '';
-		const nav = x.go || x.fb || x.upd;
-		rows.push(`<div class="ntit${opened.has(x.k) ? ' open' : ''}${isNew ? ' new' : ''}" data-k="${esc(x.k)}" role="button" tabindex="0"><span class="ntic ${esc(x.lvl)}">${ntSvg(x.ic)}</span><div class="ntb"><b>${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}${x.ann && x.ann.files ? filesHtml(x.ann.files) : ''}<span class="ntm"><i>${esc(x.src)}</i>${tm ? '<span>' + tm + '</span>' : ''}${isNew ? '<span style="color:var(--brand);font-weight:700">新</span>' : ''}</span></div>${nav ? '<span class="ntgo" aria-hidden="true">›</span>' : ''}</div>`);
+		const isNew = x.t > seen, dot = x.lvl === 'info' && x.c !== 'sys' ? (x.c === 'ann' ? 'warn' : x.fb ? 'ok' : 'gray') : x.lvl;
+		const long = x.body && (x.body.length > 90 || x.body.split('\n').length > 3);
+		rows.push(`<div class="ntev${opened.has(x.k) ? ' open' : ''}${isNew ? ' new' : ''}${prev.size && !prev.has(x.k) && !first ? ' fresh' : ''}" data-k="${esc(x.k)}" role="button" tabindex="0"><span class="ntdot ${esc(dot)}"></span><div class="ntb"><b>${tag(x)}${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}${x.merged ? `<div class="ntmg"><span class="red">${ntHm(x.from)} ${NT_STOPW[x.kind] || '出问题'}</span><span class="green">${ntHm(x.to)} 恢复</span></div>` : ''}${x.ann && x.ann.files ? filesHtml(x.ann.files) : ''}${x.c === 'ann' && long ? `<span class="ntfull">${opened.has(x.k) ? '收起' : '看全文'}</span>` : ''}</div><span class="nttm">${esc(ntRel(x.t))}</span></div>`);
 	}
 	flush();
 	if (list.length > lim) html += `<button class="btn" data-ntmore style="width:100%;margin-top:12px">再看 ${Math.min(60, list.length - lim)} 条（共 ${list.length} 条）</button>`;
 	box.innerHTML = html;
-	box._items = list;
+	box._items = list.concat(pend);
+	box._pend = pend;
+	// 打开这一页时：内容依次浮现一次（系统开了「减少动态效果」就不播）
+	if (first) { box.dataset.drawn = 1; const pg = $('p-notice'); pg.classList.remove('ntin'); void pg.offsetWidth; pg.classList.add('ntin'); }
 }
-$('ntChips').onclick = (e) => { const c = e.target.closest('[data-ntf]'); if (!c) return; NT.f = c.dataset.ntf; NT.more = 0; ntRender(); };
-$('p-notice').querySelector('.ntent').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
-$('ntPin').onclick = (e) => { if (e.target.closest('.files')) return; const p = e.target.closest('.ntpin'); if (!p) return; p.classList.toggle('open'); const s = p.querySelector('.pm span:last-child'); if (s && s.textContent) s.textContent = p.classList.contains('open') ? '收起' : '点开看全文'; };
+$('p-notice').querySelector('.ntqb').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
+$('ntStrip').onclick = (e) => {
+	const b = e.target.closest('[data-day]'); if (!b) return;
+	const g = [...document.querySelectorAll('#ntList .ntday')].find((x) => x.dataset.day === b.dataset.day);
+	if (!g) return toast(b.dataset.day === '今天' ? '今天还没有记录' : b.dataset.day + '没有记录');
+	g.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+};
+$('ntPin').onclick = async (e) => {
+	if (e.target.closest('.files')) return;
+	const b = e.target.closest('[data-pa]'), c = e.target.closest('.ntact'); if (!b || !c) return;
+	const x = ($('ntList')._pend || []).find((y) => y.k === c.dataset.k); if (!x) return;
+	const a = b.dataset.pa;
+	if (a === 'wd') return go('wd');
+	if (a === 'upd') return updStart();
+	if (a === 'updinfo') return updSheet(false);
+	if (a === 'app') return toast('回到 App 首页（路由器列表），会提示一键更新');
+	if (a === 'fb') { FB_FOCUS = x.fb; return go('myfb'); }
+	if (a === 'chat') return go('chat');
+	if (a === 'annfull') { c.classList.toggle('open'); b.textContent = c.classList.contains('open') ? '收起' : '看全文'; return; }
+	if (a === 'ack') {
+		ntAck(x.ann.id);
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return ntRender();
+		c.classList.add('gone'); setTimeout(ntRender, 260);
+	}
+};
 $('ntList').onclick = (e) => {
 	if (e.target.closest('.files')) return; // 点公告里的文件：直接打开 / 下载，不折叠
 	if (e.target.closest('[data-ntmore]')) { NT.more += 60; return ntRender(); }
-	const it = e.target.closest('.ntit'); if (!it) return;
+	const it = e.target.closest('.ntev'); if (!it) return;
 	const x = ($('ntList')._items || []).find((y) => y.k === it.dataset.k); if (!x) return;
 	if (x.fb) { FB_FOCUS = x.fb; return go('myfb'); }
-	if (x.upd === 'router') return updSheet(false);
-	if (x.upd === 'app') return toast('回到 App 首页（路由器列表），会提示一键更新');
 	if (x.go) return go(x.go);
 	it.classList.toggle('open');
+	const f = it.querySelector('.ntfull'); if (f) f.textContent = it.classList.contains('open') ? '收起' : '看全文';
 };
-for (const id of ['ntList', 'ntPin']) $(id).onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && (e.target.classList.contains('ntit') || e.target.classList.contains('ntpin'))) { e.preventDefault(); e.target.click(); } };
+for (const id of ['ntList']) $(id).onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('ntev')) { e.preventDefault(); e.target.click(); } };
 $('bellBtn').onclick = () => go('notice');
 
 /* ---------- 5.2 发文件：先经路由器领上传票，再从手机直接分块传给托管服务（不经过路由器）；最大 200MB ---------- */

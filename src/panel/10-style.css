@@ -256,38 +256,57 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 @media(max-width:359px){.toplogo{display:none}}
 .bell:active{transform:scale(.92)}.bell svg{width:19px;height:19px}
 .bell em{position:absolute;top:-4px;right:-5px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--danger);color:#fff;font:700 10.5px/18px system-ui,sans-serif;font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--bg)}
-.ntseg .chip{font-size:12.5px;padding:7px 0;min-width:0;overflow:hidden;text-overflow:ellipsis}.ntseg .chip small{font-size:11px;font-weight:600;opacity:.75;margin-left:2px}
-/* 通知页（4.0）：上面两个入口卡片，置顶重要公告，下面按天的时间线 */
-.nthead{display:flex;align-items:center;justify-content:space-between;gap:10px}.nthead h1{margin:0}
-.ntsub{margin:6px 0 0;line-height:1.55}
-.ntent{display:grid;grid-template-columns:1fr;gap:8px;margin-top:14px}@media(min-width:600px){.ntent{grid-template-columns:1fr 1fr}}
-.ntent button{display:flex;align-items:center;gap:10px;text-align:left;border:0;border-radius:18px;padding:12px;background:var(--fill);color:var(--text);cursor:pointer;min-width:0;position:relative;font:inherit;transition:transform .18s var(--spring)}
-.ntent button:active{transform:scale(.97)}
-.ntent i{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;flex:none;color:#fff}.ntent i svg{width:20px;height:20px}
-.ntent b{display:block;font-size:14px;line-height:1.3}.ntent span{display:block;font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ntent div{min-width:0;flex:1}
-.ntent button::after{content:"›";font-size:20px;color:var(--muted);opacity:.6;margin-left:4px}
-.ntent em{position:static;flex:none;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--danger);color:#fff;font:700 10.5px/18px system-ui,sans-serif;font-style:normal;text-align:center}
-.ntpin{margin-top:14px;border-radius:22px;padding:14px 15px;background:linear-gradient(135deg,var(--wsoft),transparent 70%),var(--card);box-shadow:var(--shadow),inset 0 0 0 1px var(--wsoft);cursor:pointer}
-.ntpin .pt{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--warn)}
-.ntpin b{display:block;font-size:16px;margin-top:6px;line-height:1.4}
-.ntpin p{margin:4px 0 0;font-size:13.5px;line-height:1.6;color:var(--muted);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.ntpin.open p{display:block;color:var(--text)}
-.ntpin .pm{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)}
-.ntday{font-size:12.5px;font-weight:700;color:var(--muted);margin:16px 6px 7px;display:flex;justify-content:space-between}
-.ntlist{padding:2px 14px}
-.ntit{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:.5px solid var(--line);cursor:pointer;position:relative}.ntit:last-child{border-bottom:0}
-.ntic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;margin-top:1px}.ntic svg{width:18px;height:18px}
-.ntic.err{background:var(--dsoft);color:var(--danger)}.ntic.ok{background:var(--oksoft);color:var(--ok)}.ntic.warn{background:var(--wsoft);color:var(--warn)}.ntic.info{background:var(--soft);color:var(--brand)}
-.ntb{flex:1;min-width:0}.ntb>b{display:block;font-size:14.5px;line-height:1.45;word-break:break-word;font-weight:600}
-.ntit.new .ntb>b{font-weight:800}
-.ntit.new::before{content:"";position:absolute;left:-9px;top:25px;width:6px;height:6px;border-radius:50%;background:var(--brand)}
-.ntb>p{margin:3px 0 0;font-size:13px;line-height:1.55;color:var(--muted);white-space:pre-line;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.ntit.open .ntb>p{display:block;color:var(--text)}
-.ntm{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:5px;font-size:12px;color:var(--muted);align-items:center}.ntm i{font-style:normal;font-weight:600}
-.ntgo{flex:none;color:var(--muted);font-size:20px;line-height:1;margin-top:7px;opacity:.6}
-.ntempty{text-align:center;padding:34px 16px}.ntempty svg{width:40px;height:40px;color:var(--muted);opacity:.5}.ntempty b{display:block;margin-top:8px}.ntempty p{margin:4px 0 0;font-size:13px;color:var(--muted)}
-@media(min-width:900px){.ntent{grid-template-columns:repeat(2,minmax(0,320px))}}
+/* 通知页（6.0 第 93 项，用户 11/25 选的方案 A）：顶部状态 + 近 7 天 + 健康条；「待处理」；按天的时间线（同一件事合成一条） */
+.nthero h1{margin:0;font-size:24px;line-height:1.3;text-wrap:pretty}
+.ntsum{margin:6px 0 0;font-size:14px;line-height:1.6;color:var(--muted);text-wrap:pretty}
+.ntbars{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:46px;margin-top:16px}
+.ntbars button{border:0;padding:0;border-radius:6px;height:14px;background:var(--ok);opacity:.5;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .2s var(--spring)}
+.ntbars button.w{height:30px;background:var(--warn);opacity:.9}.ntbars button.e{height:44px;background:var(--danger);opacity:.9}
+.ntbars button:active{transform:scaleY(.9)}
+.ntdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:6px;font-size:11.5px;color:var(--muted);text-align:center}.ntdays .now{color:var(--text);font-weight:600}
+.ntqb{display:flex;gap:8px;margin-top:14px;max-width:440px}
+.ntstrip{max-width:560px}
+.ntqb button{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border:0;border-radius:19px;background:var(--fill);color:var(--text);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.ntqb svg{width:16px;height:16px;flex:none}.ntqb span{overflow:hidden;text-overflow:ellipsis}
+.ntqb em{flex:none;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:var(--danger);color:#fff;font:700 10.5px/18px system-ui,sans-serif;font-style:normal;text-align:center}
+.ntsec{display:flex;align-items:baseline;justify-content:space-between;margin:20px 6px 8px}.ntsec b{font-size:17px}.ntsec span{font-size:13px;color:var(--muted)}
+.ntact{display:flex;gap:12px;align-items:flex-start;border-radius:22px;padding:14px 15px;margin:0 0 10px;transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.ntact.gone{opacity:0;transform:translateX(24px)}
+.ntab{flex:1;min-width:0}.ntab>b{display:block;font-size:15.5px;line-height:1.4;text-wrap:pretty;word-break:break-word}
+.ntab>p{margin:3px 0 0;font-size:13.5px;line-height:1.55;color:var(--muted);white-space:pre-line;word-break:break-word;text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ntact.open .ntab>p{display:block;color:var(--text)}
+.ntbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.ntic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none}.ntic svg{width:18px;height:18px}
+.ntic.red{background:var(--dsoft);color:var(--danger)}.ntic.green{background:var(--oksoft);color:var(--ok)}.ntic.orange{background:var(--wsoft);color:var(--warn)}.ntic.blue{background:var(--soft);color:var(--brand)}
+.nttag{display:inline-flex;align-items:center;height:19px;padding:0 7px;border-radius:6px;font-size:11.5px;font-weight:600;margin-right:6px;vertical-align:2px}
+.nttag.orange{background:var(--wsoft);color:var(--warn)}.nttag.red{background:var(--dsoft);color:var(--danger)}.nttag.green{background:var(--oksoft);color:var(--ok)}.nttag.gray{background:var(--fill);color:var(--muted)}
+.ntday{font-size:13px;font-weight:600;color:var(--muted);margin:18px 6px 7px;scroll-margin-top:80px}
+.ntl{padding:4px 14px 4px 0;overflow:hidden}
+.ntev{display:grid;grid-template-columns:44px 1fr auto;gap:0 10px;padding:11px 0;position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ntev::before{content:"";position:absolute;left:21px;top:0;bottom:0;width:2px;background:var(--line)}
+.ntev:first-child::before{top:18px}.ntev:last-child::before{bottom:auto;height:18px}.ntev:only-child::before{display:none}
+.ntdot{grid-column:1;justify-self:center;width:12px;height:12px;border-radius:50%;margin-top:5px;position:relative;background:#a1a1a8;box-shadow:0 0 0 4px var(--card)}
+:root.glass .ntdot{box-shadow:0 0 0 4px var(--glass,var(--card))}
+.ntdot.ok{background:var(--ok)}.ntdot.err{background:var(--danger)}.ntdot.warn{background:var(--warn)}.ntdot.info{background:var(--brand)}
+.ntb{min-width:0}.ntb>b{display:block;font-size:15px;line-height:1.4;font-weight:600;word-break:break-word;text-wrap:pretty}
+.ntev.new .ntb>b{font-weight:750}
+.ntb>p{margin:2px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted);white-space:pre-line;word-break:break-word;text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ntev.open .ntb>p{display:block;color:var(--text)}
+.ntmg{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.ntmg span{white-space:nowrap;font-size:12.5px;padding:3px 9px;border-radius:10px}
+.ntmg .red{background:var(--dsoft);color:var(--danger)}.ntmg .green{background:var(--oksoft);color:var(--ok)}
+.ntfull{display:inline-block;margin-top:6px;font-size:13.5px;font-weight:600;color:var(--brand)}
+.nttm{font-size:12.5px;color:var(--muted);white-space:nowrap;padding-top:2px}
+.ntev.new .nttm{color:var(--brand);font-weight:600}
+.ntempty{text-align:center;padding:34px 16px}.ntempty svg{width:40px;height:40px;color:var(--muted);opacity:.5}.ntempty b{display:block;margin-top:8px}
+/* 打开这一页：顶部、待处理、每一天依次浮现一次；新来的一条从上面滑进来 */
+@keyframes ntUp{from{opacity:0;transform:translateY(10px)}}
+@keyframes ntNew{from{opacity:0;transform:translateY(-12px)}}
+#p-notice.ntin .nthero,#p-notice.ntin .ntsec,#p-notice.ntin .ntact,#p-notice.ntin .ntday,#p-notice.ntin .ntl{animation:ntUp .42s var(--ease) both}
+#p-notice.ntin .ntsec{animation-delay:.06s}#p-notice.ntin .ntact{animation-delay:.1s}#p-notice.ntin .ntact+.ntact{animation-delay:.14s}
+#p-notice.ntin .ntday,#p-notice.ntin .ntl{animation-delay:.18s}
+.ntact.fresh,.ntev.fresh{animation:ntNew .4s var(--ease) both}
+@media(prefers-reduced-motion:reduce){#p-notice.ntin *,.ntact.fresh,.ntev.fresh{animation:none!important}.ntact,.ntbars button{transition:none}}
+:root.lowfx #p-notice.ntin *,:root.lowfx .ntev.fresh,:root.lowfx .ntact.fresh{animation:none!important}
 /* 实时联系开发者（4.0） */
 body.chatp .dock{display:none}body.chatp main.wrap{padding-bottom:0}
 #p-chat.on{display:flex;flex-direction:column;min-height:calc(100dvh - var(--toph,64px) - 12px)}

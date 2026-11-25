@@ -3454,6 +3454,8 @@ function nt_seen() {
 	// 第一次（刚装好 / 刚升级）：以前的记录都算看过，不然一打开就是一大堆「新」
 	if (type(s) != 'object' || type(s.t) != 'int' && type(s.t) != 'double') { s = { t: time() * 1000, since: time() * 1000, pop: [] }; writefile(NT_SEEN, sprintf('%J', s)); }
 	if (type(s.pop) != 'array') s.pop = [];
+	// 6.0 第 93 项：以前弹过的重要公告当时已经看过了，升级上来时都算「知道了」（不放进通知页的「待处理」）
+	if (type(s.ack) != 'array') { s.ack = slice(s.pop); writefile(NT_SEEN, sprintf('%J', s)); }
 	return s;
 }
 P.notices = function(a) {
@@ -3474,13 +3476,16 @@ P.notices = function(a) {
 		}
 	}
 	let cp = null; try { cp = chat_peek(); } catch (e) {}
-	return { now: time(), app, chat: cp, ann: an?.list ?? [], annAt: an?.at ?? 0, annFail: !!an?.fail, events: ev, fb: fb?.list ?? [], hosted: !!fb?.hosted, seen: { t: s.t, pop: s.pop, since: +(s.since ?? 0), upd: '' + (s.upd ?? '') } };
+	return { now: time(), app, chat: cp, ann: an?.list ?? [], annAt: an?.at ?? 0, annFail: !!an?.fail, events: ev, fb: fb?.list ?? [], hosted: !!fb?.hosted, seen: { t: s.t, pop: s.pop, ack: s.ack, since: +(s.since ?? 0), upd: '' + (s.upd ?? '') } };
 };
 P.notices_seen = function(a) {
 	let s = nt_seen(), ch = false, t = +(a?.t ?? 0), lim = time() * 1000 + 60000;
 	if (t > s.t) { s.t = t > lim ? lim : t; ch = true; }
 	let id = '' + (a?.pop ?? '');
 	if (length(id)) { if (!match(id, /^[a-z2-9]{10}$/)) die('公告编号不对'); if (index(s.pop, id) < 0) { push(s.pop, id); s.pop = slice(s.pop, -50); ch = true; } }
+	// 6.0 第 93 项：重要公告点了「知道了」，从通知页的「待处理」移到下面的时间线
+	let ak = '' + (a?.ack ?? '');
+	if (length(ak)) { if (!match(ak, /^[a-z2-9]{10}$/)) die('公告编号不对'); if (index(s.ack, ak) < 0) { push(s.ack, ak); s.ack = slice(s.ack, -50); ch = true; } }
 	// 6.0 第 85 项：这个新版本已经弹过（每个版本只弹一次；换手机、清缓存也不再弹）。不算「看了公告」，不上报
 	let uv = '' + (a?.upd ?? ''), wr = ch;
 	if (length(uv)) { if (!match(uv, /^[0-9]+(\.[0-9]+){1,3}$/)) die('版本号不对'); if (s.upd != uv) { s.upd = uv; wr = true; } }

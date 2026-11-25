@@ -441,6 +441,21 @@
 	<section class="card list"><div id="prList"></div></section>
 </section>
 
+<!-- 6.0 第 83 项：应用管理 -->
+<section class="page" id="p-apps">
+	<section class="card">
+		<div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input id="apFilter" class="input" placeholder="搜索" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="pill" id="apFree" style="align-self:center">—</span></div>
+		<div class="chips" id="apView" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr))">
+			<button class="chip on" data-v="plugin">插件</button>
+			<button class="chip" data-v="soft">软件</button>
+			<button class="chip" data-v="dep">依赖</button>
+			<button class="chip" data-v="rom">系统</button>
+		</div>
+	</section>
+	<div class="sectitle"><b id="apTitle">插件</b><span class="pill" id="apCount">—</span></div>
+	<section class="card list"><div id="apList"><div class="empty">读取中…</div></div></section>
+</section>
+
 <section class="page" id="p-more">
 	<div class="sectitle" style="margin-top:2px"><b>查看</b></div>
 	<section class="card">

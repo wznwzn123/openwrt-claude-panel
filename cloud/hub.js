@@ -205,6 +205,53 @@ export class Hub extends DurableObject {
 	lock(fn) { const run = (this.q || Promise.resolve()).then(fn, fn); this.q = run.catch(() => {}); return run; }
 	watch(sub) { return this.env.W.get(this.env.W.idFromName('dev:' + sub)); }
 	max() { return Math.max(1, Math.min(1000, +this.env.MAX_DEVICES || 1000)); }
+	/* ---------- 6.0 第 46 项：托管名额（用户 11/26 定：满了停止新注册 + 排队，有空位发邮件；后台能调上限） ---------- */
+	// 上限：后台改过就用后台的（1–1000），没改过用部署时的 MAX_DEVICES
+	async maxN() { const m = +(await this.ctx.storage.get('maxset')); return m >= 1 && m <= 1000 ? m : this.max(); }
+	// 满没满：路由器数到了上限，或者 Cloudflare 子域名名额用完了（一天内、数量没减少）
+	async isFull() {
+		const n = await this.count();
+		if (n >= (await this.maxN())) return true;
+		const f = await this.ctx.storage.get('dnsfull');
+		return !!(f && Date.now() - f.at < DAY && n >= f.count);
+	}
+	// 排队的邮箱：发过有空位通知 30 天、排了 180 天还没排到的自动删掉（隐私政策里写了）
+	async waitList() { const l = await this.ctx.storage.get('wl'), now = Date.now(); return Array.isArray(l) ? l.filter((x) => (x.sent ? now - x.sent < 30 * DAY : now - x.at < 180 * DAY)) : []; }
+	// 留邮箱排队（同一个 IP 一小时最多 5 次；最多排 2000 人）
+	async waitJoin({ email, ip }) {
+		email = normEmail(email);
+		if (!email) return { st: 400, error: '邮箱格式不对' };
+		if (!(await this.isFull())) return { st: 400, error: '现在有名额，直接注册就行' };
+		if (!this.env.RESEND_API_KEY) return { st: 501, error: '官网还没开通发邮件，排不了队，过几天再来看' };
+		if (await this.ctx.storage.get('e:' + email)) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
+		if (!(await this.hit('wl:' + ip, 5, 3600e3))) return { st: 429, error: '太频繁了，一小时后再试' };
+		const l = await this.waitList();
+		let i = l.findIndex((x) => x.email === email);
+		if (i < 0) { if (l.length >= 2000) return { st: 503, error: '排队的人太多了，过几天再来' }; l.push({ email, at: Date.now() }); i = l.length - 1; await this.ctx.storage.put('wl', l); }
+		return { st: 200, ok: true, pos: l.filter((x, j) => j <= i && !x.sent).length };
+	}
+	// 有空位了：按排队先后发邮件，空几个发几个（发过的不再发；一次最多 20 封）
+	async waitNotify() {
+		if (!this.env.RESEND_API_KEY || (await this.isFull())) return 0;
+		const free = (await this.maxN()) - (await this.count()), l = await this.waitList();
+		let n = 0;
+		for (const x of l) {
+			if (n >= Math.min(free, 20)) break;
+			if (x.sent) continue;
+			if (!(await this.mail(x.email, '路由器面板有空位了', `<p>你之前排队的路由器面板托管服务有空位了，现在可以注册：</p><p><a href="https://${this.env.BASE_DOMAIN}/app">https://${this.env.BASE_DOMAIN}/app</a></p><p>名额先到先得，晚了可能又满了。</p>`))) break; // 发不出去（额度用完）：下次再发
+			x.sent = Date.now(); n++;
+		}
+		if (n) { await this.ctx.storage.put('wl', l); await this.alog('wait-mail', '', `有空位了，给排队的 ${n} 个人发了邮件`, 'system'); }
+		return n;
+	}
+	async setMax(n) {
+		n = Math.round(+n);
+		if (!(n >= 1 && n <= 1000)) return { st: 400, error: '上限填 1–1000' };
+		await this.ctx.storage.put('maxset', n);
+		await this.alog('max', '', '托管名额上限改成 ' + n, 'admin');
+		await this.waitNotify();
+		return { st: 200, ok: true, ...(await this.stats()) };
+	}
 	async count() { return (await this.ctx.storage.get('count')) || 0; }
 	async addCount(n) { await this.ctx.storage.put('count', Math.max(0, (await this.count()) + n)); }
 	// 限流：同一个 IP 每小时最多开通 5 台，全站每小时最多 60 台
@@ -261,7 +308,7 @@ export class Hub extends DurableObject {
 		if (inv.keep && !keep) return { st: 403, error: '这台路由器的托管服务已经到期了，这个码不能再用来重装' + (inv.uid ? '。在官网账号里申请续期，或者重新拿一个安装码' : '') };
 		if (!keep && inv.exp && now > inv.exp) return { st: 403, error: inv.uid ? '安装码已经过期了：回官网「添加路由器 → 装新路由器」重新拿一个' : '邀请码已经过期' };
 		if (inv.used >= inv.max) return { st: 403, error: inv.uid ? '这个安装码已经用过了：每个安装码只能装一台。回官网「添加路由器 → 装新路由器」重新拿一个' : '邀请码已经用完了' };
-		if ((await this.count()) >= this.max()) return { st: 403, error: '名额已满，暂时不能开通' };
+		if ((await this.count()) >= (await this.maxN())) return { st: 403, error: '名额已满，暂时不能开通' };
 		// 上次开通时 Cloudflare 的子域名名额满了：一天内、路由器数量没减少之前直接说名额已满，不再去建隧道（过一天再试一次，升级了套餐也能自己恢复）
 		const full = await this.ctx.storage.get('dnsfull');
 		if (full && now - full.at < DAY && (await this.count()) >= full.count) return { st: 403, error: '名额已满，暂时不能开通' };
@@ -342,6 +389,7 @@ export class Hub extends DurableObject {
 		}
 		await this.ctx.storage.delete('d:' + sub);
 		await this.addCount(-1);
+		try { await this.waitNotify(); } catch (e) {} // 第 46 项：腾出名额了，告诉排队的人
 		return true;
 	}
 	unregister(a) { return this.lock(() => this._unregister(a)); }
@@ -808,11 +856,14 @@ export class Hub extends DurableObject {
 		if (!email) return { st: 400, error: '邮箱格式不对' };
 		const pe = pwError(password); if (pe) return { st: 400, error: pe };
 		if (await this.ctx.storage.get('e:' + email)) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
+		// 第 46 项：名额满了不再注册新账号（只能留邮箱排队）
+		if (await this.isFull()) return { st: 403, error: '名额已满，暂时不能注册', full: true };
 		if (!(await this.hit('ri:' + ip, 10, 3600e3))) return { st: 429, error: '注册太频繁了，一小时后再试' };
 		if (this.env.RESEND_API_KEY && !(await this.useCode(email, 'reg', code))) return { st: 400, error: '验证码不对或已过期' };
 		const uid = rnd(12), salt = rnd(16);
 		const u = { uid, email, salt, pw: await pwHash(password, salt), created: Date.now(), devs: [], sids: [], verified: !!this.env.RESEND_API_KEY };
 		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + email]: uid });
+		{ const wl = await this.waitList(); if (wl.some((x) => x.email === email)) await this.ctx.storage.put('wl', wl.filter((x) => x.email !== email)); } // 排过队的注册了：从队里去掉
 		await this.loginLog({ k: 'reg', who: email, ok: true, why: '注册', ip, place: dev && dev.place, ua: dev && dev.ua });
 		const nd = this.newDeviceCode() ? await this.trust(u, did) : ''; // 注册时邮箱验证过了，这台设备就算验证过
 		return { st: 200, sid: await this.newSession(u, dev), did: nd };
@@ -1479,7 +1530,7 @@ export class Hub extends DurableObject {
 		if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
 		return this.renew(sub, code, '路由器');
 	}
-	async stats() { const f = await this.ctx.storage.get('dnsfull'); return { count: await this.count(), max: this.max(), ...(f ? { dnsFull: f } : {}) }; }
+	async stats() { const f = await this.ctx.storage.get('dnsfull'), wl = await this.waitList(); return { count: await this.count(), max: await this.maxN(), maxEnv: this.max(), full: await this.isFull(), wait: wl.filter((x) => !x.sent).length, waitSent: wl.filter((x) => x.sent).length, ...(f ? { dnsFull: f } : {}) }; }
 	// 每天清理：90 天没上线的回收；开通到一半卡住超过 1 小时的也清掉
 	cleanup(now) { return this.lock(() => this._cleanup(now || Date.now())); }
 	async _cleanup(now) {
@@ -1587,7 +1638,8 @@ export async function hubFetch(req, env) {
 	// 5.2 发文件：上传（分块）、下载（带签名）
 	{ const fx = await filesRoute(req, env, H, p); if (fx) return fx; }
 	// 6.0 第 7 项：公开的状态接口只回答「在线」和「开没开邮件验证码」（注册页要用）；名额、文件存储这些只在管理员的 /api/admin/health 里
-	if (p === '/api/ping') return J({ ok: true, mail: !!env.RESEND_API_KEY });
+	// 第 46 项：再加一个「满没满」（注册页满了改成留邮箱排队），不给具体数量
+	if (p === '/api/ping') return J({ ok: true, mail: !!env.RESEND_API_KEY, full: await H.isFull() });
 	if (p === '/api/register' && req.method === 'POST') {
 		const b = await body();
 		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, rid: b.rid, local: b.local === true, ip: req.headers.get('cf-connecting-ip') || '' });
@@ -2012,7 +2064,8 @@ async function accountApi0(req, env, H, p, body) {
 	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
 	{ const fx = (await famDev(p, H, b)) || (await edDev(p, H, b)); if (fx) return fx; }
 	const a = p.slice('/api/account/'.length);
-	{ const k = { code: 'code', register: 'reg', login: 'login', reset: 'reset' }[a]; if (k) { const g = await captchaGate(env, H, k, ip, s(b.cft)); if (g) return g; } }
+	{ const k = { code: 'code', register: 'reg', login: 'login', reset: 'reset', wait: 'reg' }[a]; if (k) { const g = await captchaGate(env, H, k, ip, s(b.cft)); if (g) return g; } }
+	if (a === 'wait') return out(await H.waitJoin({ email: s(b.email), ip })); // 第 46 项：名额满了，留邮箱排队
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev, did }));

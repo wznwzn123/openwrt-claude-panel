@@ -10,7 +10,7 @@
 - 托管服务只发三把「云端钥匙」，只能读写那台路由器自己的云端数据（心跳、推送、备份），每台互相隔离。
 - 网址随机分配，用户不能指定；删除只能由那台路由器自己（凭钥匙）或管理员操作。
 - Cloudflare API 令牌只存在 Worker 的密钥里，不会发给任何路由器。
-- 邀请码控制谁能开通；同一个 IP 每小时最多开通 5 台、全站每小时最多 60 台；名额有上限。
+- 邀请码控制谁能开通；同一个 IP 每小时最多开通 5 台、全站每小时最多 60 台；名额有上限（部署时用 `MAX_DEVICES` 设，6.0 起管理后台「路由器」页能直接改）。名额满了官网停止注册新账号，新用户留邮箱排队，腾出名额后按排队先后发邮件。
 - 90 天没上线的路由器自动回收（删隧道、删子域名、删数据）。
 
 **你要守住的**：托管服务的 Cloudflare 账号（建议单独注册、开两步验证）。账号被盗的话，攻击者能把用户的网址指到假页面骗登录地址。
@@ -80,7 +80,7 @@ npx wrangler secret put VAPID_PUB -c wrangler.hosted.toml
 
 官网页面在 `cloud/site/` 里，改完运行 `node tools/build-site.mjs` 再部署。
 
-打开 `https://example.com/api/ping`，看到 `{"ok":true,...}` 就部署好了。（6.0 起这个公开地址只说在线和开没开邮件验证码；名额、文件存储这些在管理后台「设置」里看，或者带管理员密钥访问 `/api/admin/health`。）
+打开 `https://example.com/api/ping`，看到 `{"ok":true,...}` 就部署好了。（6.0 起这个公开地址只说在线、开没开邮件验证码、名额满没满；名额、文件存储这些在管理后台「设置」里看，或者带管理员密钥访问 `/api/admin/health`。）
 
 ### 4. 发邀请码
 
@@ -169,7 +169,9 @@ App 的签名密钥已经加密放在仓库里（`android/signing/router-panel.j
 | `GET /api/admin/logins` / `log` / `mails` / `errors` | 登录记录（带 IP）、操作记录、邮件记录、出错记录 |
 | `GET /api/admin/chat` / `GET /api/admin/chat/{对话}?read=1` / `POST /api/admin/chat/{对话}` | 实时对话：列表、看消息、回复（`{"text","img"}`） |
 | `GET/POST/DELETE /api/admin/ann[/{编号}]` | 公告：列表、发布 / 修改、删除 |
-| `GET /api/admin/devices` | 所有路由器、已用名额 |
+| `GET /api/admin/devices` | 所有路由器、已用名额、排队人数 |
+| `POST /api/admin/max` | 改名额上限（`{"max": 1–1000}`），改大后马上给排队的人发邮件 |
+| `GET /api/admin/wait` | 排队的邮箱 |
 | `POST /api/admin/devices/{子域名}/off` | 封禁（网址立刻打不开） |
 | `POST /api/admin/devices/{子域名}/on` | 解封 |
 | `POST /api/admin/devices/{子域名}/delete` | 删除（回收隧道和子域名） |

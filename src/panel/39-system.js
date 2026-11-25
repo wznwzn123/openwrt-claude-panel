@@ -76,7 +76,7 @@ const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.dev
 async function loadDev() {
 	const [b, pz, ow, rl] = await Promise.all([P('black_state'), P('pause_list').catch(() => null), P('dev_own').catch(() => null), P('rl_get').catch(() => null)]);
 	blk = b;
-	if (rl) DRL = rl;
+	if (rl && rl.devs) DRL = rl;
 	if (pz) PZ = pz;
 	OWN.d = ow;
 	devices = blk.devices || [];
@@ -239,7 +239,7 @@ function devSets(d) {
 	if (pz && (pz.sched || []).length) out.push('每天定时断网（' + pz.sched.map((s) => s.from + '–' + s.to).join('、') + '）');
 	if (pz && pz.plan) out.push('上网计划（' + pz.plan.slots.map(plSlot).join('、') + '）');
 	if (isBlack(d)) out.push('「不走代理」');
-	if (d.mac && DRL.devs[d.mac]) out.push('限速（' + rlSub(d.mac) + '）');
+	if (d.mac && (DRL.devs || {})[d.mac]) out.push('限速（' + rlSub(d.mac) + '）');
 	if (d.renamed) out.push('改过的名字「' + d.name + '」');
 	if (d.img) out.push('设的照片');
 	else if (d.icon) out.push('选的图标');

@@ -50,6 +50,17 @@ const vdist = computed(() => {
   return Object.keys(c).sort((a, b) => (a === '?' ? 1 : b === '?' ? -1 : vNewer(a, b) ? -1 : 1)).map(k => ({ v: k, n: c[k], old: k !== '?' && !!latest.value && vNewer(latest.value, k) }))
 })
 const status = (d: any) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '已到期暂停' : '已封禁') : '最后上线 ' + ago(d.seen)
+/* 6.0 第 46 项：托管名额上限（后台能调）、满了排队的人 */
+const waitList = ref<any[] | null>(null)
+async function setMax() {
+  const v = await ask({ title: '改名额上限', message: `现在开通了 ${st.value.count} 台。改大以后会马上给排队的人发邮件（空几个发几个）。部署时设的是 ${st.value.maxEnv} 台。`, input: { label: '上限（1–1000 台）', value: String(st.value.max), numeric: true, required: '要填数字' }, confirmText: '保存' })
+  if (!v) return
+  try { const r = await post('max', { max: +v.value }); st.value = { ...st.value, ...r }; pushToast('名额上限改成 ' + r.max + ' 台') } catch (e) { toastError(e, '改不了') }
+}
+async function showWait() {
+  if (waitList.value) { waitList.value = null; return }
+  try { waitList.value = (await get('wait')).list } catch (e) { toastError(e, '排队名单读不出来') }
+}
 async function load() {
   try {
     const [r, v] = await Promise.all([get('devices'), fetch('/api/router/version', { cache: 'no-store' }).then(x => x.json()).catch(() => ({}))])
@@ -104,9 +115,12 @@ onMounted(load)
 <template>
   <div class="page">
     <PageHeader title="路由器" :desc="`开通了托管服务的路由器。已开通 ${st.count} / 名额 ${st.max} 台，6 小时内在线 ${online} 台。`">
+      <Button @click="setMax">改名额上限</Button>
       <Button icon="trash" @click="cleanup">清理 90 天没上线的</Button>
     </PageHeader>
     <div class="hub-stack">
+      <div v-if="st.full || st.wait || st.waitSent" class="hub-note reveal ov-bar"><span><b>{{ st.full ? '名额满了' : '有空位' }}</b>，新用户{{ st.full ? '只能留邮箱排队' : '能注册' }}。排队 {{ st.wait || 0 }} 人<template v-if="st.waitSent">，已发过有空位邮件 {{ st.waitSent }} 人</template>。</span><Button size="sm" @click="showWait">{{ waitList ? '收起' : '看排队' }}</Button></div>
+      <Panel v-if="waitList" class="reveal"><div class="hub-list"><div v-for="x in waitList" :key="x.email" class="hub-row"><div class="hub-row-main"><div class="hub-row-title">{{ x.email }}</div><p class="hub-row-meta">{{ day(x.at) }} 排队<template v-if="x.sent"> · {{ day(x.sent) }} 发了有空位邮件</template></p></div></div><EmptyState v-if="!waitList.length" title="没有人排队" /></div></Panel>
       <div v-if="st.dnsFull" class="hub-note reveal" style="border: 1px solid var(--red); color: var(--red-text)"><b>Cloudflare 子域名名额满了</b>（{{ new Date(st.dnsFull.at).toLocaleString('zh-CN', { hour12: false }) }}，当时 {{ st.dnsFull.count }} 台）。新用户开通会提示「名额已满」：彻底删除不用的路由器，或者升级 Cloudflare 套餐。</div>
       <Panel class="reveal">
         <div class="hub-tools">

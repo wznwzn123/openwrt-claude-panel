@@ -4,14 +4,14 @@
 let DRL = { devs: {}, caps: null };
 const rlMb = (k) => { const v = k / 1000; return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10) + ''; };
 function rlSub(mac) {
-	const e = mac && DRL.devs[mac];
+	const e = mac && (DRL.devs || {})[mac];
 	if (!e) return '';
 	return [e.down ? '下载 ' + rlMb(e.down) : '', e.up ? '上传 ' + rlMb(e.up) : ''].filter(Boolean).join(' · ') + ' Mbps';
 }
 async function rlSheet(d) {
 	const c = DRL.caps;
 	if (c && !c.ok) return toast(c.why, true);
-	const e = DRL.devs[d.mac] || {}, nm = d.name || d.ip;
+	const e = (DRL.devs || {})[d.mac] || {}, nm = d.name || d.ip;
 	const fld = (k, t, v) => `<div class="fld"><div class="lb"><b>${t}</b></div><div class="ctl rlin"><input class="input" data-r="${k}" inputmode="decimal" autocomplete="off" placeholder="不限" value="${v ? rlMb(v) : ''}"><span class="muted">Mbps</span></div></div>`;
 	const v = await modal(`<h3>限速「${esc(nm)}」</h3>
 		${c && c.warn ? `<div class="notice w">${esc(c.warn)}</div>` : ''}

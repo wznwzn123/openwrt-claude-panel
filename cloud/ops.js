@@ -280,6 +280,9 @@ export async function opsAdmin(req, a, H, body, u, env = {}) {
 	const m = req.method;
 	if (a[0] === 'atk' && m === 'GET') return J({ ok: true, atk: await H.atkGet(), captcha: !!(env.TURNSTILE_SITE && env.TURNSTILE_SECRET) });
 	if (a[0] === 'atk' && m === 'POST') { const b = (await body()) || {}; return J({ ok: true, atk: await H.atkSet(!!b.on, b.hours), captcha: !!(env.TURNSTILE_SITE && env.TURNSTILE_SECRET) }); }
+	// 第 46 项：托管名额上限（后台能调）、排队的人
+	if (a[0] === 'max' && m === 'POST') { const b = (await body()) || {}; const r = await H.setMax(b.max); const { st, ...rest } = r; return J(rest, st); }
+	if (a[0] === 'wait' && m === 'GET') return J({ ok: true, list: (await H.waitList()).map((x) => ({ email: x.email, at: x.at, sent: x.sent || 0 })) });
 	if (a[0] === 'health' && m === 'GET') return J({ ok: true, ...(await H.stats()), mail: !!env.RESEND_API_KEY, files: !!env.F }); // 第 7 项：原来 /api/ping 里的名额等
 	if (a[0] === 'overview' && m === 'GET') return J({ ok: true, ...(await H.overview()) });
 	if (a[0] === 'stats' && m === 'GET') return J({ ok: true, days: await H.statDays(u.searchParams.get('days')) });

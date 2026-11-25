@@ -408,6 +408,13 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 			<div class="err" data-err></div>
 			<button class="btn primary">注册</button>
 		</form>
+		<!-- 6.0 第 46 项：名额满了，注册换成留邮箱排队 -->
+		<form id="fWait" class="hidden">
+			<div class="codehd"><b>名额已满</b><p class="muted" data-wtip>留个邮箱，有空位时发邮件给你。</p></div>
+			<div data-wform><label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="常用邮箱" required>
+			<div class="err" data-err></div>
+			<button class="btn primary">排队</button></div>
+		</form>
 		<form id="fReset" class="hidden">
 			<p class="muted" style="margin:6px 0 0;font-size:14px">输入注册时的邮箱，我们会发一个验证码。</p>
 			<label class="f">邮箱</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="email" type="email" autocomplete="email" placeholder="注册时用的邮箱" required><button type="button" class="btn" data-send="reset">发送</button></div>
@@ -573,11 +580,11 @@ async function api(path, body) {
 }
 const pair = new URLSearchParams(location.search).get('pair') || '';
 const joinCode = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
-let mailOn = false;
+let mailOn = false, regFull = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
 	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'code' || t === 'totp' ? 'login' : t)));
-	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); $('fTotp').classList.toggle('hidden', t !== 'totp'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code' || t === 'totp');
+	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg' || regFull); $('fWait').classList.toggle('hidden', !(t === 'reg' && regFull)); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); $('fTotp').classList.toggle('hidden', t !== 'totp'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code' || t === 'totp');
 }
 document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
 // 欢迎页 ↔ 登录 / 注册卡片：网址带 #login、#reg（手机上按返回键回到欢迎页；直接打开 /app#reg 就是注册）
@@ -678,7 +685,15 @@ form('fTotp', async (d, f) => {
 });
 $('fTotp').querySelector('[data-tf-rc]').onclick = (e) => { e.preventDefault(); tfMode(!$('fTotp').dataset.rc); };
 $('fTotp').querySelector('[data-codeback]').onclick = (e) => { e.preventDefault(); tfTok = ''; tab('login'); };
-form('fReg', async (d) => { await api('register', d); toast('注册成功'); await load('reg'); });
+form('fReg', async (d) => {
+	try { await api('register', d); } catch (e) { if (e.data && e.data.full) { regFull = true; tab('reg'); } throw e; }
+	toast('注册成功'); await load('reg');
+});
+form('fWait', async (d) => {
+	const r = await api('wait', d);
+	$('fWait').querySelector('[data-wtip]').textContent = '已排队，排第 ' + r.pos + ' 位。有空位时发邮件到 ' + d.email + '。';
+	$('fWait').querySelector('[data-wform]').classList.add('hidden');
+});
 form('fReset', async (d, f) => { const r = await api('reset', d); f.reset(); if (r && r.need === 'totp') { toast('密码已重置，再输一下验证器上的码'); return totpStep(r.token); } toast('密码已重置'); await load('reset'); });
 form('fBind', async (d, f) => {
 	const r = await api('bind', { code: d.code }); f.reset(); toast('已绑定「' + r.name + '」'); history.replaceState(null, '', '/app');
@@ -1278,7 +1293,7 @@ async function load(after) {
 }
 // 浏览器关掉了 Cookie：登录不了，先说清楚
 if (navigator.cookieEnabled === false) { const n = $('vAuth').querySelector('.lgcard'); if (n) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">这个浏览器关掉了 Cookie，登录不了。请在浏览器设置里打开 Cookie，或者换手机自带的浏览器。</div>'); }
-fetch('/api/ping').then((r) => r.json()).then((j) => { mailOn = !!j.mail; document.querySelector('#fReg [data-mail]').classList.toggle('hidden', !mailOn); }).catch(() => {});
+fetch('/api/ping').then((r) => r.json()).then((j) => { mailOn = !!j.mail; regFull = !!j.full; document.querySelector('#fReg [data-mail]').classList.toggle('hidden', !mailOn); if (!$('fReg').classList.contains('hidden') || !$('fWait').classList.contains('hidden')) tab('reg'); }).catch(() => {});
 tab('login'); load();
 </script>
 </body>

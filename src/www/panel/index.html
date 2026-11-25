@@ -1041,6 +1041,19 @@ html,body{overscroll-behavior-y:contain}
 .rlin{display:flex;align-items:center;gap:6px}
 .rlin .input{min-width:0;flex:1}
 .rlin span{font-size:13px;flex:none}
+/* 6.0 第 23 项：应用过滤 */
+.oftr{padding:8px 0;border-bottom:1px solid var(--line)}
+.ofdays{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.ofdays .chip{padding:6px 0;text-align:center;min-width:0}
+.oftime{display:flex;align-items:center;gap:8px;margin-top:8px}
+.oftime .input{flex:1;min-width:0}
+.ofapps{max-height:38vh;overflow:auto;margin-top:4px}
+.ofcls{margin:6px 0 10px}
+.ofcls-h{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.ofcls .chips{flex-wrap:wrap}
+.ofu{padding:9px 0;border-bottom:1px solid var(--line)}
+.ofu-t{display:flex;justify-content:space-between;gap:10px;font-size:14.5px}
+.ofu i{display:block;height:5px;border-radius:3px;background:var(--text);opacity:.75;margin-top:6px}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1303,7 +1316,7 @@ html,body{overscroll-behavior-y:contain}
 	</div>
 	<div id="ownBox"></div>
 	<div id="pzBox"></div>
-	<div class="sectitle"><b id="dvAllT">全部设备</b><span class="dvsec"><button class="btn sm hidden" id="dvClaim">认领设备</button><button class="btn sm hidden" id="dvClear">清除离线设备</button><span class="pill" id="dvCount">—</span></span></div>
+	<div class="sectitle"><b id="dvAllT">全部设备</b><span class="dvsec"><button class="btn sm hidden" id="dvClaim">认领设备</button><button class="btn sm hidden" id="dvScan">扫描</button><button class="btn sm hidden" id="dvClear">清除离线设备</button><span class="pill" id="dvCount">—</span></span></div>
 	<section id="dvList" class="grid tasks"></section>
 </section>
 
@@ -1515,6 +1528,9 @@ html,body{overscroll-behavior-y:contain}
 	<section class="card" id="wsSt"><div class="empty">读取中…</div></section>
 	<div id="wsBody"></div>
 </section>
+<section class="page" id="p-oaf">
+	<div id="ofBody"><section class="card empty">读取中…</section></div>
+</section>
 <section class="page" id="p-mon">
 	<section class="card mncard"><div class="mnhead"><b>网速</b><span><em id="mnRx" class="dn">—</em><em id="mnTx" class="up">—</em></span></div><svg id="mnNet" class="mnchart" viewBox="0 0 300 70" preserveAspectRatio="none" aria-hidden="true"></svg></section>
 	<section class="card mncard"><div class="mnhead"><b>负载</b><span id="mnCpu" class="muted"></span></div>
@@ -1615,7 +1631,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2055,7 +2071,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2102,7 +2118,8 @@ const NAV = [
 	] },
 	{ g: '服务', noic: 1, items: [
 		{ t: 'AdGuard Home', i: 'A', kids: [['admin/services/adguardhome/status', '运行状态'], ['admin/services/adguardhome/config', '设置'], ['admin/services/adguardhome/logs', '日志']] },
-		{ t: '应用过滤', i: '◎', kids: [['admin/services/oaf/dashboard', '仪表盘'], ['admin/services/oaf/users', '用户列表'], ['admin/services/oaf/app_filter', '应用过滤'], ['admin/services/oaf/mac_filter', '访问控制'], ['admin/services/oaf/whitelist', '白名单'], ['admin/services/oaf/app_record', '应用记录'], ['admin/services/oaf/feature', '特征库'], ['admin/services/oaf/advanced', '设置']] },
+		{ p: 'oaf', i: '◎', t: '应用过滤', kw: 'oaf 拦截 app 游戏 抖音 家长控制 使用记录 用了多久 屏蔽' },
+		{ t: 'OAF 原版', i: '◎', kids: [['admin/services/oaf/dashboard', '仪表盘'], ['admin/services/oaf/users', '用户列表'], ['admin/services/oaf/app_filter', '应用过滤'], ['admin/services/oaf/mac_filter', '访问控制'], ['admin/services/oaf/whitelist', '白名单'], ['admin/services/oaf/app_record', '应用记录'], ['admin/services/oaf/feature', '特征库'], ['admin/services/oaf/advanced', '设置']] },
 		{ t: 'Docker', i: 'D', kids: [['admin/dockerman/overview', '概览'], ['admin/dockerman/containers', '容器'], ['admin/dockerman/images', '镜像'], ['admin/dockerman/networks', '网络'], ['admin/dockerman/volumes', '存储卷'], ['admin/dockerman/events', '事件'], ['admin/dockerman/configuration', '设置']] },
 		['admin/services/upnp', 'UPnP', '⇅'],
 		['admin/store', 'iStore 应用商店', '⊞'],
@@ -2232,10 +2249,11 @@ const pageTitle = (p) => TITLES[p] || NAVK[p]?.t || '';
 let navOpen;
 try { navOpen = JSON.parse(store.get('rp_nav') || 'null'); } catch (e) {}
 if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 1, '网络': 1, '工具': 1 };
-const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"], "ndiag": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "mon": ["<path d=\"M3 13h3.5l2.5-6 4 11 3-8 2 3H21\"/>", "#ff9500"], "pf": ["<path d=\"M4 12h12\"/><path d=\"M12 7l5 5-5 5\"/><path d=\"M20 5v14\"/>", "#5856d6"], "store": ["<path d=\"M12 4v11\"/><path d=\"M7 10l5 5 5-5\"/><path d=\"M5 20h14\"/>", "#007aff"]};
+const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/OAF 原版": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"], "ndiag": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "mon": ["<path d=\"M3 13h3.5l2.5-6 4 11 3-8 2 3H21\"/>", "#ff9500"], "pf": ["<path d=\"M4 12h12\"/><path d=\"M12 7l5 5-5 5\"/><path d=\"M20 5v14\"/>", "#5856d6"], "store": ["<path d=\"M12 4v11\"/><path d=\"M7 10l5 5 5-5\"/><path d=\"M5 20h14\"/>", "#007aff"]};
 // 6.0 第 14 项：Wi-Fi 页的图标（侧边栏、快捷操作里用）
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 // 6.0 第 24、25、22 项：上网设置、局域网设置、无线中继
+NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
 NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circle cx="12" cy="17" r="1"/><path d="M3 20h18"/>', '#5ac8fa'];
 NAV_IC.lanset = ['<path d="M4 11l8-7 8 7v9H4z"/><path d="M9 20v-4h6v4"/><path d="M12 4v3"/>', '#ff9500'];
 NAV_IC.wan = ['<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/>', '#34c759'];
@@ -4695,6 +4713,110 @@ $$('#ndTool .chip').forEach((b) => (b.onclick = () => {
 	$('ndOut').innerHTML = '';
 }));
 $('ndRecent').addEventListener('click', (e) => { const c = e.target.closest('[data-a]'); if (!c) return; $('ndAddr').value = c.dataset.a; ndRun(); });
+/* ---------- 6.0 第 23 项：应用过滤（OAF） ----------
+ * OAF 7：总开关、规则（名字、对谁、时间、拦哪些 App）、每台设备今天用了哪些 App（只有主账号能看）。
+ * 老版 OAF：去原版页面。没装：去软件中心装；软件源里没有就说这个固件不支持。 */
+const OF = { d: null };
+const OF_DAY = ['日', '一', '二', '三', '四', '五', '六'];
+async function loadOaf() {
+	OF.d = await P('oaf_get', {}, 20000);
+	setStatus(true, '在线');
+	ofRender();
+}
+const ofDur = (s) => (s < 60 ? s + ' 秒' : s < 3600 ? Math.round(s / 60) + ' 分钟' : (Math.round(s / 360) / 10) + ' 小时');
+const ofDev = (mac) => { const u = (OF.d.users || []).find((x) => x.mac === mac); return u && u.name ? u.name : mac; };
+function ofDays(w) {
+	const s = [...w].sort((a, b) => a - b).join(',');
+	return s === '0,1,2,3,4,5,6' ? '每天' : s === '1,2,3,4,5' ? '周一到周五' : s === '0,6' ? '周末' : '周' + w.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((x) => OF_DAY[x]).join('、');
+}
+function ofRender() {
+	const d = OF.d, box = $('ofBody');
+	if (!d.kind) {
+		box.innerHTML = d.avail === false ? '<section class="card empty">软件源里没有应用过滤（OAF），这个固件不支持</section>'
+			: '<section class="card"><div class="wanhd"><b>没装应用过滤</b></div><button class="btn primary" id="ofGet" type="button" style="width:100%;margin-top:12px">去软件中心装</button></section>';
+		return;
+	}
+	if (d.kind === 'legacy') { box.innerHTML = '<section class="card"><div class="wanhd"><b>老版应用过滤（OAF 6 及更早）</b><span class="muted">规则在原版页面里设</span></div><button class="btn" id="ofOld" type="button" style="width:100%;margin-top:12px">打开原版页面</button></section>'; return; }
+	const app = {};
+	for (const c of d.classes || []) for (const a of c.apps) app[a.id] = a.name;
+	const rows = (d.rules || []).map((r) => {
+		const t = r.time_rules[0], more = r.time_rules.length > 1 ? ` 等 ${r.time_rules.length} 段` : '';
+		const apps = r.app_ids.slice(0, 3).map((i) => app[i] || i).join('、') + (r.app_ids.length > 3 ? ` 等 ${r.app_ids.length} 个` : '');
+		return `<div class="file ofrow" data-id="${r.id}" role="button" tabindex="0"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(r.name)}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc((r.mode === 1 ? '所有设备' : ofDev(r.mac)) + ' · ' + (t ? ofDays(t.weekdays) + ' ' + t.start_time + '–' + t.end_time : '') + more)}</span><span class="muted ell" style="display:block;font-size:12.5px">${esc(apps)}</span></div><span class="muted">›</span></div>`;
+	}).join('');
+	box.innerHTML = `<section class="card">${d.limit ? '<div class="wanhd"><b>应用过滤</b><span class="muted">' + (d.on ? '开着' : '关着') + '</span></div>' : `<label class="fld row" style="margin:0"><div class="lb"><b>应用过滤</b></div><label class="sw"><input type="checkbox" id="ofOn"${d.on ? ' checked' : ''} aria-label="应用过滤"><i></i></label></label>`}</section>
+		<div class="sectitle"><b>规则 <span class="pill">${(d.rules || []).length}</span></b><button class="btn sm" id="ofAdd" type="button">添加</button></div>
+		<section class="card list"><div id="ofRules">${rows || '<div class="empty">没有规则</div>'}</div></section>
+		${d.owner ? `<div class="sectitle"><b>今天用了什么</b></div><section class="card list">${(d.users || []).map((u) => `<button class="file ofuse" data-mac="${esc(u.mac)}" type="button" style="background:none"><div style="flex:1;min-width:0;text-align:left"><b class="ell" style="display:block">${esc(u.name || u.mac)}</b></div>${u.online ? '<span class="pill good">在线</span>' : ''}<span class="muted">›</span></button>`).join('') || '<div class="empty">还没有设备</div>'}</section>` : ''}`;
+}
+async function ofUsage(mac) {
+	let r;
+	try { r = await P('oaf_usage', { mac }, 20000); } catch (e) { return toast(e.message, true); }
+	const max = Math.max(1, ...r.list.map((x) => x.t));
+	modal(`<div class="sheethead"><h3>${esc(ofDev(mac))}</h3><button class="btn sm" data-v="close">关闭</button></div>
+		${r.list.length ? `<div class="ofuse-l">${r.list.map((x) => `<div class="ofu"><div class="ofu-t"><b class="ell">${esc(x.name)}</b><span class="muted">${ofDur(x.t)}</span></div><i style="width:${Math.max(3, Math.round((x.t / max) * 100))}%"></i></div>`).join('')}</div>` : '<div class="empty">今天还没用</div>'}`);
+}
+async function ofEdit(r) {
+	const d = OF.d, isNew = !r, me = r || { name: '', mode: d.limit ? 2 : 1, mac: (d.users[0] || {}).mac || '', time_rules: [{ weekdays: [0, 1, 2, 3, 4, 5, 6], start_time: '00:00', end_time: '23:59' }], app_ids: [] };
+	let tr = me.time_rules.map((t) => ({ ...t, weekdays: [...t.weekdays] }));
+	const sel = new Set(me.app_ids.map(Number));
+	const trHtml = () => tr.map((t, i) => `<div class="oftr" data-t="${i}"><div class="ofdays">${[1, 2, 3, 4, 5, 6, 0].map((w) => `<button type="button" class="chip${t.weekdays.includes(w) ? ' on' : ''}" data-w="${w}">${OF_DAY[w]}</button>`).join('')}</div>
+		<div class="oftime"><input class="input" type="time" data-s value="${esc(t.start_time)}" aria-label="开始"><span class="muted">到</span><input class="input" type="time" data-e value="${esc(t.end_time)}" aria-label="结束">${tr.length > 1 ? '<button type="button" class="btn sm" data-rm>去掉</button>' : ''}</div></div>`).join('');
+	const v = await modal(`<div class="sheethead"><h3>${isNew ? '添加规则' : esc(me.name)}</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<div class="fld"><div class="lb"><b>名字</b></div><div class="ctl"><input class="input" data-k="name" maxlength="16" value="${esc(me.name)}" placeholder="写作业时间"></div></div>
+		<div class="fld"><div class="lb"><b>对谁</b></div></div>
+		${d.limit ? '' : `<div class="chips" id="ofMode" style="display:grid;grid-template-columns:1fr 1fr"><button type="button" class="chip${me.mode === 1 ? ' on' : ''}" data-m="1">所有设备</button><button type="button" class="chip${me.mode === 2 ? ' on' : ''}" data-m="2">一台设备</button></div>`}
+		<div class="ctl${me.mode === 2 ? '' : ' hidden'}" data-dev style="margin-top:8px"><select class="input" data-k="mac">${d.users.map((u) => `<option value="${esc(u.mac)}"${u.mac === me.mac ? ' selected' : ''}>${esc(u.name || u.mac)}</option>`).join('')}</select></div>
+		<div class="fld"><div class="lb"><b>什么时候拦</b></div></div><div data-trs>${trHtml()}</div>
+		<button type="button" class="btn sm" data-addt style="margin-top:6px">加一段时间</button>
+		<div class="fld"><div class="lb"><b>拦哪些 App <span class="pill" data-n>${sel.size}</span></b></div></div>
+		<div class="ofapps">${d.classes.map((c) => `<div class="ofcls"><div class="ofcls-h">${esc(c.name)}</div><div class="chips">${c.apps.map((a) => `<button type="button" class="chip${sel.has(a.id) ? ' on' : ''}" data-a="${a.id}">${esc(a.name)}</button>`).join('')}</div></div>`).join('')}</div>
+		<div class="btngrid" style="margin:14px 0 0">${isNew ? '<button class="btn" data-v="close">取消</button>' : '<button class="btn danger" data-v="del">删除</button>'}<button class="btn primary" data-v="save">保存</button></div>`,
+	(m, close) => {
+		const box = m.querySelector('[data-trs]');
+		const sync = () => box.querySelectorAll('.oftr').forEach((el, i) => { tr[i].start_time = el.querySelector('[data-s]').value; tr[i].end_time = el.querySelector('[data-e]').value; });
+		m.addEventListener('click', (e) => {
+			const md = e.target.closest('#ofMode .chip');
+			if (md) { m.querySelectorAll('#ofMode .chip').forEach((b) => b.classList.toggle('on', b === md)); m.querySelector('[data-dev]').classList.toggle('hidden', md.dataset.m !== '2'); return; }
+			const w = e.target.closest('[data-w]');
+			if (w) { sync(); const t = tr[+w.closest('.oftr').dataset.t], n = +w.dataset.w; t.weekdays = t.weekdays.includes(n) ? t.weekdays.filter((x) => x !== n) : [...t.weekdays, n]; w.classList.toggle('on'); return; }
+			if (e.target.closest('[data-rm]')) { sync(); tr.splice(+e.target.closest('.oftr').dataset.t, 1); box.innerHTML = trHtml(); return; }
+			if (e.target.closest('[data-addt]')) { sync(); tr.push({ weekdays: [1, 2, 3, 4, 5], start_time: '20:00', end_time: '22:00' }); box.innerHTML = trHtml(); return; }
+			const a = e.target.closest('[data-a]');
+			if (a) { const id = +a.dataset.a; if (sel.has(id)) sel.delete(id); else sel.add(id); a.classList.toggle('on'); m.querySelector('[data-n]').textContent = sel.size; }
+		});
+		const save = m.querySelector('[data-v="save"]');
+		save.addEventListener('click', (e) => {
+			e.stopPropagation(); sync();
+			const name = m.querySelector('[data-k="name"]').value.trim();
+			if (!name) return m.querySelector('[data-k="name"]').focus();
+			if (!sel.size) return toast('至少选一个 App', true);
+			const mode = d.limit ? 2 : +(m.querySelector('#ofMode .chip.on')?.dataset.m || 1);
+			busy(save, async () => {
+				OF.d = await P('oaf_rule', { op: isNew ? 'add' : 'update', id: r?.id, name, mode, mac: mode === 2 ? m.querySelector('[data-k="mac"]').value : '', time_rules: tr, app_ids: [...sel] }, 20000);
+				close('ok'); ofRender(); toast(isNew ? '已添加「' + name + '」' : '已保存');
+			});
+		});
+	});
+	if (v === 'del' && (await confirmBox('删除规则「' + me.name + '」', '这些 App 不再按这条规则拦。', '删除', true))) {
+		try { OF.d = await P('oaf_rule', { op: 'del', id: r.id }); ofRender(); toast('已删除'); } catch (e) { toast(e.message, true); }
+	}
+}
+$('ofBody').addEventListener('click', (e) => {
+	if (e.target.id === 'ofGet') return stFind('luci-app-oaf');
+	if (e.target.id === 'ofOld') return go(validPage('k:admin/services/appfilter') ? 'k:admin/services/appfilter' : 'lfull');
+	if (e.target.id === 'ofAdd') return ofEdit(null);
+	const r = e.target.closest('.ofrow');
+	if (r) return ofEdit(OF.d.rules.find((x) => x.id === +r.dataset.id));
+	const u = e.target.closest('.ofuse');
+	if (u) return ofUsage(u.dataset.mac);
+});
+$('ofBody').addEventListener('change', async (e) => {
+	if (e.target.id !== 'ofOn') return;
+	const on = e.target.checked;
+	if (!on && !(await confirmBox('关掉应用过滤', '所有规则都不拦了。', '关掉', true))) { e.target.checked = true; return; }
+	try { OF.d = await P('oaf_switch', { on }); ofRender(); toast(on ? '已打开应用过滤' : '已关掉应用过滤'); } catch (er) { e.target.checked = !on; toast(er.message, true); }
+});
 
 /* ---------- 6.0 第 17 项：家人只管自己的设备 ----------
  * 只管自己的家人（没有「看和管所有设备」）：设备页只有自己名下的设备，「认领设备」选哪台是自己的，主账号确认后才算。
@@ -5229,6 +5351,7 @@ async function loadDev() {
 	$('dvOnline').textContent = online + ' 台在线';
 	$('dvCount').textContent = devices.length + ' 台';
 	const cl = $('dvClear'); if (cl) cl.classList.toggle('hidden', !off || !canPerm('parent'));
+	$('dvScan').classList.toggle('hidden', !canPerm('parent') || !!blk.own); // 6.0 第 26 项：只管自己设备的家人不扫
 	if (!devices.length) { $('dvList').innerHTML = `<div class="card empty">${blk.own ? '还没有你名下的设备：点「认领设备」' : '没有发现设备'}</div>`; return; }
 	$('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join('');
 	const ds = devices;
@@ -5245,6 +5368,12 @@ $('dvList').addEventListener('click', (e) => {
 	$('cnFilter').value = d.ip; go('conn');
 });
 $('dvClear') && $('dvClear').addEventListener('click', (e) => devClearOff(e.currentTarget));
+// 6.0 第 26 项：深度扫描，找出手动设了 IP、不走 DHCP 的设备（点了才扫）
+$('dvScan').addEventListener('click', (e) => busy(e.currentTarget, async () => {
+	const r = await P('lan_scan', {}, 90000), n = (r.fresh || []).length;
+	toast((n ? `扫到 ${n} 台新设备` : '没有新设备') + (r.part ? `（只扫了 ${r.range}）` : ''));
+	await loadDev();
+}, '扫描中'));
 
 // 名字点一下就在卡片上改（按 MAC 记，换 IP、路由器重启都还在）；回车或点别处保存，Esc 不改；留空就是改回原来的名字
 function devRenameInline(card, d) {
@@ -8786,7 +8915,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

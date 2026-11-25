@@ -86,6 +86,7 @@ async function loadDev() {
 	$('dvOnline').textContent = online + ' 台在线';
 	$('dvCount').textContent = devices.length + ' 台';
 	const cl = $('dvClear'); if (cl) cl.classList.toggle('hidden', !off || !canPerm('parent'));
+	$('dvScan').classList.toggle('hidden', !canPerm('parent') || !!blk.own); // 6.0 第 26 项：只管自己设备的家人不扫
 	if (!devices.length) { $('dvList').innerHTML = `<div class="card empty">${blk.own ? '还没有你名下的设备：点「认领设备」' : '没有发现设备'}</div>`; return; }
 	$('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join('');
 	const ds = devices;
@@ -102,6 +103,12 @@ $('dvList').addEventListener('click', (e) => {
 	$('cnFilter').value = d.ip; go('conn');
 });
 $('dvClear') && $('dvClear').addEventListener('click', (e) => devClearOff(e.currentTarget));
+// 6.0 第 26 项：深度扫描，找出手动设了 IP、不走 DHCP 的设备（点了才扫）
+$('dvScan').addEventListener('click', (e) => busy(e.currentTarget, async () => {
+	const r = await P('lan_scan', {}, 90000), n = (r.fresh || []).length;
+	toast((n ? `扫到 ${n} 台新设备` : '没有新设备') + (r.part ? `（只扫了 ${r.range}）` : ''));
+	await loadDev();
+}, '扫描中'));
 
 // 名字点一下就在卡片上改（按 MAC 记，换 IP、路由器重启都还在）；回车或点别处保存，Esc 不改；留空就是改回原来的名字
 function devRenameInline(card, d) {

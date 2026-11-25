@@ -1181,11 +1181,15 @@ const DI_DIR = replace(CL.DN_PATH, /devnames\.json$/, 'devimg');
 const DI_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+\/=]+$/;
 const di_file = (mac) => DI_DIR + '/' + replace(mac, /:/g, '') + '.txt';
 const DEV_ICONS = ['phone', 'tablet', 'laptop', 'pc', 'tv', 'console', 'watch', 'speaker', 'camera', 'printer', 'router', 'iot', 'other'];
+// 6.0 第 26 项：深度扫描找到的、不走 DHCP 的设备（手动设了 IP 的）记在这里，不在线了也留在列表里（30 天）
+const ARP_F = getenv('CMCP_ARP') || '/proc/net/arp', SCAN_F = ETC + '/scan.json';
 P.devices = function() {
-	let leases = lease_map();
+	let leases = lease_map(), scanned = CL.readj(SCAN_F, {});
+	if (type(scanned) != 'object') scanned = {};
+	for (let mac, x in scanned) if (type(x) == 'object' && x.ip && !leases[x.ip]) leases[x.ip] = { mac, name: CL.dev_label(mac, null), orig: null };
 	let arp = {}, wdev = {};
 	for (let w in ['wan', 'wan6']) try { let st = json(sh('ifstatus ' + w).out); if (st?.l3_device) wdev[st.l3_device] = 1; if (st?.device) wdev[st.device] = 1; } catch (e) {}
-	for (let l in split(readfile('/proc/net/arp') ?? '', '\n')) {
+	for (let l in split(readfile(ARP_F) ?? '', '\n')) {
 		let m = match(l, /^(\d+\.\d+\.\d+\.\d+)\s+\S+\s+(0x\S+)\s+([0-9a-fA-F:]{17})\s+\S+\s+(\S+)/);
 		if (m && m[2] != '0x0' && m[3] != '00:00:00:00:00:00' && !wdev[m[4]]) arp[m[1]] = { mac: lc(m[3]), dev: m[4] };
 	}
@@ -2859,7 +2863,7 @@ const FAM_GROUPS = {
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
-	parent: ['rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
+	parent: ['oaf_get', 'oaf_switch', 'oaf_rule', 'lan_scan', 'rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
 	proxy: ['oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
@@ -5984,6 +5988,106 @@ P.lan_host_set = function(a) {
 	bg(f ? 'echo /etc/init.d/dnsmasq reload >> ' + shq(f) : '/etc/init.d/dnsmasq reload');
 	return { changed: true, what, hosts: ls_hosts() };
 };
+/* ---------------- 6.0 第 23 项：应用过滤（OAF）——规则 + 每台设备的 App 使用记录 ----------------
+ * OAF 7（fanchmwrt，ubus 对象 fwx）：规则、开关、使用记录都在面板里（接口在用户路由器上看过：fwx common {api, data}）。
+ * OAF 6 及更早（ubus 对象 appfilter / uci appfilter）：面板不改，说清楚、给原版页面入口。
+ * 没装：用户 11/26 定，给软件中心一键安装的入口；软件源里没有就说这个固件不支持。
+ * 使用记录只有主账号能看（oaf_usage 不在任何权限组里 = 只有主账号）；家人能改规则（parent 组），只管自己设备的家人只能给自己的设备设。 */
+const OAF_UBUS = getenv('CMCP_OAF_UBUS') || 'ubus';
+function oaf_kind() {
+	let l = sh(OAF_UBUS + ' list 2>/dev/null').out;
+	if (match(l, /(^|\n)fwx(\n|$)/)) return 'fwx';
+	if (match(l, /(^|\n)appfilter(\n|$)/) || stat('/usr/bin/oafd') || stat('/etc/init.d/appfilter')) return 'legacy';
+	return null;
+}
+function fwx(api, data) {
+	let r = null;
+	try { r = json(sh(sprintf('%s -t 15 call fwx common %s 2>/dev/null', OAF_UBUS, shq(sprintf('%J', { CopyRight: 'www.fanchmwrt.com', api, data: data ?? {} })))).out); } catch (e) {}
+	return type(r) == 'object' && r.code == 2000 ? (r.data ?? {}) : null;
+}
+// 分类名：OAF 给的是英文
+const OAF_CLASS = { Chat: '聊天', Game: '游戏', Video: '视频', Shopping: '购物', Music: '音乐', Download: '下载', Website: '网站', Social: '社交', News: '新闻', Live: '直播', Reading: '阅读', Tools: '工具', Finance: '理财', Education: '学习', Travel: '出行', Map: '地图', Email: '邮件', Office: '办公', Vpn: 'VPN', VPN: 'VPN', Other: '其他' };
+function oaf_classes() {
+	let d = fwx('class_list'), out = [];
+	for (let c in (d?.class_list ?? [])) {
+		let apps = [];
+		for (let a in (c.app_list ?? [])) { let p = split('' + a, ','); if (+p[0] > 0) push(apps, { id: +p[0], name: p[1] ?? ('' + p[0]) }); }
+		if (length(apps)) push(out, { name: OAF_CLASS[c.name] ?? c.name, apps });
+	}
+	return out;
+}
+function oaf_avail() {
+	let pm = app_pm();
+	if (!pm) return false;
+	let I = st_index(pm);
+	if (I.age == null) return null;
+	return !!(I.idx['luci-app-oaf'] || I.idx['app-meta-oaf'] || I.idx['luci-app-appfilter']);
+}
+P.oaf_get = function() {
+	let k = oaf_kind();
+	if (!k) return { kind: null, avail: oaf_avail() };
+	if (k == 'legacy') return { kind: 'legacy' };
+	let rules = fwx('get_filter_rules')?.list ?? [], adv = fwx('get_app_filter_adv'), users = fwx('get_all_users')?.list ?? [];
+	if (own_only()) { let mine = own_mine(); rules = filter(rules, (r) => r.mode == 2 && mine[lc(r.user_mac ?? '')]); users = filter(users, (u) => mine[lc(u.mac ?? '')]); }
+	return {
+		kind: 'fwx', on: adv ? +adv.enable == 1 : null, owner: ROLE == 'owner', limit: own_only(),
+		rules: map(rules, (r) => ({ id: +r.id, name: r.name ?? '', mode: +r.mode, mac: lc(r.user_mac ?? ''), time_rules: r.time_rules ?? [], app_ids: r.app_ids ?? [] })),
+		classes: oaf_classes(), users: map(users, (u) => ({ mac: lc(u.mac ?? ''), name: u.nickname || u.hostname || '', online: !!u.online }))
+	};
+};
+P.oaf_switch = function(a) {
+	if (oaf_kind() != 'fwx') die('在原版页面里改');
+	if (own_only()) die('只有能管所有设备的家人能开关');
+	if (fwx('set_app_filter_adv', { enable: a?.on ? 1 : 0 }) == null) die('应用过滤没响应，稍后再试');
+	return P.oaf_get();
+};
+// a: { op: add | update | del, id, name, mode（1 所有设备 / 2 一台设备）, mac, time_rules: [{ weekdays: [0..6，0 是周日], start_time, end_time }], app_ids }
+P.oaf_rule = function(a) {
+	if (oaf_kind() != 'fwx') die('在原版页面里改');
+	let op = a?.op, cur = null, rules = fwx('get_filter_rules')?.list ?? [];
+	if (index(['add', 'update', 'del'], op) < 0) die('不支持的操作');
+	if (op != 'add') { for (let r in rules) if (+r.id == +a?.id) cur = r; if (!cur) die('没有这条规则'); }
+	// 只管自己设备的家人：只能动给自己设备的规则
+	if (own_only() && cur && !(cur.mode == 2 && own_mine()[lc(cur.user_mac ?? '')])) die('这条规则管的不只是你的设备，找主账号改');
+	if (op == 'del') {
+		if (fwx('delete_filter_rule', { id: +cur.id }) == null) die('删除失败，稍后再试');
+		return P.oaf_get();
+	}
+	let name = trim('' + (a?.name ?? ''));
+	if (!length(name) || length(name) > 48 || match(name, /[\x01-\x1f\x7f<>"]/)) die('名字不对（最多 16 个字）');
+	let mode = +a?.mode == 2 ? 2 : 1, mac = lc(trim('' + (a?.mac ?? '')));
+	if (mode == 1 && own_only()) die('你只能给自己的设备设规则');
+	if (mode == 2) { if (!match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('选一台设备'); own_check(mac); }
+	let tr = [];
+	for (let t in (type(a?.time_rules) == 'array' ? slice(a.time_rules, 0, 8) : [])) {
+		let wd = [];
+		for (let w in (type(t?.weekdays) == 'array' ? t.weekdays : [])) if (+w >= 0 && +w <= 6 && index(wd, +w) < 0) push(wd, +w);
+		let s = '' + (t?.start_time ?? ''), e = '' + (t?.end_time ?? '');
+		if (!length(wd)) die('每段时间至少选一天');
+		if (!match(s, /^([01][0-9]|2[0-3]):[0-5][0-9]$/) || !match(e, /^([01][0-9]|2[0-3]):[0-5][0-9]$/)) die('时间不对，比如 08:00');
+		if (s >= e) die('开始时间要比结束时间早（跨夜的分成两段）');
+		push(tr, { weekdays: sort(wd, (x, y) => x - y), start_time: s, end_time: e });
+	}
+	if (!length(tr)) die('至少设一段时间');
+	let ids = [];
+	for (let i in (type(a?.app_ids) == 'array' ? slice(a.app_ids, 0, 500) : [])) if (+i > 0 && index(ids, +i) < 0) push(ids, +i);
+	if (!length(ids)) die('至少选一个 App');
+	if (op == 'add' && length(rules) >= 32) die('最多 32 条规则');
+	let uname = '';
+	if (mode == 2) for (let u in (fwx('get_all_users')?.list ?? [])) if (lc(u.mac ?? '') == mac) uname = u.nickname || u.hostname || '';
+	let d = { name, mode, time_rules: tr, app_ids: ids, user_mac: mode == 2 ? mac : '', user_name: uname };
+	if (op == 'update') d.id = +cur.id;
+	if (fwx(op == 'add' ? 'add_filter_rule' : 'update_filter_rule', d) == null) die('保存失败，稍后再试');
+	return P.oaf_get();
+};
+// 一台设备用了哪些 App、各用了多久（今天，OAF 自己的统计）
+P.oaf_usage = function(a) {
+	if (oaf_kind() != 'fwx') die('在原版页面里看');
+	let mac = lc(trim('' + (a?.mac ?? '')));
+	if (!match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('选一台设备');
+	let l = fwx('dev_visit_time', { mac })?.list ?? [];
+	return { mac, list: sort(map(filter(l, (x) => +x.t > 0), (x) => ({ id: +x.id, name: x.name ?? '', t: +x.t })), (p, q) => q.t - p.t) };
+};
 /* ---------------- 6.0 第 20 项：每台设备限速 ----------------
  * 设置存 /etc/claude-mcp/ratelimit.json（按 MAC），规则由 cmcp-ratelimit 生成（fw4 / fw3 都行，见那个脚本）；看门狗每 30 秒跟着设备的 IP 更新。
  * 子账号只能限自己名下的设备（own_check）。 */
@@ -6020,6 +6124,41 @@ P.rl_set = function(a) {
 	cmcp_writej(RL_F, o);
 	sh(SBIN + '/cmcp-ratelimit apply >/dev/null 2>&1');
 	return P.rl_get();
+};
+/* ---------------- 6.0 第 26 项：局域网深度扫描（找出没走 DHCP、手动设了 IP 的设备） ----------------
+ * 用户 11/26 定：设备页点「扫描」才扫，不定时扫。只扫家里网段（太大的网段只扫路由器所在的那个 /24）：
+ * 对每个地址 ping 一下（设备不回 ping 也会回 ARP），然后看 ARP 表；DHCP 里没有的记进 scan.json，设备列表里一直留着（30 天没再见到就删）。
+ * 一次最多同时 64 个 ping，小内存路由器也扛得住。 */
+P.lan_scan = function() {
+	if (own_only()) die('只有能看所有设备的家人能扫描');
+	let lan = pf_lan();
+	if (!lan) die('没有家里网络（lan）的设置');
+	let pl = lan.pl, base, size, part = null;
+	if (pl < 22) { pl = 24; part = true; }
+	size = pow2(32 - pl); base = v4int(lan.ip) - v4int(lan.ip) % size;
+	let ips = [];
+	for (let i = 1; i < size - 1; i++) { let ip = ls_int2ip(base + i); if (ip != lan.ip) push(ips, ip); }
+	let pb = getenv('CMCP_PING') || 'ping';
+	for (let i = 0; i < length(ips); i += 64) {
+		let c = [];
+		for (let ip in slice(ips, i, i + 64)) push(c, sprintf('%s -c 1 -W 1 %s >/dev/null 2>&1 &', pb, ip));
+		sh(join(' ', c) + ' wait');
+	}
+	let leases = lease_map(), known = {}, sc = cmcp_readj(SCAN_F, {}), now = time(), found = 0, fresh = [];
+	if (type(sc) != 'object') sc = {};
+	for (let ip, l in leases) if (l.mac) known[l.mac] = 1;
+	for (let l in split(readfile(ARP_F) ?? '', '\n')) {
+		let m = match(l, /^(\d+\.\d+\.\d+\.\d+)\s+\S+\s+(0x\S+)\s+([0-9a-fA-F:]{17})\s+\S+\s+(\S+)/);
+		if (!m || m[2] == '0x0' || m[3] == '00:00:00:00:00:00' || !cidr_has(lan.ip, lan.pl, m[1]) || m[1] == lan.ip) continue;
+		found++;
+		let mac = lc(m[3]);
+		if (known[mac]) continue;
+		if (!sc[mac]) push(fresh, { ip: m[1], mac, name: CL.dev_label(mac, null) });
+		sc[mac] = { ip: m[1], at: now };
+	}
+	for (let mac in keys(sc)) if (type(sc[mac]) != 'object' || now - (+sc[mac].at || 0) > 30 * 86400 || known[mac]) delete sc[mac];
+	cmcp_writej(SCAN_F, sc);
+	return { found, fresh, range: ls_int2ip(base) + '/' + pl, part };
 };
 /* ---------------- 6.0 第 22 项：无线中继（连上级 Wi-Fi 上网，WISP） ----------------
  * 用户 11/26 定：只做「连上级 Wi-Fi 上网」。在一个频段上加一个客户端（sta），接到新的上网接口 wwan（DHCP），放进防火墙的外网区域；

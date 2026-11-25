@@ -50,7 +50,7 @@ const server = http.createServer((req, res) => {
 	ok('点「服务」里的 OpenClash：展开「代理 › OpenClash 原版」', await page.evaluate(() => document.querySelector('#sidenav .ng[data-g="代理"]').classList.contains('open') && document.querySelector('#sidenav .ng[data-g="代理/OpenClash 原版"]').classList.contains('open')));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'menu-03-jump.png') });
 	ok('PassWall 原版新增的子页面（规则列表）也补上了', (await page.locator('#sidenav [data-g="代理/PassWall"] button[data-p="k:admin/services/passwall/rule_list"]').count()) === 1);
-	ok('OAF 原版新增的「关于」也补上了', (await page.locator('#sidenav [data-g="服务/应用过滤"] button[data-p="k:admin/services/oaf/about"]').count()) === 1);
+	ok('OAF 原版新增的「关于」也补上了', (await page.locator('#sidenav [data-g="服务/OAF 原版"] button[data-p="k:admin/services/oaf/about"]').count()) === 1);
 	ok('「工具」里的 LuCI 首页还在（菜单里没有但能打开）', (await page.locator('#sidenav button[data-p="k:admin/quickstart"]').count()) === 1);
 	await page.fill('#sideQ', '终端'); await page.waitForTimeout(300);
 	ok('搜「终端」不会出现两个', (await page.locator('#sidenav button[data-p="term"]').count()) === 1);

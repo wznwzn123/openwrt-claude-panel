@@ -311,7 +311,7 @@ const FAM_GROUPS = {
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
-	parent: ['rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
+	parent: ['oaf_get', 'oaf_switch', 'oaf_rule', 'lan_scan', 'rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
 	proxy: ['oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；

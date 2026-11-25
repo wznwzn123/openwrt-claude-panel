@@ -6,11 +6,15 @@ const DI_DIR = replace(CL.DN_PATH, /devnames\.json$/, 'devimg');
 const DI_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+\/=]+$/;
 const di_file = (mac) => DI_DIR + '/' + replace(mac, /:/g, '') + '.txt';
 const DEV_ICONS = ['phone', 'tablet', 'laptop', 'pc', 'tv', 'console', 'watch', 'speaker', 'camera', 'printer', 'router', 'iot', 'other'];
+// 6.0 第 26 项：深度扫描找到的、不走 DHCP 的设备（手动设了 IP 的）记在这里，不在线了也留在列表里（30 天）
+const ARP_F = getenv('CMCP_ARP') || '/proc/net/arp', SCAN_F = ETC + '/scan.json';
 P.devices = function() {
-	let leases = lease_map();
+	let leases = lease_map(), scanned = CL.readj(SCAN_F, {});
+	if (type(scanned) != 'object') scanned = {};
+	for (let mac, x in scanned) if (type(x) == 'object' && x.ip && !leases[x.ip]) leases[x.ip] = { mac, name: CL.dev_label(mac, null), orig: null };
 	let arp = {}, wdev = {};
 	for (let w in ['wan', 'wan6']) try { let st = json(sh('ifstatus ' + w).out); if (st?.l3_device) wdev[st.l3_device] = 1; if (st?.device) wdev[st.device] = 1; } catch (e) {}
-	for (let l in split(readfile('/proc/net/arp') ?? '', '\n')) {
+	for (let l in split(readfile(ARP_F) ?? '', '\n')) {
 		let m = match(l, /^(\d+\.\d+\.\d+\.\d+)\s+\S+\s+(0x\S+)\s+([0-9a-fA-F:]{17})\s+\S+\s+(\S+)/);
 		if (m && m[2] != '0x0' && m[3] != '00:00:00:00:00:00' && !wdev[m[4]]) arp[m[1]] = { mac: lc(m[3]), dev: m[4] };
 	}

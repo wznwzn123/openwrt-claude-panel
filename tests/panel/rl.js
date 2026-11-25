@@ -8,9 +8,10 @@ const SHOT = path.join(__dirname, 'shots'); fs.mkdirSync(SHOT, { recursive: true
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const TV = '11:22:33:44:55:66';
-const S = { calls: [], devs: {}, caps: { ok: true, mode: 'nft', why: null, warn: null } };
+const S = { scan: { found: 5, fresh: [{ ip: '192.168.5.77', mac: 'aa:00:00:00:00:77' }, { ip: '192.168.5.78', mac: 'aa:00:00:00:00:78' }], range: '192.168.5.0/24', part: false }, calls: [], devs: {}, caps: { ok: true, mode: 'nft', why: null, warn: null } };
 function handle(m, p) {
 	S.calls.push({ m, p });
+	if (m === 'lan_scan') return S.scan;
 	if (m === 'rl_get') return { devs: S.devs, caps: S.caps };
 	if (m === 'rl_set') { if (p.down || p.up) S.devs[p.mac] = { down: p.down, up: p.up, name: p.name || null }; else delete S.devs[p.mac]; return { devs: S.devs, caps: S.caps }; }
 	return mock.respond(m, p);
@@ -73,6 +74,15 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		await page.locator('#dvList [data-i="1"] [data-more]').click(); await W(500);
 		await page.locator('.modal').last().locator('[data-v="rl"]').click(); await W(600);
 		ok('用不了的固件：直接说原因，不弹设置', /缺 iptables 限速模块/.test(await page.textContent('#toast')) && !(await page.locator('.modal [data-r="down"]').count()));
+		// 6.0 第 26 项：深度扫描
+		await page.locator('.modal').last().locator('[data-v="close"]').click().catch(() => {}); await W(400);
+		ok('设备页有「扫描」按钮', await page.locator('#dvScan').isVisible());
+		const n0 = S.calls.filter((c) => c.m === 'black_state').length;
+		await page.click('#dvScan'); await W(900);
+		ok('点「扫描」：扫完提示扫到几台新设备，刷新列表', S.calls.some((c) => c.m === 'lan_scan') && /扫到 2 台新设备/.test(await page.textContent('#toast')) && S.calls.filter((c) => c.m === 'black_state').length > n0);
+		S.scan = { found: 3, fresh: [], range: '10.0.1.0/24', part: true };
+		await page.click('#dvScan'); await W(900);
+		ok('没有新设备、网段太大只扫了一段：都说清楚', /没有新设备（只扫了 10\.0\.1\.0\/24）/.test(await page.textContent('#toast')));
 		await ctx.close();
 	}
 	await browser.close(); server.close();

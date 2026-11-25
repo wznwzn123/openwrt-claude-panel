@@ -25,7 +25,7 @@ function nd_ping(addr) {
 	if (m) r.ip = m[1];
 	for (let l in split(t, '\n')) { let x = match(l, /time[=<]([0-9.]+) ?ms/); if (x) push(r.times, +x[1]); }
 	m = match(t, /([0-9]+) packets transmitted, ([0-9]+) (packets )?received/);
-	if (m) { r.sent = +m[1]; r.recv = +m[2]; r.loss = r.sent ? +sprintf("%.0f", (r.sent - r.recv) * 100 / r.sent) : null; }
+	if (m) { r.sent = +m[1]; r.recv = +m[2]; r.loss = r.sent ? +sprintf("%.0f", (r.sent - r.recv) * 100.0 / r.sent) : null; }
 	m = match(t, /min\/avg\/max[^=]*= *([0-9.]+)\/([0-9.]+)\/([0-9.]+)/);
 	if (m) { r.min = +m[1]; r.avg = +m[2]; r.max = +m[3]; }
 	if (!r.sent && !length(r.times)) die('Ping 没有结果：' + substr(trim(t), 0, 200));

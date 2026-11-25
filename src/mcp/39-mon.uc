@@ -18,11 +18,11 @@ P.mon = function() {
 		let tot = 0; for (let i = 1; i <= 8; i++) tot += +(m[i] || 0);
 		let idle = +m[4] + +m[5], CF = '/tmp/cmcp_moncpu.json', p = null;
 		try { p = json(readfile(CF) ?? 'null'); } catch (e) {}
-		if (p && tot > p.tot) o.cpu = +sprintf('%.0f', 100 - (idle - p.idle) * 100 / (tot - p.tot));
+		if (p && tot > p.tot) o.cpu = +sprintf('%.0f', 100 - (idle - p.idle) * 100.0 / (tot - p.tot));
 		writefile(CF, sprintf('%J', { tot, idle }));
 	}
 	let mi = readfile(MON_R + '/proc/meminfo') ?? '', mt = +(match(mi, /MemTotal:[ \t]+([0-9]+)/)?.[1] ?? 0), ma = +(match(mi, /MemAvailable:[ \t]+([0-9]+)/)?.[1] ?? 0);
-	if (mt) o.mem = +sprintf('%.0f', (mt - ma) * 100 / mt);
+	if (mt) o.mem = +sprintf('%.0f', (mt - ma) * 100.0 / mt);
 	try { let l = P.live(); o.rx = l.rx; o.tx = l.tx; } catch (e) {}
 	return o;
 };

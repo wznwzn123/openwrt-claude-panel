@@ -483,6 +483,8 @@ button.file{width:100%;text-align:left;color:var(--text);font-size:15px}button.f
 .kv>span:first-child{color:var(--muted);flex:none}.kv>span:last-child{text-align:right;font-weight:600;overflow-wrap:anywhere;min-width:0;font-variant-numeric:tabular-nums}
 /* 提示：iOS HUD 胶囊 */
 .toast{position:fixed;z-index:100;top:calc(var(--toph,calc(var(--sat,env(safe-area-inset-top)) + 56px)) + 10px);left:0;right:0;margin:0 auto;width:max-content;max-width:min(360px,calc(100% - 24px));display:flex;align-items:center;gap:9px;text-align:left;border-radius:16px;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);color:var(--text);padding:10px 16px 10px 12px;font-size:13px;font-weight:600;line-height:1.4;text-wrap:pretty;box-shadow:0 10px 30px rgba(0,0,0,.12),inset 0 0 0 .5px rgba(0,0,0,.08);white-space:pre-line;overflow:hidden;cursor:pointer;transform-origin:top center;-webkit-user-select:none;user-select:none}
+/* 软件中心（第 19 项） */
+.strefresh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;font-size:13px}.strow .btn{margin-left:10px;flex:none}
 /* 实时监控（第 27 项） */
 .mnhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.mnhead b{font-size:15px}.mnhead span{display:flex;gap:10px;font-variant-numeric:tabular-nums;white-space:nowrap}.mnhead em{font-style:normal;font-weight:600}.mnhead small{font-size:11px;margin-left:2px;font-weight:500}
 .mnchart{display:block;width:100%;height:70px;margin-top:10px}#mnLoad{margin-top:10px;grid-template-columns:repeat(3,minmax(0,1fr))}#p-mon>.card+.card,#ndOut>.card+.card,#ndOut>.card+.sectitle{margin-top:12px}
@@ -1272,6 +1274,15 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 </section>
 
 <!-- 6.0 第 83 项：应用管理 -->
+<section class="page" id="p-store">
+	<section class="card">
+		<div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input id="stFilter" class="input" placeholder="搜索" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="pill" id="stFree" style="align-self:center">—</span></div>
+		<div class="chips" id="stView" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr))"><button class="chip on" data-v="plugin">插件</button><button class="chip" data-v="upd" id="stUpd">可更新</button></div>
+		<div class="strefresh"><span class="muted" id="stAge">—</span><button class="btn sm" id="stRefresh">更新软件源</button></div>
+	</section>
+	<div class="sectitle"><b id="stTitle">插件</b><span class="pill" id="stCount">—</span></div>
+	<section class="card list"><div id="stList"><div class="empty">读取中…</div></div></section>
+</section>
 <section class="page" id="p-pf">
 	<section class="card"><div class="pfwan" id="pfWan"><b>外网地址</b><span class="muted">—</span></div></section>
 	<div class="sectitle"><b>端口转发 <span class="pill" id="pfCount">—</span></b><button class="btn sm" id="pfAdd">添加</button></div>
@@ -1374,7 +1385,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -1810,7 +1821,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -1864,6 +1875,7 @@ const NAV = [
 	{ g: '系统', items: [
 		{ p: 'more', i: '⌘', t: '系统操作' },
 		{ p: 'apps', i: '⬚', t: '应用管理', kw: '插件 卸载 软件 安装时间 最近装的' },
+		{ p: 'store', i: '⬇', t: '软件中心', kw: '安装 插件 更新 软件包 下载 opkg apk 软件源' },
 		['admin/system/system', '系统设置', '⚙'],
 		{ t: '管理权', i: '⚿', kids: [['admin/system/admin/password', '路由器密码'], ['admin/system/admin/dropbear', 'SSH 访问'], ['admin/system/admin/sshkeys', 'SSH 密钥'], ['admin/system/admin/uhttpd', 'HTTP(S) 访问'], ['admin/system/admin/repokeys', '软件源公钥']] },
 		['admin/package-manager', '软件包', '⬚'],
@@ -1983,7 +1995,7 @@ const pageTitle = (p) => TITLES[p] || NAVK[p]?.t || '';
 let navOpen;
 try { navOpen = JSON.parse(store.get('rp_nav') || 'null'); } catch (e) {}
 if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 1, '网络': 1, '工具': 1 };
-const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"], "ndiag": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "mon": ["<path d=\"M3 13h3.5l2.5-6 4 11 3-8 2 3H21\"/>", "#ff9500"], "pf": ["<path d=\"M4 12h12\"/><path d=\"M12 7l5 5-5 5\"/><path d=\"M20 5v14\"/>", "#5856d6"]};
+const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"], "ndiag": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "mon": ["<path d=\"M3 13h3.5l2.5-6 4 11 3-8 2 3H21\"/>", "#ff9500"], "pf": ["<path d=\"M4 12h12\"/><path d=\"M12 7l5 5-5 5\"/><path d=\"M20 5v14\"/>", "#5856d6"], "store": ["<path d=\"M12 4v11\"/><path d=\"M7 10l5 5 5-5\"/><path d=\"M5 20h14\"/>", "#007aff"]};
 // 6.0 第 14 项：Wi-Fi 页的图标（侧边栏、快捷操作里用）
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
@@ -4418,6 +4430,78 @@ async function pushTag() {
 		store.set('rp_push_uid', k);
 	} catch (e) {}
 }
+/* ---------- 6.0 第 19 项：软件中心（搜索、安装、更新） ----------
+   只列固件自带软件源里的；默认看插件，「可更新」单独一类；搜索时什么包都搜。
+   安装、更新、更新软件源都在路由器后台跑，这里每 2 秒问一次进度；卸载在「应用管理」 */
+let SC = null, stView = 'plugin', stQ = '', stPollT = 0, stSeq = 0;
+const stAge = (s) => (s == null ? '' : s < 3600 ? '刚更新' : s < 86400 ? Math.floor(s / 3600) + ' 小时前更新' : Math.floor(s / 86400) + ' 天前更新');
+async function loadStore() {
+	const seq = ++stSeq;
+	const r = await P('store_list', stQ ? { q: stQ } : {}, 30000);
+	if (seq !== stSeq) return;
+	SC = r;
+	setStatus(true, '在线');
+	stDraw();
+	if (r.state && r.state.st === 'run') stPoll();
+}
+function stDraw() {
+	const r = SC;
+	$('stAge').textContent = r.age == null ? '软件源没更新过' : stAge(r.age);
+	$('stFree').textContent = r.free != null ? '剩 ' + apSize(r.free * 1024) : r.pm;
+	$('stUpd').textContent = '可更新 ' + r.upd;
+	$$('#stView .chip').forEach((b) => b.classList.toggle('on', !stQ && b.dataset.v === stView));
+	const run = r.state && r.state.st === 'run';
+	$('stRefresh').disabled = run;
+	const l = stQ ? r.list : r.list.filter((x) => (stView === 'upd' ? x.upd : x.plugin));
+	$('stTitle').textContent = stQ ? '搜索结果' : stView === 'upd' ? '可更新' : '插件';
+	$('stCount').textContent = stQ && r.total > r.list.length ? r.list.length + '+' : l.length;
+	const owner = ME_ROLE.role !== 'sub';
+	$('stList').innerHTML = r.age == null && !r.list.length ? `<div class="empty">软件源没更新过<br><button class="btn sm blue" style="margin-top:10px" data-ref>更新软件源</button></div>`
+		: l.length ? l.slice(0, 200).map((x) => `<div class="file strow" data-n="${esc(x.name)}"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.installed ? ` <span class="pill" style="font-size:11px">${x.upd ? '可更新' : '已装'}</span>` : ''}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(x.name)} · ${esc(x.upd ? x.installed + ' → ' + x.ver : x.ver)}${x.size ? ' · ' + apSize(x.size) : ''}</span></div>
+			${owner && !run ? (!x.installed ? '<button class="btn sm" data-act="install">安装</button>' : x.upd ? '<button class="btn sm" data-act="upgrade">更新</button>' : '') : ''}</div>`).join('')
+		: `<div class="empty">${stQ ? '没有符合的' : stView === 'upd' ? '都是最新的' : '没有'}</div>`;
+}
+// 等后台做完：成功 / 失败都说一声，然后刷新列表
+function stPoll() {
+	clearTimeout(stPollT);
+	stPollT = setTimeout(async () => {
+		let s = null;
+		try { s = (await P('store_state', {}, 8000)).state; } catch (e) { return stPoll(); }
+		if (s && s.st === 'run') return stPoll();
+		if (s && s.st === 'ok') toast('已' + (s.what || '完成'));
+		else if (s && s.st === 'fail') toast((s.what || '') + '没成功：' + (s.msg || (s.log || '').split('\n').filter(Boolean).pop() || '原因不明'), true);
+		if (page === 'store') loadStore().catch(() => {});
+	}, 2000);
+}
+async function stAct(act, x) {
+	if (act === 'install') {
+		const need = x.size ? '下载 ' + apSize(x.size) + (SC.free != null ? '，闪存剩 ' + apSize(SC.free * 1024) : '') + '。' : '';
+		if (!(await confirmBox('安装「' + x.title + '」', need || '装好后在菜单「服务」里。', '安装'))) return;
+	} else if (!(await confirmBox('更新「' + x.title + '」', x.installed + ' → ' + x.ver + '。更新时这个插件会停一下。', '更新'))) return;
+	await busy(null, async () => {
+		await P(act === 'install' ? 'store_install' : 'store_upgrade', { name: x.name }, 30000);
+		toast((act === 'install' ? '正在安装' : '正在更新') + '「' + x.title + '」…');
+		SC.state = { st: 'run' }; stDraw(); stPoll();
+	});
+}
+async function stRefresh() {
+	await busy($('stRefresh'), async () => {
+		await P('store_refresh', {}, 15000);
+		toast('正在更新软件源…');
+		SC.state = { st: 'run' }; stDraw(); stPoll();
+	}, false);
+}
+$('stRefresh').onclick = stRefresh;
+let stQT = 0;
+$('stFilter').addEventListener('input', () => { clearTimeout(stQT); stQT = setTimeout(() => { stQ = $('stFilter').value.trim(); loadStore().catch(handleErr); }, 350); });
+$$('#stView .chip').forEach((b) => (b.onclick = () => { stView = b.dataset.v; if (stQ) { stQ = ''; $('stFilter').value = ''; loadStore().catch(handleErr); } else stDraw(); }));
+$('stList').addEventListener('click', (e) => {
+	if (e.target.closest('[data-ref]')) return stRefresh();
+	const b = e.target.closest('[data-act]');
+	if (!b) return;
+	const x = SC.list.find((y) => y.name === b.closest('.strow').dataset.n);
+	if (x) stAct(b.dataset.act, x);
+});
 /* =====================================================================
    设备 / 连接 / 系统（沿用）
    ===================================================================== */
@@ -7773,7 +7857,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

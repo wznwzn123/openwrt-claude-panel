@@ -465,6 +465,10 @@ button.file{width:100%;text-align:left;color:var(--text);font-size:15px}button.f
 .kv>span:first-child{color:var(--muted);flex:none}.kv>span:last-child{text-align:right;font-weight:600;overflow-wrap:anywhere;min-width:0;font-variant-numeric:tabular-nums}
 /* 提示：iOS HUD 胶囊 */
 .toast{position:fixed;z-index:100;top:calc(var(--toph,calc(var(--sat,env(safe-area-inset-top)) + 56px)) + 10px);left:0;right:0;margin:0 auto;width:max-content;max-width:min(360px,calc(100% - 24px));display:flex;align-items:center;gap:9px;text-align:left;border-radius:16px;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);color:var(--text);padding:10px 16px 10px 12px;font-size:13px;font-weight:600;line-height:1.4;text-wrap:pretty;box-shadow:0 10px 30px rgba(0,0,0,.12),inset 0 0 0 .5px rgba(0,0,0,.08);white-space:pre-line;overflow:hidden;cursor:pointer;transform-origin:top center;-webkit-user-select:none;user-select:none}
+/* 实时监控（第 27 项） */
+.mnhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.mnhead b{font-size:15px}.mnhead span{display:flex;gap:10px;font-variant-numeric:tabular-nums;white-space:nowrap}.mnhead em{font-style:normal;font-weight:600}.mnhead small{font-size:11px;margin-left:2px;font-weight:500}
+.mnchart{display:block;width:100%;height:70px;margin-top:10px}#mnLoad{margin-top:10px;grid-template-columns:repeat(3,minmax(0,1fr))}#p-mon>.card+.card,#ndOut>.card+.card,#ndOut>.card+.sectitle{margin-top:12px}
+#mnConn.ndbad{color:var(--dangert)}.stat4 .card.tap{cursor:pointer}.stat4 .card.tap:active{transform:scale(.97)}
 /* 网络诊断（第 21 项） */
 .ndst{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}.ndst b{display:block;font-size:19px;font-weight:700;white-space:nowrap}.ndst span{font-size:12px;color:var(--muted)}.ndst .ndbad{color:var(--dangert)}.ndst .ndwarn{color:var(--warnt)}
 .ndhop{width:26px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums}

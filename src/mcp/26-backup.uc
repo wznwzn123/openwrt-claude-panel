@@ -306,7 +306,7 @@ const EMERG_VIA = '路由器终端的应急登录码';
 const LAN_VIA_LUCI = '原版后台（局域网）', LAN_VIA_PW = '路由器后台密码（局域网）';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'mon', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],

@@ -2843,7 +2843,7 @@ const EMERG_VIA = '路由器终端的应急登录码';
 const LAN_VIA_LUCI = '原版后台（局域网）', LAN_VIA_PW = '路由器后台密码（局域网）';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'mon', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
@@ -5181,6 +5181,34 @@ T.packages = function(a) {
 		if (no) die('不能卸载 ' + a.name + '：' + no);
 	}
 	return APP_PK0(a);
+};
+
+/* ---------------- 6.0 第 27 项：实时监控（网速、负载、连接数） ----------------
+ * 面板每 2 秒要一次，曲线在面板里画（路由器不存历史，不写闪存）。
+ * 连接数是系统的连接跟踪（conntrack），不只是代理的连接；满了新连接会被丢，所以把上限也给出去。
+ * 测试用环境变量：CMCP_MON_ROOT（/proc 前面加的目录） */
+const MON_R = getenv('CMCP_MON_ROOT') || '';
+P.mon = function() {
+	let o = { load: null, cpus: 1, cpu: null, conn: null, conn_max: null, rx: null, tx: null, mem: null };
+	let la = split(trim(readfile(MON_R + '/proc/loadavg') ?? ''), ' ');
+	if (length(la) >= 3) o.load = [+la[0], +la[1], +la[2]];
+	o.cpus = length(filter(split(readfile(MON_R + '/proc/cpuinfo') ?? '', '\n'), (l) => match(l, /^processor[ \t]*:/))) || 1;
+	let c = trim(readfile(MON_R + '/proc/sys/net/netfilter/nf_conntrack_count') ?? ''), cm = trim(readfile(MON_R + '/proc/sys/net/netfilter/nf_conntrack_max') ?? '');
+	if (match(c, /^[0-9]+$/)) o.conn = +c;
+	if (match(cm, /^[0-9]+$/)) o.conn_max = +cm;
+	// CPU 使用率：跟上一次（2 秒前）比
+	let m = match(readfile(MON_R + '/proc/stat') ?? '', /^cpu +([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+) ([0-9]+) ?([0-9]*)/);
+	if (m) {
+		let tot = 0; for (let i = 1; i <= 8; i++) tot += +(m[i] || 0);
+		let idle = +m[4] + +m[5], CF = '/tmp/cmcp_moncpu.json', p = null;
+		try { p = json(readfile(CF) ?? 'null'); } catch (e) {}
+		if (p && tot > p.tot) o.cpu = +sprintf('%.0f', 100 - (idle - p.idle) * 100 / (tot - p.tot));
+		writefile(CF, sprintf('%J', { tot, idle }));
+	}
+	let mi = readfile(MON_R + '/proc/meminfo') ?? '', mt = +(match(mi, /MemTotal:[ \t]+([0-9]+)/)?.[1] ?? 0), ma = +(match(mi, /MemAvailable:[ \t]+([0-9]+)/)?.[1] ?? 0);
+	if (mt) o.mem = +sprintf('%.0f', (mt - ma) * 100 / mt);
+	try { let l = P.live(); o.rx = l.rx; o.tx = l.tx; } catch (e) {}
+	return o;
 };
 
 /* ---------------- 6.0 第 21 项：网络诊断（Ping、路由追踪、域名查询） ----------------

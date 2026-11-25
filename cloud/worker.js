@@ -209,11 +209,14 @@ export class Watch extends DurableObject {
 		await this.ctx.storage.put('pushLast', last);
 		const keep = [];
 		let sent = 0;
+		// 6.0 第 16 项：指定了账号（msg.to）就只推给他的手机；他一台都没开通知就照常推给所有人
+		const mine = msg.to ? subs.filter((s) => s.uid === msg.to) : [];
 		for (const s of subs) {
+			if (mine.length && !mine.includes(s)) { keep.push(s); continue; }
 			let st = 0;
 			// 每条推送带一个编号，手机收到后回报（这样能知道推送有没有真的到手机）
 			const id = b64u(crypto.getRandomValues(new Uint8Array(6)));
-			try { st = await sendPush(s, { ...msg, id, t: now, url: msg.url || './?p=wd' }, this.env); } catch (e) { st = -1; }
+			try { const { to: _to, ...m } = msg; st = await sendPush(s, { ...m, id, t: now, url: msg.url || './?p=wd' }, this.env); } catch (e) { st = -1; }
 			if (st === 404 || st === 410) continue;
 			if (st >= 200 && st < 300) { sent++; s.ok = now; s.err = null; s.last = { id, t: now, title: String(msg.title || '').slice(0, 60) }; } else s.err = st;
 			keep.push(s);
@@ -410,8 +413,10 @@ export class Watch extends DurableObject {
 	async subs(op, b) {
 		let subs = (await this.ctx.storage.get('subs')) || [];
 		if (op === 'sub' && b.sub && b.sub.endpoint && b.sub.keys) {
+			const old = subs.find((s) => s.endpoint === b.sub.endpoint);
 			subs = subs.filter((s) => s.endpoint !== b.sub.endpoint);
-			subs.push({ endpoint: b.sub.endpoint, keys: { p256dh: b.sub.keys.p256dh, auth: b.sub.keys.auth }, name: String(b.name || '手机').slice(0, 40), at: Date.now() });
+			// uid：这台手机是哪个账号的（路由器签过名，路由里核对过）；没带就沿用以前记的
+			subs.push({ endpoint: b.sub.endpoint, keys: { p256dh: b.sub.keys.p256dh, auth: b.sub.keys.auth }, name: String(b.name || '手机').slice(0, 40), at: Date.now(), uid: b.uid || (old && old.uid) || null });
 			subs = subs.slice(-10);
 		}
 		if (op === 'unsub') subs = subs.filter((s) => s.endpoint !== b.endpoint);
@@ -541,8 +546,14 @@ async function handle(req, env) {
 			// 6.0 第 11 项：AI 想做危险操作 → 点开面板弹出「允许 / 拒绝」（只在面板里点，推送上不能直接允许）
 			// 6.0 第 2 项：新设备连上了 → 点开去设备页，按钮「暂停它上网」（在面板里选多久、确认了才生效）
 			const nm = b.kind === 'newdev' ? /^newdev-([0-9a-f]{2}(?::[0-9a-f]{2}){5})$/.exec(String(b.tag || '')) : null;
-			const extra = b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : nm ? { url: './?p=dev', actions: [{ action: 'pause', title: '暂停它上网', url: './?p=dev&ask=pause&mac=' + nm[1] }] } : b.kind === 'ban' || b.kind === 'login' ? { url: './?p=auto' } : b.kind === 'ai' && /^aiask-[a-z0-9]{10}$/.test(String(b.tag || '')) ? { url: './?p=home&ask=ai', actions: [{ action: 'ai', title: '去确认', url: './?p=home&ask=ai' }] } : b.kind === 'fix' ? { url: './?p=home&ask=update', actions: [{ action: 'upd', title: '去更新', url: './?p=home&ask=update' }] } : {};
-			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info', nolog: true, ...extra });
+			// 6.0 第 16 项：上网计划快到停网时间 → 点开延长 30 分钟 / 1 小时（在面板里再点一次才生效）；换了 MAC → 把计划也用到新地址
+			const pm = b.kind === 'plan' ? /^plan-([0-9a-f]{2}(?::[0-9a-f]{2}){5})$/.exec(String(b.tag || '')) : null;
+			const pc = b.kind === 'planmac' ? /^planmac-([0-9a-f]{2}(?::[0-9a-f]{2}){5})-([0-9a-f]{2}(?::[0-9a-f]{2}){5})$/.exec(String(b.tag || '')) : null;
+			const extra = pm ? { url: './?p=dev&ask=ext&mac=' + pm[1], actions: [{ action: 'ext30', title: '延长 30 分钟', url: './?p=dev&ask=ext&min=30&mac=' + pm[1] }, { action: 'ext60', title: '延长 1 小时', url: './?p=dev&ask=ext&min=60&mac=' + pm[1] }] }
+				: pc ? { url: './?p=dev&ask=plancopy&mac=' + pc[1] + '&src=' + pc[2], actions: [{ action: 'plancopy', title: '计划也管它', url: './?p=dev&ask=plancopy&mac=' + pc[1] + '&src=' + pc[2] }] }
+				: b.kind === 'ann' ? { url: './?p=notice' } : b.kind === 'chat' ? { url: './?p=chat' } : nm ? { url: './?p=dev', actions: [{ action: 'pause', title: '暂停它上网', url: './?p=dev&ask=pause&mac=' + nm[1] }] } : b.kind === 'ban' || b.kind === 'login' ? { url: './?p=auto' } : b.kind === 'ai' && /^aiask-[a-z0-9]{10}$/.test(String(b.tag || '')) ? { url: './?p=home&ask=ai', actions: [{ action: 'ai', title: '去确认', url: './?p=home&ask=ai' }] } : b.kind === 'fix' ? { url: './?p=home&ask=update', actions: [{ action: 'upd', title: '去更新', url: './?p=home&ask=update' }] } : {};
+			const to = /^[a-z2-9]{12}$/.test(String(b.to || '')) ? b.to : null;
+			const sent = await w.push({ title: icon + String(b.title).slice(0, 120), body: String(b.body || '').slice(0, 500), tag: String(b.tag || b.kind || 'router').slice(0, 60), lvl: b.lvl || 'info', nolog: true, to, ...extra });
 			return J({ ok: true, sent });
 		}
 		// 云端备份（只有路由器拿着 RKEY 能用；面板经路由器转发）
@@ -589,6 +600,12 @@ async function handle(req, env) {
 			let b = {};
 			try { b = await req.json(); } catch (e) {}
 			if (!safeEq(b.token, T.pkey)) return J({ error: 'bad token' }, 403);
+			// 6.0 第 16 项：开通知时带上账号编号和路由器的签名（sha256(推送密钥 + ':push:' + 账号)），核对不上就不记账号
+			if (b.uid != null) {
+				const ok = /^[a-z2-9]{12}$/.test(String(b.uid)) && /^[0-9a-f]{64}$/.test(String(b.sig || '')) && T.rkey
+					&& safeEq(b.sig, [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(T.rkey + ':push:' + b.uid)))].map((x) => x.toString(16).padStart(2, '0')).join(''));
+				if (!ok) b.uid = null;
+			}
 			if (b.op === 'test') {
 				const sent = await w.push({ title: '测试通知 🔔', body: '能看到这条，说明路由器有情况时会推送到这台手机', tag: 'test', lvl: 'info', force: true , nolog: true });
 				return J({ ok: true, sent, subs: await w.subs('list', b), wx: await w.wxInfo() });

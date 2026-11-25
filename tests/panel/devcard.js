@@ -52,7 +52,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		// 更多：分组
 		await card(0).locator('[data-more]').click(); await W(600);
 		const groups = await page.$$eval('.modal .mgrp', (gs) => gs.map((g) => [(g.querySelector('.mgt') || {}).textContent || '', [...g.querySelectorAll('.mact b')].map((b) => b.textContent)]));
-		ok('在线设备的「更多」：看连接 / 名字和图标 / 上网控制，三组，没有删除', JSON.stringify(groups) === JSON.stringify([['', ['看连接']], ['名字和图标', ['改名字', '换图标']], ['上网控制', ['暂停上网', '不走代理']]]), JSON.stringify(groups));
+		ok('在线设备的「更多」：看连接 / 名字和图标 / 上网控制（6.0 第 16 项加了上网计划），三组，没有删除', JSON.stringify(groups) === JSON.stringify([['', ['看连接']], ['名字和图标', ['改名字', '换图标']], ['上网控制', ['暂停上网', '上网计划', '不走代理']]]), JSON.stringify(groups));
 		await page.screenshot({ path: path.join(__dirname, 'shots', 'devcard-more.png') });
 		await page.click('.modal [data-v="icon"]'); await W(700);
 		// 换内置图标

@@ -245,7 +245,12 @@ function respond(method, p) {
 		if (p.resume) delete e.until;
 		if (p.until) e.until = p.until;
 		if (p.sched) e.sched = p.sched;
-		if (!e.until && !(e.sched || []).length) delete PZ.devs[p.mac]; else { e.on = !!e.until || PZ.schedOn; PZ.devs[p.mac] = e; }
+		// 6.0 第 16 项：上网计划（PZ.planOk：测试里设现在在不在能上网的时段）
+		const now = Math.floor(Date.now() / 1000);
+		if ('plan' in p) { if (p.plan) { if (!p.plan.length) throw new Error('至少要有一个能上网的时段'); e.plan = { slots: p.plan, by: 'u1', at: now }; } else { delete e.plan; delete e.ext; } }
+		if ('ext' in p) { if (!e.plan) throw new Error('这台设备没有上网计划'); e.ext = (e.ext || (PZ.planOk !== false ? now + 600 : now)) + p.ext * 60; }
+		if (e.plan) e.pn = e.ext ? { ok: true, at: e.ext, ext: e.ext } : PZ.planOk !== false ? { ok: true, at: now + 600, ext: null } : { ok: false, at: now + 36000, ext: null }; else delete e.pn;
+		if (!e.until && !(e.sched || []).length && !e.plan) delete PZ.devs[p.mac]; else { e.on = !!e.until || PZ.schedOn || (!!e.plan && !e.pn.ok); PZ.devs[p.mac] = e; }
 		return { devs: PZ.devs, now: Math.floor(Date.now() / 1000) };
 	}
 	case 'autosw': {
@@ -271,6 +276,7 @@ function respond(method, p) {
 	}
 	case 'net_confirm': case 'net_revert': { WIFI.calls.push([method, p.token]); const g = wfPend(); if (!g || g.token !== p.token) return { ok: false, gone: true }; if (method === 'net_revert' && WIFI.gwhat) Object.assign(WIFI.g, { on: false, until: 0, left: 0, key: null, bands: [], net: null }); WIFI.pend = null; WIFI.gwhat = null; return { ok: true }; }
 	case 'net_pending': return { pending: wfPend() };
+	case 'push_id': return { uid: 'dadaaaaaaaa2', sig: 'a'.repeat(64) };
 	case 'guest_get': return { ...JSON.parse(JSON.stringify(WIFI.g)), pending: wfPend() };
 	case 'guest_set': {
 		WIFI.gsets.push(p); const G = WIFI.g, now = Math.floor(Date.now() / 1000);

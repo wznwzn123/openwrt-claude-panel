@@ -120,6 +120,33 @@ ok('同一条 30 秒内不重复推', r.sent === 0 && sent.length === 2);
 	const m4 = JSON.parse(decrypt(sent[sent.length - 1].body).text);
 	ok('[修好了] 点通知打开面板的「检查更新」，按钮「去更新」', m4.url === './?p=home&ask=update' && m4.actions?.[0]?.title === '去更新', JSON.stringify(m4));
 }
+// 6.0 第 16 项：上网计划快到停网时间 → 只推给设计划的家长；按钮「延长 30 分钟 / 1 小时」；换了 MAC → 「计划也管它」
+{
+	const sig = (uid) => nc.createHash('sha256').update('rk:push:' + uid).digest('hex');
+	const subB = { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/dad' }, subC = { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/mom' };
+	r = await (await call('POST', '/cloud/push', { token: 'pt', op: 'sub', sub: subB, name: '爸爸', uid: 'dadaaaaaaaa2', sig: sig('dadaaaaaaaa2') })).json();
+	await call('POST', '/cloud/push', { token: 'pt', op: 'sub', sub: subC, name: '妈妈', uid: 'momaaaaaaaa2', sig: 'f'.repeat(64) });
+	const ss = await storage.get('subs');
+	ok('[计划] 开通知时带账号：路由器签名对得上才记', ss.find((x) => x.name === '爸爸').uid === 'dadaaaaaaaa2' && ss.find((x) => x.name === '妈妈').uid === null, JSON.stringify(ss.map((x) => [x.name, x.uid])));
+	await call('POST', '/cloud/push', { token: 'pt', op: 'sub', sub: subB, name: '爸爸' });
+	ok('[计划] 同一台手机再订阅（没带账号）：账号沿用', (await storage.get('subs')).find((x) => x.name === '爸爸').uid === 'dadaaaaaaaa2');
+	const n0 = sent.length;
+	r = await (await call('POST', '/cloud/n/rk', { lvl: 'info', kind: 'plan', title: '「小明的平板」10 分钟后停网', body: '按上网计划 21:00 停网。', tag: 'plan-aa:bb:cc:dd:ee:02', to: 'dadaaaaaaaa2' })).json();
+	ok('[计划] 只推给设计划的家长的手机', r.sent === 1 && sent.length === n0 + 1 && sent[n0].u.endsWith('/dad'), sent.slice(n0).map((x) => x.u).join());
+	const m = JSON.parse(decrypt(sent[n0].body).text);
+	ok('[计划] 点开去设备页问延长多久，两个按钮', m.url === './?p=dev&ask=ext&mac=aa:bb:cc:dd:ee:02' && m.actions?.map((x) => x.title).join() === '延长 30 分钟,延长 1 小时' && m.actions[0].url === './?p=dev&ask=ext&min=30&mac=aa:bb:cc:dd:ee:02' && m.actions[1].url.includes('min=60'), JSON.stringify(m));
+	ok('[计划] 推送内容里不带账号编号', !('to' in m));
+	const n1 = sent.length;
+	r = await (await call('POST', '/cloud/n/rk', { lvl: 'info', kind: 'plan', title: '「电视」10 分钟后停网', body: '', tag: 'plan-aa:bb:cc:dd:ee:03', to: 'nobodyaaaaa2' })).json();
+	ok('[计划] 这个家长没开通知：推给所有手机', r.sent === 3 && sent.length === n1 + 3);
+	const n2 = sent.length;
+	await call('POST', '/cloud/n/rk', { lvl: 'warn', kind: 'planmac', title: '「小明的平板」可能换了 MAC 地址', body: '', tag: 'planmac-12:34:56:78:9a:bc-aa:bb:cc:dd:ee:02', to: 'dadaaaaaaaa2' });
+	const m2 = JSON.parse(decrypt(sent[n2].body).text);
+	ok('[计划] 换了 MAC：点开把计划也用到新地址', sent.length === n2 + 1 && m2.url === './?p=dev&ask=plancopy&mac=12:34:56:78:9a:bc&src=aa:bb:cc:dd:ee:02' && m2.actions?.[0]?.title === '计划也管它', JSON.stringify(m2));
+	await call('POST', '/cloud/n/rk', { lvl: 'info', kind: 'plan', title: 'x', body: '', tag: 'plan-;rm', to: 'dadaaaaaaaa2' });
+	ok('[计划] 标签不对：不加按钮', !JSON.parse(decrypt(sent[sent.length - 1].body).text).actions);
+	for (const e of [subB, subC]) await call('POST', '/cloud/push', { token: 'pt', op: 'unsub', endpoint: e.endpoint });
+}
 r = await (await call('POST', '/cloud/n/rk', { lvl: 'ok', kind: 'dns', title: 'DNS 恢复正常', body: '' })).json();
 ok('不同的通知照常推', r.sent === 1 && JSON.parse(decrypt(sent[sent.length - 1].body).text).title === '✅ DNS 恢复正常');
 

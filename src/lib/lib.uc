@@ -233,4 +233,102 @@ function node_pick(cur, cands) {
 	return null;
 }
 
-export { node_meta, node_pick, D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };
+// ---------------- 6.0 第 16 项：上网计划（每台设备按星期设能上网的时段） ----------------
+// 时段：[{ d: [1..7]（周一 = 1）, from: 'HH:MM', to: 'HH:MM' }]，to 不晚于 from 表示到第二天；最多 8 段。
+// 一周里的第几分钟：周一 00:00 = 0，一周 10080 分钟。off：本地时间比 UTC 快多少分钟（date +%z）
+const WEEK = 10080, WDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function hm_min(s) {
+	let m = match('' + (s ?? ''), /^(\d{1,2}):(\d\d)$/);
+	if (!m) return null;
+	let h = +m[1], mi = +m[2];
+	if (mi > 59 || h > 24 || (h == 24 && mi > 0)) return null;
+	return h * 60 + mi;
+}
+function min_hm(x) { return sprintf('%02d:%02d', (x - x % 60) / 60, x % 60); }
+function plan_norm(slots) {
+	let out = [];
+	for (let s in (type(slots) == 'array' ? slots : [])) {
+		let a = hm_min(s?.from), b = hm_min(s?.to);
+		if (a == null || b == null || a == b || a == 1440) continue;
+		let d = [];
+		for (let x in (type(s.d) == 'array' ? s.d : [])) { x = +x; if (x >= 1 && x <= 7 && index(d, x) < 0) push(d, x); }
+		if (!length(d)) continue;
+		push(out, { d: sort(d, (p, q) => p - q), from: min_hm(a), to: b == 1440 ? '24:00' : min_hm(b) });
+		if (length(out) >= 8) break;
+	}
+	return out;
+}
+// 能上网的区间（合并过、按开始排好）：[[开始, 结束), …]
+function plan_spans(slots) {
+	let sp = [];
+	for (let s in slots) {
+		let a = hm_min(s.from), b = hm_min(s.to);
+		if (a == null || b == null) continue;
+		if (b <= a) b += 1440;
+		for (let d in s.d) {
+			let x = (d - 1) * 1440 + a, y = (d - 1) * 1440 + b;
+			if (y <= WEEK) push(sp, [x, y]); else { push(sp, [x, WEEK]); push(sp, [0, y - WEEK]); }
+		}
+	}
+	sp = sort(sp, (p, q) => p[0] - q[0]);
+	let m = [];
+	for (let x in sp) {
+		let l = length(m) ? m[length(m) - 1] : null;
+		if (l && x[0] <= l[1]) { if (x[1] > l[1]) l[1] = x[1]; }
+		else push(m, [x[0], x[1]]);
+	}
+	return m;
+}
+// 不能上网的区间（一周里能上网区间以外的）
+function plan_blocked(slots) {
+	let out = [], at = 0;
+	for (let x in plan_spans(slots)) { if (x[0] > at) push(out, [at, x[0]]); at = x[1]; }
+	if (at < WEEK) push(out, [at, WEEK]);
+	return out;
+}
+// 时间戳 → 本地一周里的第几分钟、这一分钟开始的时间戳
+function plan_mow(t, off) {
+	let l = t + off * 60, sec = l % 60, days = (l - l % 86400) / 86400;
+	return { m: ((days + 3) % 7) * 1440 + (l % 86400 - sec) / 60, t0: t - sec };
+}
+function plan_ok_at(sp, m) { for (let x in sp) if (m >= x[0] && m < x[1]) return true; return false; }
+// 现在能不能上网（只看计划）；能的话 at = 几点停，不能的话 at = 几点能上（都没有 = null）
+function plan_now(slots, t, off) {
+	let sp = plan_spans(slots), w = plan_mow(t, off);
+	if (!length(sp)) return { ok: false, at: null };
+	for (let x in sp) if (w.m >= x[0] && w.m < x[1]) {
+		let end = x[1];
+		// 跨过周日 24:00 接着能上
+		if (end == WEEK && sp[0][0] == 0) end = WEEK + sp[0][1];
+		if (end - w.m >= WEEK) return { ok: true, at: null };
+		return { ok: true, at: w.t0 + (end - w.m) * 60 };
+	}
+	for (let x in sp) if (x[0] > w.m) return { ok: false, at: w.t0 + (x[0] - w.m) * 60 };
+	return { ok: false, at: w.t0 + (sp[0][0] + WEEK - w.m) * 60 };
+}
+// 防火墙规则用的：不能上网的区间换成 UTC，按天拆开 → [{ day: 'Mon', start: 'HH:MM:SS', stop: 'HH:MM:SS' }]（stop 含这一秒）
+function plan_rules(slots, off) {
+	let sp = [], out = [];
+	for (let b in plan_blocked(slots)) {
+		let x = b[0] - off, y = b[1] - off;
+		while (x < 0) { x += WEEK; y += WEEK; }
+		while (x >= WEEK) { x -= WEEK; y -= WEEK; }
+		if (y <= WEEK) push(sp, [x, y]); else { push(sp, [x, WEEK]); push(sp, [0, y - WEEK]); }
+	}
+	// 换成 UTC 以后首尾可能接上了：合并，规则少一点
+	sp = sort(sp, (p, q) => p[0] - q[0]);
+	let m = [];
+	for (let x in sp) { let l = length(m) ? m[length(m) - 1] : null; if (l && x[0] <= l[1]) { if (x[1] > l[1]) l[1] = x[1]; } else push(m, [x[0], x[1]]); }
+	for (let p in m) {
+		let a = p[0];
+		while (a < p[1]) {
+			let day = (a - a % 1440) / 1440, e = (day + 1) * 1440;
+			if (e > p[1]) e = p[1];
+			push(out, { day: WDAY[day], start: min_hm(a % 1440) + ':00', stop: min_hm((e - 1) % 1440) + ':59' });
+			a = e;
+		}
+	}
+	return out;
+}
+
+export { plan_norm, plan_spans, plan_blocked, plan_now, plan_rules, plan_mow, plan_ok_at, hm_min, node_meta, node_pick, D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };

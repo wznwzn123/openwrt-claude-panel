@@ -780,3 +780,6 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 #wfGuest:not(:empty){margin-top:12px}
 .wfc .fld .val.mono{font-family:var(--mono);font-weight:600;letter-spacing:.02em}
 .wfqr{max-width:min(220px,30vh);cursor:default;margin:4px auto 10px;background:#fff;border-radius:16px;padding:10px}.wfqr svg{display:block;width:100%;height:auto}
+.plwk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:12px}.plwk .chip{padding:8px 0;text-align:center;min-width:0}
+.plrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line)}.plrow>span{flex:1;min-width:0;font-weight:600;font-size:14px;line-height:1.4;overflow-wrap:anywhere;text-wrap:pretty}.plrow>.btn{flex:none}
+.pzadd.pladd{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.pzadd.pladd>.btn{grid-column:1/-1}

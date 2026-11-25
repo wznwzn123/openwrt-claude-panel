@@ -297,6 +297,11 @@ function start() {
 	if (usp.get('ask') === 'pause' && /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(usp.get('mac') || '')) setTimeout(() => askPause(usp.get('mac')), 1600);
 	// 6.0 第 11 项：推送里点了「AI 想要…」：打开面板马上弹出「允许 / 拒绝」；平时打开 2 秒后查一次
 	setTimeout(() => aiCheck(true), usp.get('ask') === 'ai' ? 900 : 2500);
+	// 6.0 第 16 项：推送「快到停网时间」点进来问延长多久；「换了 MAC」点进来把计划也用到新地址；开了通知的手机报一下是哪个账号的
+	const askMac = usp.get('mac') || '', MRE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
+	if (usp.get('ask') === 'ext' && MRE.test(askMac)) setTimeout(() => askExt(askMac, +usp.get('min') || 0), 1600);
+	if (usp.get('ask') === 'plancopy' && MRE.test(askMac)) setTimeout(() => askPlanCopy(askMac, usp.get('src') || ''), 1600);
+	setTimeout(pushTag, 6000);
 	// 6.0 第 14 项：改完 Wi-Fi 手机断开、重新连上：接着问「保留」还是「改回去」
 	setTimeout(wfResume, 700);
 	// 6.0 第 60 项：推送「你遇到的问题修好了」点进来：打开检查更新

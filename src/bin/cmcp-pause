@@ -3,16 +3,28 @@
 //   暂停到某个时间点（到点自动恢复）+ 每天定时断网（比如 23:00–07:00）
 // 规则放在 mangle 表 PREROUTING 第一条的 CMCP_PAUSE 链里，比 OpenClash 的规则先生效；只放行 DHCP（保持能拿到 IP）
 // 这台路由器有硬件加速（NSS），已经建立的连接不经过防火墙，所以暂停开始时要把这台设备现有的连接全部删掉
-// 数据：/etc/claude-mcp/pause.json {"MAC":{"name":..,"until":时间戳,"sched":[{"from":"23:00","to":"07:00"}]}}
+// 数据：/etc/claude-mcp/pause.json {"MAC":{"name":..,"until":时间戳,"sched":[{"from":"23:00","to":"07:00"}],
+//        "plan":{"slots":[{"d":[1,2,3,4,5],"from":"16:00","to":"21:00"}],"by":设计划的人,"host":设计划时它的设备名},"ext":临时延长到}}
+//   6.0 第 16 项「上网计划」：plan 里是能上网的时段（按星期），其余时间断网；ext 之前不受计划限制（家长点了「延长」）
 // 用法：cmcp-pause apply   重新生成规则（面板改了设置后调用）
-//       cmcp-pause check   看门狗每 30 秒调一次：规则被防火墙重载冲掉了、有到期的、定时暂停开始/结束了，就重新生成
+//       cmcp-pause check   看门狗每 30 秒调一次：规则被防火墙重载冲掉了、有到期的、定时暂停开始/结束了，就重新生成；
+//                          上网计划快到停网时间（10 分钟内）推送给设计划的家长；有新设备用了计划里设备的名字（换了 MAC）也推送
 //       cmcp-pause status  打印每台设备现在是否在暂停
+//       cmcp-pause state   打印每台设备的上网计划现在怎样：{ MAC: { ok, at, ext } }
+// 测试用环境变量：CMCP_PAUSE_ETC（代替 /etc/claude-mcp）、CMCP_PAUSE_TMP（代替 /tmp）、CMCP_PAUSE_NOW（当成现在的时间）、
+//                 CMCP_PAUSE_IPT（用哪几个 iptables，逗号隔开）、CMCP_PAUSE_LEASES（DHCP 租约文件）、CMCP_PAUSE_NEIGH（邻居表文件）、CMCP_SBIN（cmcp-notify 在哪）
 'use strict';
 import * as L from 'cmcp.lib';
 import { access, readfile } from 'fs';
 
-const F = L.D + '/pause.json', ON = '/tmp/cmcp_pause_on.json', CH = 'CMCP_PAUSE';
-const ipt = filter(['iptables', 'ip6tables'], (b) => access('/usr/sbin/' + b, 'x'));
+const E = getenv('CMCP_PAUSE_ETC') || L.D, TMP = getenv('CMCP_PAUSE_TMP') || '/tmp';
+const F = E + '/pause.json', ON = TMP + '/cmcp_pause_on.json', WARN = TMP + '/cmcp_plan_warn.json', CH = 'CMCP_PAUSE';
+const LEASES = getenv('CMCP_PAUSE_LEASES') || '/tmp/dhcp.leases', SB = getenv('CMCP_SBIN') || '/usr/sbin';
+const ipt = getenv('CMCP_PAUSE_IPT') ? split(getenv('CMCP_PAUSE_IPT'), ',') : filter(['iptables', 'ip6tables'], (b) => access('/usr/sbin/' + b, 'x'));
+const NOW = +getenv('CMCP_PAUSE_NOW') || L.now();
+// 推送：to = 只推给这个账号的手机（设计划的家长；他没开通知就推给所有人）
+function notify(lvl, kind, title, body, tag, to) { L.sh(sprintf('%s/cmcp-notify %s %s %s %s %s %s', SB, L.shq(lvl), L.shq(kind), L.shq(title), L.shq(body ?? ''), L.shq(tag ?? kind), L.shq(to ?? ''))); }
+const hasPlan = (e) => length(e?.plan?.slots ?? []) > 0;
 
 // 我们的链必须是 PREROUTING 的第一条
 function hooked() {
@@ -28,9 +40,10 @@ function utc(hm) {
 	x = ((x - off) % 1440 + 1440) % 1440;
 	return sprintf('%02d:%02d', x / 60, x % 60);
 }
-// 现在是否在这台设备的暂停时间内
+// 现在是否在这台设备的暂停时间内（上网计划：不在能上网的时段、也没有临时延长）
 function active(e, t) {
 	if (e.until && e.until > t) return true;
+	if (hasPlan(e) && !(e.ext > t) && !L.plan_now(e.plan.slots, t, off).ok) return true;
 	let now = ((int(t / 60) + off) % 1440 + 1440) % 1440;
 	for (let s in e.sched ?? []) {
 		let a = mins(s.from), b = mins(s.to);
@@ -42,7 +55,7 @@ function active(e, t) {
 // 这台设备现在的 IP（IPv4 从 DHCP 和邻居表找，IPv6 从邻居表找）
 function ips(mac) {
 	let r = {};
-	for (let l in split(readfile('/tmp/dhcp.leases') ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 3 && lc(f[1]) == mac) r[f[2]] = 1; }
+	for (let l in split(readfile(LEASES) ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 3 && lc(f[1]) == mac) r[f[2]] = 1; }
 	for (let l in split(L.sh('ip neigh show dev br-lan; ip -6 neigh show dev br-lan'), '\n')) {
 		let m = match(l, /^(\S+) lladdr ([0-9a-f:]+)/);
 		if (m && m[2] == mac) r[m[1]] = 1;
@@ -62,19 +75,69 @@ function kill(mac) {
 	for (let c in cn) if (set[c.metadata?.sourceIP]) { L.api('DELETE', '/connections/' + L.enc(c.id), null, 3); n++; }
 	return n;
 }
+// 上网计划现在怎样：ok = 现在能上网（计划里的时段或临时延长中），at = 几点停 / 几点能上，ext = 延长到
+function plan_state(e, t) {
+	let n = L.plan_now(e.plan.slots, t, off);
+	if (e.ext > t) {
+		// 延长到点时如果正好进了计划里的时段，就接着那一段算
+		let after = L.plan_now(e.plan.slots, e.ext, off);
+		return { ok: true, at: after.ok ? after.at : e.ext, ext: e.ext };
+	}
+	return { ok: n.ok, at: n.at, ext: null };
+}
+// 在线：邻居表里有它（不在线的设备快到时间也不用提醒）
+function online(mac) {
+	let nf = getenv('CMCP_PAUSE_NEIGH');
+	for (let l in split(nf ? (readfile(nf) ?? '') : L.sh('ip neigh show'), '\n')) if (index(lc(l), mac) >= 0 && !match(l, /FAILED|INCOMPLETE/)) return true;
+	return false;
+}
+function name_of(mac, e) { let n = L.readj(L.DN_PATH, {})?.[mac]; return (type(n) == 'object' ? n.name : n) || e.name || mac; }
+function hm_of(ts) { let x = gmtime(ts + off * 60); return sprintf('%02d:%02d', x.hour, x.min); }
+// 快到停网时间推送给设计划的家长；有新设备用了计划里设备的名字（多半是换了 MAC 绕过计划）也推送
+function plan_watch(p, t) {
+	let w = L.readj(WARN, {}), ch = false;
+	w.end = w.end ?? {}; w.mac = w.mac ?? {};
+	let leases = [];
+	for (let l in split(readfile(LEASES) ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 4 && +f[0] > t) push(leases, { mac: lc(f[1]), host: f[3] }); }
+	for (let m in p) {
+		let e = p[m];
+		if (!hasPlan(e)) continue;
+		let st = plan_state(e, t), nm = name_of(m, e);
+		if (st.ok && st.at && st.at - t <= 600 && st.at > t && w.end[m] != st.at && online(m)) {
+			w.end[m] = st.at; ch = true;
+			notify('info', 'plan', '「' + nm + '」' + int((st.at - t + 59) / 60) + ' 分钟后停网', '按上网计划 ' + hm_of(st.at) + ' 停网。要多给点时间，点开延长 30 分钟或 1 小时。', 'plan-' + m, e.plan.by);
+		}
+		let host = lc(e.plan.host ?? '');
+		if (length(host) && host != '*') for (let x in leases) {
+			if (x.mac == m || lc(x.host) != host || p[x.mac] || w.mac[x.mac]) continue;
+			w.mac[x.mac] = t; ch = true;
+			notify('warn', 'planmac', '「' + nm + '」可能换了 MAC 地址', '有一台新设备（' + x.mac + '）用的名字也是「' + x.host + '」，上网计划管不到它。点开把计划也用到它。', 'planmac-' + x.mac + '-' + m, e.plan.by);
+		}
+	}
+	for (let m in w.end) if (!p[m]) { delete w.end[m]; ch = true; }
+	for (let m in w.mac) if (t - w.mac[m] > 7 * 86400) { delete w.mac[m]; ch = true; }
+	if (ch) L.writej(WARN, w);
+}
 function apply() {
-	let p = L.readj(F, {}), t = L.now(), ch = false, rules = [], on = {};
+	let p = L.readj(F, {}), t = NOW, ch = false, rules = [], on = {};
 	for (let mac in p) {
 		let e = p[mac];
 		if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) { delete p[mac]; ch = true; continue; }
 		if (e.until && e.until <= t) { delete e.until; ch = true; }
+		if (e.ext && e.ext <= t) { delete e.ext; ch = true; }
 		let ok = filter(e.sched ?? [], (s) => utc(s.from) && utc(s.to) && s.from != s.to);
 		if (length(ok) != length(e.sched ?? [])) { e.sched = ok; ch = true; }
-		if (!e.until && !length(e.sched ?? [])) { delete p[mac]; ch = true; continue; }
+		if (e.plan && !hasPlan(e)) { delete e.plan; delete e.ext; ch = true; }
+		if (!e.until && !length(e.sched ?? []) && !hasPlan(e)) { delete p[mac]; ch = true; continue; }
 		let mm = '-m mac --mac-source ' + mac;
 		push(rules, mm + ' -p udp --dport 67:68 -j RETURN', mm + ' -p udp --dport 546:547 -j RETURN');
 		if (e.until) push(rules, mm + ' -m time --datestop ' + trim(L.sh('date -u -d @' + e.until + ' +%Y-%m-%dT%H:%M:%S')) + ' -j DROP');
 		for (let s in e.sched ?? []) push(rules, mm + ' -m time --timestart ' + utc(s.from) + ' --timestop ' + utc(s.to) + ' -j DROP');
+		// 上网计划：临时延长期间先放行；其余不在能上网时段的时间按天（UTC）断网
+		if (hasPlan(e)) {
+			if (e.ext > t) push(rules, mm + ' -m time --datestop ' + trim(L.sh('date -u -d @' + e.ext + ' +%Y-%m-%dT%H:%M:%S')) + ' -j RETURN');
+			for (let r in L.plan_rules(e.plan.slots, off)) push(rules, mm + ' -m time --weekdays ' + r.day + ' --timestart ' + r.start + ' --timestop ' + r.stop + ' -j DROP');
+		}
 		if (active(e, t)) on[mac] = 1;
 	}
 	if (ch) L.writej(F, p);
@@ -95,20 +158,28 @@ function apply() {
 switch (ARGV[0]) {
 case 'apply': apply(); break;
 case 'check': {
-	let p = L.readj(F, {}), t = L.now(), was = L.readj(ON, {}), need = false;
+	let p = L.readj(F, {}), t = NOW, was = L.readj(ON, {}), need = false;
 	for (let m in p) {
 		if (p[m].until && p[m].until <= t) need = true;
+		if (p[m].ext && p[m].ext <= t) need = true;
 		if (!!active(p[m], t) != !!was[m]) need = true;
 	}
 	for (let m in was) if (!p[m]) need = true;
 	if (need || !hooked()) apply();
+	plan_watch(p, t);
+	break;
+}
+case 'state': {
+	let p = L.readj(F, {}), o = {};
+	for (let m in p) if (hasPlan(p[m])) o[m] = plan_state(p[m], NOW);
+	print(sprintf('%J\n', o));
 	break;
 }
 case 'status': {
-	let p = L.readj(F, {}), t = L.now(), o = {};
+	let p = L.readj(F, {}), t = NOW, o = {};
 	for (let m in p) o[m] = active(p[m], t);
 	print(sprintf('%J\n', o));
 	break;
 }
-default: print('用法：cmcp-pause apply | check | status\n');
+default: print('用法：cmcp-pause apply | check | status | state\n');
 }

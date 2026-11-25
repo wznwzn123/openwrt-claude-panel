@@ -57,12 +57,27 @@ P.autosw = function(a) {
 
 /* ---------- 设备暂停上网 ---------- */
 function pause_out() {
-	let p = cmcp_readj('/etc/claude-mcp/pause.json', {}), st = {};
-	try { st = json(trim(sh('/usr/sbin/cmcp-pause status').out)) ?? {}; } catch (e) {}
-	for (let m in p) p[m].on = !!st[m];
+	let p = cmcp_readj('/etc/claude-mcp/pause.json', {}), st = {}, ps = {}, any = false;
+	for (let m in p) if (length(p[m]?.plan?.slots ?? [])) any = true;
+	try { st = json(trim(sh(SBIN + '/cmcp-pause status').out)) ?? {}; } catch (e) {}
+	// 6.0 第 16 项：上网计划现在怎样（能不能上、几点停 / 几点能上、延长到几点）
+	if (any) try { ps = json(trim(sh(SBIN + '/cmcp-pause state').out)) ?? {}; } catch (e) {}
+	for (let m in p) { p[m].on = !!st[m]; if (ps[m]) p[m].pn = ps[m]; if (p[m].plan) delete p[m].plan.host; }
 	return { devs: p, now: time() };
 }
+// 本地时间比 UTC 快多少分钟
+function tz_off() { let m = match(trim(sh('date +%z').out), /^([+-])(\d\d)(\d\d)$/); return m ? (m[1] == '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : 480; }
 P.pause_list = function() { return pause_out(); };
+// 6.0 第 16 项：这台手机开通知时告诉官网「这是哪个账号的手机」，这样计划提醒只推给设计划的家长。
+// sig = sha256(路由器推送密钥 + ':push:' + 账号)：官网核对得上才记，别人冒充不了
+P.push_id = function() {
+	let uid = DEV?.uid ?? null;
+	if (!uid || !match(uid, /^[a-z2-9]{12}$/)) return { uid: null };
+	let k = match(readfile(ETC + '/cloud.conf') ?? '', /RKEY=([A-Za-z0-9_-]+)/);
+	if (!k) return { uid: null };
+	let h = match(sh('printf %s ' + shq(k[1] + ':push:' + uid) + ' | sha256sum').out, /^([0-9a-f]{64})/);
+	return h ? { uid, sig: h[1] } : { uid: null };
+};
 P.pause_set = function(a) {
 	let mac = lc(a?.mac ?? '');
 	if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) die('这台设备读不到 MAC 地址，没法暂停');
@@ -78,10 +93,32 @@ P.pause_set = function(a) {
 				push(e.sched, { from: s.from, to: s.to });
 		e.sched = slice(e.sched, 0, 6);
 	}
-	if (!e.until && !length(e.sched ?? [])) delete p[mac]; else p[mac] = e;
+	// 6.0 第 16 项：上网计划（能上网的时段，按星期）；null = 删掉计划
+	if (exists(a, 'plan')) {
+		if (a.plan == null) { delete e.plan; delete e.ext; }
+		else {
+			let sl = CL.plan_norm(a.plan), host = null;
+			if (!length(sl)) die('至少要有一个能上网的时段');
+			// 记下它现在的设备名：以后有新 MAC 用同一个名字（换地址绕过计划）能认出来
+			for (let l in split(readfile('/tmp/dhcp.leases') ?? '', '\n')) { let x = split(l, ' '); if (length(x) >= 4 && lc(x[1]) == mac && x[3] != '*') host = x[3]; }
+			e.plan = { slots: sl, by: DEV?.uid ?? null, host: host ?? e.plan?.host ?? null, at: time() };
+		}
+	}
+	// 临时延长：在本来停网的时间（或上次延长到的时间）上加 30 分钟 / 1 小时；已经停网了就从现在算
+	if (exists(a, 'ext')) {
+		if (!length(e.plan?.slots ?? [])) die('这台设备没有上网计划');
+		let m = +a.ext, t = time();
+		if (m != 30 && m != 60) die('只能延长 30 分钟或 1 小时');
+		let n = CL.plan_now(e.plan.slots, t, tz_off()), base = t;
+		if (e.ext > t) base = e.ext; else if (n.ok && n.at) base = n.at;
+		if (base + m * 60 > t + 12 * 3600) die('最多延长到 12 小时以后');
+		e.ext = base + m * 60;
+	}
+	if (a.ext_off) delete e.ext;
+	if (!e.until && !length(e.sched ?? []) && !length(e.plan?.slots ?? [])) delete p[mac]; else p[mac] = e;
 	cmcp_writej(f, p);
 	// 生成规则；刚开始暂停的设备，现有连接会被马上断开
-	sh('/usr/sbin/cmcp-pause apply');
+	sh(SBIN + '/cmcp-pause apply');
 	return pause_out();
 };
 

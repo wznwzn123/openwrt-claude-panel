@@ -146,6 +146,7 @@ async function swUnit() {
 	const subCall = CL.calls.find((c) => c.op === 'sub');
 	ok('订阅时用了云端的公钥、只发看得见的通知', await page.evaluate(() => window.__subOpt && window.__subOpt.uv === true && window.__subOpt.keyLen === 65));
 	ok('把订阅交给云端，带上手机型号', subCall && subCall.sub.endpoint.startsWith('https://fcm.') && subCall.name === '23127PN0CC', subCall && subCall.name);
+	ok('[6.0 第 16 项] 订阅时带上是哪个账号的手机（路由器签的名）', subCall && subCall.uid === 'dadaaaaaaaa2' && subCall.sig === 'a'.repeat(64), JSON.stringify(subCall && { uid: subCall.uid }));
 	ok('开启后马上发一条测试', CL.calls.some((c) => c.op === 'test'));
 	ok('卡片变成已开启', (await page.textContent('#pushPill')) === '已开启' && /这台手机已开启|已开启/.test(await page.textContent('#pushCard')));
 	ok('有提示', /通知已开启/.test(await page.textContent('#toast')));

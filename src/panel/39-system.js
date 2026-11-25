@@ -205,6 +205,7 @@ function devMore(d) {
 		{ t: '名字和图标', items: [ed && { v: 'ren', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '改名字', sub: d.renamed && d.orig ? '原名：' + d.orig : '' },
 			ed && { v: 'icon', ic: dvSvg(k), t: '换图标' }] },
 		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网' },
+			d.mac && par && { v: 'plan', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', t: '上网计划', sub: pz && pz.plan ? plState(pz) || pz.plan.slots.map(plSlot).join('、') : '' },
 			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理' })] },
 		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', danger: true }] }
 	]).then((v) => {
@@ -212,6 +213,7 @@ function devMore(d) {
 		else if (v === 'ren') devRename(d);
 		else if (v === 'icon') devIconSheet(d);
 		else if (v === 'pause') pauseSheet(d);
+		else if (v === 'plan') planSheet(d);
 		else if (v === 'black') blackToggle(d, true, null);
 		else if (v === 'unblack') blackToggle(d, false, null);
 		else if (v === 'forget') devForget(d);
@@ -222,6 +224,7 @@ function devSets(d) {
 	const out = [], pz = d.mac ? PZ.devs[d.mac] : null;
 	if (pz && pz.until) out.push('暂停上网');
 	if (pz && (pz.sched || []).length) out.push('每天定时断网（' + pz.sched.map((s) => s.from + '–' + s.to).join('、') + '）');
+	if (pz && pz.plan) out.push('上网计划（' + pz.plan.slots.map(plSlot).join('、') + '）');
 	if (isBlack(d)) out.push('「不走代理」');
 	if (d.renamed) out.push('改过的名字「' + d.name + '」');
 	if (d.img) out.push('设的照片');
@@ -462,6 +465,7 @@ function pzDesc(e) {
 	const parts = [];
 	if (e.until) parts.push('<strong>暂停中</strong> · ' + pzWhen(e.until));
 	if ((e.sched || []).length) parts.push('每天 ' + e.sched.map((s) => s.from + '–' + s.to).join('、') + ' 断网' + (e.on && !e.until ? '（现在就在这个时间里）' : ''));
+	if (e.plan && (e.plan.slots || []).length) parts.push('上网计划：' + esc(plState(e) || e.plan.slots.map(plSlot).join('、')));
 	return parts.join('<br>');
 }
 function renderPz() {
@@ -476,6 +480,8 @@ $('pzBox').addEventListener('click', (e) => {
 	const mac = row.dataset.pzm, ent = PZ.devs[mac] || {};
 	const d = devices.find((x) => x.mac === mac) || { mac, name: ent.name, ip: '' };
 	if (e.target.closest('[data-pzset]') && ent.on && ent.until && !(ent.sched || []).length) return busy(e.target.closest('button'), async () => { PZ = await P('pause_set', { mac, resume: true }); toast('已恢复上网'); await loadDev(); }, false);
+	// 只有上网计划的：打开计划
+	if (ent.plan && !ent.until && !(ent.sched || []).length) return planSheet(d);
 	pauseSheet(d);
 });
 // 明天早上 7 点（现在 7 点前就是今天 7 点）
@@ -927,7 +933,10 @@ function pushRender() {
 			const reg = await swReg();
 			const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((key.length + 3) % 4)), (c) => c.charCodeAt(0));
 			const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw }));
-			await cloudPush({ op: 'sub', sub: sub.toJSON(), name: devName() });
+			// 6.0 第 16 项：带上是哪个账号的手机（路由器签过名），上网计划的提醒只推给设计划的家长
+			const id = await P('push_id').catch(() => null);
+			await cloudPush({ op: 'sub', sub: sub.toJSON(), name: devName(), ...(id && id.uid ? { uid: id.uid, sig: id.sig } : {}) });
+			if (id && id.uid) store.set('rp_push_uid', id.uid + '|' + sub.endpoint.slice(-24));
 			await pushState(true); pushRender();
 			toast('通知已开启，正在发一条测试');
 			pushTest().catch((e) => toast(e.message, true));

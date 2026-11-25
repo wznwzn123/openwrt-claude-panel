@@ -1,17 +1,18 @@
 #!/bin/sh
 # 发一条通知：记到断线记录里，并通过 Cloudflare 推送到手机
-# 用法：cmcp-notify 等级(ok|info|warn|err) 类别 标题 [详情] [标签]
+# 用法：cmcp-notify 等级(ok|info|warn|err) 类别 标题 [详情] [标签] [只推给这个账号]
+#   第 6 个参数（6.0 第 16 项）：官网账号编号，只推给这个人开了通知的手机（他一台都没开就推给所有人）
 D=/etc/claude-mcp
 EV=$D/events.log
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 esc() { printf '%s' "$1" | tr '\t\r' '  ' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} {if (NR>1) print "\\n"; print}'; }
-lvl=${1:-info}; kind=${2:-info}; title=$3; body=$4; tag=${5:-$kind}
+lvl=${1:-info}; kind=${2:-info}; title=$3; body=$4; tag=${5:-$kind}; to=$6
 [ -n "$title" ] || exit 1
 # CMCP_NOLOG=1：只推送，不记到断线记录里（比如公告：面板「通知」里另有一类）
 [ "$CMCP_NOLOG" = 1 ] || printf '{"t":%s,"lvl":"%s","kind":"%s","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "$lvl" "$kind" "$(esc "$title")" "$(esc "$body")" >> "$EV"
 logger -t cmcp-notify "[$kind] $title"
 [ -f "$D/cloud.conf" ] || exit 0
 . "$D/cloud.conf"
-j=$(printf '{"lvl":"%s","kind":"%s","title":"%s","body":"%s","tag":"%s"}' "$lvl" "$kind" "$(esc "$title")" "$(esc "$body")" "$(esc "$tag")")
+j=$(printf '{"lvl":"%s","kind":"%s","title":"%s","body":"%s","tag":"%s","to":"%s"}' "$lvl" "$kind" "$(esc "$title")" "$(esc "$body")" "$(esc "$tag")" "$(esc "$to")")
 curl -s -m 20 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/n/$RKEY" >/dev/null 2>&1
 exit 0

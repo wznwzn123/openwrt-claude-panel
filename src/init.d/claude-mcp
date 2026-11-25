@@ -22,6 +22,8 @@ start_service() {
 		procd_close_instance
 	fi
 
+	# 6.0 第 94 项：本地版不起隧道（只在家里局域网打开）
+	[ -f /etc/claude-mcp/local ] && return 0
 	rm -f /tmp/claude-mcp-tunnel.log
 	# 闪存里有 cloudflared 就直接用；小闪存模式（没装进闪存）由 cmcp-cfd 下载到内存后再启动，参数完全一样
 	local CFD=/usr/bin/cloudflared

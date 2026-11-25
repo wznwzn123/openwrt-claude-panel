@@ -7,7 +7,7 @@ f="${1:-$SCRIPT_FILENAME}"
 [ -f "$f" ] || { printf 'Status: 404 Not Found\r\nContent-Type: text/plain\r\n\r\nnot found\n'; exit 0; }
 sz=$(wc -c < "$f" | tr -d ' '); mt=$(date -r "$f" +%s 2>/dev/null)
 tag="\"$sz-$mt\""
-h='Content-Type: text/html; charset=utf-8\r\nVary: Accept-Encoding\r\nCache-Control: no-cache\r\nX-Content-Type-Options: nosniff\r\nETag: '"$tag"'\r\n'
+h='Content-Type: text/html; charset=utf-8\r\nVary: Accept-Encoding\r\nCache-Control: no-cache\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: frame-ancestors '\''none'\''\r\nReferrer-Policy: no-referrer\r\nETag: '"$tag"'\r\n'
 same=0
 [ "$HTTP_IF_NONE_MATCH" = "$tag" ] && same=1
 case "&$QUERY_STRING&" in *"&_et=%22$sz-$mt%22&"*) same=1 ;; esac

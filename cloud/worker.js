@@ -179,7 +179,16 @@ export class Watch extends DurableObject {
 	async setup(c) { await this.ctx.storage.put('cfg', c); await this.ensureAlarm(); }
 	async getCfg() { return (await this.ctx.storage.get('cfg')) || null; }
 	// 给官网「我的路由器」看的在线状态（只读，不启动定时器）
-	async brief() { const m = await this.ctx.storage.get(['r', 's']); const r = m.get('r'), s = m.get('s'); return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String((r && r.rep && r.rep.ver) || '').slice(0, 20) }; }
+	async brief() {
+		const m = await this.ctx.storage.get(['r', 's']); const r = m.get('r'), s = m.get('s'), rep = (r && r.rep) || {};
+		// 6.0 第 94 项：ed = 路由器报的版本（ai / local / noai），lan = 家里局域网的面板地址（本地版从官网打开要用）
+		// 只认家里局域网的地址（10.x、172.16–31.x、192.168.x），官网「打开面板」不会被带到外面的网址
+		const lan = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d{2,5}$/.test(String(rep.lan || '')) ? rep.lan : '';
+		return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String(rep.ver || '').slice(0, 20), ed: ['ai', 'local', 'noai'].includes(rep.ed) ? rep.ed : '', lan };
+	}
+	// 6.0 第 94 项：换版本。探测地址（本地版没有隧道，不探测）；官网发给路由器的「换版本」指令（路由器下次心跳时带回去）
+	async setProbe(url) { const c = await this.getCfg(); if (!c) return; c.probe = url || ''; await this.ctx.storage.put('cfg', c); if (!url) await this.ctx.storage.delete('probe'); }
+	async setCmd(cmd) { const c = await this.getCfg(); if (!c) return; if (cmd) c.cmd = cmd; else delete c.cmd; await this.ctx.storage.put('cfg', c); }
 	async setOff(off) { const c = await this.getCfg(); if (!c) return; c.off = !!off; await this.ctx.storage.put('cfg', c); }
 	async wipe() { await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll(); }
 	async load() {
@@ -341,6 +350,8 @@ export class Watch extends DurableObject {
 				await this.ctx.storage.put('cfg', c);
 				try { await this.env.H.get(this.env.H.idFromName('hub')).seen(c.sub, now); } catch (e) {}
 			}
+			// 官网让路由器换版本：每次心跳都带上，直到路由器报回结果（一天没执行就作废）
+			if (c && c.cmd) { if (now - (c.cmd.at || 0) > 86400e3) await this.setCmd(null); else out = { ...(out || {}), cmd: { id: c.cmd.id, to: c.cmd.to } }; }
 		}
 		return out;
 	}
@@ -434,7 +445,7 @@ export class Watch extends DurableObject {
 // 心跳：一切正常、状态没变、离上次交给 Durable Object 不到 170 秒，就只在这里记一下（用 Cloudflare 的缓存），不叫醒它
 // 缓存只在同一个机房有效；换了机房、缓存被清掉，就照常交过去，不会漏
 // 只看会影响判断的字段（隧道连接数 ready 会在 2～4 之间跳，不算变化）
-const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver'];
+const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver', 'ed', 'lan'];
 export const beatSig = (rep) => JSON.stringify(BEAT_KEYS.map((k) => (rep && rep[k] != null ? rep[k] : null)));
 async function beatRoute(req, env, u, who, key) {
 	if (who !== 'r' && who !== 't') return J({ error: 'not found' }, 404);
@@ -460,11 +471,11 @@ async function beatRoute(req, env, u, who, key) {
 	}
 	const r = await w.beatIn(who, key, rep);
 	if (r === 'off') return J({ error: 'not found' }, 404);
-	if (r !== 'ok' && !(r && r.probe)) return J({ error: 'bad key' }, 403);
+	if (r !== 'ok' && !(r && (r.probe || r.cmd))) return J({ error: 'bad key' }, 403);
 	// 钥匙核对过了、轮到探测隧道：在这里（Durable Object 外面）探，结果交回去判断
 	if (r.probe) { const code = await probeFetch(r.probe, r.at); try { await w.probeIn(r.at, code); } catch (e) {} }
 	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) { why += ',puterr:' + String(e && e.message || e).slice(0, 80); } }
-	return J({ ok: true, m: 0, why });
+	return J({ ok: true, m: 0, why, ...(r && r.cmd ? { cmd: r.cmd } : {}) });
 }
 async function tenant(u, env) {
 	if (!env.BASE_DOMAIN) return { w: env.W.get(env.W.idFromName('home')), rkey: env.RKEY, tkey: env.TKEY, pkey: env.PANEL_TOKEN };
@@ -527,7 +538,19 @@ async function relay(req, env) {
 	return new Response(r.body, { status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store', 'x-cmcp-relay': '1', ...cors } });
 }
 
+// 6.0 第 94 项：本地版 / 在家里局域网打开的面板（http://192.168.x.x:906）要读云端状态、设置推送：
+// 这几个接口靠请求里的钥匙认人（不用 Cookie），允许家里局域网地址跨域来读
+const LAN_ORIGIN = /^http:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d{1,5})?$/;
 async function handle(req, env) {
+	const o = req.headers.get('origin') || '', u0 = new URL(req.url);
+	if (!LAN_ORIGIN.test(o) || !/^\/cloud\/(s|push|push\/key)$/.test(u0.pathname)) return handleCore(req, env);
+	const cors = { 'access-control-allow-origin': o, 'access-control-allow-methods': 'GET, POST', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600', vary: 'Origin' };
+	if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+	const r = await handleCore(req, env), h = new Headers(r.headers);
+	for (const [k, v] of Object.entries(cors)) h.set(k, v);
+	return new Response(r.body, { status: r.status, headers: h });
+}
+async function handleCore(req, env) {
 	{
 		const u = new URL(req.url);
 		const p = u.pathname.split('/').filter(Boolean); // cloud, beat, r|t, key

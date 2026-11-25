@@ -267,7 +267,7 @@ async function openTicket(t) {
 async function loadRole() {
 	try {
 		const r = await P('whoami');
-		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg, lanin: !!r.lanin };
+		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg, lanin: !!r.lanin, ed: r.ed || null };
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
@@ -276,7 +276,10 @@ async function loadRole() {
 		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
 		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
+		if (r.svc_off) svcOffPop(r.svc_off === 'exp' ? '托管服务到期了，续期以后才能用：在官网「我的路由器」申请续期，或者在这里输入续期码' : '这台路由器的托管服务停用了：请联系提供服务的人');
+		setTimeout(edNoaiHint, 1500); // 旧的托管纯面板版：提示一次能换
 		if (r.lan !== undefined) { if (r.lan) store.set('rp_lan', JSON.stringify(r.lan)); else store.del('rp_lan'); } // 家里局域网的面板地址（第 82 项）
+		if (ch && page === 'me') loadMe(true).catch(() => {}); // 版本、身份变了：我的主页跟着刷新
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); } // 设备卡片上能不能改名、换图标看权限；自定义快捷操作里没权限的页面去掉
 	} catch (e) {}
 }
@@ -686,7 +689,7 @@ async function lockSettings() {
 	const v = await modal(`<h3>面板锁</h3>
 		<div class="kv"><span>状态</span><span>已开启</span></div>
 		<div class="kv"><span>解锁密码</span><span>${c.len} 位数字</span></div>
-		<div class="kv"><span>指纹解锁</span><span>${c.cred ? '已开启' : fpOk ? '未开启' : '这台手机不支持'}</span></div>
+		<div class="kv"><span>指纹解锁</span><span>${c.cred ? '已开启' : fpOk ? '未开启' : !window.isSecureContext ? '在家里地址打开时用不了' : '这台手机不支持'}</span></div>
 		<div class="kv"><span>自动锁定</span><span>${LOCK_MIN} 分钟没操作</span></div>
 		<div class="btngrid" style="margin:14px 0 0"><button class="btn blue" data-v="now">立即锁定</button><button class="btn" data-v="pin">修改密码</button>
 		${c.cred ? '<button class="btn" data-v="fpoff">关闭指纹</button>' : fpOk ? '<button class="btn" data-v="fpon">开启指纹</button>' : ''}<button class="btn danger" data-v="off">关闭面板锁</button></div>

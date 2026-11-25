@@ -203,6 +203,12 @@ export function installFam(Hub) {
 			const t = rnd(24);
 			await this.ctx.storage.put('ot:' + t, { sub, uid, exp: Date.now() + 120e3 });
 			await this.famSave(d);
+			// 6.0 第 94 项：本地版跳到家里局域网的面板地址（路由器心跳报上来的），手机要连着家里的 Wi-Fi
+			if (d.local) {
+				let b = null; try { b = await this.watch(sub).brief(); } catch (e) {}
+				if (!b || !b.lan) { await this.ctx.storage.delete('ot:' + t); return { st: 409, error: '还不知道路由器在家里的地址：等路由器连上官网（几分钟）再打开' }; }
+				return { st: 200, ok: true, local: true, lan: b.lan, url: 'http://' + b.lan + '/panel/#open=' + t };
+			}
 			return { st: 200, ok: true, url: 'https://' + sub + '.' + this.env.BASE_DOMAIN + '/panel/#open=' + t };
 		},
 		// 路由器（凭 RKEY）拿票换身份；票只能用一次

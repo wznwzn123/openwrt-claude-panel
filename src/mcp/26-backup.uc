@@ -80,9 +80,9 @@ P.svc_info = function(a) {
 	if (!o || a?.force || time() - (o.at ?? 0) > 3600) {
 		let r = null;
 		try { r = hub_call('/api/dev/info'); } catch (e) {}
-		if (r) { o = { at: time(), exp: r.exp ?? 0, off: !!r.off, files: !!r.files }; writefile(cf, sprintf('%J', o)); }
+		if (r) { o = { at: time(), exp: r.exp ?? 0, off: !!r.off, why: r.off ? (r.offWhy == 'exp' ? 'exp' : 'admin') : null, files: !!r.files }; writefile(cf, sprintf('%J', o)); }
 	}
-	return { hosted: true, hub: c.HUB, exp: o?.exp ?? null, off: !!o?.off, files: !!o?.files };
+	return { hosted: true, hub: c.HUB, exp: o?.exp ?? null, off: !!o?.off, why: o?.why ?? null, files: !!o?.files, ed: stat(ETC + '/local') ? 'local' : conf().ai === false ? 'noai' : 'ai' };
 };
 P.svc_renew = function(a) {
 	let code = uc(replace('' + (a?.code ?? ''), /[^A-Za-z0-9]/g, ''));
@@ -306,7 +306,7 @@ const EMERG_VIA = '路由器终端的应急登录码';
 const LAN_VIA_LUCI = '原版后台（局域网）', LAN_VIA_PW = '路由器后台密码（局域网）';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
@@ -455,7 +455,14 @@ function ckey_get(make) {
 	CONF = null;
 	return c.ckey;
 }
-function ckey_url(k) { let h = trim(readfile('/etc/claude-mcp/hostname') ?? ''); return length(h) ? 'https://' + h + '/cgi-bin/mcp/' + k : null; }
+function ckey_url(k) {
+	// 6.0 第 94 项：本地版没有隧道，AI 连接器用家里局域网的地址（家里电脑上的 AI 应用，比如 Cherry Studio）
+	if (stat(ETC + '/local')) {
+		let p = +trim(readfile(ETC + '/lan_port') ?? '') || 906, ip = trim(split(split(uci_get('network.lan.ipaddr') ?? '', ' ')[0], '/')[0]);
+		return match(ip, /^\d+\.\d+\.\d+\.\d+$/) ? 'http://' + ip + ':' + p + '/cgi-bin/mcp/' + k : null;
+	}
+	let h = trim(readfile(ETC + '/hostname') ?? ''); return length(h) ? 'https://' + h + '/cgi-bin/mcp/' + k : null;
+}
 P.ckey_info = function(a) {
 	if (conf().ai === false) return { ai: false };
 	need_sudo(a, true);

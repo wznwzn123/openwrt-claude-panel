@@ -55,7 +55,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		else if (m === 'tablet_url') result = { url: 'https://ab3cd4ef.panel.example/cloud/beat/t/' + 't'.repeat(32) };
 		else if (m === 'device_list') result = { hosted, list: Object.entries(DEVS).map(([id, d]) => ({ id, name: d.name, at: d.at, via: d.via, seen: id === 'app00001' ? Math.floor(Date.now() / 1000) - 8 * 3600 : null, me: id === 'abcd1234' })) };
 		else if (m === 'device_remove') { if (body.params.all_others) { for (const k of Object.keys(DEVS)) if (k !== 'abcd1234') delete DEVS[k]; } else delete DEVS[body.params.id]; result = { ok: true }; }
-		else if (m === 'whoami') result = { hosted, hub: 'https://panel.example', emerg: EMERG, role: ROLE, perms: ROLE === 'sub' ? ['msg', 'node', 'speed'] : ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'], uid: 'abcdefghijk2' };
+		else if (m === 'whoami') result = { hosted, ed: hosted ? 'local' : null, hub: 'https://panel.example', emerg: EMERG, role: ROLE, perms: ROLE === 'sub' ? ['msg', 'node', 'speed'] : ['msg', 'node', 'speed', 'parent', 'proxy', 'net', 'sys'], uid: 'abcdefghijk2' };
 		else if (m === 'fam') { const r = famOp(body.params); if (DELAY && body.params.op === 'page') { setTimeout(() => res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: r })), DELAY); return; } if (r.error) return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: r.error } })); result = r; }
 		else if (m === 'chat') result = body.params.op === 'get' ? { ok: true, msgs: body.params.after ? [] : msgs, seq: 4, uu: 0, hosted: true, ...(body.params.after ? {} : { dev, me }) } : { ok: true, s: 5, t: Date.now() };
 		else result = respond(m, body.params || {});
@@ -94,6 +94,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('打开我的主页：只问一次（page），不再一个接一个问 me / members / log' + T, fc0.join() === 'page', fc0.join());
 		ok('点开是「我的主页」整页：头像、名字、打码邮箱、主账号' + T, (await page.textContent('#pageTitle')) === '我的主页' && /小明/.test(t) && /xi\*\*\*@qq\.com/.test(t) && /主账号/.test(t), t.slice(0, 200));
 		ok('有托管服务、这台路由器、家人、敏感信息、操作记录、我的反馈' + T, ['托管服务', '这台路由器', '家人', '敏感信息', '操作记录', '我的反馈'].every((x) => t.includes(x)));
+		ok('这台路由器：显示版本（本地版），主账号有「换」' + T, /版本\s*本地版/.test(t) && await page.isVisible('#meBox [data-mp="edsw"]'), t.slice(0, 400));
 		ok('托管服务：到期时间、专属网址、输入续期码' + T, /还剩 7 天/.test(t) && /localhost:8181/.test(t) && await page.isVisible('[data-mp="renew"]'));
 		ok('家人：列出爸爸（家人权限），能管理、添加、转让' + T, /爸爸/.test(t) && /家人/.test(t) && await page.isVisible('[data-mp="sub"]') && await page.isVisible('[data-mp="join"]') && await page.isVisible('[data-mp="transfer"]'));
 		ok('敏感信息默认锁着，看不到完整邮箱，有「发验证码」' + T, !/xiaoming2026/.test(t) && await page.isVisible('#meBox [data-cwrap] [data-send]') && /发验证码到 xi\*\*\*@qq\.com/.test(t));
@@ -203,6 +204,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		await p3.goto('http://localhost:8181/panel/?p=me'); await W(2400);
 		const t3 = await p3.textContent('#meBox');
 		ok('[子账号] 标着子账号 · 家人，列出能用的功能（打勾）和主账号' + T, /子账号 · 家人/.test(t3) && /✓ 切换节点/.test(t3) && /✕ 系统操作/.test(t3) && /妈妈/.test(t3), t3.slice(0, 300));
+		ok('[子账号] 能看到版本，不能换' + T, /本地版/.test(t3) && !(await p3.isVisible('#meBox [data-mp="edsw"]')));
 		ok('[子账号] 没有续期码、添加家人、转让；有「退出这台路由器」' + T, !(await p3.isVisible('[data-mp="renew"]')) && !(await p3.isVisible('[data-mp="join"]')) && await p3.isVisible('[data-mp="leave"]'));
 		ok('[子账号] 整页不横向滚动' + T, (await p3.evaluate(() => document.documentElement.scrollWidth)) <= w);
 		await p3.screenshot({ path: path.join(SHOT, `me-sub-${w}.png`), fullPage: true });

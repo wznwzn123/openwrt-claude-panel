@@ -34,8 +34,13 @@ const FS: Record<string, { n: string; f: (d: any) => boolean }> = {
   idle: { n: '7 天没上线', f: d => live(d) && !d.off && Date.now() - (d.seen || d.created) > 7 * 864e5 },
   // 报不上版本的（心跳里没有版本号，v1.3.0 及更早）也算旧版本：它们最需要手动升级
   old: { n: '旧版本', f: d => live(d) && !!latest.value && (d.ver ? vNewer(latest.value, d.ver) : !!d.seen) },
+  local: { n: '本地版', f: d => live(d) && d.ed === 'local' },
+  edfail: { n: '换版本失败', f: d => live(d) && !!d.edFail && Date.now() - d.edFail.at < 7 * 864e5 },
   bin: { n: '回收站', f: d => d.offWhy === 'deleted' },
 }
+// 6.0 第 94 项：托管版的版本、换版本失败在哪一步
+const ED_NAME: Record<string, string> = { ai: 'AI 版', local: '本地版', noai: '纯面板版（旧）' }
+const ED_STEP: Record<string, string> = { hub: '官网开通隧道', space: '路由器空间不够', download: '下载隧道程序', tunnel: '连接隧道', write: '写入设置', busy: '正在更新', other: '其他' }
 const hit = (d: any) => { const k = q.value.trim().toLowerCase(); return !k || [d.sub, d.name, d.model, d.anote].join(' ').toLowerCase().includes(k) }
 const shown = computed(() => devs.value.filter(d => FS[f.value].f(d) && hit(d)).sort((a, b) => f.value === 'bin' ? (a.purgeAt || 0) - (b.purgeAt || 0) : (b.seen || 0) - (a.seen || 0)))
 const online = computed(() => devs.value.filter(d => live(d) && d.seen && Date.now() - d.seen < 6 * 3600e3 + 600e3).length)
@@ -119,9 +124,13 @@ onMounted(load)
                 <Tag v-if="d.ver" :tone="latest && vNewer(latest, d.ver) ? 'danger' : 'neutral'">v{{ d.ver }}{{ latest && vNewer(latest, d.ver) ? ' · 旧版' : '' }}</Tag>
                 <Tag v-else-if="live(d) && d.seen" tone="danger">版本未知 · 很旧</Tag>
                 <Tag v-if="d.off && d.offWhy !== 'deleted'" tone="danger" dot>{{ d.offWhy === 'exp' ? '到期暂停' : '已封禁' }}</Tag>
+                <Tag v-if="d.ed === 'local'" tone="info">本地版</Tag>
+                <Tag v-else-if="d.ed === 'noai'" tone="neutral">纯面板版（旧）</Tag>
+                <Tag v-if="d.edFail && Date.now() - d.edFail.at < 7 * 864e5" tone="danger">换版本失败</Tag>
               </div>
               <div v-if="d.offWhy === 'deleted'" class="hub-row-meta">{{ day(d.delAt) }} {{ d.delWhy === 'idle' ? '因为 90 天没上线被放进回收站' : '删除' }} · <b class="bad">{{ day(d.purgeAt) }} 彻底删除</b> · {{ (d.users || []).length }} 个账号</div>
               <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号{{ d.owner ? '' : (d.users || []).length > 1 ? '（还没选主账号）' : '' }} · 邀请码 {{ d.invite || '—' }}{{ d.ov ? ` · 提醒过升级 ${d.ov.n || 1} 次（最近 ${ago(d.ov.at)}）` : '' }}</div>
+              <div v-if="d.edFail && Date.now() - d.edFail.at < 7 * 864e5" class="hub-note">换成{{ d.edFail.to === 'ai' ? ' AI 版' : ED_NAME[d.edFail.to] || d.edFail.to }}失败（{{ ED_STEP[d.edFail.step] || d.edFail.step }}，{{ ago(d.edFail.at) }}）：{{ d.edFail.why || '没说原因' }}。已自动退回原来的版本</div>
               <div v-if="d.anote" class="hub-note">📝 {{ d.anote }}</div>
             </div>
             <div class="hub-row-acts">

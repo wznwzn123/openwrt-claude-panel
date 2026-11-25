@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="panel-ver" content="dev"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- 6.0 第 94 项（安全）：不让别的网页把面板套在框里（点击劫持）；本地版走 http，路由器那边也加了 X-Frame-Options -->
+<script>if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.location.href; } catch (e) {} }</script>
 <meta name="theme-color" id="tcm" content="#f2f2f7">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>我的路由器</title>

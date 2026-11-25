@@ -605,6 +605,11 @@ const noCloud = () => !!cinfo && cinfo.enabled === false;
 // 6.0：手机不再存登录密钥，自建完整版 Worker 要的密钥由路由器在云端信息里给；
 // 还没换成手机钥匙的旧手机（比如升级后第一次打开时路由器正好离线）先用手上那把旧的，好看到断线原因
 const cloudKey = () => (cinfo && cinfo.pkey) || oldToken() || '';
+// 云端接口的地址：平时跟面板同一个网址（../cloud/）；在家里局域网打开的（本地版、http://路由器地址:906）没有 /cloud/，
+// 直接找托管的专属网址（云端允许家里局域网地址跨域来读，6.0 第 94 项）
+// 在家里局域网打开的：先要知道专属网址（cloud_info）才能去读云端
+async function cinfoReady() { if (LAN_HOME && !cinfo) { try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} } }
+const cloudURL = (p) => (LAN_HOME && cinfo && /^https:\/\/[^/]+\/cloud\/?$/.test(cinfo.url || '') ? cinfo.url.replace(/\/$/, '') + '/' : '../cloud/') + p;
 // 连不上时查一下是哪一段不通：官网（也在 Cloudflare 上）通不通、国内网站通不通（只看能不能连上，不读内容）
 async function netProbe(url, ms) {
 	const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 6000);
@@ -617,6 +622,7 @@ async function netDiag() {
 	return { official, cn };
 }
 async function cloudFetch(force) {
+	await cinfoReady();
 	if (noCloud()) { cloud = null; cloudErr = null; return null; }
 	if (!force && cloud && Date.now() - cloudAt < 15000) return cloud;
 	cloudAt = Date.now();
@@ -628,7 +634,7 @@ async function cloudFetch(force) {
 		if (rel && relayOn()) r = await go(rel);
 		else {
 			// 专属网址连不上：托管版试一下官网中转（见 30-core 的 relayFor）
-			try { r = await go('../cloud/s'); }
+			try { r = await go(cloudURL('s')); }
 			catch (e) { if (!rel || e.name === 'AbortError') throw e; r = await go(rel); if (r.headers.get('x-cmcp-relay') !== '1') throw e; }
 		}
 		if (!r.ok) throw new Error(r.status === 403 ? '云端密钥不对' : '云端返回 ' + r.status);
@@ -856,7 +862,7 @@ function renderWd(err) {
 		const x = ev.target.closest('[data-wdclear]');
 		if (x && await confirmBox('清空断线记录', '路由器和云端的记录都会清空，之前的断线原因就看不到了。', '清空', true)) busy(x, async () => {
 			await P('wd_clear', {});
-			await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), clear: true }) }).catch(() => {});
+			await fetch(cloudURL('s'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), clear: true }) }).catch(() => {});
 			toast('已清空'); refresh(true);
 		});
 		if (ev.target.closest('[data-tablet]')) tabletHelp();
@@ -868,7 +874,8 @@ function renderWd(err) {
 const PUSH = { st: null, at: 0 };
 const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 async function cloudPush(b) {
-	const r = await fetch('../cloud/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), ...b }), cache: 'no-store' });
+	await cinfoReady();
+	const r = await fetch(cloudURL('push'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), ...b }), cache: 'no-store' });
 	if (!r.ok) {
 		let m = null;
 		try { m = (await r.json()).error; } catch (e) {}
@@ -915,7 +922,7 @@ function pushRender() {
 	// 浏览器通知（部分浏览器收不到，比如安卓 Edge）
 	let bh;
 	const others = (s.subs || []).filter((x) => !x.me);
-	if (!s.ok) bh = `<p class="muted" style="margin:4px 0 0;font-size:13px">这个浏览器不支持推送通知。</p>`;
+	if (!s.ok) bh = `<p class="muted" style="margin:4px 0 0;font-size:13px">${!window.isSecureContext ? '在家里地址（http）打开面板时，浏览器不让开推送通知：用下面的微信推送，或者从官网打开面板再开。' : '这个浏览器不支持推送通知。'}</p>`;
 	else if (s.perm === 'denied') bh = `<div class="notice w">通知权限被关掉了：到手机「设置 → 应用 → 浏览器 → 通知」里打开，再回来点开启。</div>`;
 	else if (!on) bh = `<p class="muted" style="margin:4px 0 0;font-size:13px">弹在手机通知栏。安卓 Edge 收不到，要用 Chrome。</p>
 		${s.err ? `<div class="notice w" style="margin-top:8px">${esc(s.err)}</div>` : ''}
@@ -958,7 +965,7 @@ function pushRender() {
 		if (on1) busy(on1, async () => {
 			const perm = await Notification.requestPermission();
 			if (perm !== 'granted') { await pushState(true); pushRender(); return toast(perm === 'denied' ? '通知权限被拒绝了' : '没有允许通知', true); }
-			const key = (await (await fetch('../cloud/push/key', { cache: 'no-store' })).json()).key;
+			const key = (await (await fetch(cloudURL('push/key'), { cache: 'no-store' })).json()).key;
 			if (!key) throw new Error('云端还没配置推送');
 			const reg = await swReg();
 			const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((key.length + 3) % 4)), (c) => c.charCodeAt(0));
@@ -2295,7 +2302,7 @@ function lanRow() { const l = lanAddr(); return l ? `<dt>在家里打开</dt><dd
 function mpLocalDraw() {
 	const box = $('meBox'), hosted = isHosted(), ver = sudoOn() && SUDO.kind === 'local';
 	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? (ME_ROLE.lanin ? '局域网登录' : '应急登录') : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? (ME_ROLE.lanin ? '你是在家里局域网直接登录的' : '你是用路由器终端的应急登录码进来的') + '，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
-	if (lanAddr()) h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">${lanRow()}</dl></section>`;
+	if (lanAddr() || edNow()) h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">${edRow()}${lanRow()}</dl></section>`;
 	if (!ver) {
 		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
 		if (store.get('rp_ai') === '1') L.push(['AI 连接器地址', '能让 AI 控制路由器的地址']);
@@ -2417,7 +2424,7 @@ function mpDraw() {
 	${s.exp ? (main ? `<div class="mp-acts"><button class="btn" data-mp="renew">输入续期码</button><a class="btn primary" href="${esc((s.hub || '') + '/app')}" target="_blank" rel="noopener">去官网申请续期</a></div>` : '<p class="mp-note">续期由主账号在官网申请</p>') : ''}</section>`;
 	// 这台路由器
 	h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">
-	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>${lanRow()}
+	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>${edRow()}${lanRow()}
 	${ME.role === 'sub' && ME.subExp ? `<dt>你能用到</dt><dd>${esc(ymd(ME.subExp))}</dd>` : ''}</dl>
 	${ME.role === 'sub' ? `<div class="mp-perm">${Object.keys(PERM_N).map((k) => `<span class="${(ME.perms || []).includes(k) ? 'on' : ''}">${(ME.perms || []).includes(k) ? '✓' : '✕'} ${esc(PERM_N[k])}</span>`).join('')}</div><p class="mp-note" style="text-align:left">你是子账号：上面打勾的你能用，其他的由主账号决定。</p>` : ''}</section>`;
 	// 家人
@@ -2560,6 +2567,7 @@ $('meBox').addEventListener('click', async (e) => {
 	if (k === 'av') { const f = await pickFile('image/*,.heic,.heif'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
+	else if (k === 'edsw') edSheet();
 	else if (k === 'lancp') { const l = lanAddr(); if (l) copyText(l.url); }
 	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }
 	else if (k === 'kphone') addPhone();
@@ -2687,6 +2695,7 @@ async function ckeySheet() {
 	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
 	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
+	${r.url && /^http:/.test(r.url) ? '<div class="notice" style="margin-top:10px">本地版：只有连着家里 Wi-Fi 的电脑、手机能用这个地址。</div>' : ''}
 	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 AI 应用里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
 	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m, close) => {

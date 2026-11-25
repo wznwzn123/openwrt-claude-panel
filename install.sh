@@ -11,7 +11,8 @@
 #
 # 托管版（用别人提供的托管服务，自动拿到专属网址，不用自己弄 Cloudflare）：
 #   --hub https://托管服务网址   托管安装包里已经写好，一般不用填
-#   --invite 安装码              托管版：官网注册账号后在「装新路由器」里拿（领试用或用邀请码兑换），官网给的命令里已经带着；装 AI 版还是纯面板版在终端里输 1 或 2 选
+#   --invite 安装码              托管版：官网注册账号后在「装新路由器」里拿（领试用或用邀请码兑换），官网给的命令里已经带着；装 AI 版还是本地版在终端里输 1 或 2 选
+#   --local                      托管版装本地版：不装隧道，只能连着家里 Wi-Fi 打开面板（6.0）
 #
 # 其他可选参数（不填就交互询问）：
 #   --domain router.example.com    面板域名（用 Cloudflare 命名隧道时填）
@@ -37,7 +38,7 @@ fi
 SRC=$(cd "$(dirname "$0")" && pwd)/src
 WWW=/www-claude-mcp
 D=/etc/claude-mcp
-ED=""; AI=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0; HUB=""; INV=""; BOUND=0
+ED=""; AI=""; LOCAL=""; DOMAIN=""; TTOK=""; CURL_=""; YES=0; HUB=""; INV=""; BOUND=0
 
 STEP="开始安装"; ERR=""; ABORT=0
 say()  { STEP="$*"; printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -190,6 +191,7 @@ while [ $# -gt 0 ]; do
 		--lite) ED=lite ;;
 		--full) ED=full ;;
 		--ai) AI=1 ;;
+		--local) LOCAL=1; AI=1 ;;
 		--no-ai|--panel-only) AI=0 ;;
 		--domain) DOMAIN=$2; shift ;;
 		--tunnel-token) TTOK=$2; shift ;;
@@ -258,6 +260,29 @@ if [ -n "$HUB" ]; then
 	case "$HUB" in https://*) ;; *) die "托管服务网址应该是 https:// 开头" ;; esac
 	ED=full   # 托管版自带云端（推送、云端备份、断电断网判断）
 fi
+# 6.0 第 94 项：托管版只有「1 AI 版 / 2 本地版」（旧的托管纯面板版保持原样，在面板里能换）；自建版还是「AI 版 / 纯面板版」
+OLDLOCAL=0; [ -f "$D/local" ] && OLDLOCAL=1
+OLDNOAI=0; [ $UPGRADE = 1 ] && grep -q '"ai": *false' "$D/config.json" 2>/dev/null && OLDNOAI=1
+[ -n "$LOCAL" ] && [ -z "$HUB" ] && die "本地版只有托管版有：自建版本来就能只在家里用（不填隧道 token 就是临时隧道）"
+if [ -n "$HUB" ] && [ -z "$LOCAL" ]; then
+	if [ -n "$AI" ]; then
+		# 一键更新（带着 --ai / --no-ai）：版本不变
+		LOCAL=$OLDLOCAL
+	elif [ $UPGRADE = 1 ] && [ $OLDNOAI = 1 ]; then
+		AI=0; LOCAL=0
+		say "这台路由器装的是纯面板版（旧），保持不变。想换成 AI 版或本地版：面板「我的主页」里一键切换"
+	else
+		def=1; [ $OLDLOCAL = 1 ] && def=2
+		echo
+		echo "  装哪个版本？"
+		echo "  1) AI 版：在哪都能打开面板，能接 Claude、ChatGPT 等 AI"
+		echo "  2) 本地版：只能连着家里 Wi-Fi 打开，比 AI 版省约 30 MB"
+		echo "  以后想换：面板「我的主页」或官网「我的路由器」里一键切换"
+		ask PICK "输入 1 或 2，回车" "$def"
+		AI=1; case "$PICK" in 2) LOCAL=1 ;; *) LOCAL=0 ;; esac
+	fi
+fi
+[ -z "$HUB" ] && LOCAL=0
 if [ -z "$AI" ]; then
 	def=1; [ "$PKG_AI" = 0 ] && def=2
 	[ $UPGRADE = 1 ] && { grep -q '"ai": *false' "$D/config.json" && def=2 || def=1; }
@@ -279,7 +304,13 @@ if [ -z "$ED" ]; then
 	case "$PICK" in 2) ED=full ;; *) ED=lite ;; esac
 fi
 [ "$ED" = full ] && [ ! -f "$SRC/bin/cmcp-backup" ] && die "这个安装包是精简版，装完整版请下载 full 包"
-NAME="$( [ "$AI" = 1 ] && echo AI版 || echo 纯面板版 )·$( [ -n "$HUB" ] && echo 托管版 || { [ "$ED" = full ] && echo 完整版 || echo 精简版; } )"
+NAME="$( [ "$LOCAL" = 1 ] && echo 本地版 || { [ "$AI" = 1 ] && echo AI版 || echo 纯面板版; } )·$( [ -n "$HUB" ] && echo 托管版 || { [ "$ED" = full ] && echo 完整版 || echo 精简版; } )"
+# 已经开通过的托管版换了版本（本地版 ↔ AI 版）：文件装好以后交给 cmcp-edition 换（失败自动退回原来的版本）
+EDSWITCH=""
+if [ -n "$HUB" ] && [ $UPGRADE = 1 ] && [ -s "$D/hub.conf" ]; then
+	[ "$LOCAL" = 1 ] && [ $OLDLOCAL = 0 ] && EDSWITCH=local
+	[ "$LOCAL" = 0 ] && [ $OLDLOCAL = 1 ] && EDSWITCH=ai
+fi
 say "安装 $NAME${PKG_VER:+（v$PKG_VER）}$( [ $UPGRADE = 1 ] && echo '，升级，保留现有设置' )"
 
 # ---------- 依赖 ----------
@@ -513,6 +544,8 @@ pkg_rm() { if have_pkg apk; then apk del "$@" >/dev/null 2>&1; elif have_pkg opk
 # 装进闪存还是用小闪存模式：设置 CFD_RAM（0 = 装进闪存了，1 = 要用小闪存模式）
 cfd_place() {
 	CFD_RAM=0
+	# 6.0 第 94 项：本地版不装隧道程序（省约 30 MB）；从本地版换成 AI 版的，交给后面的 cmcp-edition 装
+	if [ "$LOCAL" = 1 ] || [ "$EDSWITCH" = ai ]; then ok "本地版不用隧道程序（cloudflared），省约 30 MB"; return 0; fi
 	have_pkg cloudflared && return 0
 	CFD_NEED=$(cfd_need)
 	FREE=$(free_mb); FREE=${FREE:-0}
@@ -684,7 +717,7 @@ if [ -n "$HUB" ]; then
 				[ ${#RID} -ge 16 ] || RID=$(printf '%s%s%s' "$(date +%s)" "$$" "$(cat /proc/sys/kernel/random/uuid 2>/dev/null)" | md5sum | cut -c1-32)
 				(umask 077; printf '%s\n' "$RID" > $D/reg_rid)
 			fi
-			R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\",\"rid\":\"$RID\"}" "$HUB/api/register" || true)
+			R=$(curl -s -m 90 -X POST -H 'Content-Type: application/json' -d "{\"invite\":\"$inv\",\"name\":\"$nm\",\"model\":\"$md\",\"rid\":\"$RID\"$( [ "$LOCAL" = 1 ] && echo ',\"local\":true' )}" "$HUB/api/register" || true)
 			SUB=$(jf sub)
 			[ -n "$SUB" ] && break
 			e=$(jf error)
@@ -695,13 +728,14 @@ if [ -n "$HUB" ]; then
 			die "开通失败：${e:-连不上托管服务 $HUB}"
 		done
 		HOST=$(jf host)
+		[ "$LOCAL" = 1 ] && [ "$(jf local)" != true ] && die "官网这边还不能开通本地版：过一会儿再试，或者先装 AI 版（以后在面板里能换）"
 		(umask 077
-		 printf '%s' "$(jf token)" > $D/tunnel_token
+		 if [ "$(jf local)" = true ]; then rm -f $D/tunnel_token; : > $D/local; else printf '%s' "$(jf token)" > $D/tunnel_token; rm -f $D/local; fi
 		 printf 'URL=%s\nRKEY=%s\nTKEY=%s\nPKEY=%s\n' "$(jf url)" "$(jf rkey)" "$(jf tkey)" "$(jf pkey)" > $D/cloud.conf
 		 printf 'HUB=%s\nSUB=%s\n' "$HUB" "$SUB" > $D/hub.conf)
 		printf '%s\n' "$HOST" > $D/hostname
 		rm -f $D/reg_rid
-		ok "开通成功：https://$HOST"
+		if [ "$(jf local)" = true ]; then ok "开通成功（本地版）"; else ok "开通成功：https://$HOST"; fi
 		[ "$(jf bound)" = true ] && { BOUND=1; ok "路由器已经自动加到你的官网账号里，你是它的主账号"; }
 		EXP=$(jf exp); [ "${EXP:-0}" -gt 0 ] 2>/dev/null && SVC_END=$(date -d "@$((EXP / 1000))" '+%Y-%m-%d' 2>/dev/null || echo "")
 	fi
@@ -760,7 +794,7 @@ echo "$(( $(date +%s) / 7 % 60 )) $(( $(date +%s) / 13 % 3 + 3 )) * * * /usr/sbi
 # ---------- 升级系统时保留 ----------
 [ "$UC_PRIV" = 1 ] && for p in $UCRT/ $UCW; do grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf; done
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /www/luci-static/resources/view/cmcp/ /usr/lib/lua/luci/controller/cmcp.lua /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /www/luci-static/resources/view/cmcp/ /usr/lib/lua/luci/controller/cmcp.lua /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-edition /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复
@@ -775,7 +809,7 @@ printf 'VER=%s\nCODE=%s\nAT=%s\n' "${PKG_VER:-dev}" "$CODE" "$(date +%s)" > $D/v
 # 认出装了哪些代理插件（OpenClash、Nikki、PassWall、PassWall2、HomeProxy、SSR Plus+），面板按它显示
 PXL=$(/usr/sbin/cmcp-proxy list 2>/dev/null | cut -d' ' -f4- | tr '\n' '、' | sed 's/、$//')
 [ -n "$PXL" ] && ok "认出代理插件：$PXL" || ok "没装代理插件（以后装了 OpenClash、PassWall 等，面板会自动认出来）"
-[ "$(/usr/sbin/cmcp-tunbypass apply 2>/dev/null)" = changed ] && ok "隧道改成直连 Cloudflare：代理插件重启或节点卡住时，面板和 AI 不会再跟着断"
+[ ! -f $D/local ] && [ "$(/usr/sbin/cmcp-tunbypass apply 2>/dev/null)" = changed ] && ok "隧道改成直连 Cloudflare：代理插件重启或节点卡住时，面板和 AI 不会再跟着断"
 
 # ---------- 启动 ----------
 say "启动服务"
@@ -783,6 +817,16 @@ say "启动服务"
 /etc/init.d/claude-mcp restart
 /etc/init.d/cmcp-watchdog enable
 /etc/init.d/cmcp-watchdog restart
+# 6.0 第 94 项：重新运行安装命令时换了版本（本地版 ↔ AI 版）
+if [ -n "$EDSWITCH" ] && [ -x /usr/sbin/cmcp-edition ]; then
+	say "换成$( [ "$EDSWITCH" = local ] && echo 本地版 || echo ' AI 版')"
+	if /usr/sbin/cmcp-edition to-$EDSWITCH "" install >/dev/null 2>&1; then ok "已换好"
+	else
+		warn "没换成：$(jsonfilter -i /tmp/cmcp_ed.json -e '@.msg' 2>/dev/null)。已退回原来的版本，其他照常安装"
+		[ -f $D/local ] && LOCAL=1 || LOCAL=0
+	fi
+	NAME="$( [ "$LOCAL" = 1 ] && echo 本地版 || echo AI版 )·托管版"
+fi
 # 换了网址（比如自建版换成托管版）后，OpenClash 规则集里的面板域名也要跟着更新
 /usr/sbin/cmcp-route --init >/dev/null 2>&1 || true
 # 公告：先取一次（记下从现在开始，以前的公告不推送到手机；面板「通知」里马上就能看到）
@@ -836,8 +880,10 @@ if [ -n "$HUB" ]; then
 		echo
 		echo "👉 接下来：回到手机上的官网「我的路由器」（页面会自动刷新），"
 		echo "   点这台路由器的「打开面板」就进去了，不用输任何码。"
+		[ -f $D/local ] && echo "   本地版：手机要连着家里的 Wi-Fi 才能打开。"
 	else
 		echo "👉 接下来：手机打开官网，在「我的路由器」里点这台路由器的「打开面板」。"
+		[ -f $D/local ] && echo "   本地版：手机要连着家里的 Wi-Fi 才能打开。"
 		echo
 		echo "   官网里还没有这台路由器的话：在这里运行 cmcp-pair 拿一个配对码，"
 		echo "   在官网「添加路由器 → 装新路由器 → 路由器已经装好了」里填上，就加到你的账号里了。"
@@ -857,8 +903,14 @@ if [ -n "$HUB" ]; then
 	echo "托管版的推送、云端备份、断电断网判断都已经开通，不用另外设置。"
 	echo
 	echo "---------- 备用信息（一般用不到） ----------"
+	if [ -f $D/local ]; then
+		LP=$(cat $D/lan_port 2>/dev/null || echo 906); LIP=$(uci -q get network.lan.ipaddr); LIP=${LIP%% *}; LIP=${LIP%%/*}
+		echo "本地版：只能连着家里 Wi-Fi 打开。面板地址：http://${LIP:-路由器地址}:$LP/panel/（从官网「打开面板」进去不用输密码；直接打开要输一次路由器后台密码）"
+		echo "AI 连接器地址（家里电脑上的 AI 应用用，比如 Cherry Studio；只有你自己能看）：http://${LIP:-路由器地址}:$LP/cgi-bin/mcp/$CKEY"
+	else
 	echo "面板地址：https://$H/panel/（要从官网「打开面板」进去才能登录）"
 	[ "$AI" = 1 ] && echo "AI 连接器地址（在 AI 应用里添加连接器时填，比如 Claude「设置 → 连接器 → 添加自定义连接器」；只有你自己能看）：https://$H/cgi-bin/mcp/$CKEY"
+	fi
 	echo "官网打不开、急着用：在这里运行 cmcp-logincode 拿一个应急登录码，在面板「官网打不开、急着用？」里输入"
 else
 	echo

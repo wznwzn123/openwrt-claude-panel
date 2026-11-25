@@ -777,7 +777,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
             <ol class="steps">
               <li><div><h3>注册账号，获取安装命令</h3><p><a class="inline" href="/app#reg">注册账号</a>后在「添加路由器 → 装新路由器」里领 7 天免费试用（有邀请码的填进去兑换），下面会给你一条<b>带着安装码</b>的命令，点「复制命令」。</p></div></li>
               <li><div><h3>打开路由器后台的终端</h3><p>手机连家里 Wi-Fi，浏览器打开路由器后台（比如 <code>http://192.168.1.1</code>）→「服务」→「终端」，用 <code>root</code> 和后台密码登录。没有「终端」可以用手机 SSH 软件。（这里用的是路由器后台自带的终端。）</p></div></li>
-              <li><div><h3>粘贴命令，选择版本</h3><p>命令长这样（最后是你的安装码）。终端问装哪个版本时，输 <b>1</b> 是 <b>AI 版</b>（手机面板 + 能用 Claude、ChatGPT 等 AI 对话管路由器），输 <b>2</b> 是<b>纯面板版</b>（只有手机面板），回车后等待安装完成：</p>
+              <li><div><h3>粘贴命令，选择版本</h3><p>命令长这样（最后是你的安装码）。终端问装哪个版本时，输 <b>1</b> 是 <b>AI 版</b>（手机面板 + 能用 Claude、ChatGPT 等 AI 对话管路由器），输 <b>2</b> 是<b>本地版</b>（只能连着家里 Wi-Fi 打开，省约 30 MB），回车后等待安装完成：</p>
                 <pre class="cmd" id="cmd">cd /tmp &amp;&amp; wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel-hosted.tar.gz &amp;&amp; tar xzf p.tar.gz &amp;&amp; cd openwrt-claude-panel &amp;&amp; sh install.sh --invite 你的安装码</pre>
                 <div class="copy-row"><a class="btn btn--secondary" href="/app#reg">去官网拿我的命令</a><span class="t-small">已有账号的直接<a class="inline" href="/app">登录</a></span></div></div></li>
             </ol>
@@ -844,7 +844,7 @@ footer.closing .close--type h2 { font-size: clamp(40px, 6vw, 88px); line-height:
           <ul>
             <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>无需自备域名和 Cloudflare 账号</li>
             <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>包含推送、云端备份和一键更新</li>
-            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>可选 AI 版或纯面板版</li>
+            <li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.4 2.8 2.8 6.2-6.4"/></svg>可选 AI 版或本地版，随时一键切换</li>
           </ul>
           <div class="btn-row"><a class="btn btn--primary" href="/app#reg">注册领 7 天试用</a></div>
         </article>

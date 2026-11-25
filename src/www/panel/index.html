@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="panel-ver" content="dev"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- 6.0 第 94 项（安全）：不让别的网页把面板套在框里（点击劫持）；本地版走 http，路由器那边也加了 X-Frame-Options -->
+<script>if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.location.href; } catch (e) {} }</script>
 <meta name="theme-color" id="tcm" content="#f2f2f7">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>我的路由器</title>
@@ -554,6 +556,7 @@ b.dvname{display:block;line-height:26px}
 .mact{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:50px;padding:9px 14px;border:0;background:none;text-align:left;font:inherit;color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .mact+.mact::before{content:"";position:absolute;top:0;left:60px;right:0;border-top:.5px solid var(--line)}
 .mact:active{background:var(--fill)}
+.mact:disabled{opacity:.55;cursor:default}.mact:disabled:active{background:none}
 .mact i{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--fill);flex:none}
 .mact i svg{width:18px;height:18px}
 .mact span{min-width:0}
@@ -623,6 +626,7 @@ b.dvname{display:block;line-height:26px}
 .mp-kv dt,.mp-kv dd{padding:11px 2px;border-top:1px solid var(--line,rgba(127,127,127,.15));margin:0;font-size:14.5px}
 .mp-kv dt{color:var(--muted);padding-right:14px;white-space:nowrap}
 .mp-kv dd{text-align:right;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-kv dd.mp-edd{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-top:7px;padding-bottom:7px}.mp-edd>span{overflow:hidden;text-overflow:ellipsis}.mp-edd .btn{flex:none}
 .mp-kv dt:first-of-type,.mp-kv dt:first-of-type+dd{border-top:0}
 .mp-ok{color:#34c759}.mp-warn{color:#ff9f0a}
 .mp-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
@@ -1462,6 +1466,8 @@ function rpcResult(j, method) {
 	}
 	if (e.code === -32014) { const err = new LockError(e.message, e.data); try { lkNeedPin(err); } catch (x) {} throw err; }
 	if (e.code === -32015) throw new NeedPwError(e.message);
+	// 6.0 第 94 项：托管服务到期 / 停用：路由器只回答看状态、输续期码
+	if (e.code === -32016) { try { svcOffPop(e.message); } catch (x) {} const err = new Error(e.message); err.quiet = true; throw err; }
 	// 6.0 第 60 项：这台路由器开不了这个功能（路由器那边已经记下，下次兼容情况上报时报）：弹一个小卡片，能直接「报告这个问题」
 	if (e.code === -32020) { try { compatFailPop(e.message, method); } catch (x) {} const err = new Error(e.message); err.quiet = true; throw err; }
 	throw new Error(e.message);
@@ -1554,6 +1560,7 @@ const base = (p) => String(p || '').split('/').pop();
 let toastT = 0, toastX = 0;
 let TOAST_MUTE = '';
 function toast(s, err) {
+	if (err && SVC_POP && /托管服务(到期|停用)/.test(String(s))) return; // 到期卡片已经说了，不再重复弹
 	s = String(s ?? '');
 	if (err && TOAST_MUTE && s === TOAST_MUTE) return; // 已经弹过「开不了这个功能」的卡片，不再重复提示
 	const t = $('toast'), dur = Math.min(7000, 2800 + Math.max(0, s.length - 24) * 60);
@@ -3786,6 +3793,93 @@ function renderLog() {
 	}).join('\n') : '（没有日志）';
 }
 
+/* ---------- 6.0 第 94 项：托管版的「AI 版 / 本地版」 ----------
+   「我的主页 → 这台路由器」里显示现在是哪个版本，主账号能换；换的时候路由器在后台做，这里看进度。
+   旧的托管纯面板版：更新后提示一次，能「打开 AI 功能」或「换成本地版」。托管服务到期 / 停用：弹卡片，能输续期码。 */
+const ED_NAME = { ai: 'AI 版', local: '本地版', noai: '纯面板版（旧）' };
+const ED_STEP = { hub: '官网开通隧道', space: '路由器空间不够', download: '下载隧道程序', tunnel: '连接隧道', write: '写入设置', busy: '正在更新', other: '' };
+const edN = (to) => (to === 'ai' ? ' AI 版' : ED_NAME[to]); // 「换成」后面接英文要空一格
+const edNow = () => (ME_ROLE && ME_ROLE.ed) || null;
+// 「这台路由器」里的一行：版本 + 换（只有主账号能换）
+function edRow() {
+	const ed = edNow();
+	if (!ed) return '';
+	return `<dt>版本</dt><dd class="mp-edd"><span>${esc(ED_NAME[ed])}</span>${ME_ROLE.role !== 'sub' ? '<button type="button" class="btn sm" data-mp="edsw">换版本</button>' : ''}</dd>`;
+}
+async function edSheet() {
+	const cur = edNow();
+	if (!cur) return;
+	const opt = (to, t, x) => `<button class="mact${cur === to ? ' on' : ''}" data-v="${to}"${cur === to ? ' disabled' : ''}><i>${mIc(to === 'local' ? '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/>' : '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>')}</i><span><b>${esc(t)}${cur === to ? '（现在）' : ''}</b><small>${esc(x)}</small></span></button>`;
+	const to = await modal(`<div class="sheethead"><h3>换版本</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<p class="muted" style="margin:0 0 10px;text-wrap:pretty">账号、家人、设置和到期时间都不变。</p>
+		<div class="mlist">${opt('ai', cur === 'noai' ? '打开 AI 功能' : 'AI 版', '在哪都能打开面板，能接 Claude、ChatGPT 等 AI')}${opt('local', '本地版', '只能连着家里 Wi-Fi 打开，比 AI 版省约 30 MB')}</div>`);
+	if (to !== 'ai' && to !== 'local') return;
+	const lan = lanAddr();
+	const what = to === 'local'
+		? `换好以后在外面打不开面板，只能连着家里 Wi-Fi 打开 ${lan ? lan.url : 'http://路由器地址:906/panel/'}。\nAI 连接器地址会换成家里的地址；推送、云端备份照常。\n路由器会删掉隧道程序（cloudflared），面板会断开几秒。`
+		: cur === 'noai' ? '打开以后能用 AI 连接器地址（在「我的主页 → 敏感信息」里）。' : '路由器要下载隧道程序（约 30 MB，闪存不够就放在内存里），2 分钟左右。\n没装上会自动退回本地版。';
+	if (!(await confirmBox(to === 'local' ? '换成本地版' : cur === 'noai' ? '打开 AI 功能' : '换成 AI 版', what, to === 'local' ? '换成本地版' : cur === 'noai' ? '打开' : '换成 AI 版', to === 'local'))) return;
+	let r;
+	try { r = await P('edition_set', { to }); } catch (e) { return toast(e.message, true); }
+	edProgress(to, r.id, r.lan || lan);
+}
+// 进度：路由器在后台换，这里每 2 秒问一次；换成本地版时隧道一停，在外面的手机就连不上了——直接告诉他去家里打开
+function edProgress(to, id, lan) {
+	const remote = !LAN_HOME;
+	modal(`<h3 data-t>正在换成${esc(edN(to))}</h3><div class="notice" data-m style="line-height:1.6;text-wrap:pretty"><span class="spin">↻</span> 准备中</div>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn primary" data-v="close" data-done disabled>完成</button></div>`, (m, close) => {
+		m.dataset.lock = '1';
+		const T = m.querySelector('[data-t]'), M = m.querySelector('[data-m]'), B = m.querySelector('[data-done]');
+		const end = (ok, html) => { clearInterval(tm); T.textContent = (ok ? '已换成' : '没换成') + edN(to); M.className = 'notice' + (ok ? '' : ' w'); M.innerHTML = html; B.disabled = false; delete m.dataset.lock; if (ok) loadRole(); };
+		let miss = 0;
+		const tick = async () => {
+			let s;
+			try { s = await P('edition_state', {}, 6000); miss = 0; } catch (e) {
+				// 换成本地版、手机不在家：隧道停了，连不上是正常的
+				if (to === 'local' && remote && ++miss >= 2) return end(true, `隧道已经停了，这台手机在外面连不上路由器了。换好会推送通知你。<br>以后连着家里 Wi-Fi 打开 <b>${esc(lan ? lan.url : 'http://路由器地址:906/panel/')}</b>，或者从官网「我的路由器」点「打开面板」。`);
+				return;
+			}
+			const j = s && s.job;
+			if (!j || j.id !== id) return;
+			if (j.state === 'run') { M.innerHTML = `<span class="spin">↻</span> ${esc(j.msg || '正在换')}`; return; }
+			if (j.state === 'ok') return end(true, esc(j.msg || ''));
+			end(false, `${ED_STEP[j.step] ? '<b>' + esc(ED_STEP[j.step]) + '</b>：' : ''}${esc(j.msg || '')}${/已退回/.test(j.msg || '') ? '' : '<br>已退回' + esc(edN(edNow()) || '原来的版本') + '，'}路由器照常能用。`);
+		};
+		const tm = setInterval(tick, 2000);
+		setTimeout(tick, 800);
+		B.onclick = () => close(null);
+	}, { compact: true });
+}
+// 旧的托管纯面板版：更新到 6.0 后提示一次（只有主账号）
+function edNoaiHint() {
+	if (edNow() !== 'noai' || ME_ROLE.role === 'sub' || store.get('rp_noaihint')) return;
+	store.set('rp_noaihint', '1');
+	modal(`<h3>纯面板版可以换成 AI 版或本地版了</h3><p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">AI 版能接 Claude、ChatGPT 等 AI；本地版只能连着家里 Wi-Fi 打开，比现在省约 30 MB。不换也能照常用。</p>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">不换</button><button class="btn primary" data-v="go">看看</button></div>`, null, { compact: true }).then((v) => { if (v === 'go') edSheet(); });
+}
+// 托管服务到期 / 停用（路由器上也挡住了，只能看状态、输续期码）
+var SVC_POP = false;
+function svcOffPop(msg) {
+	if (SVC_POP) return;
+	SVC_POP = true;
+	const exp = /到期/.test(msg || ''), hub = store.get('rp_hub') || '';
+	const body = String(msg || '').replace(/^托管服务(到期|停用)了[，：]?/, '').replace(/^这台路由器的托管服务停用了[，：]?/, '');
+	modal(`<h3>${exp ? '托管服务到期了' : '托管服务停用了'}</h3><p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">${esc(body)}</p>
+		${exp ? `<input class="input" data-code placeholder="续期码" autocapitalize="characters" spellcheck="false" style="margin-top:12px"><div class="formerr hidden" data-err></div>
+		<div class="btngrid" style="margin:12px 0 0">${hub ? `<a class="btn" href="${esc(hub + '/app')}" target="_blank" rel="noopener">去官网续期</a>` : '<button class="btn" data-again>我已经续期了</button>'}<button class="btn primary" data-renew>输入续期码</button></div>
+		${hub ? '<button class="btn" data-again style="width:100%;margin-top:8px">我已经续期了</button>' : ''}` : '<div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-again>再试一次</button></div>'}`, (m, close) => {
+		m.dataset.lock = '1';
+		const err = (t) => { const e = m.querySelector('[data-err]'); if (e) { e.textContent = t; e.classList.toggle('hidden', !t); } else if (t) toast(t, true); };
+		const again = async () => { try { const s = await P('svc_info', { force: true }); if (!s.off) { close(null); SVC_POP = false; location.reload(); } else err('官网那边还没续上：续期申请通过后再点'); } catch (e) { err(e.message); } };
+		m.querySelectorAll('[data-again]').forEach((b) => (b.onclick = () => busy(b, again, '核对中')));
+		const rb = m.querySelector('[data-renew]');
+		if (rb) rb.onclick = () => busy(rb, async () => {
+			const code = m.querySelector('[data-code]').value.trim();
+			if (!code) return err('输一下续期码');
+			try { const r = await P('svc_renew', { code }); toast('已续期 ' + r.days + ' 天'); close(null); SVC_POP = false; location.reload(); } catch (e) { err(e.message); }
+		}, '核对中');
+	}, { compact: true });
+}
 
 /* ---------- 6.0 第 17 项：家人只管自己的设备 ----------
  * 只管自己的家人（没有「看和管所有设备」）：设备页只有自己名下的设备，「认领设备」选哪台是自己的，主账号确认后才算。
@@ -4617,6 +4711,11 @@ const noCloud = () => !!cinfo && cinfo.enabled === false;
 // 6.0：手机不再存登录密钥，自建完整版 Worker 要的密钥由路由器在云端信息里给；
 // 还没换成手机钥匙的旧手机（比如升级后第一次打开时路由器正好离线）先用手上那把旧的，好看到断线原因
 const cloudKey = () => (cinfo && cinfo.pkey) || oldToken() || '';
+// 云端接口的地址：平时跟面板同一个网址（../cloud/）；在家里局域网打开的（本地版、http://路由器地址:906）没有 /cloud/，
+// 直接找托管的专属网址（云端允许家里局域网地址跨域来读，6.0 第 94 项）
+// 在家里局域网打开的：先要知道专属网址（cloud_info）才能去读云端
+async function cinfoReady() { if (LAN_HOME && !cinfo) { try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} } }
+const cloudURL = (p) => (LAN_HOME && cinfo && /^https:\/\/[^/]+\/cloud\/?$/.test(cinfo.url || '') ? cinfo.url.replace(/\/$/, '') + '/' : '../cloud/') + p;
 // 连不上时查一下是哪一段不通：官网（也在 Cloudflare 上）通不通、国内网站通不通（只看能不能连上，不读内容）
 async function netProbe(url, ms) {
 	const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 6000);
@@ -4629,6 +4728,7 @@ async function netDiag() {
 	return { official, cn };
 }
 async function cloudFetch(force) {
+	await cinfoReady();
 	if (noCloud()) { cloud = null; cloudErr = null; return null; }
 	if (!force && cloud && Date.now() - cloudAt < 15000) return cloud;
 	cloudAt = Date.now();
@@ -4640,7 +4740,7 @@ async function cloudFetch(force) {
 		if (rel && relayOn()) r = await go(rel);
 		else {
 			// 专属网址连不上：托管版试一下官网中转（见 30-core 的 relayFor）
-			try { r = await go('../cloud/s'); }
+			try { r = await go(cloudURL('s')); }
 			catch (e) { if (!rel || e.name === 'AbortError') throw e; r = await go(rel); if (r.headers.get('x-cmcp-relay') !== '1') throw e; }
 		}
 		if (!r.ok) throw new Error(r.status === 403 ? '云端密钥不对' : '云端返回 ' + r.status);
@@ -4868,7 +4968,7 @@ function renderWd(err) {
 		const x = ev.target.closest('[data-wdclear]');
 		if (x && await confirmBox('清空断线记录', '路由器和云端的记录都会清空，之前的断线原因就看不到了。', '清空', true)) busy(x, async () => {
 			await P('wd_clear', {});
-			await fetch('../cloud/s', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), clear: true }) }).catch(() => {});
+			await fetch(cloudURL('s'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), clear: true }) }).catch(() => {});
 			toast('已清空'); refresh(true);
 		});
 		if (ev.target.closest('[data-tablet]')) tabletHelp();
@@ -4880,7 +4980,8 @@ function renderWd(err) {
 const PUSH = { st: null, at: 0 };
 const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 async function cloudPush(b) {
-	const r = await fetch('../cloud/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), ...b }), cache: 'no-store' });
+	await cinfoReady();
+	const r = await fetch(cloudURL('push'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: cloudKey(), ...b }), cache: 'no-store' });
 	if (!r.ok) {
 		let m = null;
 		try { m = (await r.json()).error; } catch (e) {}
@@ -4927,7 +5028,7 @@ function pushRender() {
 	// 浏览器通知（部分浏览器收不到，比如安卓 Edge）
 	let bh;
 	const others = (s.subs || []).filter((x) => !x.me);
-	if (!s.ok) bh = `<p class="muted" style="margin:4px 0 0;font-size:13px">这个浏览器不支持推送通知。</p>`;
+	if (!s.ok) bh = `<p class="muted" style="margin:4px 0 0;font-size:13px">${!window.isSecureContext ? '在家里地址（http）打开面板时，浏览器不让开推送通知：用下面的微信推送，或者从官网打开面板再开。' : '这个浏览器不支持推送通知。'}</p>`;
 	else if (s.perm === 'denied') bh = `<div class="notice w">通知权限被关掉了：到手机「设置 → 应用 → 浏览器 → 通知」里打开，再回来点开启。</div>`;
 	else if (!on) bh = `<p class="muted" style="margin:4px 0 0;font-size:13px">弹在手机通知栏。安卓 Edge 收不到，要用 Chrome。</p>
 		${s.err ? `<div class="notice w" style="margin-top:8px">${esc(s.err)}</div>` : ''}
@@ -4970,7 +5071,7 @@ function pushRender() {
 		if (on1) busy(on1, async () => {
 			const perm = await Notification.requestPermission();
 			if (perm !== 'granted') { await pushState(true); pushRender(); return toast(perm === 'denied' ? '通知权限被拒绝了' : '没有允许通知', true); }
-			const key = (await (await fetch('../cloud/push/key', { cache: 'no-store' })).json()).key;
+			const key = (await (await fetch(cloudURL('push/key'), { cache: 'no-store' })).json()).key;
 			if (!key) throw new Error('云端还没配置推送');
 			const reg = await swReg();
 			const raw = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((key.length + 3) % 4)), (c) => c.charCodeAt(0));
@@ -6307,7 +6408,7 @@ function lanRow() { const l = lanAddr(); return l ? `<dt>在家里打开</dt><dd
 function mpLocalDraw() {
 	const box = $('meBox'), hosted = isHosted(), ver = sudoOn() && SUDO.kind === 'local';
 	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? (ME_ROLE.lanin ? '局域网登录' : '应急登录') : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? (ME_ROLE.lanin ? '你是在家里局域网直接登录的' : '你是用路由器终端的应急登录码进来的') + '，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
-	if (lanAddr()) h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">${lanRow()}</dl></section>`;
+	if (lanAddr() || edNow()) h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">${edRow()}${lanRow()}</dl></section>`;
 	if (!ver) {
 		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
 		if (store.get('rp_ai') === '1') L.push(['AI 连接器地址', '能让 AI 控制路由器的地址']);
@@ -6429,7 +6530,7 @@ function mpDraw() {
 	${s.exp ? (main ? `<div class="mp-acts"><button class="btn" data-mp="renew">输入续期码</button><a class="btn primary" href="${esc((s.hub || '') + '/app')}" target="_blank" rel="noopener">去官网申请续期</a></div>` : '<p class="mp-note">续期由主账号在官网申请</p>') : ''}</section>`;
 	// 这台路由器
 	h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">
-	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>${lanRow()}
+	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>${edRow()}${lanRow()}
 	${ME.role === 'sub' && ME.subExp ? `<dt>你能用到</dt><dd>${esc(ymd(ME.subExp))}</dd>` : ''}</dl>
 	${ME.role === 'sub' ? `<div class="mp-perm">${Object.keys(PERM_N).map((k) => `<span class="${(ME.perms || []).includes(k) ? 'on' : ''}">${(ME.perms || []).includes(k) ? '✓' : '✕'} ${esc(PERM_N[k])}</span>`).join('')}</div><p class="mp-note" style="text-align:left">你是子账号：上面打勾的你能用，其他的由主账号决定。</p>` : ''}</section>`;
 	// 家人
@@ -6572,6 +6673,7 @@ $('meBox').addEventListener('click', async (e) => {
 	if (k === 'av') { const f = await pickFile('image/*,.heic,.heif'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
+	else if (k === 'edsw') edSheet();
 	else if (k === 'lancp') { const l = lanAddr(); if (l) copyText(l.url); }
 	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }
 	else if (k === 'kphone') addPhone();
@@ -6699,6 +6801,7 @@ async function ckeySheet() {
 	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
 	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
+	${r.url && /^http:/.test(r.url) ? '<div class="notice" style="margin-top:10px">本地版：只有连着家里 Wi-Fi 的电脑、手机能用这个地址。</div>' : ''}
 	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 AI 应用里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
 	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
 	(m, close) => {
@@ -7474,7 +7577,7 @@ async function openTicket(t) {
 async function loadRole() {
 	try {
 		const r = await P('whoami');
-		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg, lanin: !!r.lanin };
+		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg, lanin: !!r.lanin, ed: r.ed || null };
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
@@ -7483,7 +7586,10 @@ async function loadRole() {
 		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
 		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
+		if (r.svc_off) svcOffPop(r.svc_off === 'exp' ? '托管服务到期了，续期以后才能用：在官网「我的路由器」申请续期，或者在这里输入续期码' : '这台路由器的托管服务停用了：请联系提供服务的人');
+		setTimeout(edNoaiHint, 1500); // 旧的托管纯面板版：提示一次能换
 		if (r.lan !== undefined) { if (r.lan) store.set('rp_lan', JSON.stringify(r.lan)); else store.del('rp_lan'); } // 家里局域网的面板地址（第 82 项）
+		if (ch && page === 'me') loadMe(true).catch(() => {}); // 版本、身份变了：我的主页跟着刷新
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); } // 设备卡片上能不能改名、换图标看权限；自定义快捷操作里没权限的页面去掉
 	} catch (e) {}
 }
@@ -7893,7 +7999,7 @@ async function lockSettings() {
 	const v = await modal(`<h3>面板锁</h3>
 		<div class="kv"><span>状态</span><span>已开启</span></div>
 		<div class="kv"><span>解锁密码</span><span>${c.len} 位数字</span></div>
-		<div class="kv"><span>指纹解锁</span><span>${c.cred ? '已开启' : fpOk ? '未开启' : '这台手机不支持'}</span></div>
+		<div class="kv"><span>指纹解锁</span><span>${c.cred ? '已开启' : fpOk ? '未开启' : !window.isSecureContext ? '在家里地址打开时用不了' : '这台手机不支持'}</span></div>
 		<div class="kv"><span>自动锁定</span><span>${LOCK_MIN} 分钟没操作</span></div>
 		<div class="btngrid" style="margin:14px 0 0"><button class="btn blue" data-v="now">立即锁定</button><button class="btn" data-v="pin">修改密码</button>
 		${c.cred ? '<button class="btn" data-v="fpoff">关闭指纹</button>' : fpOk ? '<button class="btn" data-v="fpon">开启指纹</button>' : ''}<button class="btn danger" data-v="off">关闭面板锁</button></div>

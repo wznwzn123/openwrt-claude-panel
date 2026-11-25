@@ -54,6 +54,8 @@ function handle(msg) {
 		let m = msg.method == 'tools/call' ? 'tools:' + (p.name ?? '') : substr(msg.method, 0, 6) == 'panel/' ? substr(msg.method, 6) : null;
 		if (m && !fam_allowed(m, p)) return is_notification ? null : rpc_error(id, -32012, fam_deny_msg(m, p));
 	}
+	// 6.0 第 94 项：托管服务到期 / 停用：只留看状态、输续期码
+	{ let why = svc_gate(msg, p); if (why) return is_notification ? null : { jsonrpc: '2.0', id, error: { code: -32016, message: why, data: { svc_off: true } } }; }
 	// 纯面板版（config.json 里 "ai": false）：只接受手机面板的请求，AI 客户端连不上
 	if (conf().ai === false && msg.client != 'panel')
 		return is_notification ? null : rpc_error(id, -32001, '这台路由器装的是纯面板版，没有开启 AI 连接器');

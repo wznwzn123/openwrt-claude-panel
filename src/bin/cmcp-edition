@@ -1,0 +1,192 @@
+#!/bin/sh
+# 6.0 第 94 项：托管版换版本（只有托管版有；自建版不动）
+#   cmcp-edition to-local [编号] [谁让换的]   换成本地版：只能在家里局域网打开面板（http://路由器地址:906），停掉并删掉隧道程序（省约 30 MB）
+#   cmcp-edition to-ai    [编号] [谁让换的]   换成 AI 版：装隧道程序、官网开通隧道，在哪都能打开；旧的纯面板版就是打开 AI 功能
+#   cmcp-edition remote 编号 ai|local         看门狗收到官网发来的指令时调用（同一个编号只做一次）
+#   cmcp-edition state                          现在的进度（面板看）
+# 谁让换的：panel（面板「我的主页」）、web（官网「我的路由器」）、install（重新运行安装命令时选了另一个）
+# 中途哪一步出错，都自动退回原来的版本：面板和官网显示失败在哪一步、怎么办，推送告诉主账号，原因报给官网（管理后台能看到）和兼容性上报。
+# 测试用环境变量：CMCP_ED_D（设置目录）、CMCP_SBIN、CMCP_ED_RUN（会断网、改系统的命令只记下来不真跑）、CMCP_ED_WAIT（等隧道接上的秒数）、
+#                 CMCP_ED_ST（进度文件）、CMCP_ED_FREE（假装闪存剩多少 MB）、CMCP_ED_MEM（假装可用内存 MB）、FAKE_READY、CMCP_ED_NOW
+D=${CMCP_ED_D:-/etc/claude-mcp}
+SB=${CMCP_SBIN:-/usr/sbin}
+ST=${CMCP_ED_ST:-/tmp/cmcp_ed.json}
+LK=${ST%.json}.lock
+WAIT=${CMCP_ED_WAIT:-90}
+
+now() { echo "${CMCP_ED_NOW:-$(date +%s)}"; }
+esc() { printf '%s' "$1" | tr -d '\000-\037' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+run() { if [ -n "$CMCP_ED_RUN" ]; then echo "$*" >> "$CMCP_ED_RUN"; else "$@" >/dev/null 2>&1; fi; }
+have() { command -v "$1" >/dev/null 2>&1; }
+# 进度：state = run | ok | fail；step = 失败在哪一步（hub 官网开通隧道 / space 空间 / download 下载 / tunnel 连接隧道 / write 写入设置 / busy 正在换 / other）
+state() { printf '{"id":"%s","to":"%s","state":"%s","step":"%s","msg":"%s","at":%s}\n' "$ID" "$TO" "$1" "$2" "$(esc "$3")" "$(now)" > "$ST.tmp" && mv -f "$ST.tmp" "$ST"; }
+conf() { sed -n "s/^$1=//p" "$2" 2>/dev/null | head -n1; }
+hub() {
+	local h s k b
+	h=$(conf HUB "$D/hub.conf"); s=$(conf SUB "$D/hub.conf"); k=$(conf RKEY "$D/cloud.conf")
+	b=$(printf '{"sub":"%s","rkey":"%s"%s}' "$s" "$k" "$2")
+	curl -s -m "${3:-60}" -X POST -H 'Content-Type: application/json' -d "$b" "$h$1" 2>/dev/null
+}
+jf() { printf '%s' "$1" | jsonfilter -e "@.$2" 2>/dev/null; }
+lan_url() {
+	local p ip
+	p=$(cat "$D/lan_port" 2>/dev/null); case "$p" in ''|*[!0-9]*) p=906 ;; esac
+	ip=$(uci -q get network.lan.ipaddr); ip=${ip%% *}; ip=${ip%%/*}
+	echo "http://${ip:-路由器地址}:$p/panel/"
+}
+# 报结果：官网（记在这台路由器上，管理后台能看到）、推送、兼容性上报
+report() {
+	local ok=$1 step=$2 why=$3
+	hub /api/dev/edres "$(printf ',"id":"%s","to":"%s","ok":%s,"step":"%s","why":"%s"' "$ID" "$TO" "$ok" "$step" "$(esc "$why")")" 20 >/dev/null
+	[ "$ok" = true ] && return 0
+	"$SB/cmcp-compat" fail tunnel "换成$NAME失败（$step）：$why" >/dev/null 2>&1
+	"$SB/cmcp-notify" warn edition "换成$NAME没成功，已退回原来的版本" "$why" edition >/dev/null 2>&1
+	return 0
+}
+fail() { state fail "$1" "$2"; report false "$1" "$2"; rm -rf "$LK"; exit 1; }
+done_ok() { state ok "" "$1"; report true "" ""; "$SB/cmcp-notify" info edition "已换成$NAME" "$1" edition >/dev/null 2>&1; rm -rf "$LK"; exit 0; }
+restart() { run /etc/init.d/claude-mcp restart; }
+
+free_mb() { [ -n "$CMCP_ED_FREE" ] && { echo "$CMCP_ED_FREE"; return; }; df -k /overlay 2>/dev/null | awk 'NR==2 { print int($4 / 1024) }'; }
+mem_mb() { [ -n "$CMCP_ED_MEM" ] && { echo "$CMCP_ED_MEM"; return; }; awk '$1 == "MemAvailable:" { print int($2 / 1024) }' /proc/meminfo; }
+cfd_need() { case "$(awk '$2 == "/overlay" { t = $3 } END { print t }' /proc/mounts 2>/dev/null)" in ubifs|jffs2) echo 22 ;; *) echo 40 ;; esac; }
+pkg_add() { if have apk; then run apk update && run apk add "$1"; elif have opkg; then run opkg update && run opkg install "$1"; else return 1; fi; }
+pkg_rm() { if have apk; then run apk del "$1"; elif have opkg; then run opkg remove "$1"; fi; }
+cfd_flash() { [ -n "$CMCP_ED_RUN" ] && [ -f "$D/fake_cfd" ] && return 0; [ -x /usr/bin/cloudflared ]; }
+# 隧道程序是不是还被别的东西用着（自己装的 cloudflared 服务、LuCI 的 cloudflared 插件）：用着就不删
+cfd_shared() {
+	[ -x /etc/init.d/cloudflared ] && /etc/init.d/cloudflared enabled 2>/dev/null && return 0
+	if have apk; then apk info -e luci-app-cloudflared >/dev/null 2>&1 && return 0
+	elif have opkg; then opkg list-installed luci-app-cloudflared 2>/dev/null | grep -q . && return 0; fi
+	return 1
+}
+# 隧道连上了没有（cloudflared 的 /ready）
+ready() {
+	[ -n "$FAKE_READY" ] && { echo "$FAKE_READY"; return; }
+	local p r
+	for p in 20241 20242 20243 20244 20245; do
+		r=$(curl -s -m 2 "http://127.0.0.1:$p/ready" 2>/dev/null | jsonfilter -e '@.readyConnections' 2>/dev/null)
+		[ -n "$r" ] && { echo "$r"; return; }
+	done
+	echo 0
+}
+# AI 开关打开（旧的纯面板版换过来时）：config.json 去掉 "ai": false，没有 AI 连接器钥匙就生成一个
+ai_on() {
+	local f=$D/config.json k
+	if ! grep -q '"ai": *false' "$f" 2>/dev/null && grep -q '"ckey"' "$f" 2>/dev/null; then return 0; fi
+	k=$(tr -dc 'a-z0-9' < /dev/urandom 2>/dev/null | head -c 40)
+	[ ${#k} -eq 40 ] || return 1
+	UC=${CMCP_UCODE:-ucode}; [ -x /usr/libexec/cmcp-ucode ] && UC=/usr/libexec/cmcp-ucode
+	$UC -e 'let fs = require("fs"), f = ARGV[0], c = json(fs.readfile(f)); delete c.ai; if (length(c.ckey ?? "") < 16) c.ckey = ARGV[1]; fs.writefile(f + ".t", sprintf("%.J\n", c)); fs.rename(f + ".t", f);' "$f" "$k"
+}
+
+to_local() {
+	[ -f "$D/local" ] && done_ok "已经是本地版了"
+	state run "" "官网改网址"
+	R=$(hub /api/dev/edition ',"to":"local"')
+	[ "$(jf "$R" ok)" = true ] || fail hub "$(jf "$R" error | sed 's/^$/连不上官网：检查路由器能不能上网，过一会儿再试/')"
+	state run "" "停掉隧道"
+	if ! { : > "$D/local"; } 2>/dev/null; then
+		# 写不进去（闪存满了、只读）：官网那边换回去，路由器照旧
+		R=$(hub /api/dev/edition ',"to":"ai"')
+		t=$(jf "$R" token); [ -n "$t" ] && (umask 077; printf '%s' "$t" > "$D/tunnel_token")
+		restart
+		fail write "路由器上写不进设置（闪存可能满了）"
+	fi
+	rm -f "$D/tunnel_token"
+	restart
+	run "$SB/cmcp-tunbypass" remove
+	run "$SB/cmcp-route" --init
+	# 删掉隧道程序省空间；别的程序还用着就留着
+	rm -rf /tmp/cmcp-cfd "$D/cfd.ram"
+	kept=""
+	if cfd_flash; then
+		if cfd_shared; then kept="（cloudflared 还被别的插件用着，没删）"
+		else pkg_rm cloudflared; rm -f "$D/fake_cfd"; fi
+	fi
+	done_ok "在家里连着 Wi-Fi 打开 $(lan_url)。在外面打不开面板了；想换回 AI 版，在面板「我的主页」或官网「我的路由器」里点。$kept"
+}
+
+to_ai() {
+	if [ ! -f "$D/local" ]; then
+		# 已经有隧道：AI 版不用换；旧的纯面板版打开 AI 功能
+		grep -q '"ai": *false' "$D/config.json" 2>/dev/null || done_ok "已经是 AI 版了"
+		ai_on || fail write "路由器上写不进设置（闪存可能满了）"
+		done_ok "AI 连接器地址在面板「我的主页 → 敏感信息」里，验证后能看到"
+	fi
+	# 1. 隧道程序：闪存放得下就装进闪存，放不下用小闪存模式（开机下载到内存）
+	state run "" "安装隧道程序"
+	NEW=""
+	if ! cfd_flash; then
+		free=$(free_mb); free=${free:-0}; need=$(cfd_need)
+		if [ "$free" -ge "$need" ] && pkg_add cloudflared && { left=$(free_mb); [ "${left:-0}" -ge 6 ]; }; then NEW=flash
+		else
+			cfd_flash && pkg_rm cloudflared
+			m=$(mem_mb); m=${m:-0}
+			case "$(uname -m)" in aarch64|arm64|armv7*|armv8l|x86_64|i386|i486|i586|i686) ;; *) fail space "闪存只剩 $free MB，放不下隧道程序（约 30 MB），这台路由器的架构也用不了小闪存模式。删掉用不上的插件，让闪存剩 $need MB 以上再试" ;; esac
+			[ "$m" -ge 120 ] || fail space "闪存只剩 $free MB，放不下隧道程序（约 30 MB）；可用内存只有 $m MB，小闪存模式要 120 MB 以上。删掉用不上的插件，让闪存剩 $need MB 以上再试"
+			state run "" "下载隧道程序到内存"
+			if [ -n "$CMCP_ED_RUN" ]; then echo "cmcp-cfd fetch" >> "$CMCP_ED_RUN"; [ -f "$D/fake_cfd_fail" ] && fail download "下载隧道程序失败：官网和 GitHub 都没下成。检查路由器能不能上网，过一会儿再试"
+			else CFD_HUB=$(conf HUB "$D/hub.conf") "$SB/cmcp-cfd" fetch >/dev/null 2>&1 || fail download "下载隧道程序失败：官网和 GitHub 都没下成，或者下载的文件校验不对。检查路由器能不能上网，过一会儿再试"; fi
+			: > "$D/cfd.ram"; NEW=ram
+		fi
+	fi
+	undo_cfd() { [ "$NEW" = flash ] && pkg_rm cloudflared; [ "$NEW" = ram ] && rm -rf /tmp/cmcp-cfd "$D/cfd.ram"; return 0; }
+	# 2. 官网开通隧道
+	state run "" "官网开通隧道"
+	R=$(hub /api/dev/edition ',"to":"ai"' 90)
+	if [ "$(jf "$R" ok)" != true ]; then undo_cfd; fail hub "$(jf "$R" error | sed 's/^$/连不上官网：检查路由器能不能上网，过一会儿再试/')"; fi
+	t=$(jf "$R" token)
+	# 3. 写设置、启动隧道
+	if [ -z "$t" ] || ! (umask 077; printf '%s' "$t" > "$D/tunnel_token") 2>/dev/null || ! ai_on; then
+		hub /api/dev/edition ',"to":"local"' >/dev/null; rm -f "$D/tunnel_token"; undo_cfd
+		fail write "路由器上写不进设置（闪存可能满了）"
+	fi
+	rm -f "$D/local"
+	restart
+	# 4. 等隧道接上（最多 90 秒）
+	state run "" "连接隧道"
+	i=0
+	while [ "$(ready)" -lt 1 ] 2>/dev/null; do
+		i=$((i + 3)); [ $i -ge "$WAIT" ] && break
+		[ -n "$CMCP_ED_RUN" ] || sleep 3
+	done
+	if [ "$(ready)" -lt 1 ] 2>/dev/null; then
+		why=$(tail -n 50 /tmp/claude-mcp-tunnel.log 2>/dev/null | grep -o -E 'ERR[^"]{0,120}' | tail -n 1)
+		: > "$D/local"; rm -f "$D/tunnel_token"
+		hub /api/dev/edition ',"to":"local"' >/dev/null
+		restart; undo_cfd
+		fail tunnel "隧道 $WAIT 秒都没接上 Cloudflare，已退回本地版。可能是网络挡了 Cloudflare，过一会儿再试${why:+。隧道程序说：$why}"
+	fi
+	run "$SB/cmcp-tunbypass" apply
+	run "$SB/cmcp-route" --init
+	done_ok "在哪都能从官网「我的路由器」打开面板；AI 连接器地址在面板「我的主页 → 敏感信息」里"
+}
+
+go() {
+	TO=$1; ID=$2
+	case "$ID" in [a-z2-9][a-z2-9][a-z2-9][a-z2-9][a-z2-9][a-z2-9][a-z2-9][a-z2-9][a-z2-9][a-z2-9]) ;; *) ID=$(tr -dc 'a-km-np-z2-9' < /dev/urandom 2>/dev/null | head -c 10) ;; esac
+	[ "$TO" = local ] && NAME=本地版 || NAME=" AI 版"
+	[ -s "$D/hub.conf" ] || { state fail other "只有托管版能换版本"; exit 1; }
+	# 同时只换一次；上一次卡住超过 10 分钟的不算
+	if ! mkdir "$LK" 2>/dev/null; then
+		if [ -n "$(find "$LK" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then rm -rf "$LK"; mkdir "$LK" 2>/dev/null || exit 1
+		else echo "正在换版本，等这次做完"; exit 2; fi
+	fi
+	# 官网发来的指令：拿到锁以后才记下编号（没拿到锁，下次心跳还会再带来）
+	[ -n "$REMOTE_ID" ] && echo "$REMOTE_ID" > "$D/ed_last"
+	# 一键更新正在装：等它装完再换
+	[ -f /tmp/cmcp_upd.lock ] && fail busy "正在更新面板，更新完再换"
+	[ "$TO" = local ] && to_local || to_ai
+}
+
+case "$1" in
+	to-local) go local "$2" ;;
+	to-ai) go ai "$2" ;;
+	remote)
+		case "$3" in ai|local) ;; *) exit 1 ;; esac
+		[ "$(cat "$D/ed_last" 2>/dev/null)" = "$2" ] && exit 0
+		REMOTE_ID=$2 go "$3" "$2" ;;
+	state) cat "$ST" 2>/dev/null || echo '{}' ;;
+	*) echo "用法：cmcp-edition to-local|to-ai [编号] | remote 编号 ai|local | state"; exit 1 ;;
+esac

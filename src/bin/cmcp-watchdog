@@ -262,9 +262,23 @@ cloud_beat() {
 	BEAT_T=$t
 	local URL RKEY TKEY j
 	. "$D/cloud.conf"
-	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s","ver":"%s"}' \
-		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")" "$(sed -n 's/^VER=//p' $D/version 2>/dev/null | tr -dc '0-9a-z.')")
-	( curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" >/dev/null 2>&1 & )
+	# 6.0 第 94 项：ed = 托管版的哪个版本（ai / local / noai），lan = 家里局域网的面板地址（只有本地版报，官网「打开面板」要用）
+	local ed="" lan="" lp lip
+	if [ -s "$D/hub.conf" ]; then
+		if [ -f "$D/local" ]; then ed=local; elif grep -q '"ai": *false' "$D/config.json" 2>/dev/null; then ed=noai; else ed=ai; fi
+	fi
+	lp=$(cat "$D/lan_port" 2>/dev/null); case "$lp" in ''|*[!0-9]*) lp=906 ;; esac
+	lip=$(uci -q get network.lan.ipaddr 2>/dev/null); lip=${lip%% *}; lip=${lip%%/*}
+	# 只有本地版报（官网「打开面板」要跳过去）；AI 版、自建版不报
+	[ "$ed" = local ] && [ -n "$lip" ] && [ ! -f "$D/lan_off" ] && lan="$lip:$lp"
+	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s","ver":"%s","ed":"%s","lan":"%s"}' \
+		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")" "$(sed -n 's/^VER=//p' $D/version 2>/dev/null | tr -dc '0-9a-z.')" "$ed" "$lan")
+	# 官网让路由器换版本（主账号在官网「我的路由器」里点的）：心跳的回复里带着指令
+	( r=$(curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" 2>/dev/null)
+	  case "$r" in *'"cmd"'*)
+		id=$(printf '%s' "$r" | jsonfilter -e '@.cmd.id' 2>/dev/null | tr -cd 'a-z0-9'); to=$(printf '%s' "$r" | jsonfilter -e '@.cmd.to' 2>/dev/null)
+		[ -n "$id" ] && [ -x /usr/sbin/cmcp-edition ] && /usr/sbin/cmcp-edition remote "$id" "$to" ;;
+	  esac ) >/dev/null 2>&1 &
 }
 
 # 一键更新正在装（15 分钟内的更新锁）：装的时候会重启面板服务和隧道，看门狗这时不去「修」，免得两边一起重启
@@ -304,37 +318,41 @@ check() {
 		fi
 	fi
 
-	# 隧道
-	TP=$(tpid); RDY=$(ready)
-	if [ -n "$TP" ] && [ "${RDY:-0}" -gt 0 ] 2>/dev/null; then
-		if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 AI 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE$([ "$RSN" -gt 0 ] && echo "，期间自动重启了 $RSN 次隧道")" "$TUN_T" "$t"; TUN=ok; fi
-		TFAIL=0; TCAUSE=; RSN=0; TGONE=0
+	# 隧道（6.0 第 94 项：本地版没有隧道，不查）
+	if [ -f "$D/local" ]; then TUN=ok; TFAIL=0; RDY=0
 	else
-		TFAIL=$((TFAIL + 1))
-		local cause det
-		if [ "$WAN" != ok ]; then cause="宽带断开"
-		elif [ "$NET" != ok ]; then cause="外网不通"
-		elif [ -z "$TP" ] && [ -f /tmp/cmcp-cfd/fetching ]; then cause="正在把隧道程序下载到内存（小闪存模式，开机后要先下载）"
-		elif [ -z "$TP" ]; then cause="隧道程序没在运行"
-		else cause="隧道程序在运行，但连不上 Cloudflare"
+		TP=$(tpid); RDY=$(ready)
+		if [ -n "$TP" ] && [ "${RDY:-0}" -gt 0 ] 2>/dev/null; then
+			if [ "$TUN" != ok ]; then ev ok tunnel "隧道恢复，面板和 AI 可以连上了（断了 $(mins $TUN_T $t)）" "原因：$TCAUSE$([ "$RSN" -gt 0 ] && echo "，期间自动重启了 $RSN 次隧道")" "$TUN_T" "$t"; TUN=ok; fi
+			TFAIL=0; TCAUSE=; RSN=0; TGONE=0
+		else
+			TFAIL=$((TFAIL + 1))
+			local cause det
+			if [ "$WAN" != ok ]; then cause="宽带断开"
+			elif [ "$NET" != ok ]; then cause="外网不通"
+			elif [ -z "$TP" ] && [ -f /tmp/cmcp-cfd/fetching ]; then cause="正在把隧道程序下载到内存（小闪存模式，开机后要先下载）"
+			elif [ -z "$TP" ]; then cause="隧道程序没在运行"
+			else cause="隧道程序在运行，但连不上 Cloudflare"
+			fi
+			# 第 2 次检查还不行才算断（避免一瞬间的抖动）
+			if [ "$TUN" = ok ] && [ "$TFAIL" -ge 2 ]; then
+				TUN=down; TUN_T=$((t - INTERVAL)); TCAUSE=$cause
+				case "$cause" in 宽带断开|外网不通) det="跟着$cause一起断的，网络恢复后隧道会自己连回来" ;; *) det=$(tunlog) ;; esac
+				ev err tunnel "隧道断开：$cause（这段时间面板和 AI 都连不上路由器）" "$det"
+			fi
+			[ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TCAUSE" != "$cause" ] && TCAUSE="$TCAUSE → $cause"
+			# 直连 Cloudflare 断了 15 分钟还连不上（外网是通的、隧道也没被删）：可能直连被挡了，改回走 OpenClash 代理
+			if [ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TGONE" != 1 ] && [ $(( t - TUN_T )) -ge 900 ] && tb_on; then
+				tb_off
+				ev warn tunnel "隧道直连 Cloudflare 一直连不上，已改回走 OpenClash 代理" "直连断了 $(mins $TUN_T $t)，可能是网络屏蔽了直连。一天后会自动再试一次直连；想一直走代理：cmcp-tunbypass off
+	$(tunlog)"
+				LAST_RS=0; RSN=0
+			fi
+			# 外网是通的才重启隧道，断网时重启没用
+			# 自动处理里关掉了「隧道断了自动重启」：只记录，不重启
+			[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && [ ! -f "$D/off.tunrestart" ] && ! updating && restart_tunnel
 		fi
-		# 第 2 次检查还不行才算断（避免一瞬间的抖动）
-		if [ "$TUN" = ok ] && [ "$TFAIL" -ge 2 ]; then
-			TUN=down; TUN_T=$((t - INTERVAL)); TCAUSE=$cause
-			case "$cause" in 宽带断开|外网不通) det="跟着$cause一起断的，网络恢复后隧道会自己连回来" ;; *) det=$(tunlog) ;; esac
-			ev err tunnel "隧道断开：$cause（这段时间面板和 AI 都连不上路由器）" "$det"
-		fi
-		[ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TCAUSE" != "$cause" ] && TCAUSE="$TCAUSE → $cause"
-		# 直连 Cloudflare 断了 15 分钟还连不上（外网是通的、隧道也没被删）：可能直连被挡了，改回走 OpenClash 代理
-		if [ "$TUN" != ok ] && [ "$NET" = ok ] && [ "$TGONE" != 1 ] && [ $(( t - TUN_T )) -ge 900 ] && tb_on; then
-			tb_off
-			ev warn tunnel "隧道直连 Cloudflare 一直连不上，已改回走 OpenClash 代理" "直连断了 $(mins $TUN_T $t)，可能是网络屏蔽了直连。一天后会自动再试一次直连；想一直走代理：cmcp-tunbypass off
-$(tunlog)"
-			LAST_RS=0; RSN=0
-		fi
-		# 外网是通的才重启隧道，断网时重启没用
-		# 自动处理里关掉了「隧道断了自动重启」：只记录，不重启
-		[ "$TFAIL" -ge 2 ] && [ "$NET" = ok ] && [ ! -f "$D/off.tunrestart" ] && ! updating && restart_tunnel
+
 	fi
 
 	# 面板服务
@@ -402,7 +420,7 @@ $(tunlog)"
 		[ -f /etc/claude-mcp/guest_until ] && [ -x /usr/sbin/cmcp-guest ] && ( /usr/sbin/cmcp-guest tick >/dev/null 2>&1 & )
 	fi
 	# 隧道直连 Cloudflare（不经过 OpenClash）：路由器重启后 /tmp 里的设置没了就补回来；自动关掉的过一天再试
-	if [ $(( t - TB_T )) -ge 300 ] && [ "$DRYRUN" != 1 ] && [ -x /usr/sbin/cmcp-tunbypass ]; then
+	if [ $(( t - TB_T )) -ge 300 ] && [ "$DRYRUN" != 1 ] && [ -x /usr/sbin/cmcp-tunbypass ] && [ ! -f "$D/local" ]; then
 		TB_T=$t
 		case "$(/usr/sbin/cmcp-tunbypass check 2>/dev/null)" in *retry*) ev info tunnel "重新试一次隧道直连 Cloudflare（不经过 OpenClash）" "" ;; esac
 	fi

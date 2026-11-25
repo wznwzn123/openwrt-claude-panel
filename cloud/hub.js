@@ -17,6 +17,7 @@ import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } fro
 import { changelogOf } from './changelog.js';
 import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 import { installTotp } from './totp.js';
+import { installEdition, edDev, edAccount, ED_NAME } from './edition.js';
 import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled } from './oldver.js';
 
@@ -94,6 +95,41 @@ export async function provision(env, sub) {
 		await deprovision(env, made).catch(() => {});
 		throw e;
 	}
+}
+// 6.0 第 94 项：本地版不建隧道。子域名还是要有一条（路由器的心跳、推送、云端备份都走 https://子域名/cloud/），
+// 指向 100::（Cloudflare 的「没有源站」写法），只给 Worker 用；面板只在家里局域网打开
+async function dnsAddLocal(env, sub) {
+	const d = await cf(env, 'POST', `/zones/${env.CF_ZONE_ID}/dns_records`, { type: 'AAAA', name: host(env, sub), content: '100::', proxied: true, comment: 'cmcp local ' + sub });
+	return d.id;
+}
+export async function provisionLocal(env, sub) {
+	try { return { dns: await dnsAddLocal(env, sub) }; } catch (e) { e.dnsStep = true; throw e; }
+}
+// 本地版 → AI 版：建隧道、子域名改指向隧道。中间失败就退回本地版的样子（子域名指回 100::、删掉建了一半的隧道）
+export async function edToTunnel(env, sub, d) {
+	const acc = env.CF_ACCOUNT_ID, made = {};
+	try {
+		const t = await cf(env, 'POST', `/accounts/${acc}/cfd_tunnel`, { name: 'cmcp-' + sub, config_src: 'cloudflare' });
+		made.tunnel = t.id;
+		await cf(env, 'PUT', `/accounts/${acc}/cfd_tunnel/${t.id}/configurations`, {
+			config: { ingress: [{ hostname: host(env, sub), service: 'http://127.0.0.1:18765' }, { service: 'http_status:404' }] },
+		});
+		made.token = t.token || (await cf(env, 'GET', `/accounts/${acc}/cfd_tunnel/${t.id}/token`));
+		await dnsDel(env, d.dns);
+		try { made.dns = await dnsAdd(env, sub, t.id); } catch (e) { e.dnsStep = true; try { d.dns = await dnsAddLocal(env, sub); } catch (x) { d.dns = null; } throw e; }
+		return made;
+	} catch (e) {
+		await deprovision(env, { tunnel: made.tunnel }).catch(() => {});
+		throw e;
+	}
+}
+// AI 版（或旧的纯面板版）→ 本地版：子域名改指向 100::，删掉隧道
+export async function edToLocal(env, sub, d) {
+	await dnsDel(env, d.dns);
+	let dns;
+	try { dns = await dnsAddLocal(env, sub); } catch (e) { try { d.dns = await dnsAdd(env, sub, d.tunnel); } catch (x) { d.dns = null; } throw e; }
+	await deprovision(env, { tunnel: d.tunnel }).catch(() => {});
+	return { dns };
 }
 // 子域名名额满了（Cloudflare 免费版每个域名的 DNS 记录有上限：2024-09 以后加的域名 200 条，以前的 1000 条）
 export const dnsFull = (e) => !!(e && e.dnsStep && ((e.codes || []).includes(81045) || /quota|limit|exceed/i.test(e.message || '')));
@@ -203,7 +239,8 @@ export class Hub extends DurableObject {
 		if (!keep && inv.trial && u.trial && u.trial.sub === sub) { u.trialUsed = Math.max(0, (u.trialUsed || 1) - 1); u.trial = { ...u.trial, used: 0, sub: '' }; }
 		await this.ctx.storage.put('u:' + inv.uid, u);
 	}
-	async _register({ invite, ip, name, model, rid }) {
+	async _register({ invite, ip, name, model, rid, local }) {
+		local = local === true;
 		const now = Date.now();
 		const code = String(invite || '').trim().toUpperCase();
 		const inv = code && (await this.ctx.storage.get('i:' + code));
@@ -238,7 +275,7 @@ export class Hub extends DurableObject {
 		await this.addCount(1);
 		let made;
 		try {
-			made = await provision(this.env, sub);
+			made = local ? await provisionLocal(this.env, sub) : await provision(this.env, sub);
 		} catch (e) {
 			await this._refund(code, sub, keep);
 			await this.ctx.storage.delete('d:' + sub);
@@ -258,11 +295,12 @@ export class Hub extends DurableObject {
 			if (full) await this.ctx.storage.delete('dnsfull');
 			const keys = { rkey: rnd(32), tkey: rnd(32), pkey: rnd(32) };
 			const h = host(this.env, sub);
-			await this.watch(sub).setup({ sub, ...keys, probe: 'https://' + h + '/panel/manifest.json' });
+			// 本地版没有隧道：云端不探测面板网址（断线只看心跳）
+			await this.watch(sub).setup({ sub, ...keys, probe: local ? '' : 'https://' + h + '/panel/manifest.json' });
 			// 试用码：开通后只能用 svc 天，到期前找提供服务的人要续期码；普通邀请码不限期
 			const exp = keep ? keep.exp || 0 : +inv.svc > 0 ? now + inv.svc * DAY : 0;
 			// fresh：路由器还没连上过官网；连上过一次就去掉（1 天都没连上的会被收回，见 _cleanup）
-			const dv = { sub, state: 'ok', created: now, seen: now, fresh: true, ...(keep ? { keep } : {}), invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp };
+			const dv = { sub, state: 'ok', created: now, seen: now, fresh: true, ...(keep ? { keep } : {}), invite: code, name: clean(name, 40), model: clean(model, 60), tunnel: made.tunnel, dns: made.dns, exp, ...(local ? { local: true } : {}) };
 			// 官网账号领的试用码：开通后直接加到这个账号里，不用再配对
 			let bound = false;
 			if (inv.uid) {
@@ -275,10 +313,10 @@ export class Hub extends DurableObject {
 					await this.ctx.storage.put('u:' + inv.uid, u);
 				}
 			}
-			const res = { sub, host: h, token: made.token, url: 'https://' + h + '/cloud', exp, bound, ...keys };
+			const res = { sub, host: h, token: made.token || '', url: 'https://' + h + '/cloud', exp, bound, ...(local ? { local: true } : {}), ...keys };
 			if (rh) { dv.rr = rh; await this.ctx.storage.put('rr:' + rh, { code, sub, at: now, res }); }
 			await this.ctx.storage.put('d:' + sub, dv);
-			await this.rlog(sub, '✨', (keep ? '卸载后用同一个码重装，到期时间不变' : '开通托管服务') + (dv.exp ? '（' + Math.round((dv.exp - now) / DAY) + ' 天）' : '') + (bound ? '，自动加到 ' + (await this.rname(inv.uid)) + ' 的账号里，他是主账号' : ''));
+			await this.rlog(sub, '✨', (keep ? '卸载后用同一个码重装，到期时间不变' : '开通托管服务') + (local ? '（本地版）' : '') + (dv.exp ? '（' + Math.round((dv.exp - now) / DAY) + ' 天）' : '') + (bound ? '，自动加到 ' + (await this.rname(inv.uid)) + ' 的账号里，他是主账号' : ''));
 			if (inv.uid) await this.alog(inv.trial ? 'trial-used' : 'inst-used', sub, (inv.trial ? '用官网领的试用码开通' : '用安装码开通（邀请码 ' + (inv.from || '?') + '）') + (bound ? '，已自动加到账号里' : ''), 'router');
 			await this.track('dev_reg');
 			return { st: 200, ...res };
@@ -546,11 +584,12 @@ export class Hub extends DurableObject {
 		for (const k of await this.renewals()) if (k.used && k.sub) rs.add(k.sub);
 		for (const a of (await this.ctx.storage.get('aplog')) || []) if (a.status === 'ok') rs.add(a.sub);
 		// 路由器上的面板版本（路由器心跳报上来的）：管理页看谁还是旧版
-		const vers = await Promise.all(list.map(async (d) => { if (d.state !== 'ok') return ''; try { return String((await this.watch(d.sub).brief()).ver || '').replace(/^v/, ''); } catch (e) { return ''; } }));
+		const brs = await Promise.all(list.map(async (d) => { if (d.state !== 'ok') return null; try { return await this.watch(d.sub).brief(); } catch (e) { return null; } }));
+		const vers = brs.map((x) => String((x && x.ver) || '').replace(/^v/, ''));
 		// 6.0 第 86 项：上次提醒升级是什么时候、提醒了几次
 		const ovm = new Map();
 		for (let i = 0; i < list.length; i += 100) for (const [k, v] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ov:' + d.sub))) ovm.set(k.slice(3), v);
-		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], ov: ovm.get(d.sub) || null, prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
@@ -579,7 +618,7 @@ export class Hub extends DurableObject {
 		if (off && !d.off) { await dnsDel(this.env, d.dns); d.dns = null; d.off = Date.now(); d.offWhy = why || 'admin'; }
 		else if (off && d.off && !why) d.offWhy = 'admin'; // 到期暂停的，管理员又封禁了：续期也不解封
 		else if (off && d.off && why === 'deleted') d.offWhy = 'deleted';
-		if (!off && d.off) { d.dns = await dnsAdd(this.env, sub, d.tunnel); delete d.off; delete d.offWhy; }
+		if (!off && d.off) { d.dns = d.local ? await dnsAddLocal(this.env, sub) : await dnsAdd(this.env, sub, d.tunnel); delete d.off; delete d.offWhy; }
 		await this.watch(sub).setOff(!!off);
 		await this.ctx.storage.put('d:' + sub, d);
 		return true;
@@ -824,7 +863,7 @@ export class Hub extends DurableObject {
 			try { b = await this.watch(x.sub).brief(); } catch (e) {}
 			const role = this.famRole(d, uid), fo = this.famOf(d), sx = fo.subs[uid];
 			const fam = { role, owner: role === 'main' || !fo.owner ? null : await this.famPerson(fo.owner), perms: sx ? permsOf(sx) : null, subExp: sx ? sx.exp || 0 : 0, nsub: Object.keys(fo.subs).length };
-			devs.push({ ...fam, sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
+			devs.push({ ...fam, sub: x.sub, host: host(this.env, x.sub), name: x.alias || d.name || x.sub, model: d.model || '', off: !!d.off, last: b.last, state: b.state, ver: b.ver || '', ed: this.edOf(d, b), edJob: role === 'main' ? this.edJobOut(d) : null, bound: x.at, exp: d.exp || 0, expired: !!(d.off && d.offWhy === 'exp'), trashed: d.offWhy === 'deleted' ? (d.delAt || 0) + TRASH_DAYS * DAY : 0, apply: await this.applyBrief(x.sub, uid) });
 		}
 		const links = (u.links || []).map((x) => ({ id: x.id, url: x.url, name: x.name, at: x.at }));
 		const td = this.trialDays(), ts = td ? await this.trialState(u) : null, inst = await this.instList(u);
@@ -1551,7 +1590,7 @@ export async function hubFetch(req, env) {
 	if (p === '/api/ping') return J({ ok: true, mail: !!env.RESEND_API_KEY });
 	if (p === '/api/register' && req.method === 'POST') {
 		const b = await body();
-		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, rid: b.rid, ip: req.headers.get('cf-connecting-ip') || '' });
+		const r = await H.register({ invite: b.invite, name: b.name, model: b.model, rid: b.rid, local: b.local === true, ip: req.headers.get('cf-connecting-ip') || '' });
 		const { st, ...rest } = r;
 		return J(rest, st);
 	}
@@ -1971,7 +2010,7 @@ async function accountApi0(req, env, H, p, body) {
 	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [], files: Array.isArray(b.files) ? b.files.slice(0, 5).map(s) : [] }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
-	{ const fx = await famDev(p, H, b); if (fx) return fx; }
+	{ const fx = (await famDev(p, H, b)) || (await edDev(p, H, b)); if (fx) return fx; }
 	const a = p.slice('/api/account/'.length);
 	{ const k = { code: 'code', register: 'reg', login: 'login', reset: 'reset' }[a]; if (k) { const g = await captchaGate(env, H, k, ip, s(b.cft)); if (g) return g; } }
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
@@ -1987,7 +2026,7 @@ async function accountApi0(req, env, H, p, body) {
 	const me = await H.who(sid);
 	if (!me) return a === 'brief' ? J({ ok: false }) : J({ error: '请先登录', login: true }, 401);
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
-	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)); if (fx) return fx; }
+	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)) || (await edAccount(a, H, me, b, sid)); if (fx) return fx; }
 	// 官网各页右上角：登录了就显示头像和名字（很轻，只要名字和头像）
 	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
 	if (a === 'profile') return out(await H.setProfile(me.uid, { name: b.name === undefined ? undefined : s(b.name), avatar: b.avatar === undefined ? undefined : s(b.avatar), layout: b.layout === undefined ? undefined : b.layout }));
@@ -2023,6 +2062,7 @@ installOldVer(Hub);
 installV5(Hub);
 installFam(Hub);
 installInst(Hub);
+installEdition(Hub, { edToTunnel, edToLocal });
 installFiles(Hub);
 installHelp(Hub);
 export { hubObj };

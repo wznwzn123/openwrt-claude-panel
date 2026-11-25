@@ -164,6 +164,8 @@ function rpcResult(j, method) {
 	}
 	if (e.code === -32014) { const err = new LockError(e.message, e.data); try { lkNeedPin(err); } catch (x) {} throw err; }
 	if (e.code === -32015) throw new NeedPwError(e.message);
+	// 6.0 第 94 项：托管服务到期 / 停用：路由器只回答看状态、输续期码
+	if (e.code === -32016) { try { svcOffPop(e.message); } catch (x) {} const err = new Error(e.message); err.quiet = true; throw err; }
 	// 6.0 第 60 项：这台路由器开不了这个功能（路由器那边已经记下，下次兼容情况上报时报）：弹一个小卡片，能直接「报告这个问题」
 	if (e.code === -32020) { try { compatFailPop(e.message, method); } catch (x) {} const err = new Error(e.message); err.quiet = true; throw err; }
 	throw new Error(e.message);
@@ -256,6 +258,7 @@ const base = (p) => String(p || '').split('/').pop();
 let toastT = 0, toastX = 0;
 let TOAST_MUTE = '';
 function toast(s, err) {
+	if (err && SVC_POP && /托管服务(到期|停用)/.test(String(s))) return; // 到期卡片已经说了，不再重复弹
 	s = String(s ?? '');
 	if (err && TOAST_MUTE && s === TOAST_MUTE) return; // 已经弹过「开不了这个功能」的卡片，不再重复提示
 	const t = $('toast'), dur = Math.min(7000, 2800 + Math.max(0, s.length - 24) * 60);

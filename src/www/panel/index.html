@@ -5984,10 +5984,12 @@ function autoItems(d) {
 	add('出问题时自动修', 'panelrestart', on.panelrestart !== false, '面板服务卡住自动重启', '面板没响应时自动重启面板服务。关掉后面板卡住只能自己重启路由器或服务');
 	add('出问题时自动修', 'cacheclean', on.cacheclean !== false, '内存快满时清理缓存', '内存快用完时先清理系统缓存，不影响上网');
 	if (d.oc) add('出问题时自动修', 'memguard', !!d.memguard, '内存不够时自动重启 ' + pn, '清理缓存后还不够，就重启一次 ' + pn + ' 释放内存（断网十几秒，会推送告诉你），避免整台路由器死机重启。至少隔 30 分钟、一天最多 6 次');
+	if (d.autosw == null && d.autosw_why) L.push({ g: '出问题时自动修', k: 'autosw', t: '节点挂了自动换', desc: d.autosw_why, na: true });
 	if (d.autosw != null) add('出问题时自动修', 'autosw', !!d.autosw, '节点挂了自动换', '每分钟测一次正在用的节点，连续 3 分钟都不通才换：先换同地区同类型同倍率的（专线换专线、3x 换 3x），没有再往下退；原来的恢复 10 分钟后换回。你手动换节点后 10 分钟内不会把它换走');
 	// 开关看「有没有打开」（want）；打开了但有的插件还没生效，下面另外提示
 	if (d.oc) add('网络', 'tunbypass', !!(d.tb && (d.tb.want ?? d.tb.on)), '隧道直连 Cloudflare', '面板和 AI 用的隧道不经过代理插件，' + pn + ' 重启、节点卡住时不会跟着断。直连连不上时会自动改回走代理' + (d.px === 'Nikki' ? '（Nikki 要等它下次重启才生效）' : ''));
 	// 面板线路自动选择靠「不走代理」那个规则集换路线：规则集没启用时开着也不起作用，要说清楚
+	if (!d.route && d.route_why) L.push({ g: '网络', k: 'route', t: '面板线路自动选择', desc: d.route_why, na: true });
 	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「不走代理」页启用' : ''));
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
 	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
@@ -6031,23 +6033,24 @@ function renderAuto() {
 	const el = $('auCard'), pl = $('auPill'); if (!el) return;
 	const d = AU.d;
 	if (!d) { pl.textContent = '—'; pl.className = 'pill'; return; }
-	const row = (x) => `<label class="kv aswon" data-au="${x.k}"><span><b>${esc(x.t)}</b><span class="muted">${esc(x.desc)}</span></span><span class="sw"><input type="checkbox" ${x.v ? 'checked' : ''}><i></i></span></label>`;
+	const row = (x) => x.na ? `<div class="kv aswon auna"><span><b>${esc(x.t)}</b><span class="muted">${esc(x.desc)}</span></span><span class="pill">用不了</span></div>` : `<label class="kv aswon" data-au="${x.k}"><span><b>${esc(x.t)}</b><span class="muted">${esc(x.desc)}</span></span><span class="sw"><input type="checkbox" ${x.v ? 'checked' : ''}><i></i></span></label>`;
 	const day = (t) => { const x = new Date(t * 1000); return (x.getMonth() + 1) + ' 月 ' + x.getDate() + ' 日 ' + hm(t * 1000); };
 	const items = autoItems(d);
 	// 每一组一张卡片，标题在卡片外面（跟其他页面一样）
 	const groups = [];
 	for (const x of items) { let g = groups.find((y) => y.g === x.g); if (!g) groups.push(g = { g: x.g, list: [] }); g.list.push(x); }
-	const note = (x) => x.k !== 'tunbypass' ? '' : x.v ? (d.tb.status === '还没生效' ? '<div class="notice" style="margin:2px 0 8px">已打开，还有代理插件没生效：Nikki 要等它下次重启；其他的过几分钟会自动补上。</div>' : '') : d.tb.auto ? `<div class="notice w" style="margin:2px 0 8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>` : '';
+	// 6.0 第 44 项（用户 11/26 定）：Nikki 要重启才生效：先问，点「现在重启」才重启，不点就等它下次重启
+	const note = (x) => x.k !== 'tunbypass' ? '' : x.v ? (d.tb.status === '还没生效' ? (d.px === 'Nikki' ? '<div class="notice" style="margin:2px 0 8px">已打开，Nikki 重启后生效</div><button class="btn sm" data-nkrs type="button" style="margin:0 0 8px">现在重启 Nikki</button>' : '<div class="notice" style="margin:2px 0 8px">已打开，还有代理插件没生效：过几分钟会自动补上</div>') : '') : d.tb.auto ? `<div class="notice w" style="margin:2px 0 8px">直连 Cloudflare 一直连不上，${d.tb.at ? day(d.tb.at) + ' ' : ''}已自动改回走代理，一天后会再试一次直连。</div>` : '';
 	// 「节点挂了自动换」的详细设置（看哪个策略组、最近切换、模拟一次）放在它下面：同一个设置只在这一页改（节点页只显示状态）
 	const bans = d.ban && d.ban.ips ? Object.entries(d.ban.ips).sort((a, b) => b[1].at - a[1].at) : [];
-	const more = (x) => (x.k === 'autosw' ? '<div id="aswCard" class="aswin"></div>' : x.k === 'autoban' && bans.length ? `<div class="banlist">${bans.map(([ip, b]) => `<div class="kv" style="align-items:center"><span><b style="color:var(--text)">${esc(ip)}</b><span class="muted" style="display:block;font-size:12px">${b.noblock ? '没能封（防火墙不支持），只提醒了' : '封到 ' + day(b.until)}</span></span><button class="btn sm" data-unban="${esc(ip)}">解封</button></div>`).join('')}</div>` : '');
+	const more = (x) => (x.na ? '' : x.k === 'autosw' ? '<div id="aswCard" class="aswin"></div>' : x.k === 'autoban' && bans.length ? `<div class="banlist">${bans.map(([ip, b]) => `<div class="kv" style="align-items:center"><span><b style="color:var(--text)">${esc(ip)}</b><span class="muted" style="display:block;font-size:12px">${b.noblock ? '没能封（防火墙不支持），只提醒了' : '封到 ' + day(b.until)}</span></span><button class="btn sm" data-unban="${esc(ip)}">解封</button></div>`).join('')}</div>` : '');
 	let html = groups.map((g) => `<div class="sectitle"><b>${esc(g.g)}</b></div><section class="card aucard">${g.list.map((x) => row(x) + note(x) + more(x)).join('')}</section>`).join('');
 	if (!d.oc) html += '<p class="muted" style="font-size:12.5px;margin:10px 4px 0">这台路由器没装代理插件，跟代理插件有关的几项不显示。</p>';
 	el.innerHTML = html;
 	if (d.autosw != null) { if (ASW.st) renderAsw(); loadAsw(); }
-	const n = items.filter((x) => x.v).length;
-	pl.textContent = n === items.length ? '全部开启' : n ? `开了 ${n} / ${items.length} 项` : '全部关闭';
-	pl.className = 'pill ' + (n === items.length ? 'good' : '');
+	const can = items.filter((x) => !x.na), n = can.filter((x) => x.v).length; // 用不了的不算
+	pl.textContent = n === can.length ? '全部开启' : n ? `开了 ${n} / ${can.length} 项` : '全部关闭';
+	pl.className = 'pill ' + (n === can.length ? 'good' : '');
 }
 $('auCard').addEventListener('click', (ev) => {
 	const ub = ev.target.closest('[data-unban]');
@@ -6055,13 +6058,24 @@ $('auCard').addEventListener('click', (ev) => {
 		if (!(await confirmBox('解封 ' + ub.dataset.unban, '这个地址马上就能再连路由器的后台和 SSH。确认是你自己（或者认识的人）再解封。', '解封'))) return;
 		await P('ban_del', { ip: ub.dataset.unban }, 20000); toast('已解封'); await loadAuto({});
 	}, false);
+	if (ev.target.closest('[data-nkrs]')) return nikkiRestart();
 	const au = ev.target.closest('[data-au]'); if (au && ev.target.matches('input')) setAuto(au);
 });
+async function nikkiRestart() {
+	if (!(await confirmBox('重启 Nikki', '断网 10–30 秒。', '重启'))) return;
+	try { await P('px_ctl', { id: 'nikki', op: 'restart' }); toast('正在重启 Nikki…'); setTimeout(() => loadAuto({}).catch(() => {}), 40000); } catch (e) { toast(e.message, true); }
+}
 function setAuto(lb) {
 	const k = lb.dataset.au, inp = lb.querySelector('input'), on = inp.checked;
 	const it = AU.d ? autoItems(AU.d).find((x) => x.k === k) : null;
 	busy(null, async () => {
-		try { await loadAuto({ set: true, [k]: on }); toast((on ? '已开启：' : '已关闭：') + (it ? it.t : '')); }
+		try {
+			await loadAuto({ set: true, [k]: on }); toast((on ? '已开启：' : '已关闭：') + (it ? it.t : ''));
+			// 用的是 Nikki：打开隧道直连后问要不要现在重启（不重启就等它下次重启）
+			if (k === 'tunbypass' && on && AU.d && AU.d.px === 'Nikki' && AU.d.tb && AU.d.tb.status === '还没生效') {
+				if (await confirmBox('现在重启 Nikki？', '重启后马上生效，断网 10–30 秒；不重启就等它下次重启。', '现在重启')) { await P('px_ctl', { id: 'nikki', op: 'restart' }); toast('正在重启 Nikki…'); setTimeout(() => loadAuto({}).catch(() => {}), 40000); }
+			}
+		}
 		catch (e) { inp.checked = !on; throw e; }
 	});
 }

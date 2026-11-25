@@ -117,6 +117,20 @@ const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPil
 	s = await st(page);
 	ok('打开了直连、有的插件还没生效：开关显示开着，下面写着还没生效的原因', s.rows.includes('tunbypass:true') && /还有代理插件没生效/.test(s.txt), JSON.stringify(s));
 	await ctx.close();
+	// 6.0 第 44 项：用的是 Nikki，打开了还没生效：给「现在重启 Nikki」，先确认
+	AUTO.px = 'Nikki';
+	({ page, ctx } = await open(browser));
+	await page.goto('http://panel.test/panel/'); await page.waitForTimeout(1200); await goWd(page);
+	s = await st(page);
+	ok('Nikki 还没生效：写「Nikki 重启后生效」，给「现在重启 Nikki」', /Nikki 重启后生效/.test(s.txt) && (await page.locator('#auCard [data-nkrs]').count()) === 1, JSON.stringify(s).slice(0, 200));
+	page.__calls = [];
+	await page.route('**/cgi-bin/mcp/**', async (route) => { const b = JSON.parse(route.request().postData() || '{}'); if (/px_ctl/.test(b.method)) { page.__calls.push(b.params); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: b.id, result: { ok: true } }) }); } return route.fallback(); });
+	await page.click('#auCard [data-nkrs]'); await page.waitForTimeout(400);
+	ok('点了先确认：断网多久', /重启 Nikki/.test(await txt(page, '.modal')) && /断网 10–30 秒/.test(await txt(page, '.modal')));
+	await page.locator('.modal').last().locator('[data-v="true"]').click(); await page.waitForTimeout(800);
+	ok('确认后才重启 Nikki', page.__calls.some((p) => p.id === 'nikki' && p.op === 'restart') && /正在重启 Nikki/.test(await txt(page, '#toast')), JSON.stringify(page.__calls));
+	await ctx.close();
+	delete AUTO.px;
 	// 直连被自动关掉
 	AUTO.tb = { on: false, auto: true, at: Math.floor(Date.now() / 1000) - 3600, status: '已关闭：自动：直连连不上' };
 	({ page, ctx } = await open(browser));
@@ -124,6 +138,14 @@ const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPil
 	s = await st(page);
 	ok('直连连不上被自动关掉：写明已改回走代理、一天后再试', /已自动改回走代理/.test(s.txt) && /一天后/.test(s.txt) && s.rows.includes('tunbypass:false'), JSON.stringify(s));
 	await ctx.close();
+	// 6.0 第 42、43 项：用的是 PassWall（没有切换节点的接口）
+	AUTO.autosw_save = AUTO.autosw; AUTO.autosw = null; AUTO.autosw_why = 'PassWall 没有切换节点的接口。用它自带的自动切换，在原版页面里开'; AUTO.route_save = AUTO.route; AUTO.route = false; AUTO.route_why = 'PassWall 做不到：换路线要靠 OpenClash 的规则集（不重启、不断网）';
+	({ page, ctx } = await open(browser));
+	await page.goto('http://panel.test/panel/'); await page.waitForTimeout(1200); await goWd(page);
+	s = await st(page);
+	ok('别的代理插件：「节点挂了自动换」「面板线路自动选择」写明为什么用不了，不能开关，不算进开了几项', /PassWall 没有切换节点的接口/.test(s.txt) && /PassWall 做不到/.test(s.txt) && (await page.locator('#auCard .auna').count()) === 2 && (await page.locator('#auCard .auna input').count()) === 0 && !/\/ 1[5-9] 项/.test(s.pill), JSON.stringify(s).slice(0, 300));
+	await ctx.close();
+	AUTO.autosw = AUTO.autosw_save; AUTO.route = AUTO.route_save; delete AUTO.autosw_why; delete AUTO.route_why;
 	// 没装代理插件、没开云端
 	AUTO.oc = false; AUTO.cloud = false; AUTO.tb = { on: true, auto: false, at: 0, status: '已开启' };
 	({ page, ctx } = await open(browser, { dark: true }));

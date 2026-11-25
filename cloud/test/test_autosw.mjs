@@ -10,7 +10,7 @@ const UC = process.env.UCODE;
 if (!UC) { console.log('跳过：没有设置 UCODE'); process.exit(0); }
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
 // 让 cmcp-autosw 用仓库里最新的 cmcp.lib
-const LIBD = fs.mkdtempSync(path.join(os.tmpdir(), 'aswlib-')); fs.mkdirSync(LIBD + '/cmcp'); fs.copyFileSync(path.resolve('../src/lib/lib.uc'), LIBD + '/cmcp/lib.uc');
+const LIBD = fs.mkdtempSync(path.join(os.tmpdir(), 'aswlib-')); fs.mkdirSync(LIBD + '/cmcp'); fs.copyFileSync(process.env.ASW_LIB || path.resolve('../src/lib/lib.uc'), LIBD + '/cmcp/lib.uc');
 const BIN = fs.mkdtempSync(path.join(os.tmpdir(), 'aswbin-'));
 for (const [n, body] of [['ping', 'exit 0'], ['uci', 'exit 1'], ['pidof', 'exit 1']]) { fs.writeFileSync(BIN + '/' + n, '#!/bin/sh\n' + body + '\n'); fs.chmodSync(BIN + '/' + n, 0o755); }
 const SF = '/tmp/cmcp_autosw.json', HF = '/etc/claude-mcp/autosw_hist.json', MF = path.join(os.tmpdir(), 'asw_manual_' + process.pid);
@@ -35,7 +35,7 @@ const srv = http.createServer((req, res) => {
 });
 await new Promise((z) => srv.listen(9090, '127.0.0.1', z));
 const run = (arg) => new Promise((z) => {
-	const p = spawn('sh', ['-c', UC + ` -L '${LIBD}/*.uc' ` + JSON.stringify(path.resolve('../src/bin/cmcp-autosw')) + (arg ? ' ' + arg : '')], { env: { ...process.env, PATH: BIN + ':' + process.env.PATH, CMCP_ASW_MANUAL: MF } });
+	const p = spawn('sh', ['-c', UC + ` -L '${LIBD}/*.uc' ` + JSON.stringify(process.env.ASW_BIN || path.resolve('../src/bin/cmcp-autosw')) + (arg ? ' ' + arg : '')], { env: { ...process.env, PATH: BIN + ':' + process.env.PATH, CMCP_ASW_MANUAL: MF } });
 	let out = ''; p.stdout.on('data', (x) => { out += x; }); p.stderr.on('data', (x) => { out += x; });
 	p.on('close', () => { fs.rmSync('/tmp/cmcp_autosw.lock', { recursive: true, force: true }); z(out); });
 });

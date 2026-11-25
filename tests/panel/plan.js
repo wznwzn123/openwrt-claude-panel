@@ -55,7 +55,7 @@ const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; P
 		await sh().locator('[data-pl="add"]').click(); await page.waitForTimeout(800);
 		ok(`[${tag}] 添加时段：发给路由器`, JSON.stringify(PZ.calls[0]) === JSON.stringify({ mac: TV, name: 'TV', plan: [{ d: [1, 2, 3, 4, 5], from: '16:00', to: '21:00' }] }), JSON.stringify(PZ.calls[0]));
 		let t = await sh().textContent();
-		ok(`[${tag}] 列表里显示时段、现在能不能上网、几点停`, /周一到周五 16:00–21:00/.test(t) && /能上网，\d\d:\d\d 停网/.test(t) && /已添加：周一到周五 16:00–21:00/.test(await toastT()), t);
+		ok(`[${tag}] 列表里显示时段、现在能不能上网、几点停`, /周一到周五 16:00–21:00/.test(t) && /能上网，(明天 )?\d\d:\d\d 停网/.test(t) && /已添加：周一到周五 16:00–21:00/.test(await toastT()), t + " | toast=" + await toastT());
 		ok(`[${tag}] 有计划后出现延长和删除`, (await sh().locator('[data-pl="30"]').count()) === 1 && (await sh().locator('[data-pl="del"]').count()) === 1);
 		await page.screenshot({ path: path.join(SHOT, `plan-${w}${dark ? '-dark' : ''}.png`) });
 		// 周末
@@ -113,7 +113,7 @@ const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; P
 		PZ.devs[TV] = { name: 'TV', plan: { slots: [{ d: [1, 2, 3, 4, 5], from: '16:00', to: '21:00' }], by: 'u1' }, pn: { ok: true, at: Math.floor(Date.now() / 1000) + 540, ext: null }, on: false };
 		await page.goto(`http://localhost:8100/panel/?p=dev&ask=ext&min=60&mac=${TV}`); await page.waitForTimeout(2800);
 		const ex = page.locator('.modal[data-ext]');
-		ok(`[${tag}] 推送点「延长 1 小时」进来：问延长多久，1 小时是蓝色的`, (await ex.count()) === 1 && /「TV」能上网，\d\d:\d\d 停网/.test(await ex.textContent()) && /primary/.test(await ex.locator('[data-e="60"]').getAttribute('class')) && !/primary/.test(await ex.locator('[data-e="30"]').getAttribute('class')), (await ex.count()) && await ex.textContent());
+		ok(`[${tag}] 推送点「延长 1 小时」进来：问延长多久，1 小时是蓝色的`, (await ex.count()) === 1 && /「TV」能上网，(明天 )?\d\d:\d\d 停网/.test(await ex.textContent()) && /primary/.test(await ex.locator('[data-e="60"]').getAttribute('class')) && !/primary/.test(await ex.locator('[data-e="30"]').getAttribute('class')), (await ex.count()) && await ex.textContent());
 		const bx = await ex.locator('.modalbox').boundingBox();
 		ok(`[${tag}] 是居中的小卡片`, bx && bx.height < h * 0.7 && bx.y > 0);
 		await page.screenshot({ path: path.join(SHOT, `plan-ext-${w}${dark ? '-dark' : ''}.png`) });

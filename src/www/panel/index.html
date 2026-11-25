@@ -792,6 +792,10 @@ section.page{display:none}section.page.on{display:block}
 select.input.wfch{width:auto;min-width:96px;flex:none}
 .wfsame .kv{border:0;padding:0}
 .wfcd{display:flex;align-items:baseline;gap:8px;margin:6px 0 12px}.wfcd b{font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}.wfcd span{color:var(--muted);font-size:14px}
+.wfgo{display:grid;gap:8px;margin-top:12px}.wfgo.three{grid-template-columns:repeat(3,minmax(0,1fr))}.wfgo .btn{min-width:0;padding-left:6px;padding-right:6px;white-space:nowrap}
+#wfGuest:not(:empty){margin-top:12px}
+.wfc .fld .val.mono{font-family:var(--mono);font-weight:600;letter-spacing:.02em}
+.wfqr{max-width:min(220px,30vh);cursor:default;margin:4px auto 10px;background:#fff;border-radius:16px;padding:10px}.wfqr svg{display:block;width:100%;height:auto}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1051,6 +1055,7 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 	</div>
 	<div id="wfPend"></div>
 	<div id="wfBody"><section class="card empty">读取中…</section></div>
+	<div id="wfGuest"></div>
 	<div class="savebar hidden" id="wfBar"><span class="muted" id="wfN"></span><div class="actions"><button class="btn sm" id="wfUndo">撤销</button><button class="btn sm primary" id="wfSave">保存</button></div></div>
 </section>
 
@@ -6352,13 +6357,14 @@ function wfStrength(k) {
 const wfBytes = (s) => new TextEncoder().encode(s).length;
 const wfMain = () => (WF.d?.radios || []).filter((r) => r.wifi);
 async function loadWifi() {
-	const d = await P('wifi_get');
+	const [d, g] = await Promise.all([P('wifi_get'), P('guest_get').catch(() => null)]);
+	GU.d = g;
 	WF.d = d; WF.keys = {}; WF.show = {};
 	const ms = wfMain();
 	WF.same = ms.length > 1 && !!d.same;
 	setStatus(true, '在线');
-	wfRender();
-	if (d.pending && d.pending.token && !document.querySelector('.modal[data-ng]')) { const o = wfSaved(); wfConfirm(d.pending.token, d.pending.left, o && o.tok === d.pending.token ? o.ssid : null); }
+	wfRender(); guRender();
+	if (d.pending && d.pending.token && !document.querySelector('.modal[data-ng]')) { const o = wfSaved(); wfConfirm(d.pending.token, d.pending.left, o && o.tok === d.pending.token ? o.ssid : null, d.pending.what); }
 }
 function wfRender() {
 	const d = WF.d, box = $('wfBody');
@@ -6484,29 +6490,31 @@ $('wfSave').addEventListener('click', async () => {
 	finally { btn.disabled = false; }
 });
 // 倒数卡片：点「保留」/「改回去」；连不上路由器时留着卡片，连上新 Wi-Fi 再点
-function wfConfirm(tok, secs, ssid) {
+// what：路由器记的「改的是什么」（Wi-Fi 设置 / 访客 Wi-Fi）；after：点了「保留」以后接着做的（比如出访客二维码）
+function wfConfirm(tok, secs, ssid, what, after) {
 	if (document.querySelector('.modal[data-ng]')) return;
-	const until = Date.now() + Math.max(0, +secs || 0) * 1000;
-	store.set('rp_ng', JSON.stringify({ tok, until, ssid }));
+	const until = Date.now() + Math.max(0, +secs || 0) * 1000, gu = what === '访客 Wi-Fi';
+	store.set('rp_ng', JSON.stringify({ tok, until, ssid, what }));
 	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (page === 'wifi') setTimeout(() => refresh(), 600); };
-	modal(`<h3>新的 Wi-Fi 设置要保留吗？</h3>
-		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>秒后改回原来的</span></div>
+	modal(`<h3>${gu ? '访客网络加好了，家里还能上网吗？' : '新的 Wi-Fi 设置要保留吗？'}</h3>
+		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>${gu ? '秒后自动撤销' : '秒后改回原来的'}</span></div>
 		${ssid ? `<div class="notice">手机断开的话，先连上「${esc(ssid)}」再点「保留」。</div>` : ''}
-		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>改回去</button><button class="btn primary" data-keep>保留</button></div>`,
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>${gu ? '撤销' : '改回去'}</button><button class="btn primary" data-keep>保留</button></div>`,
 	(m, close) => {
 		m.dataset.ng = 1; m.dataset.lock = 1;
 		const n = m.querySelector('[data-n]'), keep = m.querySelector('[data-keep]'), back = m.querySelector('[data-back]');
 		const tick = setInterval(() => {
 			const s = Math.max(0, Math.ceil((until - Date.now()) / 1000));
 			n.textContent = s;
-			if (!s) { clearInterval(tick); close(null); done('没有确认，已改回原来的 Wi-Fi 设置'); }
+			if (!s) { clearInterval(tick); close(null); done(gu ? '没有确认，访客 Wi-Fi 已撤销' : '没有确认，已改回原来的 Wi-Fi 设置'); }
 		}, 500);
 		const act = async (b, m2) => {
 			keep.disabled = back.disabled = true;
 			try {
 				const r = await P(m2, { token: tok }, 8000);
 				clearInterval(tick); close(null);
-				done(r.gone ? '已经改回原来的设置了' : m2 === 'net_confirm' ? '已保留新的 Wi-Fi 设置' : '正在改回原来的设置');
+				done(r.gone ? '已经改回原来的设置了' : m2 === 'net_confirm' ? (gu ? '访客 Wi-Fi 已打开' : '已保留新的 Wi-Fi 设置') : gu ? '正在撤销访客 Wi-Fi' : '正在改回原来的设置');
+				if (m2 === 'net_confirm' && !r.gone && after) after();
 			} catch (x) {
 				keep.disabled = back.disabled = false;
 				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
@@ -6524,9 +6532,75 @@ function wfResume() {
 	if (o.until < Date.now()) { store.del('rp_ng'); return; }
 	P('net_pending').then((r) => {
 		const p = r.pending;
-		if (p && p.token === o.tok) wfConfirm(p.token, p.left, o.ssid); else store.del('rp_ng');
-	}).catch(() => wfConfirm(o.tok, (o.until - Date.now()) / 1000, o.ssid));
+		if (p && p.token === o.tok) wfConfirm(p.token, p.left, o.ssid, p.what); else store.del('rp_ng');
+	}).catch(() => wfConfirm(o.tok, (o.until - Date.now()) / 1000, o.ssid, o.what));
 }
+
+/* ---------- 6.0 第 15 项：访客 Wi-Fi ----------
+ * Wi-Fi 页下面一张卡片：关着时直接点「开 2 小时 / 1 天 / 7 天」；开着时显示名字、密码、还剩多久、几台设备，能出二维码、延长、关掉。
+ * 第一次打开要加访客网络：先弹「家里还能上网吗？」倒数确认，点「保留」后出二维码。 */
+const GU = { d: null };
+const guLeft = (s) => { const M = Math.max(1, Math.ceil((s | 0) / 60)), d = Math.floor(M / 1440), h = Math.floor(M % 1440 / 60), m = M % 60; return d ? `${d} 天${h ? ' ' + h + ' 小时' : ''}` : h ? `${h} 小时${m ? ' ' + m + ' 分' : ''}` : `${m} 分钟`; };
+function guAt(t) {
+	const d = new Date(t * 1000), n = new Date(), hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+	const day = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5);
+	return (day === 0 ? '今天 ' : day === 1 ? '明天 ' : day === 2 ? '后天 ' : `${d.getMonth() + 1}月${d.getDate()}日 `) + hm;
+}
+const guQrText = (g) => { const e = (x) => String(x).replace(/([\;,:"])/g, '\\$1'); return `WIFI:T:WPA;S:${e(g.ssid)};P:${e(g.key)};;`; };
+function guRender() {
+	const box = $('wfGuest'), g = GU.d;
+	if (!box) return;
+	if (!g || WF.d?.none) { box.innerHTML = ''; return; }
+	const st = g.on ? `还剩 ${guLeft(g.left)} · ${g.devs ? g.devs + ' 台设备连着' : '没有设备连着'}` : g.can ? '关着' : g.why;
+	const down = g.on ? (g.bands || []).filter((b) => b.up === false) : [];
+	box.innerHTML = `<section class="card wfc wfg${g.on ? '' : ' off'}">
+		<div class="wfhd"><div><b>访客 Wi-Fi</b><span class="muted">${esc(st)}</span></div>${g.on ? '<span class="pill good">开着</span>' : ''}</div>
+		${g.on ? `<div class="fld row"><div class="lb"><b>名字</b></div><span class="val">${esc(g.ssid)}</span></div>
+		<div class="fld row"><div class="lb"><b>密码</b></div><span class="val mono">${esc(g.key)}</span></div>
+		${down.length ? `<div class="notice w" style="margin-top:4px">${esc(down.map((b) => b.name).join('、'))} 上的访客 Wi-Fi 没开起来：这个无线芯片可能不支持同时开两个 Wi-Fi。</div>` : ''}
+		<div class="wfgo three"><button class="btn primary" data-gu="qr">二维码</button><button class="btn" data-gu="ext">延长</button><button class="btn" data-gu="off">关掉</button></div>`
+		: g.can ? `<div class="wfgo three"><button class="btn" data-gu="2">开 2 小时</button><button class="btn" data-gu="24">开 1 天</button><button class="btn" data-gu="168">开 7 天</button></div>` : ''}
+	</section>`;
+}
+async function guQr() {
+	const g = GU.d; if (!g || !g.on) return;
+	try { await loadQr(); } catch (x) { return toast(x.message, true); }
+	modal(`<h3>访客 Wi-Fi</h3>
+		<div class="cscroll"><div class="qrbox wfqr">${qrSvg(guQrText(g))}</div>
+		<div class="kv"><span>名字</span><span>${esc(g.ssid)}</span></div>
+		<div class="kv"><span>密码</span><span class="mono">${esc(g.key)}</span></div>
+		<div class="kv"><span>自动关</span><span>${esc(guAt(g.until))}</span></div></div>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-copy>复制名字和密码</button><button class="btn primary" data-v="close">好了</button></div>`,
+	(m) => { m.dataset.guqr = 1; m.querySelector('[data-copy]').onclick = () => copyText(`Wi-Fi：${g.ssid}\n密码：${g.key}`); }, { compact: true });
+}
+$('wfGuest').addEventListener('click', async (e) => {
+	const b = e.target.closest('[data-gu]'); if (!b) return;
+	const v = b.dataset.gu, g = GU.d;
+	if (v === 'qr') return guQr();
+	if (v === 'off') {
+		if (!(await confirmBox('关掉访客 Wi-Fi？', g.devs ? `连着访客 Wi-Fi 的 ${g.devs} 台设备会断开。` : '下次打开会换一个新密码。', '关掉', true))) return;
+		return busy(b, async () => { GU.d = await P('guest_set', { on: false }, 20000); guRender(); toast('访客 Wi-Fi 已关'); });
+	}
+	if (v === 'ext') {
+		const CLK = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+		const h = await moreSheet({ t: '延长访客 Wi-Fi', sub: '现在 ' + guAt(g.until) + ' 自动关' }, [{ items: [{ v: '2', ic: CLK, t: '2 小时' }, { v: '24', ic: CLK, t: '1 天' }, { v: '168', ic: CLK, t: '7 天' }] }]);
+		if (!h || h === 'close') return;
+		try { GU.d = await P('guest_set', { extend: +h }, 15000); guRender(); toast('延长到 ' + guAt(GU.d.until)); } catch (x) { toast(x.message, true); }
+		return;
+	}
+	const hours = +v, first = !g.net, len = hours === 2 ? '2 小时' : hours === 24 ? '1 天' : '7 天';
+	const txt = first ? '第一次打开要给访客加一个单独的网络：路由器的网络会重新加载，家里的设备断开几秒。\n加好后 90 秒内点「保留」，不点就自动撤销。'
+		: 'Wi-Fi 会断开几秒再连上。访客只能上外网，进不了家里的设备和路由器后台。';
+	if (!(await confirmBox(`打开访客 Wi-Fi ${len}？`, txt, '打开'))) return;
+	await busy(b, async () => {
+		try {
+			const r = await P('guest_set', { on: true, hours }, 20000);
+			GU.d = r; guRender();
+			if (r.token) wfConfirm(r.token, r.wait + 2, null, '访客 Wi-Fi', guQr);
+			else guQr();
+		} catch (x) { toast(x.message, true); }
+	});
+});
 /* =====================================================================
    Kwrt 原版页面（在面板里打开，自动登录）
    ===================================================================== */

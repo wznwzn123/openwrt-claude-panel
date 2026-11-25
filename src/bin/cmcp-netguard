@@ -26,6 +26,8 @@ reload() {
 back() {
 	what=$(cat "$P/what" 2>/dev/null)
 	for f in "$P"/files/*; do [ -f "$f" ] && cp -f "$f" "$C/$(basename "$f")"; done
+	# 改的时候顺便写下的状态文件（比如访客 Wi-Fi 的到期时间）一起删掉；只认 /etc/claude-mcp 里的
+	[ -f "$P/drop" ] && while read -r f; do case "$f" in "${CMCP_GUEST_ETC:-/etc/claude-mcp}"/*) case "$f" in *..*) ;; *) rm -f "$f" ;; esac ;; esac; done < "$P/drop"
 	reload
 	rm -rf "${P:?}"
 	[ "$1" = auto ] && "$SB/cmcp-notify" warn net "${what:-网络设置}已改回原来的" "改完 $WAIT 秒内没有点「保留」，已自动改回原来的设置。" net >/dev/null 2>&1

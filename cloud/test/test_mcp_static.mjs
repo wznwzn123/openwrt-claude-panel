@@ -32,6 +32,19 @@ decl.forEach((d, i) => {
 	}
 });
 ok('[路由器程序] 没有「先用后声明」的变量（会在运行时报 undeclared variable）', !bad.length, bad.join('；'));
+// 反过来：顶层声明了跟内置函数同名的变量（比如 30-plugin-switch.uc 的 int = 参数说明），它后面的代码再调这个内置函数就会调错（6.0 第 15 项踩过）
+const shadow = [];
+decl.forEach((d, i) => {
+	for (const n of d.names) {
+		if (!BUILTIN.has(n)) continue;
+		const at = d.s.split('\n').findIndex((l) => new RegExp('^(?:let|const)\\s+([^;]*[,\\s])?' + n + '\\s*=').test(l));
+		const later = [d.s.split('\n').slice(at + 1).join('\n'), ...decl.slice(i + 1).map((x) => x.s)];
+		const re = new RegExp('(?<![\\w$.])' + n + '\\s*\\((?![^)]*\\)\\s*=>)');
+		// 同名变量自己的用法（int('说明')）算正常：只看传数字算式的
+		for (const s of later) { const hit = s.split('\n').find((l) => re.test(l) && !new RegExp(n + "\\(''").test(l)); if (hit) shadow.push(`${n}（${d.f} 里改成了别的东西，后面还当内置函数用：${hit.trim().slice(0, 80)}）`); }
+	}
+});
+ok('[路由器程序] 内置函数被同名变量盖住以后，后面没再当内置函数用', !shadow.length, shadow.join('；'));
 console.log(results.map(([n, c, note]) => (c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '（' + String(note).slice(0, 600) + '）')).join('\n'));
 const pass = results.filter((x) => x[1]).length;
 console.log(`\n通过 ${pass}/${results.length}`);

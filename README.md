@@ -172,6 +172,7 @@ AI 能用的工具包括：路由器状态、设备列表、实时网速、连�
 - OpenClash：节点切换与测速、订阅管理、配置文件、覆写、自定义规则、插件设置
 - 设备：在线设备、点名字改名、设备图标（自动认，也能选内置图标或相册照片）、删除离线设备、不走代理、暂停上网（到点恢复 / 每天定时断网）；卡片上只留「暂停上网」，其余在「更多」里
 - Wi-Fi（6.0）：改名字、密码、隐藏、信道，2.4G / 5G 分开开关或用同一个名字；保存后 90 秒内要点「保留」，不点自动改回原来的（改错了也连得回来）
+- 访客 Wi-Fi（6.0）：开 2 小时 / 1 天 / 7 天，到点自动关；每次换新密码、出二维码；访客单独一个网络，进不了家里的设备和路由器后台
 - 流量统计、网速测试（代理 / 直连）、连接列表
 - 通知（6.0 改版）：顶部写路由器现在的状态和近 7 天具体出了什么事（比如「OpenClash 停止 2 次，都已自动重启」），下面一条 7 天的健康条；要你处理的（新版本、重要公告、反馈有回复）放在最上面；其余按天排成时间线，「停了」和「恢复」合成一条
 - 文件管理、终端、系统日志、进程、LuCI 原版页面（自动登录）
@@ -223,7 +224,7 @@ cmcp-uninstall --purge
 |---|---|
 | `/www-claude-mcp/cgi-bin/mcp` | 连接器主程序（ucode CGI） |
 | `/www-claude-mcp/panel/` | 手机面板 |
-| `/usr/sbin/cmcp-*` | 看门狗、节点自动切换、设备暂停、流量统计、每日体检、通知、云端备份（`cmcp-backup`，没有 openssl 时用自带的加密 `cmcp-bkcrypt`）、面板直连自动选择（`cmcp-route`）、拿配对码（`cmcp-pair`）、应急登录码（`cmcp-logincode`）、一键更新（`cmcp-update`）、改网络设置后不确认就改回去（`cmcp-netguard`） |
+| `/usr/sbin/cmcp-*` | 看门狗、节点自动切换、设备暂停、流量统计、每日体检、通知、云端备份（`cmcp-backup`，没有 openssl 时用自带的加密 `cmcp-bkcrypt`）、面板直连自动选择（`cmcp-route`）、拿配对码（`cmcp-pair`）、应急登录码（`cmcp-logincode`）、一键更新（`cmcp-update`）、改网络设置后不确认就改回去（`cmcp-netguard`）、访客 Wi-Fi 到点关（`cmcp-guest`） |
 | `/usr/share/ucode/cmcp/lib.uc` | 共用函数 |
 | `/etc/init.d/claude-mcp` | 面板服务（uhttpd）+ Cloudflare 隧道 |
 | `/etc/init.d/cmcp-watchdog` | 看门狗 |

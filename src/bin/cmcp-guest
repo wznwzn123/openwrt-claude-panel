@@ -1,0 +1,44 @@
+#!/bin/sh
+# 6.0 第 15 项：访客 Wi-Fi 到点自动关（看门狗每分钟调用 tick）
+#   cmcp-guest tick     到了 /etc/claude-mcp/guest_until 里的时间就关掉访客 Wi-Fi，推送告诉你
+#   cmcp-guest off      马上关掉（面板「关掉」）
+#   cmcp-guest remove   卸载时用：访客 Wi-Fi、访客网络、防火墙区域、DHCP 设置全部删掉
+# 面板加的配置都带 cmcp 前缀：wireless.cmcp_guest_<频段>、network.cmcpguest（新版还有 network.cmcp_guest_dev）、
+# firewall.cmcp_guest_zone / cmcp_guest_fwd / cmcp_guest_dhcp / cmcp_guest_dns、dhcp.cmcpguest
+E=${CMCP_GUEST_ETC:-/etc/claude-mcp}
+SB=${CMCP_SBIN:-/usr/sbin}
+U=${CMCP_UCI:-uci}
+
+run() { if [ -n "$CMCP_NG_RUN" ]; then echo "$1" >> "$CMCP_NG_RUN"; else $1 >/dev/null 2>&1; fi; }
+ifaces() { $U -q -X show wireless | sed -n "s/^wireless\.\([A-Za-z0-9_]*\)\.cmcp_guest='1'$/\1/p"; }
+
+off() {
+	for s in $(ifaces); do $U set "wireless.$s.disabled=1"; done
+	$U commit wireless
+	rm -f "$E/guest_until"
+	run 'wifi reload'
+}
+
+case "$1" in
+tick)
+	[ -f "$E/guest_until" ] || exit 0
+	u=$(cat "$E/guest_until")
+	[ "$(date +%s)" -ge "${u:-0}" ] 2>/dev/null || exit 0
+	off
+	"$SB/cmcp-notify" info guest "访客 Wi-Fi 已关" "到了设定的时间，访客 Wi-Fi 已自动关掉。要再用就在面板里重新打开，会换一个新密码。" guest >/dev/null 2>&1
+	;;
+off) off ;;
+remove)
+	# 没开过访客 Wi-Fi 就什么都不动（不重新加载网络）
+	[ -n "$(ifaces)" ] || $U -q get network.cmcpguest >/dev/null || exit 0
+	for s in $(ifaces); do $U -q delete "wireless.$s"; done
+	$U -q delete network.cmcpguest; $U -q delete network.cmcp_guest_dev
+	for s in cmcp_guest_zone cmcp_guest_fwd cmcp_guest_dhcp cmcp_guest_dns; do $U -q delete "firewall.$s"; done
+	$U -q delete dhcp.cmcpguest
+	for c in wireless network firewall dhcp; do $U commit $c; done
+	rm -f "$E/guest_until"
+	run 'wifi reload'; run '/etc/init.d/network reload'; run '/etc/init.d/firewall reload'; run '/etc/init.d/dnsmasq reload'
+	;;
+*) echo "用法：cmcp-guest tick|off|remove"; exit 1 ;;
+esac
+exit 0

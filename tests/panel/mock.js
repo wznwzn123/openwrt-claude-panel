@@ -149,9 +149,10 @@ const WIFI = { st: null, keys: {}, sets: [], calls: [], pend: null, none: null, 
 		{ id: 'radio0', band: '2g', name: '2.4G', on: true, channel: 6, chans: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], wifi: { ssid: 'Home', hidden: false, kind: 'psk', key: true }, sta: null },
 		{ id: 'radio1', band: '5g', name: '5G', on: true, channel: 'auto', chans: [36, 40, 44, 48, 149, 153, 157, 161, 165], wifi: { ssid: 'Home-5G', hidden: false, kind: 'psk', key: true }, sta: null }], same: false };
 	WIFI.keys = { radio0: 'Home-Pass-2024!', radio1: 'Home-Pass-2024!' }; WIFI.sets = []; WIFI.calls = []; WIFI.pend = null; WIFI.none = null;
+	WIFI.g = { can: true, why: null, on: false, until: 0, left: 0, ssid: null, key: null, bands: [], devs: 0, net: null }; WIFI.gsets = []; WIFI.gwhat = null;
 } };
 WIFI.reset();
-const wfPend = () => (WIFI.pend && WIFI.pend.until > Date.now() ? { token: WIFI.pend.token, what: 'Wi-Fi 设置', left: Math.ceil((WIFI.pend.until - Date.now()) / 1000) } : null);
+const wfPend = () => (WIFI.pend && WIFI.pend.until > Date.now() ? { token: WIFI.pend.token, what: WIFI.gwhat || 'Wi-Fi 设置', left: Math.ceil((WIFI.pend.until - Date.now()) / 1000) } : null);
 const dnApply = (list) => list.filter((d) => !DH[d.mac || 'ip:' + d.ip] || d.online).map((d) => ({ ...(d.mac && DN[d.mac] ? { ...d, name: DN[d.mac], orig: d.name, renamed: true } : { ...d, orig: d.name }), icon: (d.mac && DI[d.mac]) || null, img: (d.mac && DIMG[d.mac] && DIMG[d.mac].v) || null }));
 const ASW = { sub: { at: 1793249000, name: 'zou', up: 1224191028, down: 30586976742, total: 322122547200, expire: 1795706585 }, enabled: true, group: 'Zou', hist: [{ t: 1793240000, from: '🇭🇰香港04 专线 3x', to: '🇭🇰香港02 专线 3x', d: 38, same: true }, { t: 1793200000, from: '🇭🇰香港02 专线 3x', to: '🇹🇼台湾01', d: 120, same: false }],
 	dryRes: { cur: '🇭🇰香港02 专线 3x', node: true, curDelay: 88, region: 'HK', kind: 'line', mult: 3, pick: { n: '🇭🇰香港05 专线 3x', d: 41, tier: 0, why: '同地区、同类型（专线、3 倍）' }, same: true, tested: 30, ok: 27 } };
@@ -268,8 +269,19 @@ function respond(method, p) {
 		WIFI.pend = { token: 'ng' + 'x'.repeat(14), until: Date.now() + (WIFI.wait || 90) * 1000 };
 		return { changed: true, token: WIFI.pend.token, wait: WIFI.wait || 90, alloff: !WIFI.st.radios.some((r) => r.on) };
 	}
-	case 'net_confirm': case 'net_revert': { WIFI.calls.push([method, p.token]); const g = wfPend(); if (!g || g.token !== p.token) return { ok: false, gone: true }; WIFI.pend = null; return { ok: true }; }
+	case 'net_confirm': case 'net_revert': { WIFI.calls.push([method, p.token]); const g = wfPend(); if (!g || g.token !== p.token) return { ok: false, gone: true }; if (method === 'net_revert' && WIFI.gwhat) Object.assign(WIFI.g, { on: false, until: 0, left: 0, key: null, bands: [], net: null }); WIFI.pend = null; WIFI.gwhat = null; return { ok: true }; }
 	case 'net_pending': return { pending: wfPend() };
+	case 'guest_get': return { ...JSON.parse(JSON.stringify(WIFI.g)), pending: wfPend() };
+	case 'guest_set': {
+		WIFI.gsets.push(p); const G = WIFI.g, now = Math.floor(Date.now() / 1000);
+		if (p.on === false) { Object.assign(G, { on: false, until: 0, left: 0, key: null, bands: [], devs: 0 }); return { ...G }; }
+		if ('extend' in p) { if (!G.on) throw new Error('访客 Wi-Fi 已经关了，重新打开就行'); G.until = Math.min(G.until + p.extend * 3600, now + 7 * 86400); G.left = G.until - now; return { ...G }; }
+		if (![2, 24, 168].includes(p.hours)) throw new Error('只能开 2 小时、1 天或 7 天');
+		const first = !G.net;
+		Object.assign(G, { on: true, until: now + p.hours * 3600, left: p.hours * 3600, ssid: 'Home-Guest', key: 'k7m2-p9xw-4hr' + (WIFI.gsets.length % 10), bands: [{ id: 'radio0', name: '2.4G', up: null }, { id: 'radio1', name: '5G', up: null }], devs: 0, net: '192.168.66.1' });
+		let token = null; if (first) { WIFI.pend = { token: 'gu' + 'y'.repeat(14), until: Date.now() + (WIFI.wait || 90) * 1000 }; WIFI.gwhat = '访客 Wi-Fi'; token = WIFI.pend.token; }
+		return { ...G, token, wait: token ? (WIFI.wait || 90) : 0 };
+	}
 	case 'dev_imgs': return { imgs: Object.fromEntries((p.macs || []).filter((m) => DIMG[m]).map((m) => [m, DIMG[m].u])) };
 	case 'dev_forget': { let n = 0; for (const it of p.items || []) { const k = it.mac || 'ip:' + it.ip; if (p.only_plain && it.mac && (DN[it.mac] || DI[it.mac] || PZ.devs[it.mac])) continue; DH[k] = 1; if (it.mac) { delete DN[it.mac]; delete DI[it.mac]; delete PZ.devs[it.mac]; } n++; } DEVFORGET.push(p); return { ok: true, n, skip: { online: 0, set: 0 } }; }
 	case 'black_state': return { entries: BL, devices: dnApply([{ ip: '192.168.5.8', mac: 'aa:bb:cc:dd:ee:ff', name: 'iPhone', online: true, stats: { conns: 12, dl: 123456789, ul: 1234567, proxied: 3 } }, { ip: '192.168.5.20', mac: '11:22:33:44:55:66', name: 'TV', online: true }, { ip: '192.168.5.9', mac: null, name: null, online: false }, { ip: '192.168.5.30', mac: '5c:cf:7f:12:34:56', name: 'ESP_1A2B3C', online: false }, { ip: '192.168.5.31', mac: '7a:11:22:33:44:55', name: null, online: false }, { ip: '192.168.5.32', mac: '00:11:32:aa:bb:cc', name: 'DiskStation', online: false }]).map((d) => (d.mac === '11:22:33:44:55:66' ? { ...d, since: Math.floor(Date.now() / 1000) - 8100 } : d)), ready: BLREADY.v, live: BLREADY.v, custom_on: true, lan_ac_mode: '0' };

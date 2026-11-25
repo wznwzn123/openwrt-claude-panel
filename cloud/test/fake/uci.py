@@ -67,6 +67,16 @@ elif cmd == 'get':
     for k, v in s['o']:
         if k == p[2]: print(' '.join(v) if isinstance(v, list) else v); sys.exit(0)
     die('Entry not found')
+elif cmd == 'add_list':
+    key, _, val = a[0].partition('=')
+    p = key.split('.'); secs = load(p[0]); s = find(secs, p[1]) if len(p) > 2 else None
+    if not s: die('Invalid argument')
+    for x in s['o']:
+        if x[0] == p[2]:
+            if not isinstance(x[1], list): x[1] = [x[1]]
+            x[1].append(val); break
+    else: s['o'].append([p[2], [val]])
+    save(p[0], secs)
 elif cmd in ('set', 'delete'):
     key, _, val = a[0].partition('=')
     p = key.split('.'); secs = load(p[0])

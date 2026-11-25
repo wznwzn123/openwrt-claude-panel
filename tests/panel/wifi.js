@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
 		await page.goto('http://localhost:8098/panel/?p=wifi'); await page.waitForTimeout(2200);
 		const C = (id) => page.locator(`.wfc[data-r="${id}"]`), F = (id, k) => C(id).locator(`[data-wf="${k}"]`);
 		const toastT = async () => (await page.textContent('#toast')) || '';
-		ok(`[${tag}] 两个频段各一张卡片，显示名字`, (await page.locator('.wfc').count()) === 2 && (await F('radio0', 'ssid').inputValue()) === 'Home' && (await F('radio1', 'ssid').inputValue()) === 'Home-5G');
+		ok(`[${tag}] 两个频段各一张卡片，显示名字`, (await page.locator('#wfBody .wfc').count()) === 2 && (await F('radio0', 'ssid').inputValue()) === 'Home' && (await F('radio1', 'ssid').inputValue()) === 'Home-5G');
 		ok(`[${tag}] 顶上显示开着几个、卡片上显示信道`, /开着 2 个/.test(await page.textContent('#wfPill')) && /信道 6/.test(await C('radio0').textContent()) && /信道自动/.test(await C('radio1').textContent()));
 		ok(`[${tag}] 没改的时候不显示保存条`, await page.locator('#wfBar').isHidden());
 		ok(`[${tag}] 打开页面不拿密码`, !(await page.content()).includes('Home-Pass-2024!') && !WIFI.calls.some((c) => c[0] === 'key'));

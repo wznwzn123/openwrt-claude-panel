@@ -74,7 +74,7 @@ const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; P
 		await page.screenshot({ path: path.join(SHOT, `plan-slots-${w}${dark ? '-dark' : ''}.png`) });
 		// 延长
 		await sh().locator('[data-pl="30"]').click(); await page.waitForTimeout(800);
-		ok(`[${tag}] 延长 30 分钟`, PZ.calls[PZ.calls.length - 1].ext === 30 && /已延长到 \d\d:\d\d/.test(await toastT()) && /延长过/.test(await sh().textContent()), await toastT());
+		ok(`[${tag}] 延长 30 分钟`, PZ.calls[PZ.calls.length - 1].ext === 30 && /已延长到 (明天 )?\d\d:\d\d/.test(await toastT()) && /延长过/.test(await sh().textContent()), await toastT());
 		// 删一个时段
 		await sh().locator('[data-pldel="2"]').click(); await page.waitForTimeout(800);
 		ok(`[${tag}] 删掉一个时段`, PZ.calls[PZ.calls.length - 1].plan.length === 2 && !/20:00–01:00/.test(await sh().textContent()));
@@ -118,7 +118,7 @@ const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; P
 		ok(`[${tag}] 是居中的小卡片`, bx && bx.height < h * 0.7 && bx.y > 0);
 		await page.screenshot({ path: path.join(SHOT, `plan-ext-${w}${dark ? '-dark' : ''}.png`) });
 		await ex.locator('[data-e="60"]').click(); await page.waitForTimeout(900);
-		ok(`[${tag}] 点了才延长`, JSON.stringify(PZ.calls[0]) === JSON.stringify({ mac: TV, ext: 60 }) && /「TV」已延长到 \d\d:\d\d/.test(await toastT()) && !(await page.locator('.modal[data-ext]').count()), await toastT());
+		ok(`[${tag}] 点了才延长`, JSON.stringify(PZ.calls[0]) === JSON.stringify({ mac: TV, ext: 60 }) && /「TV」已延长到 (明天 )?\d\d:\d\d/.test(await toastT()) && !(await page.locator('.modal[data-ext]').count()), await toastT());
 		// 推送点进来：换了 MAC
 		await page.goto(`http://localhost:8100/panel/?p=dev&ask=plancopy&mac=${NEW}&src=${TV}`); await page.waitForTimeout(2800);
 		ok(`[${tag}] 换了 MAC：说清楚把哪个计划用到哪台`, /把「TV」的上网计划（周一到周五 16:00–21:00）也用到「ESP_1A2B3C」（5c:cf:7f:12:34:56）/.test(await last().textContent()), await last().textContent());

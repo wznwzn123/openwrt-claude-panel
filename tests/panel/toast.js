@@ -39,9 +39,8 @@ async function open(browser, opt = {}) {
 	return { page, ctx, calls, ctl };
 }
 const T = (page) => page.evaluate(() => {
-	const t = document.getElementById('toast'), r = t.getBoundingClientRect(), b = t.querySelector('.tbar');
-	const m = getComputedStyle(b).transform; const sx = m === 'none' ? 1 : +m.split('(')[1].split(',')[0];
-	return { cls: t.className, text: t.textContent, x: r.left, r: r.right, top: r.top, w: r.width, h: r.height, vw: innerWidth, bg: getComputedStyle(t).backgroundImage, fg: getComputedStyle(t).color, barBg: getComputedStyle(b).backgroundColor, sx, barH: b.getBoundingClientRect().height, z: +getComputedStyle(t).zIndex, sw: document.documentElement.scrollWidth };
+	const t = document.getElementById('toast'), r = t.getBoundingClientRect(), ic = getComputedStyle(t, '::before'), sp = t.querySelector('span');
+	return { cls: t.className, text: t.textContent, x: r.left, r: r.right, top: r.top, w: r.width, h: r.height, vw: innerWidth, bg: getComputedStyle(t).backgroundColor, blur: getComputedStyle(t).backdropFilter, fg: getComputedStyle(sp).color, icBg: ic.backgroundColor, icImg: ic.backgroundImage, icAnim: ic.animationName, icW: parseFloat(ic.width), bar: !!t.querySelector('.tbar'), z: +getComputedStyle(t).zIndex, sw: document.documentElement.scrollWidth };
 });
 // 去掉「已选中」和点击放在同一步：中间要是赶上概览每 4 秒刷新一次，按钮又会被标回「已选中」，点了就没反应
 const tapRule = async (page) => { await page.evaluate(() => { const b = document.querySelector('#modeChips .chip[data-mode="rule"]'); b.classList.remove('on'); b.click(); }); };
@@ -66,20 +65,17 @@ const tapRule = async (page) => { await page.evaluate(() => { const b = document
 		ok('位置在顶栏正下方居中（不挡顶栏按钮）' + sfx, Math.abs(s.x - (s.vw - s.r)) <= 2 && s.top >= tb + 4 && s.top <= tb + 16, `左 ${Math.round(s.x)} 右 ${Math.round(s.vw - s.r)}，上边距 ${s.top}，顶栏底 ${tb}`);
 		ok('尺寸小巧（不超过两行、宽度不超过 360）' + sfx, s.h <= 60 && s.w <= 360, `${Math.round(s.w)}×${Math.round(s.h)}`);
 		ok('文字正确，没有显示秒数' + sfx, s.text.startsWith('已切换为规则模式') && !/\d+\s*(s|秒)/.test(s.text), s.text);
-		ok('底部有细进度条（白色）' + sfx, s.barH >= 1.4 && s.barH <= 1.6 && s.barBg === 'rgb(255, 255, 255)', s.barH + 'px ' + s.barBg);
-		ok('背景是米白→天蓝渐变' + sfx, /gradient/.test(s.bg) && /247, 239, 225/.test(s.bg) && /50, 171, 253/.test(s.bg), s.bg.slice(0, 60));
+		ok('没有底部进度条' + sfx, !s.bar);
+		ok('毛玻璃白卡（深色是深灰），带模糊' + sfx, (dark ? /44, 44, 46, 0\.9/ : /255, 255, 255, 0\.9/).test(s.bg) && /blur/.test(s.blur), s.bg + ' ' + s.blur);
+		ok('成功：左边绿色圆圈打勾' + sfx, /(52, 199, 89|48, 209, 88)/.test(s.icBg) && /svg/.test(s.icImg) && s.icW === 20, s.icBg);
 		await page.screenshot({ path: path.join(OUT, 'toast' + (dark ? '-dark' : '') + '.png') });
-		const sx1 = s.sx;
-		await page.waitForTimeout(800);
-		s = await T(page);
-		ok('进度条在缩短' + sfx, s.sx < sx1 - 0.15 && s.sx > 0, `${sx1.toFixed(2)} → ${s.sx.toFixed(2)}`);
 
-		// 显示中再来一条：原地轻弹 + 进度条重新开始
+		// 显示中再来一条：原地轻弹
+		await page.waitForTimeout(800);
 		await tapRule(page);
 		await page.waitForTimeout(120);
 		s = await T(page);
 		ok('显示中再弹：原地刷新，不重新滑入' + sfx, s.cls.includes('re') && !s.cls.includes('in'), s.cls);
-		ok('进度条重新开始' + sfx, s.sx > 0.9, s.sx.toFixed(2));
 
 		// 自动消失（短文字 2.8 秒）
 		await page.waitForTimeout(2800 - 120 + 40);
@@ -122,7 +118,7 @@ const tapRule = async (page) => { await page.evaluate(() => { const b = document
 		await page.click('#refreshBtn');
 		await page.waitForTimeout(600);
 		const s = await T(page);
-		ok('错误提示是米白→红色渐变', /gradient/.test(s.bg) && /255, 90, 74/.test(s.bg), s.bg.slice(0, 60));
+		ok('出错：左边红色感叹号，文字红色', /255, 59, 48/.test(s.icBg) && /svg/.test(s.icImg) && /255, 59, 48/.test(s.fg), s.icBg + ' ' + s.fg);
 		ok('长文字自动换行，宽度不超过 360，仍居中', s.w <= 360.5 && s.h > 40 && Math.abs(s.x - (s.vw - s.r)) <= 2, `${Math.round(s.w)}×${Math.round(s.h)}`);
 		ok('页面没有被撑出横向滚动', s.sw <= s.vw, `${s.sw}/${s.vw}`);
 		await page.screenshot({ path: path.join(OUT, 'toast-err.png') });
@@ -152,18 +148,13 @@ const tapRule = async (page) => { await page.evaluate(() => { const b = document
 		await ctx.close();
 	}
 
-	// 系统开了「减少动态效果」：进度条照样走
+	// 系统开了「减少动态效果」：照常消失
 	{
 		const { page, ctx } = await open(browser, { reduce: true });
 		await page.goto('http://panel.test/panel/?p=home');
 		await page.waitForTimeout(1200);
 		await tapRule(page);
-		await page.waitForTimeout(300);
-		const a = (await T(page)).sx;
-		await page.waitForTimeout(900);
-		const b = (await T(page));
-		ok('减少动态效果时进度条仍然工作', b.sx < a - 0.15, `${a.toFixed(2)} → ${b.sx.toFixed(2)}`);
-		await page.waitForTimeout(2200);
+		await page.waitForTimeout(3600);
 		ok('减少动态效果时也会消失', (await T(page)).cls === 'toast hidden');
 		await ctx.close();
 	}

@@ -26,7 +26,7 @@ function handle(m, p) {
 }
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
 	const u = new URL(req.url, 'http://x'), J = (o) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
-	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); try { return J({ jsonrpc: '2.0', id: body.id, result: handle(body.method.replace(/^panel\//, ''), body.params || {}) }); } catch (e) { return J({ jsonrpc: '2.0', id: body.id, error: { code: e.code || -32000, message: e.message } }); } }
+	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); if (/app_remove/.test(body.method)) return setTimeout(() => { try { J({ jsonrpc: '2.0', id: body.id, result: handle(body.method.replace(/^panel\//, ''), body.params || {}) }); } catch (e) { J({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } }); } }, 1200); try { return J({ jsonrpc: '2.0', id: body.id, result: handle(body.method.replace(/^panel\//, ''), body.params || {}) }); } catch (e) { return J({ jsonrpc: '2.0', id: body.id, error: { code: e.code || -32000, message: e.message } }); } }
 	if (u.pathname.startsWith('/cloud/')) return J({ error: 'x' });
 	const p = u.pathname.replace(/^\/panel\//, '') || 'index.html', f = path.join(ROOT, p);
 	if (!fs.existsSync(f)) { res.writeHead(404); return res.end(''); }
@@ -77,7 +77,11 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		mt = await page.locator('.modal').last().textContent();
 		ok('卸 OpenClash 前确认：一句话说代理会停' + T, /卸载 OpenClash/.test(mt) && /代理会停，节点、规则等页面不可用/.test(mt), mt);
 		await page.screenshot({ path: path.join(SHOT, `apps-confirm-${w}${dark ? '-dark' : ''}.png`) });
-		await page.locator('.modal').last().locator('[data-v="true"]').click(); await W(1500);
+		await page.locator('.modal').last().locator('[data-v="true"]').click(); await W(400);
+		const ts = await page.evaluate(() => { const t = document.getElementById('toast'); return { cls: t.className, txt: t.textContent, an: getComputedStyle(t, '::before').animationName }; });
+		ok('卸载中：灵动岛写「正在卸载…」，转圈' + T, /busy/.test(ts.cls) && ts.txt === '正在卸载…' && ts.an === 'toastSpin', JSON.stringify(ts));
+		if (w === 390) await page.screenshot({ path: path.join(SHOT, 'toast-busy-dark.png'), clip: { x: 0, y: 0, width: w, height: 200 } });
+		await W(1500);
 		ok('卸载：告诉路由器（带确认），说空出多少，列表刷新' + T, S.calls.some((c) => c.m === 'app_remove' && c.p.name === 'luci-app-openclash' && c.p.confirm === 'REMOVE') && /已卸载 OpenClash，空出 3\.0 MB/.test(await page.textContent('#toast')) && !(await page.locator('#apList .aprow[data-n="luci-app-openclash"]').count()));
 		// 点开能卸的：详情里也能卸
 		await page.click('#apList .aprow[data-n="luci-app-wol"]'); await W(500);

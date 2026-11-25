@@ -23,8 +23,6 @@ label.f { display: block; margin: 16px 0 8px; font-size: 14px; font-weight: 500;
 .row > .input { flex: 1; min-width: 0; }
 .err:empty { display: none; }
 .notice { padding: 12px 14px; border-radius: 14px; background: color-mix(in oklab, var(--accent) 10%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent); font-size: 14px; line-height: 1.6; color: color-mix(in oklab, var(--ink) 86%, var(--bg)); }
-.toast { pointer-events: none; position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); z-index: 90; transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; padding: 12px 20px; border-radius: 999px; background: color-mix(in oklab, #1b2621 88%, transparent); border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent); color: var(--ink); font-size: 15px; font-weight: 500; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 18px 40px -12px rgb(0 0 0 / .7), 0 0 30px -10px color-mix(in oklab, var(--accent) 50%, transparent); transition: opacity .3s, transform .4s cubic-bezier(.22,1.4,.36,1); }
-.toast.hide { opacity: 0; transform: translate(-50%, 16px) scale(.96); pointer-events: none; }
 .oldpair { margin-top: 16px; border-top: 1px solid var(--hair); padding-top: 12px; }
 .oldpair summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .oldpair p { font-size: 13.5px; line-height: 1.7; margin: 10px 0; }
@@ -550,7 +548,7 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 	</div>
 </div>
 </main>
-<div class="toast hide" id="toast" role="status"></div>
+<div class="toast hide" id="toast" role="status" aria-live="polite" onclick="this.classList.add('hide')"></div>
 <input type="file" id="avFile" accept="image/*" hidden>
 <div id="footLinks"><!--KIT_FOOT--></div>
 <!--KIT_JS-->
@@ -563,7 +561,8 @@ function roll(el, n) { if (!el) return; const to = +n || 0, from = +el.dataset.v
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 let tt;
-function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove('hide'); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), 2600); }
+// 以「…」结尾的是进行中：转圈，等结果换掉；出错的第二个参数传 true
+function toast(t, err) { t = String(t == null ? '' : t); const e = $('toast'), busy = !err && /…$/.test(t); e.textContent = t; e.className = 'toast' + (err ? ' err' : busy ? ' busy' : ''); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), busy ? 20000 : Math.min(7000, 2600 + Math.max(0, t.length - 24) * 60)); }
 async function api(path, body) {
 	const r = await fetch('/api/account/' + path, body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 	let j = {}; try { j = await r.json(); } catch (e) {}
@@ -632,7 +631,7 @@ $('setBack').onclick = (e) => { e.preventDefault(); if (setFrom) history.back();
 	}
 	try { size(); requestAnimationFrame(loop); new ResizeObserver(() => { if (c.clientWidth !== w || c.clientHeight !== h) size(); }).observe(c); } catch (e) {}
 })();
-$('toReset').onclick = (e) => { e.preventDefault(); if (!mailOn) return toast('还没有开通邮件服务，忘记密码请联系管理员'); tab('reset'); };
+$('toReset').onclick = (e) => { e.preventDefault(); if (!mailOn) return toast('还没有开通邮件服务，忘记密码请联系管理员', true); tab('reset'); };
 document.querySelector('[data-back]').onclick = (e) => { e.preventDefault(); tab('login'); };
 // 表单通用：提交时按钮变灰，出错显示在表单里
 function form(id, fn) {
@@ -640,7 +639,7 @@ function form(id, fn) {
 	f.onsubmit = async (e) => {
 		e.preventDefault();
 		const btn = f.querySelector('button:not([type=button])'); btn.disabled = true; if (err) err.textContent = '';
-		try { await fn(Object.fromEntries(new FormData(f)), f); } catch (x) { if (err) err.textContent = x.message; else toast(x.message); }
+		try { await fn(Object.fromEntries(new FormData(f)), f); } catch (x) { if (err) err.textContent = x.message; else toast(x.message, true); }
 		finally { btn.disabled = false; }
 	};
 }
@@ -656,7 +655,7 @@ form('fCode', async (d, f) => {
 	try { await api('login2', { token: codeTok, code: d.code }); } catch (e) { if (e.again) { codeTok = ''; tab('login'); $('fLogin').querySelector('[data-err]').textContent = e.message; return; } throw e; }
 	f.reset(); codeTok = ''; await load('login');
 });
-$('fCode').querySelector('[data-resend]').onclick = async (e) => { e.preventDefault(); try { await api('login2', { token: codeTok, op: 'resend' }); toast('验证码已重新发送'); } catch (x) { if (x.again) { codeTok = ''; tab('login'); } toast(x.message); } };
+$('fCode').querySelector('[data-resend]').onclick = async (e) => { e.preventDefault(); try { await api('login2', { token: codeTok, op: 'resend' }); toast('验证码已重新发送'); } catch (x) { if (x.again) { codeTok = ''; tab('login'); } toast(x.message, true); } };
 $('fCode').querySelector('[data-codeback]').onclick = (e) => { e.preventDefault(); codeTok = ''; tab('login'); };
 // 6.0 第 5 项：开了两步验证的账号，新设备登录（和找回密码以后）要输验证器上的码，手机不在身边就输备用恢复码
 let tfTok = '';
@@ -703,7 +702,7 @@ $('delBtn').onclick = async () => {
 	if (!pw) return;
 	let code = '';
 	if (ME && ME.totp && ME.totp.on) { code = (prompt('开了两步验证：再输一下验证器 App 上的 6 位数字（或备用恢复码）') || '').trim(); if (!code) return; }
-	try { await api('delete', { password: pw, code }); wasIn.set(false); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message); }
+	try { await api('delete', { password: pw, code }); wasIn.set(false); toast('账号已注销'); show('auth'); lgView('welcome'); } catch (x) { toast(x.message, true); }
 };
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
 const ago = (t) => { if (!t) return '还没上线'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
@@ -719,7 +718,7 @@ function renderInst(me) {
 	const t = me.trial, tr = $('trialRow');
 	tr.innerHTML = t && t.left > 0 ? `<div class="trialrow"><div><b>🎁 免费试用 ${t.days} 天</b><span>${t.max > 1 ? '每个账号能领 ' + t.max + ' 次，还剩 ' + t.left + ' 次' : '每个账号能领一次'}</span></div><button class="btn primary sm" id="trialGo">领取</button></div>` : '';
 	const go = $('trialGo');
-	if (go) go.onclick = async () => { go.disabled = true; try { await api('trial', {}); await load(); toast('领好了：复制下面的安装命令到路由器上运行'); } catch (e) { toast(e.message); go.disabled = false; } };
+	if (go) go.onclick = async () => { go.disabled = true; try { await api('trial', {}); await load(); toast('领好了：复制下面的安装命令到路由器上运行'); } catch (e) { toast(e.message, true); go.disabled = false; } };
 	const L = me.inst || [];
 	$('instList').innerHTML = L.map((x) => {
 		const days = Math.max(1, Math.ceil((x.exp - Date.now()) / 86400e3));
@@ -812,7 +811,7 @@ function edBox(d) {
 			: cur === 'noai' ? '打开以后能用 AI 连接器地址（在面板「我的主页 → 敏感信息」里）。' : '路由器要下载隧道程序（约 30 MB，闪存不够就放在内存里），2 分钟左右。没装上会自动退回本地版。';
 	}));
 	const go = async () => { const to = m.querySelector('input[name=edto]:checked').value; await api('edition', { sub: d.sub, to }); m.remove(); toast('已发给路由器：3 分钟内换好，完成后会推送通知你'); await load(); };
-	ok.onclick = async () => { ok.disabled = true; er.textContent = ''; try { await go(); } catch (x) { if (x.data && x.data.sudo) { m.remove(); sudoBox(() => go().catch((e) => toast(e.message))); } else er.textContent = x.message; } finally { ok.disabled = false; } };
+	ok.onclick = async () => { ok.disabled = true; er.textContent = ''; try { await go(); } catch (x) { if (x.data && x.data.sudo) { m.remove(); sudoBox(() => go().catch((e) => toast(e.message, true))); } else er.textContent = x.message; } finally { ok.disabled = false; } };
 	document.body.appendChild(m);
 }
 // 本地版第一次从官网打开：先说一句要连着家里的 Wi-Fi
@@ -834,7 +833,7 @@ async function openPanel(d, btn) {
 		const r = await api('fam/open', { sub: d.sub });
 		if (r.pick) return pickBox(d, r);
 		location.assign(r.url);
-	} catch (x) { toast(x.message); } finally { if (btn) setTimeout(() => (btn.disabled = false), 1500); }
+	} catch (x) { toast(x.message, true); } finally { if (btn) setTimeout(() => (btn.disabled = false), 1500); }
 }
 // 老路由器绑了好几个账号：先选一个当主账号（只有这一次），被选的人收验证码确认
 function pickBox(d, r) {
@@ -866,7 +865,7 @@ function pickBox(d, r) {
 // 加入家人的路由器：先看一眼（谁邀请的、什么权限），再加入
 const PERM_NAMES = { msg: '联系开发者、问题反馈', node: '切换节点', speed: '网速测试', parent: '定时断网、设备不走代理', alldev: '看和管所有设备', proxy: '改代理规则、订阅、配置', net: '完全控制（原版后台、脚本、恢复备份）', sys: '重启、服务管理、更新面板' };
 async function joinBox(code) {
-	let r; try { r = await api('fam/join_info', { code }); } catch (x) { toast(x.message); return; }
+	let r; try { r = await api('fam/join_info', { code }); } catch (x) { toast(x.message, true); return; }
 	const m = document.createElement('div'); m.className = 'mask';
 	// 6.0 第 17 项：没有「看和管所有设备」的只看得到自己名下的设备
 	const perms = [r.perms.includes('alldev') ? '看状态、所有设备和流量、断线记录' : '看状态、断线记录，只看得到自己名下的设备', ...r.perms.filter((k) => k !== 'alldev').map((k) => PERM_NAMES[k]).filter(Boolean)];
@@ -904,7 +903,7 @@ function render(me) {
 	$('devs').querySelectorAll('[data-lc]').forEach((b) => (b.onclick = async () => {
 		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub);
 		b.disabled = true;
-		try { const r = await api('logincode', { sub }); codeBox(r.code, d); } catch (x) { toast(x.message); } finally { b.disabled = false; }
+		try { const r = await api('logincode', { sub }); codeBox(r.code, d); } catch (x) { toast(x.message, true); } finally { b.disabled = false; }
 	}));
 	$('devs').querySelectorAll('[data-apply]').forEach((b) => (b.onclick = () => applyBox(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub), me.email)));
 	// 有路由器到期暂停了、还没申请（或者上次被拒）：打开页面就弹出申请表（每次打开只弹一次）
@@ -914,20 +913,20 @@ function render(me) {
 		const sub = b.closest('[data-sub]').dataset.sub, code = prompt('输入续期码（找提供服务的人要）：');
 		if (!code || !code.trim()) return;
 		b.disabled = true;
-		try { const r = await api('renew', { sub, code: code.trim() }); toast('已续期 ' + r.days + ' 天，到期时间 ' + ymd(r.exp)); await load(); } catch (x) { toast(x.message); } finally { b.disabled = false; }
+		try { const r = await api('renew', { sub, code: code.trim() }); toast('已续期 ' + r.days + ' 天，到期时间 ' + ymd(r.exp)); await load(); } catch (x) { toast(x.message, true); } finally { b.disabled = false; }
 	}));
-	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message); } }));
-	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message); } }));
+	$('devs').querySelectorAll('[data-ren]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, n = prompt('给这台路由器起个名字：', b.closest('.dev').querySelector('b').textContent); if (n == null) return; try { await api('rename', { sub, alias: n.trim() }); await load(); } catch (x) { toast(x.message, true); } }));
+	$('devs').querySelectorAll('[data-unl]').forEach((b) => (b.onclick = async () => { const id = b.closest('[data-link]').dataset.link; if (!confirm('从账号里移除这台自建版路由器？路由器本身不受影响。')) return; try { await api('unlink', { id }); toast('已移除'); await load(); } catch (x) { toast(x.message, true); } }));
 	$('devs').querySelectorAll('[data-unb]').forEach((b) => (b.onclick = async () => {
 		const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub), main = d.role === 'main';
 		if (!confirm(main ? '你是主账号：解绑以后，这台路由器会从你和所有子账号的账号里移除（路由器本身和家里上网不受影响，以后可以重新绑定）。确定？' : '从账号里移除这台路由器？路由器本身和面板都不受影响，以后可以重新绑定。')) return;
 		const go = async () => { await api('unbind', { sub }); toast('已解绑'); await load(); };
-		try { await go(); } catch (x) { if (/确认是你本人/.test(x.message)) sudoBox(() => go().catch((e) => toast(e.message))); else toast(x.message); }
+		try { await go(); } catch (x) { if (/确认是你本人/.test(x.message)) sudoBox(() => go().catch((e) => toast(e.message, true))); else toast(x.message, true); }
 	}));
 	$('devs').querySelectorAll('[data-upcmd]').forEach((b) => (b.onclick = async () => { const c = upCmd(); try { await navigator.clipboard.writeText(c); toast('已复制升级命令：在路由器后台「服务 → 终端」里粘贴运行，问装哪个版本时直接回车；网址和设置都保留'); } catch (e) { prompt('复制升级命令，到路由器后台「服务 → 终端」里运行：', c); } }));
 	$('devs').querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => edBox(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub))));
 	$('devs').querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => openPanel(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub), b)));
-	$('devs').querySelectorAll('[data-leave]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub); if (!confirm('退出「' + d.name + '」？退出以后你的手机就打不开这台路由器的面板了，要主账号重新发加入码才能回来。')) return; try { await api('fam/leave', { sub }); toast('已退出'); await load(); } catch (x) { toast(x.message); } }));
+	$('devs').querySelectorAll('[data-leave]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub); if (!confirm('退出「' + d.name + '」？退出以后你的手机就打不开这台路由器的面板了，要主账号重新发加入码才能回来。')) return; try { await api('fam/leave', { sub }); toast('已退出'); await load(); } catch (x) { toast(x.message, true); } }));
 }
 
 // ===== 个人主页：头像、名字、注册时间；点头像换头像，「编辑资料」改名字 =====
@@ -964,7 +963,7 @@ $('tfCard').onclick = (e) => {
 const tfLoadQr = () => window.qrcode ? Promise.resolve() : new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = '/k/qr.js'; sc.onload = ok; sc.onerror = () => no(new Error('二维码没加载出来')); document.head.appendChild(sc); });
 async function tfSetup() {
 	let r;
-	try { r = await api('totp_setup', {}); } catch (x) { if (x.data && x.data.sudo) return sudoBox(() => tfSetup()); return toast(x.message); }
+	try { r = await api('totp_setup', {}); } catch (x) { if (x.data && x.data.sudo) return sudoBox(() => tfSetup()); return toast(x.message, true); }
 	let qr = '';
 	try { await tfLoadQr(); const q = window.qrcode(0, 'M'); q.addData(r.uri); q.make(); qr = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (x) {}
 	const key = r.secret.replace(/(.{4})/g, '$1 ').trim();
@@ -979,7 +978,7 @@ async function tfSetup() {
 		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-x>取消</button><button type="button" class="btn primary" data-ok>开启</button></div></div>`;
 	const er = m.querySelector('[data-err]'), inp = m.querySelector('[data-c]');
 	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
-	m.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(r.secret); toast('密钥已复制'); } catch (x) { toast('复制不了，请手动抄下来'); } };
+	m.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(r.secret); toast('密钥已复制'); } catch (x) { toast('复制不了，请手动抄下来', true); } };
 	const go = async () => {
 		const b = m.querySelector('[data-ok]'); b.disabled = true; er.textContent = '';
 		try { const x = await api('totp_on', { code: inp.value.trim() }); m.remove(); await load(); tfCodes(x.codes, true); }
@@ -999,7 +998,7 @@ function tfCodes(codes, fresh) {
 		<ul class="tf-codes">${codes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
 		<div class="acts"><button type="button" class="btn" data-copy>复制</button><button type="button" class="btn" data-dl>存成文件</button><button type="button" class="btn primary" data-x>我存好了</button></div></div>`;
 	m.querySelector('[data-x]').onclick = () => m.remove();
-	m.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(txt); toast('恢复码已复制'); } catch (x) { toast('复制不了，请手动抄下来'); } };
+	m.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(txt); toast('恢复码已复制'); } catch (x) { toast('复制不了，请手动抄下来', true); } };
 	m.querySelector('[data-dl]').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' })); a.download = '路由器面板-恢复码.txt'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); };
 	document.body.appendChild(m);
 }
@@ -1041,7 +1040,7 @@ let avTarget = null;
 $('avFile').onchange = async () => {
 	const f = $('avFile').files[0]; $('avFile').value = '';
 	if (!f) return;
-	try { const a = await shrink(f); if (avTarget) { avTarget(a); return; } const r = await api('profile', { avatar: a }); ME.avatar = r.avatar; renderMe(ME); toast('头像已更新'); } catch (x) { toast(x.message); }
+	try { const a = await shrink(f); if (avTarget) { avTarget(a); return; } const r = await api('profile', { avatar: a }); ME.avatar = r.avatar; renderMe(ME); toast('头像已更新'); } catch (x) { toast(x.message, true); }
 };
 $('meAv').onclick = () => { avTarget = null; $('avFile').click(); };
 $('meEdit').onclick = () => profBox(ME);
@@ -1115,7 +1114,7 @@ $('layDone').onclick = async () => {
 	document.body.classList.remove('lay-edit'); $('layBar').hidden = true;
 	const L = layNow();
 	if (JSON.stringify(L) === JSON.stringify(layBefore)) return;
-	try { await api('profile', { layout: L }); if (ME) ME.layout = L; toast('布局已保存，换手机登录也一样'); } catch (x) { toast('布局没保存上：' + x.message); }
+	try { await api('profile', { layout: L }); if (ME) ME.layout = L; toast('布局已保存，换手机登录也一样'); } catch (x) { toast('布局没保存上：' + x.message, true); }
 };
 layTools();
 // 续期申请表：到期弹窗里填；提交后等管理员审核（审核完才能再提交）
@@ -1159,7 +1158,7 @@ function codeBox(code, d, fresh) {
 		<p class="muted" style="font-size:13.5px;line-height:1.7;margin:0">10 分钟内有效，用一次就作废。<br>在要登录的手机上打开这台路由器的面板，出现「输入登录码」时填进去。<br>点下面「打开面板」会自动填好（已经登录过的手机不用再输）。</p>
 		<div class="acts"><button class="btn" data-cp>复制</button><a class="btn primary" href="https://${esc(d.host)}/panel/#code=${esc(code)}" rel="noopener">打开面板</a><button class="btn" data-x>关闭</button></div></div>`;
 	m.onclick = (e) => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); };
-	m.querySelector('[data-cp]').onclick = async () => { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (e) { toast('复制不了，长按登录码手动复制'); } };
+	m.querySelector('[data-cp]').onclick = async () => { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (e) { toast('复制不了，长按登录码手动复制', true); } };
 	document.body.appendChild(m);
 }
 // 最新版本：用来提示「可更新」
@@ -1191,12 +1190,12 @@ $('sessList').onclick = async (e) => {
 	const row = b.closest('[data-sess]'), name = row.querySelector('b').textContent;
 	if (!confirm('让「' + name + '」退出这个账号？那台设备要重新输密码才能登录。')) return;
 	b.disabled = true;
-	try { await api('session_out', { id: row.dataset.sess }); toast('已退出'); } catch (x) { toast(x.message); }
+	try { await api('session_out', { id: row.dataset.sess }); toast('已退出'); } catch (x) { toast(x.message, true); }
 	loadSess();
 };
 $('sessAll').onclick = async () => {
 	if (!confirm('除了你手上这台，其他设备全部退出这个账号？')) return;
-	try { const r = await api('sessions_out_others', {}); toast('已退出 ' + r.n + ' 台设备'); } catch (x) { toast(x.message); }
+	try { const r = await api('sessions_out_others', {}); toast('已退出 ' + r.n + ' 台设备'); } catch (x) { toast(x.message, true); }
 	loadSess();
 };
 // 我的反馈：账号里路由器在面板发的、登录后在官网报告的；进度条只有三段，说明在详情页
@@ -1272,7 +1271,7 @@ async function load(after) {
 		loadSess(); loadFb();
 		await Promise.race([verP, new Promise((r) => setTimeout(r, 1500))]);
 		render(me); if (window.fxCards) window.fxCards($('vDash'));
-	} catch (e) { report('显示「我的路由器」出错', e); toast('页面有一部分没显示出来，刷新一下试试'); }
+	} catch (e) { report('显示「我的路由器」出错', e); toast('页面有一部分没显示出来，刷新一下试试', true); }
 	if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').closest('details').open = true; $('fBind').code.value = pair; $('fBind').requestSubmit(); }
 	if (joinCode && !sessionStorage.getItem('joined:' + joinCode) && !document.querySelector('.mask')) { sessionStorage.setItem('joined:' + joinCode, '1'); joinBox(joinCode); }
 	return me;

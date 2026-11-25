@@ -464,10 +464,14 @@ button.file{width:100%;text-align:left;color:var(--text);font-size:15px}button.f
 .kv{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line);font-size:14px}.kv:last-child{border-bottom:0}
 .kv>span:first-child{color:var(--muted);flex:none}.kv>span:last-child{text-align:right;font-weight:600;overflow-wrap:anywhere;min-width:0;font-variant-numeric:tabular-nums}
 /* 提示：iOS HUD 胶囊 */
-.toast{position:fixed;z-index:100;top:calc(var(--toph,calc(var(--sat,env(safe-area-inset-top)) + 56px)) + 10px);left:0;right:0;margin:0 auto;width:max-content;max-width:min(360px,calc(100% - 24px));text-align:center;border-radius:20px;background:linear-gradient(172deg,#f7efe1 0%,#d9ecf6 42%,#8fcdf9 72%,#32abfd 100%);color:#0b3f6b;padding:9px 16px 11px;font-size:13px;font-weight:600;line-height:1.45;box-shadow:0 8px 24px rgba(50,171,253,.28),0 2px 6px rgba(0,0,0,.08);white-space:pre-line;overflow:hidden;cursor:pointer;transform-origin:top right;-webkit-user-select:none;user-select:none}
-:root.dark .toast{box-shadow:inset 0 0 0 .5px rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.5)}
-.toast.err{background:linear-gradient(172deg,#f7efe1 0%,#fbd6cf 42%,#fb9a8c 72%,#ff5a4a 100%);color:#7a1610;box-shadow:0 8px 24px rgba(255,90,74,.28),0 2px 6px rgba(0,0,0,.08)}
-.toast .tbar{position:absolute;left:0;right:0;bottom:0;height:1.5px;background:#fff;transform-origin:left;animation:toastBar var(--d,3s) linear both}
+.toast{position:fixed;z-index:100;top:calc(var(--toph,calc(var(--sat,env(safe-area-inset-top)) + 56px)) + 10px);left:0;right:0;margin:0 auto;width:max-content;max-width:min(360px,calc(100% - 24px));display:flex;align-items:center;gap:9px;text-align:left;border-radius:16px;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);color:var(--text);padding:10px 16px 10px 12px;font-size:13px;font-weight:600;line-height:1.4;text-wrap:pretty;box-shadow:0 10px 30px rgba(0,0,0,.12),inset 0 0 0 .5px rgba(0,0,0,.08);white-space:pre-line;overflow:hidden;cursor:pointer;transform-origin:top center;-webkit-user-select:none;user-select:none}
+/* 灵动岛（11/25 用户选的方案 B：毛玻璃白卡）：左边图标说明结果——成功打勾、出错感叹号、进行中转圈 */
+.toast span{min-width:0}
+.toast::before{content:"";flex:none;width:20px;height:20px;border-radius:50%;background:var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center/12px no-repeat}
+.toast.err::before{background-color:var(--danger);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 6.5v7'/%3E%3Cpath d='M12 17.6v.1'/%3E%3C/svg%3E")}
+.toast.err span{color:var(--danger)}
+.toast.busy::before{width:16px;height:16px;margin:2px;background:none;border:2.2px solid var(--brand);border-right-color:transparent;animation:toastSpin .8s linear infinite}
+:root.dark .toast{background:rgba(44,44,46,.9);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12),0 10px 30px rgba(0,0,0,.55)}
 .toast.in{animation:toastIn .46s var(--spring) both}
 .toast.re{animation:toastRe .32s var(--spring) both}
 .toast.out{animation:toastOut .26s cubic-bezier(.4,0,1,1) both}
@@ -661,12 +665,12 @@ section.page{display:none}section.page.on{display:block}
 @keyframes toastIn{from{opacity:0;transform:translateY(-14px) scale(.9)}to{opacity:1;transform:none}}
 @keyframes toastRe{from{transform:scale(.95)}to{transform:none}}
 @keyframes toastOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-12px) scale(.92)}}
-@keyframes toastBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes toastSpin{to{transform:rotate(360deg)}}
 @keyframes popIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
 @media(min-width:761px){.modal{place-items:center}.modalbox{animation:popIn .32s var(--spring) both}.modal.closing .modalbox{animation:dimOut .25s both;opacity:0}.modalbox::before{display:none}.formgrid{display:grid;grid-template-columns:1fr 1fr;column-gap:28px}}
 @media(max-width:760px){.two,.tasks{grid-template-columns:1fr}}
 @media(max-width:380px){.qbtn i{width:44px;height:44px;border-radius:13px}.qbtn{font-size:11.5px}.stat4 b{font-size:19px}}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.toast .tbar{animation:toastBar var(--d,3s) linear both!important}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.toast.busy::before{animation:toastSpin 1.6s linear infinite!important}}
 
 /* ---------- 玻璃主题：背景图 + 半透明磨砂卡片（:root.glass）；关掉就是原来的简洁样式 ---------- */
 #wall{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;display:none;background:var(--bg)}

@@ -599,17 +599,18 @@
   gap: 10px;
   max-width: 100%;
   min-height: var(--toast-h);
-  padding: 8px 8px 8px 14px;
-  border-radius: 999px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 16px;
   font-size: 13px;
   font-weight: 560;
   color: var(--ink);
 }
 .toast-msg { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.toast-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--blue); }
-.toast.tone-ok .toast-dot { background: var(--lime); box-shadow: 0 0 0 4px var(--lime-soft); }
-.toast.tone-info .toast-dot { box-shadow: 0 0 0 4px var(--blue-soft); }
-.toast.tone-danger .toast-dot { background: var(--red); box-shadow: 0 0 0 4px var(--red-soft); }
+/* 跟面板的灵动岛一样：左边 20px 圆形图标说明结果（成功打勾、出错感叹号、其他 i），出错的字是红色 */
+.toast-dot { width: 20px; height: 20px; border-radius: 999px; flex: none; background: var(--blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 10.5v7'/%3E%3Cpath d='M12 6.4v.1'/%3E%3C/svg%3E") center/12px no-repeat; }
+.toast.tone-ok .toast-dot { background-color: #34c759; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E"); }
+.toast.tone-danger .toast-dot { background-color: var(--red); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 6.5v7'/%3E%3Cpath d='M12 17.6v.1'/%3E%3C/svg%3E"); }
+.toast.tone-danger .toast-msg { color: var(--red-text); }
 .toast-close { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 999px; color: var(--ink-faint); flex: none; transition: background .2s ease, color .2s ease; }
 .toast-close:hover { background: var(--hover-bg); color: var(--ink); }
 .toast-ring { overflow: visible; }
@@ -617,6 +618,7 @@
 .toast-ring .ring-track { stroke: var(--line-strong); }
 /* 倒计时细环：短时（≤ 4.2s）的一次性进度，暂停时跟随计时器停住（导 Conduct） */
 .toast-ring .ring-time {
+  display: none; /* 11/25：不要倒计时进度 */
   stroke: currentColor;
   stroke-dasharray: 44;
   stroke-dashoffset: 0;

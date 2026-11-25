@@ -80,12 +80,12 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 	<div class="sech"><h2>操作记录</h2></div>
 	<div class="card"><p class="muted" style="margin:0 0 4px;font-size:12.5px">谁在什么时候删了、停了、恢复了哪台路由器或账号，都记在这里（最近 500 条）。</p><div id="logs"></div></div>
 </section>
-<div class="toast hide" id="toast"></div>
+<div class="toast hide" id="toast" role="status" aria-live="polite" onclick="this.classList.add('hide')"></div>
 </div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-let tt; function toast(t) { const e = $('toast'); e.textContent = t; e.classList.remove('hide'); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), 2600); }
+let tt; function toast(t, err) { t = String(t == null ? '' : t); const e = $('toast'), busy = !err && /…$/.test(t); e.textContent = t; e.className = 'toast' + (err ? ' err' : busy ? ' busy' : ''); clearTimeout(tt); tt = setTimeout(() => e.classList.add('hide'), busy ? 20000 : Math.min(7000, 2600 + Math.max(0, t.length - 24) * 60)); }
 let KEY = ''; try { KEY = sessionStorage.getItem('hubkey') || ''; } catch (e) {}
 // 开了两步验证（5.0）：输一次验证码换 12 小时的通行证
 let SESS = '', TFA = null; try { SESS = sessionStorage.getItem('hubsess') || ''; } catch (e) {}
@@ -115,7 +115,7 @@ $('outBtn').onclick = logout;
 $('mailTest').onclick = async () => {
 	const b = $('mailTest'); b.disabled = true;
 	try { const r = await api('POST', 'testmail'); toast('测试邮件已发到 ' + r.to + '，没收到的话看看垃圾箱'); }
-	catch (x) { toast(x.message); }
+	catch (x) { toast(x.message, true); }
 	b.disabled = false;
 };
 $('fKey').onsubmit = async (e) => { e.preventDefault(); KEY = e.target.k.value.trim(); try { await load(); try { sessionStorage.setItem('hubkey', KEY); } catch (x) {} } catch (x) { e.target.querySelector('[data-err]').textContent = x.message; } };
@@ -204,13 +204,13 @@ $('devs').onclick = async (e) => {
 		const n = await daysDialog({ title: '给「' + (d.name || sub) + '」加天数', who: sub + (d.anote ? ' · ' + d.anote : ''), cur: d.exp, want: 30, go: '加' });
 		if (!n) return;
 		b.disabled = true;
-		try { const r = await api('POST', 'devices/' + sub + '/extend', { days: n }); toast('已加 ' + n + ' 天，到期 ' + day(r.exp)); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+		try { const r = await api('POST', 'devices/' + sub + '/extend', { days: n }); toast('已加 ' + n + ' 天，到期 ' + day(r.exp)); await load(); } catch (x) { toast(x.message, true); b.disabled = false; }
 		return;
 	}
 	if (op === 'note') {
 		const v = prompt('备注（给谁的、怎么联系、收了多少钱……只有你能看到，留空就是删掉）：', d.anote || '');
 		if (v == null) return;
-		try { await api('POST', 'devices/' + sub + '/note', { note: v }); toast(v.trim() ? '备注已保存' : '备注已删除'); await load(); } catch (x) { toast(x.message); }
+		try { await api('POST', 'devices/' + sub + '/note', { note: v }); toast(v.trim() ? '备注已保存' : '备注已删除'); await load(); } catch (x) { toast(x.message, true); }
 		return;
 	}
 	if (op === 'delete') {
@@ -224,7 +224,7 @@ $('devs').onclick = async (e) => {
 		if (!confirm(msg)) return;
 	}
 	b.disabled = true;
-	try { const r = await api('POST', 'devices/' + sub + '/' + op, body); toast(op === 'delete' ? '已放进回收站，' + day(r.purgeAt) + ' 前可以恢复' + (r.mailed ? '，已发邮件通知' : '') : op === 'restore' ? '已恢复' + (r.mailed ? '，已发邮件通知' : '') : op === 'purge' ? '已彻底删除' + (r.mailed ? '，已发邮件告诉用户怎么重新开通' : '') : '已完成'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+	try { const r = await api('POST', 'devices/' + sub + '/' + op, body); toast(op === 'delete' ? '已放进回收站，' + day(r.purgeAt) + ' 前可以恢复' + (r.mailed ? '，已发邮件通知' : '') : op === 'restore' ? '已恢复' + (r.mailed ? '，已发邮件通知' : '') : op === 'purge' ? '已彻底删除' + (r.mailed ? '，已发邮件告诉用户怎么重新开通' : '') : '已完成'); await load(); } catch (x) { toast(x.message, true); b.disabled = false; }
 };
 function renderInv(list) {
 	list.sort((a, b) => b.created - a.created);
@@ -237,7 +237,7 @@ $('invs').onclick = async (e) => {
 	const row = e.target.closest('[data-code]'); if (!row) return;
 	const code = row.dataset.code;
 	if (e.target.closest('[data-copy]')) { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (x) { prompt('复制邀请码：', code); } }
-	if (e.target.closest('[data-del]') && confirm('作废邀请码 ' + code + '？已经开通的路由器不受影响。')) { try { await api('DELETE', 'invites/' + code); await load(); } catch (x) { toast(x.message); } }
+	if (e.target.closest('[data-del]') && confirm('作废邀请码 ' + code + '？已经开通的路由器不受影响。')) { try { await api('DELETE', 'invites/' + code); await load(); } catch (x) { toast(x.message, true); } }
 };
 $('fInv').onsubmit = async (e) => {
 	e.preventDefault(); const f = e.target, err = f.querySelector('[data-err]'); err.textContent = '';
@@ -261,7 +261,7 @@ $('aps').onclick = async (e) => {
 	if (okk) { const ap = APS.find((x) => x.sub === sub && !x.logged); const n = await pickDays(ap); if (!n) return; body = { days: n }; }
 	else { const r = prompt('拒绝的原因（会推送给用户，选填）：', ''); if (r == null) return; body = { reason: r }; }
 	b.disabled = true;
-	try { const r = await api('POST', 'applications/' + sub + '/' + (okk ? 'approve' : 'reject'), body); toast((okk ? '已通过，到期时间 ' + day(r.exp) : '已拒绝') + (r.mailed ? '，已发邮件通知他' : '，邮件没发出去（他开了推送的话会收到推送）')); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+	try { const r = await api('POST', 'applications/' + sub + '/' + (okk ? 'approve' : 'reject'), body); toast((okk ? '已通过，到期时间 ' + day(r.exp) : '已拒绝') + (r.mailed ? '，已发邮件通知他' : '，邮件没发出去（他开了推送的话会收到推送）')); await load(); } catch (x) { toast(x.message, true); b.disabled = false; }
 };
 // 续几天：「180」「180天」「１８０」都认；认不出返回 0
 function parseDays(v) {
@@ -318,13 +318,13 @@ $('rens').onclick = async (e) => {
 	const row = e.target.closest('[data-rcode]'); if (!row) return;
 	const code = row.dataset.rcode;
 	if (e.target.closest('[data-copy]')) { try { await navigator.clipboard.writeText(code); toast('已复制'); } catch (x) { prompt('复制续期码：', code); } }
-	if (e.target.closest('[data-del]') && confirm('作废续期码 ' + code + '？')) { try { await api('DELETE', 'renewals/' + code); await load(); } catch (x) { toast(x.message); } }
+	if (e.target.closest('[data-del]') && confirm('作废续期码 ' + code + '？')) { try { await api('DELETE', 'renewals/' + code); await load(); } catch (x) { toast(x.message, true); } }
 };
 $('fRen').onsubmit = async (e) => {
 	e.preventDefault(); const f = e.target, err = f.querySelector('[data-err]'); err.textContent = '';
 	try { const r = await api('POST', 'renewals', { days: +f.days.value, count: +f.count.value, note: f.note.value }); f.note.value = ''; toast('续期码：' + r.list.map((x) => x.code).join('、')); await load(); } catch (x) { err.textContent = x.message; }
 };
-$('cleanBtn').onclick = async () => { if (!confirm('把 90 天没上线的路由器放进回收站？（受保护的不动；30 天内能恢复，之后自动彻底删除）')) return; try { const r = await api('POST', 'cleanup'); toast('处理了 ' + r.removed.length + ' 台'); await load(); } catch (x) { toast(x.message); } };
+$('cleanBtn').onclick = async () => { if (!confirm('把 90 天没上线的路由器放进回收站？（受保护的不动；30 天内能恢复，之后自动彻底删除）')) return; try { const r = await api('POST', 'cleanup'); toast('处理了 ' + r.removed.length + ' 台'); await load(); } catch (x) { toast(x.message, true); } };
 /* ---------- 统计和筛选 ---------- */
 let FILTER = 'all', STATS = { count: 0, max: 0 };
 const live = (d) => d.state === 'ok' && d.offWhy !== 'deleted';
@@ -388,7 +388,7 @@ $('users').onclick = async (e) => {
 		if (!c) return; body = { confirm: c };
 	} else if (!confirm('恢复账号 ' + u.email + '？原来绑定的路由器会重新绑定回来。')) return;
 	b.disabled = true;
-	try { const r = await api('POST', 'users/' + uid + '/' + op, body); toast(op === 'delete' ? '已放进回收站，' + day(r.purgeAt) + ' 前可以恢复' : op === 'restore' ? '已恢复，重新绑定了 ' + r.devs + ' 台路由器' : '已彻底删除'); await load(); } catch (x) { toast(x.message); b.disabled = false; }
+	try { const r = await api('POST', 'users/' + uid + '/' + op, body); toast(op === 'delete' ? '已放进回收站，' + day(r.purgeAt) + ' 前可以恢复' : op === 'restore' ? '已恢复，重新绑定了 ' + r.devs + ' 台路由器' : '已彻底删除'); await load(); } catch (x) { toast(x.message, true); b.disabled = false; }
 };
 /* ---------- 操作记录 ---------- */
 let LOGS = [], LOGN = 30;
@@ -440,7 +440,7 @@ $('anns').onclick = async (e) => {
 	if (e.target.closest('[data-aed]')) return annEdit(a);
 	if (e.target.closest('[data-adel]')) {
 		if (!confirm('删除公告「' + a.title + '」？大家的面板里也会消失')) return;
-		try { await api('DELETE', 'ann/' + a.id); toast('已删除'); if (ANN_ED === a.id) annEdit(null); ANNS = (await api('GET', 'ann')).list; renderAnns(); } catch (x) { toast(x.message); }
+		try { await api('DELETE', 'ann/' + a.id); toast('已删除'); if (ANN_ED === a.id) annEdit(null); ANNS = (await api('GET', 'ann')).list; renderAnns(); } catch (x) { toast(x.message, true); }
 	}
 };
 let FBS = [], FB_ALL = false;
@@ -482,9 +482,9 @@ $('fbs').onclick = async (e) => {
 			const t = await r.text(), w = document.createElement('div'); w.className = 'dlg'; w.style.alignItems = 'center';
 			w.innerHTML = `<div class="card" style="width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>安装日志</h3><span><button class="btn sm" data-copy>复制</button> <button class="btn sm" data-x>关闭</button></span></div><pre style="flex:1;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.55;margin:10px 0 0;padding:10px;border-radius:10px;background:var(--fill)"></pre></div>`;
 			w.querySelector('pre').textContent = t;
-			w.onclick = (ev) => { if (ev.target === w || ev.target.closest('[data-x]')) w.remove(); else if (ev.target.closest('[data-copy]')) navigator.clipboard.writeText(t).then(() => toast('已复制'), () => toast('复制不了，手动选一下')); };
+			w.onclick = (ev) => { if (ev.target === w || ev.target.closest('[data-x]')) w.remove(); else if (ev.target.closest('[data-copy]')) navigator.clipboard.writeText(t).then(() => toast('已复制'), () => toast('复制不了，手动选一下', true)); };
 			document.body.appendChild(w); w.querySelector('pre').scrollTop = 1e9;
-		} catch (x) { toast(x.message); }
+		} catch (x) { toast(x.message, true); }
 		lg.disabled = false; return;
 	}
 	const row = e.target.closest('[data-fb]'); if (!row) return;
@@ -501,7 +501,7 @@ $('fbs').onclick = async (e) => {
 		else if (e.target.closest('[data-fdel]')) { if (!confirm('删除这条反馈？')) return; await api('DELETE', 'feedback/' + id); }
 		else return;
 		FBS = (await api('GET', 'feedback')).list; renderFbs();
-	} catch (x) { toast(x.message); }
+	} catch (x) { toast(x.message, true); }
 };
 async function load() {
 	try { LATEST = String((await (await fetch('/api/router/version', { cache: 'no-store' })).json()).version || ''); } catch (e) {}

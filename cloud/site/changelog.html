@@ -92,8 +92,6 @@
 .cl-empty { padding: 28px 0; color: var(--muted); font-size: 15px; }
 .cl-src { margin: 8px 0 0 30px; font-size: 13.5px; color: var(--muted); }
 .cl-src a { color: inherit; }
-.cl-toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 50; transform: translate(-50%, 20px); opacity: 0; padding: 11px 18px; border-radius: 99px; background: var(--accent); color: var(--p-accent-ink); font-weight: 600; font-size: 14.5px; box-shadow: 0 16px 40px -14px #000; transition: opacity .3s, transform .3s; pointer-events: none; }
-.cl-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* 电脑：版本号和日期在左边一栏，往下读的时候跟着停在上面 */
 @media (min-width: 900px) {
@@ -161,7 +159,7 @@
     </div>
   </div>
 </main>
-<div class="cl-toast" id="clToast" role="status" aria-live="polite"></div>
+<div class="toast hide" id="toast" role="status" aria-live="polite" onclick="this.classList.add('hide')"></div>
 <!--KIT_FOOT-->
 <!--KIT_JS-->
 <script>
@@ -325,7 +323,7 @@
   });
   $('clFilter').addEventListener('click', (e) => { const b = e.target.closest('button[data-f]'); if (!b) return; filter = b.dataset.f; applyFilter(); });
 
-  function toast(t) { const el = $('clToast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 3200); }
+  function toast(t, err) { t = String(t == null ? '' : t); const e = document.getElementById('toast'), busy = !err && /…$/.test(t); e.textContent = t; e.className = 'toast' + (err ? ' err' : busy ? ' busy' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.add('hide'), busy ? 20000 : Math.min(7000, 2600 + Math.max(0, t.length - 24) * 60)); }
   function live(ok, at) {
     const el = $('clLive');
     el.classList.toggle('off', !ok);

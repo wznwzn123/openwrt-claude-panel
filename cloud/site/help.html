@@ -45,8 +45,6 @@
 .hp-none p { margin: 8px 0 0; font-size: 14.5px; line-height: 1.8; color: var(--muted); }
 .hp-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 .hp-more { margin-top: clamp(32px, 5vw, 48px); }
-.hp-toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 50; transform: translate(-50%, 20px); opacity: 0; padding: 11px 18px; border-radius: 99px; background: var(--accent); color: var(--p-accent-ink); font-weight: 600; font-size: 14px; transition: opacity .25s, transform .25s; pointer-events: none; }
-.hp-toast.show { opacity: 1; transform: translate(-50%, 0); }
 @media (max-width: 639px) {
   .hp-q { font-size: 15.5px; padding-top: 15px; padding-bottom: 15px; }
   .hp-a { font-size: 14.5px; }
@@ -84,7 +82,7 @@
     </div>
   </div>
 </main>
-<div class="hp-toast" id="hpToast" role="status" aria-live="polite"></div>
+<div class="toast hide" id="toast" role="status" aria-live="polite" onclick="this.classList.add('hide')"></div>
 <!--KIT_FOOT-->
 <!--KIT_JS-->
 <script>
@@ -171,8 +169,7 @@
   });
   // 同一页里点了别的问题链接（地址栏 # 变了）：回到全部、清掉搜索，展开那一条
   addEventListener('hashchange', () => { const id = decodeURIComponent(location.hash.slice(1)); if (!ITEMS.some((x) => x.id === id)) return; cat = 'all'; q = ''; $('hpQ').value = ''; cats(); render(id); });
-  let tT = 0;
-  function toast(t) { const el = $('hpToast'); el.textContent = t; el.classList.add('show'); clearTimeout(tT); tT = setTimeout(() => el.classList.remove('show'), 1800); }
+  function toast(t, err) { t = String(t == null ? '' : t); const e = document.getElementById('toast'), busy = !err && /…$/.test(t); e.textContent = t; e.className = 'toast' + (err ? ' err' : busy ? ' busy' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.add('hide'), busy ? 20000 : Math.min(7000, 2600 + Math.max(0, t.length - 24) * 60)); }
 
   (async () => {
     try {

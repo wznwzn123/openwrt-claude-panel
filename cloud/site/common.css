@@ -24,8 +24,12 @@ label.f{display:block;margin:12px 0 6px;font-size:13px;font-weight:600;color:var
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .notice{padding:11px 13px;border-radius:14px;background:var(--fill);font-size:13.5px;color:var(--muted);line-height:1.6}
 .err{color:var(--danger);font-size:13.5px;min-height:20px;margin-top:8px}
-.toast{position:fixed;left:0;right:0;top:16px;margin:auto;width:max-content;max-width:calc(100% - 32px);padding:10px 16px;border-radius:18px;background:var(--card);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);box-shadow:var(--shadow),0 10px 30px rgba(0,0,0,.15);font-weight:600;font-size:14px;z-index:99;transition:opacity .3s,transform .3s}
-.toast.hide{opacity:0;transform:translateY(-10px);pointer-events:none}
+.toast{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 12px);margin:auto;width:max-content;max-width:min(360px,calc(100% - 24px));display:flex;align-items:center;gap:9px;padding:10px 16px 10px 12px;border-radius:16px;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);box-shadow:0 10px 30px rgba(0,0,0,.12),inset 0 0 0 .5px rgba(0,0,0,.08);font-weight:600;font-size:14px;line-height:1.4;text-wrap:pretty;z-index:99;cursor:pointer;transition:opacity .26s,transform .3s}
+.toast::before{content:"";flex:none;width:20px;height:20px;border-radius:50%;background:var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center/12px no-repeat}
+.toast.err{color:var(--danger)}.toast.err::before{background-color:var(--danger);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 6.5v7'/%3E%3Cpath d='M12 17.6v.1'/%3E%3C/svg%3E")}
+.toast.busy::before{width:16px;height:16px;margin:2px;background:none;border:2.2px solid var(--brand);border-right-color:transparent;animation:tSpin .8s linear infinite}@keyframes tSpin{to{transform:rotate(360deg)}}
+@media(prefers-color-scheme:dark){.toast{background:rgba(44,44,46,.9);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12),0 10px 30px rgba(0,0,0,.55)}}
+.toast.hide{opacity:0;transform:translateY(-12px) scale(.94);pointer-events:none}
 .hidden{display:none!important}
 .dot{width:9px;height:9px;border-radius:50%;background:#aaa;display:inline-block;flex:none}.dot.on{background:var(--ok)}.dot.off{background:var(--danger)}
 h1,h2,h3{letter-spacing:-.02em;margin:0}

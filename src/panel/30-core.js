@@ -261,13 +261,13 @@ function toast(s, err) {
 	if (err && SVC_POP && /托管服务(到期|停用)/.test(String(s))) return; // 到期卡片已经说了，不再重复弹
 	s = String(s ?? '');
 	if (err && TOAST_MUTE && s === TOAST_MUTE) return; // 已经弹过「开不了这个功能」的卡片，不再重复提示
-	const t = $('toast'), dur = Math.min(7000, 2800 + Math.max(0, s.length - 24) * 60);
+	// 以「…」结尾的是进行中（「正在卸载…」「读取中…」）：转圈，等结果出来再换掉（最多留 20 秒）
+	const busy = !err && /…$/.test(s);
+	const t = $('toast'), dur = busy ? 20000 : Math.min(7000, 2800 + Math.max(0, s.length - 24) * 60);
 	const shown = !t.classList.contains('hidden') && !t.classList.contains('out');
 	clearTimeout(toastT); clearTimeout(toastX);
 	t.firstElementChild.textContent = s;
-	t.className = 'toast' + (err ? ' err' : '');
-	t.style.setProperty('--d', dur + 'ms');
-	const bar = t.lastElementChild; bar.replaceWith(bar.cloneNode());
+	t.className = 'toast' + (err ? ' err' : busy ? ' busy' : '');
 	void t.offsetWidth;
 	t.classList.add(shown ? 're' : 'in');
 	toastT = setTimeout(toastHide, dur);

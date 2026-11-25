@@ -55,7 +55,7 @@ const server = http.createServer((req, res) => {
 		await page.click('[data-aswdry]'); await page.waitForTimeout(200);
 		ok('模拟时按钮显示正在测', /正在测所有节点/.test(await page.textContent('[data-aswdry]')));
 		await page.waitForTimeout(1200);
-		ok('模拟结果：当前节点正常 + 挂了会换到同地区的哪个 + 测了多少个', /当前「🇭🇰香港02 专线 3x」88 ms，正常/.test(await txt()) && /同地区的「🇭🇰香港05 专线」（41 ms）/.test(await txt()) && /一共测了 30 个节点，27 个能用/.test(await txt()), await txt());
+		ok('模拟结果：当前节点正常 + 挂了会换到同地区同类型同倍率的哪个 + 测了多少个', /当前「🇭🇰香港02 专线 3x」88 ms，正常/.test(await txt()) && /同地区、同类型（专线、3 倍）的「🇭🇰香港05 专线 3x」（41 ms）/.test(await txt()) && /恢复 10 分钟后会自动换回去/.test(await txt()) && /一共测了 30 个节点，27 个能用/.test(await txt()), await txt());
 		await page.screenshot({ path: path.join(__dirname, 'shots', 'asw-02-dry.png') });
 		ASW.dryRes = { cur: 'X', node: true, curDelay: 0, region: 'HK', pick: null, same: false, tested: 30, ok: 0 };
 		await page.click('[data-aswdry]'); await page.waitForTimeout(1500);

@@ -1,6 +1,7 @@
 #!/usr/bin/ucode
 // 节点自动切换（看门狗每分钟调用一次）
-// 当前节点连续测不通 → 优先换同地区延迟最低的节点，同地区都不通才换别的地区 → 断开走旧节点的连接 → 通知
+// 当前节点连续测不通 → 按「同地区同类型同倍率 → 同地区同类型 → 同地区 → 其他地区」挑延迟最低的（6.0 第 92 项，认法见 cmcp.lib 的 node_meta）
+// → 断开走旧节点的连接 → 通知；原来的节点连续正常 10 分钟后自动换回去（中间手动切过就不换）
 // 设置：/etc/claude-mcp/autosw.json {"enabled":true,"group":"Zou"}
 'use strict';
 import * as L from 'cmcp.lib';
@@ -26,11 +27,6 @@ if (!length(L.sh('ping -c1 -W2 223.5.5.5 >/dev/null && echo y || ping -c1 -W2 11
 
 const GROUPS = ['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay', 'Smart'];
 const INFO = /剩余|到期|官网|流量|过期|套餐|更新|客户端|网址|订阅|重置|公告|群/;
-const REG = [['HK', /🇭🇰|香港|港|\bHK\b|Hong ?Kong/i], ['TW', /🇹🇼|台湾|台灣|\bTW\b|Taiwan/i], ['JP', /🇯🇵|日本|东京|大阪|\bJP\b|Japan/i],
-	['SG', /🇸🇬|新加坡|狮城|\bSG\b|Singapore/i], ['US', /🇺🇸|美国|美國|\bUS\b|United States|洛杉矶|圣何塞/i], ['KR', /🇰🇷|韩国|首尔|\bKR\b|Korea/i],
-	['GB', /🇬🇧|英国|伦敦|\bUK\b|\bGB\b/i], ['DE', /🇩🇪|德国|法兰克福|\bDE\b/i], ['CA', /🇨🇦|加拿大|\bCA\b/i], ['AE', /🇦🇪|迪拜|阿联酋/i]];
-const region = (n) => { for (let r in REG) if (match(n, r[1])) return r[0]; return '?'; };
-
 // 机场订阅的流量和到期时间（订阅链接返回的 subscription-userinfo），缓存 6 小时
 const SUBF = '/tmp/cmcp_subinfo.json';
 function subinfo(fresh) {
@@ -69,9 +65,39 @@ const isNode = (n) => px[n] && !(px[n].type in GROUPS) && !(px[n].type in ['Dire
 // 当前选的是另一个策略组（比如「自动选择」）或直连：它自己会处理，不管
 if (!isNode(cur) && !T) done();
 // 10 分钟内刚手动换过节点（面板或 AI 换的）：先照你的选择来，不自动换走；过了 10 分钟它还连不上才换
-if (!T && t - (+(readfile(getenv('CMCP_ASW_MANUAL') ?? '/tmp/cmcp_autosw_manual') ?? 0) || 0) < 600) done();
+const manual = +(readfile(getenv('CMCP_ASW_MANUAL') ?? '/tmp/cmcp_autosw_manual') ?? 0) || 0;
+// 自动换过以后你又手动选了别的（或者组里已经不是自动换上的那个）：不再换回原来的
+if (!T && st.orig && (cur != st.orig.to || manual > st.orig.at)) { st.orig = null; save(); }
+if (!T && t - manual < 600) done();
 
 const delay = (n, tmo) => +(L.api('GET', '/proxies/' + L.enc(n) + '/delay?timeout=' + tmo + '&url=' + L.enc(TEST), null, tmo / 1000 + 3).json?.delay ?? 0);
+// 断开还挂在某个节点上的连接，让它们马上走新节点（面板自己的连接保留）
+function cut(from) {
+	const hp = split(trim(readfile('/etc/claude-mcp/hostname') ?? ''), '.');
+	const host = length(hp) > 2 ? join('.', slice(hp, 1)) : join('.', hp);
+	let n = 0;
+	for (let c in (L.api('GET', '/connections', null, 8).json?.connections ?? [])) {
+		if (!(from in (c.chains ?? []))) continue;
+		if (host && index(c.metadata?.host ?? '', host) >= 0) continue;
+		L.api('DELETE', '/connections/' + L.enc(c.id), null, 3); n++;
+	}
+	return n;
+}
+const hist = (h) => L.writej(HF, slice([h, ...L.readj(HF, [])], 0, 20));
+// 原来的节点连续正常 10 分钟：换回去
+function back() {
+	let o = st.orig;
+	if (!o) return;
+	if (!(o.from in all) || !isNode(o.from)) { st.orig = null; return; }
+	if (delay(o.from, 3000) <= 0) { o.ok = 0; return; }
+	if (!o.ok) { o.ok = t; return; }
+	if (t - o.ok < 600) return;
+	L.api('PUT', '/proxies/' + L.enc(cfg.group), { name: o.from }, 6);
+	let n = cut(cur);
+	hist({ t, from: cur, to: o.from, back: true });
+	st.orig = null; st.last = t;
+	L.notify('ok', 'node', '节点已换回：' + o.from, '「' + o.from + '」已经连续正常 10 分钟，从「' + cur + '」换回来了，断开了 ' + n + ' 条旧连接', 'node');
+}
 let d1 = delay(cur, 5000);
 if (!T) {
 	if (d1 > 0) {
@@ -79,6 +105,7 @@ if (!T) {
 		// 节点正常时顺便更新订阅信息（6 小时一次）；续费了就清掉「用光了」的标记
 		let si = subinfo(false);
 		if (st.subbad && !subbad(si)) { st.subbad = null; L.notify('ok', 'sub', '机场订阅恢复正常', '剩余流量 ' + GB(si.total - si.up - si.down) + (si.expire ? '，' + day(si.expire) + ' 到期' : '') + '。节点自动切换照常工作。', 'sub'); }
+		back();
 		save(); done();
 	}
 	L.sh('sleep 3'); if (delay(cur, 5000) > 0) { save(); done(); }
@@ -99,38 +126,23 @@ if (!T) {
 }
 
 const res = L.api('GET', '/group/' + L.enc(cfg.group) + '/delay?timeout=3000&url=' + L.enc(TEST), null, 15).json ?? {};
-const myr = region(cur);
-let best = null, bestAny = null;
-for (let n in all) {
-	if (n == cur || !isNode(n)) continue;
-	let d = +res[n] || 0;
-	if (d <= 0) continue;
-	if (!bestAny || d < bestAny.d) bestAny = { n, d };
-	if (region(n) == myr && myr != '?' && (!best || d < best.d)) best = { n, d };
-}
-let pick = best ?? bestAny;
-if (T) { let si = subinfo(true); out({ sub: si, subbad: subbad(si), cur, node: isNode(cur), curDelay: d1, region: myr, pick, same: !!best, tested: length(filter(all, (n) => n != cur && isNode(n))), ok: length(filter(keys(res), (n) => +res[n] > 0 && isNode(n))) }); done(); }
+const cands = map(filter(all, (n) => n != cur && isNode(n)), (n) => ({ n, d: +res[n] || 0 }));
+const pick = L.node_pick(cur, cands), meta = L.node_meta(cur);
+if (T) { let si = subinfo(true); out({ sub: si, subbad: subbad(si), cur, node: isNode(cur), curDelay: d1, region: meta.reg, kind: meta.kind, mult: meta.mult, pick, same: !!pick && pick.tier < 3, tested: length(cands), ok: length(filter(cands, (x) => x.d > 0)) }); done(); }
 if (!pick) {
 	if (!st.allfail) { st.allfail = true; L.notify('err', 'node', '所有节点都连不上', '策略组「' + cfg.group + '」里的节点全部测不通，可能是机场出了问题或订阅过期了', 'node'); }
 	save(); done();
 }
 
 L.api('PUT', '/proxies/' + L.enc(cfg.group), { name: pick.n }, 6);
-// 断开还挂在旧节点上的连接，让它们马上走新节点（面板自己的连接保留）
-const hp = split(trim(readfile('/etc/claude-mcp/hostname') ?? ''), '.');
-const host = length(hp) > 2 ? join('.', slice(hp, 1)) : join('.', hp);
-const cn = L.api('GET', '/connections', null, 8).json?.connections ?? [];
-let n = 0;
-for (let c in cn) {
-	if (!(cur in (c.chains ?? []))) continue;
-	if (host && index(c.metadata?.host ?? '', host) >= 0) continue;
-	L.api('DELETE', '/connections/' + L.enc(c.id), null, 3); n++;
-}
+const n = cut(cur);
+// 记下原来的节点：它恢复后（连续正常 10 分钟）换回去；连着换了几次，只记最早那个
+st.orig = { from: st.orig?.from ?? cur, to: pick.n, at: t, ok: 0 };
+if (st.orig.from == pick.n) st.orig = null;  // 换回的正好是最早那个：不用再等着换回
 st.last = t; st.fail = 0; st.allfail = false;
 // 切换记录存到闪存（很少写，重启也不丢）
-let hist = [ { t, from: cur, to: pick.n, d: pick.d, same: !!best }, ...L.readj(HF, []) ];
-L.writej(HF, slice(hist, 0, 20));
+hist({ t, from: cur, to: pick.n, d: pick.d, same: pick.tier < 3, tier: pick.tier, why: pick.why });
 save();
 L.notify('warn', 'node', '节点自动切换：' + cur + ' → ' + pick.n,
-	'「' + cur + '」连不上了，已自动换到' + (best ? '同地区' : '其他地区') + '的「' + pick.n + '」（延迟 ' + pick.d + ' ms），断开了 ' + n + ' 条旧连接', 'node');
+	'「' + cur + '」连不上了，已换到' + pick.why + '的「' + pick.n + '」（延迟 ' + pick.d + ' ms），断开了 ' + n + ' 条旧连接。原来的节点恢复 10 分钟后会自动换回去', 'node');
 done();

@@ -10,7 +10,7 @@ async function loadProxy() {
 	loadProviders();
 	loadAsw();
 }
-// 节点自动切换：看门狗每分钟测一次当前节点，连不上就换到同地区延迟最低的节点
+// 节点自动切换：看门狗每分钟测一次当前节点，连不上按「同地区同类型同倍率 → 同地区同类型 → 同地区 → 其他地区」换（6.0 第 92 项）
 const ASW = { st: null, dry: null };
 async function loadAsw(b) {
 	try { ASW.st = await P('autosw', b || {}, b && b.dry ? 60000 : 15000); if (b && b.dry) ASW.dry = ASW.st.dry; }
@@ -38,7 +38,7 @@ function renderAsw() {
 		const cur = `当前「${esc(d.cur)}」${d.curDelay > 0 ? `${d.curDelay} ms，正常` : '<b style="color:var(--danger)">测不通</b>'}。`;
 		const nxt = d.subbad ? '订阅' + (d.subbad === 'traffic' ? '流量用光了' : '已经到期') + '，就算当前节点挂了也<b>不会自动切换</b>。'
 			: !d.node ? '当前选的是策略组，不是具体节点，自动切换不会动它。'
-			: d.pick ? `要是它挂了，会换到${d.same ? '同地区' : '<b>其他地区</b>'}的「${esc(d.pick.n)}」（${d.pick.d} ms）。`
+			: d.pick ? `要是它挂了，会换到${d.pick.why ? (d.pick.tier === 3 ? '<b>' + esc(d.pick.why) + '</b>' : esc(d.pick.why)) : d.same ? '同地区' : '<b>其他地区</b>'}的「${esc(d.pick.n)}」（${d.pick.d} ms）。原来的节点恢复 10 分钟后会自动换回去。`
 			: '<b>其他节点也都测不通</b>，到时候会推送提醒你检查机场。';
 		dry = `<div class="notice ${d.node && !d.pick ? 'w' : ''}" style="margin-top:10px">${cur}${nxt}<br><span class="muted" style="font-size:12.5px">一共测了 ${d.tested} 个节点，${d.ok} 个能用。</span></div>`;
 	}
@@ -54,7 +54,7 @@ function renderAsw() {
 	el.innerHTML = `${sel}
 		${subRow}
 		${s.enabled && isGroup ? `<div class="notice w" style="margin-top:8px">「${esc(s.group)}」现在选的是「${esc(s.now)}」（策略组），自动切换只在选了具体节点时才起作用。</div>` : ''}
-		${hist.length ? `<div class="subhd" style="margin-top:10px">最近切换</div>${hist.map((h) => `<div class="kv aswh"><span>${fmt(h.t)}</span><span>${esc(h.from)} → <b>${esc(h.to)}</b>${h.same === false ? '<i>换了地区</i>' : ''}</span></div>`).join('')}` : ''}
+		${hist.length ? `<div class="subhd" style="margin-top:10px">最近切换</div>${hist.map((h) => `<div class="kv aswh"><span>${fmt(h.t)}</span><span>${esc(h.from)} → <b>${esc(h.to)}</b>${h.back ? '<i>换回原来的</i>' : h.tier === 3 || h.same === false ? '<i>换了地区</i>' : h.tier === 1 ? '<i>倍率不同</i>' : h.tier === 2 ? '<i>类型不同</i>' : ''}</span></div>`).join('')}` : ''}
 		${dry}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn" data-aswdry>模拟一次：要是当前节点挂了，会换到哪</button></div>`;
 }

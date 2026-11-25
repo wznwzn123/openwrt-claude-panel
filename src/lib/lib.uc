@@ -192,4 +192,45 @@ function local_key() {
 	return k;
 }
 
-export { D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };
+/* ---------- 节点自动切换：认出节点的地区、类型、倍率（6.0 第 92 项） ----------
+ * 各家机场写法不一样：地区「香港 / 港 / HK / 🇭🇰 / Hong Kong」，类型「专线 / IPLC / IEPL / 中转 / 家宽」，倍率「3x / x3 / ×3 / 3倍 / 倍率:3」 */
+const NREG = [['HK', /🇭🇰|香港|港|\bHK\b|HKG|Hong ?Kong/i], ['TW', /🇹🇼|台湾|台灣|\bTW\b|Taiwan|台北/i], ['MO', /🇲🇴|澳门|澳門|\bMO\b|Macao|Macau/i],
+	['JP', /🇯🇵|日本|东京|東京|大阪|\bJP\b|Japan|Tokyo|Osaka/i], ['SG', /🇸🇬|新加坡|狮城|獅城|\bSG\b|Singapore/i], ['KR', /🇰🇷|韩国|韓國|首尔|\bKR\b|Korea|Seoul/i],
+	['US', /🇺🇸|美国|美國|\bUS\b|\bUSA\b|United States|洛杉矶|圣何塞|硅谷|西雅图|纽约|芝加哥|达拉斯|Los ?Angeles|San ?Jose/i],
+	['GB', /🇬🇧|英国|英國|伦敦|\bUK\b|\bGB\b|London/i], ['DE', /🇩🇪|德国|德國|法兰克福|\bDE\b|Germany|Frankfurt/i], ['FR', /🇫🇷|法国|法國|巴黎|\bFR\b|France|Paris/i],
+	['NL', /🇳🇱|荷兰|荷蘭|阿姆斯特丹|\bNL\b|Netherlands/i], ['CA', /🇨🇦|加拿大|\bCA\b|Canada/i], ['AU', /🇦🇺|澳大利亚|澳洲|悉尼|\bAU\b|Australia/i],
+	['RU', /🇷🇺|俄罗斯|俄羅斯|莫斯科|\bRU\b|Russia/i], ['IN', /🇮🇳|印度|孟买|\bIN\b|India/i], ['TR', /🇹🇷|土耳其|\bTR\b|Turkey|Türkiye/i],
+	['MY', /🇲🇾|马来西亚|馬來西亞|吉隆坡|\bMY\b|Malaysia/i], ['TH', /🇹🇭|泰国|泰國|曼谷|\bTH\b|Thailand/i], ['VN', /🇻🇳|越南|\bVN\b|Vietnam/i],
+	['PH', /🇵🇭|菲律宾|\bPH\b|Philippines/i], ['AE', /🇦🇪|迪拜|阿联酋|\bAE\b|Dubai/i], ['AR', /🇦🇷|阿根廷|\bAR\b|Argentina/i], ['BR', /🇧🇷|巴西|\bBR\b|Brazil/i]];
+function node_meta(n) {
+	n = '' + (n ?? '');
+	let reg = '?';
+	for (let r in NREG) if (match(n, r[1])) { reg = r[0]; break; }
+	// 类型：专线（IPLC / IEPL / 专线）、中转、家宽；认不出算普通
+	let kind = match(n, /IPLC|IEPL|专线|專線|内网专线|直连专线/i) ? 'line' : match(n, /中转|中轉|隧道|Relay|Transit|BGP/i) ? 'relay' : match(n, /家宽|家寬|家庭宽带|住宅|Residential|\bHome\b|原生/i) ? 'home' : 'std';
+	// 倍率：3x、x3、×3、3倍、倍率3、[0.5X]；没写算 1（ucode 的正则不支持前瞻，多字节字符也不放进 [] 里）
+	let m = match(n, /倍率[ ]*(:|：)?[ ]*([0-9]+(\.[0-9]+)?)/), v = m ? +m[2] : 0;
+	if (!v) { m = match(n, /([0-9]+(\.[0-9]+)?)[ ]*(倍|x|X|×)([^A-Za-z0-9]|$)/); v = m ? +m[1] : 0; }
+	if (!v) { m = match(n, /(^|[^A-Za-z0-9])(x|X|×)[ ]?([0-9]+(\.[0-9]+)?)([^0-9.]|$)/); v = m ? +m[3] : 0; }
+	let mult = v > 0 && v < 100 ? v : 1;
+	return { reg, kind, mult };
+}
+const NKIND = { line: '专线', relay: '中转', home: '家宽', std: '普通' };
+// 挑节点：同地区同类型同倍率 → 同地区同类型 → 同地区 → 其他地区；每一层里挑延迟最低的。cands: [{ n, d }]（d > 0 才算通）
+function node_pick(cur, cands) {
+	let c = node_meta(cur), best = [null, null, null, null];
+	for (let x in cands) {
+		if (!x || x.n == cur || !(+x.d > 0)) continue;
+		let m = node_meta(x.n), tier = 3;
+		if (c.reg != '?' && m.reg == c.reg) tier = m.kind == c.kind ? (m.mult == c.mult ? 0 : 1) : 2;
+		if (!best[tier] || x.d < best[tier].d) best[tier] = { n: x.n, d: +x.d };
+	}
+	for (let i = 0; i < 4; i++) if (best[i]) return { ...best[i], tier: i, meta: c, why: [
+		'同地区、同类型（' + NKIND[c.kind] + (c.mult != 1 ? '、' + c.mult + ' 倍' : '') + '）',
+		'同地区、同类型（' + NKIND[c.kind] + '，倍率不同）',
+		'同地区（没有同类型的能用）',
+		'其他地区（' + (c.reg == '?' ? '认不出原来的地区' : '同地区的都连不上') + '）'][i] };
+	return null;
+}
+
+export { node_meta, node_pick, D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };

@@ -18,6 +18,12 @@ function handle(msg) {
 		try { return rpc_result(id, msg.method == 'panel/open_login' ? P.open_login(p) : P.device_approve(p)); }
 		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
+	// 6.0 第 82 项：家里局域网（:906）登录：只能用原版后台给的票，或者输路由器后台密码换手机钥匙（只认局域网来的请求）
+	if (MODE == 'lan') {
+		if (msg.method != 'panel/lan_open' && msg.method != 'panel/lan_pw') return is_notification ? null : rpc_error(id, -32601, 'not found');
+		try { return rpc_result(id, msg.method == 'panel/lan_open' ? P.lan_open(p) : P.lan_pw(p)); }
+		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
+	}
 	// 6.0 第 6 项：通行证地址。只有「拿手机钥匙换通行证」不用带通行证；别的请求都要带，并且只给手机面板用
 	if (MODE == 'pass') {
 		if (msg.method == 'panel/pass_new') return is_notification ? null : pass_new_rpc(id, p);
@@ -135,6 +141,8 @@ function main() {
 		MODE = 'open';
 	else if (path == '/pass')
 		MODE = 'pass';
+	else if (path == '/lan')
+		MODE = 'lan';
 	else if (length(token) < 16 || path != '/' + token) {
 		reply('404 Not Found', { error: 'not found' });
 		return;

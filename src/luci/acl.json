@@ -1,0 +1,6 @@
+{
+	"luci-app-cmcp": {
+		"description": "路由器面板：从原版后台直接打开",
+		"write": { "ubus": { "cmcp": [ "ticket" ] } }
+	}
+}

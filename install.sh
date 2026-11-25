@@ -579,6 +579,25 @@ cp -f "$SRC/etc/luci-gate" "$SRC/etc/oc_cbi.lua" "$SRC/etc/oc_line.lua" $D/
 chmod 755 $D/luci-gate
 for n in cgi-backup cgi-download cgi-exec cgi-upload luci; do ln -sf $D/luci-gate $WWW/cgi-bin/$n; done
 [ -e $WWW/luci-static ] || [ -L $WWW/luci-static ] || ln -s /www/luci-static $WWW/luci-static
+# 6.0 第 82 项：家里局域网直接打开面板（http://路由器地址:906）。端口第一次装时定：906 被占用就换 9906、19906，以后一直用这个
+if [ ! -s $D/lan_port ]; then
+	LP=906
+	for x in 906 9906 19906; do netstat -ltn 2>/dev/null | grep -q "[:.]$x[[:space:]]" || { LP=$x; break; }; done
+	echo $LP > $D/lan_port
+	[ "$LP" = 906 ] || warn "906 端口被别的程序占用了，家里打开面板改用 $LP 端口"
+fi
+# 原版后台「服务 → 路由器面板」：新版 LuCI 用菜单 JSON + 页面脚本，老版用 Lua 控制器；票由 rpcd 插件发（只有登录了后台的人能拿）
+mkdir -p /usr/libexec/rpcd /usr/share/rpcd/acl.d
+cp -f "$SRC/luci/rpcd-cmcp" /usr/libexec/rpcd/cmcp && chmod 755 /usr/libexec/rpcd/cmcp
+cp -f "$SRC/luci/acl.json" /usr/share/rpcd/acl.d/luci-app-cmcp.json
+if [ -d /usr/share/luci/menu.d ]; then
+	cp -f "$SRC/luci/menu.json" /usr/share/luci/menu.d/luci-app-cmcp.json
+	mkdir -p /www/luci-static/resources/view/cmcp && cp -f "$SRC/luci/panel.js" /www/luci-static/resources/view/cmcp/panel.js
+elif [ -d /usr/lib/lua/luci/controller ]; then
+	cp -f "$SRC/luci/cmcp.lua" /usr/lib/lua/luci/controller/cmcp.lua
+fi
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache 2>/dev/null
+/etc/init.d/rpcd reload >/dev/null 2>&1 || true
 ok "文件已就位"
 
 # ---------- 密钥（已有的保留） ----------
@@ -741,7 +760,7 @@ echo "$(( $(date +%s) / 7 % 60 )) $(( $(date +%s) / 13 % 3 + 3 )) * * * /usr/sbi
 # ---------- 升级系统时保留 ----------
 [ "$UC_PRIV" = 1 ] && for p in $UCRT/ $UCW; do grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf; done
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /www/luci-static/resources/view/cmcp/ /usr/lib/lua/luci/controller/cmcp.lua /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复

@@ -100,6 +100,7 @@ h1,h2,h3{letter-spacing:-.02em}
 .updcard .updtop>div{min-width:0}.updcard #rUpdCur{white-space:pre-line}
 .updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .updcard .updfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:4px}.updcard .updfoot .linkbtn{padding:8px 0 2px}.updcard #rUpdMore{color:var(--brand);font-weight:600}
+.mp-lanbtn{background:none;border:0;padding:0;color:var(--brand);font:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
 .updsteps{margin:10px 0 4px;padding:0;list-style:none}.updsteps li{padding:7px 0;color:var(--muted);font-size:14px}.updsteps li.on{color:var(--text);font-weight:600}.updsteps li.ok{color:var(--ok)}.updsteps li.ok::before{content:'✓ '}.updsteps li.on::before{content:'⏳ '}
 .sidenav .ng.flash>button{background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
@@ -586,8 +587,8 @@ b.dvname{display:block;line-height:26px}
 .lgmain:active{transform:scale(.97);opacity:.85}
 :root.dark .lgmain{background:#f5f5f7;color:#000}
 .formerr{margin-top:9px;padding:10px 12px;border-radius:12px;background:rgba(255,59,48,.1);color:var(--danger);font-size:13px;line-height:1.55;white-space:pre-wrap}
-#needcode.lgwrap{position:fixed;inset:0;z-index:90;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:max(40px,var(--sat,env(safe-area-inset-top))) 16px 22px;background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
-:root.dark #needcode.lgwrap{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}
+#needcode.lgwrap,#lanlogin.lgwrap{position:fixed;inset:0;z-index:90;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:max(40px,var(--sat,env(safe-area-inset-top))) 16px 22px;background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
+:root.dark #needcode.lgwrap,:root.dark #lanlogin.lgwrap{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}
 .nclink{text-align:center;text-decoration:none}
 /* 我的主页（5.2） */
 .mp-head{display:flex;flex-direction:column;align-items:center;text-align:center;padding:22px 18px 18px}

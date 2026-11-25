@@ -42,6 +42,10 @@ try { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (m) { pendCod
 // 5.2 官网「我的路由器 → 打开面板」：网址带 #open=一次性票，路由器拿票去官网核对，发这台手机的钥匙
 let pendOpen = '';
 try { const m = /^#open=([a-z2-9]{24})$/.exec(location.hash); if (m) { pendOpen = m[1]; history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+// 6.0 第 82 项：家里局域网直接打开（http://路由器地址:906）。从原版后台「服务 → 路由器面板」点进来带 #lopen=票（免输密码）
+let pendLan = '';
+try { const m = /^#lopen=([a-z2-9]{24})$/.exec(location.hash); if (m) { pendLan = m[1]; history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+const LAN_HOME = location.protocol === 'http:' && (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname) || ['906', '9906', '19906'].includes(location.port));
 // 6.0 第 6 项：手机上存的是这台手机自己的钥匙（rp_dev），不再长期存路由器的登录密钥。
 // token 现在只表示「这台手机登录过」：有手机钥匙，或者还有一把旧的登录密钥等着换成手机钥匙
 let token = store.get('rp_dev') || store.get('rp_token') || store.get('cmcp_token');

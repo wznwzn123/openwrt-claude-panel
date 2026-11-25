@@ -1,0 +1,8 @@
+{
+	"admin/services/cmcp": {
+		"title": "路由器面板",
+		"order": 1,
+		"action": { "type": "view", "path": "cmcp/panel" },
+		"depends": { "acl": [ "luci-app-cmcp" ] }
+	}
+}

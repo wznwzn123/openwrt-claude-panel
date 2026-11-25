@@ -154,6 +154,8 @@ function logout(msg) {
 	token = null;
 	$('app').classList.add('hidden');
 	$('needcode').classList.add('hidden');
+	// 家里局域网打开的：输路由器后台密码
+	if (LAN_HOME) { $('login').classList.add('hidden'); $('lanlogin').classList.remove('hidden'); llErr(msg || ''); setTimeout(() => $('llPw').focus(), 300); return; }
 	$('login').classList.remove('hidden');
 	$('lgInput').value = '';
 	lgErr(msg || '');
@@ -216,6 +218,30 @@ function needCode(data, why, force) {
 	if (pendCode) { $('lcEmerg').open = true; $('lcInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
 }
 // 官网「打开面板」带来的票：换这台手机的钥匙
+// 6.0 第 82 项：家里局域网登录（原版后台给的票，或者路由器后台密码）→ 换这台设备自己的钥匙
+function llErr(m) { const e = $('llErr'); e.textContent = m; e.classList.toggle('hidden', !m); }
+async function lanOpen(p) {
+	const btn = $('llBtn'); btn.disabled = true; btn.textContent = p.ticket ? '正在打开…' : '核对中…';
+	$('login').classList.add('hidden'); $('app').classList.add('hidden'); $('lanlogin').classList.remove('hidden');
+	let msg = '';
+	try {
+		const r = await fetch('../cgi-bin/mcp/lan', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, cache: 'no-store',
+			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: p.ticket ? 'panel/lan_open' : 'panel/lan_pw', params: { ...p, name: loginDevName() }, client: 'panel' }) });
+		if (r.status === 404) msg = '路由器上的面板版本太旧，先升级';
+		else {
+			const j = await r.json();
+			if (j.error) msg = j.error.message;
+			else {
+				store.set('rp_dev', j.result.dev); token = j.result.dev; forgetToken(); passClear(); store.del('rp_role');
+				$('lanlogin').classList.add('hidden'); $('llPw').value = ''; start(); return;
+			}
+		}
+	} catch (e) { msg = '连不上路由器：确认手机连着家里的 Wi-Fi'; }
+	finally { btn.disabled = false; btn.textContent = '打开面板'; }
+	llErr(msg); $('llPw').focus();
+}
+$('llBtn').onclick = () => { const pw = $('llPw').value; if (!pw) return llErr('输一下路由器后台密码'); lanOpen({ pw }); };
+$('llPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('llBtn').click(); });
 async function openTicket(t) {
 	const w = $('needcode');
 	$('login').classList.add('hidden'); $('app').classList.add('hidden');
@@ -241,7 +267,7 @@ async function openTicket(t) {
 async function loadRole() {
 	try {
 		const r = await P('whoami');
-		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg };
+		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg, lanin: !!r.lanin };
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
@@ -250,6 +276,7 @@ async function loadRole() {
 		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
 		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
+		if (r.lan !== undefined) { if (r.lan) store.set('rp_lan', JSON.stringify(r.lan)); else store.del('rp_lan'); } // 家里局域网的面板地址（第 82 项）
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); } // 设备卡片上能不能改名、换图标看权限；自定义快捷操作里没权限的页面去掉
 	} catch (e) {}
 }
@@ -398,7 +425,42 @@ const lkB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const lkBin = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const lkRnd = (n) => crypto.getRandomValues(new Uint8Array(n));
 // 密码用 PBKDF2（12 万次）加盐哈希，拿到存储内容也很难反推
+// 6.0 第 82 项：家里局域网 http 地址（:906）上浏览器不给用 crypto.subtle：用下面这个纯 JS 的 PBKDF2-SHA256，算出来的一样
+const LK_K = new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+const LK_H0 = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+function lkBlock(H, W) {
+	for (let i = 16; i < 64; i++) { const a = W[i - 15], b = W[i - 2]; W[i] = (((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3)) + W[i - 16] + (((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10)) + W[i - 7] | 0; }
+	let [a, b, c, d, e, f, g, h] = H;
+	for (let i = 0; i < 64; i++) {
+		const t1 = h + (((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7))) + ((e & f) ^ (~e & g)) + LK_K[i] + W[i] | 0;
+		const t2 = (((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10))) + ((a & b) ^ (a & c) ^ (b & c)) | 0;
+		h = g; g = f; f = e; e = d + t1 | 0; d = c; c = b; b = a; a = t1 + t2 | 0;
+	}
+	return [H[0] + a | 0, H[1] + b | 0, H[2] + c | 0, H[3] + d | 0, H[4] + e | 0, H[5] + f | 0, H[6] + g | 0, H[7] + h | 0];
+}
+// 整段 SHA-256（起点 H，前面已经处理了 pre 字节）
+function lkSha(bytes, H = LK_H0, pre = 0) {
+	const n = bytes.length, len = (n + 9 + 63) & ~63, buf = new Uint8Array(len); buf.set(bytes); buf[n] = 0x80;
+	const bits = (n + pre) * 8; buf[len - 4] = bits >>> 24; buf[len - 3] = bits >>> 16; buf[len - 2] = bits >>> 8; buf[len - 1] = bits; buf[len - 5] = Math.floor(bits / 2 ** 32);
+	const W = new Int32Array(64);
+	for (let o = 0; o < len; o += 64) { for (let i = 0; i < 16; i++) W[i] = buf[o + i * 4] << 24 | buf[o + i * 4 + 1] << 16 | buf[o + i * 4 + 2] << 8 | buf[o + i * 4 + 3]; H = lkBlock(H, W); }
+	return H;
+}
+const lkWords = (H) => { const o = new Uint8Array(32); H.forEach((x, i) => { o[i * 4] = x >>> 24; o[i * 4 + 1] = x >>> 16; o[i * 4 + 2] = x >>> 8; o[i * 4 + 3] = x; }); return o; };
+function lkPbkdf2(pw, salt, iter) {
+	let key = pw.length > 64 ? lkWords(lkSha(pw)) : pw;
+	const ip = new Uint8Array(64).fill(0x36), op = new Uint8Array(64).fill(0x5c);
+	key.forEach((x, i) => { ip[i] ^= x; op[i] ^= x; });
+	const W = new Int32Array(64), blk = (b) => { for (let i = 0; i < 16; i++) W[i] = b[i * 4] << 24 | b[i * 4 + 1] << 16 | b[i * 4 + 2] << 8 | b[i * 4 + 3]; return W; };
+	const Hi = lkBlock(LK_H0, blk(ip)), Ho = lkBlock(LK_H0, blk(op));
+	const mac = (m) => lkWords(lkSha(lkWords(lkSha(m, Hi, 64)), Ho, 64));
+	const s1 = new Uint8Array(salt.length + 4); s1.set(salt); s1[salt.length + 3] = 1;
+	let u = mac(s1); const t = u.slice();
+	for (let i = 1; i < iter; i++) { u = mac(u); for (let j = 0; j < 32; j++) t[j] ^= u[j]; }
+	return t;
+}
 async function lkHash(pin, salt) {
+	if (!(window.crypto && crypto.subtle)) return lkB64(lkPbkdf2(new TextEncoder().encode(pin), new TextEncoder().encode(salt), 120000));
 	const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
 	return lkB64(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: 120000 }, k, 256));
 }
@@ -639,5 +701,5 @@ async function lockSettings() {
 
 try { lgBackground(); } catch (e) {}
 try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch (e) {}
-if (pendOpen) openTicket(pendOpen); else token ? start() : logout();
+if (pendLan) lanOpen({ ticket: pendLan }); else if (pendOpen) openTicket(pendOpen); else token ? start() : logout();
 })();

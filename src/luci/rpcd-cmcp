@@ -1,0 +1,26 @@
+#!/bin/sh
+# 6.0 第 82 项：原版后台「服务 → 路由器面板」用的 rpcd 插件（装在 /usr/libexec/rpcd/cmcp）
+# ticket：发一张 2 分钟内有效、只能用一次的票，面板（http://路由器地址:906）拿它换钥匙，不用再输密码。
+# 只有登录了原版后台（root）的人能调（权限见 /usr/share/rpcd/acl.d/luci-app-cmcp.json）
+T=${CMCP_LAN_T:-/tmp/cmcp_lt}
+E=${CMCP_LAN_ETC:-/etc/claude-mcp}
+case "$1" in
+list) echo '{ "ticket": {} }' ;;
+call)
+	case "$2" in
+	ticket)
+		mkdir -p "$T" && chmod 700 "$T"
+		# 用过的、过期的票清掉
+		find "$T" -type f -mmin +5 -exec rm -f {} \; 2>/dev/null
+		t=$(tr -dc 'a-z2-9' </dev/urandom 2>/dev/null | head -c 24)
+		[ ${#t} -eq 24 ] || { echo '{ "error": "生成不了票" }'; exit 0; }
+		: > "$T/$t"
+		p=$(cat "$E/lan_port" 2>/dev/null); case "$p" in ''|*[!0-9]*) p=906 ;; esac
+		[ -f "$E/lan_off" ] && { echo '{ "error": "家里局域网打开面板已关闭" }'; exit 0; }
+		printf '{ "ticket": "%s", "port": %s }\n' "$t" "$p"
+		;;
+	*) echo '{ "error": "unknown method" }' ;;
+	esac
+	;;
+esac
+exit 0

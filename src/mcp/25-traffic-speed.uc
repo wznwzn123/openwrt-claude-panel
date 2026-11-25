@@ -59,6 +59,7 @@ P.luci_menu = function(a) {
 		if (!length(ch)) { push(items, { p: 'admin/' + cat, t: tr(c.title), g: tr(c.title), o: +c.order || 0, kids: [] }); continue; }
 		for (let it in ch) {
 			let n = c.children[it], p = 'admin/' + cat + '/' + it;
+			if (p == 'admin/services/cmcp') continue; // 6.0 第 82 项：原版后台里的「路由器面板」入口，面板里不显示（免得面板里套面板）
 			push(items, { p, t: tr(n.title), g: tr(c.title), o: +n.order || 0, kids: kids(p, n) });
 		}
 	}

@@ -302,6 +302,8 @@ P.device_remove = function(a) {
  * 每个请求都按这台手机属于哪个账号检查权限；谁是主账号、子账号有什么权限，从官网拿，在内存里缓存 30 秒（连不上官网时用上一次的）。 */
 const FAM_PATH = '/tmp/cmcp_fam.json', FAM_LOCK = '/tmp/cmcp_fam.lock', FAM_STALE = 6 * 3600;
 const EMERG_VIA = '路由器终端的应急登录码';
+// 6.0 第 82 项：家里局域网（:906）登录的：从已登录的原版后台点进来、或者输了路由器后台密码，都是能碰到路由器的人，按主账号算
+const LAN_VIA_LUCI = '原版后台（局域网）', LAN_VIA_PW = '路由器后台密码（局域网）';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
 	view: ['compat_info', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
@@ -357,7 +359,7 @@ function fam_drop_dev(msg) { let d = devs_read(); if (DEV_ID && d[DEV_ID]) { del
 function fam_check() {
 	ROLE = 'owner'; PERMS = [];
 	if (!DEV) return null; // 路由器自己的小工具
-	if (DEV.emerg || (!DEV.uid && DEV.via == EMERG_VIA)) return null; // 在路由器终端拿应急登录码进来的：能碰到路由器的人，按主账号算
+	if (DEV.emerg || (!DEV.uid && (DEV.via == EMERG_VIA || DEV.via == LAN_VIA_LUCI || DEV.via == LAN_VIA_PW))) return null; // 在路由器终端拿应急登录码进来的：能碰到路由器的人，按主账号算
 	if (!DEV.uid) return fam_drop_dev('面板升级到 5.2 了：每台手机要从官网「我的路由器」点「打开面板」重新进一次');
 	let v = fam_view();
 	// 安全加固（第二轮）：连不上官网时，子账号最多按 6 小时内的成员名单用原来的权限；再久就只能看（主账号不受影响）。

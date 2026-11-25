@@ -1221,7 +1221,7 @@ async function feedbackSheet(prefill) {
 	let dg = '', hosted = true;
 	try { const r = await P('feedback_diag', {}, 15000); dg = r.text || ''; hosted = r.hosted !== false; } catch (e) {}
 	// 6.0 第 67 项：托管版要登录着官网账号才能反馈（用应急登录码进来的，先从官网打开面板）
-	if (hosted && store.get('rp_dev') && ME_ROLE.emerg) return toast('先从官网「我的路由器」打开面板再反馈：用应急登录码进来的手机不能发反馈', true);
+	if (hosted && store.get('rp_dev') && ME_ROLE.emerg) return toast('先从官网「我的路由器」打开面板再反馈：' + (ME_ROLE.lanin ? '在家里局域网直接登录的' : '用应急登录码进来的') + '设备不能发反馈', true);
 	// 5.2：托管服务开了文件存储才显示「添加视频或文件」（老的缓存里没有这一项，就问一次）
 	if (hosted && !(SVC && 'files' in SVC)) await svcLoad(false);
 	const IM = [];
@@ -2288,10 +2288,14 @@ function mpDevsHtml(dl, note) {
 		${dl && dl.length > 1 ? '<button class="btn sm danger" data-mp="drmall" style="width:100%;margin-top:6px">除了这台，全部移除</button>' : ''}</section>
 		<p class="mp-note" style="text-align:left;margin:7px 4px 0!important">${note}</p>`;
 }
+// 6.0 第 82 项：家里局域网直接打开的地址（连着家里 Wi-Fi 时用，不走外网）。点一下复制
+function lanAddr() { try { const l = JSON.parse(store.get('rp_lan') || 'null'); return l && l.url ? l : null; } catch (e) { return null; } }
+function lanRow() { const l = lanAddr(); return l ? `<dt>在家里打开</dt><dd><button type="button" class="mp-lanbtn" data-mp="lancp" title="复制">${esc(l.ip + ':' + l.port)}</button></dd>` : ''; }
 // 自建版、应急登录：没有官网账号，「我的主页」只有这台路由器的敏感信息，用路由器后台密码验证
 function mpLocalDraw() {
 	const box = $('meBox'), hosted = isHosted(), ver = sudoOn() && SUDO.kind === 'local';
-	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? '应急登录' : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? '你是用路由器终端的应急登录码进来的，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
+	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? (ME_ROLE.lanin ? '局域网登录' : '应急登录') : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? (ME_ROLE.lanin ? '你是在家里局域网直接登录的' : '你是用路由器终端的应急登录码进来的') + '，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
+	if (lanAddr()) h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">${lanRow()}</dl></section>`;
 	if (!ver) {
 		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
 		if (store.get('rp_ai') === '1') L.push(['AI 连接器地址', '能让 AI 控制路由器的地址']);
@@ -2413,7 +2417,7 @@ function mpDraw() {
 	${s.exp ? (main ? `<div class="mp-acts"><button class="btn" data-mp="renew">输入续期码</button><a class="btn primary" href="${esc((s.hub || '') + '/app')}" target="_blank" rel="noopener">去官网申请续期</a></div>` : '<p class="mp-note">续期由主账号在官网申请</p>') : ''}</section>`;
 	// 这台路由器
 	h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">
-	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>
+	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>${lanRow()}
 	${ME.role === 'sub' && ME.subExp ? `<dt>你能用到</dt><dd>${esc(ymd(ME.subExp))}</dd>` : ''}</dl>
 	${ME.role === 'sub' ? `<div class="mp-perm">${Object.keys(PERM_N).map((k) => `<span class="${(ME.perms || []).includes(k) ? 'on' : ''}">${(ME.perms || []).includes(k) ? '✓' : '✕'} ${esc(PERM_N[k])}</span>`).join('')}</div><p class="mp-note" style="text-align:left">你是子账号：上面打勾的你能用，其他的由主账号决定。</p>` : ''}</section>`;
 	// 家人
@@ -2556,6 +2560,7 @@ $('meBox').addEventListener('click', async (e) => {
 	if (k === 'av') { const f = await pickFile('image/*,.heic,.heif'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
+	else if (k === 'lancp') { const l = lanAddr(); if (l) copyText(l.url); }
 	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }
 	else if (k === 'kphone') addPhone();
 	// 6.0 第 12 项：自建版「登录要输路由器后台密码」

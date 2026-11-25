@@ -29,6 +29,10 @@ done
 [ -x /usr/sbin/cmcp-guest ] && /usr/sbin/cmcp-guest remove
 # 设备暂停（6.0 起只有 nftables 的固件用 nft 表）
 command -v nft >/dev/null 2>&1 && nft delete table inet cmcp_pause 2>/dev/null
+# 原版后台「服务 → 路由器面板」（6.0）
+rm -f /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /usr/lib/lua/luci/controller/cmcp.lua
+rm -rf /www/luci-static/resources/view/cmcp /tmp/cmcp_lt /tmp/luci-indexcache* /tmp/luci-modulecache
+/etc/init.d/rpcd reload >/dev/null 2>&1
 # 隧道直连的设置（dnsmasq、OpenClash 局域网名单里加的那一行）删掉
 [ -x /usr/sbin/cmcp-tunbypass ] && /usr/sbin/cmcp-tunbypass remove
 # 自动拉黑（6.0）：自己的防火墙表 / ipset 规则一起删掉

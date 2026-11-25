@@ -116,6 +116,7 @@ h1,h2,h3{letter-spacing:-.02em}
 .updcard .updtop>div{min-width:0}.updcard #rUpdCur{white-space:pre-line}
 .updcard p{margin:8px 0 0;font-size:13px;line-height:1.6;white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .updcard .updfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:4px}.updcard .updfoot .linkbtn{padding:8px 0 2px}.updcard #rUpdMore{color:var(--brand);font-weight:600}
+.mp-lanbtn{background:none;border:0;padding:0;color:var(--brand);font:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
 .updsteps{margin:10px 0 4px;padding:0;list-style:none}.updsteps li{padding:7px 0;color:var(--muted);font-size:14px}.updsteps li.on{color:var(--text);font-weight:600}.updsteps li.ok{color:var(--ok)}.updsteps li.ok::before{content:'✓ '}.updsteps li.on::before{content:'⏳ '}
 .sidenav .ng.flash>button{background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
@@ -602,8 +603,8 @@ b.dvname{display:block;line-height:26px}
 .lgmain:active{transform:scale(.97);opacity:.85}
 :root.dark .lgmain{background:#f5f5f7;color:#000}
 .formerr{margin-top:9px;padding:10px 12px;border-radius:12px;background:rgba(255,59,48,.1);color:var(--danger);font-size:13px;line-height:1.55;white-space:pre-wrap}
-#needcode.lgwrap{position:fixed;inset:0;z-index:90;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:max(40px,var(--sat,env(safe-area-inset-top))) 16px 22px;background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
-:root.dark #needcode.lgwrap{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}
+#needcode.lgwrap,#lanlogin.lgwrap{position:fixed;inset:0;z-index:90;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;align-items:center;padding:max(40px,var(--sat,env(safe-area-inset-top))) 16px 22px;background:radial-gradient(120% 70% at 50% 0%,#fff 0%,#f0f1f5 55%,#e7e9ef 100%)}
+:root.dark #needcode.lgwrap,:root.dark #lanlogin.lgwrap{background:radial-gradient(120% 70% at 50% 0%,#1d1d20 0%,#0c0c0e 65%,#000 100%)}
 .nclink{text-align:center;text-decoration:none}
 /* 我的主页（5.2） */
 .mp-head{display:flex;flex-direction:column;align-items:center;text-align:center;padding:22px 18px 18px}
@@ -827,6 +828,19 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 	<button id="lgBtn" class="lgmain">连接</button>
 </main>
 <div class="lgfoot">我的路由器 · OpenWrt 管理面板</div>
+</div>
+
+<!-- 6.0 第 82 项：家里局域网直接打开（http://路由器地址:906）：输一次路由器后台密码，这台设备记住 -->
+<div id="lanlogin" class="lgwrap hidden">
+<main class="lgcard">
+	<div class="logo lgbiglogo" aria-hidden="true" style="font-size:30px">🏠</div>
+	<h2>在家里打开面板</h2>
+	<label class="lglabel" for="llPw">路由器后台密码</label>
+	<input id="llPw" class="input" type="password" autocomplete="current-password">
+	<div id="llErr" class="formerr hidden"></div>
+	<button id="llBtn" class="lgmain">打开面板</button>
+	<div class="muted" style="font-size:12.5px;margin-top:12px;text-wrap:pretty">从原版后台「服务 → 路由器面板」点进来不用输密码</div>
+</main>
 </div>
 
 <!-- 托管版：这台手机第一次打开面板，要输一次登录码 -->
@@ -1326,6 +1340,10 @@ try { const m = /^#code=([A-Za-z0-9]{8})$/.exec(location.hash); if (m) { pendCod
 // 5.2 官网「我的路由器 → 打开面板」：网址带 #open=一次性票，路由器拿票去官网核对，发这台手机的钥匙
 let pendOpen = '';
 try { const m = /^#open=([a-z2-9]{24})$/.exec(location.hash); if (m) { pendOpen = m[1]; history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+// 6.0 第 82 项：家里局域网直接打开（http://路由器地址:906）。从原版后台「服务 → 路由器面板」点进来带 #lopen=票（免输密码）
+let pendLan = '';
+try { const m = /^#lopen=([a-z2-9]{24})$/.exec(location.hash); if (m) { pendLan = m[1]; history.replaceState(null, '', location.pathname + location.search); } } catch (e) {}
+const LAN_HOME = location.protocol === 'http:' && (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname) || ['906', '9906', '19906'].includes(location.port));
 // 6.0 第 6 项：手机上存的是这台手机自己的钥匙（rp_dev），不再长期存路由器的登录密钥。
 // token 现在只表示「这台手机登录过」：有手机钥匙，或者还有一把旧的登录密钥等着换成手机钥匙
 let token = store.get('rp_dev') || store.get('rp_token') || store.get('cmcp_token');
@@ -5215,7 +5233,7 @@ async function feedbackSheet(prefill) {
 	let dg = '', hosted = true;
 	try { const r = await P('feedback_diag', {}, 15000); dg = r.text || ''; hosted = r.hosted !== false; } catch (e) {}
 	// 6.0 第 67 项：托管版要登录着官网账号才能反馈（用应急登录码进来的，先从官网打开面板）
-	if (hosted && store.get('rp_dev') && ME_ROLE.emerg) return toast('先从官网「我的路由器」打开面板再反馈：用应急登录码进来的手机不能发反馈', true);
+	if (hosted && store.get('rp_dev') && ME_ROLE.emerg) return toast('先从官网「我的路由器」打开面板再反馈：' + (ME_ROLE.lanin ? '在家里局域网直接登录的' : '用应急登录码进来的') + '设备不能发反馈', true);
 	// 5.2：托管服务开了文件存储才显示「添加视频或文件」（老的缓存里没有这一项，就问一次）
 	if (hosted && !(SVC && 'files' in SVC)) await svcLoad(false);
 	const IM = [];
@@ -6282,10 +6300,14 @@ function mpDevsHtml(dl, note) {
 		${dl && dl.length > 1 ? '<button class="btn sm danger" data-mp="drmall" style="width:100%;margin-top:6px">除了这台，全部移除</button>' : ''}</section>
 		<p class="mp-note" style="text-align:left;margin:7px 4px 0!important">${note}</p>`;
 }
+// 6.0 第 82 项：家里局域网直接打开的地址（连着家里 Wi-Fi 时用，不走外网）。点一下复制
+function lanAddr() { try { const l = JSON.parse(store.get('rp_lan') || 'null'); return l && l.url ? l : null; } catch (e) { return null; } }
+function lanRow() { const l = lanAddr(); return l ? `<dt>在家里打开</dt><dd><button type="button" class="mp-lanbtn" data-mp="lancp" title="复制">${esc(l.ip + ':' + l.port)}</button></dd>` : ''; }
 // 自建版、应急登录：没有官网账号，「我的主页」只有这台路由器的敏感信息，用路由器后台密码验证
 function mpLocalDraw() {
 	const box = $('meBox'), hosted = isHosted(), ver = sudoOn() && SUDO.kind === 'local';
-	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? '应急登录' : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? '你是用路由器终端的应急登录码进来的，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
+	let h = `<section class="hero"><div class="herohead"><h1>我的主页</h1><span class="pill">${hosted ? (ME_ROLE.lanin ? '局域网登录' : '应急登录') : '自建版'}</span></div><p class="muted" style="margin-bottom:0">${hosted ? (ME_ROLE.lanin ? '你是在家里局域网直接登录的' : '你是用路由器终端的应急登录码进来的') + '，看不到官网账号的信息；从官网「我的路由器」点「打开面板」进来，这里会显示完整的主页。' : '这台路由器没有用官网账号。'}这里放着这台路由器的敏感信息，验证是你本人后才能看。</p></section>`;
+	if (lanAddr()) h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">${lanRow()}</dl></section>`;
 	if (!ver) {
 		const L = [['登录密钥', hosted ? '换登录密钥' : '添加新手机的二维码、换登录密钥']];
 		if (store.get('rp_ai') === '1') L.push(['AI 连接器地址', '能让 AI 控制路由器的地址']);
@@ -6407,7 +6429,7 @@ function mpDraw() {
 	${s.exp ? (main ? `<div class="mp-acts"><button class="btn" data-mp="renew">输入续期码</button><a class="btn primary" href="${esc((s.hub || '') + '/app')}" target="_blank" rel="noopener">去官网申请续期</a></div>` : '<p class="mp-note">续期由主账号在官网申请</p>') : ''}</section>`;
 	// 这台路由器
 	h += `<div class="sectitle"><b>这台路由器</b></div><section class="card"><dl class="mp-kv">
-	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>
+	<dt>名字</dt><dd>${esc((ME.router && ME.router.name) || '—')}</dd><dt>型号</dt><dd>${esc((ME.router && ME.router.model) || '—')}</dd><dt>面板版本</dt><dd>${esc(PANEL_VER || '—')}</dd>${lanRow()}
 	${ME.role === 'sub' && ME.subExp ? `<dt>你能用到</dt><dd>${esc(ymd(ME.subExp))}</dd>` : ''}</dl>
 	${ME.role === 'sub' ? `<div class="mp-perm">${Object.keys(PERM_N).map((k) => `<span class="${(ME.perms || []).includes(k) ? 'on' : ''}">${(ME.perms || []).includes(k) ? '✓' : '✕'} ${esc(PERM_N[k])}</span>`).join('')}</div><p class="mp-note" style="text-align:left">你是子账号：上面打勾的你能用，其他的由主账号决定。</p>` : ''}</section>`;
 	// 家人
@@ -6550,6 +6572,7 @@ $('meBox').addEventListener('click', async (e) => {
 	if (k === 'av') { const f = await pickFile('image/*,.heic,.heif'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
+	else if (k === 'lancp') { const l = lanAddr(); if (l) copyText(l.url); }
 	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }
 	else if (k === 'kphone') addPhone();
 	// 6.0 第 12 项：自建版「登录要输路由器后台密码」
@@ -7338,6 +7361,8 @@ function logout(msg) {
 	token = null;
 	$('app').classList.add('hidden');
 	$('needcode').classList.add('hidden');
+	// 家里局域网打开的：输路由器后台密码
+	if (LAN_HOME) { $('login').classList.add('hidden'); $('lanlogin').classList.remove('hidden'); llErr(msg || ''); setTimeout(() => $('llPw').focus(), 300); return; }
 	$('login').classList.remove('hidden');
 	$('lgInput').value = '';
 	lgErr(msg || '');
@@ -7400,6 +7425,30 @@ function needCode(data, why, force) {
 	if (pendCode) { $('lcEmerg').open = true; $('lcInput').value = pendCode; pendCode = ''; setTimeout(ncGo, 50); }
 }
 // 官网「打开面板」带来的票：换这台手机的钥匙
+// 6.0 第 82 项：家里局域网登录（原版后台给的票，或者路由器后台密码）→ 换这台设备自己的钥匙
+function llErr(m) { const e = $('llErr'); e.textContent = m; e.classList.toggle('hidden', !m); }
+async function lanOpen(p) {
+	const btn = $('llBtn'); btn.disabled = true; btn.textContent = p.ticket ? '正在打开…' : '核对中…';
+	$('login').classList.add('hidden'); $('app').classList.add('hidden'); $('lanlogin').classList.remove('hidden');
+	let msg = '';
+	try {
+		const r = await fetch('../cgi-bin/mcp/lan', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, cache: 'no-store',
+			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: p.ticket ? 'panel/lan_open' : 'panel/lan_pw', params: { ...p, name: loginDevName() }, client: 'panel' }) });
+		if (r.status === 404) msg = '路由器上的面板版本太旧，先升级';
+		else {
+			const j = await r.json();
+			if (j.error) msg = j.error.message;
+			else {
+				store.set('rp_dev', j.result.dev); token = j.result.dev; forgetToken(); passClear(); store.del('rp_role');
+				$('lanlogin').classList.add('hidden'); $('llPw').value = ''; start(); return;
+			}
+		}
+	} catch (e) { msg = '连不上路由器：确认手机连着家里的 Wi-Fi'; }
+	finally { btn.disabled = false; btn.textContent = '打开面板'; }
+	llErr(msg); $('llPw').focus();
+}
+$('llBtn').onclick = () => { const pw = $('llPw').value; if (!pw) return llErr('输一下路由器后台密码'); lanOpen({ pw }); };
+$('llPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('llBtn').click(); });
 async function openTicket(t) {
 	const w = $('needcode');
 	$('login').classList.add('hidden'); $('app').classList.add('hidden');
@@ -7425,7 +7474,7 @@ async function openTicket(t) {
 async function loadRole() {
 	try {
 		const r = await P('whoami');
-		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg };
+		const n = { role: r.role === 'sub' ? 'sub' : 'owner', perms: r.perms || [], uid: r.uid || '', emerg: !!r.emerg, lanin: !!r.lanin };
 		const ch = JSON.stringify(n) !== JSON.stringify(ME_ROLE);
 		ME_ROLE = n; store.set('rp_role', JSON.stringify(n));
 		if (r.hub) store.set('rp_hub', r.hub);
@@ -7434,6 +7483,7 @@ async function loadRole() {
 		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
 		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
+		if (r.lan !== undefined) { if (r.lan) store.set('rp_lan', JSON.stringify(r.lan)); else store.del('rp_lan'); } // 家里局域网的面板地址（第 82 项）
 		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); } // 设备卡片上能不能改名、换图标看权限；自定义快捷操作里没权限的页面去掉
 	} catch (e) {}
 }
@@ -7582,7 +7632,42 @@ const lkB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const lkBin = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const lkRnd = (n) => crypto.getRandomValues(new Uint8Array(n));
 // 密码用 PBKDF2（12 万次）加盐哈希，拿到存储内容也很难反推
+// 6.0 第 82 项：家里局域网 http 地址（:906）上浏览器不给用 crypto.subtle：用下面这个纯 JS 的 PBKDF2-SHA256，算出来的一样
+const LK_K = new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+const LK_H0 = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+function lkBlock(H, W) {
+	for (let i = 16; i < 64; i++) { const a = W[i - 15], b = W[i - 2]; W[i] = (((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3)) + W[i - 16] + (((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10)) + W[i - 7] | 0; }
+	let [a, b, c, d, e, f, g, h] = H;
+	for (let i = 0; i < 64; i++) {
+		const t1 = h + (((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7))) + ((e & f) ^ (~e & g)) + LK_K[i] + W[i] | 0;
+		const t2 = (((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10))) + ((a & b) ^ (a & c) ^ (b & c)) | 0;
+		h = g; g = f; f = e; e = d + t1 | 0; d = c; c = b; b = a; a = t1 + t2 | 0;
+	}
+	return [H[0] + a | 0, H[1] + b | 0, H[2] + c | 0, H[3] + d | 0, H[4] + e | 0, H[5] + f | 0, H[6] + g | 0, H[7] + h | 0];
+}
+// 整段 SHA-256（起点 H，前面已经处理了 pre 字节）
+function lkSha(bytes, H = LK_H0, pre = 0) {
+	const n = bytes.length, len = (n + 9 + 63) & ~63, buf = new Uint8Array(len); buf.set(bytes); buf[n] = 0x80;
+	const bits = (n + pre) * 8; buf[len - 4] = bits >>> 24; buf[len - 3] = bits >>> 16; buf[len - 2] = bits >>> 8; buf[len - 1] = bits; buf[len - 5] = Math.floor(bits / 2 ** 32);
+	const W = new Int32Array(64);
+	for (let o = 0; o < len; o += 64) { for (let i = 0; i < 16; i++) W[i] = buf[o + i * 4] << 24 | buf[o + i * 4 + 1] << 16 | buf[o + i * 4 + 2] << 8 | buf[o + i * 4 + 3]; H = lkBlock(H, W); }
+	return H;
+}
+const lkWords = (H) => { const o = new Uint8Array(32); H.forEach((x, i) => { o[i * 4] = x >>> 24; o[i * 4 + 1] = x >>> 16; o[i * 4 + 2] = x >>> 8; o[i * 4 + 3] = x; }); return o; };
+function lkPbkdf2(pw, salt, iter) {
+	let key = pw.length > 64 ? lkWords(lkSha(pw)) : pw;
+	const ip = new Uint8Array(64).fill(0x36), op = new Uint8Array(64).fill(0x5c);
+	key.forEach((x, i) => { ip[i] ^= x; op[i] ^= x; });
+	const W = new Int32Array(64), blk = (b) => { for (let i = 0; i < 16; i++) W[i] = b[i * 4] << 24 | b[i * 4 + 1] << 16 | b[i * 4 + 2] << 8 | b[i * 4 + 3]; return W; };
+	const Hi = lkBlock(LK_H0, blk(ip)), Ho = lkBlock(LK_H0, blk(op));
+	const mac = (m) => lkWords(lkSha(lkWords(lkSha(m, Hi, 64)), Ho, 64));
+	const s1 = new Uint8Array(salt.length + 4); s1.set(salt); s1[salt.length + 3] = 1;
+	let u = mac(s1); const t = u.slice();
+	for (let i = 1; i < iter; i++) { u = mac(u); for (let j = 0; j < 32; j++) t[j] ^= u[j]; }
+	return t;
+}
 async function lkHash(pin, salt) {
+	if (!(window.crypto && crypto.subtle)) return lkB64(lkPbkdf2(new TextEncoder().encode(pin), new TextEncoder().encode(salt), 120000));
 	const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
 	return lkB64(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: 120000 }, k, 256));
 }
@@ -7823,7 +7908,7 @@ async function lockSettings() {
 
 try { lgBackground(); } catch (e) {}
 try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch (e) {}
-if (pendOpen) openTicket(pendOpen); else token ? start() : logout();
+if (pendLan) lanOpen({ ticket: pendLan }); else if (pendOpen) openTicket(pendOpen); else token ? start() : logout();
 })();
 </script>
 </body></html>

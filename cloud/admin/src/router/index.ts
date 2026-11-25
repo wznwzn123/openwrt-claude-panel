@@ -29,6 +29,7 @@ const PAGES: Record<string, () => Promise<any>> = {
 }
 const children: RouteRecordRaw[] = []
 for (const g of navGroups.value) for (const it of g.items) children.push({ path: it.path.slice(1), name: it.key, component: PAGES[it.key], meta: { title: it.label, group: g.single ? undefined : g.label } })
+children.push({ path: 'users/:uid', name: 'user-detail', component: () => import('@/views/UserDetail.vue'), meta: { title: '账号详情', group: '用户与路由器' } })
 children.push({ path: '', redirect: '/dashboard' })
 children.push({ path: ':pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFound.vue'), meta: { title: '页面不存在' } })
 

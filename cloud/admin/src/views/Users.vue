@@ -78,8 +78,8 @@ onMounted(load)
             <div class="hub-row-meta">{{ u.deleted ? '原来的路由器' : '路由器' }}：{{ devs(u) }}</div>
           </div>
           <div class="hub-row-acts">
-            <template v-if="u.deleted"><Button size="sm" variant="primary" @click="op(u, 'restore')">恢复</Button><Button size="sm" variant="danger" @click="op(u, 'purge')">彻底删除</Button></template>
-            <template v-else><Button size="sm" @click="router.push({ path: '/logins', query: { q: u.email } })">登录记录</Button><Button size="sm" @click="acct(u, 'kick')">所有设备退出</Button><Button size="sm" @click="acct(u, 'email')">改登录邮箱</Button><Button v-if="u.totp" size="sm" @click="acct(u, 'totp_off')">关两步验证</Button><Button v-if="!u.admin" size="sm" variant="ghost" @click="op(u, 'delete')">删除</Button></template>
+            <template v-if="u.deleted"><Button size="sm" @click="router.push('/users/' + u.uid)">全部记录</Button><Button size="sm" variant="primary" @click="op(u, 'restore')">恢复</Button><Button size="sm" variant="danger" @click="op(u, 'purge')">彻底删除</Button></template>
+            <template v-else><Button size="sm" variant="primary" @click="router.push('/users/' + u.uid)">全部记录</Button><Button size="sm" @click="router.push({ path: '/logins', query: { q: u.email } })">登录记录</Button><Button size="sm" @click="acct(u, 'kick')">所有设备退出</Button><Button size="sm" @click="acct(u, 'email')">改登录邮箱</Button><Button v-if="u.totp" size="sm" @click="acct(u, 'totp_off')">关两步验证</Button><Button v-if="!u.admin" size="sm" variant="ghost" @click="op(u, 'delete')">删除</Button></template>
           </div>
         </div>
         <EmptyState v-if="!loading && !shown.length" title="没有账号" icon="users" />

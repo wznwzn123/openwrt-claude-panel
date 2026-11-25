@@ -14,13 +14,14 @@ import { confirm } from '@/composables/confirm'
 import { pushToast, toastError } from '@/composables/toast'
 import { copy, full } from '@/utils/fmt'
 import { viewImage } from '@/utils/img'
+import { useRoute } from 'vue-router'
 import FileList from '@/components/hub/FileList.vue'
 
 /* 问题反馈：面板里发的、官网报告的、终端安装失败上报的都在这里。进度只有三段：反馈成功 → 开发人员已收到 → 已修复 / 无法修复 */
 const list = ref<any[]>([])
 const loading = ref(true)
 const f = ref<'todo' | 'all' | 'done' | 'nofix'>('todo')
-const q = ref('')
+const q = ref(String(useRoute().query.q || '')) // 从账号详情点进来时带着受理编号
 const imgs = ref<Record<string, string>>({})
 const logOpen = ref(false)
 const logText = ref('')

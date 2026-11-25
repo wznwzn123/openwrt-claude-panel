@@ -449,6 +449,54 @@ export class Hub extends DurableObject {
 				devs: (u.devs || []).map((x) => ({ sub: x.sub, name: x.alias || devs.get(x.sub)?.name || x.sub, gone: !devs.has(x.sub) })) });
 		return out;
 	}
+	/* 6.0 第 91 项（用户 11/25 定：只算官网账号上的）：后台点进某个人，一页看到他的资料和全部记录，按时间排。
+	 * 来源：登录记录、后台操作记录（跟他邮箱或他的路由器有关的）、他路由器的操作记录、发给他的邮件、反馈和报告、续期申请、
+	 * 联系开发者的对话、他的安装码和试用码。钥匙、登录地址、密码、会话编号一律不出现。管理员查看本身也记一笔（同一个人 1 小时记一次） */
+	async adminUserFull(uid) {
+		let u = await this.ctx.storage.get('u:' + uid), deleted = false;
+		if (!u) { u = await this.ctx.storage.get('xu:' + uid); deleted = !!u; }
+		if (!u) return { st: 404, error: '没有这个账号' };
+		const email = String(u.email || '').toLowerCase(), now = Date.now(), ev = [];
+		const subs = new Set((u.devs || []).map((x) => x.sub));
+		// 他是家人（子账号）的路由器也算
+		for (const d of await this.devices()) if ((d.users || []).includes(uid) || d.owner === uid) subs.add(d.sub);
+		const rn = {};
+		const devs = [];
+		for (const sub of subs) {
+			const d = await this.ctx.storage.get('d:' + sub);
+			rn[sub] = (d && d.name) || sub;
+			devs.push(d ? { sub, name: d.name || sub, model: d.model || '', role: d.owner === uid ? '主账号' : '家人', exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', seen: d.seen || 0, created: d.created || 0, ver: d.ver || '' } : { sub, name: sub, gone: true });
+		}
+		const KL = { login: '登录官网', reg: '注册', reset: '找回密码', code: '收邮箱验证码', totp: '两步验证', admin: '管理后台' };
+		for (const x of (await this.ctx.storage.get('ll')) || []) if (String(x.who || '').toLowerCase() === email)
+			ev.push({ t: x.t, k: 'login', text: (KL[x.k] || x.k) + (x.ok ? '' : '失败'), detail: x.why || '', ok: !!x.ok, ip: x.ip || '', place: x.place || '', ua: x.ua || '' });
+		for (const x of (await this.ctx.storage.get('alog')) || []) {
+			const tg = String(x.target || ''), hit = tg.toLowerCase() === email || subs.has(tg) || (email && String(x.detail || '').toLowerCase().includes(email));
+			if (hit) ev.push({ t: x.t, k: 'op', text: x.detail || x.op, detail: (x.by === 'admin' ? '管理员' : x.by === 'router' ? '路由器' : x.by === 'system' ? '系统' : x.by || '') + (subs.has(tg) ? ' · ' + (rn[tg] || tg) : ''), op: x.op });
+		}
+		for (const sub of subs) for (const x of (await this.ctx.storage.get('rl:' + sub)) || []) ev.push({ t: x.t, k: 'router', text: x.x, detail: rn[sub] || sub, sub });
+		for (const x of (await this.ctx.storage.get('ml')) || []) if (String(x.to || '').toLowerCase() === email) ev.push({ t: x.t, k: 'mail', text: '发邮件：' + x.subject, detail: x.ok ? '' : '没发出去：' + (x.err || ''), ok: !!x.ok });
+		for (const x of (await this.ctx.storage.get('fbl')) || []) {
+			const mine = x.uid === uid || x.by === uid || (x.emails || []).some((y) => String(y).toLowerCase() === email);
+			if (mine) ev.push({ t: x.at, k: 'fb', text: (x.web ? x.name : '问题反馈 · ' + (x.name || '')) + '（' + String(x.code || '').toUpperCase() + '）', detail: String(x.text || '').slice(0, 300), state: x.nofix ? '无法修复' : x.done ? '已处理' : '处理中', code: x.code });
+		}
+		const aps = [...(await this.ctx.storage.list({ prefix: 'ap:' })).values()].concat((await this.ctx.storage.get('aplog')) || []);
+		for (const x of aps) if (x.uid === uid) ev.push({ t: x.at, k: 'app', text: '续期申请 · ' + (x.name || x.sub), detail: [x.source, x.note].filter(Boolean).join(' · ').slice(0, 300), state: x.status === 'pending' ? '待审核' : x.status === 'ok' ? '通过' + (x.days ? '，续 ' + x.days + ' 天' : '') : '没通过' + (x.reason ? '：' + x.reason : '') });
+		for (const x of (await this.ctx.storage.get('cth')) || []) if (x.uid === uid || (!x.uid && x.sub && devs.some((d) => d.sub === x.sub && d.role === '主账号')))
+			ev.push({ t: x.last || x.at || 0, k: 'chat', text: '联系开发者 · ' + (x.name || x.tid), detail: (x.n ? x.n + ' 条消息' : '') + (x.ua ? '，' + x.ua + ' 条没回' : ''), tid: x.tid });
+		const codes = [];
+		for (const [k, x] of await this.ctx.storage.list({ prefix: 'i:' })) if (x.uid === uid) {
+			const code = k.slice(2);
+			codes.push({ code, trial: !!x.trial, used: x.used || 0, max: x.max || 1, exp: x.exp || 0, svc: x.svc || 0, from: x.from || '', keep: !!x.keep });
+			ev.push({ t: x.at || x.created || 0, k: 'code', text: (x.trial ? '领了试用码 ' : '拿到安装码 ') + code + (x.from ? '（用邀请码 ' + x.from + ' 兑换）' : ''), detail: (x.used >= (x.max || 1) ? '已用' : x.exp && x.exp < now ? '已过期' : '没用') + (x.svc ? ' · 开通后能用 ' + x.svc + ' 天' : '') });
+		}
+		ev.sort((a, b) => b.t - a.t);
+		// 查看也记一笔（同一个人 1 小时最多记一次，免得刷满操作记录）
+		if (await this.hit('auv:' + uid, 1, 3600e3)) await this.alog('user-view', u.email, '在后台查看了这个人的全部记录', 'admin');
+		const profile = { uid, email: u.email, name: u.name || '', created: u.created || 0, verified: !!u.verified, totp: !!u.totp, lastAt: u.lastAt || 0, deleted, delAt: u.delAt || 0, delWhy: u.delWhy || '',
+			trialUsed: u.trialUsed || 0, trial: u.trial ? { used: u.trial.used || 0, sub: u.trial.sub || '' } : null, inst: u.inst || [], sessions: deleted ? [] : await this.sessionList(u, null), links: (u.links || []).length };
+		return { st: 200, ok: true, profile, devs, codes, events: ev.slice(0, 3000), total: ev.length };
+	}
 	// 把账号放进回收站：登录不了、解除跟路由器的绑定（路由器本身不动），30 天内能恢复
 	async _trashUserRec(u, why) {
 		for (const x of u.devs || []) { const d = await this.ctx.storage.get('d:' + x.sub); if (d) { d.users = (d.users || []).filter((y) => y !== u.uid); await this.ctx.storage.put('d:' + x.sub, d); } }
@@ -1600,6 +1648,7 @@ export async function hubFetch(req, env) {
 			return J({ ok: true, version: rv.version, ...r });
 		}
 		if (a[0] === 'users' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminUsers(), trashDays: TRASH_DAYS });
+		if (a[0] === 'users' && /^[a-z2-9]{12}$/.test(a[1] || '') && a[2] === 'full' && req.method === 'GET') { const { st, ...r } = await H.adminUserFull(a[1]); return J(r, st); }
 		if (a[0] === 'users' && /^[a-z2-9]{12}$/.test(a[1] || '') && req.method === 'POST') {
 			const b = await body();
 			const r = a[2] === 'delete' ? await H.trashUser(a[1], b.confirm) : a[2] === 'restore' ? await H.restoreUser(a[1]) : a[2] === 'purge' ? await H.purgeUser(a[1], b.confirm) : { st: 404, error: 'not found' };

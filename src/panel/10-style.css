@@ -834,12 +834,12 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
 .chip.on{background:var(--text);color:var(--card)}
 :root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"])>.chip.hidden{display:none}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
-:root.dark :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
-@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.hidden{display:none}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
+:root.dark :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
+@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
 /* 按钮 */
 .btn.sm{background:var(--fill);color:var(--brand);font-weight:700}
 /* 黑（深色模式白）只给主操作（.btn.primary）；蓝色按钮是浅蓝底蓝字，同一种操作一个样子（评审 11/26） */
@@ -1009,3 +1009,13 @@ html,body{overscroll-behavior-y:contain}
 /* 6.0 第 25 项：局域网设置 */
 .lsrange{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 #lsLease{margin:6px 0 4px}
+/* 6.0 第 22 项：无线中继 */
+.wshd{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#wsBand{margin:0 0 10px}
+.wsrow{gap:10px}
+.wsrow.off{opacity:.5;cursor:default}
+.wslock{font-size:12px;opacity:.6}
+.wsbars{display:inline-flex;align-items:flex-end;gap:2px;height:14px;flex:none}
+.wsbars i{width:3px;border-radius:1px;background:var(--line,rgba(127,127,127,.3))}
+.wsbars i:nth-child(1){height:5px}.wsbars i:nth-child(2){height:8px}.wsbars i:nth-child(3){height:11px}.wsbars i:nth-child(4){height:14px}
+.wsbars i.on{background:var(--text)}

@@ -28,7 +28,7 @@ let CK = {};
 for (let p in split(getenv('HTTP_COOKIE') ?? '', ';')) { let m = match(trim(p), /^([^=]+)=(.*)$/); if (m) CK[m[1]] = m[2]; }
 function cookie_without_sysauth() {
 	let o = [];
-	for (let p in split(getenv('HTTP_COOKIE') ?? '', ';')) { p = trim(p); if (length(p) && !match(p, /^sysauth(_https)?=/)) push(o, p); }
+	for (let p in split(getenv('HTTP_COOKIE') ?? '', ';')) { p = trim(p); if (length(p) && !match(p, /^sysauth(_https?)?=/)) push(o, p); }
 	return join('; ', o);
 }
 function page(code, title, msg) {
@@ -111,7 +111,8 @@ if (getenv('REQUEST_METHOD') == 'POST' && len > 0 && len < 8192 && match(getenv(
 		save(S);
 		unlink('/tmp/cmcp_lf.' + PID + '.body');
 		notify('info', '有人登录了完整原版后台', sprintf('从「%s」用路由器密码登录。不是你自己的话，马上在面板「我的主页 → 敏感信息」移除这台手机，并改路由器密码。', T.name ?? '手机'));
-		print(sprintf('Status: 302 Found\r\nSet-Cookie: sysauth_https=%s; path=/cgi-bin/luci/; SameSite=Strict; HttpOnly; secure\r\nLocation: %s\r\nCache-Control: no-store\r\n\r\n', nsid, replace(getenv('REQUEST_URI') ?? '/cgi-bin/luci/', /[\r\n]/g, '')));
+		// 22.03 起 LuCI 认 sysauth_https；21.02 及更早只认 sysauth：两个都发
+		print(sprintf('Status: 302 Found\r\nSet-Cookie: sysauth_https=%s; path=/cgi-bin/luci/; SameSite=Strict; HttpOnly; secure\r\nSet-Cookie: sysauth=%s; path=/cgi-bin/luci/; SameSite=Strict; HttpOnly; secure\r\nLocation: %s\r\nCache-Control: no-store\r\n\r\n', nsid, nsid, replace(getenv('REQUEST_URI') ?? '/cgi-bin/luci/', /[\r\n]/g, '')));
 		exit(0);
 	}
 	pass(10, ck);

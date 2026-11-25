@@ -23,7 +23,9 @@ if [ -n "$(ck cmcp_f)" ]; then
 		*) rm -f "$F.ck" "$F.body"; exit 0 ;;
 	esac
 fi
+# 22.03 起 LuCI 认 sysauth_https；21.02 及更早只认 sysauth，两个都发、都认
 SID=$(ck sysauth_https)
+[ -n "$SID" ] || SID=$(ck sysauth)
 case "$SID" in *[!0-9a-f]*) SID= ;; esac
 if [ -n "$SID" ] && ubus call session get "{\"ubus_rpc_session\":\"$SID\"}" 2>/dev/null | grep -q '"token"'; then
 	exec /www/cgi-bin/luci
@@ -38,10 +40,10 @@ fi
 { cat /tmp/cmcp_luci_sid 2>/dev/null; echo "$SID"; } | tail -n 50 > /tmp/cmcp_luci_sid.$$ && mv -f /tmp/cmcp_luci_sid.$$ /tmp/cmcp_luci_sid
 TOK=$(head -c 16 /dev/urandom | md5sum | cut -c1-32)
 ubus call session set "{\"ubus_rpc_session\":\"$SID\",\"values\":{\"token\":\"$TOK\",\"username\":\"root\"}}" >/dev/null 2>&1
-CK="sysauth_https=$SID; Max-Age=31536000; path=/cgi-bin/luci/; SameSite=strict; HttpOnly; secure"
+CK="=$SID; Max-Age=31536000; path=/cgi-bin/luci/; SameSite=strict; HttpOnly; secure"
 if [ "$REQUEST_METHOD" = GET ]; then
-	printf 'Status: 302 Found\r\nSet-Cookie: %s\r\nLocation: %s\r\nCache-Control: no-store\r\n\r\n' "$CK" "$REQUEST_URI"
+	printf 'Status: 302 Found\r\nSet-Cookie: sysauth_https%s\r\nSet-Cookie: sysauth%s\r\nLocation: %s\r\nCache-Control: no-store\r\n\r\n' "$CK" "$CK" "$REQUEST_URI"
 	exit 0
 fi
-export HTTP_COOKIE="sysauth_https=$SID"
+export HTTP_COOKIE="sysauth_https=$SID; sysauth=$SID"
 exec /www/cgi-bin/luci

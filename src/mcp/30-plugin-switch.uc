@@ -99,6 +99,7 @@ P.luci_key = function() {
 const LFULL = '/tmp/cmcp_lfull.json';
 P.luci_full = function() {
 	if (!DEV_ID) die('先在面板重新登录一次再打开');
+	if (!stat(LUCI_CGI)) die('这台路由器没装原版后台（LuCI）');
 	if (!length(trim(readfile(LUCI_KEY) ?? '')) || !stat(SBIN + '/cmcp-lfull')) die('这台路由器上的面板版本太旧，先一键更新');
 	let s = null; try { s = json(readfile(LFULL) ?? 'null'); } catch (e) {}
 	if (type(s) != 'object') s = {};

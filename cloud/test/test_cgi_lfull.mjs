@@ -46,7 +46,7 @@ const gate = (ck, { method = 'GET', body = '', uri = '/cgi-bin/luci/admin/status
 const TOKEN = 'tok' + 'q'.repeat(30);
 fs.writeFileSync(E + '/config.json', JSON.stringify({ token: TOKEN }));
 const cgi = (pathInfo, msg) => new Promise((z) => {
-	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, PATH: BIN + ':' + process.env.PATH, CMCP_SBIN: G, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: pathInfo, REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(JSON.stringify(msg))) } });
+	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, PATH: BIN + ':' + process.env.PATH, CMCP_SBIN: G, CMCP_LUCI_CGI: process.env.T_NOLUCI ? G + '/none' : G + '/real-luci', CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: pathInfo, REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(JSON.stringify(msg))) } });
 	let out = ''; p.stdout.on('data', (d) => (out += d)); p.on('close', () => { const i = out.indexOf('\r\n\r\n'); let j = null; try { j = JSON.parse(out.slice(i + 4)); } catch (e) {} z(j || { raw: out }); });
 	p.stdin.end(JSON.stringify(msg));
 });
@@ -63,6 +63,10 @@ const r2 = await cgi('/pass', { jsonrpc: '2.0', id: ++rid, method: 'panel/luci_f
 ok('同一台手机再拿一次：旧的票作废，只留新的', !JSON.parse(fs.readFileSync(lfStateReal, 'utf8')).t[TK] && !!r2.result?.ticket);
 fs.copyFileSync(lfStateReal, STATE);
 const T2 = r2.result.ticket;
+process.env.T_NOLUCI = '1';
+ok('没装 LuCI：说清楚', /没装原版后台/.test((await cgi('/pass', { jsonrpc: '2.0', id: ++rid, method: 'panel/luci_full', params: {}, client: 'panel', pass: P1 })).error?.message || ''));
+delete process.env.T_NOLUCI;
+fs.copyFileSync(lfStateReal, STATE);
 ok('没登录的拿不到入口票', (await cgi('/pass', { jsonrpc: '2.0', id: ++rid, method: 'panel/luci_full', params: {}, client: 'panel', pass: 'x'.repeat(32) })).error?.code === -32013);
 
 const K = 'cmcp_l=' + 'k'.repeat(32), C = K + '; cmcp_f=' + T2;
@@ -105,6 +109,7 @@ o = await login('Str0ng 路由器+"%\'!Pass');
 const sidm = /sysauth_https=([0-9a-f]{32})/.exec(o);
 ok('密码对了：发会话（只在这条路径、不能被脚本读、只走 HTTPS），回到刚才那一页', !!sidm && /Status: 302/.test(o) && /HttpOnly/.test(o) && /secure/.test(o) && /path=\/cgi-bin\/luci\//.test(o) && /Location: \/cgi-bin\/luci\/admin\/status\/overview/.test(o), o.slice(0, 300));
 ok('密码里有空格、加号、中文、引号、百分号也认得对', !!sidm);
+ok('老版 LuCI（21.02 及更早只认 sysauth）：两个 Cookie 都发', !!sidm && new RegExp('Set-Cookie: sysauth=' + sidm[1] + ';').test(o), o.slice(0, 300));
 const SID = sidm && sidm[1];
 const sess = SID ? JSON.parse(fs.readFileSync(E + '/sess/' + SID, 'utf8')) : {};
 ok('会话 30 分钟没操作就过期，标着是完整后台登录的、哪台手机', sess.timeout === 1800 && sess.values?.cmcp_full === 1 && sess.values.cmcp_dev === D1.split('.')[0]);
@@ -112,6 +117,8 @@ ok('登录成功推送提醒，写明是哪台手机', /info\|有人登录了完
 ok('会话记下来了（换门禁钥匙时一起退出）', fs.readFileSync(SIDF, 'utf8').includes(SID));
 o = await gate(C + '; sysauth_https=' + SID);
 ok('登录以后：原样打开原版后台', /LUCI cookie=\[.*sysauth_https=/.test(o), o.slice(0, 200));
+o = await gate(C + '; sysauth=' + SID);
+ok('老版 LuCI 只带 sysauth：也认得是已登录的会话', /LUCI cookie=\[.*sysauth=/.test(o) && !/登录页|Status: 403/.test(o), o.slice(0, 200));
 // 30 分钟没操作
 const S1 = JSON.parse(fs.readFileSync(STATE, 'utf8')); S1.act[SID] -= 1801; fs.writeFileSync(STATE, JSON.stringify(S1));
 o = await gate(C + '; sysauth_https=' + SID, { uri: '/cgi-bin/luci/admin/ubus' });
@@ -122,6 +129,7 @@ ok('入口票过期：打不开，说明回面板重新打开', /入口过期了
 // 面板「原版页面」（没带入口票）照旧自动登录
 o = await gate(K);
 ok('不带入口票（面板「原版页面」）：照旧自动登录，不受影响', /Status: 302/.test(o) && /sysauth_https=/.test(o) && ulog().includes('login cmcp'), o.slice(0, 200));
+ok('自动登录也发老版 LuCI 认的 sysauth', /Set-Cookie: sysauth=[0-9a-f]{32};/.test(o), o.slice(0, 300));
 
 for (const f of ['/tmp/cmcp_pass.json', '/tmp/cmcp_lkok.json', '/tmp/cmcp_devseen.json', '/tmp/cmcp_lfull.json']) try { fs.rmSync(f); } catch (e) {}
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));

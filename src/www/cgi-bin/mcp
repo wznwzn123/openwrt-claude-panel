@@ -2422,17 +2422,28 @@ P.traffic = function() {
 };
 
 /* ---------- Kwrt 后台菜单（侧边栏自动加入新装的插件） ---------- */
+const LUCI_CGI = getenv('CMCP_LUCI_CGI') || '/www/cgi-bin/luci';
 // 用面板的自动登录账号读一次 LuCI 菜单，翻译成中文；只有装 / 卸软件包以后才重新读
 P.luci_menu = function(a) {
 	let key = trim(sh('date -r /usr/lib/opkg/status +%s 2>/dev/null; ls /usr/share/luci/menu.d /usr/lib/lua/luci/controller 2>/dev/null | md5sum').out);
 	let cf = '/tmp/cmcp_menu_list.json', c = cmcp_readj(cf, null);
 	if (c && c.key == key && !a?.force) return { items: c.items };
-	let pass = trim(readfile('/etc/claude-mcp/luci_pass') ?? '');
+	let pass = trim(readfile(ETC + '/luci_pass') ?? '');
 	if (!length(pass)) die('还没启用 LuCI 页面的自动登录');
-	let jar = '/tmp/cmcp_menu_jar';
-	sh(sprintf("curl -s -m 10 -c %s -o /dev/null --data-urlencode 'luci_username=cmcp' --data-urlencode %s http://127.0.0.1/cgi-bin/luci/", jar, shq('luci_password=' + pass)));
-	let r = sh(sprintf('curl -s -m 20 -b %s http://127.0.0.1/cgi-bin/luci/admin/menu; rm -f %s', jar, jar)), m = null;
-	try { m = json(r.out); } catch (e) {}
+	// 直接运行 LuCI 的 CGI 读菜单（不走 HTTP）：不依赖 curl、不管后台开在哪个端口、是不是只开了 HTTPS。
+	// 会话用面板专用账号临时登录一个，读完就退出；两个 Cookie 名都给（21.02 及更早只认 sysauth）
+	let L = null;
+	try { L = json(sh(sprintf('ubus call session login %s', shq(sprintf('%J', { username: 'cmcp', password: pass, timeout: 60 })))).out); } catch (e) {}
+	let sid = L?.ubus_rpc_session;
+	if (!match(sid ?? '', /^[0-9a-f]{32}$/)) die('读不到 LuCI 的菜单');
+	sh(sprintf('ubus call session set %s', shq(sprintf('%J', { ubus_rpc_session: sid, values: { token: sid, username: 'root' } }))));
+	let r = sh(sprintf("HTTP_COOKIE=%s HTTPS=on REQUEST_METHOD=GET SCRIPT_NAME=/cgi-bin/luci PATH_INFO=/admin/menu REQUEST_URI=/cgi-bin/luci/admin/menu SERVER_PORT=443 REMOTE_ADDR=127.0.0.1 timeout 20 %s", shq('sysauth_https=' + sid + '; sysauth=' + sid), shq(LUCI_CGI)));
+	sh(sprintf('ubus call session destroy %s', shq(sprintf('%J', { ubus_rpc_session: sid }))));
+	// 去掉 CGI 的响应头（到第一个空行为止）
+	let out = r.out ?? '', hb = index(out, '\r\n\r\n'), hn = index(out, '\n\n');
+	if (hb >= 0 && (hn < 0 || hb < hn)) out = substr(out, hb + 4); else if (hn >= 0) out = substr(out, hn + 2);
+	let m = null;
+	try { m = json(out); } catch (e) {}
 	let adm = m?.children?.admin?.children;
 	if (!adm) die('读不到 LuCI 的菜单');
 	let C = null;
@@ -3734,6 +3745,7 @@ P.luci_key = function() {
 const LFULL = '/tmp/cmcp_lfull.json';
 P.luci_full = function() {
 	if (!DEV_ID) die('先在面板重新登录一次再打开');
+	if (!stat(LUCI_CGI)) die('这台路由器没装原版后台（LuCI）');
 	if (!length(trim(readfile(LUCI_KEY) ?? '')) || !stat(SBIN + '/cmcp-lfull')) die('这台路由器上的面板版本太旧，先一键更新');
 	let s = null; try { s = json(readfile(LFULL) ?? 'null'); } catch (e) {}
 	if (type(s) != 'object') s = {};

@@ -442,6 +442,18 @@
 </section>
 
 <!-- 6.0 第 83 项：应用管理 -->
+<section class="page" id="p-ndiag">
+	<section class="card">
+		<div class="chips" id="ndTool" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr))">
+			<button class="chip on" data-nt="ping">Ping</button>
+			<button class="chip" data-nt="trace">路由追踪</button>
+			<button class="chip" data-nt="dns">域名查询</button>
+		</div>
+		<form id="ndForm" style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px"><input id="ndAddr" class="input" placeholder="域名或 IP" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url" enterkeyhint="go"><button class="btn blue" id="ndGo" type="submit">开始</button></form>
+		<div class="chips" id="ndRecent" style="margin-top:10px"></div>
+	</section>
+	<div id="ndOut"></div>
+</section>
 <section class="page" id="p-apps">
 	<section class="card">
 		<div style="display:grid;grid-template-columns:1fr auto;gap:8px"><input id="apFilter" class="input" placeholder="搜索" autocomplete="off" autocapitalize="off" spellcheck="false"><span class="pill" id="apFree" style="align-self:center">—</span></div>

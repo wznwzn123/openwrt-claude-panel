@@ -465,6 +465,11 @@ button.file{width:100%;text-align:left;color:var(--text);font-size:15px}button.f
 .kv>span:first-child{color:var(--muted);flex:none}.kv>span:last-child{text-align:right;font-weight:600;overflow-wrap:anywhere;min-width:0;font-variant-numeric:tabular-nums}
 /* 提示：iOS HUD 胶囊 */
 .toast{position:fixed;z-index:100;top:calc(var(--toph,calc(var(--sat,env(safe-area-inset-top)) + 56px)) + 10px);left:0;right:0;margin:0 auto;width:max-content;max-width:min(360px,calc(100% - 24px));display:flex;align-items:center;gap:9px;text-align:left;border-radius:16px;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);color:var(--text);padding:10px 16px 10px 12px;font-size:13px;font-weight:600;line-height:1.4;text-wrap:pretty;box-shadow:0 10px 30px rgba(0,0,0,.12),inset 0 0 0 .5px rgba(0,0,0,.08);white-space:pre-line;overflow:hidden;cursor:pointer;transform-origin:top center;-webkit-user-select:none;user-select:none}
+/* 网络诊断（第 21 项） */
+.ndst{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}.ndst b{display:block;font-size:19px;font-weight:700;white-space:nowrap}.ndst span{font-size:12px;color:var(--muted)}.ndst .ndbad{color:var(--dangert)}.ndst .ndwarn{color:var(--warnt)}
+.ndhop{width:26px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums}
+#ndTool .chip.off{opacity:.45}#ndRecent{flex-wrap:wrap;overflow:visible}#ndRecent .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.ndtags{display:flex;gap:6px;flex:none;align-items:center}#p-ndiag .sectitle b.ell{min-width:0}
 /* 灵动岛（11/25 用户选的方案 B：毛玻璃白卡）：左边图标说明结果——成功打勾、出错感叹号、进行中转圈 */
 .toast span{min-width:0}
 .toast::before{content:"";flex:none;width:20px;height:20px;border-radius:50%;background:var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center/12px no-repeat}

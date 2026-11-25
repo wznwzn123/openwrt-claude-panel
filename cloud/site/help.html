@@ -82,7 +82,7 @@
     </div>
   </div>
 </main>
-<div class="toast hide" id="toast" role="status" aria-live="polite" onclick="this.classList.add('hide')"></div>
+<div class="toast hide" id="toast" role="status" aria-live="polite"></div>
 <!--KIT_FOOT-->
 <!--KIT_JS-->
 <script>
@@ -169,7 +169,7 @@
   });
   // 同一页里点了别的问题链接（地址栏 # 变了）：回到全部、清掉搜索，展开那一条
   addEventListener('hashchange', () => { const id = decodeURIComponent(location.hash.slice(1)); if (!ITEMS.some((x) => x.id === id)) return; cat = 'all'; q = ''; $('hpQ').value = ''; cats(); render(id); });
-  function toast(t, err) { t = String(t == null ? '' : t); const e = document.getElementById('toast'), busy = !err && /…$/.test(t); e.textContent = t; e.className = 'toast' + (err ? ' err' : busy ? ' busy' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.add('hide'), busy ? 20000 : Math.min(7000, 2600 + Math.max(0, t.length - 24) * 60)); }
+  function toast(t, err) { t = String(t == null ? '' : t); const e = document.getElementById('toast'), busy = !err && /…$/.test(t); e.textContent = t; e.className = 'toast' + (err ? ' err' : busy ? ' busy' : ''); e.onclick = () => e.classList.add('hide'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.add('hide'), busy ? 20000 : Math.min(7000, 2600 + Math.max(0, t.length - 24) * 60)); }
 
   (async () => {
     try {

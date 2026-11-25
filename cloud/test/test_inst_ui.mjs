@@ -50,7 +50,7 @@ for (const [w, h] of [[390, 844], [1280, 860]]) {
 	let card = p.locator('.inst').first();
 	ok('领试用：出现安装码卡片，带步骤和安装命令（命令里带着安装码）' + T, await card.isVisible() && /免费试用 7 天/.test(await card.textContent()) && /sh install\.sh --invite [A-Z2-9]{10}$/.test((await card.locator('pre.cmd').textContent()).trim()) && /openwrt-claude-panel-hosted\.tar\.gz/.test(await card.locator('pre.cmd').textContent()));
 	ok('领完试用：试用按钮没了（每个账号一次）' + T, !(await p.isVisible('#trialGo')));
-	ok('步骤里说清楚：终端里输 1 是 AI 版，输 2 是纯面板版' + T, /1AI版/.test((await card.locator('.pickv').textContent()).replace(/\s/g, '')) && /2纯面板版/.test((await card.locator('.pickv').textContent()).replace(/\s/g, '')));
+	ok('步骤里说清楚：终端里输 1 是 AI 版，输 2 是本地版' + T, /1AI版/.test((await card.locator('.pickv').textContent()).replace(/\s/g, '')) && /2本地版/.test((await card.locator('.pickv').textContent()).replace(/\s/g, '')));
 	await card.locator('[data-cp]').click(); await W(400);
 	const clip = await p.evaluate(() => navigator.clipboard.readText()).catch(() => '');
 	ok('「复制命令」：复制的就是这条命令' + T, /hosted\.tar\.gz.*--invite [A-Z2-9]{10}$/.test(clip), clip);

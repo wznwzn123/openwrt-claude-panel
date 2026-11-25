@@ -174,11 +174,13 @@ try {
 	fs.rmSync(NOTE, { force: true }); guest('tick');
 	ok('没开着的时候 tick 什么都不做', !fs.existsSync(NOTE));
 	// ---- 卸载 ----
+	// 前面的改动在后台还没记完的重新加载（cmcp-netguard、「sleep 1; …」）：等它们结束再数（机器忙的时候会晚几秒）
+	await waitFor(() => { const ps = execFileSync('ps', ['ax', '-o', 'args']).toString(); return !ps.includes(SB + '/cmcp-netguard') && !ps.includes(RUN); }, 30000);
 	fs.rmSync(RUN, { force: true });
 	guest('remove');
-	ok('卸载：访客 Wi-Fi、网络、防火墙、DHCP 都删掉', !/cmcp/.test(R('wireless')) && !/cmcp/.test(R('network')) && !/cmcp/.test(R('firewall')) && !/cmcp/.test(R('dhcp')) && runs().length === 4);
+	ok('卸载：访客 Wi-Fi、网络、防火墙、DHCP 都删掉', !/cmcp/.test(R('wireless')) && !/cmcp/.test(R('network')) && !/cmcp/.test(R('firewall')) && !/cmcp/.test(R('dhcp')) && runs().length === 4, runs().join(' / '));
 	fs.rmSync(RUN, { force: true }); guest('remove');
-	ok('没开过访客 Wi-Fi 时卸载：不重新加载网络', runs().length === 0);
+	ok('没开过访客 Wi-Fi 时卸载：不重新加载网络', runs().length === 0, runs().join(' / '));
 	// ---- 第一次打开没确认：全部撤销 ----
 	reset();
 	r = await cgi('guest_set', { on: true, hours: 2 });

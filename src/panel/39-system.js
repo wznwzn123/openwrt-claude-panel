@@ -856,7 +856,7 @@ function renderWd(err) {
 	box.onclick = async (ev) => {
 		if (ev.target.closest('[data-goauto]')) return go('auto');
 		const dr = ev.target.closest('[data-dyrun]');
-		if (dr) return busy(dr, async () => { DY.d = await P('daily', { run: 1 }, 90000); DY.at = Date.now(); store.set('rp_daily', JSON.stringify(DY.d)); renderDaily(); toast('体检完成：' + (DY.d.summary || '')); }, '体检中');
+		if (dr) return busy(dr, async () => { DY.d = await P('daily', { run: 1 }, 90000); DY.at = Date.now(); store.set('rp_daily', JSON.stringify(DY.d)); renderDaily(); toast('体检完成：' + (DY.d.summary || ''), /发现|问题|异常/.test(DY.d.summary || '') ? 'warn' : false); }, '体检中');
 		const c = ev.target.closest('[data-wdcheck]');
 		if (c) return busy(c, async () => { await loadWd(false, true); toast('检查完成'); }, '检查中');
 		const x = ev.target.closest('[data-wdclear]');

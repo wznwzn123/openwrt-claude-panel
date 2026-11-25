@@ -53,17 +53,17 @@
 </div>
 
 <div id="app" class="hidden">
+<div class="ptr" id="ptr" aria-hidden="true"><i></i></div>
 <header class="top" id="topbar">
 	<div class="topin">
 		<div class="brand">
-			<button class="menubtn" id="menuBtn" aria-label="打开菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
-			<div class="logo toplogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
-			<div style="min-width:0"><div class="title" id="pageTitle">我的路由器</div><div class="sub" id="topSub">正在连接…</div></div>
+			<button class="logo toplogo" id="menuBtn" type="button" aria-label="打开菜单"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></button>
+			<div class="tid"><div class="title" id="topSub">正在连接…</div><div class="sub" id="statusPill" role="button" tabindex="0" aria-label="状态：连接中，点一下刷新"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span><span class="tsep" aria-hidden="true">·</span><span id="pageTitle">我的路由器</span></div></div>
 		</div>
 		<div class="actions">
 			<span class="pill hidden" id="jobPill"><i class="dot busy"></i><span id="jobText">后台任务</span></span>
 			<button class="bell" id="bellBtn" type="button" aria-label="通知" title="通知"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><em id="bellN" class="hidden"></em></button>
-			<div class="topcap"><span class="pill" id="statusPill" role="status"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
+			<button class="hidden" id="refreshBtn" type="button" aria-hidden="true" tabindex="-1">↻</button>
 		</div>
 	</div>
 </header>

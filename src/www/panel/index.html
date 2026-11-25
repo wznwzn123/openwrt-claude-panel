@@ -77,7 +77,8 @@ h1,h2,h3{letter-spacing:-.02em}
 .sidenav button{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:12px;background:transparent;color:var(--text);font-size:15px;font-weight:600;text-align:left;transition:background-color .2s,color .2s}
 .sidenav button i{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;font-style:normal;font-size:13px;background:var(--fill);color:var(--muted);flex:none}
 .sidenav button:active{background:var(--fill)}
-.sidenav button.on{background:var(--soft);color:var(--brand)}.sidenav button.on i{background:var(--brand);color:#fff}
+.sidenav button.on{background:var(--soft);color:var(--brand)}
+:root:not(.glass) .sidenav button.on{background:var(--fill2);color:var(--text)}.sidenav button.on i{background:var(--brand);color:#fff}
 .sidenav button i.nic{width:28px;height:28px;border-radius:8px;color:#fff;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.18)}
 .sidenav button i.nic svg{width:16px;height:16px}
 /* 侧边栏：可展开的上下级 */
@@ -499,6 +500,7 @@ button.file{width:100%;text-align:left;color:var(--text);font-size:15px}button.f
 .toast::before{content:"";flex:none;width:20px;height:20px;border-radius:50%;background:var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center/12px no-repeat}
 .toast.err::before{background-color:var(--danger);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 6.5v7'/%3E%3Cpath d='M12 17.6v.1'/%3E%3C/svg%3E")}
 .toast.err span{color:var(--dangert)}
+.toast.warn::before{background-color:var(--warn);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 6.5v7'/%3E%3Cpath d='M12 17.6v.1'/%3E%3C/svg%3E")}
 .toast.busy::before{width:16px;height:16px;margin:2px;background:none;border:2.2px solid var(--brand);border-right-color:transparent;animation:toastSpin .8s linear infinite}
 :root.dark .toast{background:rgba(44,44,46,.9);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.12),0 10px 30px rgba(0,0,0,.55)}
 .toast.in{animation:toastIn .46s var(--spring) both}
@@ -840,20 +842,30 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .card{border-radius:18px}.hero{border-radius:22px}
 /* 列表：卡片里一行一行，用细线分开 */
 .card.list .file{background:transparent;border-radius:0;margin:0;padding:13px 2px}
-.card.list .file+.file,.card.list .file+.stgrp,.card.list .stgrp+.file{border-top:1px solid var(--line)}
+.card.list .file+.file,.card.list .file+.stgrp,.card.list .stgrp+.file,.card.list .stgrp+.stgrp{border-top:1px solid var(--line)}
+/* 说明文字不掉一个字到下一行 */
+.muted,p,li,.notice,.empty,.sub{text-wrap:pretty}
 .card.list>div>.file:first-child,.card.list>.file:first-child{border-top:0}
 #stList .strow{padding-left:2px}
-/* 分类：分段开关 */
-.chips{background:var(--fill);border-radius:11px;padding:2px;gap:2px}
-.chip{background:transparent;border-radius:9px;padding:6px 10px}
-.chip.on{background:var(--text);color:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+/* 选项：一颗颗浅灰胶囊，选中是黑（深色模式白）；
+   真正「多选一」的几处（下面这些 id）做成分段开关：一条底，选项等分，选中的浮起来。
+   能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
+.chip.on{background:var(--text);color:var(--card)}
 :root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip.hidden{display:none}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
+:root.dark :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
+@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
 /* 按钮 */
 .btn.sm{background:var(--fill);color:var(--brand);font-weight:700}
-.btn.primary,.btn.blue{background:var(--text);color:var(--card)}
-:root.dark .btn.primary,:root.dark .btn.blue{background:#eef0f4;color:#0b0c0f}
+/* 黑（深色模式白）只给主操作（.btn.primary）；蓝色按钮是浅蓝底蓝字，同一种操作一个样子（评审 11/26） */
+.btn.primary{background:var(--text);color:var(--card)}
+:root.dark .btn.primary{background:#eef0f4;color:#0b0c0f}
+.btn.blue{background:var(--soft);color:var(--brand)}
 .sectitle b{font-size:20px;font-weight:700;letter-spacing:-.02em}
-.sectitle .pill{background:transparent;color:var(--muted);font-size:15px;font-weight:500;padding:2px 0}
+.sectitle .pill:not(.good):not(.red):not(.warnc):not(.mpok):not(.blue){background:transparent;color:var(--muted);font-size:15px;font-weight:500;padding:2px 0}
 /* 代理开关那一行：不再整块绿色，开着时名字前一个绿点 */
 .pxrow,.pxrow.on,.pxrow.off{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 .pxrow.on b{color:var(--text)}
@@ -874,6 +886,50 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .menubtn{background:transparent}
 /* 底栏 */
 :root:not(.glass) .dock{background:var(--glass);box-shadow:var(--shadow);border-radius:20px}
+/* 顶栏「设备身份」（用户 11/26 选的 T2，去掉刷新按钮）：左边 logo（手机上点了打开菜单），粗体路由器名，下面「● 在线 · 页面名」；右边只有铃铛 */
+.top .menubtn{display:none!important}
+.top .toplogo{display:grid!important;width:38px;height:38px;border-radius:11px;padding:0;border:0;cursor:pointer;flex:none;transition:transform .18s var(--spring)}
+.top .toplogo:active{transform:scale(.92)}
+.top .brand{gap:10px}
+.tid{min-width:0}
+.top .title{font-size:16px;font-weight:650;letter-spacing:-.015em}
+.top .tid .sub{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;overflow:hidden;min-width:0}
+.top .tid .sub .dot{width:6px;height:6px;flex:none}
+#statusText{display:inline!important}
+.top .tsep{opacity:.6}
+#pageTitle{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.top.tight2 #statusText,.top.tight2 .tsep{display:none!important}
+.top.tight3 .title{font-size:15px}
+.bell{width:38px;height:38px;background:var(--card);box-shadow:0 0 0 1px var(--line),0 2px 8px -4px rgba(0,0,0,.12)}
+:root.glass .bell{background:var(--fill)}
+/* 下拉刷新的圆圈 */
+html,body{overscroll-behavior-y:contain}
+.ptr{position:fixed;left:50%;top:calc(var(--toph,64px) + 6px);z-index:40;width:34px;height:34px;margin-left:-17px;border-radius:50%;background:var(--card);box-shadow:0 0 0 1px var(--line),0 6px 18px -6px rgba(0,0,0,.25);display:grid;place-items:center;pointer-events:none;opacity:0;transform:translateY(calc(var(--py,0) * 40px - 30px)) scale(calc(.6 + var(--py,0) * .4));transition:opacity .2s,transform .25s var(--spring)}
+.ptr.pull{transition:none;opacity:calc(var(--py,0) * 1.4)}
+.ptr.run{opacity:1;transform:translateY(10px) scale(1)}
+.ptr i{width:16px;height:16px;border-radius:50%;border:2.2px solid var(--muted);border-top-color:transparent;transform:rotate(calc(var(--py,0) * 300deg))}
+.ptr.ready i,.ptr.run i{border-color:var(--brand);border-top-color:transparent}
+.ptr.run i{animation:spin .8s linear infinite}
+@media(prefers-reduced-motion:reduce){.ptr.run i{animation:spin 1.6s linear infinite!important}}
+/* 新手引导：挖空高亮 + 小卡片 */
+.tour{position:fixed;inset:0;z-index:90}
+.tourhole{position:fixed;box-shadow:0 0 0 9999px rgba(8,10,14,.62);transition:left .3s var(--ease),top .3s var(--ease),width .3s var(--ease),height .3s var(--ease);pointer-events:none}
+.tourhole::after{content:"";position:absolute;inset:-3px;border-radius:inherit;box-shadow:0 0 0 2px rgba(255,255,255,.85)}
+.tourhole.pull::before{content:"";position:absolute;left:50%;top:calc(100% + 6px);width:2px;height:34px;margin-left:-1px;background:linear-gradient(#fff,transparent);border-radius:2px;animation:tourPull 1.4s var(--ease) infinite}
+@keyframes tourPull{0%{transform:translateY(-6px);opacity:0}30%{opacity:1}100%{transform:translateY(14px);opacity:0}}
+.tourcard{position:fixed;background:var(--card);color:var(--text);border-radius:16px;padding:14px 14px 12px;box-shadow:0 0 0 1px var(--line),0 18px 40px -12px rgba(0,0,0,.45)}
+.tourcard.in{animation:tourIn .28s var(--spring) both}
+@keyframes tourIn{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+.tourcard b{display:block;font-size:16px;font-weight:700;letter-spacing:-.01em}
+.tourcard p{margin:4px 0 0;font-size:13.5px;color:var(--muted);line-height:1.45;text-wrap:pretty}
+.tourbar{display:flex;align-items:center;gap:8px;margin-top:12px}
+.tourn{flex:1;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){.tourhole.pull::before{display:none}}
+/* 节点列表也改成细分隔线；当前节点保留浅色底 + 主色字（评审 11/26） */
+.nodes .file{background:transparent;border-radius:12px;margin:0;padding:12px 8px}
+.nodes .file+.file{border-top:1px solid var(--line)}
+.nodes .file.cur{background:var(--soft);border-top-color:transparent}
+.nodes .file.cur+.file{border-top-color:transparent}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -929,17 +985,17 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 </div>
 
 <div id="app" class="hidden">
+<div class="ptr" id="ptr" aria-hidden="true"><i></i></div>
 <header class="top" id="topbar">
 	<div class="topin">
 		<div class="brand">
-			<button class="menubtn" id="menuBtn" aria-label="打开菜单"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
-			<div class="logo toplogo" role="img" aria-label="我的路由器"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
-			<div style="min-width:0"><div class="title" id="pageTitle">我的路由器</div><div class="sub" id="topSub">正在连接…</div></div>
+			<button class="logo toplogo" id="menuBtn" type="button" aria-label="打开菜单"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></button>
+			<div class="tid"><div class="title" id="topSub">正在连接…</div><div class="sub" id="statusPill" role="button" tabindex="0" aria-label="状态：连接中，点一下刷新"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span><span class="tsep" aria-hidden="true">·</span><span id="pageTitle">我的路由器</span></div></div>
 		</div>
 		<div class="actions">
 			<span class="pill hidden" id="jobPill"><i class="dot busy"></i><span id="jobText">后台任务</span></span>
 			<button class="bell" id="bellBtn" type="button" aria-label="通知" title="通知"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/></svg><em id="bellN" class="hidden"></em></button>
-			<div class="topcap"><span class="pill" id="statusPill" role="status"><i class="dot" id="statusDot"></i><span id="statusText">连接中</span></span><button class="btn" id="refreshBtn" title="刷新" aria-label="刷新">↻</button></div>
+			<button class="hidden" id="refreshBtn" type="button" aria-hidden="true" tabindex="-1">↻</button>
 		</div>
 	</div>
 </header>
@@ -1680,7 +1736,7 @@ function toast(s, err) {
 	const shown = !t.classList.contains('hidden') && !t.classList.contains('out');
 	clearTimeout(toastT); clearTimeout(toastX);
 	t.firstElementChild.textContent = s;
-	t.className = 'toast' + (err ? ' err' : busy ? ' busy' : '');
+	t.className = 'toast' + (err === 'warn' ? ' warn' : err ? ' err' : busy ? ' busy' : '');
 	void t.offsetWidth;
 	t.classList.add(shown ? 're' : 'in');
 	toastT = setTimeout(toastHide, dur);
@@ -1809,14 +1865,14 @@ let DG = { at: 0, v: null };
 function setStatus(ok, text) {
 	$('statusDot').className = 'dot ' + (ok ? 'on' : 'off');
 	$('statusText').textContent = text;
-	$('statusPill').setAttribute('aria-label', '状态：' + text);
+	$('statusPill').setAttribute('aria-label', '状态：' + text + '，点一下刷新');
 }
-/* 顶栏（6.0 第 76 项）：页面名、路由器名要显示完整。放不下时先藏 logo，再藏副标题里的插件状态，再把状态收成一个点（点一下看完整状态），最后标题字小一号 */
+/* 顶栏（6.0 第 76 项；11/26 改成「设备身份」样式）：左边 logo（点了打开菜单），旁边粗体是路由器名，下面一行「● 在线 · 页面名」。
+   放不下时先藏路由器名后面的插件状态，再把「在线」收成一个点，最后字小一号（logo 是菜单按钮，不藏） */
 function fitTop() {
 	const tb = $('topbar'), t = $('pageTitle'), s = $('topSub'); if (!tb || !t || !s) return;
 	const over = () => t.scrollWidth > t.clientWidth + 1 || s.scrollWidth > s.clientWidth + 1;
 	tb.classList.remove('tight1', 'tight2', 'tight3', 'tight4');
-	if (over()) tb.classList.add('tight1');
 	if (over()) tb.classList.add('tight4'); // 副标题只留型号（插件状态概览页里有）
 	if (over()) tb.classList.add('tight2'); // 状态收成一个点
 	if (over()) tb.classList.add('tight3'); // 再不够：标题字小一号
@@ -1825,7 +1881,10 @@ function fitTop() {
 	let q = 0; const fit = () => { if (!q) q = requestAnimationFrame(() => { q = 0; fitTop(); }); };
 	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
 	addEventListener('resize', fit);
-	$('statusPill').addEventListener('click', () => { if ($('topbar').classList.contains('tight2')) toast($('statusText').textContent); });
+	// 点「● 在线」刷新（电脑上没有下拉，这是刷新的入口；手机上也能用）
+	const st = () => { toast('正在刷新…'); ptrRun(); };
+	$('statusPill').addEventListener('click', st);
+	$('statusPill').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st(); } });
 }
 
 /* ---------- 共享数据 ---------- */
@@ -2154,7 +2213,8 @@ $('sidenav').addEventListener('click', (e) => {
 $('sideQ').addEventListener('input', renderNav);
 $('sideQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = $('sidenav').querySelector('button[data-p]'); if (b && $('sideQ').value.trim()) { $('sideQ').value = ''; go(b.dataset.p); renderNav(); } } });
 renderNav();
-$('menuBtn').onclick = () => sideOpen(true);
+// 顶栏 logo 就是菜单按钮（#menuBtn）：手机上打开菜单；电脑上菜单一直在左边，点了回概览
+$('menuBtn').onclick = () => (matchMedia('(min-width:900px)').matches && document.body.classList.contains('app') ? go('home') : sideOpen(true));
 $('scrim').onclick = () => sideOpen(false);
 // 从屏幕左边缘往右滑：能返回就返回（苹果手机添加到主屏幕后没有系统的侧滑返回），已经在第一页就打开菜单。
 // 苹果手机在 Safari 浏览器里：左边缘归 Safari 自己的侧滑返回，面板不抢
@@ -2243,6 +2303,52 @@ async function refresh(quiet) {
 	}
 }
 $('refreshBtn').onclick = () => { S.state = null; S.schema = {}; refresh(); };
+/* 下拉刷新（用户 11/26：刷新按钮去掉，换成往下拉，所有设备都要适配）
+   手机、平板：在页面最顶上往下拉，拉过 64px 松手就刷新；顶上出现一个圆圈，跟着手指转。
+   电脑：触控板在最顶上继续往上滑（滚轮向上）也算；另外点顶栏的「● 在线」也能刷新。
+   浏览器自己的下拉重新加载整页关掉（overscroll-behavior），不然会跟这个打架。
+   有弹窗、菜单开着、在聊天页（自己有滚动）或原版后台页时不管。 */
+let ptrBusy = false;
+async function ptrRun() {
+	if (ptrBusy) return;
+	ptrBusy = true;
+	const el = $('ptr'); el.classList.add('run'); el.style.setProperty('--py', '1');
+	S.state = null; S.schema = {};
+	try { await refresh(); } catch (e) {}
+	el.classList.remove('run', 'pull'); el.style.setProperty('--py', '0');
+	ptrBusy = false;
+}
+function ptrOk() {
+	const b = document.body;
+	return !ptrBusy && (window.scrollY || document.documentElement.scrollTop) <= 0 && !document.querySelector('.modal') && !$('side').classList.contains('open') && !b.classList.contains('chatp') && !b.classList.contains('luci') && !(typeof LK !== 'undefined' && LK.on);
+}
+{
+	const el = $('ptr'), MAX = 64;
+	let y0 = null, dy = 0;
+	addEventListener('touchstart', (e) => { y0 = e.touches.length === 1 && ptrOk() ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+	addEventListener('touchmove', (e) => {
+		if (y0 == null) return;
+		dy = e.touches[0].clientY - y0;
+		if (dy <= 0 || (window.scrollY || 0) > 0) { el.classList.remove('pull'); el.style.setProperty('--py', '0'); return; }
+		const p = Math.min(1, dy / (MAX * 1.6));
+		el.classList.add('pull'); el.classList.toggle('ready', dy * 0.6 >= MAX); el.style.setProperty('--py', p.toFixed(3));
+	}, { passive: true });
+	addEventListener('touchend', () => {
+		if (y0 == null) return;
+		const hit = dy * 0.6 >= MAX; y0 = null;
+		el.classList.remove('ready');
+		if (hit) ptrRun(); else { el.classList.remove('pull'); el.style.setProperty('--py', '0'); }
+	}, { passive: true });
+	// 滚轮：只算「已经停在最顶上以后」新开始的向上滑；从下面一路滑上来的惯性不算（不然滑到顶就会误刷新）
+	let acc = 0, accT = 0, moveT = 0;
+	addEventListener('scroll', () => { moveT = Date.now(); }, { passive: true });
+	addEventListener('wheel', (e) => {
+		if (e.deltaY >= 0 || !ptrOk() || Date.now() - moveT < 700) { acc = 0; return; }
+		if (Date.now() - accT > 400) acc = 0;
+		accT = Date.now(); acc += -e.deltaY;
+		if (acc > 260) { acc = 0; ptrRun(); }
+	}, { passive: true });
+}
 // 手机上后台任务只显示一个点，点一下看在做什么
 $('jobPill').onclick = () => toast($('jobText').textContent);
 $('jobPill').style.cursor = 'pointer';
@@ -5445,7 +5551,7 @@ function renderWd(err) {
 	box.onclick = async (ev) => {
 		if (ev.target.closest('[data-goauto]')) return go('auto');
 		const dr = ev.target.closest('[data-dyrun]');
-		if (dr) return busy(dr, async () => { DY.d = await P('daily', { run: 1 }, 90000); DY.at = Date.now(); store.set('rp_daily', JSON.stringify(DY.d)); renderDaily(); toast('体检完成：' + (DY.d.summary || '')); }, '体检中');
+		if (dr) return busy(dr, async () => { DY.d = await P('daily', { run: 1 }, 90000); DY.at = Date.now(); store.set('rp_daily', JSON.stringify(DY.d)); renderDaily(); toast('体检完成：' + (DY.d.summary || ''), /发现|问题|异常/.test(DY.d.summary || '') ? 'warn' : false); }, '体检中');
 		const c = ev.target.closest('[data-wdcheck]');
 		if (c) return busy(c, async () => { await loadWd(false, true); toast('检查完成'); }, '检查中');
 		const x = ev.target.closest('[data-wdclear]');
@@ -7398,6 +7504,72 @@ function compatFailPop(msg, method) {
 	<div class="cfoot"><div class="btngrid"><button class="btn" data-v="close">知道了</button><button class="btn primary" data-rep>报告这个问题</button></div></div>`,
 	(m, close) => { m.dataset.cpf = 1; m.querySelector('[data-rep]').onclick = () => { close(null); feedbackSheet('功能开不了：' + msg + (method ? '（' + method + '）' : '')); }; }, { compact: true });
 }
+/* ---------- 6.0 新手引导（用户 11/26：第一次用的、升级到 6.0 的老用户都要有，怕不知道左上角图标是切换） ----------
+   4 步：左上角图标（菜单）、往下拉刷新（电脑上是点「● 在线」）、铃铛（通知）、底部快捷栏。每步把那一处挖空高亮，旁边一张小卡片。
+   每台手机只出一次（rp_tour6）；能跳过。等连上路由器、没有别的弹窗、没锁屏、在概览页时才出来，不跟「必须更新」公告这些叠在一起。 */
+const TOUR_KEY = 'rp_tour6';
+function tourSteps() {
+	const wide = matchMedia('(min-width:900px)').matches && document.body.classList.contains('app');
+	const st = [
+		wide ? null : { el: '#menuBtn', t: '点这里打开菜单', d: '所有页面都在菜单里，从这里切换。' },
+		wide ? { el: '#statusPill', t: '点这里刷新', d: '' } : { el: '#topbar', t: '往下拉刷新', d: '在页面最上面往下拉，松手就刷新。', pull: true },
+		{ el: '#bellBtn', t: '通知在这里', d: '' },
+		{ el: '#dock', t: '常用操作', d: '' },
+	];
+	return st.filter((x) => x && (() => { const e = document.querySelector(x.el); return e && e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden'; })());
+}
+function tourReady() {
+	return token && !LK.on && page === 'home' && $('statusDot').classList.contains('on') && !document.querySelector('.modal') && !$('side').classList.contains('open') && $('needcode').classList.contains('hidden') && !document.hidden;
+}
+function tourRun() {
+	const steps = tourSteps();
+	if (!steps.length) return;
+	let i = 0;
+	const ov = document.createElement('div');
+	ov.className = 'tour'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', '新手引导');
+	ov.innerHTML = '<div class="tourhole"></div><div class="tourcard"><b></b><p></p><div class="tourbar"><span class="tourn"></span><button class="btn sm tourskip" type="button">跳过</button><button class="btn sm primary tournext" type="button"></button></div></div>';
+	document.body.appendChild(ov);
+	const hole = ov.querySelector('.tourhole'), card = ov.querySelector('.tourcard');
+	const end = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} removeEventListener('resize', draw); removeEventListener('keydown', key); ov.remove(); };
+	function draw() {
+		const s = steps[i], e = document.querySelector(s.el);
+		if (!e) return end();
+		const r = e.getBoundingClientRect(), pad = s.el === '#topbar' ? 0 : 6;
+		const x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(innerWidth - 8, r.width + pad * 2), h = r.height + pad * 2;
+		Object.assign(hole.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', borderRadius: s.el === '#topbar' ? '0 0 18px 18px' : getComputedStyle(e).borderRadius || '14px' });
+		hole.classList.toggle('pull', !!s.pull);
+		card.querySelector('b').textContent = s.t;
+		const p = card.querySelector('p'); p.textContent = s.d; p.classList.toggle('hidden', !s.d);
+		card.querySelector('.tourn').textContent = i + 1 + ' / ' + steps.length;
+		card.querySelector('.tournext').textContent = i === steps.length - 1 ? '知道了' : '下一步';
+		card.querySelector('.tourskip').classList.toggle('hidden', i === steps.length - 1);
+		// 卡片放在高亮处下面，放不下就放上面；左右不出屏幕
+		const cw = Math.min(300, innerWidth - 24);
+		card.style.width = cw + 'px';
+		const ch = card.offsetHeight, below = y + h + 12;
+		card.style.top = (below + ch < innerHeight - 8 ? below : Math.max(8, y - ch - 12)) + 'px';
+		card.style.left = Math.min(innerWidth - cw - 12, Math.max(12, x + w / 2 - cw / 2)) + 'px';
+		card.classList.remove('in'); void card.offsetWidth; card.classList.add('in');
+	}
+	const key = (e) => { if (e.key === 'Escape') end(); };
+	card.querySelector('.tournext').onclick = () => { if (++i >= steps.length) end(); else draw(); };
+	card.querySelector('.tourskip').onclick = end;
+	addEventListener('resize', draw); addEventListener('keydown', key);
+	draw();
+	card.querySelector('.tournext').focus({ preventScroll: true });
+}
+// 打开面板后等时机：每 2 秒看一次，最多等 2 分钟
+(function tourWait() {
+	// 自动化测试（navigator.webdriver）里不出，免得挡住别的测试；测引导本身时设 rp_tourtest=1
+	try { if (localStorage.getItem(TOUR_KEY) || (navigator.webdriver && !localStorage.getItem('rp_tourtest'))) return; } catch (e) { return; }
+	let n = 0;
+	const t = setInterval(() => {
+		if (++n > 60) return clearInterval(t);
+		if (!tourReady()) return;
+		clearInterval(t);
+		setTimeout(() => { if (tourReady() && !document.querySelector('.tour')) tourRun(); }, 1500);
+	}, 2000);
+})();
 
 /* ---------- 6.0 第 14 项：Wi-Fi 设置 ----------
  * 每个频段一张卡片：开关、名字、密码、隐藏、信道。两个频段名字和密码一样时合成一份（「用同一个名字」）。

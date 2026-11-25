@@ -74,7 +74,7 @@ const goWd = async (page) => { await page.click('#menuBtn'); await page.waitForT
 		await page.click('.wdev details summary');
 		await page.waitForTimeout(200);
 		const n0 = calls.filter((c) => c === 'panel/wd').length;
-		await page.click('#refreshBtn');
+		await page.click('#statusPill');
 		await page.waitForTimeout(600);
 		ok('刷新后展开的详细信息还开着' + sfx, (await page.$$('#wdBody details[open]')).length === 1 && calls.filter((c) => c === 'panel/wd').length > n0);
 		await page.screenshot({ path: path.join(OUT, 'wd' + (dark ? '-dark' : '') + '.png'), fullPage: true });
@@ -131,7 +131,7 @@ const goWd = async (page) => { await page.click('#menuBtn'); await page.waitForT
 		if (mode === '530') await page.screenshot({ path: path.join(OUT, 'wd-offline.png'), fullPage: false });
 		// 恢复后自动回到在线
 		ctl.mode = 'ok';
-		await page.click('#refreshBtn');
+		await page.click('#statusPill');
 		await page.waitForTimeout(700);
 		ok(`[${mode}] 恢复后自动更新`, (await txt(page, '#statusText')) === '在线' && !(await txt(page, '#wdBody')).includes('现在连不上路由器'));
 		await ctx.close();

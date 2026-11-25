@@ -267,7 +267,7 @@ function toast(s, err) {
 	const shown = !t.classList.contains('hidden') && !t.classList.contains('out');
 	clearTimeout(toastT); clearTimeout(toastX);
 	t.firstElementChild.textContent = s;
-	t.className = 'toast' + (err ? ' err' : busy ? ' busy' : '');
+	t.className = 'toast' + (err === 'warn' ? ' warn' : err ? ' err' : busy ? ' busy' : '');
 	void t.offsetWidth;
 	t.classList.add(shown ? 're' : 'in');
 	toastT = setTimeout(toastHide, dur);
@@ -396,14 +396,14 @@ let DG = { at: 0, v: null };
 function setStatus(ok, text) {
 	$('statusDot').className = 'dot ' + (ok ? 'on' : 'off');
 	$('statusText').textContent = text;
-	$('statusPill').setAttribute('aria-label', '状态：' + text);
+	$('statusPill').setAttribute('aria-label', '状态：' + text + '，点一下刷新');
 }
-/* 顶栏（6.0 第 76 项）：页面名、路由器名要显示完整。放不下时先藏 logo，再藏副标题里的插件状态，再把状态收成一个点（点一下看完整状态），最后标题字小一号 */
+/* 顶栏（6.0 第 76 项；11/26 改成「设备身份」样式）：左边 logo（点了打开菜单），旁边粗体是路由器名，下面一行「● 在线 · 页面名」。
+   放不下时先藏路由器名后面的插件状态，再把「在线」收成一个点，最后字小一号（logo 是菜单按钮，不藏） */
 function fitTop() {
 	const tb = $('topbar'), t = $('pageTitle'), s = $('topSub'); if (!tb || !t || !s) return;
 	const over = () => t.scrollWidth > t.clientWidth + 1 || s.scrollWidth > s.clientWidth + 1;
 	tb.classList.remove('tight1', 'tight2', 'tight3', 'tight4');
-	if (over()) tb.classList.add('tight1');
 	if (over()) tb.classList.add('tight4'); // 副标题只留型号（插件状态概览页里有）
 	if (over()) tb.classList.add('tight2'); // 状态收成一个点
 	if (over()) tb.classList.add('tight3'); // 再不够：标题字小一号
@@ -412,7 +412,10 @@ function fitTop() {
 	let q = 0; const fit = () => { if (!q) q = requestAnimationFrame(() => { q = 0; fitTop(); }); };
 	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
 	addEventListener('resize', fit);
-	$('statusPill').addEventListener('click', () => { if ($('topbar').classList.contains('tight2')) toast($('statusText').textContent); });
+	// 点「● 在线」刷新（电脑上没有下拉，这是刷新的入口；手机上也能用）
+	const st = () => { toast('正在刷新…'); ptrRun(); };
+	$('statusPill').addEventListener('click', st);
+	$('statusPill').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st(); } });
 }
 
 /* ---------- 共享数据 ---------- */
@@ -741,7 +744,8 @@ $('sidenav').addEventListener('click', (e) => {
 $('sideQ').addEventListener('input', renderNav);
 $('sideQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = $('sidenav').querySelector('button[data-p]'); if (b && $('sideQ').value.trim()) { $('sideQ').value = ''; go(b.dataset.p); renderNav(); } } });
 renderNav();
-$('menuBtn').onclick = () => sideOpen(true);
+// 顶栏 logo 就是菜单按钮（#menuBtn）：手机上打开菜单；电脑上菜单一直在左边，点了回概览
+$('menuBtn').onclick = () => (matchMedia('(min-width:900px)').matches && document.body.classList.contains('app') ? go('home') : sideOpen(true));
 $('scrim').onclick = () => sideOpen(false);
 // 从屏幕左边缘往右滑：能返回就返回（苹果手机添加到主屏幕后没有系统的侧滑返回），已经在第一页就打开菜单。
 // 苹果手机在 Safari 浏览器里：左边缘归 Safari 自己的侧滑返回，面板不抢
@@ -830,6 +834,52 @@ async function refresh(quiet) {
 	}
 }
 $('refreshBtn').onclick = () => { S.state = null; S.schema = {}; refresh(); };
+/* 下拉刷新（用户 11/26：刷新按钮去掉，换成往下拉，所有设备都要适配）
+   手机、平板：在页面最顶上往下拉，拉过 64px 松手就刷新；顶上出现一个圆圈，跟着手指转。
+   电脑：触控板在最顶上继续往上滑（滚轮向上）也算；另外点顶栏的「● 在线」也能刷新。
+   浏览器自己的下拉重新加载整页关掉（overscroll-behavior），不然会跟这个打架。
+   有弹窗、菜单开着、在聊天页（自己有滚动）或原版后台页时不管。 */
+let ptrBusy = false;
+async function ptrRun() {
+	if (ptrBusy) return;
+	ptrBusy = true;
+	const el = $('ptr'); el.classList.add('run'); el.style.setProperty('--py', '1');
+	S.state = null; S.schema = {};
+	try { await refresh(); } catch (e) {}
+	el.classList.remove('run', 'pull'); el.style.setProperty('--py', '0');
+	ptrBusy = false;
+}
+function ptrOk() {
+	const b = document.body;
+	return !ptrBusy && (window.scrollY || document.documentElement.scrollTop) <= 0 && !document.querySelector('.modal') && !$('side').classList.contains('open') && !b.classList.contains('chatp') && !b.classList.contains('luci') && !(typeof LK !== 'undefined' && LK.on);
+}
+{
+	const el = $('ptr'), MAX = 64;
+	let y0 = null, dy = 0;
+	addEventListener('touchstart', (e) => { y0 = e.touches.length === 1 && ptrOk() ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+	addEventListener('touchmove', (e) => {
+		if (y0 == null) return;
+		dy = e.touches[0].clientY - y0;
+		if (dy <= 0 || (window.scrollY || 0) > 0) { el.classList.remove('pull'); el.style.setProperty('--py', '0'); return; }
+		const p = Math.min(1, dy / (MAX * 1.6));
+		el.classList.add('pull'); el.classList.toggle('ready', dy * 0.6 >= MAX); el.style.setProperty('--py', p.toFixed(3));
+	}, { passive: true });
+	addEventListener('touchend', () => {
+		if (y0 == null) return;
+		const hit = dy * 0.6 >= MAX; y0 = null;
+		el.classList.remove('ready');
+		if (hit) ptrRun(); else { el.classList.remove('pull'); el.style.setProperty('--py', '0'); }
+	}, { passive: true });
+	// 滚轮：只算「已经停在最顶上以后」新开始的向上滑；从下面一路滑上来的惯性不算（不然滑到顶就会误刷新）
+	let acc = 0, accT = 0, moveT = 0;
+	addEventListener('scroll', () => { moveT = Date.now(); }, { passive: true });
+	addEventListener('wheel', (e) => {
+		if (e.deltaY >= 0 || !ptrOk() || Date.now() - moveT < 700) { acc = 0; return; }
+		if (Date.now() - accT > 400) acc = 0;
+		accT = Date.now(); acc += -e.deltaY;
+		if (acc > 260) { acc = 0; ptrRun(); }
+	}, { passive: true });
+}
 // 手机上后台任务只显示一个点，点一下看在做什么
 $('jobPill').onclick = () => toast($('jobText').textContent);
 $('jobPill').style.cursor = 'pointer';

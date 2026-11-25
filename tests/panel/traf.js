@@ -63,7 +63,7 @@ const server = http.createServer((req, res) => {
 		ok('侧边栏「状态」里有流量统计', (await page.locator('#sidenav [data-p="traf"]').count()) === 1);
 		// 没有数据时
 		const keep = TFD.d; TFD.d = { days: {}, names: {}, today: null, at: null };
-		await page.click('#refreshBtn'); await page.waitForTimeout(1200);
+		await page.click('#statusPill'); await page.waitForTimeout(1200);
 		ok('还没数据：提示统计刚开始', /统计刚开始/.test(await body()));
 		TFD.d = keep;
 		await ctx.close();

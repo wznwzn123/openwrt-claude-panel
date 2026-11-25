@@ -115,7 +115,7 @@ const tapRule = async (page) => { await page.evaluate(() => { const b = document
 		await page.goto('http://panel.test/panel/?p=home');
 		await page.waitForTimeout(1200);
 		ctl.fail = 'overview';
-		await page.click('#refreshBtn');
+		await page.click('#statusPill');
 		await page.waitForTimeout(600);
 		const s = await T(page);
 		ok('出错：左边红色感叹号，文字深红（白底看得清）', /255, 59, 48/.test(s.icBg) && /svg/.test(s.icImg) && /215, 0, 21/.test(s.fg), s.icBg + ' ' + s.fg);

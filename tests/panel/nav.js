@@ -117,7 +117,7 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	ok('跳转后依然隐藏 Argon 外壳', (await fr().evaluate(() => getComputedStyle(document.querySelector('header')).display)) === 'none');
 	// 刷新按钮重新打开
 	const n0 = luciHits.length;
-	await page.click('#refreshBtn'); await page.waitForTimeout(700);
+	await page.click('#statusPill'); await page.waitForTimeout(700);
 	ok('刷新按钮重新打开当前原版页', luciHits.length > n0 && luciHits[luciHits.length - 1].p === 'admin/network/dhcp');
 	// 自动刷新不会重新载入原版页面
 	const n1 = luciHits.length;
@@ -130,7 +130,7 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	await page.click('#sidenav button[data-p="k:admin/network/dns"]'); await page.waitForTimeout(1200);
 	ok('钥匙过期会自动重新取并打开', (await fr()?.textContent('#lfbody')) === 'admin/network/dns' && calls.filter((c) => c.m === 'panel/luci_key').length >= 2);
 	gateKey = 'nope';
-	await page.click('#refreshBtn'); await page.waitForTimeout(1500);
+	await page.click('#statusPill'); await page.waitForTimeout(1500);
 	ok('真的没权限时显示提示和重试按钮', /没有权限/.test(await page.textContent('#lfMsg')) && await vis('#lfRetry'));
 	gateKey = 'lk999';
 	await page.click('#lfRetry'); await page.waitForTimeout(900);
@@ -145,11 +145,11 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 		ok(`第 ${n} 次换钥匙：自动重新取，打开的是刚点的那一页，用户不用做什么`, (await fr()?.textContent('#lfbody')) === 'admin/whatever' && calls.filter((c) => c.m === 'panel/luci_key').length === nk + 1 && await page.evaluate(() => document.getElementById('lfMask').classList.contains('hidden')), await fr()?.textContent('#lfbody'));
 	}
 	gateKey = 'lk999'; LK.key = 'lk999';
-	await page.click('#refreshBtn'); await page.waitForTimeout(1500);
+	await page.click('#statusPill'); await page.waitForTimeout(1500);
 
 	/* ---------- 路由器连不上（Cloudflare 错误页） ---------- */
 	luciMode = 'cf';
-	await page.click('#refreshBtn'); await page.waitForTimeout(900);
+	await page.click('#statusPill'); await page.waitForTimeout(900);
 	ok('Cloudflare 错误页不直接显示，改成提示', /连不上路由器/.test(await page.textContent('#lfMsg')) && await vis('#lfMask'));
 	await shot('nav-05-luci-off');
 	luciMode = 'ok';
@@ -176,7 +176,7 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	/* ---------- 一直没反应 ---------- */
 	luciMode = 'hang';
 	await page.evaluate(() => { window.__st = setTimeout; window.setTimeout = (f, ms, ...a) => window.__st(f, ms === 30000 ? 800 : ms, ...a); });
-	await page.click('#refreshBtn'); await page.waitForTimeout(1600);
+	await page.click('#statusPill'); await page.waitForTimeout(1600);
 	ok('太久没打开显示提示', /太慢/.test(await page.textContent('#lfMsg')) && await vis('#lfRetry'));
 	await page.evaluate(() => { window.setTimeout = window.__st; });
 	luciMode = 'ok';

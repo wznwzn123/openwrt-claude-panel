@@ -105,6 +105,29 @@ const u = await st.get('u:uidtest01');
 ok('1 天没连上收回后：账号里的路由器去掉，安装码放回账号、可以再用', !u.devs.length && u.inst.includes('INSTCODE01') && (await inv('INSTCODE01')).used === 0, JSON.stringify(u));
 
 
+// ⑤ 用户 11/25：装好以后在路由器上卸载了，再用同一个码重装（试用码，到期时间不变、试用不会变长）
+await st.put('u:uidtrial1', { uid: 'uidtrial1', email: 't@x.com', devs: [], inst: ['TRIALCODE1'], trialUsed: 0 });
+await st.put('i:TRIALCODE1', { code: 'TRIALCODE1', uid: 'uidtrial1', max: 1, used: 0, exp: Date.now() + 7 * DAY, svc: 7, trial: true, at: Date.now() });
+const t1 = await (await reg('TRIALCODE1', '7.7.7.1', { rid: '1'.repeat(32) })).json();
+await hub().seen(t1.sub, Date.now());
+ok('试用码开通，算用了一次试用', t1.sub && (await st.get('u:uidtrial1')).trialUsed === 1, JSON.stringify(t1));
+const cfg1 = { rkey: t1.rkey };
+let un = await (await api('POST', '/api/unregister', { sub: t1.sub, rkey: cfg1.rkey })).json();
+ok('卸载：网址交还，告诉路由器可以用同一个码重装', un.ok && un.again && un.again.exp === t1.exp && !(await dev(t1.sub)), JSON.stringify(un));
+ok('卸载后：安装码退回（放回账号），试用次数不变', (await inv('TRIALCODE1')).used === 0 && (await st.get('u:uidtrial1')).inst.includes('TRIALCODE1') && (await st.get('u:uidtrial1')).trialUsed === 1);
+const T0 = Date.now(); Date.now = () => T0 + 3 * DAY;
+const t2 = await (await reg('TRIALCODE1', '7.7.7.2', { rid: '2'.repeat(32) })).json();
+ok('3 天后用同一个码重装：成功，到期时间还是原来的（不会变长）', t2.sub && t2.exp === t1.exp, JSON.stringify({ e1: t1.exp, e2: t2.exp }));
+ok('重装不再算一次试用', (await st.get('u:uidtrial1')).trialUsed === 1 && (await st.get('u:uidtrial1')).devs.length === 1);
+ok('重装后安装码又算用过了', (await inv('TRIALCODE1')).used === 1 && !(await inv('TRIALCODE1')).keep);
+await hub().seen(t2.sub, Date.now());
+const cfg2 = { rkey: t2.rkey };
+await api('POST', '/api/unregister', { sub: t2.sub, rkey: cfg2.rkey });
+Date.now = () => T0 + 8 * DAY;
+b = await reg('TRIALCODE1', '7.7.7.3', { rid: '3'.repeat(32) }); B = await b.json();
+ok('到期以后再重装：不行，说清楚是到期了', b.status === 403 && /到期/.test(B.error) && !B.sub, JSON.stringify(B));
+Date.now = () => T0;
+
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

@@ -105,7 +105,8 @@ CF.fail = '/dns_records';
 const nT = CF.tunnels.size;
 r = await reg(inv2, '6.6.6.6');
 ok('加子域名失败：开通失败', r.status === 502);
-ok('失败后已建的隧道被删掉、名额和邀请码次数都退回', CF.tunnels.size === nT && (await hub().count()) === 2 && (await hub().ctx.storage.get('i:' + inv2)).used === 1 && (await hub().devices()).every((d) => d.state === 'ok'));
+// C 卸载时邀请码已经退回（6.0 第 90 项：卸载后能用同一个码重装），所以这里是 0
+ok('失败后已建的隧道被删掉、名额和邀请码次数都退回', CF.tunnels.size === nT && (await hub().count()) === 2 && (await hub().ctx.storage.get('i:' + inv2)).used === 0 && (await hub().devices()).every((d) => d.state === 'ok'));
 CF.fail = null;
 
 // 限流：同一个 IP 一小时最多 5 次

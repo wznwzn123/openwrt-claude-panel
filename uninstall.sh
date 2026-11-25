@@ -9,7 +9,9 @@ if [ -s /etc/claude-mcp/hub.conf ]; then
 	RKEY=$(sed -n 's/^RKEY=//p' /etc/claude-mcp/cloud.conf 2>/dev/null)
 	r=$(curl -s -m 30 -X POST -H 'Content-Type: application/json' -d "{\"sub\":\"$SUB\",\"rkey\":\"$RKEY\"}" "$HUB/api/unregister" 2>/dev/null)
 	case "$r" in
-		*'"ok":true'*) echo "已注销托管网址 $SUB"; rm -f /etc/claude-mcp/hub.conf /etc/claude-mcp/tunnel_token /etc/claude-mcp/cloud.conf /etc/claude-mcp/hostname ;;
+		*'"ok":true'*) echo "已注销托管网址 $SUB"
+			case "$r" in *'"again":{'*) echo "以后想重装：用原来的安装码就行，到期时间不变" ;; esac
+			rm -f /etc/claude-mcp/hub.conf /etc/claude-mcp/tunnel_token /etc/claude-mcp/cloud.conf /etc/claude-mcp/hostname ;;
 		*) echo "托管网址注销失败（${r:-连不上托管服务}），不用管它：90 天没上线会自动回收" ;;
 	esac
 fi

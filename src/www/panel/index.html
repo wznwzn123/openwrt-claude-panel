@@ -801,6 +801,12 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .pzadd.pladd{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}.pzadd.pladd>.btn{grid-column:1/-1}
 .ownrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:.5px solid var(--line)}.ownrow:last-child{border-bottom:0}.ownrow>span:first-child{min-width:0;flex:1}.ownrow b{display:block;font-size:15px;overflow-wrap:anywhere}.ownrow .muted{display:block;font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}.ownbtn{display:flex;gap:6px;flex:none}
 #ownBox:empty{display:none}
+.mlist.augo{box-shadow:var(--shadow)}.augo .mact>.muted{margin-left:auto;flex:none}
+.qnodes{max-height:46vh;overflow:auto;overscroll-behavior:contain;box-shadow:none;background:var(--fill)}
+.qnrow{display:flex;align-items:center;border-bottom:.5px solid var(--line)}.qnrow:last-child{border-bottom:0}
+.qnstar{flex:none;width:40px;height:44px;border:0;background:none;color:var(--muted);font-size:17px;cursor:pointer}.qnstar.on{color:var(--warn)}
+.qnn{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 10px 0;border:0;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}.qnn b{min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qnn .pill{flex:none}
+.qnrow.cur .qnn b{color:var(--brand)}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -972,7 +978,7 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 		<p class="muted" style="margin-bottom:6px">点节点即可切换。自动选择的策略组只能测速，不能手动切换。</p>
 		<label class="notice" style="display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--text)"><span>切换后断开旧连接<br><span class="muted">让 App 立刻走新节点</span></span><span class="sw"><input type="checkbox" id="pxClose" checked><i></i></span></label>
 	</div>
-	<!-- 节点挂了自动换：只在「自动任务」页设置（同一个设置只留一个入口），这里只显示状态 -->
+	<!-- 节点挂了自动换：只在「特色功能」页设置（同一个设置只留一个入口），这里只显示状态 -->
 	<button class="card aswsum" id="aswSum" type="button"><span><b>节点挂了自动换</b><span class="muted" id="aswSumT">读取中…</span></span><span class="muted">去设置 ›</span></button>
 	<div class="sectitle"><b>策略组</b><span class="pill" id="pxCount">—</span></div>
 	<div id="pxList" class="grid"></div>
@@ -1179,12 +1185,13 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 
 <!-- 断线记录 -->
 <section class="page" id="p-wd"><div id="wdBody"></div></section>
-<!-- 自动任务 -->
+<!-- 特色功能（6.0 第 70 项：以前叫「自动任务」） -->
 <section class="page" id="p-auto">
 	<div class="hero">
-		<div class="herohead"><h1>自动任务</h1><span class="pill" id="auPill">—</span></div>
-		<p class="muted" style="margin-bottom:0">路由器自己会做的事：出了问题自动修、选网络线路、定时提醒和备份。每一项都能单独开关，关掉以后会怎样写在下面。</p>
+		<div class="herohead"><h1>特色功能</h1><span class="pill" id="auPill">—</span></div>
+		<div id="auNew"></div>
 	</div>
+	<div id="auGo"></div>
 	<div id="auCard"><section class="card"><div class="muted" style="font-size:13px">读取中…</div></section></div>
 </section>
 
@@ -1722,7 +1729,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -1733,7 +1740,7 @@ const NAV = [
 		{ p: 'traf', i: '▥', t: '流量统计' },
 		{ p: 'speed', i: '⏱', t: '网速测试' },
 		{ p: 'wd', i: '♥', t: '断线记录' },
-		{ p: 'auto', i: '⟳', t: '自动任务' },
+		{ p: 'auto', i: '⟳', t: '特色功能', kw: '自动任务 智能管家 自动修复 自动' },
 		{ p: 'slog', i: '≣', t: '系统日志' },
 		{ p: 'proc', i: '▦', t: '进程' },
 		{ t: '实时监控', i: '∿', kids: [['admin/status/realtime/bandwidth', '实时流量'], ['admin/status/realtime/load', '系统负载'], ['admin/status/realtime/connections', '连接统计'], ['admin/status/realtime/wireless', '无线信号']] },
@@ -1909,7 +1916,7 @@ function renderNav() {
 		for (const g of NAV) for (const it of g.items) {
 			const one = (x, path) => {
 				const t = Array.isArray(x) ? x[1] : x.t, p = Array.isArray(x) ? 'k:' + x[0] : x.p;
-				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : '')).toLowerCase().includes(q))
+				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : x.kw || '')).toLowerCase().includes(q)) // kw：别名（比如以前叫「自动任务」）
 					hits.push(`<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`);
 			};
 			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示
@@ -2872,10 +2879,67 @@ $('dock').onclick = async (e) => {
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });
 	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><button class="btn sm" data-v="close">关闭</button></div>${pxOC() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
-		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>`,
-		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); });
+		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>
+		<div data-qn></div>`,
+		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); quickNodes(m.querySelector('[data-qn]'), close); });
 };
 
+
+/* ---------- 6.0 第 79 项：快捷操作里换节点 ----------
+ * 快捷操作最下面：一个策略组的节点和延迟，点一下就换（跟节点页一样：没测过的先测，测不通先问）。
+ * 能自己选看哪个策略组，点星号把常用节点放到最前面（每台手机各自记）。手动换过的 10 分钟内节点自动切换不会把它换走。
+ * 家人没有「切换节点」权限就不显示；不是 OpenClash / Nikki 的说清楚怎么换。 */
+const QN = { g: null, groups: [] };
+const qnFav = () => { try { return JSON.parse(store.get('rp_qfav') || '{}') || {}; } catch (e) { return {}; } };
+async function quickNodes(box, close) {
+	if (!box || !canPerm('node')) return;
+	const a = pxAct();
+	if (!a) return;
+	if (a.kind === 'other') { box.innerHTML = `<div class="sectitle"><b>换节点</b></div><button class="btn" data-qo style="width:100%">换 ${esc(a.name)} 的节点</button>`; box.querySelector('[data-qo]').onclick = () => { close(); pxNodeSheet(); }; return; }
+	if (a.kind !== 'clash') { box.innerHTML = `<div class="sectitle"><b>换节点</b></div><p class="muted" style="font-size:13px;margin:0">${esc(a.name)} 的节点要在它自己的页面里换。</p>`; return; }
+	box.innerHTML = '<div class="sectitle"><b>换节点</b></div><div class="muted" style="font-size:13px">读取中…</div>';
+	try { QN.groups = ((await P('groups')).groups || []).filter((g) => g.type === 'Selector' && g.nodes.some((n) => !n.group)); } catch (e) { box.innerHTML = `<div class="sectitle"><b>换节点</b></div><p class="muted" style="font-size:13px;margin:0">${esc(e.message)}</p>`; return; }
+	if (!QN.groups.length) { box.innerHTML = '<div class="sectitle"><b>换节点</b></div><p class="muted" style="font-size:13px;margin:0">没有能手动切换的策略组（OpenClash 没在运行？）</p>'; return; }
+	const want = store.get('rp_qgrp') || (ASW.st && ASW.st.group);
+	QN.g = QN.groups.find((g) => g.name === want) || QN.groups[0];
+	qnRender(box);
+}
+function qnRender(box) {
+	const g = QN.g, fav = qnFav()[g.name] || [];
+	const nodes = g.nodes.filter((n) => !n.group);
+	const list = [...fav.map((f) => nodes.find((n) => n.name === f)).filter(Boolean), ...nodes.filter((n) => !fav.includes(n.name))];
+	box.innerHTML = `<div class="sectitle"><b>换节点</b><span class="dvsec">${QN.groups.length > 1 ? `<button class="btn sm" data-qg>${esc(g.name)}</button>` : `<span class="pill">${esc(g.name)}</span>`}<button class="btn sm blue" data-qt>测延迟</button></span></div>
+		<div class="mlist qnodes">${list.map((n) => `<div class="qnrow${n.name === g.now ? ' cur' : ''}"><button class="qnstar${fav.includes(n.name) ? ' on' : ''}" data-qs="${esc(n.name)}" aria-label="${fav.includes(n.name) ? '取消常用' : '设为常用'}">${fav.includes(n.name) ? '★' : '☆'}</button><button class="qnn" data-qn="${esc(n.name)}"><b>${esc(n.name)}</b>${n.name === g.now ? '<span class="pill blue">正在用</span>' : delayPill(n.delay)}</button></div>`).join('')}</div>`;
+	box.onclick = async (e) => {
+		const gb = e.target.closest('[data-qg]'), tb = e.target.closest('[data-qt]'), sb = e.target.closest('[data-qs]'), nb = e.target.closest('[data-qn]');
+		if (gb) {
+			const v = await moreSheet({ t: '看哪个策略组' }, [{ items: QN.groups.map((x) => ({ v: x.name, ic: '<circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/>', t: x.name, sub: '正在用：' + (x.now || '—') })) }]);
+			if (v && v !== 'close') { QN.g = QN.groups.find((x) => x.name === v) || QN.g; store.set('rp_qgrp', QN.g.name); qnRender(box); }
+			return;
+		}
+		if (tb) return busy(tb, async () => { await tool('test_delay', { name: g.name, timeout: 4000 }, 90000); QN.groups = ((await P('groups')).groups || []).filter((x) => x.type === 'Selector' && x.nodes.some((n) => !n.group)); QN.g = QN.groups.find((x) => x.name === g.name) || QN.groups[0]; qnRender(box); }, '测速中');
+		if (sb) {
+			const f = qnFav(), l = f[g.name] || [], n = sb.dataset.qs;
+			f[g.name] = l.includes(n) ? l.filter((x) => x !== n) : [...l, n];
+			store.set('rp_qfav', JSON.stringify(f)); qnRender(box);
+			return;
+		}
+		if (nb) {
+			const n = g.nodes.find((x) => x.name === nb.dataset.qn);
+			if (!n || n.name === g.now) return;
+			await busy(nb, async () => {
+				if (!(n.delay > 0)) {
+					const c = await P('node_check', { node: n.name }, 20000).catch(() => ({ ok: false }));
+					if (c.ok) n.delay = c.delay;
+					else if (!(await confirmBox('这个节点测不通', `「${n.name}」现在连不上。\n切过去以后海外网站会打不开，在家里 Wi-Fi 下打开的这个面板也可能打不开。`, '仍然切换', true))) return;
+				}
+				await tool('switch_proxy', { group: g.name, node: n.name });
+				g.now = n.name; NC.at = {}; qnRender(box);
+				toast(`已切换到 ${n.name}` + (ASW.st && ASW.st.enabled ? '，10 分钟内不会被自动换走' : ''));
+			}, false);
+		}
+	};
+}
 /* =====================================================================
    节点
    ===================================================================== */
@@ -2895,13 +2959,13 @@ async function loadAsw(b) {
 	catch (e) { if (b) throw e; ASW.st = { err: e.message }; }
 	renderAsw();
 }
-// 节点页上的一行状态（点了去「自动任务」页设置）
+// 节点页上的一行状态（点了去「特色功能」页设置）
 function renderAswSum() {
 	const t = $('aswSumT'), s = ASW.st; if (!t || !s) return;
 	t.textContent = s.err ? s.err : s.enabled ? '已开启 · 看「' + s.group + '」' + (s.hist && s.hist[0] ? ' · 最近一次 ' + s.hist[0].from + ' → ' + s.hist[0].to : '') : '已关闭';
 }
 $('aswSum').addEventListener('click', () => go('auto'));
-// 「自动任务」页里「节点挂了自动换」下面的详细设置：看哪个策略组、机场订阅、最近切换、模拟一次（开关就是上面那一行）
+// 「特色功能」页里「节点挂了自动换」下面的详细设置：看哪个策略组、机场订阅、最近切换、模拟一次（开关就是上面那一行）
 function renderAsw() {
 	renderAswSum();
 	const el = $('aswCard'), s = ASW.st;
@@ -2936,7 +3000,7 @@ function renderAsw() {
 		${dry}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn" data-aswdry>模拟一次：要是当前节点挂了，会换到哪</button></div>`;
 }
-// 详细设置在「自动任务」页里每次重画，事件挂在外面那层（auCard）上
+// 详细设置在「特色功能」页里每次重画，事件挂在外面那层（auCard）上
 $('auCard').addEventListener('change', (e) => {
 	const g = e.target.closest('#aswCard [data-aswg]');
 	if (g) busy(null, async () => { ASW.dry = null; await loadAsw({ set: true, group: g.value }); toast('改为看「' + g.value + '」'); });
@@ -4568,7 +4632,34 @@ function autoItems(d) {
 	add('状态提醒', 'diskfull', on.diskfull !== false, '存储快满提醒', '闪存剩不到 2 MB，或者挂载的硬盘用了 95% 以上，就推送。一天最多推一次');
 	return L;
 }
+// 6.0 第 70 项：「自动任务」改名「特色功能」，Wi-Fi、访客 Wi-Fi、上网计划这些特色功能的入口也放在这一页（按用途分组），没权限的不显示
+const AU_GO = [
+	{ g: '上网管理', items: [
+		{ v: 'wifi', t: 'Wi-Fi 设置', ic: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', ok: () => canPage('wifi') },
+		{ v: 'guest', t: '访客 Wi-Fi', ic: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.6-5.5 7-5.5s6 2 7 5.5"/>', ok: () => canPage('wifi') },
+		{ v: 'dev', t: '上网计划、暂停上网', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', ok: () => canPerm('parent') },
+		{ v: 'black', t: '不走代理', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', ok: () => canPerm('parent') && pxShow({ p: 'black', px: 'oc' }) }] },
+	{ g: '家里网络', items: [
+		{ v: 'traf', t: '流量统计', ic: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', ok: () => true },
+		{ v: 'speed', t: '网速测试', ic: '<path d="M12 14l4-4M3.5 17a9 9 0 1 1 17 0"/>', ok: () => canPerm('speed') },
+		{ v: 'wd', t: '断线记录', ic: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', ok: () => true }] },
+	{ g: '备份', items: [{ v: 'cbk', t: '云端备份', ic: '<path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5"/>', ok: () => canPage('cbk') }] },
+];
+function renderAuGo() {
+	const box = $('auGo'); if (!box) return;
+	box.innerHTML = AU_GO.map((g) => ({ ...g, items: g.items.filter((x) => x.ok()) })).filter((g) => g.items.length).map((g) => `<div class="sectitle"><b>${esc(g.g)}</b></div><div class="mlist augo">${g.items.map((x) => `<button class="mact" data-augo="${x.v}"><i>${mIc(x.ic)}</i><span><b>${esc(x.t)}</b></span><span class="muted">›</span></button>`).join('')}</div>`).join('');
+	// 老用户第一次进来：说一声改名了（只说一次）
+	const nb = $('auNew');
+	if (nb) { let seen = true; try { seen = !!localStorage.getItem('rp_f70') || !localStorage.getItem('rp_ov'); localStorage.setItem('rp_f70', '1'); } catch (e) {} if (!seen) nb.innerHTML = '<div class="notice" style="margin-top:10px">「自动任务」改名叫「特色功能」了，Wi-Fi、访客 Wi-Fi、上网计划也放在这一页。</div>'; }
+}
+$('auGo').addEventListener('click', (e) => {
+	const b = e.target.closest('[data-augo]'); if (!b) return;
+	const v = b.dataset.augo;
+	if (v === 'guest') return go('wifi').then(() => setTimeout(() => { const g = $('wfGuest'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 500));
+	go(v);
+});
 function renderAuto() {
+	renderAuGo();
 	const el = $('auCard'), pl = $('auPill'); if (!el) return;
 	const d = AU.d;
 	if (!d) { pl.textContent = '—'; pl.className = 'pill'; return; }
@@ -4656,7 +4747,7 @@ function renderWd(err) {
 		</section>`;
 	}
 	html += `<div class="sectitle"><b>每日体检</b><span class="pill" id="dyPill">—</span></div><section class="card" id="dyCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
-	html += `<section class="card list" style="margin-top:12px"><button class="file" data-goauto><div><b>自动任务</b><span class="muted">出了问题自动修、定时提醒和备份，每一项都能开关</span></div><span class="muted">›</span></button></section>`;
+	html += `<section class="card list" style="margin-top:12px"><button class="file" data-goauto><div><b>特色功能</b></div><span class="muted">›</span></button></section>`;
 	html += noCloud() ? `<div class="sectitle"><b>手机通知</b><span class="pill">未启用</span></div><section class="card"><div class="muted" style="font-size:13px">手机推送、微信推送、云端备份和断电/断网判断需要 Cloudflare 云端（完整版）。装好云端后在路由器上重新运行安装脚本选完整版即可。</div></section>`
 		: `<div class="sectitle"><b>手机通知</b><span class="pill" id="pushPill">—</span></div><section class="card" id="pushCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
 	html += `<div class="sectitle"><b>最近 7 天</b></div><div class="wdsum">${sum.map(([k, n]) => `<span class="pill ${n ? (k === '自动修复' ? 'blue' : 'red') : ''}">${k} ${n} 次</span>`).join('')}</div>`;

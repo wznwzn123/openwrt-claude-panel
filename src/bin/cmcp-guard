@@ -5,7 +5,7 @@
 //   温度、负载（health）：温度到 90°C 以上、或者负载连续 5 分钟很高就推送，同一类 6 小时最多一次
 //   存储快满（diskfull）：闪存剩不到 2 MB、或者挂载的硬盘用了 95% 以上就推送，一天最多一次
 //   自动拉黑（autoban）：同一个外部地址 10 分钟内后台或 SSH 密码错 5 次，封 1 小时（再犯翻倍，最长 1 天），推送；
-//     家里局域网、路由器自己、私有地址（含 Tailscale 的 100.64.0.0/10）一律不封；封禁到期自动解开，面板「自动任务」里能手动解封
+//     家里局域网、路由器自己、私有地址（含 Tailscale 的 100.64.0.0/10）一律不封；封禁到期自动解开，面板「特色功能」里能手动解封
 // 开关：off.名字（关掉）；ipchange 默认关，打开 = on.ipchange
 // 用法：cmcp-guard            每分钟检查一次
 //       cmcp-guard unban 地址  手动解封    cmcp-guard list  列出封着的地址（JSON）
@@ -141,7 +141,7 @@ for (let ip in keys(S.fail)) {
 	changed = true;
 	if (tool && ban_setup(tool)) {
 		ban_apply(tool, ip, secs);
-		notify('warn', 'ban', '已自动封禁 ' + mask(ip), sprintf('这个外网地址 10 分钟内后台或 SSH 密码错了 5 次，封 %s（到期自动解开；面板「自动任务」里能马上解封）。家里的设备不会被封。', secs >= 86400 ? '1 天' : (secs / 3600) + ' 小时'), 'ban-' + ip);
+		notify('warn', 'ban', '已自动封禁 ' + mask(ip), sprintf('这个外网地址 10 分钟内后台或 SSH 密码错了 5 次，封 %s（到期自动解开；面板「特色功能」里能马上解封）。家里的设备不会被封。', secs >= 86400 ? '1 天' : (secs / 3600) + ' 小时'), 'ban-' + ip);
 	} else {
 		B.ips[ip].noblock = true;
 		// 6.0 第 57 项：记下来，下次兼容情况上报时一起报（用户关了上报就只记在本机）

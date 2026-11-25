@@ -448,7 +448,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '自动任务', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -459,7 +459,7 @@ const NAV = [
 		{ p: 'traf', i: '▥', t: '流量统计' },
 		{ p: 'speed', i: '⏱', t: '网速测试' },
 		{ p: 'wd', i: '♥', t: '断线记录' },
-		{ p: 'auto', i: '⟳', t: '自动任务' },
+		{ p: 'auto', i: '⟳', t: '特色功能', kw: '自动任务 智能管家 自动修复 自动' },
 		{ p: 'slog', i: '≣', t: '系统日志' },
 		{ p: 'proc', i: '▦', t: '进程' },
 		{ t: '实时监控', i: '∿', kids: [['admin/status/realtime/bandwidth', '实时流量'], ['admin/status/realtime/load', '系统负载'], ['admin/status/realtime/connections', '连接统计'], ['admin/status/realtime/wireless', '无线信号']] },
@@ -635,7 +635,7 @@ function renderNav() {
 		for (const g of NAV) for (const it of g.items) {
 			const one = (x, path) => {
 				const t = Array.isArray(x) ? x[1] : x.t, p = Array.isArray(x) ? 'k:' + x[0] : x.p;
-				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : '')).toLowerCase().includes(q))
+				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : x.kw || '')).toLowerCase().includes(q)) // kw：别名（比如以前叫「自动任务」）
 					hits.push(`<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`);
 			};
 			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示

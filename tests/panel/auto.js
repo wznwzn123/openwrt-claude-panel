@@ -62,10 +62,19 @@ const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPil
 	let s = await st(page);
 	ok('自动任务页：所有自动任务都有开关（15 项），默认只有「公网 IP 变了提醒」关着', s.rows.map((r) => r.split(':')[0]).join() === ALL.join() && s.rows.every((r) => r.endsWith(r.startsWith('ipchange') ? ':false' : ':true')) && s.pill === '开了 14 / 15 项', JSON.stringify(s));
 	ok('分成五组，每组一张卡片：出问题时自动修、网络、提醒和备份、安全、状态提醒', await page.evaluate(() => [...document.querySelectorAll('#auCard .sectitle b')].map((x) => x.textContent).join()) === '出问题时自动修,网络,提醒和备份,安全,状态提醒' && await page.evaluate(() => document.querySelectorAll('#auCard section.card').length) === 5);
-	ok('侧边栏「自动任务」用的是画好的图标（跟其他项一样）', await page.evaluate(() => !!document.querySelector('#sidenav [data-p="auto"] .nic svg')));
+	ok('侧边栏「特色功能」（以前叫自动任务）用的是画好的图标（跟其他项一样）', await page.evaluate(() => !!document.querySelector('#sidenav [data-p="auto"] .nic svg')));
 	ok('每一项都写清楚关掉以后会怎样', /关掉后只记录/.test(s.txt) && /关掉后保持现在的走法/.test(s.txt) && /「现在体检」照样能用/.test(s.txt) && /「立即备份」照样能用/.test(s.txt) && /在「设备」页能看到/.test(s.txt));
 	await page.locator('#auCard').scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(OUT, 'auto.png') });
-	ok('自动任务是侧边栏里单独的一页，标题「自动任务」', /自动任务/.test(await txt(page, '#pageTitle')) && await page.isVisible('#p-auto #auCard'));
+	ok('自动任务是侧边栏里单独的一页，标题「特色功能」', /特色功能/.test(await txt(page, '#pageTitle')) && await page.isVisible('#p-auto #auCard'));
+	// 6.0 第 70 项：改名「特色功能」，特色功能的入口也在这一页；搜旧名也找得到；老用户第一次进来说一声
+	ok('[第 70 项] 特色功能页：按用途分组列出 Wi-Fi、访客 Wi-Fi、上网计划、不走代理、流量统计、云端备份这些入口', /上网管理/.test(await txt(page, '#auGo')) && /Wi-Fi 设置/.test(await txt(page, '#auGo')) && /访客 Wi-Fi/.test(await txt(page, '#auGo')) && /上网计划/.test(await txt(page, '#auGo')) && /流量统计/.test(await txt(page, '#auGo')), await txt(page, '#auGo'));
+	ok('[第 70 项] 老用户第一次进来：说一声改名了', /「自动任务」改名叫「特色功能」了/.test(await txt(page, '#auNew')));
+	await page.fill('#sideQ', '自动任务').catch(() => {}); await page.waitForTimeout(300);
+	ok('[第 70 项] 搜旧名「自动任务」也找得到', (await page.locator('#sidenav [data-p="auto"]').count()) >= 1 && /特色功能/.test(await page.locator('#sidenav').textContent()));
+	await page.fill('#sideQ', '').catch(() => {});
+	await page.locator('#auGo [data-augo="traf"]').click(); await page.waitForTimeout(800);
+	ok('[第 70 项] 点入口去那一页', /流量统计/.test(await txt(page, '#pageTitle')));
+	await page.goBack().catch(() => {}); await page.waitForTimeout(800);
 	await flip(page, 'memguard'); s = await st(page);
 	ok('关掉「内存不够时自动重启 OpenClash」：路由器那边关了，显示「开了 13 / 15 项」', AUTO.memguard === false && s.pill === '开了 13 / 15 项', JSON.stringify(s));
 	ok('关掉后有提示', await page.evaluate(() => /已关闭：内存不够时自动重启 OpenClash/.test(document.body.textContent)));
@@ -97,9 +106,9 @@ const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPil
 	ok('[拉黑] 防火墙没法封的路由器：开关下面写明只推送提醒', /没法自动封禁/.test(await txt(page, '#auCard [data-au="autoban"]')));
 	AUTO.ban = { tool: 'nft', ips: {} };
 	await goWdReal(page);
-	ok('断线记录页：有一行「自动任务」入口，点了跳过去', await page.isVisible('#wdBody [data-goauto]'));
+	ok('断线记录页：有一行「特色功能」入口，点了跳过去', await page.isVisible('#wdBody [data-goauto]'));
 	await page.click('#wdBody [data-goauto]'); await page.waitForTimeout(900);
-	ok('点入口：打开自动任务页', /自动任务/.test(await txt(page, '#pageTitle')) && await page.isVisible('#auCard [data-au="daily"]'));
+	ok('点入口：打开特色功能页', /特色功能/.test(await txt(page, '#pageTitle')) && await page.isVisible('#auCard [data-au="daily"]'));
 	await ctx.close();
 	// 打开了，但有的插件还没生效：开关是开着的，下面提示
 	AUTO.tb = { on: false, want: true, auto: false, at: 0, status: '还没生效' };

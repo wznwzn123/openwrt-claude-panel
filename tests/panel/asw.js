@@ -1,5 +1,5 @@
 // 节点挂了自动换（6.0 第 62 项：同一个设置只留一个入口）：
-// 节点页只显示状态，点了去「自动任务」页；开关、换策略组、最近切换、模拟一次都在「自动任务」页这一项下面
+// 节点页只显示状态，点了去「特色功能」页；开关、换策略组、最近切换、模拟一次都在「特色功能」页这一项下面
 const { chromium } = require('playwright');
 const http = require('http');
 const fs = require('fs');
@@ -42,9 +42,9 @@ const server = http.createServer((req, res) => {
 		ok(T + '节点页没有开关（同一个设置只留一个入口）', (await page.locator('#pg-proxy input[type=checkbox][data-aswon], [data-aswon]').count()) === 0);
 		await page.screenshot({ path: path.join(__dirname, 'shots', `asw-00-sum${dark ? '-dark' : ''}.png`) });
 		await page.click('#aswSum'); await page.waitForTimeout(1800);
-		ok(T + '点状态去「自动任务」页', /自动任务/.test(await page.textContent('#pageTitle')));
+		ok(T + '点状态去「特色功能」页', /特色功能/.test(await page.textContent('#pageTitle')));
 		const txt = async () => page.textContent('#aswCard');
-		ok(T + '「自动任务」页：开关在「节点挂了自动换」那一行，开着', await page.locator('[data-au="autosw"] input').isChecked());
+		ok(T + '「特色功能」页：开关在「节点挂了自动换」那一行，开着', await page.locator('[data-au="autosw"] input').isChecked());
 		ok(T + '说明里写清楚手动换节点后 10 分钟内不换走', /10 分钟内不会把它换走/.test(await page.textContent('[data-au="autosw"]')));
 		ok(T + '显示最近切换（换了地区的有标注）', /香港04 专线 3x → 🇭🇰香港02/.test(await txt()) && /换了地区/.test(await txt()));
 		ok(T + '多个手动策略组时可以选看哪个', (await page.locator('[data-aswg] option').count()) === 2);
@@ -63,7 +63,7 @@ const server = http.createServer((req, res) => {
 		ASW.dryRes = { err: '家里宽带现在上不了网，先不动节点' };
 		await page.click('[data-aswdry]'); await page.waitForTimeout(1500);
 		ok('模拟：家里断网时给出原因', /家里宽带现在上不了网/.test(await txt()));
-		// 关闭 / 开启（在「自动任务」页那一行）
+		// 关闭 / 开启（在「特色功能」页那一行）
 		await page.click('[data-au="autosw"] .sw'); await page.waitForTimeout(900);
 		ok('关闭自动切换：详细设置收起来', ASW.enabled === false && (await page.locator('#aswCard').innerHTML()) === '' && /已关闭：节点挂了自动换/.test(await page.textContent('#toast')));
 		await page.click('[data-au="autosw"] .sw'); await page.waitForTimeout(1200);

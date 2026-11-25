@@ -718,7 +718,34 @@ function autoItems(d) {
 	add('状态提醒', 'diskfull', on.diskfull !== false, '存储快满提醒', '闪存剩不到 2 MB，或者挂载的硬盘用了 95% 以上，就推送。一天最多推一次');
 	return L;
 }
+// 6.0 第 70 项：「自动任务」改名「特色功能」，Wi-Fi、访客 Wi-Fi、上网计划这些特色功能的入口也放在这一页（按用途分组），没权限的不显示
+const AU_GO = [
+	{ g: '上网管理', items: [
+		{ v: 'wifi', t: 'Wi-Fi 设置', ic: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', ok: () => canPage('wifi') },
+		{ v: 'guest', t: '访客 Wi-Fi', ic: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.6-5.5 7-5.5s6 2 7 5.5"/>', ok: () => canPage('wifi') },
+		{ v: 'dev', t: '上网计划、暂停上网', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', ok: () => canPerm('parent') },
+		{ v: 'black', t: '不走代理', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', ok: () => canPerm('parent') && pxShow({ p: 'black', px: 'oc' }) }] },
+	{ g: '家里网络', items: [
+		{ v: 'traf', t: '流量统计', ic: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', ok: () => true },
+		{ v: 'speed', t: '网速测试', ic: '<path d="M12 14l4-4M3.5 17a9 9 0 1 1 17 0"/>', ok: () => canPerm('speed') },
+		{ v: 'wd', t: '断线记录', ic: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', ok: () => true }] },
+	{ g: '备份', items: [{ v: 'cbk', t: '云端备份', ic: '<path d="M7 18a5 5 0 0 1-.6-9.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/><path d="M12 11v6M9.5 13.5 12 11l2.5 2.5"/>', ok: () => canPage('cbk') }] },
+];
+function renderAuGo() {
+	const box = $('auGo'); if (!box) return;
+	box.innerHTML = AU_GO.map((g) => ({ ...g, items: g.items.filter((x) => x.ok()) })).filter((g) => g.items.length).map((g) => `<div class="sectitle"><b>${esc(g.g)}</b></div><div class="mlist augo">${g.items.map((x) => `<button class="mact" data-augo="${x.v}"><i>${mIc(x.ic)}</i><span><b>${esc(x.t)}</b></span><span class="muted">›</span></button>`).join('')}</div>`).join('');
+	// 老用户第一次进来：说一声改名了（只说一次）
+	const nb = $('auNew');
+	if (nb) { let seen = true; try { seen = !!localStorage.getItem('rp_f70') || !localStorage.getItem('rp_ov'); localStorage.setItem('rp_f70', '1'); } catch (e) {} if (!seen) nb.innerHTML = '<div class="notice" style="margin-top:10px">「自动任务」改名叫「特色功能」了，Wi-Fi、访客 Wi-Fi、上网计划也放在这一页。</div>'; }
+}
+$('auGo').addEventListener('click', (e) => {
+	const b = e.target.closest('[data-augo]'); if (!b) return;
+	const v = b.dataset.augo;
+	if (v === 'guest') return go('wifi').then(() => setTimeout(() => { const g = $('wfGuest'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 500));
+	go(v);
+});
 function renderAuto() {
+	renderAuGo();
 	const el = $('auCard'), pl = $('auPill'); if (!el) return;
 	const d = AU.d;
 	if (!d) { pl.textContent = '—'; pl.className = 'pill'; return; }
@@ -806,7 +833,7 @@ function renderWd(err) {
 		</section>`;
 	}
 	html += `<div class="sectitle"><b>每日体检</b><span class="pill" id="dyPill">—</span></div><section class="card" id="dyCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
-	html += `<section class="card list" style="margin-top:12px"><button class="file" data-goauto><div><b>自动任务</b><span class="muted">出了问题自动修、定时提醒和备份，每一项都能开关</span></div><span class="muted">›</span></button></section>`;
+	html += `<section class="card list" style="margin-top:12px"><button class="file" data-goauto><div><b>特色功能</b></div><span class="muted">›</span></button></section>`;
 	html += noCloud() ? `<div class="sectitle"><b>手机通知</b><span class="pill">未启用</span></div><section class="card"><div class="muted" style="font-size:13px">手机推送、微信推送、云端备份和断电/断网判断需要 Cloudflare 云端（完整版）。装好云端后在路由器上重新运行安装脚本选完整版即可。</div></section>`
 		: `<div class="sectitle"><b>手机通知</b><span class="pill" id="pushPill">—</span></div><section class="card" id="pushCard"><div class="muted" style="font-size:13px">读取中…</div></section>`;
 	html += `<div class="sectitle"><b>最近 7 天</b></div><div class="wdsum">${sum.map(([k, n]) => `<span class="pill ${n ? (k === '自动修复' ? 'blue' : 'red') : ''}">${k} ${n} 次</span>`).join('')}</div>`;

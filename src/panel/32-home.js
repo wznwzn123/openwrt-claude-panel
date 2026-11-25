@@ -513,7 +513,64 @@ $('dock').onclick = async (e) => {
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });
 	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><button class="btn sm" data-v="close">关闭</button></div>${pxOC() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
-		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>`,
-		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); });
+		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>
+		<div data-qn></div>`,
+		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); quickNodes(m.querySelector('[data-qn]'), close); });
 };
 
+
+/* ---------- 6.0 第 79 项：快捷操作里换节点 ----------
+ * 快捷操作最下面：一个策略组的节点和延迟，点一下就换（跟节点页一样：没测过的先测，测不通先问）。
+ * 能自己选看哪个策略组，点星号把常用节点放到最前面（每台手机各自记）。手动换过的 10 分钟内节点自动切换不会把它换走。
+ * 家人没有「切换节点」权限就不显示；不是 OpenClash / Nikki 的说清楚怎么换。 */
+const QN = { g: null, groups: [] };
+const qnFav = () => { try { return JSON.parse(store.get('rp_qfav') || '{}') || {}; } catch (e) { return {}; } };
+async function quickNodes(box, close) {
+	if (!box || !canPerm('node')) return;
+	const a = pxAct();
+	if (!a) return;
+	if (a.kind === 'other') { box.innerHTML = `<div class="sectitle"><b>换节点</b></div><button class="btn" data-qo style="width:100%">换 ${esc(a.name)} 的节点</button>`; box.querySelector('[data-qo]').onclick = () => { close(); pxNodeSheet(); }; return; }
+	if (a.kind !== 'clash') { box.innerHTML = `<div class="sectitle"><b>换节点</b></div><p class="muted" style="font-size:13px;margin:0">${esc(a.name)} 的节点要在它自己的页面里换。</p>`; return; }
+	box.innerHTML = '<div class="sectitle"><b>换节点</b></div><div class="muted" style="font-size:13px">读取中…</div>';
+	try { QN.groups = ((await P('groups')).groups || []).filter((g) => g.type === 'Selector' && g.nodes.some((n) => !n.group)); } catch (e) { box.innerHTML = `<div class="sectitle"><b>换节点</b></div><p class="muted" style="font-size:13px;margin:0">${esc(e.message)}</p>`; return; }
+	if (!QN.groups.length) { box.innerHTML = '<div class="sectitle"><b>换节点</b></div><p class="muted" style="font-size:13px;margin:0">没有能手动切换的策略组（OpenClash 没在运行？）</p>'; return; }
+	const want = store.get('rp_qgrp') || (ASW.st && ASW.st.group);
+	QN.g = QN.groups.find((g) => g.name === want) || QN.groups[0];
+	qnRender(box);
+}
+function qnRender(box) {
+	const g = QN.g, fav = qnFav()[g.name] || [];
+	const nodes = g.nodes.filter((n) => !n.group);
+	const list = [...fav.map((f) => nodes.find((n) => n.name === f)).filter(Boolean), ...nodes.filter((n) => !fav.includes(n.name))];
+	box.innerHTML = `<div class="sectitle"><b>换节点</b><span class="dvsec">${QN.groups.length > 1 ? `<button class="btn sm" data-qg>${esc(g.name)}</button>` : `<span class="pill">${esc(g.name)}</span>`}<button class="btn sm blue" data-qt>测延迟</button></span></div>
+		<div class="mlist qnodes">${list.map((n) => `<div class="qnrow${n.name === g.now ? ' cur' : ''}"><button class="qnstar${fav.includes(n.name) ? ' on' : ''}" data-qs="${esc(n.name)}" aria-label="${fav.includes(n.name) ? '取消常用' : '设为常用'}">${fav.includes(n.name) ? '★' : '☆'}</button><button class="qnn" data-qn="${esc(n.name)}"><b>${esc(n.name)}</b>${n.name === g.now ? '<span class="pill blue">正在用</span>' : delayPill(n.delay)}</button></div>`).join('')}</div>`;
+	box.onclick = async (e) => {
+		const gb = e.target.closest('[data-qg]'), tb = e.target.closest('[data-qt]'), sb = e.target.closest('[data-qs]'), nb = e.target.closest('[data-qn]');
+		if (gb) {
+			const v = await moreSheet({ t: '看哪个策略组' }, [{ items: QN.groups.map((x) => ({ v: x.name, ic: '<circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/>', t: x.name, sub: '正在用：' + (x.now || '—') })) }]);
+			if (v && v !== 'close') { QN.g = QN.groups.find((x) => x.name === v) || QN.g; store.set('rp_qgrp', QN.g.name); qnRender(box); }
+			return;
+		}
+		if (tb) return busy(tb, async () => { await tool('test_delay', { name: g.name, timeout: 4000 }, 90000); QN.groups = ((await P('groups')).groups || []).filter((x) => x.type === 'Selector' && x.nodes.some((n) => !n.group)); QN.g = QN.groups.find((x) => x.name === g.name) || QN.groups[0]; qnRender(box); }, '测速中');
+		if (sb) {
+			const f = qnFav(), l = f[g.name] || [], n = sb.dataset.qs;
+			f[g.name] = l.includes(n) ? l.filter((x) => x !== n) : [...l, n];
+			store.set('rp_qfav', JSON.stringify(f)); qnRender(box);
+			return;
+		}
+		if (nb) {
+			const n = g.nodes.find((x) => x.name === nb.dataset.qn);
+			if (!n || n.name === g.now) return;
+			await busy(nb, async () => {
+				if (!(n.delay > 0)) {
+					const c = await P('node_check', { node: n.name }, 20000).catch(() => ({ ok: false }));
+					if (c.ok) n.delay = c.delay;
+					else if (!(await confirmBox('这个节点测不通', `「${n.name}」现在连不上。\n切过去以后海外网站会打不开，在家里 Wi-Fi 下打开的这个面板也可能打不开。`, '仍然切换', true))) return;
+				}
+				await tool('switch_proxy', { group: g.name, node: n.name });
+				g.now = n.name; NC.at = {}; qnRender(box);
+				toast(`已切换到 ${n.name}` + (ASW.st && ASW.st.enabled ? '，10 分钟内不会被自动换走' : ''));
+			}, false);
+		}
+	};
+}

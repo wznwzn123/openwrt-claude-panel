@@ -169,7 +169,7 @@
 		<p class="muted" style="margin-bottom:6px">点节点即可切换。自动选择的策略组只能测速，不能手动切换。</p>
 		<label class="notice" style="display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--text)"><span>切换后断开旧连接<br><span class="muted">让 App 立刻走新节点</span></span><span class="sw"><input type="checkbox" id="pxClose" checked><i></i></span></label>
 	</div>
-	<!-- 节点挂了自动换：只在「自动任务」页设置（同一个设置只留一个入口），这里只显示状态 -->
+	<!-- 节点挂了自动换：只在「特色功能」页设置（同一个设置只留一个入口），这里只显示状态 -->
 	<button class="card aswsum" id="aswSum" type="button"><span><b>节点挂了自动换</b><span class="muted" id="aswSumT">读取中…</span></span><span class="muted">去设置 ›</span></button>
 	<div class="sectitle"><b>策略组</b><span class="pill" id="pxCount">—</span></div>
 	<div id="pxList" class="grid"></div>
@@ -376,12 +376,13 @@
 
 <!-- 断线记录 -->
 <section class="page" id="p-wd"><div id="wdBody"></div></section>
-<!-- 自动任务 -->
+<!-- 特色功能（6.0 第 70 项：以前叫「自动任务」） -->
 <section class="page" id="p-auto">
 	<div class="hero">
-		<div class="herohead"><h1>自动任务</h1><span class="pill" id="auPill">—</span></div>
-		<p class="muted" style="margin-bottom:0">路由器自己会做的事：出了问题自动修、选网络线路、定时提醒和备份。每一项都能单独开关，关掉以后会怎样写在下面。</p>
+		<div class="herohead"><h1>特色功能</h1><span class="pill" id="auPill">—</span></div>
+		<div id="auNew"></div>
 	</div>
+	<div id="auGo"></div>
 	<div id="auCard"><section class="card"><div class="muted" style="font-size:13px">读取中…</div></section></div>
 </section>
 

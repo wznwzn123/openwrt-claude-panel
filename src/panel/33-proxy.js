@@ -17,13 +17,13 @@ async function loadAsw(b) {
 	catch (e) { if (b) throw e; ASW.st = { err: e.message }; }
 	renderAsw();
 }
-// 节点页上的一行状态（点了去「自动任务」页设置）
+// 节点页上的一行状态（点了去「特色功能」页设置）
 function renderAswSum() {
 	const t = $('aswSumT'), s = ASW.st; if (!t || !s) return;
 	t.textContent = s.err ? s.err : s.enabled ? '已开启 · 看「' + s.group + '」' + (s.hist && s.hist[0] ? ' · 最近一次 ' + s.hist[0].from + ' → ' + s.hist[0].to : '') : '已关闭';
 }
 $('aswSum').addEventListener('click', () => go('auto'));
-// 「自动任务」页里「节点挂了自动换」下面的详细设置：看哪个策略组、机场订阅、最近切换、模拟一次（开关就是上面那一行）
+// 「特色功能」页里「节点挂了自动换」下面的详细设置：看哪个策略组、机场订阅、最近切换、模拟一次（开关就是上面那一行）
 function renderAsw() {
 	renderAswSum();
 	const el = $('aswCard'), s = ASW.st;
@@ -58,7 +58,7 @@ function renderAsw() {
 		${dry}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn" data-aswdry>模拟一次：要是当前节点挂了，会换到哪</button></div>`;
 }
-// 详细设置在「自动任务」页里每次重画，事件挂在外面那层（auCard）上
+// 详细设置在「特色功能」页里每次重画，事件挂在外面那层（auCard）上
 $('auCard').addEventListener('change', (e) => {
 	const g = e.target.closest('#aswCard [data-aswg]');
 	if (g) busy(null, async () => { ASW.dry = null; await loadAsw({ set: true, group: g.value }); toast('改为看「' + g.value + '」'); });

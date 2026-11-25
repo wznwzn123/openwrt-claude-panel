@@ -53,9 +53,9 @@ $('subList').addEventListener('click', async (e) => {
 	if (t.closest('[data-more]')) {
 		const f = (st.files || []).find((x) => x.sub === s.name);
 		act = await moreSheet({ t: s.name || '（未命名）', sub: f ? (f.active ? '正在使用' : '配置文件 ' + f.name) : '还没有下载过' }, [
-			{ items: [{ v: 'flow', ic: '<path d="M5 20v-6M10 20V9M15 20v-9M20 20V5"/>', t: '查流量', sub: '剩余流量和到期时间（机场提供才有）' },
-				{ v: 'ed', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '编辑', sub: '订阅地址、名字、转换设置' }] },
-			{ items: [f && !f.active && { v: 'use', ic: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', t: '使用这个配置', sub: '切换后 OpenClash 重启，断网 10–30 秒' }] }
+			{ items: [{ v: 'flow', ic: '<path d="M5 20v-6M10 20V9M15 20v-9M20 20V5"/>', t: '查流量' },
+				{ v: 'ed', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '编辑' }] },
+			{ items: [f && !f.active && { v: 'use', ic: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', t: '使用这个配置' }] }
 		]);
 	}
 	if (act === 'flow') return busy(null, async () => {

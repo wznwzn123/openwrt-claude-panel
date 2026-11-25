@@ -153,7 +153,7 @@ function devIconSheet(d) {
 	const cur = d.img ? '' : d.icon || '', auto = devKind({ ...d, icon: null }), hasImg = !!d.img;
 	modal(`<div class="sheethead"><h3>换图标</h3><button class="btn sm" data-v="close">关闭</button></div>
 		<p class="muted" style="margin:0 0 12px;font-size:13px">${esc(d.name || d.ip)}</p>
-		<div class="mgrp"><div class="mlist"><button class="mact" data-photo><i>${mIc('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5L6 19"/>')}</i><span><b>${hasImg ? '换一张照片' : '用相册里的照片'}</b><small>用设备的照片，一眼认出是哪台</small></span></button>${hasImg ? `<button class="mact danger" data-k="${esc(d.icon || '')}"><i>${mIc('<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>')}</i><span><b>不用照片</b><small>改回${d.icon ? '「' + DV_KIND[d.icon][0] + '」' : '自动识别的图标'}</small></span></button>` : ''}</div></div>
+		<div class="mgrp"><div class="mlist"><button class="mact" data-photo><i>${mIc('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5L6 19"/>')}</i><span><b>${hasImg ? '换一张照片' : '用相册里的照片'}</b></span></button>${hasImg ? `<button class="mact danger" data-k="${esc(d.icon || '')}"><i>${mIc('<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>')}</i><span><b>不用照片</b></span></button>` : ''}</div></div>
 		<div class="mgrp"><div class="mgt">内置图标</div><div class="dvgrid">${Object.keys(DV_KIND).map((k) => `<button class="dvpick${cur === k ? ' on' : ''}" data-k="${k}" aria-pressed="${cur === k}"><span class="dvic" style="--c:${DV_KIND[k][1]}">${dvSvg(k)}</span><span>${DV_KIND[k][0]}</span></button>`).join('')}</div>
 		<button class="btn${cur || hasImg ? '' : ' on'}" data-k="" style="width:100%;margin-top:12px">自动识别（现在认成「${DV_KIND[auto][0]}」）</button></div>`,
 	(m, close) => m.querySelector('.modalbox').addEventListener('click', async (e) => {
@@ -171,12 +171,12 @@ function devIconSheet(d) {
 function devMore(d) {
 	const pz = d.mac ? PZ.devs[d.mac] : null, bl = isBlack(d), ed = devEdit(d), par = canPerm('parent'), k = devKind(d);
 	moreSheet({ t: d.name || '未命名设备', sub: d.ip + ' · ' + (d.online ? '在线' : '离线'), ic: dvTile(d, k) }, [
-		{ items: [{ v: 'conns', ic: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>', t: '看连接', sub: '它正在访问哪些网站、走的哪条线路' }] },
+		{ items: [{ v: 'conns', ic: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>', t: '看连接' }] },
 		{ t: '名字和图标', items: [ed && { v: 'ren', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '改名字', sub: d.renamed && d.orig ? '原名：' + d.orig : '' },
-			ed && { v: 'icon', ic: dvSvg(k), t: '换图标', sub: d.img ? '现在用的是照片' : '现在是「' + DV_KIND[k][0] + '」' + (d.icon ? '' : '（自动识别）') + '，也能用照片' }] },
-		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网', sub: pz && pz.on ? '现在暂停中' : '暂停一会儿，或每天定时断网' },
-			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理', sub: '现在只用大陆网络' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理', sub: '只用大陆网络，海外网站打不开' })] },
-		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', sub: '设备再连上会重新出现', danger: true }] }
+			ed && { v: 'icon', ic: dvSvg(k), t: '换图标' }] },
+		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网' },
+			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理' })] },
+		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', danger: true }] }
 	]).then((v) => {
 		if (v === 'conns') { $('cnFilter').value = d.ip; go('conn'); }
 		else if (v === 'ren') devRename(d);

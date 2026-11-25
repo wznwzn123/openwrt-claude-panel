@@ -812,3 +812,47 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .qe{box-shadow:none;background:var(--fill)}.qerow{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:.5px solid var(--line)}.qerow:last-child{border-bottom:0}.qerow>b{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qerow>.btn{flex:none;width:34px;padding-left:0;padding-right:0;text-align:center}.qerow>.btn.blue{width:auto;padding-left:12px;padding-right:12px}
 .qeic{flex:none}.qeic i{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--qc);color:#fff}.qeic i svg{width:18px;height:18px}
 .qch{font-size:18px;color:#fff}
+/* ===== 6.0 整体视觉：方案 B「石墨」（用户 11/26 选的）=====
+   冷灰底、白卡片 + 1px 细边框和很淡的长阴影；列表行不再是一格一格的灰盒子，改成细分隔线；
+   分类是分段开关，选中是黑（深色模式是白）；小按钮是浅灰底 + 主色字；主色从系统蓝换成更沉的蓝。
+   默认不用彩色壁纸（玻璃效果默认关），设置里打开玻璃效果后还是原来的壁纸和玻璃。 */
+:root:not(.glass){--bg:#eceef2;--card:#fff;--card2:#f4f5f8;--text:#11151c;--muted:#6b7280;--line:rgba(17,21,28,.08);--fill:rgba(17,21,28,.06);--fill2:rgba(17,21,28,.1);--brand:#2f5bea;--soft:rgba(47,91,234,.1);--glass:rgba(236,238,242,.86);--shadow:0 0 0 1px var(--line),0 1px 2px rgba(17,21,28,.04),0 12px 32px -12px rgba(17,21,28,.12)}
+:root.dark:not(.glass){--bg:#0b0c0f;--card:#15171c;--card2:#1c1f26;--text:#eef0f4;--muted:#8b93a1;--line:rgba(255,255,255,.07);--fill:rgba(255,255,255,.07);--fill2:rgba(255,255,255,.11);--brand:#5b82ff;--soft:rgba(91,130,255,.16);--glass:rgba(11,12,15,.86);--shadow:0 0 0 1px var(--line),inset 0 1px 0 rgba(255,255,255,.04),0 16px 40px -16px rgba(0,0,0,.8)}
+:root:not(.glass) .card,:root:not(.glass) .hero{box-shadow:var(--shadow)}
+.card{border-radius:18px}.hero{border-radius:22px}
+/* 列表：卡片里一行一行，用细线分开 */
+.card.list .file{background:transparent;border-radius:0;margin:0;padding:13px 2px}
+.card.list .file+.file,.card.list .file+.stgrp,.card.list .stgrp+.file{border-top:1px solid var(--line)}
+.card.list>div>.file:first-child,.card.list>.file:first-child{border-top:0}
+#stList .strow{padding-left:2px}
+/* 分类：分段开关 */
+.chips{background:var(--fill);border-radius:11px;padding:2px;gap:2px}
+.chip{background:transparent;border-radius:9px;padding:6px 10px}
+.chip.on{background:var(--text);color:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+:root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
+/* 按钮 */
+.btn.sm{background:var(--fill);color:var(--brand);font-weight:700}
+.btn.primary,.btn.blue{background:var(--text);color:var(--card)}
+:root.dark .btn.primary,:root.dark .btn.blue{background:#eef0f4;color:#0b0c0f}
+.sectitle b{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.sectitle .pill{background:transparent;color:var(--muted);font-size:15px;font-weight:500;padding:2px 0}
+/* 代理开关那一行：不再整块绿色，开着时名字前一个绿点 */
+.pxrow,.pxrow.on,.pxrow.off{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.pxrow.on b{color:var(--text)}
+.pxrow.on b::before,.pxrow.off b::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
+.pxrow.off b::before{background:var(--danger);box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 20%,transparent)}
+.tag.ok{background:transparent;padding-left:0}
+/* 顶栏（用户 11/26：优化）：贴着屏幕顶，不再浮成一块；底色跟页面一样，往下滑才出现细线；
+   图标按钮不要灰圆底，状态只留一个点和字 */
+:root:not(.glass) .top{margin:0;top:0;border-radius:0;padding:max(10px,var(--sat,env(safe-area-inset-top))) 16px 10px;background:var(--glass);box-shadow:none;border-bottom:1px solid transparent}
+:root:not(.glass) .top.scrolled{border-bottom-color:var(--line);box-shadow:none}
+:root:not(.glass) .topfade{display:none}
+.top .title{font-size:18px;letter-spacing:-.02em}
+.top .sub{font-size:12px}
+.bell,.topcap{background:transparent;box-shadow:none}
+.bell:active,.topcap .btn:active{background:var(--fill)}
+.topcap .pill{padding:0 6px 0 10px;font-weight:600;color:var(--muted)}
+.topcap .btn::before{display:none}
+.menubtn{background:transparent}
+/* 底栏 */
+:root:not(.glass) .dock{background:var(--glass);box-shadow:var(--shadow);border-radius:20px}

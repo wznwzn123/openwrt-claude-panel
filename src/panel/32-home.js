@@ -9,6 +9,7 @@ function pxSet(px) {
 	const k = JSON.stringify(px), old = PXS;
 	PXS = px; store.set('rp_px', k);
 	if (!old || old.active !== px.active || JSON.stringify((old.list || []).map((x) => x.id)) !== JSON.stringify((px.list || []).map((x) => x.id))) { try { renderNav(); } catch (e) {} }
+	dockDraw();
 }
 function renderSub(o) {
 	if (o.px) pxSet(o.px);
@@ -531,10 +532,21 @@ async function diagSheet(type) {
 	try { const r = await P('diag', { type, addr }, 60000); toastHide(); textBox((isDns ? 'DNS 诊断：' : '连接诊断：') + addr, r.text); } catch (e) { handleErr(e); }
 }
 
+/* 底部快捷栏
+   6.0（用户 11/26）：没装代理插件的路由器，代理那三个（重启插件、更新订阅、模式）换成通用的：设备、实时监控、网络诊断 */
+function dockDraw() {
+	const px = !!pxAct();
+	for (const b of $$('#dock [data-d]')) {
+		const d = b.dataset.d, gen = d === 'dev' || d === 'mon' || d === 'ndiag';
+		b.classList.toggle('hidden', d === 'ip' || d === 'quick' ? false : px ? gen : !gen);
+	}
+}
+dockDraw();
 /* 底部快捷栏 */
 $('dock').onclick = async (e) => {
 	const b = e.target.closest('[data-d]'); if (!b) return;
 	const d = b.dataset.d;
+	if (d === 'dev' || d === 'mon' || d === 'ndiag') return go(d);
 	const a = pxAct();
 	if (d === 'restart') {
 		if (!a) return toast('这台路由器没装代理插件');

@@ -9,10 +9,10 @@
 <link rel="manifest" href="./manifest.json"><link rel="icon" type="image/png" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png">
 <script>try{var d=localStorage.getItem("rp_dark");if(d==="1"||(d===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}
 try{var N=navigator,dm=N.deviceMemory,hc=N.hardwareConcurrency;if(/Android/i.test(N.userAgent)&&((dm&&dm<=2)||(hc&&hc<=4)))document.documentElement.classList.add("lowfx")}catch(e){}
-try{var R=document.documentElement,g=localStorage.getItem("rp_glass"),w=localStorage.getItem("rp_wall"),b=localStorage.getItem("rp_wblur"),m=localStorage.getItem("rp_wdim");if(g==="1"||(g===null&&!matchMedia("(prefers-reduced-transparency: reduce)").matches))R.classList.add("glass");if(w)R.setAttribute("data-wall",w);R.style.setProperty("--wblur",(b===null?20:+b)+"px");R.style.setProperty("--wdim",(m===null?0:+m)/100)}catch(e){}
+try{var R=document.documentElement,g=localStorage.getItem("rp_glass"),w=localStorage.getItem("rp_wall"),b=localStorage.getItem("rp_wblur"),m=localStorage.getItem("rp_wdim");if(g==="1")R.classList.add("glass");if(w)R.setAttribute("data-wall",w);R.style.setProperty("--wblur",(b===null?20:+b)+"px");R.style.setProperty("--wdim",(m===null?0:+m)/100)}catch(e){}
 // 手机最上面状态栏的颜色 = 页面最上面那一条的颜色（背景图顶部的平均色，再按「变暗」和深色模式压暗）；安卓 App 会读这个颜色，还会把状态栏变透明（RP_EDGE）
 var RP_EDGE=1,WALL_TOP={mist:"#e3e2f8",night:"#191e4a",aurora:"#2d5586",ocean:"#baddfe",sunset:"#ffcca8",mint:"#e2fbca",sakura:"#f4dff2",graphite:"#393d46"};
-function rpTop(){var R=document.documentElement,dk=R.classList.contains("dark");if(!R.classList.contains("glass"))return dk?"#000000":"#f2f2f7";var w=R.getAttribute("data-wall")||(dk?"night":"mist"),c=w==="photo"?(localStorage.getItem("rp_walltop")||"#888888"):(WALL_TOP[w]||"#888888"),m=localStorage.getItem("rp_wdim"),k=1-Math.min(.95,(m===null?0:+m)/100+(dk?.28:0)),n=parseInt(c.slice(1),16),h=function(v){v=Math.round(v*k);return(v<16?"0":"")+v.toString(16)};return"#"+h(n>>16&255)+h(n>>8&255)+h(n&255)}
+function rpTop(){var R=document.documentElement,dk=R.classList.contains("dark");if(!R.classList.contains("glass"))return dk?"#0b0c0f":"#eceef2";var w=R.getAttribute("data-wall")||(dk?"night":"mist"),c=w==="photo"?(localStorage.getItem("rp_walltop")||"#888888"):(WALL_TOP[w]||"#888888"),m=localStorage.getItem("rp_wdim"),k=1-Math.min(.95,(m===null?0:+m)/100+(dk?.28:0)),n=parseInt(c.slice(1),16),h=function(v){v=Math.round(v*k);return(v<16?"0":"")+v.toString(16)};return"#"+h(n>>16&255)+h(n>>8&255)+h(n&255)}
 function rpBar(){try{document.getElementById("tcm").setAttribute("content",rpTop())}catch(e){}}
 try{rpBar()}catch(e){}</script>
 <style>
@@ -830,6 +830,50 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .qe{box-shadow:none;background:var(--fill)}.qerow{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:.5px solid var(--line)}.qerow:last-child{border-bottom:0}.qerow>b{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qerow>.btn{flex:none;width:34px;padding-left:0;padding-right:0;text-align:center}.qerow>.btn.blue{width:auto;padding-left:12px;padding-right:12px}
 .qeic{flex:none}.qeic i{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--qc);color:#fff}.qeic i svg{width:18px;height:18px}
 .qch{font-size:18px;color:#fff}
+/* ===== 6.0 整体视觉：方案 B「石墨」（用户 11/26 选的）=====
+   冷灰底、白卡片 + 1px 细边框和很淡的长阴影；列表行不再是一格一格的灰盒子，改成细分隔线；
+   分类是分段开关，选中是黑（深色模式是白）；小按钮是浅灰底 + 主色字；主色从系统蓝换成更沉的蓝。
+   默认不用彩色壁纸（玻璃效果默认关），设置里打开玻璃效果后还是原来的壁纸和玻璃。 */
+:root:not(.glass){--bg:#eceef2;--card:#fff;--card2:#f4f5f8;--text:#11151c;--muted:#6b7280;--line:rgba(17,21,28,.08);--fill:rgba(17,21,28,.06);--fill2:rgba(17,21,28,.1);--brand:#2f5bea;--soft:rgba(47,91,234,.1);--glass:rgba(236,238,242,.86);--shadow:0 0 0 1px var(--line),0 1px 2px rgba(17,21,28,.04),0 12px 32px -12px rgba(17,21,28,.12)}
+:root.dark:not(.glass){--bg:#0b0c0f;--card:#15171c;--card2:#1c1f26;--text:#eef0f4;--muted:#8b93a1;--line:rgba(255,255,255,.07);--fill:rgba(255,255,255,.07);--fill2:rgba(255,255,255,.11);--brand:#5b82ff;--soft:rgba(91,130,255,.16);--glass:rgba(11,12,15,.86);--shadow:0 0 0 1px var(--line),inset 0 1px 0 rgba(255,255,255,.04),0 16px 40px -16px rgba(0,0,0,.8)}
+:root:not(.glass) .card,:root:not(.glass) .hero{box-shadow:var(--shadow)}
+.card{border-radius:18px}.hero{border-radius:22px}
+/* 列表：卡片里一行一行，用细线分开 */
+.card.list .file{background:transparent;border-radius:0;margin:0;padding:13px 2px}
+.card.list .file+.file,.card.list .file+.stgrp,.card.list .stgrp+.file{border-top:1px solid var(--line)}
+.card.list>div>.file:first-child,.card.list>.file:first-child{border-top:0}
+#stList .strow{padding-left:2px}
+/* 分类：分段开关 */
+.chips{background:var(--fill);border-radius:11px;padding:2px;gap:2px}
+.chip{background:transparent;border-radius:9px;padding:6px 10px}
+.chip.on{background:var(--text);color:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+:root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
+/* 按钮 */
+.btn.sm{background:var(--fill);color:var(--brand);font-weight:700}
+.btn.primary,.btn.blue{background:var(--text);color:var(--card)}
+:root.dark .btn.primary,:root.dark .btn.blue{background:#eef0f4;color:#0b0c0f}
+.sectitle b{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.sectitle .pill{background:transparent;color:var(--muted);font-size:15px;font-weight:500;padding:2px 0}
+/* 代理开关那一行：不再整块绿色，开着时名字前一个绿点 */
+.pxrow,.pxrow.on,.pxrow.off{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+.pxrow.on b{color:var(--text)}
+.pxrow.on b::before,.pxrow.off b::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
+.pxrow.off b::before{background:var(--danger);box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 20%,transparent)}
+.tag.ok{background:transparent;padding-left:0}
+/* 顶栏（用户 11/26：优化）：贴着屏幕顶，不再浮成一块；底色跟页面一样，往下滑才出现细线；
+   图标按钮不要灰圆底，状态只留一个点和字 */
+:root:not(.glass) .top{margin:0;top:0;border-radius:0;padding:max(10px,var(--sat,env(safe-area-inset-top))) 16px 10px;background:var(--glass);box-shadow:none;border-bottom:1px solid transparent}
+:root:not(.glass) .top.scrolled{border-bottom-color:var(--line);box-shadow:none}
+:root:not(.glass) .topfade{display:none}
+.top .title{font-size:18px;letter-spacing:-.02em}
+.top .sub{font-size:12px}
+.bell,.topcap{background:transparent;box-shadow:none}
+.bell:active,.topcap .btn:active{background:var(--fill)}
+.topcap .pill{padding:0 6px 0 10px;font-weight:600;color:var(--muted)}
+.topcap .btn::before{display:none}
+.menubtn{background:transparent}
+/* 底栏 */
+:root:not(.glass) .dock{background:var(--glass);box-shadow:var(--shadow);border-radius:20px}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1355,7 +1399,10 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 	<button data-d="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg><span>重启插件</span></button>
 	<button data-d="subs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z"/><path d="M12 10.5v6M9.5 14l2.5 2.5 2.5-2.5"/></svg><span>更新订阅</span></button>
 	<button data-d="mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span id="dockMode">模式</span></button>
+	<button data-d="dev" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 17.5h2"/></svg><span>设备</span></button>
+	<button data-d="mon" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h3.5l2.5-6 4 11 3-8 2 3H21"/></svg><span>实时监控</span></button>
 	<button data-d="ip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z"/></svg><span>IP 检查</span></button>
+	<button data-d="ndiag" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/><path d="M8.5 11h5"/></svg><span>网络诊断</span></button>
 	<button data-d="quick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10.5 21 19 10.5h-6z"/></svg><span>快捷</span></button>
 </nav>
 </div>
@@ -2472,6 +2519,7 @@ function pxSet(px) {
 	const k = JSON.stringify(px), old = PXS;
 	PXS = px; store.set('rp_px', k);
 	if (!old || old.active !== px.active || JSON.stringify((old.list || []).map((x) => x.id)) !== JSON.stringify((px.list || []).map((x) => x.id))) { try { renderNav(); } catch (e) {} }
+	dockDraw();
 }
 function renderSub(o) {
 	if (o.px) pxSet(o.px);
@@ -2994,10 +3042,21 @@ async function diagSheet(type) {
 	try { const r = await P('diag', { type, addr }, 60000); toastHide(); textBox((isDns ? 'DNS 诊断：' : '连接诊断：') + addr, r.text); } catch (e) { handleErr(e); }
 }
 
+/* 底部快捷栏
+   6.0（用户 11/26）：没装代理插件的路由器，代理那三个（重启插件、更新订阅、模式）换成通用的：设备、实时监控、网络诊断 */
+function dockDraw() {
+	const px = !!pxAct();
+	for (const b of $$('#dock [data-d]')) {
+		const d = b.dataset.d, gen = d === 'dev' || d === 'mon' || d === 'ndiag';
+		b.classList.toggle('hidden', d === 'ip' || d === 'quick' ? false : px ? gen : !gen);
+	}
+}
+dockDraw();
 /* 底部快捷栏 */
 $('dock').onclick = async (e) => {
 	const b = e.target.closest('[data-d]'); if (!b) return;
 	const d = b.dataset.d;
+	if (d === 'dev' || d === 'mon' || d === 'ndiag') return go(d);
 	const a = pxAct();
 	if (d === 'restart') {
 		if (!a) return toast('这台路由器没装代理插件');
@@ -4034,7 +4093,7 @@ function mnDraw() {
 	mnChart($('mnNet'), MN.rx, MN.tx, Math.max(125000, ...MN.rx, ...MN.tx) * 1.15, 'var(--brand)');
 	const L = r.load || [];
 	$$('#mnLoad b').forEach((b, i) => { b.textContent = L[i] == null ? '—' : L[i].toFixed(2); b.className = L[i] != null && L[i] > r.cpus ? 'ndwarn' : ''; });
-	$('mnCpu').textContent = (r.cpu != null ? 'CPU ' + r.cpu + '% · ' : '') + r.cpus + ' 核';
+	$('mnCpu').textContent = (r.cpu != null ? 'CPU ' + r.cpu + '%' : '') + (r.cpus ? (r.cpu != null ? ' · ' : '') + r.cpus + ' 核' : '');
 	mnChart($('mnLd'), MN.ld, null, Math.max(r.cpus, ...MN.ld) * 1.15, 'var(--warn)', r.cpus);
 	const full = r.conn != null && r.conn_max ? r.conn / r.conn_max : 0;
 	$('mnConn').textContent = r.conn == null ? '—' : mnNum(r.conn) + (r.conn_max ? ' / ' + mnNum(r.conn_max) : '');
@@ -5820,7 +5879,8 @@ function themeLabel() { $('themeState').textContent = document.documentElement.c
 /* ---------- 主题与背景：玻璃效果、背景（预设或相册里的图），只保存在这台手机上 ---------- */
 const WALLS = [['mist', '晨雾'], ['night', '星空'], ['aurora', '极光'], ['ocean', '海洋'], ['sunset', '日落'], ['mint', '薄荷'], ['sakura', '樱花'], ['graphite', '石墨']];
 const LOOK = {
-	glass() { const g = store.get('rp_glass'); return g === '1' || (g === null && !matchMedia('(prefers-reduced-transparency: reduce)').matches); },
+	// 6.0 起默认不开玻璃效果（用户 11/26 选了「石墨」纯色风格，彩色壁纸默认不用，设置里还能打开）
+	glass() { return store.get('rp_glass') === '1'; },
 	wall() { return store.get('rp_wall') || ''; },
 	num(k, d) { const v = store.get(k); return v === null || !isFinite(+v) ? d : +v; },
 };

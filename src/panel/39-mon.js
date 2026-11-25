@@ -24,7 +24,7 @@ function mnDraw() {
 	mnChart($('mnNet'), MN.rx, MN.tx, Math.max(125000, ...MN.rx, ...MN.tx) * 1.15, 'var(--brand)');
 	const L = r.load || [];
 	$$('#mnLoad b').forEach((b, i) => { b.textContent = L[i] == null ? '—' : L[i].toFixed(2); b.className = L[i] != null && L[i] > r.cpus ? 'ndwarn' : ''; });
-	$('mnCpu').textContent = (r.cpu != null ? 'CPU ' + r.cpu + '% · ' : '') + r.cpus + ' 核';
+	$('mnCpu').textContent = (r.cpu != null ? 'CPU ' + r.cpu + '%' : '') + (r.cpus ? (r.cpu != null ? ' · ' : '') + r.cpus + ' 核' : '');
 	mnChart($('mnLd'), MN.ld, null, Math.max(r.cpus, ...MN.ld) * 1.15, 'var(--warn)', r.cpus);
 	const full = r.conn != null && r.conn_max ? r.conn / r.conn_max : 0;
 	$('mnConn').textContent = r.conn == null ? '—' : mnNum(r.conn) + (r.conn_max ? ' / ' + mnNum(r.conn_max) : '');

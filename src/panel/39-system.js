@@ -1290,7 +1290,8 @@ function themeLabel() { $('themeState').textContent = document.documentElement.c
 /* ---------- 主题与背景：玻璃效果、背景（预设或相册里的图），只保存在这台手机上 ---------- */
 const WALLS = [['mist', '晨雾'], ['night', '星空'], ['aurora', '极光'], ['ocean', '海洋'], ['sunset', '日落'], ['mint', '薄荷'], ['sakura', '樱花'], ['graphite', '石墨']];
 const LOOK = {
-	glass() { const g = store.get('rp_glass'); return g === '1' || (g === null && !matchMedia('(prefers-reduced-transparency: reduce)').matches); },
+	// 6.0 起默认不开玻璃效果（用户 11/26 选了「石墨」纯色风格，彩色壁纸默认不用，设置里还能打开）
+	glass() { return store.get('rp_glass') === '1'; },
 	wall() { return store.get('rp_wall') || ''; },
 	num(k, d) { const v = store.get(k); return v === null || !isFinite(+v) ? d : +v; },
 };

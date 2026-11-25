@@ -1,0 +1,51 @@
+#!/bin/sh
+# 改网络设置的「90 秒确认」（6.0 第 14 项起：Wi-Fi；以后访客网络、上网设置、局域网设置、无线中继也用它）
+# 面板改之前把要动的配置文件备份到 $P/files，写好 $P/token（编号）、$P/what（改的是什么）、$P/reload（怎么重新加载），
+# 改完在后台跑「cmcp-netguard run 编号」：先重新加载让新设置生效，再等 90 秒——
+#   面板点了「保留」（$P 整个删掉）就什么都不做；没点就把备份放回去、重新加载，推送告诉你已经改回去了。
+# 「cmcp-netguard revert 编号」：马上改回去（面板上点「改回去」）。
+# 等待确认期间看门狗不去「修」网络（见 cmcp-watchdog 的 netchg）。
+P=${CMCP_NG:-/tmp/cmcp_netguard}
+C=${CMCP_UCI_DIR:-/etc/config}
+SB=${CMCP_SBIN:-/usr/sbin}
+WAIT=${CMCP_NG_WAIT:-90}
+
+mine() { [ -f "$P/token" ] && [ "$(cat "$P/token")" = "$1" ]; }
+
+reload() {
+	# 只认这几种重新加载命令（文件是面板写的，这里再挡一下）
+	[ -f "$P/reload" ] || return 0
+	while read -r r; do
+		case "$r" in
+			'wifi reload'|'/etc/init.d/network reload'|'/etc/init.d/firewall reload'|'/etc/init.d/dnsmasq reload')
+				if [ -n "$CMCP_NG_RUN" ]; then echo "$r" >> "$CMCP_NG_RUN"; else $r >/dev/null 2>&1; fi ;;
+		esac
+	done < "$P/reload"
+}
+
+back() {
+	what=$(cat "$P/what" 2>/dev/null)
+	for f in "$P"/files/*; do [ -f "$f" ] && cp -f "$f" "$C/$(basename "$f")"; done
+	reload
+	rm -rf "${P:?}"
+	[ "$1" = auto ] && "$SB/cmcp-notify" warn net "${what:-网络设置}已改回原来的" "改完 $WAIT 秒内没有点「保留」，已自动改回原来的设置。" net >/dev/null 2>&1
+	return 0
+}
+
+case "$1" in
+run)
+	mine "$2" || exit 0
+	sleep 2
+	reload
+	mine "$2" || exit 0
+	echo $(( $(date +%s) + WAIT )) > "$P/until"
+	touch "$P/token"
+	sleep "$WAIT"
+	mine "$2" && back auto
+	;;
+revert)
+	mine "$2" && back
+	;;
+*) echo "用法：cmcp-netguard run|revert 编号"; exit 1 ;;
+esac
+exit 0

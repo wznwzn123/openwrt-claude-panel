@@ -270,8 +270,12 @@ cloud_beat() {
 # 一键更新正在装（15 分钟内的更新锁）：装的时候会重启面板服务和隧道，看门狗这时不去「修」，免得两边一起重启
 updating() { local l=${WD_UPDLOCK:-/tmp/cmcp_update.lock}; [ -d "$l" ] && [ $(( $(date +%s) - $(stat -c %Y "$l" 2>/dev/null || echo 0) )) -lt 900 ]; }
 
+# 面板刚改了网络设置、正在等你确认（90 秒，最多 3 分钟）：这段时间不去「修」网络，免得跟改动打架（风险 9）
+netchg() { local f=${CMCP_NG:-/tmp/cmcp_netguard}/token; [ -f "$f" ] && [ -n "$(find "$f" -mmin -3 2>/dev/null)" ]; }
+
 check() {
 	mkdir /tmp/cmcp_wd.lock 2>/dev/null || return
+	if netchg; then rmdir /tmp/cmcp_wd.lock; return; fi
 	load
 	local t; t=$(now)
 

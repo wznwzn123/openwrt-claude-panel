@@ -761,3 +761,18 @@ section.page{display:none}section.page.on{display:block}
 
 /* 6.0 第 57、58 项：帮助改进、尝鲜 */
 .kv.cpk{align-items:center;gap:14px}.kv.cpk>div{flex:1;min-width:0}.kv.cpk b{display:block;font-size:15px}.kv.cpk .muted{display:block;font-size:12.5px;line-height:1.55;margin-top:3px}
+
+/* 6.0 第 14 项：Wi-Fi 设置 */
+#wfBody{display:grid;gap:12px;margin-top:12px}
+.wfc .wfhd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 10px;border-bottom:.5px solid var(--line)}
+.wfc .wfhd>div{min-width:0}.wfc .wfhd b{display:block;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.wfc .wfhd .muted{display:block;font-size:13px;margin-top:1px;overflow-wrap:anywhere;text-wrap:pretty}
+.wfc .wfhd:last-child{border-bottom:0;padding-bottom:2px}
+.wfc.off .fld{opacity:.5;transition:opacity .25s}
+.wfc .fld .val.muted{font-weight:500;color:var(--muted)}
+.wfpw{display:flex;gap:8px;align-items:center}.wfpw .input{flex:1}.wfpw .btn{flex:none}
+.wfst:empty{display:none}.wfst{margin-top:7px}
+.wfst .pill.good{background:var(--oksoft);color:var(--ok)}.wfst .pill.warn{background:var(--wsoft);color:var(--warn)}.wfst .pill.bad{background:var(--dsoft);color:var(--danger)}
+select.input.wfch{width:auto;min-width:96px;flex:none}
+.wfsame .kv{border:0;padding:0}
+.wfcd{display:flex;align-items:baseline;gap:8px;margin:6px 0 12px}.wfcd b{font-size:40px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}.wfcd span{color:var(--muted);font-size:14px}

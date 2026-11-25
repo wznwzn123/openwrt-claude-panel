@@ -807,6 +807,9 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .qnstar{flex:none;width:40px;height:44px;border:0;background:none;color:var(--muted);font-size:17px;cursor:pointer}.qnstar.on{color:var(--warn)}
 .qnn{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 10px 0;border:0;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}.qnn b{min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qnn .pill{flex:none}
 .qnrow.cur .qnn b{color:var(--brand)}
+.qe{box-shadow:none;background:var(--fill)}.qerow{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:.5px solid var(--line)}.qerow:last-child{border-bottom:0}.qerow>b{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qerow>.btn{flex:none;width:34px;padding-left:0;padding-right:0;text-align:center}.qerow>.btn.blue{width:auto;padding-left:12px;padding-right:12px}
+.qeic{flex:none}.qeic i{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--qc);color:#fff}.qeic i svg{width:18px;height:18px}
+.qch{font-size:18px;color:#fff}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -951,7 +954,7 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 		<div class="kv oconly"><span>内核内存</span><span id="oRss">—</span></div>
 		<div class="kv"><span>累计流量</span><span id="oTotal">—</span></div>
 	</section>
-	<div class="sectitle" id="qHead"><b>快捷操作</b></div>
+	<div class="sectitle" id="qHead"><b>快捷操作</b><button class="btn sm" id="qEdit">编辑</button></div>
 	<section class="card" id="qCard"><div class="qgrid" id="qGrid"></div></section>
 	<div class="sectitle"><b>网络检测</b><span class="actions" style="flex-wrap:nowrap"><span class="live off" id="ncLive"><i></i><span id="ncAgo">实时</span></span><button class="btn sm" id="ncBtn" aria-label="重新检测">↻</button></span></div>
 	<section class="card nc" id="ncIp"><div class="nch"><span>出口 IP</span><a class="ipfull" href="https://ipcheck.ing/" target="_blank" rel="noopener">完整检测 ↗</a></div><div class="ipl" id="ipList"></div></section>
@@ -1901,6 +1904,8 @@ let navOpen;
 try { navOpen = JSON.parse(store.get('rp_nav') || 'null'); } catch (e) {}
 if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 1, '网络': 1, '工具': 1 };
 const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"]};
+// 6.0 第 14 项：Wi-Fi 页的图标（侧边栏、快捷操作里用）
+NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
@@ -2538,7 +2543,7 @@ function renderOv(o, cached) {
 	$('oDash').classList.toggle('hidden', !isOC);
 	$$('#ocCard .oconly').forEach((x) => x.classList.toggle('hidden', !isOC));
 	$('pgHead').classList.toggle('hidden', kind !== 'other'); $('pgCard').classList.toggle('hidden', kind !== 'other');
-	$('qHead').classList.toggle('hidden', !isOC); $('qCard').classList.toggle('hidden', !isOC);
+	$('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); renderQuick($('qGrid'));
 	if (a) $('ocName').textContent = a.name;
 	const pl = (PXS && PXS.list) || [];
 	$('pxPick').classList.toggle('hidden', pl.length < 2);
@@ -2701,7 +2706,42 @@ const QUICK = [
 	{ k: 'update_chnroute', t: '大陆 IP', n: '更新大陆 IP 白名单', col: '#ff9f0a', i: '<path d="M5 21V4M5 4.5h11l-2.5 3.5L16 11.5H5"/>', confirm: '在后台更新大陆 IP 段。如果有新版本，OpenClash 会自动重启加载，全家断网 10–30 秒。' },
 	{ k: 'one_key_update', t: '一键更新', n: '一键更新插件和内核', col: '#34c759', i: '<circle cx="12" cy="12" r="8.5"/><path d="M12 16.5v-9M8.5 11 12 7.5l3.5 3.5"/>', confirm: '同时更新插件和内核，完成后自动重启，期间会断网。' },
 ];
+/* 6.0 第 80 项：自定义快捷操作——自己选显示哪些、排先后，还能加「打开某一页」（侧边栏任何一项，包括原版页面）。
+ * 每台手机各自记（rp_quick），没设过就是默认分组；没权限的页面、用不上的 OpenClash 操作不显示；一键恢复默认 */
+function quickCfg() { try { const c = JSON.parse(store.get('rp_quick') || 'null'); return c && Array.isArray(c.items) ? c : null; } catch (e) { return null; } }
+// 侧边栏里的一页：名字、图标
+function navFind(k) {
+	if (k === 'main') return { t: NAV_TOP.t, k, it: NAV_TOP };
+	for (const g of NAV) for (const it of g.items) {
+		const one = (x) => (Array.isArray(x) ? ('k:' + x[0] === k ? { t: x[1], k, path: x[0], it: x } : null) : x.p === k ? { t: x.t, k, it: x } : null);
+		const r = one(it); if (r) return r;
+		for (const c of it.kids || []) { const r2 = one(c); if (r2) return { ...r2, it: Array.isArray(c) ? c : { ...c, px: c.px || it.px } }; }
+	}
+	return null;
+}
+const navOk = (f) => !!f && canPage(f.k) && (Array.isArray(f.it) ? canPerm('net') : pxShow(f.it));
+// 现在要显示的（自定义过才有；null = 用默认分组）
+function quickItems() {
+	const c = quickCfg(); if (!c) return null;
+	return c.items.map((k) => {
+		if (k.startsWith('p:')) { const f = navFind(k.slice(2)); return navOk(f) ? { page: f.k, t: f.t, f } : null; }
+		const q = QUICK.find((x) => x.k === k && !x.g); return q && pxOC() ? q : null;
+	}).filter(Boolean);
+}
+function quickTile(x) {
+	if (!x.page) return `<button class="qbtn" data-q="${x.k}" aria-label="${esc(x.n || x.t)}"><i style="--qc:${x.col}">${QI(x.i)}</i><span>${esc(x.t)}</span></button>`;
+	const ic = NAV_IC[x.f.path || x.page];
+	// 没有专门图标的（多是插件的原版页面）：用一个通用的「页面」图标
+	return `<button class="qbtn" data-qp="${esc(x.page)}" aria-label="打开${esc(x.t)}"><i style="--qc:${ic ? ic[1] : '#8e8e93'}">${QI(ic ? ic[0] : '<rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>')}</i><span>${esc(x.t)}</span></button>`;
+}
+const quickShown = () => pxOC() || (quickItems() || []).length > 0;
 function renderQuick(el, after) {
+	const mine = quickItems();
+	if (mine) {
+		el.innerHTML = mine.length ? mine.map(quickTile).join('') : '<div class="qgh">还没有快捷操作</div>';
+		el.onclick = (e) => { const b = e.target.closest('[data-q],[data-qp]'); if (!b) return; if (after) after(); if (b.dataset.qp) go(b.dataset.qp); else runQuick(b.dataset.q, b); };
+		return;
+	}
 	el.innerHTML = QUICK.map((q) => (q.g ? `<div class="qgh">${esc(q.g)}</div>` : `<button class="qbtn" data-q="${q.k}" aria-label="${esc(q.n || q.t)}"><i style="--qc:${q.col}">${QI(q.i)}</i><span>${esc(q.t)}</span></button>`)).join('');
 	el.onclick = (e) => { const b = e.target.closest('[data-q]'); if (b) { if (after) after(); runQuick(b.dataset.q, b); } };
 }
@@ -2719,6 +2759,7 @@ async function runQuick(k, btn) {
 	}, false);
 }
 renderQuick($('qGrid'));
+$('qEdit').onclick = () => quickEdit();
 async function updateSubs(btn) {
 	const st = await state();
 	const subs = (st.subs || []).filter((s) => s.enabled !== '0');
@@ -2878,10 +2919,10 @@ $('dock').onclick = async (e) => {
 	if (d === 'mode') { if (a && a.kind === 'other') pxNodeSheet(); else if (a) modeSheet(); else toast('这台路由器没装代理插件'); }
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });
-	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><button class="btn sm" data-v="close">关闭</button></div>${pxOC() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
+	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-qedit>编辑</button><button class="btn sm" data-v="close">关闭</button></div></div>${quickShown() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
 		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>
 		<div data-qn></div>`,
-		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); quickNodes(m.querySelector('[data-qn]'), close); });
+		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); m.querySelector('[data-qedit]').onclick = () => { close(); quickEdit(); }; $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); quickNodes(m.querySelector('[data-qn]'), close); });
 };
 
 
@@ -2939,6 +2980,45 @@ function qnRender(box) {
 			}, false);
 		}
 	};
+}
+
+function quickEdit(onDone) {
+	const cur = () => { const c = quickCfg(); return c ? c.items.slice() : QUICK.filter((x) => !x.g).map((x) => x.k); };
+	const save = (items) => { store.set('rp_quick', JSON.stringify({ items })); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); if (onDone) onDone(); };
+	const label = (k) => {
+		if (k.startsWith('p:')) { const f = navFind(k.slice(2)); return f && navOk(f) ? { t: '打开「' + f.t + '」', x: { page: f.k, t: f.t, f } } : null; }
+		const q = QUICK.find((x) => x.k === k && !x.g); return q && pxOC() ? { t: q.n || q.t, x: q } : null;
+	};
+	const ico = (x) => quickTile(x).replace(/^<button[^>]*>/, '').replace(/<span>[^<]*<\/span><\/button>$/, '');
+	const html = () => {
+		const items = cur(), shown = items.map((k) => [k, label(k)]).filter(([, l]) => l);
+		const more = QUICK.filter((x) => !x.g && pxOC() && !items.includes(x.k));
+		return `<div class="sheethead"><h3>编辑快捷操作</h3><button class="btn sm" data-v="close">完成</button></div>
+		<div class="sectitle" style="margin-top:4px"><b>显示的</b><span class="pill">${shown.length} 个</span></div>
+		<div class="mlist qe">${shown.map(([k, l], i) => `<div class="qerow"><span class="qeic">${ico(l.x)}</span><b>${esc(l.t)}</b><button class="btn sm" data-qu="${i}" aria-label="往前"${i ? '' : ' disabled'}>↑</button><button class="btn sm" data-qd="${i}" aria-label="往后"${i < shown.length - 1 ? '' : ' disabled'}>↓</button><button class="btn sm" data-qr="${esc(k)}" aria-label="移除">✕</button></div>`).join('') || '<div class="qerow"><b class="muted">一个都没有</b></div>'}</div>
+		${more.length ? `<div class="sectitle"><b>可以加的</b></div><div class="mlist qe">${more.map((q) => `<div class="qerow"><span class="qeic">${ico(q)}</span><b>${esc(q.n || q.t)}</b><button class="btn sm blue" data-qa="${q.k}">添加</button></div>`).join('')}</div>` : ''}
+		<button class="btn" data-qpage style="width:100%;margin-top:12px"${shown.length >= 24 ? ' disabled' : ''}>添加「打开某一页」</button>
+		<button class="btn" data-qreset style="width:100%;margin-top:8px"${quickCfg() ? '' : ' disabled'}>恢复默认</button>`;
+	};
+	modal(html(), (m) => {
+		const box = m.querySelector('.modalbox'), redo = () => { box.innerHTML = html(); };
+		box.addEventListener('click', async (e) => {
+			const b = e.target.closest('[data-qu],[data-qd],[data-qr],[data-qa],[data-qpage],[data-qreset]'); if (!b || b.disabled) return;
+			const items = cur().filter((k) => label(k)), i = +(b.dataset.qu ?? b.dataset.qd);
+			if (b.dataset.qu != null && i > 0) { [items[i - 1], items[i]] = [items[i], items[i - 1]]; save(items); return redo(); }
+			if (b.dataset.qd != null && i < items.length - 1) { [items[i + 1], items[i]] = [items[i], items[i + 1]]; save(items); return redo(); }
+			if (b.dataset.qr) { save(items.filter((k) => k !== b.dataset.qr)); return redo(); }
+			if (b.dataset.qa) { if (items.length >= 24) return toast('最多 24 个', true); save([...items, b.dataset.qa]); return redo(); }
+			if (b.dataset.qreset != null) { store.del('rp_quick'); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); if (onDone) onDone(); toast('已恢复默认'); return redo(); }
+			if (b.dataset.qpage != null) {
+				// 侧边栏里的页面，按分组列出来；已经加过的、没权限的不列
+				const have = new Set(items.filter((k) => k.startsWith('p:')).map((k) => k.slice(2)));
+				const groups = [{ t: '', items: [NAV_TOP] }, ...NAV.map((g) => ({ t: g.g, items: g.items.flatMap((it) => (it.kids ? it.kids : [it])) }))].map((g) => ({ t: g.t, items: g.items.map((x) => { const k = Array.isArray(x) ? 'k:' + x[0] : x.p; const f = k && navFind(k); if (!f || !navOk(f) || have.has(k)) return null; const ic = NAV_IC[f.path || k]; return { v: k, ic: ic ? ic[0] : '<circle cx="12" cy="12" r="3"/>', t: f.t }; }).filter(Boolean) }));
+				const v = await moreSheet({ t: '添加「打开某一页」' }, groups);
+				if (v && v !== 'close') { save([...items, 'p:' + v]); redo(); toast('已添加'); }
+			}
+		});
+	});
 }
 /* =====================================================================
    节点
@@ -7354,7 +7434,7 @@ async function loadRole() {
 		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
 		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
-		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); } // 设备卡片上能不能改名、换图标看权限
+		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); } // 设备卡片上能不能改名、换图标看权限；自定义快捷操作里没权限的页面去掉
 	} catch (e) {}
 }
 async function ncGo() {

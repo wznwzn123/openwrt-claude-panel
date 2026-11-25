@@ -6,7 +6,7 @@
 # PANEL_WWW=某个目录 → 测那个目录里的面板（比如打包后精简过的那份：dist/tmp/.../src/www）
 cd "$(dirname "$0")" || exit 1
 mkdir -p shots
-ALL="main me devname devcard heic wifi guest plan own qnode relay fileconflict leak topbar svc auto pxs logincode update updbanner verfix run nav net dash wd toast push swpush asw pause traf menu sc back speed bk quick lock loginpw lfull sec daily lite theme hosted pair rotate svcexp barcolor forcepage fbreply notice chat files offline layout"
+ALL="main me devname devcard heic wifi guest plan own qnode quickedit relay fileconflict leak topbar svc auto pxs logincode update updbanner verfix run nav net dash wd toast push swpush asw pause traf menu sc back speed bk quick lock loginpw lfull sec daily lite theme hosted pair rotate svcexp barcolor forcepage fbreply notice chat files offline layout"
 [ $# -gt 0 ] && ALL="$*"
 for t in $ALL; do
 	a=""; [ $t = offline ] && a=${PANEL_WWW:-../../src/www}/panel/sw.js

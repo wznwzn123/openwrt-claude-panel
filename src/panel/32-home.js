@@ -172,7 +172,7 @@ function renderOv(o, cached) {
 	$('oDash').classList.toggle('hidden', !isOC);
 	$$('#ocCard .oconly').forEach((x) => x.classList.toggle('hidden', !isOC));
 	$('pgHead').classList.toggle('hidden', kind !== 'other'); $('pgCard').classList.toggle('hidden', kind !== 'other');
-	$('qHead').classList.toggle('hidden', !isOC); $('qCard').classList.toggle('hidden', !isOC);
+	$('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); renderQuick($('qGrid'));
 	if (a) $('ocName').textContent = a.name;
 	const pl = (PXS && PXS.list) || [];
 	$('pxPick').classList.toggle('hidden', pl.length < 2);
@@ -335,7 +335,42 @@ const QUICK = [
 	{ k: 'update_chnroute', t: '大陆 IP', n: '更新大陆 IP 白名单', col: '#ff9f0a', i: '<path d="M5 21V4M5 4.5h11l-2.5 3.5L16 11.5H5"/>', confirm: '在后台更新大陆 IP 段。如果有新版本，OpenClash 会自动重启加载，全家断网 10–30 秒。' },
 	{ k: 'one_key_update', t: '一键更新', n: '一键更新插件和内核', col: '#34c759', i: '<circle cx="12" cy="12" r="8.5"/><path d="M12 16.5v-9M8.5 11 12 7.5l3.5 3.5"/>', confirm: '同时更新插件和内核，完成后自动重启，期间会断网。' },
 ];
+/* 6.0 第 80 项：自定义快捷操作——自己选显示哪些、排先后，还能加「打开某一页」（侧边栏任何一项，包括原版页面）。
+ * 每台手机各自记（rp_quick），没设过就是默认分组；没权限的页面、用不上的 OpenClash 操作不显示；一键恢复默认 */
+function quickCfg() { try { const c = JSON.parse(store.get('rp_quick') || 'null'); return c && Array.isArray(c.items) ? c : null; } catch (e) { return null; } }
+// 侧边栏里的一页：名字、图标
+function navFind(k) {
+	if (k === 'main') return { t: NAV_TOP.t, k, it: NAV_TOP };
+	for (const g of NAV) for (const it of g.items) {
+		const one = (x) => (Array.isArray(x) ? ('k:' + x[0] === k ? { t: x[1], k, path: x[0], it: x } : null) : x.p === k ? { t: x.t, k, it: x } : null);
+		const r = one(it); if (r) return r;
+		for (const c of it.kids || []) { const r2 = one(c); if (r2) return { ...r2, it: Array.isArray(c) ? c : { ...c, px: c.px || it.px } }; }
+	}
+	return null;
+}
+const navOk = (f) => !!f && canPage(f.k) && (Array.isArray(f.it) ? canPerm('net') : pxShow(f.it));
+// 现在要显示的（自定义过才有；null = 用默认分组）
+function quickItems() {
+	const c = quickCfg(); if (!c) return null;
+	return c.items.map((k) => {
+		if (k.startsWith('p:')) { const f = navFind(k.slice(2)); return navOk(f) ? { page: f.k, t: f.t, f } : null; }
+		const q = QUICK.find((x) => x.k === k && !x.g); return q && pxOC() ? q : null;
+	}).filter(Boolean);
+}
+function quickTile(x) {
+	if (!x.page) return `<button class="qbtn" data-q="${x.k}" aria-label="${esc(x.n || x.t)}"><i style="--qc:${x.col}">${QI(x.i)}</i><span>${esc(x.t)}</span></button>`;
+	const ic = NAV_IC[x.f.path || x.page];
+	// 没有专门图标的（多是插件的原版页面）：用一个通用的「页面」图标
+	return `<button class="qbtn" data-qp="${esc(x.page)}" aria-label="打开${esc(x.t)}"><i style="--qc:${ic ? ic[1] : '#8e8e93'}">${QI(ic ? ic[0] : '<rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/>')}</i><span>${esc(x.t)}</span></button>`;
+}
+const quickShown = () => pxOC() || (quickItems() || []).length > 0;
 function renderQuick(el, after) {
+	const mine = quickItems();
+	if (mine) {
+		el.innerHTML = mine.length ? mine.map(quickTile).join('') : '<div class="qgh">还没有快捷操作</div>';
+		el.onclick = (e) => { const b = e.target.closest('[data-q],[data-qp]'); if (!b) return; if (after) after(); if (b.dataset.qp) go(b.dataset.qp); else runQuick(b.dataset.q, b); };
+		return;
+	}
 	el.innerHTML = QUICK.map((q) => (q.g ? `<div class="qgh">${esc(q.g)}</div>` : `<button class="qbtn" data-q="${q.k}" aria-label="${esc(q.n || q.t)}"><i style="--qc:${q.col}">${QI(q.i)}</i><span>${esc(q.t)}</span></button>`)).join('');
 	el.onclick = (e) => { const b = e.target.closest('[data-q]'); if (b) { if (after) after(); runQuick(b.dataset.q, b); } };
 }
@@ -353,6 +388,7 @@ async function runQuick(k, btn) {
 	}, false);
 }
 renderQuick($('qGrid'));
+$('qEdit').onclick = () => quickEdit();
 async function updateSubs(btn) {
 	const st = await state();
 	const subs = (st.subs || []).filter((s) => s.enabled !== '0');
@@ -512,10 +548,10 @@ $('dock').onclick = async (e) => {
 	if (d === 'mode') { if (a && a.kind === 'other') pxNodeSheet(); else if (a) modeSheet(); else toast('这台路由器没装代理插件'); }
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });
-	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><button class="btn sm" data-v="close">关闭</button></div>${pxOC() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
+	if (d === 'quick') modal(`<div class="sheethead"><h3>快捷操作</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-qedit>编辑</button><button class="btn sm" data-v="close">关闭</button></div></div>${quickShown() ? '<div class="qgrid" data-g></div>' : `<p class="muted" style="font-size:13px">${a ? esc(a.name) + ' 的设置在「概览」和它的原版页面里。' : '这台路由器没装代理插件。'}</p>`}
 		<div class="btngrid" style="margin-bottom:0"><button class="btn blue" data-x="conn">连接诊断</button><button class="btn blue" data-x="dns">DNS 诊断</button></div>
 		<div data-qn></div>`,
-		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); quickNodes(m.querySelector('[data-qn]'), close); });
+		(m, close) => { if (m.querySelector('[data-g]')) renderQuick(m.querySelector('[data-g]'), () => close()); m.querySelector('[data-qedit]').onclick = () => { close(); quickEdit(); }; $$('[data-x]', m).forEach((x) => (x.onclick = () => { close(); diagSheet(x.dataset.x); })); quickNodes(m.querySelector('[data-qn]'), close); });
 };
 
 
@@ -573,4 +609,43 @@ function qnRender(box) {
 			}, false);
 		}
 	};
+}
+
+function quickEdit(onDone) {
+	const cur = () => { const c = quickCfg(); return c ? c.items.slice() : QUICK.filter((x) => !x.g).map((x) => x.k); };
+	const save = (items) => { store.set('rp_quick', JSON.stringify({ items })); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); if (onDone) onDone(); };
+	const label = (k) => {
+		if (k.startsWith('p:')) { const f = navFind(k.slice(2)); return f && navOk(f) ? { t: '打开「' + f.t + '」', x: { page: f.k, t: f.t, f } } : null; }
+		const q = QUICK.find((x) => x.k === k && !x.g); return q && pxOC() ? { t: q.n || q.t, x: q } : null;
+	};
+	const ico = (x) => quickTile(x).replace(/^<button[^>]*>/, '').replace(/<span>[^<]*<\/span><\/button>$/, '');
+	const html = () => {
+		const items = cur(), shown = items.map((k) => [k, label(k)]).filter(([, l]) => l);
+		const more = QUICK.filter((x) => !x.g && pxOC() && !items.includes(x.k));
+		return `<div class="sheethead"><h3>编辑快捷操作</h3><button class="btn sm" data-v="close">完成</button></div>
+		<div class="sectitle" style="margin-top:4px"><b>显示的</b><span class="pill">${shown.length} 个</span></div>
+		<div class="mlist qe">${shown.map(([k, l], i) => `<div class="qerow"><span class="qeic">${ico(l.x)}</span><b>${esc(l.t)}</b><button class="btn sm" data-qu="${i}" aria-label="往前"${i ? '' : ' disabled'}>↑</button><button class="btn sm" data-qd="${i}" aria-label="往后"${i < shown.length - 1 ? '' : ' disabled'}>↓</button><button class="btn sm" data-qr="${esc(k)}" aria-label="移除">✕</button></div>`).join('') || '<div class="qerow"><b class="muted">一个都没有</b></div>'}</div>
+		${more.length ? `<div class="sectitle"><b>可以加的</b></div><div class="mlist qe">${more.map((q) => `<div class="qerow"><span class="qeic">${ico(q)}</span><b>${esc(q.n || q.t)}</b><button class="btn sm blue" data-qa="${q.k}">添加</button></div>`).join('')}</div>` : ''}
+		<button class="btn" data-qpage style="width:100%;margin-top:12px"${shown.length >= 24 ? ' disabled' : ''}>添加「打开某一页」</button>
+		<button class="btn" data-qreset style="width:100%;margin-top:8px"${quickCfg() ? '' : ' disabled'}>恢复默认</button>`;
+	};
+	modal(html(), (m) => {
+		const box = m.querySelector('.modalbox'), redo = () => { box.innerHTML = html(); };
+		box.addEventListener('click', async (e) => {
+			const b = e.target.closest('[data-qu],[data-qd],[data-qr],[data-qa],[data-qpage],[data-qreset]'); if (!b || b.disabled) return;
+			const items = cur().filter((k) => label(k)), i = +(b.dataset.qu ?? b.dataset.qd);
+			if (b.dataset.qu != null && i > 0) { [items[i - 1], items[i]] = [items[i], items[i - 1]]; save(items); return redo(); }
+			if (b.dataset.qd != null && i < items.length - 1) { [items[i + 1], items[i]] = [items[i], items[i + 1]]; save(items); return redo(); }
+			if (b.dataset.qr) { save(items.filter((k) => k !== b.dataset.qr)); return redo(); }
+			if (b.dataset.qa) { if (items.length >= 24) return toast('最多 24 个', true); save([...items, b.dataset.qa]); return redo(); }
+			if (b.dataset.qreset != null) { store.del('rp_quick'); renderQuick($('qGrid')); $('qHead').classList.toggle('hidden', !quickShown()); $('qCard').classList.toggle('hidden', !quickShown()); if (onDone) onDone(); toast('已恢复默认'); return redo(); }
+			if (b.dataset.qpage != null) {
+				// 侧边栏里的页面，按分组列出来；已经加过的、没权限的不列
+				const have = new Set(items.filter((k) => k.startsWith('p:')).map((k) => k.slice(2)));
+				const groups = [{ t: '', items: [NAV_TOP] }, ...NAV.map((g) => ({ t: g.g, items: g.items.flatMap((it) => (it.kids ? it.kids : [it])) }))].map((g) => ({ t: g.t, items: g.items.map((x) => { const k = Array.isArray(x) ? 'k:' + x[0] : x.p; const f = k && navFind(k); if (!f || !navOk(f) || have.has(k)) return null; const ic = NAV_IC[f.path || k]; return { v: k, ic: ic ? ic[0] : '<circle cx="12" cy="12" r="3"/>', t: f.t }; }).filter(Boolean) }));
+				const v = await moreSheet({ t: '添加「打开某一页」' }, groups);
+				if (v && v !== 'close') { save([...items, 'p:' + v]); redo(); toast('已添加'); }
+			}
+		});
+	});
 }

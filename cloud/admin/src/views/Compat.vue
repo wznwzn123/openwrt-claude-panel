@@ -34,7 +34,7 @@ async function load() {
 async function fix(g: any) {
   const v = await ask({ title: '标为修好了：' + g.title, message: `「${g.why}」——影响 ${g.n} 台。写上在哪个版本修好的：${g.src === 'install' ? '会给认得出账号的人发邮件，让他重新运行安装命令。' : '报过这个问题、版本比它旧的路由器，下次上报时会推送「更新到这个版本就好」。'}`, input: { label: '修好的版本（比如 6.0.1）', placeholder: '6.0.1', required: '要写版本号' }, confirmText: '下一步' })
   if (!v) return
-  const n = await ask({ title: '一句话说明（会写进推送 / 邮件，可以不填）', input: { label: '说明', placeholder: '比如：压缩闪存剩 22 MB 就能装', maxlength: 200 }, confirmText: '标为修好了' })
+  const n = await ask({ title: '一句话说明（会写进推送 / 邮件，选填）', input: { label: '说明', placeholder: '比如：压缩闪存剩 22 MB 就能装', maxlength: 200 }, confirmText: '标为修好了' })
   if (n === null || n === undefined) return
   try { const r = await post<any>('compat/fix', { key: g.key, ver: v.value.trim(), note: n ? n.value : '' }); pushToast(r.mailed ? `已标为修好，发了 ${r.mailed} 封邮件` : '已标为修好'); load() } catch (e) { toastError(e, '没成功') }
 }

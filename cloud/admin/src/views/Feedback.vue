@@ -27,9 +27,9 @@ const logOpen = ref(false)
 const logText = ref('')
 const FB_ST: Record<string, string> = { fixed: '标为已修复', nofix: '标为无法修复', open: '撤回为未处理', note: '发了补充说明' }
 const DLG: Record<string, { t: string; l: string; ph: string; need?: string }> = {
-  fixed: { t: '标为已修复', l: '补充说明（可以不写）', ph: '比如：已在 4.0 修好，到面板「一键更新」更新一下就行' },
+  fixed: { t: '标为已修复', l: '补充说明（选填）', ph: '比如：已在 4.0 修好，到面板「一键更新」更新一下就行' },
   nofix: { t: '标为无法修复', l: '没法修复的原因（必须写，如实告诉对方）', ph: '比如：这是路由器固件自带的问题，面板这边改不了', need: '写一下为什么没法修复' },
-  open: { t: '撤回为未处理', l: '补充说明（可以不写）', ph: '比如：还有一种情况没修好，正在继续查' },
+  open: { t: '撤回为未处理', l: '补充说明（选填）', ph: '比如：还有一种情况没修好，正在继续查' },
   note: { t: '发补充说明', l: '补充说明（进度不变，对方会看到）', ph: '比如：已经找到原因了，下个版本修', need: '补充说明不能是空的' },
 }
 const stage = (x: any) => (x.done || x.nofix ? 3 : x.ack ? 2 : 1)

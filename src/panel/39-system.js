@@ -1239,7 +1239,7 @@ async function feedbackSheet(prefill) {
 		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*,.heic,.heif" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
 		${hosted && SVC && SVC.files ? `<div class="atts hidden" data-atts style="margin-top:8px"></div><label class="btn fbadd"><input type="file" multiple data-any style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加视频或文件（200MB 以内）</span></label>` : ''}
 		${hosted && ME && ME.me && ME.me.email ? `<div class="kv fbmail"><span>处理进度发到</span><span>${esc(ME.me.email)}<i>账号邮箱，不能改</i></span></div>` : ''}
-		<input class="input" data-ct maxlength="80" placeholder="其他联系方式（可以不填）：微信、QQ" style="margin-top:8px" autocapitalize="off" spellcheck="false">
+		<input class="input" data-ct maxlength="80" placeholder="其他联系方式（选填）：微信、QQ" style="margin-top:8px" autocapitalize="off" spellcheck="false">
 		<label class="kv aswon" style="margin-top:6px"><span><b>附上路由器信息</b><span class="muted">方便查问题，只有下面这些，不含密钥和网址</span></span><span class="sw"><input type="checkbox" data-dg checked><i></i></span></label>
 		${dg ? `<pre class="out" style="font-size:11.5px;max-height:120px;overflow:auto;margin:6px 0 0">${esc(dg)}</pre>` : ''}
 		<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn primary" data-go>发送</button></div>`, (m, close) => {
@@ -2752,7 +2752,7 @@ function betaLine(b) {
 async function betaApply(r) {
 	const hosted = !!(r.beta && r.beta.hosted);
 	const v = await modal(`<h3>申请尝鲜</h3><div class="cscroll">
-		<p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">仅上报型号、系统、版本、闪存、内存和当前上报内容。审核通过后将以邮件的形式通知您。</p>
+		<p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">仅上报型号、系统、版本、闪存、内存和当前留言内容。审核通过后将以邮件的形式通知您。</p>
 		${hosted ? '' : '<label class="lglabel" for="btMail" style="margin-top:12px">邮箱</label><input id="btMail" class="input" type="email" autocomplete="email" maxlength="120">'}
 		<label class="lglabel" for="btNote" style="margin-top:12px">留言（选填）</label><textarea id="btNote" class="input" rows="2" maxlength="200" placeholder="比如：闪存只有 16 MB" style="min-height:0;resize:none"></textarea>
 		<div class="formerr hidden" data-err></div></div>

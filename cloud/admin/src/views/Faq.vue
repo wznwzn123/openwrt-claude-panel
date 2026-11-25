@@ -102,7 +102,7 @@ onMounted(load)
         <div class="hub-form">
           <Field label="问题" class="span-all" :error="err"><TextInput v-model="form.q" :maxlength="120" placeholder="用大家会问的说法，比如：换了手机怎么登录？" /></Field>
           <Field label="分类"><Select v-model="form.cat" :options="cats.map(c => ({ label: c.t, value: c.k }))" /></Field>
-          <Field label="搜索词（可以不写，用空格隔开）"><TextInput v-model="form.kw" :maxlength="300" placeholder="搜这些词也能找到这条，比如：换手机 新手机" /></Field>
+          <Field label="搜索词（选填，用空格隔开）"><TextInput v-model="form.kw" :maxlength="300" placeholder="搜这些词也能找到这条，比如：换手机 新手机" /></Field>
           <Field label="回答" class="span-all" hint="**加粗**　`代码`　[文字](/app)　「- 」开头是列表，「1. 」开头是步骤，空一行分段"><TextInput v-model="form.a" multiline :rows="7" :maxlength="4000" placeholder="写清楚怎么做" /></Field>
           <div class="span-all faq-pv" aria-label="在官网上的样子">
             <div class="faq-pv-cap">在官网上的样子</div>

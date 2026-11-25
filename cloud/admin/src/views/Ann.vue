@@ -71,7 +71,7 @@ onMounted(load)
       <Panel :title="ed ? '修改公告' : '发布公告'" class="reveal ann-form">
         <div class="hub-form">
           <Field label="标题" class="span-all" :error="err"><TextInput v-model="form.title" :maxlength="80" placeholder="比如：4.0 发布了" /></Field>
-          <Field label="内容（可以不写）" class="span-all"><TextInput v-model="form.body" multiline :rows="4" :maxlength="2000" placeholder="写清楚要大家做什么" /></Field>
+          <Field label="内容（选填）" class="span-all"><TextInput v-model="form.body" multiline :rows="4" :maxlength="2000" placeholder="写清楚要大家做什么" /></Field>
           <div v-if="canFile" class="span-all ann-files">
             <div class="ann-files-top"><span>附件（可以不加）：图片、视频、文件，最多 5 个，每个最大 200MB</span><Button size="sm" icon="clip" @click="att?.pick()">加文件</Button></div>
             <FileAttach ref="att" ctx="ann" />

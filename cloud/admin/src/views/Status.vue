@@ -113,7 +113,7 @@ onMounted(load)
           <Field label="标题" class="span-all" :error="err"><TextInput v-model="form.title" :maxlength="80" placeholder="比如：部分专属网址打不开" /></Field>
           <Field label="严重程度"><Segmented v-model="form.level" label="严重程度" :options="[{ label: '部分有问题', value: 'part' }, { label: '故障', value: 'down' }]" /></Field>
           <Field label="影响哪些服务" group class="span-all"><div class="st-comps"><Checkbox v-for="c in COMPS" :key="c.k" v-model="form.comps[c.k]" :label="c.t" /></div></Field>
-          <Field label="说明（可以不写）" class="span-all"><TextInput v-model="form.text" multiline :rows="3" :maxlength="1000" placeholder="比如：收到反馈，正在查原因。家里上网不受影响。" /></Field>
+          <Field label="说明（选填）" class="span-all"><TextInput v-model="form.text" multiline :rows="3" :maxlength="1000" placeholder="比如：收到反馈，正在查原因。家里上网不受影响。" /></Field>
           <div><Button variant="primary" :loading="busy" @click="create">发布</Button></div>
         </div>
       </Panel>

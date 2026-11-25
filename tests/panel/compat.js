@@ -55,7 +55,7 @@ const SHOT = path.join(__dirname, 'shots');
 		ok('关掉上报：告诉路由器' + T, S.on === false && S.calls.some((c) => c.m === 'compat_set' && c.p.on === false) && !(await page.isChecked('.modal [data-sw="on"]')));
 		await page.click('.modal [data-bt="apply"]'); await W(600);
 		const ap = page.locator('.modal').last(), at = await ap.textContent();
-		ok('申请框：一句话说清楚仅上报什么' + T, /^申请尝鲜仅上报型号、系统、版本、闪存、内存和当前上报内容/.test(at.trim()) && !/看不到你是谁/.test(at) && /审核通过后将以邮件的形式通知您/.test(at) && (S.hosted ? !(await ap.locator('#btMail').count()) : await ap.locator('#btMail').isVisible()), at);
+		ok('申请框：一句话说清楚仅上报什么' + T, /^申请尝鲜仅上报型号、系统、版本、闪存、内存和当前留言内容/.test(at.trim()) && !/看不到你是谁/.test(at) && /审核通过后将以邮件的形式通知您/.test(at) && (S.hosted ? !(await ap.locator('#btMail').count()) : await ap.locator('#btMail').isVisible()), at);
 		const ab = await ap.locator('.modalbox').boundingBox();
 		ok('申请框在屏幕里、不超过 70% 高' + T, ab && ab.x >= 0 && ab.x + ab.width <= w + 1 && ab.height <= h * 0.7 + 1);
 		await page.screenshot({ path: path.join(SHOT, `compat-apply-${w}${dark ? '-dark' : ''}.png`) });

@@ -33,7 +33,7 @@ function want(a: any) {
 async function decide(a: any, ok: boolean) {
   let body: any
   if (ok) { const n = await askDays({ title: '通过续期申请', who: a.email + ' · ' + a.name, note: a.note, cur: a.curExp ?? a.exp, want: want(a) || 90, go: '续' }); if (!n) return; body = { days: n } }
-  else { const v = await ask({ title: '拒绝续期申请', message: a.email + ' · ' + a.name, input: { label: '拒绝的原因（会通知他，可以不写）', multiline: true, maxlength: 300 }, confirmText: '拒绝', danger: true }); if (!v) return; body = { reason: v.value } }
+  else { const v = await ask({ title: '拒绝续期申请', message: a.email + ' · ' + a.name, input: { label: '拒绝的原因（会通知他，选填）', multiline: true, maxlength: 300 }, confirmText: '拒绝', danger: true }); if (!v) return; body = { reason: v.value } }
   try { const r = await post(`applications/${a.sub}/${ok ? 'approve' : 'reject'}`, body); pushToast((ok ? '已通过，到期时间 ' + day(r.exp) : '已拒绝') + (r.mailed ? '，已发邮件通知他' : '，邮件没发出去（他开了推送的话会收到推送）')); load() } catch (e) { toastError(e, '没成功') }
 }
 onMounted(load)

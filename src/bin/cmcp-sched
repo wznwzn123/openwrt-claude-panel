@@ -1,0 +1,30 @@
+#!/bin/sh
+# 6.0 第 31、35 项：定时重启、定时关 Wi-Fi（计划任务里调用，设置在面板「特色功能 → 定时」）
+# 用户 11/26 定：定时开关机改成「定时重启 + 定时关 Wi-Fi」（大多数路由器关机后不能自己开机）
+# 用法：cmcp-sched reboot | wifioff | wifion
+# 测试用：CMCP_SCHED_RUN（把要执行的命令写到这个文件，不真执行）、CMCP_UPTIME（开机多少秒）、CMCP_SBIN、CMCP_UCI_DIR
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+SB=${CMCP_SBIN:-/usr/sbin}
+C=${CMCP_UCI_DIR:-/etc/config}
+run() { if [ -n "$CMCP_SCHED_RUN" ]; then echo "$*" >> "$CMCP_SCHED_RUN"; else "$@" >/dev/null 2>&1; fi; }
+up=${CMCP_UPTIME:-$(cut -d. -f1 /proc/uptime)}
+# 在用无线中继（连上级 Wi-Fi）上网：关 Wi-Fi 会把上网也断了
+sta() { grep -q "option mode 'sta'" "$C/wireless" 2>/dev/null || grep -q 'option mode sta' "$C/wireless" 2>/dev/null; }
+case "$1" in
+reboot)
+	# 刚开机 20 分钟内不重启（时间不准、或者刚重启过），免得反复重启
+	[ "$up" -lt 1200 ] && exit 0
+	"$SB/cmcp-notify" info sched "按计划重启路由器" "大约 2 分钟后恢复。" sched >/dev/null 2>&1
+	sleep 2
+	run reboot
+	;;
+wifioff)
+	if sta; then "$SB/cmcp-notify" warn sched "没有关 Wi-Fi" "在用无线中继上网，关了会断网。" sched >/dev/null 2>&1; exit 0; fi
+	run wifi down
+	;;
+wifion)
+	run wifi up
+	;;
+*) echo "用法：cmcp-sched reboot|wifioff|wifion"; exit 1 ;;
+esac
+exit 0

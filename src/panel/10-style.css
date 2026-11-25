@@ -510,7 +510,7 @@ button.file{width:100%;text-align:left;color:var(--text);font-size:15px}button.f
 .sechead{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .sectitle{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:16px 2px 7px}
 .sectitle b{font-size:17px}
-.dangerzone{margin-top:12px;text-align:center}
+.dangerzone{margin-top:12px;text-align:center;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 pre.out{margin:0;padding:12px;border-radius:14px;background:var(--card2);white-space:pre-wrap;word-break:break-word;font:12px/1.55 var(--mono);max-height:62vh;overflow:auto}
 pre.out.tall{max-height:none;min-height:40vh}
 .log .w{color:var(--warnt)}.log .e{color:var(--dangert)}.log .i{color:var(--brand)}

@@ -112,9 +112,9 @@ const LAY = '.chhero .chtop > *, #chTips, .chrow, .chbub, .chday, .chbox, .chin 
 		ok('侧边栏「实时联系开发者」上有红点', (await p.textContent('#sidenav button[data-p="chat"]')).includes('1'));
 		await p.screenshot({ path: path.join(OUT, 'chat-side.png') });
 		await p.click('#scrim', { force: true }); await p.waitForTimeout(400); await p.click('#bellBtn'); await p.waitForTimeout(1500);
-		ok('通知页：入口卡片上显示 1 条没看、列表里有「开发者回复了你」', (await p.textContent('#ntChatN')) === '1' && /开发者回复了你/.test(await p.textContent('#ntList')));
+		ok('通知页：「联系开发者」上显示 1 条没看、「待处理」里有「开发者回复了你」', (await p.textContent('#ntChatN')) === '1' && /开发者回复了你/.test(await p.textContent('#ntPin')));
 		await p.screenshot({ path: path.join(OUT, 'nt-chat.png') });
-		await p.click('.ntent [data-goto="chat"]'); await p.waitForTimeout(1500);
+		await p.click('.ntqb [data-goto="chat"]'); await p.waitForTimeout(1500);
 		ok('点入口进对话页，看过以后红点消失', await p.isVisible('#p-chat') && S.uu === 0 && (await p.isHidden('#bellN')));
 		await c.close(); }
 	console.log(R.join('\n')); const pass = R.filter((x) => x.startsWith('✓')).length; console.log('\n通过 ' + pass + '/' + R.length);

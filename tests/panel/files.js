@@ -130,11 +130,11 @@ const LAY = '.chrow, .chbub, .chbox, .chin > *:not(.hidden), #chAtts .att';
 		// —— 公告附件 ——
 		await p.goto(BASE + '/panel/?p=notice'); await p.waitForTimeout(2500);
 		const card = p.locator('#ntList', { hasText: '5.2 发布了' });
-		const nt = await p.textContent('#ntList');
-		ok('通知：公告里显示附件（图片 + 文件卡片）' + sfx, /更新说明\.pdf/.test(nt) && (await p.locator('#ntList .files img').count()) >= 1, nt.slice(0, 200));
-		const st = () => p.evaluate(() => document.querySelector('#ntList .files').closest('.ntit').classList.contains('open'));
+		const nt = await p.textContent('#p-notice');
+		ok('通知：公告里显示附件（图片 + 文件卡片）' + sfx, /更新说明\.pdf/.test(nt) && (await p.locator('#p-notice .files img').count()) >= 1, nt.slice(0, 200));
+		const st = () => p.evaluate(() => document.querySelector('#p-notice .files').closest('.ntev, .ntact').classList.contains('open'));
 		const o0 = await st();
-		await p.locator('#ntList .files a.ff').first().evaluate((a) => { a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); });
+		await p.locator('#p-notice .files a.ff').first().evaluate((a) => { a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); });
 		await p.waitForTimeout(300);
 		const o1 = await st();
 		ok('点公告里的文件：不会把公告收起来 / 展开' + sfx, o0 === o1, o0 + '→' + o1);

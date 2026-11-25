@@ -45,7 +45,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'rotate-00-keys.png') });
 	// 取消：什么都不发生
 	await page.click('#meBox [data-mp="krot"]'); await W(400);
-	ok('先弹确认，说清楚后果（旧地址作废，已登录的手机不受影响）', /旧的登录地址马上作废/.test(await page.textContent('.modal')) && /不受影响/.test(await page.textContent('.modal')) && /Claude/.test(await page.textContent('.modal')));
+	ok('先弹确认，说清楚后果（旧地址作废，已登录的手机不受影响）', /旧的登录地址马上作废/.test(await page.textContent('.modal')) && /不受影响/.test(await page.textContent('.modal')) && /AI 连接器/.test(await page.textContent('.modal')));
 	await page.click('.modal [data-v="0"], .modal button:has-text("取消")'); await W(400);
 	ok('点取消：没有换', !calls.some((c) => c.m === 'rotate_key') && cur === OLD);
 	// 确认

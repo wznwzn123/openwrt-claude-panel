@@ -209,6 +209,39 @@ P.black_set = function(a) {
 	let live = bl_apply(e.ip);
 	return { ok: true, live };
 };
+
+/* 6.0 第 87 项：从设备列表里删掉离线设备（在线的不能删）。
+ * 跟它有关的设置一起删：改的名字和图标、暂停和定时断网、「不走代理」；设备以后再连上会作为新设备重新出现。
+ * items：[{ mac, ip }]；only_plain=true（一键清除）时，有这些设置的设备跳过不删，免得规则悄悄没了 */
+P.dev_forget = function(a) {
+	let items = type(a?.items) == 'array' ? slice(a.items, 0, 300) : [];
+	if (!length(items)) die('没有要删的设备');
+	let devs = P.devices().devices, al = CL.readj(CL.DN_PATH, {}), pz = cmcp_readj('/etc/claude-mcp/pause.json', {}), bl = bl_load();
+	if (type(al) != 'object') al = {};
+	if (type(pz) != 'object') pz = {};
+	let hid = CL.readj(DH_PATH, {}), now = time(), n = 0, skip = { online: 0, set: 0 }, alch = false, pzch = false;
+	if (type(hid) != 'object') hid = {};
+	for (let it in items) {
+		let mac = match(lc('' + (it?.mac ?? '')), /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/) ? lc(it.mac) : null, ip = '' + (it?.ip ?? '');
+		if (!mac && !match(ip, /^\d+\.\d+\.\d+\.\d+$/)) continue;
+		let d = null;
+		for (let x in devs) if ((mac && x.mac == mac) || (!mac && !x.mac && x.ip == ip)) { d = x; break; }
+		if (!d) continue; // 已经不在列表里了
+		if (d.online) { skip.online++; continue; }
+		let inbl = filter(bl, (e) => (mac && e.mac == mac) || (!e.mac && e.ip == d.ip));
+		let has = (mac && (al[mac] || pz[mac])) || length(inbl);
+		if (a.only_plain && has) { skip.set++; continue; }
+		if (mac && al[mac]) { if (al[mac].img) unlink(di_file(mac)); delete al[mac]; alch = true; }
+		if (mac && pz[mac]) { delete pz[mac]; pzch = true; }
+		for (let e in inbl) P.black_set({ mac: e.mac, ip: e.ip, on: false });
+		hid[mac ?? ('ip:' + d.ip)] = now;
+		n++;
+	}
+	if (alch) dn_write(al);
+	if (pzch) { cmcp_writej('/etc/claude-mcp/pause.json', pz); sh('/usr/sbin/cmcp-pause apply'); }
+	if (n) { writefile(DH_PATH + '.tmp', sprintf('%J', hid)); rename(DH_PATH + '.tmp', DH_PATH); }
+	return { ok: true, n, skip };
+};
 /* ---------------- 工具定义 ---------------- */
 
 function S(props, req) { return { type: 'object', properties: props ?? {}, required: req ?? [] }; }

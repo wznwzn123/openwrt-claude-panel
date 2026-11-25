@@ -491,6 +491,40 @@ pre.out.tall{max-height:none;min-height:40vh}
 .mono{font-family:var(--mono);font-size:12.5px}
 .ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rowbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+/* 6.0 第 84、87、88 项：设备卡片的图标、点名字改名、选图标；「更多」菜单（.macts，设备和订阅共用） */
+.dvtop{display:flex;align-items:flex-start;gap:12px}
+.dvmain{flex:1;min-width:0}
+.dvic{flex:none;width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:var(--c,var(--muted));background:var(--fill);background:color-mix(in srgb,var(--c,#8e8e93) 15%,transparent);border:0;padding:0;font:inherit}
+.dvic svg{width:22px;height:22px}
+.dvic.img{background-size:cover;background-position:center}
+button.dvic{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.dvcard.off .dvic{filter:grayscale(1);opacity:.55}
+.dvname{display:flex;align-items:center;gap:5px;max-width:100%;min-height:26px;font:inherit;font-size:16px;font-weight:700;color:var(--text);background:none;border:0;padding:0;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+b.dvname{display:block;line-height:26px}
+.dvname .ell{min-width:0}
+.dvpen{width:14px;height:14px;flex:none;color:var(--muted)}
+.dvin{height:34px;font-size:16px;font-weight:600;padding:4px 10px;margin:-4px 0 2px;width:100%}
+.dvaddr{font-size:12.5px;display:flex;flex-wrap:wrap;column-gap:8px;white-space:nowrap;overflow:visible}
+.dvsec{display:flex;align-items:center;gap:8px;min-width:0}
+.dvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px}
+.dvpick{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 4px;border-radius:16px;background:var(--fill);border:0;font:inherit;font-size:12.5px;color:var(--text);cursor:pointer;text-align:center;line-height:1.3}
+.dvpick.on{box-shadow:inset 0 0 0 2px var(--brand)}
+.mhead{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.mhead h3{font-size:18px}
+.mgrp+.mgrp{margin-top:14px}
+.mgt{font-size:13px;font-weight:600;color:var(--muted);margin:0 6px 6px}
+.mlist{background:var(--card);border-radius:18px;overflow:hidden}
+:root.glass .modalbox .mlist{background:rgba(255,255,255,.86)}:root.glass.dark .modalbox .mlist{background:rgba(52,52,58,.66)}
+.mact{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:9px 14px;border:0;background:none;text-align:left;font:inherit;color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.mact+.mact::before{content:"";position:absolute;top:0;left:60px;right:0;border-top:.5px solid var(--line)}
+.mact:active{background:var(--fill)}
+.mact i{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--fill);flex:none}
+.mact i svg{width:18px;height:18px}
+.mact span{min-width:0}
+.mact b{display:block;font-size:15.5px;font-weight:600}
+.mact small{display:block;font-size:12.5px;color:var(--muted);margin-top:1px;line-height:1.4}
+.mact.danger{color:var(--danger);background:none}.mact.danger i{background:var(--dsoft)}
+.mact.danger:active{background:var(--fill)}
 .subcard .bar{margin:10px 0 4px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{50%{opacity:.35}}

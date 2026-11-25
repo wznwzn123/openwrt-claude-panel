@@ -142,8 +142,8 @@ const MENU = { items: [...JSON.parse(require('fs').readFileSync(__dirname + '/re
 ] };
 const PZ = { devs: {}, calls: [], schedOn: false };
 // 设备改名字（5.2.3）：MAC → 名字
-const DN = {};
-const dnApply = (list) => list.map((d) => (d.mac && DN[d.mac] ? { ...d, name: DN[d.mac], orig: d.name, renamed: true } : { ...d, orig: d.name }));
+const DN = {}, DI = {}, DH = {}, DEVFORGET = [], DIMG = {};
+const dnApply = (list) => list.filter((d) => !DH[d.mac || 'ip:' + d.ip] || d.online).map((d) => ({ ...(d.mac && DN[d.mac] ? { ...d, name: DN[d.mac], orig: d.name, renamed: true } : { ...d, orig: d.name }), icon: (d.mac && DI[d.mac]) || null, img: (d.mac && DIMG[d.mac] && DIMG[d.mac].v) || null }));
 const ASW = { sub: { at: 1793249000, name: 'zou', up: 1224191028, down: 30586976742, total: 322122547200, expire: 1795706585 }, enabled: true, group: 'Zou', hist: [{ t: 1793240000, from: '🇭🇰香港04 专线 3x', to: '🇭🇰香港02 专线 3x', d: 38, same: true }, { t: 1793200000, from: '🇭🇰香港02 专线 3x', to: '🇹🇼台湾01', d: 120, same: false }],
 	dryRes: { cur: '🇭🇰香港02 专线 3x', node: true, curDelay: 88, region: 'HK', pick: { n: '🇭🇰香港05 专线', d: 41 }, same: true, tested: 30, ok: 27 } };
 const PXM = { px: null, cur: 'n1', nodes: [{ id: 'n1', name: '香港 01', kind: 'Xray', addr: 'hk.example.com', port: '443', group: '' }, { id: 'n2', name: '日本 02', kind: 'sing-box', addr: 'jp.example.com', port: '8443', group: '' }, { id: 'n3', name: '美国 03', kind: 'Xray', addr: 'us.example.com', port: '443', group: '' }], calls: [], selfbuilt: false };
@@ -248,8 +248,10 @@ function respond(method, p) {
 	case 'quick': if (p.action === 'start') OC.running = true; if (p.action === 'stop') OC.running = false; return { ok: true, msg: '已执行 ' + p.action, text: p.action === 'debug' ? 'debug log...' : undefined };
 	case 'age': return p.op === 'public' ? { public: 'age1pubpubpub' } : { secret: 'AGE-SECRET-KEY-1AAAAAA', public: 'age1abcdef' };
 	case 'oc_sec': return { ok: true, sid: p.sid || 'cfgnew01' };
-	case 'dev_rename': { if (!/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(p.mac || '')) throw new Error('设备地址不对'); if (p.name) DN[p.mac] = p.name; else delete DN[p.mac]; return { ok: true, mac: p.mac, name: p.name || null }; }
-	case 'black_state': return { entries: BL, devices: dnApply([{ ip: '192.168.5.8', mac: 'aa:bb:cc:dd:ee:ff', name: 'iPhone', online: true, stats: { conns: 12, dl: 123456789, ul: 1234567, proxied: 3 } }, { ip: '192.168.5.20', mac: '11:22:33:44:55:66', name: 'TV', online: true }, { ip: '192.168.5.9', mac: null, name: null, online: false }]).map((d) => (d.mac === '11:22:33:44:55:66' ? { ...d, since: Math.floor(Date.now() / 1000) - 8100 } : d)), ready: BLREADY.v, live: BLREADY.v, custom_on: true, lan_ac_mode: '0' };
+	case 'dev_rename': { if (!/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(p.mac || '')) throw new Error('设备地址不对'); if ('name' in p || !('icon' in p)) { if (p.name) DN[p.mac] = p.name; else delete DN[p.mac]; } if ('icon' in p) { if (p.icon) DI[p.mac] = p.icon; else delete DI[p.mac]; delete DIMG[p.mac]; } if ('img' in p) { if (p.img) DIMG[p.mac] = { v: Math.floor(Date.now() / 1000), u: p.img }; else delete DIMG[p.mac]; } return { ok: true, mac: p.mac, name: DN[p.mac] || null, icon: DI[p.mac] || null, img: (DIMG[p.mac] || {}).v || null }; }
+	case 'dev_imgs': return { imgs: Object.fromEntries((p.macs || []).filter((m) => DIMG[m]).map((m) => [m, DIMG[m].u])) };
+	case 'dev_forget': { let n = 0; for (const it of p.items || []) { const k = it.mac || 'ip:' + it.ip; if (p.only_plain && it.mac && (DN[it.mac] || DI[it.mac] || PZ.devs[it.mac])) continue; DH[k] = 1; if (it.mac) { delete DN[it.mac]; delete DI[it.mac]; delete PZ.devs[it.mac]; } n++; } DEVFORGET.push(p); return { ok: true, n, skip: { online: 0, set: 0 } }; }
+	case 'black_state': return { entries: BL, devices: dnApply([{ ip: '192.168.5.8', mac: 'aa:bb:cc:dd:ee:ff', name: 'iPhone', online: true, stats: { conns: 12, dl: 123456789, ul: 1234567, proxied: 3 } }, { ip: '192.168.5.20', mac: '11:22:33:44:55:66', name: 'TV', online: true }, { ip: '192.168.5.9', mac: null, name: null, online: false }, { ip: '192.168.5.30', mac: '5c:cf:7f:12:34:56', name: 'ESP_1A2B3C', online: false }, { ip: '192.168.5.31', mac: '7a:11:22:33:44:55', name: null, online: false }, { ip: '192.168.5.32', mac: '00:11:32:aa:bb:cc', name: 'DiskStation', online: false }]).map((d) => (d.mac === '11:22:33:44:55:66' ? { ...d, since: Math.floor(Date.now() / 1000) - 8100 } : d)), ready: BLREADY.v, live: BLREADY.v, custom_on: true, lan_ac_mode: '0' };
 	case 'black_set': if (p.on) BL.push({ mac: p.mac || null, ip: p.ip, name: p.name || null, pinned: !!p.mac, at: 1793169000 }); else BL.splice(BL.findIndex((e) => (e.mac || e.ip) === (p.mac || p.ip)), 1); return { ok: true, ip: p.ip, pinned: !!p.mac, live: BLREADY.v, need_setup: !BLREADY.v };
 	case 'black_setup': BLREADY.v = true; return { ok: true, restarting: true };
 	case 'term': return { out: p.cmd.startsWith('cd ') ? '' : 'output of ' + p.cmd + '\nline2', code: p.cmd === 'false' ? 1 : 0, cwd: p.cmd.startsWith('cd ') ? p.cmd.slice(3) : p.cwd };
@@ -317,4 +319,4 @@ const DYD = { d: null, runs: 0 };
 const FSUM = { v: 'S1', saved: [] };
 // 一次 JSON-RPC 回答：方法报错时按路由器的格式回错误（带错误码，比如 6.0 的面板锁 -32014）
 function reply(id, method, params) { try { return { jsonrpc: '2.0', id, result: respond(method, params) }; } catch (e) { return { jsonrpc: '2.0', id, error: { code: e.code || -32000, message: e.message, data: e.data } }; } }
-module.exports = { reply, FSUM, DN, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU, PASSM };
+module.exports = { reply, FSUM, DN, DI, DH, DEVFORGET, DIMG, PXM, AUTO, DYD, respond, WD, cloudStatus, OC, LK, KILLED, ASW, PZ, TFD, MENU, PASSM };

@@ -35,7 +35,7 @@ async function loadSubs(quiet) {
 				<label class="sw"><input type="checkbox" data-en ${on ? 'checked' : ''}><i></i></label></div>
 			<div data-info class="muted" style="margin-top:8px">${f ? `配置文件 ${esc(f.name)} · ${B(f.size)} · ${ts(f.mtime)} 更新` : '还没有下载过'}</div>
 			<div data-flow></div>
-			<div class="rowbtns"><button class="btn sm blue" data-up>更新</button><button class="btn sm" data-flowbtn>查流量</button><button class="btn sm" data-ed>编辑</button>${f && !f.active ? '<button class="btn sm" data-use>使用这个配置</button>' : ''}</div>
+			<div class="rowbtns"><button class="btn sm blue" data-up>更新</button><button class="btn sm" data-more>更多</button></div>
 		</section>`;
 	}).join('');
 }
@@ -48,16 +48,26 @@ $('subList').addEventListener('click', async (e) => {
 		if (f && f.active && !(await confirmBox('更新订阅「' + s.name + '」', '这是正在使用的配置，更新完成后 OpenClash 会自动重启，断网 10–30 秒。', '更新'))) return;
 		return busy(t.closest('[data-up]'), async () => { await P('sub_update', { name: s.name }); toast('「' + s.name + '」开始在后台更新'); watchJobs(); }, false);
 	}
-	if (t.closest('[data-flowbtn]')) return busy(t.closest('[data-flowbtn]'), async () => {
+	// 6.0 第 88 项：查流量、编辑、使用这个配置收进「更多」
+	let act = t.closest('[data-flowbtn]') ? 'flow' : t.closest('[data-ed]') ? 'ed' : t.closest('[data-use]') ? 'use' : null;
+	if (t.closest('[data-more]')) {
+		const f = (st.files || []).find((x) => x.sub === s.name);
+		act = await moreSheet({ t: s.name || '（未命名）', sub: f ? (f.active ? '正在使用' : '配置文件 ' + f.name) : '还没有下载过' }, [
+			{ items: [{ v: 'flow', ic: '<path d="M5 20v-6M10 20V9M15 20v-9M20 20V5"/>', t: '查流量', sub: '剩余流量和到期时间（机场提供才有）' },
+				{ v: 'ed', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '编辑', sub: '订阅地址、名字、转换设置' }] },
+			{ items: [f && !f.active && { v: 'use', ic: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', t: '使用这个配置', sub: '切换后 OpenClash 重启，断网 10–30 秒' }] }
+		]);
+	}
+	if (act === 'flow') return busy(null, async () => {
 		delete subCache[s.sid];
 		const i = await subInfo(s.sid);
 		card.querySelector('[data-flow]').innerHTML = i ? subInfoHtml(i) : '<div class="muted">这个机场没有提供流量信息</div>';
 	});
-	if (t.closest('[data-ed]')) return editSub(s);
-	if (t.closest('[data-use]')) {
+	if (act === 'ed') return editSub(s);
+	if (act === 'use') {
 		const f = (st.files || []).find((x) => x.sub === s.name);
 		if (!(await confirmBox('切换配置', `切换到「${f.name}」并重启 OpenClash，断网 10–30 秒。`, '切换'))) return;
-		return busy(t.closest('[data-use]'), async () => { await P('cfg_switch', { name: f.name }); toast('已切换，OpenClash 正在重启'); S.state = null; watchJobs(); });
+		return busy(null, async () => { await P('cfg_switch', { name: f.name }); toast('已切换，OpenClash 正在重启'); S.state = null; watchJobs(); });
 	}
 });
 $('subList').addEventListener('change', async (e) => {

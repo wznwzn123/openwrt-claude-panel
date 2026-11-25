@@ -1,4 +1,4 @@
-// 设备页（5.2.3）：给设备改名字、改回原名、显示原名和「已在线多久」
+// 设备页（5.2.3）：给设备改名字、改回原名、显示原名和「已在线多久」；6.0 第 84 项起点名字直接在卡片上改
 const { chromium } = require('playwright');
 const http = require('http');
 const fs = require('fs');
@@ -35,27 +35,29 @@ const server = http.createServer((req, res) => {
 		page.on('pageerror', (e) => problems.push('页面错误：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8097/panel/?p=dev'); await page.waitForTimeout(2500);
-		const card = (i) => page.locator(`#dvList [data-i="${i}"]`);
-		ok(`[${tag}] 有 MAC 的设备有「改名字」按钮`, (await card(0).locator('[data-ren]').count()) === 1);
-		ok(`[${tag}] 读不到 MAC 的设备没有「改名字」`, (await card(2).locator('[data-ren]').count()) === 0);
+		const card = (i) => page.locator(`#dvList [data-i="${i}"]`), IN = () => card(0).locator('.dvin');
+		ok(`[${tag}] 有 MAC 的设备：名字能点`, (await card(0).locator('[data-ren]').count()) === 1);
+		ok(`[${tag}] 读不到 MAC 的设备：名字不能点`, (await card(2).locator('[data-ren]').count()) === 0);
 		ok(`[${tag}] 显示「已在线多久」`, /已在线 2 小时 15 分/.test(await card(1).textContent()), await card(1).textContent());
 		await card(0).locator('[data-ren]').click(); await page.waitForTimeout(400);
-		ok(`[${tag}] 改名字的框里提示原来的名字`, /iPhone/.test(await page.locator('.modal input, dialog input, input.input').last().getAttribute('placeholder')));
-		await page.locator('.modal input, dialog input, input.input').last().fill('妈妈的手机');
-		await page.locator('[data-ok]').last().click(); await page.waitForTimeout(1200);
+		ok(`[${tag}] 点名字：就在卡片上变成输入框，提示原来的名字`, (await IN().count()) === 1 && /iPhone/.test(await IN().getAttribute('placeholder')));
+		await IN().fill('妈妈的手机');
+		await IN().press('Enter'); await page.waitForTimeout(1200);
 		ok(`[${tag}] 改完列表里显示新名字`, /妈妈的手机/.test(await card(0).textContent()));
 		ok(`[${tag}] 下面显示原名`, /原名：iPhone/.test(await card(0).textContent()));
-		ok(`[${tag}] 提示改好了`, /改好了/.test(await page.textContent('#toast')));
+		ok(`[${tag}] 提示改好了`, /已改名：妈妈的手机/.test(await page.textContent('#toast')));
 		// 改回原名
 		await card(0).locator('[data-ren]').click(); await page.waitForTimeout(400);
-		await page.locator('.modal input, dialog input, input.input').last().fill('');
-		await page.locator('[data-ok]').last().click(); await page.waitForTimeout(1200);
+		await IN().fill('');
+		await IN().press('Enter'); await page.waitForTimeout(1200);
 		ok(`[${tag}] 留空就改回原名`, /iPhone/.test(await card(0).textContent()) && !/原名：/.test(await card(0).textContent()));
 		// 太长
 		await card(0).locator('[data-ren]').click(); await page.waitForTimeout(400);
-		await page.locator('.modal input, dialog input, input.input').last().fill('这是一个非常非常非常非常非常非常长的设备名字超过了二十个字');
-		await page.locator('[data-ok]').last().click(); await page.waitForTimeout(600);
-		ok(`[${tag}] 名字太长有提示，不保存`, /太长/.test(await page.textContent('#toast')) && !Object.keys(DN).length);
+		await IN().fill('这是一个非常非常非常非常非常非常长的设备名字超过了二十个字');
+		await IN().press('Enter'); await page.waitForTimeout(600);
+		ok(`[${tag}] 名字太长有提示，不保存，输入框还在`, /太长/.test(await page.textContent('#toast')) && !Object.keys(DN).length && (await IN().count()) === 1);
+		await IN().press('Escape'); await page.waitForTimeout(300);
+		ok(`[${tag}] 按 Esc 不改，名字变回原样`, (await IN().count()) === 0 && /iPhone/.test(await card(0).textContent()));
 		const ow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
 		ok(`[${tag}] 设备页不横向滚动`, ow <= 0, ow);
 		await page.screenshot({ path: path.join(__dirname, 'shots', 'devname-' + w + '.png'), fullPage: true });

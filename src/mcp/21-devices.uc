@@ -1,3 +1,11 @@
+// 6.0 第 87 项：从列表里删掉的离线设备记在这里（MAC 或 ip:地址 → 删的时间）；设备再连上就自动重新出现
+const DH_PATH = replace(CL.DN_PATH, /devnames\.json$/, 'devhide.json');
+// 6.0 第 84 项：设备图标，用户自己选的记在 devnames.json 里（icon）；没选的面板按名字和厂商猜
+// 6.0 第 84 项：也能用相册里的照片当图标（面板裁成小方图再传上来，每张不到 40 KB），一台一个文件；列表里只带版本号，图另外取
+const DI_DIR = replace(CL.DN_PATH, /devnames\.json$/, 'devimg');
+const DI_RE = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+\/=]+$/;
+const di_file = (mac) => DI_DIR + '/' + replace(mac, /:/g, '') + '.txt';
+const DEV_ICONS = ['phone', 'tablet', 'laptop', 'pc', 'tv', 'console', 'watch', 'speaker', 'camera', 'printer', 'router', 'iot', 'other'];
 P.devices = function() {
 	let leases = lease_map();
 	let arp = {}, wdev = {};
@@ -21,37 +29,81 @@ P.devices = function() {
 
 	// 在线多久：cmcp-traffic 每分钟记一次（Wi-Fi 设备用无线驱动报的连上时长，更准）
 	let on = CL.readj('/tmp/cmcp_online.json', {}), now = time();
-	let seen = {}, list = [];
+	let seen = {}, list = [], al = CL.dev_aliases(), hid = CL.readj(DH_PATH, {}), hch = false;
+	if (type(hid) != 'object') hid = {};
+	// 删过的设备 30 天后从记录里清掉（那时 DHCP 记录一般早没了）
+	for (let k, t in hid) if (now - (+t || 0) > 30 * 86400) { delete hid[k]; hch = true; }
 	function add(ip) {
 		if (seen[ip]) return;
 		seen[ip] = 1;
 		let l = leases[ip] ?? {}, a = arp[ip] ?? {}, mac = l.mac ?? a.mac, online = !!arp[ip] || !!stats[ip];
-		let since = online && mac && +on[mac] > 0 && +on[mac] <= now ? +on[mac] : null;
-		push(list, { ip, mac, name: l.name ?? (mac ? CL.dev_label(mac, null) : null), orig: l.orig ?? null, renamed: !!(mac && CL.dev_aliases()[mac]), online, since, iface: a.dev, stats: stats[ip] });
+		let hk = mac ?? ('ip:' + ip);
+		if (hid[hk]) { if (!online) return; delete hid[hk]; hch = true; }
+		let since = online && mac && +on[mac] > 0 && +on[mac] <= now ? +on[mac] : null, x = mac ? al[mac] : null;
+		push(list, { ip, mac, name: l.name ?? (mac ? CL.dev_label(mac, null) : null), orig: l.orig ?? null, renamed: !!(type(x) == 'object' && x.name), icon: type(x) == 'object' && x.icon ? x.icon : null, img: type(x) == 'object' && x.img ? x.img : null, online, since, iface: a.dev, stats: stats[ip] });
 	}
 	for (let ip in keys(leases)) add(ip);
 	for (let ip in keys(arp)) add(ip);
 	for (let ip in keys(stats)) if (match(ip, /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./)) add(ip);
+	if (hch) { writefile(DH_PATH + '.tmp', sprintf('%J', hid)); rename(DH_PATH + '.tmp', DH_PATH); }
 	list = sort(list, (x, y) => ((y.online ? 1 : 0) - (x.online ? 1 : 0)) || ((y.stats?.dl ?? 0) - (x.stats?.dl ?? 0)));
 	return { devices: list };
 };
 
-// 给设备改名字（按 MAC 记，路由器重启、换 IP 都还在）；名字留空就是改回原来的
+// 给设备改名字、换图标（按 MAC 记，路由器重启、换 IP 都还在）；名字留空就是改回原来的，图标留空就是改回自动认
+// 只传 icon 时不动名字；只传 name（或都不传，老面板）时不动图标
+function dn_write(d) {
+	let ks = keys(d);
+	// 最多记 500 台（够用了），多了把最早改的去掉
+	if (length(ks) > 500) for (let k in slice(sort(ks, (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0)), 0, length(ks) - 500)) delete d[k];
+	writefile(CL.DN_PATH + '.tmp', sprintf('%J', d));
+	rename(CL.DN_PATH + '.tmp', CL.DN_PATH);
+}
 P.dev_rename = function(a) {
 	let mac = lc(trim('' + (a.mac ?? '')));
 	if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) die('设备地址不对');
-	let name = trim(replace('' + (a.name ?? ''), /[\x01-\x1f\x7f]/g, ''));
-	if (length(name) > 60) die('名字太长了，短一点（20 个字以内）');
-	let f = CL.DN_PATH, d = CL.readj(f, {});
+	let d = CL.readj(CL.DN_PATH, {});
 	if (type(d) != 'object') d = {};
-	if (length(name)) d[mac] = { name, at: time() };
-	else delete d[mac];
-	// 最多记 500 台（够用了），多了把最早改的去掉
-	let ks = keys(d);
-	if (length(ks) > 500) for (let k in slice(sort(ks, (x, y) => (d[x].at ?? 0) - (d[y].at ?? 0)), 0, length(ks) - 500)) delete d[k];
-	writefile(f + '.tmp', sprintf('%J', d));
-	rename(f + '.tmp', f);
-	return { ok: true, mac, name: length(name) ? name : null };
+	let e = type(d[mac]) == 'object' ? d[mac] : {};
+	if (exists(a, 'name') || !exists(a, 'icon')) {
+		let name = trim(replace('' + (a.name ?? ''), /[\x01-\x1f\x7f]/g, ''));
+		if (length(name) > 60) die('名字太长了，短一点（20 个字以内）');
+		if (length(name)) e.name = name; else delete e.name;
+	}
+	// 选了内置图标就不用照片了
+	if (exists(a, 'icon')) {
+		let ic = '' + (a.icon ?? '');
+		if (length(ic) && index(DEV_ICONS, ic) < 0) die('不认识这个图标');
+		if (length(ic)) e.icon = ic; else delete e.icon;
+		if (e.img) { unlink(di_file(mac)); delete e.img; }
+	}
+	if (exists(a, 'img')) {
+		let im = '' + (a.img ?? '');
+		if (length(im)) {
+			if (length(im) > 40000 || !match(im, DI_RE)) die('图片不对或太大了，换一张试试');
+			let n = 0;
+			for (let k, x in d) if (type(x) == 'object' && x.img && k != mac) n++;
+			if (n >= 200) die('最多给 200 台设备设照片');
+			mkdir(DI_DIR);
+			writefile(di_file(mac) + '.tmp', im);
+			rename(di_file(mac) + '.tmp', di_file(mac));
+			e.img = time();
+		} else if (e.img) { unlink(di_file(mac)); delete e.img; }
+	}
+	if (e.name || e.icon || e.img) { e.at = time(); d[mac] = e; } else delete d[mac];
+	dn_write(d);
+	return { ok: true, mac, name: e.name ?? null, icon: e.icon ?? null, img: e.img ?? null };
+};
+// 取设备照片：{ macs: [...] } → { imgs: { mac: 'data:image/...' } }
+P.dev_imgs = function(a) {
+	let out = {}, al = CL.dev_aliases();
+	for (let m in slice(type(a?.macs) == 'array' ? a.macs : [], 0, 300)) {
+		m = lc('' + m);
+		if (!match(m, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/) || !al[m]?.img) continue;
+		let v = readfile(di_file(m));
+		if (v && match(v, DI_RE)) out[m] = v;
+	}
+	return { imgs: out };
 };
 
 P.connections = function(a) {

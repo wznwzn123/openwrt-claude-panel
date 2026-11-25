@@ -31,11 +31,9 @@ const MAC = 'aa:bb:cc:dd:ee:ff';
 	await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 	await page.goto('http://localhost:8096/panel/?p=dev'); await page.waitForTimeout(2500);
 	const card = () => page.locator('#dvList [data-i="0"]');
-	ok('设备卡片有「暂停」按钮', (await card().locator('[data-pause]').count()) === 1 && (await card().locator('[data-pause]').textContent()) === '暂停');
+	ok('设备卡片有「暂停」按钮', (await card().locator('[data-pause]').count()) === 1 && (await card().locator('[data-pause]').textContent()) === '暂停上网');
 	ok('没有暂停的设备时，不显示暂停列表', (await page.textContent('#pzBox')).trim() === '');
-	ok('读不到 MAC 的设备也有按钮（点了提示）', (await page.locator('#dvList [data-i="2"] [data-pause]').count()) === 1);
-	await page.locator('#dvList [data-i="2"] [data-pause]').click(); await page.waitForTimeout(400);
-	ok('读不到 MAC：提示没法暂停', /读不到 MAC/.test(await page.textContent('#toast')));
+	ok('读不到 MAC 的设备没法暂停：卡片上不放「暂停上网」，只有「更多」', (await page.locator('#dvList [data-i="2"] [data-pause]').count()) === 0 && (await page.locator('#dvList [data-i="2"] [data-more]').count()) === 1);
 
 	// 打开暂停面板
 	await card().locator('[data-pause]').click(); await page.waitForTimeout(500);

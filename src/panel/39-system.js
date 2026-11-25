@@ -3,12 +3,75 @@
    ===================================================================== */
 let devices = [], blk = { entries: [] };
 const isBlack = (d) => blk.entries.some((e) => (d.mac && e.mac === d.mac) || (!e.mac && e.ip === d.ip) || (e.ip === d.ip && d.mac && e.mac === d.mac));
-const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.devs[d.mac] : null; return `<article class="card" ${attr}="${i}">
-	<div class="sechead"><div style="min-width:0"><b style="font-size:16px;display:block" class="ell">${esc(d.name || '未命名设备')}</b><div class="sub" style="font-size:12.5px">${esc(d.ip)}${d.mac ? ' · ' + esc(d.mac) : ''}</div>${d.renamed && d.orig && d.orig !== d.name ? `<div class="sub ell" style="font-size:12px">原名：${esc(d.orig)}</div>` : ''}${d.online && d.since ? `<div class="sub" style="font-size:12px">已在线 ${esc(dur(Date.now() / 1000 - d.since))}</div>` : ''}</div>
-		<span class="pill ${pz && pz.on ? 'warnc' : isBlack(d) ? 'red' : d.online ? 'good' : ''}">${pz && pz.on ? '已暂停' : isBlack(d) ? '不走代理' : d.online ? '在线' : '离线'}</span></div>
+/* 6.0 第 84 项：设备图标。用户自己选的优先；没选的按名字认，再按厂商（MAC 前 3 段），手机默认的随机 MAC 当手机，都认不出用通用图标 */
+const DV_KIND = {
+	phone: ['手机', '#0a84ff', '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>'],
+	tablet: ['平板', '#5e5ce6', '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M11 18h2"/>'],
+	laptop: ['笔记本', '#30b0c7', '<rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/>'],
+	pc: ['电脑', '#5856d6', '<rect x="3.5" y="4" width="17" height="12" rx="2"/><path d="M9 20h6M12 16v4"/>'],
+	tv: ['电视 / 盒子', '#af52de', '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M9 2.5l3 2.5 3-2.5"/>'],
+	console: ['游戏机', '#ff2d55', '<path d="M7 8h10a4 4 0 0 1 4 4.5l-.6 3.5a2.4 2.4 0 0 1-4.1 1.2L14.5 15h-5l-1.8 2.2a2.4 2.4 0 0 1-4.1-1.2L3 12.5A4 4 0 0 1 7 8z"/><path d="M8 11v3M6.5 12.5h3M15.5 12h.01M17.5 13.5h.01"/>'],
+	watch: ['手表 / 手环', '#ff9500', '<rect x="6.5" y="7" width="11" height="10" rx="3"/><path d="M9 7l.5-4h5l.5 4M9 17l.5 4h5l.5-4"/>'],
+	speaker: ['音箱', '#34c759', '<rect x="6" y="3" width="12" height="18" rx="3"/><circle cx="12" cy="14" r="3"/><path d="M12 7.5h.01"/>'],
+	camera: ['摄像头', '#ff3b30', '<circle cx="12" cy="10" r="6"/><circle cx="12" cy="10" r="2"/><path d="M8 20h8M12 16v4"/>'],
+	printer: ['打印机', '#a2845e', '<path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/>'],
+	router: ['路由器 / 中继', '#00c7be', '<rect x="3.5" y="13" width="17" height="7" rx="2"/><path d="M7.5 16.5h.01M11 16.5h.01M8 13l-2-6M16 13l2-6"/>'],
+	iot: ['智能家居', '#ff9f0a', '<path d="M4 11l8-7 8 7v9H4z"/><path d="M12 11.5v3M10 13a2.8 2.8 0 1 0 4 0"/>'],
+	other: ['其他', '#8e8e93', '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>']
+};
+const DV_RE = [
+	['tablet', /ipad|matepad|mipad|xiaomi-?pad|redmi-?pad|galaxy-?tab|\btab\b|平板|kindle|honorpad|lenovo-?tab/],
+	['watch', /watch|手表|手环|\bband\b/],
+	['phone', /iphone|android|galaxy|redmi|huawei|honor|oppo|vivo|oneplus|realme|pixel|iqoo|meizu|nokia|手机|phone|^mi-?\d|xiaomi-?\d|mate-?\d|nova|^p\d0/],
+	['laptop', /macbook|laptop|notebook|thinkpad|笔记本|surface|matebook|xiaoxin|legion|zenbook|vivobook|ideapad|^laptop-/],
+	['pc', /desktop|^pc$|-pc$|^pc-|imac|mac-?mini|mac-?studio|台式|电脑|workstation|\bnas\b|synology|diskstation|raspberry|truenas|unraid|pve|esxi/],
+	['tv', /\btv\b|电视|mitv|tv-?box|盒子|appletv|apple-?tv|chromecast|fire-?tv|shield|投影|projector|bravia|roku/],
+	['console', /ps[345]\b|playstation|xbox|nintendo|switch-?\w*nintendo|steam-?deck/],
+	['speaker', /speaker|音箱|homepod|echo|xiaoai|小爱|天猫精灵|tmall-?genie|sonos|nest-?(mini|hub|audio)/],
+	['camera', /camera|\bcam\b|摄像|\bipc\b|ezviz|萤石|imou|乐橙|doorbell|门铃|hikvision|dahua/],
+	['printer', /print|打印|epson|canon|brother|laserjet|deskjet|officejet/],
+	['router', /router|openwrt|immortalwrt|\bmesh\b|tp-?link|asus-?rt|netgear|中继|repeater|^ap-|-ap$/],
+	['iot', /^esp|tuya|涂鸦|yeelight|插座|plug|\blamp\b|\bbulb\b|灯|sensor|空调|aircon|vacuum|扫地|roborock|dreame|purifier|净化|midea|美的|haier|海尔|gree|格力|chuangmi|lumi|aqara|zhimi|xiaomi-?(plug|light|fan)|\biot\b|ewelink|sonoff|shelly/]
+];
+const DV_OUI = { iot: '18fe34 5ccf7f 240ac4 30aea4 a4cf12 84f3eb ecfabc 3c71bf bcddc2 c44f33 2462ab 7c9ebd 083af2 94b97e cc50e3 483fda 349454 e8db84 98cdac 2cf432 600194 dc4f22 68c63a a020a6 d8bfc0 8caab5', pc: 'b827eb dca632 e45f01 d83add 2ccf67', console: '98b6e9 7cbb8a 0403d6 e84ece 582f40 00d9d1 f8461c 709e29 bc60a7 280dfc', camera: '4419b6 c056e3 bcad28 4cbd8f' };
+function devKind(d) {
+	if (d.icon && DV_KIND[d.icon]) return d.icon;
+	const n = String((d.renamed ? d.name + ' ' : '') + (d.orig || d.name || '')).toLowerCase();
+	if (n.trim()) for (const [k, re] of DV_RE) if (re.test(n)) return k;
+	const mac = String(d.mac || '').toLowerCase(), oui = mac.replace(/:/g, '').slice(0, 6);
+	if (oui) for (const k in DV_OUI) if (DV_OUI[k].includes(oui)) return k;
+	// 手机、平板连 Wi-Fi 默认用随机 MAC（第一段第二位是 2、6、a、e）
+	if (/^.[26ae]/.test(mac)) return 'phone';
+	return 'other';
+}
+const dvSvg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${DV_KIND[k][2]}</svg>`;
+// 设备照片：列表里只有版本号（img），图按需取一次，存在内存里
+const DVIMG = {};
+const dvTile = (d, k, btn) => { const im = d.mac && d.img && DVIMG[d.mac] && DVIMG[d.mac].v === d.img ? DVIMG[d.mac].u : '';
+	const st = `--c:${DV_KIND[k][1]}${im ? `;background-image:url('${im}')` : ''}`;
+	return btn ? `<button class="dvic${im ? ' img' : ''}" data-icon style="${st}" aria-label="换图标（现在是${im ? '照片' : DV_KIND[k][0]}）">${im ? '' : dvSvg(k)}</button>` : `<span class="dvic${im ? ' img' : ''}" style="${st}">${im ? '' : dvSvg(k)}</span>`; };
+async function dvImgLoad() {
+	const need = devices.filter((d) => d.mac && d.img && !(DVIMG[d.mac] && DVIMG[d.mac].v === d.img));
+	if (!need.length) return false;
+	const r = await P('dev_imgs', { macs: need.map((d) => d.mac) });
+	for (const d of need) { const u = r.imgs && r.imgs[d.mac]; if (u && AV_RE.test(u)) DVIMG[d.mac] = { v: d.img, u }; }
+	return true;
+}
+const DV_PEN = '<svg class="dvpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+const devEdit = (d) => !!d.mac && canPerm('parent');
+// 设备卡片（6.0 第 84、88 项）：图标点一下换、名字点一下改；卡片上只留常用的按钮，其余在「更多」里
+const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.devs[d.mac] : null, k = devKind(d), ed = attr === 'data-i' && devEdit(d), bl = isBlack(d);
+	const nm = esc(d.name || '未命名设备');
+	return `<article class="card dvcard${d.online ? '' : ' off'}" ${attr}="${i}">
+	<div class="dvtop">${dvTile(d, k, ed)}
+		<div class="dvmain">${ed ? `<button class="dvname" data-ren aria-label="改名字：${nm}"><span class="ell">${nm}</span>${DV_PEN}</button>` : `<b class="dvname ell">${nm}</b>`}
+			<div class="sub dvaddr"><span>${esc(d.ip)}</span>${d.mac ? `<span>${esc(d.mac)}</span>` : ''}</div>${d.renamed && d.orig && d.orig !== d.name ? `<div class="sub ell" style="font-size:12px">原名：${esc(d.orig)}</div>` : ''}${d.online && d.since ? `<div class="sub" style="font-size:12px">已在线 ${esc(dur(Date.now() / 1000 - d.since))}</div>` : ''}</div>
+		<span class="pill ${pz && pz.on ? 'warnc' : bl ? 'red' : d.online ? 'good' : ''}">${pz && pz.on ? '已暂停' : bl ? '不走代理' : d.online ? '在线' : '离线'}</span></div>
 	${pz ? `<div class="pzline">${pzDesc(pz)}</div>` : ''}
 	${d.stats ? `<div class="actions" style="margin-top:10px"><span class="pill">${d.stats.conns} 个连接</span>${d.stats.proxied ? `<span class="pill blue">${d.stats.proxied} 个走代理</span>` : ''}<span class="pill">↓ ${B(d.stats.dl)}</span><span class="pill">↑ ${B(d.stats.ul)}</span></div>` : ''}
-	<div class="rowbtns"><button class="btn sm" data-conns>看连接</button>${attr === 'data-i' && d.mac ? '<button class="btn sm" data-ren>改名字</button>' : ''}${attr === 'data-i' ? `<button class="btn sm ${pz && pz.on ? 'good' : ''}" data-pause>${pz && pz.on ? '恢复 / 设置' : '暂停'}</button>` : ''}${isBlack(d) ? '<button class="btn sm good" data-unblack>恢复走代理</button>' : '<button class="btn sm" data-black>不走代理</button>'}</div>
+	<div class="rowbtns">${attr === 'data-i'
+		? `${d.mac ? `<button class="btn sm ${pz && pz.on ? 'good' : ''}" data-pause>${pz && pz.on ? '恢复 / 设置' : '暂停上网'}</button>` : ''}<button class="btn sm" data-more>更多</button>`
+		: `${bl ? '<button class="btn sm good" data-unblack>恢复走代理</button>' : '<button class="btn sm" data-black>不走代理</button>'}<button class="btn sm" data-conns>看连接</button>`}</div>
 </article>`; };
 async function loadDev() {
 	const [b, pz] = await Promise.all([P('black_state'), P('pause_list').catch(() => null)]);
@@ -17,32 +80,147 @@ async function loadDev() {
 	devices = blk.devices || [];
 	renderPz();
 	setStatus(true, '在线');
-	const online = devices.filter((d) => d.online).length;
+	const online = devices.filter((d) => d.online).length, off = devices.length - online;
 	$('dvOnline').textContent = online + ' 台在线';
 	$('dvCount').textContent = devices.length + ' 台';
+	const cl = $('dvClear'); if (cl) cl.classList.toggle('hidden', !off || !canPerm('parent'));
 	if (!devices.length) { $('dvList').innerHTML = '<div class="card empty">没有发现设备</div>'; return; }
 	$('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join('');
+	const ds = devices;
+	dvImgLoad().then((ch) => { if (ch && ds === devices) $('dvList').innerHTML = devices.map((d, i) => devCard(d, i, 'data-i')).join(''); }).catch(() => {});
 }
 $('dvList').addEventListener('click', (e) => {
 	const a = e.target.closest('[data-i]'); if (!a) return;
+	if (e.target.closest('.dvin')) return;
 	const d = devices[+a.dataset.i];
 	if (e.target.closest('[data-pause]')) return pauseSheet(d);
-	if (e.target.closest('[data-ren]')) return devRename(d);
-	if (e.target.closest('[data-black]')) return blackToggle(d, true, e.target.closest('button'));
-	if (e.target.closest('[data-unblack]')) return blackToggle(d, false, e.target.closest('button'));
+	if (e.target.closest('[data-ren]')) return devRenameInline(a, d);
+	if (e.target.closest('[data-icon]')) return devIconSheet(d);
+	if (e.target.closest('[data-more]')) return devMore(d);
 	$('cnFilter').value = d.ip; go('conn');
 });
+$('dvClear') && $('dvClear').addEventListener('click', (e) => devClearOff(e.currentTarget));
 
-// 给设备改个好认的名字（按 MAC 记，换 IP、路由器重启都还在）；留空就是改回原来的名字
+// 名字点一下就在卡片上改（按 MAC 记，换 IP、路由器重启都还在）；回车或点别处保存，Esc 不改；留空就是改回原来的名字
+function devRenameInline(card, d) {
+	const nb = card.querySelector('[data-ren]'); if (!nb || card.querySelector('.dvin')) return;
+	const inp = document.createElement('input');
+	inp.className = 'input dvin'; inp.value = d.renamed ? d.name || '' : ''; inp.maxLength = 40;
+	inp.placeholder = d.orig ? '原名：' + d.orig : '比如：客厅电视'; inp.setAttribute('aria-label', '设备名字');
+	inp.autocapitalize = 'off'; inp.spellcheck = false; inp.enterKeyHint = 'done';
+	nb.replaceWith(inp); inp.focus(); inp.select();
+	let done = false;
+	const back = () => { if (inp.isConnected) inp.replaceWith(nb); };
+	const save = async () => {
+		if (done) return; done = true;
+		const v = inp.value.trim(), old = d.renamed ? d.name || '' : '';
+		if (v === old) return back();
+		if (v.length > 20) { toast('名字太长了，20 个字以内', true); done = false; inp.focus(); return; }
+		inp.disabled = true;
+		try {
+			await P('dev_rename', { mac: d.mac, name: v });
+			toast(v ? '已改名：' + v : '已改回原来的名字');
+			loadDev().catch(() => {});
+		} catch (e) { toast(e.message, true); back(); }
+	};
+	inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } else if (e.key === 'Escape') { done = true; back(); } });
+	inp.addEventListener('blur', () => setTimeout(save, 0));
+}
+// 「更多」里的改名字（键盘不好点到卡片时也能用）
 async function devRename(d) {
-	const v = await promptBox('改名字', d.orig ? '原来的名字：' + d.orig + '（留空就是改回原名）' : '比如：客厅电视（留空就是改回原名）', d.renamed ? d.name || '' : '');
+	const v = await promptBox('改名字', d.orig ? '原名：' + d.orig + '（留空就是改回原名）' : '比如：客厅电视（留空就是改回原名）', d.renamed ? d.name || '' : '');
 	if (v === false || v == null) return;
 	if (v.length > 20) return toast('名字太长了，20 个字以内', true);
 	try {
 		await P('dev_rename', { mac: d.mac, name: v });
-		toast(v ? '改好了：' + v : '已改回原来的名字');
+		toast(v ? '已改名：' + v : '已改回原来的名字');
 		loadDev().catch(() => {});
 	} catch (e) { toast(e.message, true); }
+}
+// 选图标：内置的十几种，或者从相册选一张照片（裁成方形小图再传，不到 40 KB）
+async function devPhoto(f) {
+	const url = URL.createObjectURL(f);
+	try {
+		const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('这张图片打不开，换一张试试')); i.src = url; });
+		const c = document.createElement('canvas'), n = 128, sz = Math.min(img.naturalWidth, img.naturalHeight);
+		c.width = c.height = n;
+		c.getContext('2d').drawImage(img, (img.naturalWidth - sz) / 2, (img.naturalHeight - sz) / 2, sz, sz, 0, 0, n, n);
+		for (const [t, q] of [['image/webp', 0.82], ['image/jpeg', 0.82], ['image/jpeg', 0.6]]) { const u = c.toDataURL(t, q); if (u.startsWith('data:' + t) && u.length < 40000) return u; }
+		throw new Error('图片太大了，换一张试试');
+	} finally { URL.revokeObjectURL(url); }
+}
+function devIconSheet(d) {
+	const cur = d.img ? '' : d.icon || '', auto = devKind({ ...d, icon: null }), hasImg = !!d.img;
+	modal(`<div class="sheethead"><h3>换图标</h3><button class="btn sm" data-v="close">关闭</button></div>
+		<p class="muted" style="margin:0 0 12px;font-size:13px">${esc(d.name || d.ip)}</p>
+		<div class="mgrp"><div class="mlist"><button class="mact" data-photo><i>${mIc('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5L6 19"/>')}</i><span><b>${hasImg ? '换一张照片' : '用相册里的照片'}</b><small>用设备的照片，一眼认出是哪台</small></span></button>${hasImg ? `<button class="mact danger" data-k="${esc(d.icon || '')}"><i>${mIc('<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>')}</i><span><b>不用照片</b><small>改回${d.icon ? '「' + DV_KIND[d.icon][0] + '」' : '自动识别的图标'}</small></span></button>` : ''}</div></div>
+		<div class="mgrp"><div class="mgt">内置图标</div><div class="dvgrid">${Object.keys(DV_KIND).map((k) => `<button class="dvpick${cur === k ? ' on' : ''}" data-k="${k}" aria-pressed="${cur === k}"><span class="dvic" style="--c:${DV_KIND[k][1]}">${dvSvg(k)}</span><span>${DV_KIND[k][0]}</span></button>`).join('')}</div>
+		<button class="btn${cur || hasImg ? '' : ' on'}" data-k="" style="width:100%;margin-top:12px">自动识别（现在认成「${DV_KIND[auto][0]}」）</button></div>`,
+	(m, close) => m.querySelector('.modalbox').addEventListener('click', async (e) => {
+		if (e.target.closest('[data-photo]')) {
+			const f = await pickFile('image/*'); if (!f) return;
+			return busy(null, async () => { const u = await devPhoto(f); const r = await P('dev_rename', { mac: d.mac, img: u }, 30000); DVIMG[d.mac] = { v: r.img, u }; close(); toast('照片换好了'); await loadDev(); });
+		}
+		const b = e.target.closest('[data-k]'); if (!b) return;
+		const k = b.dataset.k; if (k === cur && !hasImg) return close();
+		try { await P('dev_rename', { mac: d.mac, icon: k }); close(); toast(hasImg && k === (d.icon || '') ? '不用照片了' : k ? '图标换成了「' + DV_KIND[k][0] + '」' : '图标改回自动识别'); loadDev().catch(() => {}); }
+		catch (er) { toast(er.message, true); }
+	}));
+}
+// 「更多」：这台设备能做的事都在这里
+function devMore(d) {
+	const pz = d.mac ? PZ.devs[d.mac] : null, bl = isBlack(d), ed = devEdit(d), par = canPerm('parent'), k = devKind(d);
+	moreSheet({ t: d.name || '未命名设备', sub: d.ip + ' · ' + (d.online ? '在线' : '离线'), ic: dvTile(d, k) }, [
+		{ items: [{ v: 'conns', ic: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>', t: '看连接', sub: '它正在访问哪些网站、走的哪条线路' }] },
+		{ t: '名字和图标', items: [ed && { v: 'ren', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '改名字', sub: d.renamed && d.orig ? '原名：' + d.orig : '' },
+			ed && { v: 'icon', ic: dvSvg(k), t: '换图标', sub: d.img ? '现在用的是照片' : '现在是「' + DV_KIND[k][0] + '」' + (d.icon ? '' : '（自动识别）') + '，也能用照片' }] },
+		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网', sub: pz && pz.on ? '现在暂停中' : '暂停一会儿，或每天定时断网' },
+			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理', sub: '现在只用大陆网络' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理', sub: '只用大陆网络，海外网站打不开' })] },
+		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', sub: '设备再连上会重新出现', danger: true }] }
+	]).then((v) => {
+		if (v === 'conns') { $('cnFilter').value = d.ip; go('conn'); }
+		else if (v === 'ren') devRename(d);
+		else if (v === 'icon') devIconSheet(d);
+		else if (v === 'pause') pauseSheet(d);
+		else if (v === 'black') blackToggle(d, true, null);
+		else if (v === 'unblack') blackToggle(d, false, null);
+		else if (v === 'forget') devForget(d);
+	});
+}
+// 删前说清楚会一起删掉的设置
+function devSets(d) {
+	const out = [], pz = d.mac ? PZ.devs[d.mac] : null;
+	if (pz && pz.until) out.push('暂停上网');
+	if (pz && (pz.sched || []).length) out.push('每天定时断网（' + pz.sched.map((s) => s.from + '–' + s.to).join('、') + '）');
+	if (isBlack(d)) out.push('「不走代理」');
+	if (d.renamed) out.push('改过的名字「' + d.name + '」');
+	if (d.img) out.push('设的照片');
+	else if (d.icon) out.push('选的图标');
+	return out;
+}
+async function devForget(d) {
+	if (d.online) return toast('在线的设备不能删', true);
+	const sets = devSets(d), nm = d.name || d.ip;
+	const txt = (sets.length ? '它的这些设置会一起删掉：\n• ' + sets.join('\n• ') + '\n\n' : '') + '以后这台设备再连上，会作为新设备重新出现' + (sets.length ? '，上面的设置要重新设。' : '。');
+	if (!(await confirmBox('从列表删除「' + nm + '」？', txt, '删除', true))) return;
+	await busy(null, async () => {
+		const r = await P('dev_forget', { items: [{ mac: d.mac || undefined, ip: d.ip }] });
+		toast(r.n ? '已删除「' + nm + '」' : r.skip && r.skip.online ? '它刚刚又连上了，没有删' : '列表里已经没有它了');
+		await loadDev();
+	});
+}
+// 一键清除离线设备：有设置（暂停、定时断网、不走代理、改过名字或图标）的不删，要删请单独删
+async function devClearOff(btn) {
+	const off = devices.filter((d) => !d.online), plain = off.filter((d) => !devSets(d).length), keep = off.length - plain.length;
+	if (!off.length) return toast('没有离线设备');
+	if (!plain.length) return toast(`${keep} 台离线设备都有设置（暂停、不走代理或改过名字），要删请点它的「更多」单独删`);
+	const txt = `会从列表删掉 ${plain.length} 台离线设备。` + (keep ? `\n有设置的 ${keep} 台不删（暂停、定时断网、不走代理或改过名字），要删请单独删。` : '') + '\n\n这些设备以后再连上，会重新出现。';
+	if (!(await confirmBox('清除离线设备', txt, `删除 ${plain.length} 台`, true))) return;
+	await busy(btn, async () => {
+		const r = await P('dev_forget', { items: plain.map((d) => ({ mac: d.mac || undefined, ip: d.ip })), only_plain: true });
+		toast(`已删除 ${r.n} 台` + (r.skip && r.skip.online ? `，${r.skip.online} 台刚刚又连上了没删` : ''));
+		await loadDev();
+	}, false);
 }
 
 /* ---------- 流量统计 ---------- */

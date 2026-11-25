@@ -250,7 +250,7 @@ async function loadRole() {
 		// 路由器上这台手机有面板锁、手机上的设置却没了（被清掉）：按路由器的补回来（第 13 项）
 		if (r.lock && r.lock.on && !(lkCfg() || {}).on) lkSave({ on: 1, salt: r.lock.salt, len: r.lock.len });
 		if (r.ai != null) store.set('rp_ai', r.ai ? '1' : '0');
-		if (ch) { renderNav(); if (!canPage(page)) go('main'); }
+		if (ch) { renderNav(); if (!canPage(page)) go('main'); else if (page === 'dev' && devices.length) loadDev().catch(() => {}); } // 设备卡片上能不能改名、换图标看权限
 	} catch (e) {}
 }
 async function ncGo() {

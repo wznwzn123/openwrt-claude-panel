@@ -121,7 +121,10 @@ const ok = (name, cond, note) => { results.push([name, !!cond, note || '']); if 
 	await full('07-subs');
 	await overflow('订阅');
 	ok('订阅列表 2 个', await page.locator('#subList .subcard').count() === 2);
-	await page.click('#subList [data-s="0"] [data-flowbtn]'); await page.waitForTimeout(400);
+	ok('订阅卡片只留「更新」「更多」（6.0 第 88 项）', (await page.locator('#subList [data-s="0"] .rowbtns button').allTextContents()).join() === '更新,更多');
+	await page.click('#subList [data-s="0"] [data-more]'); await page.waitForTimeout(500);
+	ok('「更多」里有查流量、编辑', (await page.locator('.modal .mact b').allTextContents()).join().startsWith('查流量,编辑'));
+	await page.click('.modal [data-v="flow"]'); await page.waitForTimeout(700);
 	ok('查流量显示', (await page.textContent('#subList [data-s="0"]')).includes('已用'));
 	i = calls.length;
 	await page.click('#subList [data-s="1"] .sw input', { force: true }); await page.waitForTimeout(300);
@@ -143,7 +146,8 @@ const ok = (name, cond, note) => { results.push([name, !!cond, note || '']); if 
 	ok('添加订阅 → oc_sec add', add && add.p.op === 'add' && add.p.values.name === 'newsub' && add.p.values.keyword[0] === '香港' && add.p.values.de_ex_keyword === '到期' && add.p.values.sub_ua === 'clash-verge/v2.4.5', JSON.stringify(add && add.p.values));
 	await okBtn(); await page.waitForTimeout(300);
 	ok('添加后下载 → sub_update newsub', last('panel/sub_update').p.name === 'newsub');
-	await page.click('#subList [data-s="0"] [data-ed]'); await page.waitForTimeout(600);
+	await page.click('#subList [data-s="0"] [data-more]'); await page.waitForTimeout(500);
+	await page.click('.modal [data-v="ed"]'); await page.waitForTimeout(800);
 	await page.fill('.modal [data-o="sub_ua"] input', 'Clash');
 	i = calls.length;
 	await page.click('.modal [data-ok]'); await page.waitForTimeout(400);

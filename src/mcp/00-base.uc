@@ -3,7 +3,7 @@
 // 运行在 OpenWrt 自带的 ucode + uhttpd 上，无需安装额外运行环境。
 'use strict';
 
-import { readfile, writefile, popen, stat, stdin, rename, mkdir, open as fs_open } from 'fs';
+import { readfile, writefile, popen, stat, stdin, rename, mkdir, unlink, open as fs_open } from 'fs';
 import * as CL from 'cmcp.lib';
 
 const VERSION = '2.2.0';

@@ -2347,6 +2347,8 @@ P.push_id = function() {
 P.pause_set = function(a) {
 	let mac = lc(a?.mac ?? '');
 	if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/)) die('这台设备读不到 MAC 地址，没法暂停');
+	// 6.0 第 45 项：有 iptables 用 iptables，只有 nftables 用 nft；两个都没有就说清楚
+	if (!stat('/usr/sbin/iptables') && !stat('/usr/sbin/nft') && !getenv('CMCP_PAUSE_NFT')) compat_die('pause', '这台路由器没有 iptables 也没有 nft，暂停上网用不了');
 	let f = '/etc/claude-mcp/pause.json', p = cmcp_readj(f, {}), e = p[mac] ?? {};
 	if (a.name) e.name = substr('' + a.name, 0, 40);
 	if (a.resume) delete e.until;

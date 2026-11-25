@@ -27,6 +27,8 @@ for t in iptables ip6tables; do
 done
 # 访客 Wi-Fi（6.0）：面板加的访客 Wi-Fi、访客网络、防火墙区域、DHCP 设置一起删掉
 [ -x /usr/sbin/cmcp-guest ] && /usr/sbin/cmcp-guest remove
+# 设备暂停（6.0 起只有 nftables 的固件用 nft 表）
+command -v nft >/dev/null 2>&1 && nft delete table inet cmcp_pause 2>/dev/null
 # 隧道直连的设置（dnsmasq、OpenClash 局域网名单里加的那一行）删掉
 [ -x /usr/sbin/cmcp-tunbypass ] && /usr/sbin/cmcp-tunbypass remove
 # 自动拉黑（6.0）：自己的防火墙表 / ipset 规则一起删掉

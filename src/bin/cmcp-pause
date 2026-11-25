@@ -15,12 +15,15 @@
 //                 CMCP_PAUSE_IPT（用哪几个 iptables，逗号隔开）、CMCP_PAUSE_LEASES（DHCP 租约文件）、CMCP_PAUSE_NEIGH（邻居表文件）、CMCP_SBIN（cmcp-notify 在哪）
 'use strict';
 import * as L from 'cmcp.lib';
-import { access, readfile } from 'fs';
+import { access, readfile, writefile } from 'fs';
 
 const E = getenv('CMCP_PAUSE_ETC') || L.D, TMP = getenv('CMCP_PAUSE_TMP') || '/tmp';
 const F = E + '/pause.json', ON = TMP + '/cmcp_pause_on.json', WARN = TMP + '/cmcp_plan_warn.json', CH = 'CMCP_PAUSE';
 const LEASES = getenv('CMCP_PAUSE_LEASES') || '/tmp/dhcp.leases', SB = getenv('CMCP_SBIN') || '/usr/sbin';
-const ipt = getenv('CMCP_PAUSE_IPT') ? split(getenv('CMCP_PAUSE_IPT'), ',') : filter(['iptables', 'ip6tables'], (b) => access('/usr/sbin/' + b, 'x'));
+const ipt = getenv('CMCP_PAUSE_IPT') ? filter(split(getenv('CMCP_PAUSE_IPT'), ','), (b) => b != 'none') : filter(['iptables', 'ip6tables'], (b) => access('/usr/sbin/' + b, 'x'));
+// 6.0 第 45 项：没有 iptables（新版固件只有 nftables）时用 nft：自己一张表 inet cmcp_pause，只放「现在该断网」的设备（不用时间匹配），
+// 看门狗每 30 秒的 check 发现谁该开始 / 结束暂停就重新生成，所以开始和结束最多晚半分钟
+const NFT = !length(ipt) ? (getenv('CMCP_PAUSE_NFT') || (access('/usr/sbin/nft', 'x') ? 'nft' : null)) : null, NT = 'inet cmcp_pause';
 const NOW = +getenv('CMCP_PAUSE_NOW') || L.now();
 // 推送：to = 只推给这个账号的手机（设计划的家长；他没开通知就推给所有人）
 function notify(lvl, kind, title, body, tag, to) { L.sh(sprintf('%s/cmcp-notify %s %s %s %s %s %s', SB, L.shq(lvl), L.shq(kind), L.shq(title), L.shq(body ?? ''), L.shq(tag ?? kind), L.shq(to ?? ''))); }
@@ -28,6 +31,7 @@ const hasPlan = (e) => length(e?.plan?.slots ?? []) > 0;
 
 // 我们的链必须是 PREROUTING 的第一条
 function hooked() {
+	if (NFT) return index(L.sh(NFT + ' list table ' + NT), 'hook prerouting') >= 0;
 	for (let b in ipt) if (trim(L.sh(b + " -t mangle -S PREROUTING | sed -n 2p")) != '-A PREROUTING -j ' + CH) return false;
 	return true;
 }
@@ -141,6 +145,15 @@ function apply() {
 		if (active(e, t)) on[mac] = 1;
 	}
 	if (ch) L.writej(F, p);
+	if (NFT) {
+		// 整张表换掉：先建（防止不存在时删除报错）、再删、再建；DHCP 照样放行（保持能拿到地址）
+		let nl = ['table ' + NT, 'delete table ' + NT, 'table ' + NT + ' {', '\tchain pre {', '\t\ttype filter hook prerouting priority -300; policy accept;'];
+		for (let m in on) push(nl, '\t\tether saddr ' + m + ' udp dport { 67, 68, 546, 547 } return', '\t\tether saddr ' + m + ' drop');
+		push(nl, '\t}', '}');
+		let f = TMP + '/cmcp_pause.nft';
+		writefile(f, join('\n', nl) + '\n');
+		L.sh(NFT + ' -f ' + L.shq(f));
+	}
 	for (let b in ipt) {
 		let cmd = [b + ' -t mangle -N ' + CH + ' >/dev/null 2>&1', b + ' -t mangle -F ' + CH];
 		for (let r in rules) push(cmd, b + ' -t mangle -A ' + CH + ' ' + r);

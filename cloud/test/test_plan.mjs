@@ -111,6 +111,31 @@ print(sprintf('%J\\n', {
 	fs.rmSync(TMP + '/cmcp_plan_warn.json', { force: true });
 	await pause('check', bj(2, 22, 2));
 	ok('[换 MAC] 新地址也设了计划：不再推', notes().length === 3);
+	// ---------- 第 45 项：只有 nftables 的路由器 ----------
+	{
+		const NL = D + '/nft.log', NS = D + '/nft.state';
+		fs.writeFileSync(SB + '/nft', `#!/bin/sh\nif [ "$1" = "-f" ]; then cat "$2" > ${NS}; echo "-f" >> ${NL}; exit 0; fi\nif [ "$1" = list ]; then [ -f ${NS} ] && cat ${NS}; exit 0; fi\necho "$*" >> ${NL}\n`);
+		fs.chmodSync(SB + '/nft', 0o755);
+		const nft = (cmd, now) => runUc(path.resolve('../src/bin/cmcp-pause'), cmd, { ...ENV, CMCP_PAUSE_IPT: 'none', CMCP_PAUSE_NFT: SB + '/nft', CMCP_PAUSE_NOW: String(now) });
+		putPause({ [MAC]: { name: 'kid-pad', plan: { slots: SLOTS, by: 'dadaaaaaaaa2' } }, 'aa:00:00:00:00:99': { name: 'tv', until: bj(2, 23) } });
+		fs.rmSync(IPT, { force: true }); fs.rmSync(TMP + '/cmcp_pause_on.json', { force: true });
+		await nft('apply', bj(2, 22));
+		let st = fs.existsSync(NS) ? fs.readFileSync(NS, 'utf8') : '';
+		ok('[nft] 没有 iptables：用 nft 自己一张表，挂在 prerouting 最前面', /^table inet cmcp_pause\ndelete table inet cmcp_pause\ntable inet cmcp_pause \{/.test(st) && /type filter hook prerouting priority -300; policy accept;/.test(st) && !fs.existsSync(IPT), st);
+		ok('[nft] 只放「现在该断网」的设备：计划外的、暂停中的都断，DHCP 照样放行', /ether saddr aa:00:00:00:00:16 udp dport \{ 67, 68, 546, 547 \} return\n\t\tether saddr aa:00:00:00:00:16 drop/.test(st) && /ether saddr aa:00:00:00:00:99 drop/.test(st));
+		ok('[nft] 不用时间匹配', !/hour|day|time/.test(st));
+		await nft('check', bj(2, 22, 30));
+		ok('[nft] 状态没变、表还在：不重写', fs.readFileSync(NL, 'utf8').split('\n').filter((l) => l === '-f').length === 1);
+		await nft('check', bj(2, 23, 1));
+		st = fs.readFileSync(NS, 'utf8');
+		ok('[nft] 暂停到点：check 重新生成，那台不再断网', fs.readFileSync(NL, 'utf8').split('\n').filter((l) => l === '-f').length === 2 && !/aa:00:00:00:00:99/.test(st) && /aa:00:00:00:00:16 drop/.test(st));
+		await nft('check', bj(3, 16, 0));
+		st = fs.readFileSync(NS, 'utf8');
+		ok('[nft] 到了能上网的时段：check 重新生成，放开', !/aa:00:00:00:00:16/.test(st));
+		fs.rmSync(NS);
+		await nft('check', bj(3, 16, 1));
+		ok('[nft] 表被防火墙重载冲掉了：check 补回来', fs.existsSync(NS) && /hook prerouting/.test(fs.readFileSync(NS, 'utf8')));
+	}
 	// ---------- 面板接口（CGI） ----------
 	const BAK = {}, F = ['/tmp/dhcp.leases', '/etc/claude-mcp/pause.json'];
 	for (const f of F) BAK[f] = fs.existsSync(f) ? fs.readFileSync(f) : null;

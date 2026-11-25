@@ -127,6 +127,7 @@ try {
 	ok('流量只有自己的设备', Object.keys(r.result.days[day]).join() === PAD && !(PC in r.result.names), JSON.stringify(r.result.days[day]));
 	// 管
 	ok('别人的设备不能暂停', /不是你的/.test((await call(devB, 'pause_set', { mac: PC, minutes: 30 })).error?.message || ''));
+	ok('别人的设备不能限速（6.0 第 20 项）', /不是你的/.test((await call(devB, 'rl_set', { mac: PC, down: 1000 })).error?.message || ''));
 	ok('别人的设备不能改名', /不是你的/.test((await call(devB, 'dev_rename', { mac: TV, name: 'x' })).error?.message || ''));
 	ok('别人的设备不能删', /不是你的/.test((await call(devB, 'dev_forget', { items: [{ mac: TV }] })).error?.message || ''));
 	ok('自己的设备能改名', !(await call(devB, 'dev_rename', { mac: PAD, name: '我的平板' })).error);

@@ -221,6 +221,8 @@ P.dev_forget = function(a) {
 	if (type(al) != 'object') al = {};
 	if (type(pz) != 'object') pz = {};
 	let hid = CL.readj(DH_PATH, {}), now = time(), n = 0, skip = { online: 0, set: 0 }, alch = false, pzch = false;
+	let rl = cmcp_readj(ETC + '/ratelimit.json', {}), rlch = false; // 6.0 第 20 项：限速也一起删
+	if (type(rl) != 'object') rl = {};
 	if (type(hid) != 'object') hid = {};
 	for (let it in items) {
 		let mac = match(lc('' + (it?.mac ?? '')), /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/) ? lc(it.mac) : null, ip = '' + (it?.ip ?? '');
@@ -230,16 +232,18 @@ P.dev_forget = function(a) {
 		if (!d) continue; // 已经不在列表里了
 		if (d.online) { skip.online++; continue; }
 		let inbl = filter(bl, (e) => (mac && e.mac == mac) || (!e.mac && e.ip == d.ip));
-		let has = (mac && (al[mac] || pz[mac])) || length(inbl);
+		let has = (mac && (al[mac] || pz[mac] || rl[mac])) || length(inbl);
 		if (a.only_plain && has) { skip.set++; continue; }
 		if (mac && al[mac]) { if (al[mac].img) unlink(di_file(mac)); delete al[mac]; alch = true; }
 		if (mac && pz[mac]) { delete pz[mac]; pzch = true; }
+		if (mac && rl[mac]) { delete rl[mac]; rlch = true; }
 		for (let e in inbl) P.black_set({ mac: e.mac, ip: e.ip, on: false });
 		hid[mac ?? ('ip:' + d.ip)] = now;
 		n++;
 	}
 	if (alch) dn_write(al);
 	if (pzch) { cmcp_writej('/etc/claude-mcp/pause.json', pz); sh('/usr/sbin/cmcp-pause apply'); }
+	if (rlch) { cmcp_writej(ETC + '/ratelimit.json', rl); sh(SBIN + '/cmcp-ratelimit apply >/dev/null 2>&1'); }
 	if (n) { writefile(DH_PATH + '.tmp', sprintf('%J', hid)); rename(DH_PATH + '.tmp', DH_PATH); }
 	return { ok: true, n, skip };
 };

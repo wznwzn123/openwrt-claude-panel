@@ -1019,3 +1019,7 @@ html,body{overscroll-behavior-y:contain}
 .wsbars i{width:3px;border-radius:1px;background:var(--line,rgba(127,127,127,.3))}
 .wsbars i:nth-child(1){height:5px}.wsbars i:nth-child(2){height:8px}.wsbars i:nth-child(3){height:11px}.wsbars i:nth-child(4){height:14px}
 .wsbars i.on{background:var(--text)}
+/* 6.0 第 20 项：限速 */
+.rlin{display:flex;align-items:center;gap:6px}
+.rlin .input{min-width:0;flex:1}
+.rlin span{font-size:13px;flex:none}

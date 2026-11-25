@@ -1,0 +1,167 @@
+#!/usr/bin/ucode
+// 6.0 第 20 项：每台设备限速（下载、上传上限，按 MAC 记，按它现在的 IP 生效）
+// 规则：
+//   fw4（nftables）：自己一张表 inet cmcp_rl，forward / input / output 三个钩子都限（走代理的流量是路由器自己转发的，在 input / output 上），
+//                    同一台设备的下载（或上传）共用一个命名限速，所以直连和走代理加起来不超过上限；
+//                    开了流量卸载（flow offloading）时，被限速的设备已建立的连接在 fw4 的 forward 链最前面直接放行，不进卸载表
+//                    （/usr/share/nftables.d/chain-pre/forward/cmcp_rl.nft），用户 11/26 定：只让被限速的设备不走加速，别的照旧。
+//   fw3（iptables）：filter 表 FORWARD / INPUT / OUTPUT 第一条跳到 CMCP_RL，用 hashlimit（同名共用额度）；已建立的连接在 CMCP_RL 里放行，
+//                    也就跳过了 fw3 的 FLOWOFFLOAD。没有 hashlimit 模块就用不了，说清楚。
+//   硬件 / 快速转发加速（shortcut-fe、高通 NSS ECM、联发科 HNAT）绕过防火墙，管不到：开着的时候提示限速不准、在哪关。
+// 数据：/etc/claude-mcp/ratelimit.json {"MAC":{"down":kbit/s,"up":kbit/s,"name":..}}（0 或没有 = 不限）
+// 用法：cmcp-ratelimit apply  重新生成规则（面板改了以后）
+//       cmcp-ratelimit check  看门狗每 30 秒：设备换了 IP、规则被防火墙重载冲掉了，就重新生成
+//       cmcp-ratelimit caps   打印能不能用：{"ok":true,"mode":"nft","why":null,"warn":null}
+//       cmcp-ratelimit off    删掉全部规则（卸载时用）
+// 测试用环境变量：CMCP_RL_ETC、CMCP_RL_TMP、CMCP_RL_MODE（nft / ipt / none）、CMCP_RL_RUN（把要执行的命令写到这个文件，不真执行）、
+//                 CMCP_RL_LEASES、CMCP_RL_NEIGH、CMCP_RL_INC（fw4 的 include 文件）、CMCP_RL_SYS（代替 /sys）、CMCP_RL_OFFLOAD（1 = 开着流量卸载）
+'use strict';
+import * as L from 'cmcp.lib';
+import { access, readfile, writefile, unlink, stat } from 'fs';
+
+const E = getenv('CMCP_RL_ETC') || L.D, TMP = getenv('CMCP_RL_TMP') || '/tmp';
+const F = E + '/ratelimit.json', SIG = TMP + '/cmcp_rl.sig';
+const LEASES = getenv('CMCP_RL_LEASES') || '/tmp/dhcp.leases', SYS = getenv('CMCP_RL_SYS') || '/sys';
+const INC = getenv('CMCP_RL_INC') || '/usr/share/nftables.d/chain-pre/forward/cmcp_rl.nft';
+const RUN = getenv('CMCP_RL_RUN');
+const MODE = getenv('CMCP_RL_MODE') || (access('/sbin/fw4', 'x') && access('/usr/sbin/nft', 'x') ? 'nft' : access('/usr/sbin/iptables', 'x') ? 'ipt' : 'none');
+const NT = 'inet cmcp_rl', CH = 'CMCP_RL';
+
+function run(cmds) {
+	if (!length(cmds)) return '';
+	if (RUN) { writefile(RUN, (readfile(RUN) ?? '') + join('\n', cmds) + '\n'); return ''; }
+	return L.sh(join('; ', cmds));
+}
+function offload() {
+	let o = getenv('CMCP_RL_OFFLOAD');
+	if (o != null) return o == '1';
+	return trim(L.sh("uci -q get firewall.@defaults[0].flow_offloading")) == '1';
+}
+// 绕过防火墙的加速：管不到
+function accel() {
+	if (stat(SYS + '/module/shortcut_fe') || stat(SYS + '/module/fast_classifier')) return 'Turbo ACC（快速转发）';
+	if (stat(SYS + '/module/ecm') || stat(SYS + '/module/qca_nss_ecm')) return 'NSS 硬件加速';
+	if (stat(SYS + '/module/mtkhnat') || stat(SYS + '/module/hw_nat') || stat(SYS + '/kernel/debug/hnat')) return '硬件 NAT 加速';
+	return null;
+}
+function caps() {
+	let why = null;
+	if (MODE == 'none') why = '这台路由器没有 nftables 也没有 iptables，限速用不了';
+	else if (MODE == 'ipt' && !getenv('CMCP_RL_MODE')) {
+		let ok = index(readfile('/proc/net/ip_tables_matches') ?? '', 'hashlimit') >= 0 || length(trim(L.sh('ls /lib/modules/*/xt_hashlimit.ko 2>/dev/null')));
+		if (!ok) why = '固件缺 iptables 限速模块（kmod-ipt-hashlimit）';
+	}
+	let a = accel();
+	return { ok: !why, mode: MODE, why, warn: a ? '开着「' + a + '」：被限速的设备也会被加速，限速不准。在原版后台关掉加速才准' : null };
+}
+// 这台设备现在的 IP（IPv4 从 DHCP 和邻居表找，IPv6 从邻居表找）
+function ips(mac) {
+	let r = {};
+	for (let l in split(readfile(LEASES) ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 3 && lc(f[1]) == mac) r[f[2]] = 1; }
+	let nf = getenv('CMCP_RL_NEIGH');
+	for (let l in split(nf ? (readfile(nf) ?? '') : L.sh('ip neigh show; ip -6 neigh show'), '\n')) {
+		let m = match(l, /^(\S+) .*lladdr ([0-9a-f:]+)/);
+		if (m && lc(m[2]) == mac && !match(l, /FAILED|INCOMPLETE/) && !match(m[1], /^fe80:/)) r[m[1]] = 1;
+	}
+	return sort(keys(r));
+}
+const v6 = (ip) => index(ip, ':') >= 0;
+const kB = (kbit) => { let n = +sprintf('%.0f', kbit / 8.0); return n < 1 ? 1 : n; };
+// 要生效的：[{ mac, ips, down, up }]
+function plan() {
+	let p = L.readj(F, {}), out = [];
+	for (let mac in p) {
+		let e = p[mac];
+		if (!match(mac, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/) || !(+e?.down > 0 || +e?.up > 0)) continue;
+		let l = ips(mac);
+		if (length(l)) push(out, { mac, ips: l, down: +e.down || 0, up: +e.up || 0 });
+	}
+	return out;
+}
+function nft_rules(P) {
+	let o = ['table ' + NT + ' {'], fwd = [], inp = [], outp = [];
+	for (let i = 0; i < length(P); i++) {
+		let x = P[i];
+		if (x.down) push(o, sprintf('\tlimit d%d { rate over %d kbytes/second burst %d kbytes }', i, kB(x.down), kB(x.down)));
+		if (x.up) push(o, sprintf('\tlimit u%d { rate over %d kbytes/second burst %d kbytes }', i, kB(x.up), kB(x.up)));
+		for (let ip in x.ips) {
+			let f = v6(ip) ? 'ip6' : 'ip';
+			if (x.down) { push(fwd, sprintf('%s daddr %s limit name "d%d" drop', f, ip, i)); push(outp, sprintf('%s daddr %s limit name "d%d" drop', f, ip, i)); }
+			if (x.up) { push(fwd, sprintf('%s saddr %s limit name "u%d" drop', f, ip, i)); push(inp, sprintf('%s saddr %s limit name "u%d" drop', f, ip, i)); }
+		}
+	}
+	for (let c in [['fwd', 'forward', fwd], ['inp', 'input', inp], ['outp', 'output', outp]]) {
+		push(o, sprintf('\tchain %s {', c[0]), sprintf('\t\ttype filter hook %s priority -5; policy accept;', c[1]));
+		for (let r in c[2]) push(o, '\t\t' + r);
+		push(o, '\t}');
+	}
+	push(o, '}');
+	return join('\n', o) + '\n';
+}
+// fw4 的 forward 链最前面：被限速的设备已建立的连接直接放行，不进流量卸载
+function nft_inc(P) {
+	if (!length(P) || !offload()) return '';
+	let a4 = [], a6 = [];
+	for (let x in P) for (let ip in x.ips) push(v6(ip) ? a6 : a4, ip);
+	let o = ['# 路由器面板：被限速的设备不走流量卸载（限速才准）'];
+	if (length(a4)) push(o, 'ip daddr { ' + join(', ', a4) + ' } ct state established,related accept', 'ip saddr { ' + join(', ', a4) + ' } ct state established,related accept');
+	if (length(a6)) push(o, 'ip6 daddr { ' + join(', ', a6) + ' } ct state established,related accept', 'ip6 saddr { ' + join(', ', a6) + ' } ct state established,related accept');
+	return join('\n', o) + '\n';
+}
+function ipt_cmds(P) {
+	let c = [];
+	for (let b in ['iptables', 'ip6tables']) {
+		if (b == 'ip6tables' && !RUN && !access('/usr/sbin/ip6tables', 'x')) continue;
+		push(c, b + ' -N ' + CH + ' 2>/dev/null', b + ' -F ' + CH);
+		for (let hk in ['FORWARD', 'INPUT', 'OUTPUT']) push(c, 'while ' + b + ' -D ' + hk + ' -j ' + CH + ' 2>/dev/null; do :; done');
+		let any = false;
+		for (let i = 0; i < length(P); i++) {
+			let x = P[i];
+			for (let ip in x.ips) {
+				if (v6(ip) != (b == 'ip6tables')) continue;
+				any = true;
+				if (x.down) push(c, sprintf('%s -A %s -d %s -m hashlimit --hashlimit-name cmcprl_d%d --hashlimit-mode dstip --hashlimit-above %dkb/s -j DROP', b, CH, ip, i, kB(x.down)));
+				if (x.up) push(c, sprintf('%s -A %s -s %s -m hashlimit --hashlimit-name cmcprl_u%d --hashlimit-mode srcip --hashlimit-above %dkb/s -j DROP', b, CH, ip, i, kB(x.up)));
+			}
+		}
+		if (!any) { push(c, b + ' -X ' + CH + ' 2>/dev/null'); continue; }
+		// 已建立的连接在这里就放行：不再进 fw3 的 FLOWOFFLOAD（只在 FORWARD 上有用；INPUT / OUTPUT 放行也一样）
+		for (let x in P) for (let ip in x.ips) if (v6(ip) == (b == 'ip6tables')) push(c, sprintf('%s -A %s -d %s -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT', b, CH, ip), sprintf('%s -A %s -s %s -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT', b, CH, ip));
+		for (let hk in ['FORWARD', 'INPUT', 'OUTPUT']) push(c, b + ' -I ' + hk + ' 1 -j ' + CH);
+	}
+	return c;
+}
+function hooked(P) {
+	if (RUN) return true;
+	if (MODE == 'nft') return !length(P) || index(L.sh('nft list table ' + NT + ' 2>/dev/null'), 'hook forward') >= 0;
+	if (MODE == 'ipt') return !length(P) || trim(L.sh("iptables -S FORWARD | sed -n 2p")) == '-A FORWARD -j ' + CH;
+	return true;
+}
+function apply(force) {
+	let P = plan(), sig = sprintf('%s|%J', MODE, P) + (MODE == 'nft' ? '|' + offload() : '');
+	if (!force && readfile(SIG) == sig && hooked(P)) return { n: length(P), changed: false };
+	if (MODE == 'nft') {
+		let cmds = ['nft delete table ' + NT + ' 2>/dev/null'];
+		if (length(P)) { writefile(TMP + '/cmcp_rl.nft', nft_rules(P)); push(cmds, 'nft -f ' + L.shq(TMP + '/cmcp_rl.nft')); }
+		run(cmds);
+		let inc = nft_inc(P), old = readfile(INC);
+		if ((old ?? '') != inc) {
+			if (length(inc)) { L.sh('mkdir -p ' + L.shq(replace(INC, /\/[^\/]*$/, ''))); writefile(INC, inc); } else unlink(INC);
+			run(['fw4 reload >/dev/null 2>&1']);
+		}
+	} else if (MODE == 'ipt') run(ipt_cmds(P));
+	writefile(SIG, sig);
+	return { n: length(P), changed: true };
+}
+function off() {
+	if (MODE == 'nft') { run(['nft delete table ' + NT + ' 2>/dev/null']); if (stat(INC)) { unlink(INC); run(['fw4 reload >/dev/null 2>&1']); } }
+	else if (MODE == 'ipt') run(ipt_cmds([]));
+	unlink(SIG);
+}
+
+let cmd = ARGV[0];
+if (cmd == 'caps') print(sprintf('%J\n', caps()));
+else if (cmd == 'apply') print(sprintf('%J\n', apply(true)));
+else if (cmd == 'check') { if (stat(F) || stat(SIG)) apply(false); }
+else if (cmd == 'off') off();
+else { print('用法：cmcp-ratelimit apply|check|caps|off\n'); exit(1); }

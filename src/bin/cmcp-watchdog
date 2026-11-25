@@ -426,6 +426,8 @@ check() {
 	fi
 	# 暂停上网：规则被防火墙重载冲掉了就补回来、到期自动恢复、每天定时断网开始时断开现有连接（用过这个功能才检查）
 	[ "$DRYRUN" != 1 ] && [ -f "$D/pause.json" ] && [ -x /usr/sbin/cmcp-pause ] && /usr/sbin/cmcp-pause check >/dev/null 2>&1
+	# 6.0 第 20 项：限速跟着设备的 IP 走；防火墙重载冲掉了就补上
+	[ "$DRYRUN" != 1 ] && [ -f "$D/ratelimit.json" ] && [ -x /usr/sbin/cmcp-ratelimit ] && /usr/sbin/cmcp-ratelimit check >/dev/null 2>&1
 	# 心跳：每 5 分钟写一次闪存，用来判断断电时间（开机记录写完之前不能写，否则会盖掉断电前的最后记录）
 	# 每 5 分钟记一次「还在正常运行」，顺便记下内存（可用、内核占用、交换区已用，单位 MB），意外重启后用来判断原因
 	if [ "$BOOT_DONE" = 1 ] && [ $(( t - HB_T )) -ge 300 ]; then echo "$t $(awk '/^MemAvailable/{a=$2}/^SUnreclaim/{u=$2}/^SwapTotal/{st=$2}/^SwapFree/{sf=$2}END{printf "%d %d %d", a/1024, u/1024, (st-sf)/1024}' ${WD_MEMINFO:-/proc/meminfo} 2>/dev/null)" > "$HB"; HB_T=$t; fi

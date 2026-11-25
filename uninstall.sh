@@ -25,6 +25,8 @@ for t in iptables ip6tables; do
 	while $t -t mangle -D PREROUTING -j CMCP_PAUSE 2>/dev/null; do :; done
 	$t -t mangle -F CMCP_PAUSE 2>/dev/null; $t -t mangle -X CMCP_PAUSE 2>/dev/null
 done
+# 限速（6.0）：nft 表、iptables 链、fw4 里的「不走流量卸载」都删掉
+[ -x /usr/sbin/cmcp-ratelimit ] && /usr/sbin/cmcp-ratelimit off
 # 访客 Wi-Fi（6.0）：面板加的访客 Wi-Fi、访客网络、防火墙区域、DHCP 设置一起删掉
 [ -x /usr/sbin/cmcp-guest ] && /usr/sbin/cmcp-guest remove
 # 设备暂停（6.0 起只有 nftables 的固件用 nft 表）
@@ -43,7 +45,7 @@ if command -v ipset >/dev/null 2>&1; then
 fi
 rm -f /tmp/cmcp_ban.json /tmp/cmcp_guard.json /tmp/cmcp_ban.nft
 sed -i '/\/usr\/sbin\/cmcp-/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
-rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-edition
+rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-ratelimit /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-edition
 # 小闪存模式下载到内存里的 cloudflared
 rm -rf /tmp/cmcp-cfd
 rm -rf /usr/share/ucode/cmcp /www-claude-mcp
@@ -75,6 +77,7 @@ chk "面板网页服务、面板隧道已停止" '! ps w 2>/dev/null | grep -v g
 chk "程序文件已删除" '! ls /usr/sbin/cmcp-* 2>/dev/null | grep -v /usr/sbin/cmcp-uninstall | grep -q . && [ ! -e /www-claude-mcp ] && [ ! -e /usr/share/ucode/cmcp ] && [ ! -e /usr/libexec/cmcp-ucode ] && [ ! -e /etc/hotplug.d/ntp/90-cmcp-synced ]'
 chk "小闪存模式下载的 cloudflared 已删除" '[ ! -e /tmp/cmcp-cfd ]'
 chk "定时任务已删除" '! grep -q "/usr/sbin/cmcp-" /etc/crontabs/root 2>/dev/null'
+chk "防火墙规则（限速）已删除" '! { iptables -S 2>/dev/null; ip6tables -S 2>/dev/null; } | grep -q CMCP_RL && ! nft list table inet cmcp_rl >/dev/null 2>&1 && [ ! -e /usr/share/nftables.d/chain-pre/forward/cmcp_rl.nft ]'
 chk "防火墙规则（设备暂停）已删除" '! { iptables -t mangle -S 2>/dev/null; ip6tables -t mangle -S 2>/dev/null; } | grep -q CMCP_PAUSE'
 chk "隧道直连设置已删除（dnsmasq、各代理插件的直连名单）" '! find /tmp /var/etc -maxdepth 3 -name cmcp-tunnel.conf 2>/dev/null | grep -q . && ! grep -rqs "\[cmcp-tunnel\]" /etc/openclash/custom /etc/passwall /usr/share/passwall /usr/share/passwall2 /etc/ssrplus'
 chk "路由器登录账号（rpcd 里的 cmcp）已删除" '! uci -q show rpcd 2>/dev/null | grep -q "username=.cmcp."'

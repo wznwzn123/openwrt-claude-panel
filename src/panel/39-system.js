@@ -74,8 +74,9 @@ const devCard = (d, i, attr) => { const pz = attr === 'data-i' && d.mac ? PZ.dev
 		: `${bl ? '<button class="btn sm good" data-unblack>恢复走代理</button>' : '<button class="btn sm" data-black>不走代理</button>'}<button class="btn sm" data-conns>看连接</button>`}</div>
 </article>`; };
 async function loadDev() {
-	const [b, pz, ow] = await Promise.all([P('black_state'), P('pause_list').catch(() => null), P('dev_own').catch(() => null)]);
+	const [b, pz, ow, rl] = await Promise.all([P('black_state'), P('pause_list').catch(() => null), P('dev_own').catch(() => null), P('rl_get').catch(() => null)]);
 	blk = b;
+	if (rl) DRL = rl;
 	if (pz) PZ = pz;
 	OWN.d = ow;
 	devices = blk.devices || [];
@@ -207,6 +208,7 @@ function devMore(d) {
 			ed && { v: 'icon', ic: dvSvg(k), t: '换图标' }] },
 		{ t: '上网控制', items: [d.mac && par && { v: 'pause', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>', t: pz && pz.on ? '恢复上网 / 改暂停设置' : '暂停上网' },
 			d.mac && par && { v: 'plan', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', t: '上网计划', sub: pz && pz.plan ? plState(pz) || pz.plan.slots.map(plSlot).join('、') : '' },
+			d.mac && par && { v: 'rl', ic: '<path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="M12 13l3.5-3.5"/>', t: '限速', sub: rlSub(d.mac) },
 			par && (bl ? { v: 'unblack', ic: '<path d="M4 11l16-7-7 16-2-7z"/>', t: '恢复走代理' } : { v: 'black', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', t: '不走代理' })] },
 		{ items: [d.mac && ownCan() && { v: 'owner', ic: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>', t: '归谁', sub: ownWho(d.mac) }] },
 		{ items: [!d.online && par && { v: 'forget', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '从列表删除', danger: true }] }
@@ -216,6 +218,7 @@ function devMore(d) {
 		else if (v === 'icon') devIconSheet(d);
 		else if (v === 'pause') pauseSheet(d);
 		else if (v === 'plan') planSheet(d);
+		else if (v === 'rl') rlSheet(d);
 		else if (v === 'owner') ownPick(d);
 		else if (v === 'black') blackToggle(d, true, null);
 		else if (v === 'unblack') blackToggle(d, false, null);
@@ -229,6 +232,7 @@ function devSets(d) {
 	if (pz && (pz.sched || []).length) out.push('每天定时断网（' + pz.sched.map((s) => s.from + '–' + s.to).join('、') + '）');
 	if (pz && pz.plan) out.push('上网计划（' + pz.plan.slots.map(plSlot).join('、') + '）');
 	if (isBlack(d)) out.push('「不走代理」');
+	if (d.mac && DRL.devs[d.mac]) out.push('限速（' + rlSub(d.mac) + '）');
 	if (d.renamed) out.push('改过的名字「' + d.name + '」');
 	if (d.img) out.push('设的照片');
 	else if (d.icon) out.push('选的图标');
@@ -249,8 +253,8 @@ async function devForget(d) {
 async function devClearOff(btn) {
 	const off = devices.filter((d) => !d.online), plain = off.filter((d) => !devSets(d).length), keep = off.length - plain.length;
 	if (!off.length) return toast('没有离线设备');
-	if (!plain.length) return toast(`${keep} 台离线设备都有设置（暂停、不走代理或改过名字），要删请点它的「更多」单独删`);
-	const txt = `会从列表删掉 ${plain.length} 台离线设备。` + (keep ? `\n有设置的 ${keep} 台不删（暂停、定时断网、不走代理或改过名字），要删请单独删。` : '') + '\n\n这些设备以后再连上，会重新出现。';
+	if (!plain.length) return toast(`${keep} 台离线设备都有设置（暂停、限速、不走代理或改过名字），要删请点它的「更多」单独删`);
+	const txt = `会从列表删掉 ${plain.length} 台离线设备。` + (keep ? `\n有设置的 ${keep} 台不删（暂停、定时断网、限速、不走代理或改过名字），要删请单独删。` : '') + '\n\n这些设备以后再连上，会重新出现。';
 	if (!(await confirmBox('清除离线设备', txt, `删除 ${plain.length} 台`, true))) return;
 	await busy(btn, async () => {
 		const r = await P('dev_forget', { items: plain.map((d) => ({ mac: d.mac || undefined, ip: d.ip })), only_plain: true });

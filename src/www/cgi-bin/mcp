@@ -2854,12 +2854,12 @@ const EMERG_VIA = '路由器终端的应急登录码';
 const LAN_VIA_LUCI = '原版后台（局域网）', LAN_VIA_PW = '路由器后台密码（局域网）';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'mon', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'mon', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'rl_get', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
-	parent: ['pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
+	parent: ['rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
 	proxy: ['oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
@@ -3867,6 +3867,8 @@ P.dev_forget = function(a) {
 	if (type(al) != 'object') al = {};
 	if (type(pz) != 'object') pz = {};
 	let hid = CL.readj(DH_PATH, {}), now = time(), n = 0, skip = { online: 0, set: 0 }, alch = false, pzch = false;
+	let rl = cmcp_readj(ETC + '/ratelimit.json', {}), rlch = false; // 6.0 第 20 项：限速也一起删
+	if (type(rl) != 'object') rl = {};
 	if (type(hid) != 'object') hid = {};
 	for (let it in items) {
 		let mac = match(lc('' + (it?.mac ?? '')), /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/) ? lc(it.mac) : null, ip = '' + (it?.ip ?? '');
@@ -3876,16 +3878,18 @@ P.dev_forget = function(a) {
 		if (!d) continue; // 已经不在列表里了
 		if (d.online) { skip.online++; continue; }
 		let inbl = filter(bl, (e) => (mac && e.mac == mac) || (!e.mac && e.ip == d.ip));
-		let has = (mac && (al[mac] || pz[mac])) || length(inbl);
+		let has = (mac && (al[mac] || pz[mac] || rl[mac])) || length(inbl);
 		if (a.only_plain && has) { skip.set++; continue; }
 		if (mac && al[mac]) { if (al[mac].img) unlink(di_file(mac)); delete al[mac]; alch = true; }
 		if (mac && pz[mac]) { delete pz[mac]; pzch = true; }
+		if (mac && rl[mac]) { delete rl[mac]; rlch = true; }
 		for (let e in inbl) P.black_set({ mac: e.mac, ip: e.ip, on: false });
 		hid[mac ?? ('ip:' + d.ip)] = now;
 		n++;
 	}
 	if (alch) dn_write(al);
 	if (pzch) { cmcp_writej('/etc/claude-mcp/pause.json', pz); sh('/usr/sbin/cmcp-pause apply'); }
+	if (rlch) { cmcp_writej(ETC + '/ratelimit.json', rl); sh(SBIN + '/cmcp-ratelimit apply >/dev/null 2>&1'); }
 	if (n) { writefile(DH_PATH + '.tmp', sprintf('%J', hid)); rename(DH_PATH + '.tmp', DH_PATH); }
 	return { ok: true, n, skip };
 };
@@ -5979,6 +5983,43 @@ P.lan_host_set = function(a) {
 	let f = getenv('CMCP_NG_RUN');
 	bg(f ? 'echo /etc/init.d/dnsmasq reload >> ' + shq(f) : '/etc/init.d/dnsmasq reload');
 	return { changed: true, what, hosts: ls_hosts() };
+};
+/* ---------------- 6.0 第 20 项：每台设备限速 ----------------
+ * 设置存 /etc/claude-mcp/ratelimit.json（按 MAC），规则由 cmcp-ratelimit 生成（fw4 / fw3 都行，见那个脚本）；看门狗每 30 秒跟着设备的 IP 更新。
+ * 子账号只能限自己名下的设备（own_check）。 */
+const RL_F = ETC + '/ratelimit.json';
+function rl_caps() {
+	let c = null;
+	try { c = json(trim(sh(SBIN + '/cmcp-ratelimit caps').out)); } catch (e) {}
+	return type(c) == 'object' ? c : { ok: false, why: '路由器上的限速程序没装好，先一键更新' };
+}
+function rl_read() { let o = cmcp_readj(RL_F, {}); return type(o) == 'object' ? o : {}; }
+P.rl_get = function() {
+	let o = rl_read();
+	if (own_only()) { let mine = own_mine(); for (let k in keys(o)) if (!mine[k]) delete o[k]; }
+	return { devs: o, caps: rl_caps() };
+};
+// a: { mac, down, up（kbit/s，0 = 不限）, name }
+P.rl_set = function(a) {
+	let mac = lc(trim('' + (a?.mac ?? '')));
+	if (!match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('这台设备读不到 MAC 地址，没法限速');
+	own_check(mac);
+	let n = (v, what) => {
+		v = +(v ?? 0);
+		if (v != v || v < 0) die(what + '不对');
+		if (v > 0 && v < 100) die(what + '最小 0.1 Mbps');
+		if (v > 10000000) die(what + '最大 10000 Mbps');
+		return +sprintf('%.0f', v);
+	};
+	let down = n(a?.down, '下载上限'), up = n(a?.up, '上传上限'), o = rl_read();
+	if (down || up) {
+		let c = rl_caps();
+		if (!c.ok) compat_die('ratelimit', c.why);
+		o[mac] = { down, up, name: substr(replace('' + (a?.name ?? ''), /[[:cntrl:]<>"]/g, ''), 0, 40) || null };
+	} else delete o[mac];
+	cmcp_writej(RL_F, o);
+	sh(SBIN + '/cmcp-ratelimit apply >/dev/null 2>&1');
+	return P.rl_get();
 };
 /* ---------------- 6.0 第 22 项：无线中继（连上级 Wi-Fi 上网，WISP） ----------------
  * 用户 11/26 定：只做「连上级 Wi-Fi 上网」。在一个频段上加一个客户端（sta），接到新的上网接口 wwan（DHCP），放进防火墙的外网区域；

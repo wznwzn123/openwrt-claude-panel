@@ -852,12 +852,12 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
 .chip.on{background:var(--text);color:var(--card)}
 :root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip.hidden{display:none}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
-:root.dark :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
-@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"])>.chip.hidden{display:none}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
+:root.dark :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
+@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
 /* 按钮 */
 .btn.sm{background:var(--fill);color:var(--brand);font-weight:700}
 /* 黑（深色模式白）只给主操作（.btn.primary）；蓝色按钮是浅蓝底蓝字，同一种操作一个样子（评审 11/26） */
@@ -1015,6 +1015,15 @@ html,body{overscroll-behavior-y:contain}
 .sidenav button:not(.on):hover{background-color:var(--fill)}
 .top .toplogo:hover{transform:scale(1.04)}
 }
+
+/* 6.0 第 24 项：上网设置 */
+.wanhd{display:flex;flex-direction:column;gap:3px}
+.wanhd b{font-size:17px;font-weight:650}
+.wanhd span{font-size:13px}
+.wankv{margin-top:8px}
+.wankv dd{text-align:right}
+.wankv dd{word-break:break-all}
+#wanMode{margin:2px 0 4px}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1473,6 +1482,12 @@ html,body{overscroll-behavior-y:contain}
 	<div class="sectitle"><b>端口转发 <span class="pill" id="pfCount">—</span></b><button class="btn sm" id="pfAdd">添加</button></div>
 	<section class="card list"><div id="pfList"><div class="empty">读取中…</div></div></section>
 </section>
+<section class="page" id="p-wan">
+	<div id="wanPend"></div>
+	<section class="card" id="wanSt"><div class="empty">读取中…</div></section>
+	<div id="wanBody"></div>
+	<div class="savebar hidden" id="wanBar"><span class="muted" id="wanN"></span><div class="actions"><button class="btn sm" id="wanUndo">撤销</button><button class="btn sm primary" id="wanSave">保存</button></div></div>
+</section>
 <section class="page" id="p-mon">
 	<section class="card mncard"><div class="mnhead"><b>网速</b><span><em id="mnRx" class="dn">—</em><em id="mnTx" class="up">—</em></span></div><svg id="mnNet" class="mnchart" viewBox="0 0 300 70" preserveAspectRatio="none" aria-hidden="true"></svg></section>
 	<section class="card mncard"><div class="mnhead"><b>负载</b><span id="mnCpu" class="muted"></span></div>
@@ -1573,7 +1588,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2013,7 +2028,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2045,6 +2060,7 @@ const NAV = [
 	{ g: '网络', items: [
 		{ p: 'dev', i: '▢', t: '设备' },
 		{ p: 'wifi', i: '◠', t: 'Wi-Fi' },
+		{ p: 'wan', i: '⇅', t: '上网设置', kw: '宽带 拨号 pppoe 账号 固定 ip 静态 dhcp dns wan 外网' },
 		['admin/network/network', '接口', '⇋'],
 		['admin/network/interfaceconfig', '网口', '⌂'],
 		['admin/network/wireless', '无线高级设置', '◠'],
@@ -2190,6 +2206,8 @@ if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 
 const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/应用过滤": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"], "ndiag": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "mon": ["<path d=\"M3 13h3.5l2.5-6 4 11 3-8 2 3H21\"/>", "#ff9500"], "pf": ["<path d=\"M4 12h12\"/><path d=\"M12 7l5 5-5 5\"/><path d=\"M20 5v14\"/>", "#5856d6"], "store": ["<path d=\"M12 4v11\"/><path d=\"M7 10l5 5 5-5\"/><path d=\"M5 20h14\"/>", "#007aff"]};
 // 6.0 第 14 项：Wi-Fi 页的图标（侧边栏、快捷操作里用）
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
+// 6.0 第 24 项：上网设置
+NAV_IC.wan = ['<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/>', '#34c759'];
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
@@ -4324,7 +4342,7 @@ for (const id of ['sCpu', 'sMem']) { const c = $(id).closest('.card'); c.classLi
    4. 来新通知时铃铛摇一下
    系统开了「减少动态效果」时，这些都不做（白块直接放到位） */
 const RM = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const SEG_SEL = '#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,[data-k="proto"]';
+const SEG_SEL = '#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,[data-k="proto"]';
 function segPlace(box, now) {
 	if (!box.isConnected) return;
 	box.classList.add('segon');
@@ -4862,6 +4880,8 @@ async function stRefresh() {
 }
 $('stRefresh').onclick = stRefresh;
 let stQT = 0;
+// 别的页面跳过来搜某个包（比如上网设置里缺拨号组件）
+function stFind(q) { clearTimeout(stQT); $('stFilter').value = q; stQ = q; go('store'); }
 $('stFilter').addEventListener('input', () => { clearTimeout(stQT); stQT = setTimeout(() => { stQ = $('stFilter').value.trim(); loadStore().catch(handleErr); }, 350); });
 $$('#stView .chip').forEach((b) => (b.onclick = () => { stView = b.dataset.v; if (stQ) { stQ = ''; $('stFilter').value = ''; loadStore().catch(handleErr); } else stDraw(); }));
 $('stList').addEventListener('click', (e) => {
@@ -7161,9 +7181,9 @@ const LOCK_IC = '<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26"
 function mpKeysHtml() {
 	if (ME_ROLE.role === 'sub') return '';
 	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
-	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b><span class="muted">${d}</span></div><span class="muted">›</span></button>`;
+	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b>${d ? `<span class="muted">${d}</span>` : ''}</div><span class="muted">›</span></button>`;
 	const lpw = store.get('rp_lpw') === '1';
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${store.get('rp_ppp') !== '0' ? row('kppp', '宽带账号和密码', '') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -7455,6 +7475,7 @@ $('meBox').addEventListener('click', async (e) => {
 	}
 	else if (k === 'kckey') ckeySheet();
 	else if (k === 'ktab') tabletUrlSheet();
+	else if (k === 'kppp') pppSheet();
 	else if (k === 'krot') rotateKey();
 	// 能打开这个面板的手机：移除一台 / 除了这台全部移除（原来在「我的主页 → 敏感信息 → 登录着的设备」）
 	else if (k === 'drm' || k === 'drmall') {
@@ -7582,6 +7603,22 @@ async function ckeySheet() {
 			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，AI 应用里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
 			try { await secP('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }
 		};
+	});
+}
+// 6.0 第 24 项：宽带拨号的账号和密码只在这里看（上网设置页只能改、不显示）
+async function pppSheet() {
+	let r;
+	try { r = await secP('wan_secret'); } catch (e) { return toast(e.message, true); }
+	if (!r.pppoe) { store.set('rp_ppp', '0'); if (MP.sec) mpDraw(); else mpLocalDraw(); return toast('这台路由器不是宽带拨号上网'); }
+	store.set('rp_ppp', '1');
+	modal(`<div class="sheethead"><h3>宽带账号和密码</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<dl class="mp-kv"><dt>账号</dt><dd class="mono" style="word-break:break-all">${esc(r.user || '—')}</dd></dl>
+	<div class="qrbox blur keybox" style="word-break:break-all;font:14px/1.5 ui-monospace,monospace;padding:14px;text-align:left;margin-top:10px">${esc(r.pw || '（没设密码）')}<span>点一下显示密码</span></div>
+	<div class="btngrid three" style="margin:12px 0 0"><button class="btn" data-cu>复制账号</button><button class="btn" data-cp>复制密码</button><button class="btn primary" data-v="close">完成</button></div>`,
+	(m) => {
+		qrReveal(m);
+		m.querySelector('[data-cu]').onclick = () => copyText(r.user || '');
+		m.querySelector('[data-cp]').onclick = () => copyText(r.pw || '');
 	});
 }
 function hubBind() {
@@ -7750,6 +7787,108 @@ function tourRun() {
 		setTimeout(() => { if (tourReady() && !document.querySelector('.tour')) tourRun(); }, 1500);
 	}, 2000);
 })();
+/* ---------- 6.0 第 24 项：上网设置 ----------
+ * 上面一张卡片是 WAN 口现在的状态；下面选上网方式（自动获取 / 宽带拨号 / 固定 IP）和 DNS，改了底部出现「保存」。
+ * 宽带密码只能改、不显示（要看去「我的主页 → 敏感信息」）。保存后走「90 秒确认」（wfConfirm）：拨号失败、填错连不上，自动改回。 */
+const WAN = { d: null, m: null };
+const WAN_MODE = { dhcp: '自动获取', pppoe: '宽带拨号', static: '固定 IP' };
+async function loadWan() {
+	const d = await P('wan_get');
+	WAN.d = d; WAN.m = d.proto in WAN_MODE ? d.proto : null;
+	if (!d.none) store.set('rp_ppp', d.proto === 'pppoe' ? '1' : '0'); // 「敏感信息」里要不要列「宽带账号和密码」
+	setStatus(true, '在线');
+	wanRender();
+	if (d.pending && d.pending.token && d.pending.what === '上网设置' && !document.querySelector('.modal[data-ng]')) wfConfirm(d.pending.token, d.pending.left, null, d.pending.what);
+}
+const wanDur = (s) => (s < 60 ? '不到 1 分钟' : s < 3600 ? Math.floor(s / 60) + ' 分钟' : s < 86400 ? Math.floor(s / 3600) + ' 小时' : Math.floor(s / 86400) + ' 天');
+function wanStatus() {
+	const d = WAN.d, s = d.status, mode = d.proto in WAN_MODE ? WAN_MODE[d.proto] : (d.proto_name || '').toUpperCase();
+	if (!s) return `<div class="wanhd"><b>读不到状态</b><span class="muted">${esc(mode)}</span></div>`;
+	const auth = (s.err || []).some((e) => /AUTH/.test(e));
+	const t = s.up ? '已连上' : s.pending ? '正在连接…' : auth ? '账号或密码不对' : '没连上';
+	const kv = s.up ? `<dl class="mp-kv wankv"><dt>外网地址</dt><dd class="mono">${esc(s.ip || '—')}</dd><dt>网关</dt><dd class="mono">${esc(s.gw || '—')}</dd><dt>DNS</dt><dd class="mono">${(s.dns || []).map(esc).join('<br>') || '—'}</dd></dl>` : '';
+	return `<div class="wanhd"><b class="${s.up || s.pending ? '' : 'ndbad'}">${t}</b><span class="muted">${esc(mode)}${s.up ? ' · 连了 ' + wanDur(s.uptime) : ''}</span></div>${kv}`;
+}
+function wanRender() {
+	const d = WAN.d;
+	$('wanPend').innerHTML = d?.pending && !d.pending.token ? `<div class="notice w" style="margin-top:12px">刚改了${esc(d.pending.what)}，${d.pending.left} 秒后不确认就改回原来的。</div>` : '';
+	if (d.none) { $('wanSt').innerHTML = `<div class="empty">${esc(d.none)}</div>`; $('wanBody').innerHTML = ''; $('wanBar').classList.add('hidden'); return; }
+	$('wanSt').innerHTML = wanStatus();
+	const m = WAN.m, fld = (k, t, v, attr = '') => `<div class="fld"><div class="lb"><b>${t}</b></div><div class="ctl"><input class="input" data-wan="${k}" value="${esc(v ?? '')}" autocapitalize="off" autocomplete="off" spellcheck="false"${attr}></div></div>`;
+	let f = '';
+	if (!m) f = `<div class="notice" style="margin-top:12px">现在是 ${esc((d.proto_name || '').toUpperCase())}，选一种上网方式就会换掉</div>`;
+	else if (m === 'pppoe') f = !d.pppoe
+		? `<div class="notice w" style="margin-top:12px">固件没装宽带拨号组件</div><button class="btn sm" id="wanPpp" style="margin-top:8px">去软件中心装</button>`
+		: fld('user', '宽带账号', d.proto === 'pppoe' ? d.user : '') + `<div class="fld"><div class="lb"><b>宽带密码</b></div><div class="ctl wfpw"><input class="input" data-wan="pw" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="${d.proto === 'pppoe' && d.has_pw ? '不改就不填' : ''}"><button class="btn sm" data-wan="eye" type="button">显示</button></div></div>`;
+	else if (m === 'static') f = fld('ip', 'IP 地址', d.ip, ' inputmode="decimal" placeholder="192.168.0.10"') + fld('mask', '子网掩码', d.mask || '255.255.255.0', ' inputmode="decimal"') + fld('gw', '网关', d.gw, ' inputmode="decimal" placeholder="192.168.0.1"');
+	const dn = d.dns || [], auto = m !== 'static' && d.dns_auto, rows = Math.max(2, dn.length);
+	const dnsIn = [...Array(rows)].map((_, i) => fld('dns' + i, 'DNS ' + (i + 1) + (i ? '（选填）' : ''), dn[i] || '', ' inputmode="decimal" placeholder="' + ['223.5.5.5', '119.29.29.29', '1.1.1.1'][i] + '"')).join('');
+	$('wanBody').innerHTML = `<div class="sectitle"><b>上网方式</b></div><section class="card">
+		<div class="chips" id="wanMode">${Object.entries(WAN_MODE).map(([k, t]) => `<button class="chip${k === m ? ' on' : ''}" type="button" data-m="${k}">${t}</button>`).join('')}</div>${f}</section>
+		<div class="sectitle"><b>DNS</b></div><section class="card">
+		${m === 'static' ? '' : `<label class="fld row"><div class="lb"><b>用运营商的 DNS</b></div><label class="sw"><input type="checkbox" data-wan="auto"${auto ? ' checked' : ''} aria-label="用运营商的 DNS"><i></i></label></label>`}
+		<div id="wanDns"${auto ? ' class="hidden"' : ''}>${dnsIn}</div></section>`;
+	wanDirty();
+}
+// 现在填的跟路由器上的比：改了哪些（密码不填 = 不改）
+function wanForm() {
+	const g = (k) => $('wanBody').querySelector(`[data-wan="${k}"]`), v = (k) => (g(k)?.value || '').trim();
+	const p = { proto: WAN.m };
+	if (WAN.m === 'pppoe') { p.user = v('user'); p.pw = g('pw')?.value || ''; }
+	if (WAN.m === 'static') { p.ip = v('ip'); p.mask = v('mask'); p.gw = v('gw'); }
+	const a = g('auto');
+	p.dns_auto = WAN.m !== 'static' && !!a?.checked;
+	p.dns = p.dns_auto ? [] : $$('#wanDns [data-wan^="dns"]').map((i) => i.value.trim()).filter(Boolean);
+	return p;
+}
+function wanChanged() {
+	const d = WAN.d, p = wanForm();
+	if (!p.proto || d.none) return false;
+	if (p.proto !== d.proto) return true;
+	if (p.proto === 'pppoe' && (p.user !== (d.user || '') || p.pw)) return true;
+	if (p.proto === 'static' && (p.ip !== (d.ip || '') || p.mask !== (d.mask || '') || p.gw !== (d.gw || ''))) return true;
+	if (p.dns_auto !== !!d.dns_auto) return true;
+	return !p.dns_auto && p.dns.join(' ') !== (d.dns || []).join(' ');
+}
+function wanDirty() {
+	const c = wanChanged();
+	$('wanBar').classList.toggle('hidden', !c);
+	$('wanN').textContent = c ? '上网设置改了' : '';
+}
+$('wanBody').addEventListener('input', wanDirty);
+$('wanBody').addEventListener('change', (e) => {
+	if (e.target.dataset.wan === 'auto') $('wanDns').classList.toggle('hidden', e.target.checked);
+	wanDirty();
+});
+$('wanBody').addEventListener('click', (e) => {
+	const c = e.target.closest('#wanMode .chip');
+	if (c) {
+		// 换方式时把已经填的 DNS 带过去
+		const keep = wanForm();
+		WAN.m = c.dataset.m;
+		const d0 = WAN.d;
+		WAN.d = { ...d0, dns: keep.dns.length ? keep.dns : d0.dns, dns_auto: WAN.m === 'static' ? false : keep.dns_auto || (!keep.dns.length && d0.dns_auto) };
+		wanRender();
+		WAN.d = d0;
+		wanDirty();
+		return;
+	}
+	if (e.target.id === 'wanPpp') return stFind('ppp-mod-pppoe');
+	if (e.target.dataset.wan === 'eye') { const i = $('wanBody').querySelector('[data-wan="pw"]'); const sh = i.type === 'password'; i.type = sh ? 'text' : 'password'; e.target.textContent = sh ? '隐藏' : '显示'; }
+});
+$('wanUndo').onclick = () => { WAN.m = WAN.d.proto in WAN_MODE ? WAN.d.proto : null; wanRender(); };
+$('wanSave').onclick = async () => {
+	const p = wanForm();
+	if (p.proto === 'pppoe' && !p.user) return $('wanBody').querySelector('[data-wan="user"]')?.focus();
+	if (p.proto === 'static') for (const k of ['ip', 'gw']) if (!p[k]) return $('wanBody').querySelector(`[data-wan="${k}"]`).focus();
+	if (!p.dns_auto && !p.dns.length && p.proto === 'static') return $('wanBody').querySelector('[data-wan="dns0"]').focus();
+	if (!(await confirmBox('修改上网设置', '家里会断网一会儿，面板也会掉线；连不上外网的话 90 秒后自动改回。', '保存'))) return;
+	busy($('wanSave'), async () => {
+		const r = await P('wan_set', p, 20000);
+		if (!r.changed) { toast('没有改动'); return wanRender(); }
+		wfConfirm(r.token, r.wait + 2, null, '上网设置');
+	});
+};
 
 /* ---------- 6.0 第 14 项：Wi-Fi 设置 ----------
  * 每个频段一张卡片：开关、名字、密码、隐藏、信道。两个频段名字和密码一样时合成一份（「用同一个名字」）。
@@ -7911,31 +8050,36 @@ $('wfSave').addEventListener('click', async () => {
 // what：路由器记的「改的是什么」（Wi-Fi 设置 / 访客 Wi-Fi）；after：点了「保留」以后接着做的（比如出访客二维码）
 function wfConfirm(tok, secs, ssid, what, after) {
 	if (document.querySelector('.modal[data-ng]')) return;
-	const until = Date.now() + Math.max(0, +secs || 0) * 1000, gu = what === '访客 Wi-Fi', pf = what === '端口转发';
+	const until = Date.now() + Math.max(0, +secs || 0) * 1000, gu = what === '访客 Wi-Fi';
+	// 各处的文案：标题、倒数后面的字、点「保留」后、没确认自动改回后
+	const T = gu ? { h: '访客网络加好了，家里还能上网吗？', s: '秒后自动撤销', kept: '访客 Wi-Fi 已打开', auto: '没有确认，访客 Wi-Fi 已撤销', back: '撤销', going: '正在撤销访客 Wi-Fi' }
+		: what === '端口转发' ? { h: '保留新的端口转发？', kept: '已保留', auto: '没有确认，端口转发已改回原来的' }
+		: what === '上网设置' ? { h: '能上网了吗？', kept: '已保留新的上网设置', auto: '没有确认，已改回原来的上网设置' }
+		: { h: '新的 Wi-Fi 设置要保留吗？', kept: '已保留新的 Wi-Fi 设置', auto: '没有确认，已改回原来的 Wi-Fi 设置' };
 	store.set('rp_ng', JSON.stringify({ tok, until, ssid, what }));
-	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (page === 'wifi' || page === 'pf') setTimeout(() => refresh(), 600); };
-	modal(`<h3>${gu ? '访客网络加好了，家里还能上网吗？' : pf ? '保留新的端口转发？' : '新的 Wi-Fi 设置要保留吗？'}</h3>
-		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>${gu ? '秒后自动撤销' : '秒后改回原来的'}</span></div>
+	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (['wifi', 'pf', 'wan'].includes(page)) setTimeout(() => refresh(), 600); };
+	modal(`<h3>${T.h}</h3>
+		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>${T.s || '秒后改回原来的'}</span></div>
 		${ssid ? `<div class="notice">手机断开的话，先连上「${esc(ssid)}」再点「保留」。</div>` : ''}
-		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>${gu ? '撤销' : '改回去'}</button><button class="btn primary" data-keep>保留</button></div>`,
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>${T.back || '改回去'}</button><button class="btn primary" data-keep>保留</button></div>`,
 	(m, close) => {
 		m.dataset.ng = 1; m.dataset.lock = 1;
 		const n = m.querySelector('[data-n]'), keep = m.querySelector('[data-keep]'), back = m.querySelector('[data-back]');
 		const tick = setInterval(() => {
 			const s = Math.max(0, Math.ceil((until - Date.now()) / 1000));
 			n.textContent = s;
-			if (!s) { clearInterval(tick); close(null); done(gu ? '没有确认，访客 Wi-Fi 已撤销' : pf ? '没有确认，端口转发已改回原来的' : '没有确认，已改回原来的 Wi-Fi 设置'); }
+			if (!s) { clearInterval(tick); close(null); done(T.auto); }
 		}, 500);
 		const act = async (b, m2) => {
 			keep.disabled = back.disabled = true;
 			try {
 				const r = await P(m2, { token: tok }, 8000);
 				clearInterval(tick); close(null);
-				done(r.gone ? '已经改回原来的设置了' : m2 === 'net_confirm' ? (gu ? '访客 Wi-Fi 已打开' : pf ? '已保留' : '已保留新的 Wi-Fi 设置') : gu ? '正在撤销访客 Wi-Fi' : '正在改回原来的设置…');
+				done(r.gone ? '已经改回原来的设置了' : m2 === 'net_confirm' ? T.kept : T.going || '正在改回原来的设置…');
 				if (m2 === 'net_confirm' && !r.gone && after) after();
 			} catch (x) {
 				keep.disabled = back.disabled = false;
-				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
+				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : what === '上网设置' ? '连不上路由器，等网络恢复后再点' : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
 			}
 		};
 		keep.onclick = () => act(keep, 'net_confirm');
@@ -8295,7 +8439,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

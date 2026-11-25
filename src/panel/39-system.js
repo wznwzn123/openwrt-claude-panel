@@ -2286,9 +2286,9 @@ const LOCK_IC = '<div class="ic"><svg viewBox="0 0 24 24" width="26" height="26"
 function mpKeysHtml() {
 	if (ME_ROLE.role === 'sub') return '';
 	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
-	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b><span class="muted">${d}</span></div><span class="muted">›</span></button>`;
+	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b>${d ? `<span class="muted">${d}</span>` : ''}</div><span class="muted">›</span></button>`;
 	const lpw = store.get('rp_lpw') === '1';
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${store.get('rp_ppp') !== '0' ? row('kppp', '宽带账号和密码', '') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -2580,6 +2580,7 @@ $('meBox').addEventListener('click', async (e) => {
 	}
 	else if (k === 'kckey') ckeySheet();
 	else if (k === 'ktab') tabletUrlSheet();
+	else if (k === 'kppp') pppSheet();
 	else if (k === 'krot') rotateKey();
 	// 能打开这个面板的手机：移除一台 / 除了这台全部移除（原来在「我的主页 → 敏感信息 → 登录着的设备」）
 	else if (k === 'drm' || k === 'drmall') {
@@ -2707,6 +2708,22 @@ async function ckeySheet() {
 			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，AI 应用里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
 			try { await secP('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }
 		};
+	});
+}
+// 6.0 第 24 项：宽带拨号的账号和密码只在这里看（上网设置页只能改、不显示）
+async function pppSheet() {
+	let r;
+	try { r = await secP('wan_secret'); } catch (e) { return toast(e.message, true); }
+	if (!r.pppoe) { store.set('rp_ppp', '0'); if (MP.sec) mpDraw(); else mpLocalDraw(); return toast('这台路由器不是宽带拨号上网'); }
+	store.set('rp_ppp', '1');
+	modal(`<div class="sheethead"><h3>宽带账号和密码</h3><button class="btn sm" data-v="close">关闭</button></div>
+	<dl class="mp-kv"><dt>账号</dt><dd class="mono" style="word-break:break-all">${esc(r.user || '—')}</dd></dl>
+	<div class="qrbox blur keybox" style="word-break:break-all;font:14px/1.5 ui-monospace,monospace;padding:14px;text-align:left;margin-top:10px">${esc(r.pw || '（没设密码）')}<span>点一下显示密码</span></div>
+	<div class="btngrid three" style="margin:12px 0 0"><button class="btn" data-cu>复制账号</button><button class="btn" data-cp>复制密码</button><button class="btn primary" data-v="close">完成</button></div>`,
+	(m) => {
+		qrReveal(m);
+		m.querySelector('[data-cu]').onclick = () => copyText(r.user || '');
+		m.querySelector('[data-cp]').onclick = () => copyText(r.pw || '');
 	});
 }
 function hubBind() {

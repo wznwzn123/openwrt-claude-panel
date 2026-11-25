@@ -1,5 +1,5 @@
 #!/bin/sh
-# 改网络设置的「90 秒确认」（6.0 第 14 项起：Wi-Fi；以后访客网络、上网设置、局域网设置、无线中继也用它）
+# 改网络设置的「90 秒确认」（6.0：Wi-Fi、访客网络、端口转发、上网设置、局域网设置；以后无线中继也用它）
 # 面板改之前把要动的配置文件备份到 $P/files，写好 $P/token（编号）、$P/what（改的是什么）、$P/reload（怎么重新加载），
 # 改完在后台跑「cmcp-netguard run 编号」：先重新加载让新设置生效，再等 90 秒——
 #   面板点了「保留」（$P 整个删掉）就什么都不做；没点就把备份放回去、重新加载，推送告诉你已经改回去了。
@@ -17,7 +17,7 @@ reload() {
 	[ -f "$P/reload" ] || return 0
 	while read -r r; do
 		case "$r" in
-			'wifi reload'|'/etc/init.d/network reload'|'/etc/init.d/firewall reload'|'/etc/init.d/dnsmasq reload')
+			'wifi reload'|'/etc/init.d/network reload'|'/etc/init.d/firewall reload'|'/etc/init.d/dnsmasq reload'|'/etc/init.d/uhttpd reload'|'/etc/init.d/claude-mcp reload')
 				if [ -n "$CMCP_NG_RUN" ]; then echo "$r" >> "$CMCP_NG_RUN"; else $r >/dev/null 2>&1; fi ;;
 		esac
 	done < "$P/reload"

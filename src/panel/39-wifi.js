@@ -159,31 +159,36 @@ $('wfSave').addEventListener('click', async () => {
 // what：路由器记的「改的是什么」（Wi-Fi 设置 / 访客 Wi-Fi）；after：点了「保留」以后接着做的（比如出访客二维码）
 function wfConfirm(tok, secs, ssid, what, after) {
 	if (document.querySelector('.modal[data-ng]')) return;
-	const until = Date.now() + Math.max(0, +secs || 0) * 1000, gu = what === '访客 Wi-Fi', pf = what === '端口转发';
+	const until = Date.now() + Math.max(0, +secs || 0) * 1000, gu = what === '访客 Wi-Fi';
+	// 各处的文案：标题、倒数后面的字、点「保留」后、没确认自动改回后
+	const T = gu ? { h: '访客网络加好了，家里还能上网吗？', s: '秒后自动撤销', kept: '访客 Wi-Fi 已打开', auto: '没有确认，访客 Wi-Fi 已撤销', back: '撤销', going: '正在撤销访客 Wi-Fi' }
+		: what === '端口转发' ? { h: '保留新的端口转发？', kept: '已保留', auto: '没有确认，端口转发已改回原来的' }
+		: what === '上网设置' ? { h: '能上网了吗？', kept: '已保留新的上网设置', auto: '没有确认，已改回原来的上网设置' }
+		: { h: '新的 Wi-Fi 设置要保留吗？', kept: '已保留新的 Wi-Fi 设置', auto: '没有确认，已改回原来的 Wi-Fi 设置' };
 	store.set('rp_ng', JSON.stringify({ tok, until, ssid, what }));
-	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (page === 'wifi' || page === 'pf') setTimeout(() => refresh(), 600); };
-	modal(`<h3>${gu ? '访客网络加好了，家里还能上网吗？' : pf ? '保留新的端口转发？' : '新的 Wi-Fi 设置要保留吗？'}</h3>
-		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>${gu ? '秒后自动撤销' : '秒后改回原来的'}</span></div>
+	const done = (msg) => { store.del('rp_ng'); if (msg) toast(msg); if (['wifi', 'pf', 'wan'].includes(page)) setTimeout(() => refresh(), 600); };
+	modal(`<h3>${T.h}</h3>
+		<div class="wfcd"><b data-n>${Math.ceil((until - Date.now()) / 1000)}</b><span>${T.s || '秒后改回原来的'}</span></div>
 		${ssid ? `<div class="notice">手机断开的话，先连上「${esc(ssid)}」再点「保留」。</div>` : ''}
-		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>${gu ? '撤销' : '改回去'}</button><button class="btn primary" data-keep>保留</button></div>`,
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-back>${T.back || '改回去'}</button><button class="btn primary" data-keep>保留</button></div>`,
 	(m, close) => {
 		m.dataset.ng = 1; m.dataset.lock = 1;
 		const n = m.querySelector('[data-n]'), keep = m.querySelector('[data-keep]'), back = m.querySelector('[data-back]');
 		const tick = setInterval(() => {
 			const s = Math.max(0, Math.ceil((until - Date.now()) / 1000));
 			n.textContent = s;
-			if (!s) { clearInterval(tick); close(null); done(gu ? '没有确认，访客 Wi-Fi 已撤销' : pf ? '没有确认，端口转发已改回原来的' : '没有确认，已改回原来的 Wi-Fi 设置'); }
+			if (!s) { clearInterval(tick); close(null); done(T.auto); }
 		}, 500);
 		const act = async (b, m2) => {
 			keep.disabled = back.disabled = true;
 			try {
 				const r = await P(m2, { token: tok }, 8000);
 				clearInterval(tick); close(null);
-				done(r.gone ? '已经改回原来的设置了' : m2 === 'net_confirm' ? (gu ? '访客 Wi-Fi 已打开' : pf ? '已保留' : '已保留新的 Wi-Fi 设置') : gu ? '正在撤销访客 Wi-Fi' : '正在改回原来的设置…');
+				done(r.gone ? '已经改回原来的设置了' : m2 === 'net_confirm' ? T.kept : T.going || '正在改回原来的设置…');
 				if (m2 === 'net_confirm' && !r.gone && after) after();
 			} catch (x) {
 				keep.disabled = back.disabled = false;
-				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
+				toast(x instanceof OfflineError ? (ssid ? `连不上路由器：先连上「${ssid}」再点` : what === '上网设置' ? '连不上路由器，等网络恢复后再点' : '连不上路由器，等 Wi-Fi 恢复后再点') : x.message, true);
 			}
 		};
 		keep.onclick = () => act(keep, 'net_confirm');

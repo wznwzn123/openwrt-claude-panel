@@ -20,8 +20,9 @@ function handle(msg) {
 	}
 	// 6.0 第 82 项：家里局域网（:906）登录：只能用原版后台给的票，或者输路由器后台密码换手机钥匙（只认局域网来的请求）
 	if (MODE == 'lan') {
-		if (msg.method != 'panel/lan_open' && msg.method != 'panel/lan_pw') return is_notification ? null : rpc_error(id, -32601, 'not found');
-		try { return rpc_result(id, msg.method == 'panel/lan_open' ? P.lan_open(p) : P.lan_pw(p)); }
+		// 第 25 项：改了路由器地址，在新地址上点「保留」（凭改的时候发的编号）
+		if (msg.method != 'panel/lan_open' && msg.method != 'panel/lan_pw' && msg.method != 'panel/lan_keep') return is_notification ? null : rpc_error(id, -32601, 'not found');
+		try { return rpc_result(id, msg.method == 'panel/lan_open' ? P.lan_open(p) : msg.method == 'panel/lan_keep' ? P.lan_keep(p) : P.lan_pw(p)); }
 		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
 	// 6.0 第 6 项：通行证地址。只有「拿手机钥匙换通行证」不用带通行证；别的请求都要带，并且只给手机面板用

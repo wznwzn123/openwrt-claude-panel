@@ -456,6 +456,12 @@
 	<div class="sectitle"><b>端口转发 <span class="pill" id="pfCount">—</span></b><button class="btn sm" id="pfAdd">添加</button></div>
 	<section class="card list"><div id="pfList"><div class="empty">读取中…</div></div></section>
 </section>
+<section class="page" id="p-wan">
+	<div id="wanPend"></div>
+	<section class="card" id="wanSt"><div class="empty">读取中…</div></section>
+	<div id="wanBody"></div>
+	<div class="savebar hidden" id="wanBar"><span class="muted" id="wanN"></span><div class="actions"><button class="btn sm" id="wanUndo">撤销</button><button class="btn sm primary" id="wanSave">保存</button></div></div>
+</section>
 <section class="page" id="p-mon">
 	<section class="card mncard"><div class="mnhead"><b>网速</b><span><em id="mnRx" class="dn">—</em><em id="mnTx" class="up">—</em></span></div><svg id="mnNet" class="mnchart" viewBox="0 0 300 70" preserveAspectRatio="none" aria-hidden="true"></svg></section>
 	<section class="card mncard"><div class="mnhead"><b>负载</b><span id="mnCpu" class="muted"></span></div>

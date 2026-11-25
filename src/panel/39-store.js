@@ -89,6 +89,8 @@ async function stRefresh() {
 }
 $('stRefresh').onclick = stRefresh;
 let stQT = 0;
+// 别的页面跳过来搜某个包（比如上网设置里缺拨号组件）
+function stFind(q) { clearTimeout(stQT); $('stFilter').value = q; stQ = q; go('store'); }
 $('stFilter').addEventListener('input', () => { clearTimeout(stQT); stQT = setTimeout(() => { stQ = $('stFilter').value.trim(); loadStore().catch(handleErr); }, 350); });
 $$('#stView .chip').forEach((b) => (b.onclick = () => { stView = b.dataset.v; if (stQ) { stQ = ''; $('stFilter').value = ''; loadStore().catch(handleErr); } else stDraw(); }));
 $('stList').addEventListener('click', (e) => {

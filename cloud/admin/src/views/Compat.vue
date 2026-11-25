@@ -13,13 +13,19 @@ import { pushToast, toastError } from '@/composables/toast'
 import { ago, day } from '@/utils/fmt'
 
 /* 6.0 第 57–60 项：兼容情况。同一个问题（功能 + 原因）合并成一条，按型号列出影响多少台；终端里的安装失败上报一起归类。
-   标「在 vX 修好了」：报过的路由器下次上报时推送到手机；安装失败的给认得出账号的人发邮件。尝鲜：报名的路由器在这里挑 */
+   标「在 vX 修好了」：报过的路由器下次上报时推送到手机；安装失败的给认得出账号的人发邮件。
+   第 95 项尝鲜申请：同意 / 拒绝；撤销这台或这个申请人的全部设备（撤销后要重新申请）。只看匿名信息，申请人只显示匿名编号 */
 const list = ref<any[]>([])
 const vol = ref<any[]>([])
 const routers = ref(0)
 const loading = ref(true)
 const q = ref('')
 const f = ref<'open' | 'fixed' | 'beta'>('open')
+const bf = ref<'wait' | 'ok' | 'end'>('wait')
+const BST: Record<string, string> = { wait: '等审核', ok: '已通过', no: '没通过', rev: '已撤销' }
+const bShown = computed(() => vol.value.filter((x) => (bf.value === 'end' ? x.st === 'no' || x.st === 'rev' : x.st === bf.value)))
+const capTxt = (c: any) => Object.entries(c || {}).map(([k, v]) => k + '=' + v).join(' ')
+const mb = (k: number) => (k >= 1024 ? Math.round(k / 1024) + ' MB' : k + ' KB')
 const hit = (g: any) => { const k = q.value.trim().toLowerCase(); return !k || [g.title, g.why, ...g.models.map((m: any) => m.model), ...g.sys.map((s: any) => s.sys)].join(' ').toLowerCase().includes(k) }
 const shown = computed(() => list.value.filter((g) => (f.value === 'fixed' ? !!g.fixed : !g.fixed) && hit(g)))
 async function load() {
@@ -36,9 +42,16 @@ async function unfix(g: any) {
   if (!(await confirm({ title: '取消「修好了」', message: '改回没修好。已经推送过的不会撤回。', confirmText: '取消标记' }))) return
   try { await post('compat/fix', { key: g.key, ver: null }); load() } catch (e) { toastError(e, '没成功') }
 }
-async function beta(x: any, ok: boolean) {
-  if (ok && !(await confirm({ title: '挑为尝鲜用户', message: `${x.model || '这台路由器'}（${x.sys || '?'}，现在 v${x.ver || '?'}）。GitHub 上有标成「预发布」的新版本时，这台路由器的「检查更新」里能装；随时能退回正式版。`, confirmText: '挑中' }))) return
-  try { await post('compat/beta', { id: x.id, ok }); pushToast(ok ? '已挑中' : '已取消'); load() } catch (e) { toastError(e, '没成功') }
+async function beta(x: any, act: 'ok' | 'no' | 'rev' | 'revp') {
+  const who = x.pid ? '申请人 ' + x.pid.slice(0, 4) : '这个申请人'
+  const C = {
+    ok: { title: '同意尝鲜申请', message: `${x.model || '这台路由器'}：有预发布版本时，它的「检查更新」里能装。会通知申请人。`, confirmText: '同意' },
+    no: { title: '拒绝尝鲜申请', message: '会通知申请人，他可以重新申请。', confirmText: '拒绝', danger: true },
+    rev: { title: '撤销这台设备', message: `${x.model || '这台路由器'}以后收不到尝鲜版，已装的照常能用。会通知申请人，要重新申请。`, confirmText: '撤销这台', danger: true },
+    revp: { title: '撤销' + who + '的全部设备', message: `${who}名下 ${x.pidN} 台在用或等审核的都撤销。会通知申请人，每台都要重新申请。`, confirmText: '全部撤销', danger: true },
+  }[act]
+  if (!(await confirm(C))) return
+  try { const r = await post<any>('compat/beta', { id: x.id, act }); pushToast({ ok: '已同意', no: '已拒绝', rev: '已撤销', revp: `已撤销 ${r.n} 台` }[act]); load() } catch (e) { toastError(e, '没成功') }
 }
 const models = (g: any) => g.models.slice(0, 6).map((m: any) => m.model + (m.n > 1 ? ' × ' + m.n : '')).join('、') + (g.models.length > 6 ? ` 等 ${g.models.length} 种` : '')
 onMounted(load)
@@ -52,7 +65,7 @@ onMounted(load)
         <div class="hub-chips">
           <button type="button" :class="['hub-chip', f === 'open' && 'is-on']" @click="f = 'open'">没修好<b>{{ list.filter((g) => !g.fixed).length }}</b></button>
           <button type="button" :class="['hub-chip', f === 'fixed' && 'is-on']" @click="f = 'fixed'">已修好<b>{{ list.filter((g) => g.fixed).length }}</b></button>
-          <button type="button" :class="['hub-chip', f === 'beta' && 'is-on']" @click="f = 'beta'">尝鲜报名<b>{{ vol.length }}</b></button>
+          <button type="button" :class="['hub-chip', f === 'beta' && 'is-on']" @click="f = 'beta'">尝鲜申请<b>{{ vol.filter((x) => x.st === 'wait').length }}</b></button>
         </div>
         <TextInput v-if="f !== 'beta'" v-model="q" icon="search" placeholder="搜型号、功能、原因、系统" clearable />
       </div>
@@ -73,18 +86,30 @@ onMounted(load)
         <EmptyState v-if="!loading && !shown.length" :title="f === 'fixed' ? '还没有标过修好的' : '没有开不了的功能'" icon="check" />
       </div>
       <div v-else class="hub-list">
-        <div v-for="x in vol" :key="x.id" class="hub-row">
+        <div class="hub-chips" style="margin:0 0 10px">
+          <button type="button" :class="['hub-chip', bf === 'wait' && 'is-on']" @click="bf = 'wait'">等审核<b>{{ vol.filter((x) => x.st === 'wait').length }}</b></button>
+          <button type="button" :class="['hub-chip', bf === 'ok' && 'is-on']" @click="bf = 'ok'">已通过<b>{{ vol.filter((x) => x.st === 'ok').length }}</b></button>
+          <button type="button" :class="['hub-chip', bf === 'end' && 'is-on']" @click="bf = 'end'">拒绝和撤销<b>{{ vol.filter((x) => x.st === 'no' || x.st === 'rev').length }}</b></button>
+        </div>
+        <div v-for="x in bShown" :key="x.id" class="hub-row">
           <div class="hub-row-main">
-            <div class="hub-row-title">{{ x.model || '没认出型号' }}<Tag v-if="x.ok" tone="ok">已挑中</Tag></div>
-            <div class="hub-row-meta">{{ x.sys || '?' }} · 现在 v{{ x.ver || '?' }} · {{ ago(x.at) }} 报名</div>
+            <div class="hub-row-title">{{ x.model || '没认出型号' }}<Tag :tone="x.st === 'ok' ? 'ok' : x.st === 'wait' ? 'info' : 'neutral'">{{ BST[x.st] }}</Tag><Tag tone="neutral">{{ x.hosted ? '托管版' : '自建版' }}</Tag></div>
+            <div class="hub-row-meta">申请人 {{ x.pid ? x.pid.slice(0, 4) : '（老的报名）' }}<template v-if="x.pidN > 1"> · 共 {{ x.pidN }} 台</template> · {{ ago(x.at) }}申请<template v-if="x.dec"> · {{ ago(x.dec) }}{{ BST[x.st] }}</template></div>
+            <div v-if="x.note" class="hub-row-meta cp-why">留言：{{ x.note }}</div>
+            <div class="hub-row-meta">{{ x.sys || '?' }}{{ x.kernel ? ' · 内核 ' + x.kernel : '' }}{{ x.plat ? ' · ' + x.plat : '' }}</div>
+            <div class="hub-row-meta">面板 v{{ x.ver || '?' }}{{ x.code ? '（' + x.code + '）' : '' }} · 内存 {{ x.mem ? x.mem + ' MB' : '?' }} · 闪存剩 {{ x.flash ? mb(x.flash) : '?' }} · 最近上报 {{ ago(x.last) }}</div>
+            <div v-if="capTxt(x.caps)" class="hub-row-meta cp-cap">{{ capTxt(x.caps) }}</div>
+            <div v-for="y in x.fails" :key="y.f + y.why" class="hub-row-meta cp-why">开不了：{{ y.title }}，{{ y.why }}</div>
           </div>
           <div class="hub-row-acts">
-            <Button v-if="!x.ok" size="sm" variant="primary" @click="beta(x, true)">挑中</Button>
-            <Button v-else size="sm" variant="ghost" @click="beta(x, false)">取消</Button>
+            <template v-if="x.st === 'wait'"><Button size="sm" variant="primary" @click="beta(x, 'ok')">同意</Button><Button size="sm" variant="ghost" @click="beta(x, 'no')">拒绝</Button></template>
+            <Button v-if="x.st === 'ok'" size="sm" variant="ghost" @click="beta(x, 'rev')">撤销这台</Button>
+            <Button v-if="(x.st === 'ok' || x.st === 'wait') && x.pid" size="sm" variant="ghost" @click="beta(x, 'revp')">撤销此人</Button>
+            <Button v-if="x.st === 'no' || x.st === 'rev'" size="sm" variant="ghost" @click="beta(x, 'ok')">直接同意</Button>
           </div>
         </div>
-        <EmptyState v-if="!loading && !vol.length" title="还没有人报名尝鲜" icon="users" />
-        <p class="hub-row-meta" style="margin:14px 2px 0">发尝鲜版：GitHub Actions「发布」时勾上「先发给尝鲜用户」（标成预发布）。觉得没问题了，在 GitHub 上把「预发布」去掉，就变成正式版推给所有人。</p>
+        <EmptyState v-if="!loading && !bShown.length" :title="bf === 'wait' ? '没有等审核的申请' : bf === 'ok' ? '还没有通过的' : '没有拒绝或撤销的'" icon="users" />
+        <p class="hub-row-meta" style="margin:14px 2px 0">发尝鲜版：GitHub Actions「发布」时勾上「先发给尝鲜用户」（标成预发布）。没问题了，在 GitHub 上去掉「预发布」，就推给所有人。</p>
       </div>
     </Panel>
   </div>
@@ -92,4 +117,5 @@ onMounted(load)
 
 <style scoped>
 .cp-why { color: var(--text, inherit); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cp-cap { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; }
 </style>

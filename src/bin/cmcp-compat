@@ -7,7 +7,8 @@
 // 报的只有：随机编号（这台路由器自己生成的，不跟账号挂钩）、面板版本、型号、平台、系统版本、内核、内存和闪存大小、
 // 哪些功能能用、开不了的功能和原因。不报账号、IP、设备、网址、钥匙、任何设置的内容。
 // 关掉：面板「我的主页 → 设置 → 帮助改进兼容性」，或者 touch /etc/claude-mcp/compat_off
-// 报名了尝鲜的（面板「一键更新」里报名，/etc/claude-mcp/beta_want）：上报时一起说「想尝鲜」，官网挑中了会告诉这台路由器
+// 申请了尝鲜的（面板「帮助改进、尝鲜」里申请，/etc/claude-mcp/beta_want）：上报时带上申请（时间、留言；托管版带专属网址编号让官网认出是谁的，
+// 自建版带邮箱），官网后台只看到匿名信息；同意 / 拒绝 / 撤销的结果下次上报时带回来（第 95 项）。申请了尝鲜的，关掉兼容上报也照样报型号这些（申请时说清楚了）
 'use strict';
 import * as L from 'cmcp.lib';
 import { readfile, writefile, stat, unlink } from 'fs';
@@ -86,14 +87,25 @@ function fail(f, why) {
 	push(l, { f, why, at: L.now(), last: L.now(), n: 1 });
 	L.writej(FAIL, slice(l, -20));
 }
+// 尝鲜申请：时间、留言、自建版的邮箱；托管版加上专属网址编号和路由器钥匙（官网凭它认出是哪个账号的，只用来认人和推送结果）
+function beta_app() {
+	let a = null; try { a = json(readfile(BW) ?? 'null'); } catch (e) {}
+	if (type(a) != 'object') a = { at: 0 };
+	let o = { at: +a.at || 0, note: substr('' + (a.note ?? ''), 0, 200) };
+	let sub = match(readfile(D + '/hub.conf') ?? '', /(^|\n)SUB=([a-z0-9]+)/)?.[2], rk = match(readfile(D + '/cloud.conf') ?? '', /(^|\n)RKEY=([A-Za-z0-9]+)/)?.[2];
+	if (sub && rk) { o.sub = sub; o.rkey = rk; }
+	else if (length(a.email ?? '')) o.email = '' + a.email;
+	return o;
+}
 function send() {
 	let beta = !!stat(BW);
 	if (stat(OFF) && !beta) return { off: true };
 	let id = myid();
 	if (!id) return { error: 'no id' };
 	let v = ver(), p = probe();
-	let fails = stat(OFF) ? [] : L.readj(FAIL, []);
-	let body = stat(OFF) ? { id, ver: v.VER ?? '', beta } : { id, ver: v.VER ?? '', code: v.CODE ?? '', ...p, fails: map(type(fails) == 'array' ? fails : [], (x) => ({ f: x.f, why: x.why })), beta };
+	let full = !stat(OFF) || beta, fails = full ? L.readj(FAIL, []) : [];
+	let body = !full ? { id, ver: v.VER ?? '', beta } : { id, ver: v.VER ?? '', code: v.CODE ?? '', ...p, fails: map(type(fails) == 'array' ? fails : [], (x) => ({ f: x.f, why: x.why })), beta };
+	if (beta) body.app = beta_app();
 	let tmp = '/tmp/cmcp_compat_body.json';
 	writefile(tmp, sprintf('%J', body));
 	let out = L.sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary @%s %s", tmp, L.shq(hub() + '/api/compat')));
@@ -101,7 +113,8 @@ function send() {
 	let r = null; try { r = json(out); } catch (e) {}
 	if (type(r) != 'object' || !r.ok) return { error: '没报上去', out: substr(out ?? '', 0, 200) };
 	// 报上去了：开不了的功能清掉（官网那边记着），留着回复给面板看（尝鲜挑中没有、哪些问题修好了）
-	if (!stat(OFF)) L.writej(FAIL, []);
+	if (full) L.writej(FAIL, []);
+	if (body.app) { delete body.app.rkey; delete body.app.email; } // 留给面板看的那份不存钥匙和邮箱
 	r.at = L.now(); r.sent = body;
 	L.writej(RES, r);
 	// 修好了：比现在的版本新，就推送一次（同一个问题只推一次）

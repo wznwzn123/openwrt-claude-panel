@@ -6841,31 +6841,69 @@ function hubBind() {
 themeLabel();
 
 
-/* 6.0 第 57、58 项：帮助改进（兼容情况匿名上报，默认开）、尝鲜（报名后官网挑人，先试新版本，随时退回） */
+/* 6.0 第 57、58 项：帮助改进（兼容情况匿名上报，默认开）、尝鲜（第 95 项：申请 → 开发者同意；能撤回、退出；被撤销要重新申请） */
+const BETA_TXT = {
+	none: '正式发布前先试新版本，随时能退回',
+	sending: '正在提交申请',
+	wait: '等审核',
+	no: '没通过，可以重新申请',
+	rev: '已撤销，可以重新申请',
+	err: '没提交上',
+};
+function betaLine(b) {
+	if (b.st === 'ok') return '已通过' + (b.ver ? '：v' + esc(b.ver) + ' 在「检查更新」里装' : '');
+	return esc(BETA_TXT[b.st] || BETA_TXT.none) + (b.st === 'err' && b.why ? '：' + esc(b.why) : '');
+}
+// 申请尝鲜：说清楚会交什么；托管版用账号认人、推送结果，自建版留邮箱
+async function betaApply(r) {
+	const hosted = !!(r.beta && r.beta.hosted);
+	const v = await modal(`<h3>申请尝鲜</h3><div class="cscroll">
+		<p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">仅上报型号、系统、版本、闪存、内存和当前上报内容。审核通过后将以邮件的形式通知您。</p>
+		${hosted ? '' : '<label class="lglabel" for="btMail" style="margin-top:12px">邮箱</label><input id="btMail" class="input" type="email" autocomplete="email" maxlength="120">'}
+		<label class="lglabel" for="btNote" style="margin-top:12px">留言（选填）</label><textarea id="btNote" class="input" rows="2" maxlength="200" placeholder="比如：闪存只有 16 MB" style="min-height:0;resize:none"></textarea>
+		<div class="formerr hidden" data-err></div></div>
+		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-go>申请</button></div>`, (m, close) => {
+		const go = m.querySelector('[data-go]'), er = m.querySelector('[data-err]');
+		go.onclick = () => busy(go, async () => {
+			const email = hosted ? '' : m.querySelector('#btMail').value.trim(), note = m.querySelector('#btNote').value.trim();
+			if (!hosted && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) { er.textContent = '留一个邮箱：只用来通知你申请结果'; er.classList.remove('hidden'); return; }
+			try { close(await P('beta_set', { want: true, note, email }, 40000)); } catch (e) { er.textContent = e.message; er.classList.remove('hidden'); }
+		}, '交给官网');
+	}, { compact: true });
+	return v && v.beta ? v : null;
+}
 async function compatSheet() {
 	let r;
-	try { r = await P('compat_info', {}, 15000); } catch (e) { return toast(e.message, true); }
+	try { r = await P('compat_info', { refresh: true }, 40000); } catch (e) { return toast(e.message, true); }
 	const owner = ME_ROLE.role !== 'sub';
 	const sw = (k, on, dis) => `<label class="sw"><input type="checkbox" data-sw="${k}"${on ? ' checked' : ''}${dis ? ' disabled' : ''} aria-label="${k === 'on' ? '帮助改进兼容性' : '参加尝鲜'}"><i></i></label>`;
 	const draw = (m) => {
 		const b = r.beta || {};
-		m.querySelector('[data-body]').innerHTML = `<div class="kv cpk"><div><b>帮助改进兼容性</b><span class="muted">每天匿名报一次：路由器型号、系统版本、面板版本、哪些功能能用、开不了的功能和原因。不报账号、IP、设备、网址、钥匙。用来做官网的兼容性表、找出哪些型号有问题，修好后告诉你。</span></div>${sw('on', r.on, !owner)}</div>
+		m.querySelector('[data-body]').innerHTML = `<div class="kv cpk"><div><b>帮助改进兼容性</b><span class="muted">匿名报型号、系统和哪些功能能用，不含账号、IP 和网址</span></div>${sw('on', r.on, !owner)}</div>
 		${r.last ? `<p class="muted" style="font-size:12.5px;margin:6px 0 0">最近一次：${esc(new Date(r.last * 1000).toLocaleString('zh-CN', { hour12: false }))}</p>` : ''}
-		<div class="kv cpk" style="margin-top:12px"><div><b>参加尝鲜</b><span class="muted">${b.want ? (b.ok ? '你被选上了' + (b.ver ? '：尝鲜版 v' + esc(b.ver) + ' 可以在「检查更新」里装' : '，有尝鲜版时会在「检查更新」里出现') : '已经报名，开发者挑人以后会告诉你') : '新版本正式发布前先给你试；只给自愿报名的人，随时能退回正式版'}</span></div>${sw('beta', !!b.want, !owner)}</div>
+		<div class="kv cpk" style="margin-top:12px"><div><b>尝鲜</b><span class="muted">${betaLine(b)}</span></div>${owner ? (['none', 'no', 'rev', 'err'].includes(b.st || 'none') ? '<button class="btn sm primary" data-bt="apply">申请</button>' : b.st === 'ok' ? '<button class="btn sm" data-bt="quit">退出</button>' : '<button class="btn sm" data-bt="quit">撤回</button>') : ''}</div>
+
 		${owner ? '' : '<p class="muted" style="font-size:12.5px;margin:10px 0 0">只有主账号能改。</p>'}`;
+		const bt = m.querySelector('[data-bt]');
+		if (bt) bt.onclick = async () => {
+			if (bt.dataset.bt === 'apply') { const x = await betaApply(r); if (x) { r = x; toast(r.beta.st === 'err' ? '没提交上：' + (r.beta.why || '稍后再试') : '已申请', r.beta.st === 'err'); } draw(m); compatLabel(r); return; }
+			const ok = b.st === 'ok';
+			if (!(await confirmBox(ok ? '退出尝鲜' : '撤回申请', ok ? '以后收不到尝鲜版，已装的照常能用。再试要重新申请。' : '撤回后要重新申请。', ok ? '退出' : '撤回'))) return;
+			busy(bt, async () => { try { r = await P('beta_set', { want: false }, 40000); toast(ok ? '已退出尝鲜' : '已撤回申请'); } catch (e) { toast(e.message, true); } draw(m); compatLabel(r); });
+		};
 		m.querySelectorAll('[data-sw]').forEach((x) => (x.onchange = async () => {
 			const on = x.checked; x.disabled = true;
 			try {
-				r = x.dataset.sw === 'on' ? await P('compat_set', { on }, 15000) : await P('beta_set', { want: on }, 15000);
-				toast(x.dataset.sw === 'on' ? (on ? '已打开，谢谢帮忙' : '已关掉，不再上报') : on ? '已报名尝鲜' : '已退出尝鲜');
+				r = await P('compat_set', { on }, 15000);
+				toast(on ? '已打开，谢谢帮忙' : '已关掉，不再上报');
 			} catch (e) { toast(e.message, true); }
 			draw(m); compatLabel(r);
 		}));
 	};
 	modal(`<div class="sheethead"><h3>帮助改进、尝鲜</h3><button class="btn sm" data-v="close">关闭</button></div><div data-body></div>
-	<p class="muted" style="font-size:12.5px;margin:12px 0 0;line-height:1.6">详细说明见官网<a href="${esc((store.get('rp_hub') || 'https://yrlove520.com') + '/privacy')}" target="_blank" rel="noopener">隐私政策</a>。</p>`, (m) => draw(m));
+	<p class="muted" style="font-size:12.5px;margin:12px 0 0"><a href="${esc((store.get('rp_hub') || 'https://yrlove520.com') + '/privacy')}" target="_blank" rel="noopener">隐私政策</a></p>`, (m) => draw(m));
 }
-function compatLabel(r) { const el = $('compatState'); if (el && r) el.textContent = (r.on ? '帮助改进：开' : '帮助改进：关') + (r.beta && r.beta.want ? ' · 已报名尝鲜' : ''); }
+function compatLabel(r) { const el = $('compatState'); if (el && r) el.textContent = (r.on ? '帮助改进：开' : '帮助改进：关') + (r.beta && r.beta.want ? ' · ' + ({ ok: '尝鲜中', wait: '尝鲜等审核', sending: '尝鲜等审核', no: '尝鲜没通过', rev: '尝鲜已撤销' }[r.beta.st] || '尝鲜等审核') : ''); }
 // 开不了这个功能：路由器已经记下来了；这里给个「报告这个问题」，内容自动填好
 function compatFailPop(msg, method) {
 	TOAST_MUTE = msg; setTimeout(() => { if (TOAST_MUTE === msg) TOAST_MUTE = ''; }, 3000);

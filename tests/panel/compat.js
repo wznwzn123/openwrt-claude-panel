@@ -1,4 +1,4 @@
-// 6.0 第 57、58、60 项（面板）：系统操作「帮助改进、尝鲜」两个开关；功能开不了弹小卡片、能「报告这个问题」（内容填好）；
+// 6.0 第 57、58、60、95 项（面板）：系统操作「帮助改进、尝鲜」：上报开关、尝鲜申请（申请 → 等审核 → 通过 / 撤销后重新申请）；功能开不了弹小卡片、能「报告这个问题」（内容填好）；
 // 检查更新里装尝鲜版、退回正式版；推送「修好了」点进来打开检查更新
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -6,12 +6,15 @@ const mock = require('./mock');
 const ROOT = process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') : path.join(__dirname, '..', '..', 'src', 'www', 'panel');
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
-const S = { on: true, want: false, betaOk: false, calls: [], upd: { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '' } };
+const S = { on: true, want: false, st: 'none', hosted: false, betaOk: false, calls: [], upd: { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '' } };
 function handle(m, p) {
 	S.calls.push({ m, p });
-	if (m === 'compat_info') return { on: S.on, beta: { want: S.want, ok: S.betaOk, ver: S.betaOk ? '6.0.1' : '', tag: S.betaOk ? 'v6.0.1' : '' }, last: Math.floor(Date.now() / 1000) - 3600 };
+	if (m === 'compat_info') return { on: S.on, beta: { want: S.want, st: S.betaOk ? 'ok' : S.st, ok: S.betaOk, hosted: S.hosted, note: S.note || '', ver: S.betaOk ? '6.0.1' : '', tag: S.betaOk ? 'v6.0.1' : '' }, last: Math.floor(Date.now() / 1000) - 3600 };
 	if (m === 'compat_set') { S.on = p.on; return handle('compat_info'); }
-	if (m === 'beta_set') { S.want = p.want; return handle('compat_info'); }
+	if (m === 'beta_set') {
+		if (p.want && !S.hosted && !/@/.test(p.email || '')) throw new Error('留一个邮箱：只用来通知你申请结果');
+		S.want = p.want; S.st = p.want ? 'wait' : 'none'; S.note = p.note || ''; S.email = p.email; if (!p.want) S.betaOk = false; return handle('compat_info');
+	}
 	if (m === 'update_check') return S.upd;
 	if (m === 'update_start') { S.started = p; return { started: true }; }
 	if (m === 'update_status') return { state: 'downloading', msg: '正在下载' };
@@ -34,7 +37,7 @@ const SHOT = path.join(__dirname, 'shots');
 	const browser = await chromium.launch();
 	for (const [w, h, dark] of [[320, 568, false], [390, 844, true], [1280, 800, false]]) {
 		const T = `［${w}${dark ? ' 深色' : ''}］`;
-		S.on = true; S.want = false; S.betaOk = false; S.calls = []; S.started = null; S.upd = { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '' };
+		S.on = true; S.want = false; S.st = 'none'; S.hosted = w === 390; S.betaOk = false; S.calls = []; S.started = null; S.upd = { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '' };
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900, colorScheme: dark ? 'dark' : 'light' });
 		const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误' + T + '：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); if (matchMedia('(prefers-color-scheme: dark)').matches) localStorage.setItem('rp_dark', '1'); });
@@ -42,15 +45,35 @@ const SHOT = path.join(__dirname, 'shots');
 		ok('系统操作里有「帮助改进、尝鲜」' + T, await page.isVisible('[data-t="compat"]'));
 		await page.click('[data-t="compat"]'); await W(800);
 		let t = await page.textContent('.modal');
-		ok('说清楚报什么、不报什么；默认开着' + T, /匿名/.test(t) && /不报账号、IP、设备、网址、钥匙/.test(t) && await page.isChecked('.modal [data-sw="on"]'));
-		ok('尝鲜：说清楚只给自愿报名的、随时能退回' + T, /随时能退回正式版/.test(t) && !(await page.isChecked('.modal [data-sw="beta"]')));
+		ok('一句话说清楚报什么、不报什么；默认开着' + T, /匿名/.test(t) && /不含账号、IP 和网址/.test(t) && !/修好后告诉你/.test(t) && await page.isChecked('.modal [data-sw="on"]'));
+		ok('尝鲜：一句话、有「申请」按钮' + T, /随时能退回/.test(t) && await page.isVisible('.modal [data-bt="apply"]'));
+		ok('打开时问一次最新状态（refresh）' + T, S.calls.some((c) => c.m === 'compat_info' && c.p.refresh === true));
 		const ov = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, W: document.documentElement.clientWidth }));
 		ok('不横向滚动' + T, ov.sw <= ov.W);
 		await page.screenshot({ path: path.join(SHOT, `compat-sheet-${w}${dark ? '-dark' : ''}.png`) });
 		await page.click('.modal [data-sw="on"]'); await W(800);
 		ok('关掉上报：告诉路由器' + T, S.on === false && S.calls.some((c) => c.m === 'compat_set' && c.p.on === false) && !(await page.isChecked('.modal [data-sw="on"]')));
-		await page.click('.modal [data-sw="beta"]'); await W(800);
-		ok('报名尝鲜：告诉路由器，写着等开发者挑人' + T, S.want === true && /已经报名/.test(await page.textContent('.modal')));
+		await page.click('.modal [data-bt="apply"]'); await W(600);
+		const ap = page.locator('.modal').last(), at = await ap.textContent();
+		ok('申请框：一句话说清楚仅上报什么' + T, /^申请尝鲜仅上报型号、系统、版本、闪存、内存和当前上报内容/.test(at.trim()) && !/看不到你是谁/.test(at) && /审核通过后将以邮件的形式通知您/.test(at) && (S.hosted ? !(await ap.locator('#btMail').count()) : await ap.locator('#btMail').isVisible()), at);
+		const ab = await ap.locator('.modalbox').boundingBox();
+		ok('申请框在屏幕里、不超过 70% 高' + T, ab && ab.x >= 0 && ab.x + ab.width <= w + 1 && ab.height <= h * 0.7 + 1);
+		await page.screenshot({ path: path.join(SHOT, `compat-apply-${w}${dark ? '-dark' : ''}.png`) });
+		if (!S.hosted) {
+			await ap.locator('[data-go]').click(); await W(500);
+			ok('自建版没填邮箱：说要留邮箱' + T, /留一个邮箱/.test(await ap.textContent()) && S.want === false);
+			await ap.locator('#btMail').fill('me@example.com');
+		}
+		await ap.locator('#btNote').fill('闪存只有 16 MB');
+		await ap.locator('[data-go]').click(); await W(900);
+		ok('申请：告诉路由器（带留言' + (S.hosted ? '' : '、邮箱') + '），写着等开发者审核' + T, S.want === true && S.note === '闪存只有 16 MB' && (S.hosted || S.email === 'me@example.com') && /等审核/.test(await page.textContent('.modal')));
+		ok('等审核时能撤回' + T, await page.isVisible('.modal [data-bt="quit"]'));
+		await page.screenshot({ path: path.join(SHOT, `compat-wait-${w}${dark ? '-dark' : ''}.png`) });
+		// 被撤销：变回「申请」
+		S.st = 'rev';
+		await page.click('.modal [data-v="close"]'); await W(400); await page.click('[data-t="compat"]'); await W(800);
+		ok('被撤销：写着可以重新申请，按钮变回「申请」' + T, /已撤销，可以重新申请/.test(await page.textContent('.modal')) && await page.isVisible('.modal [data-bt="apply"]'));
+		S.st = 'wait';
 		await page.click('.modal [data-v="close"]'); await W(500);
 		// 检查更新：挑中了，有尝鲜版
 		S.betaOk = true; S.upd = { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '', beta: { ver: '6.0.1', tag: 'v6.0.1' } };

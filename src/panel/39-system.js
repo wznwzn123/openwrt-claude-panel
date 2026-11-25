@@ -137,17 +137,47 @@ async function devRename(d) {
 		loadDev().catch(() => {});
 	} catch (e) { toast(e.message, true); }
 }
+/* 6.0 第 48 项：iPhone 的 HEIC / HEIF 照片。iPhone 上的 Safari 选照片时会自动转成 JPG；在安卓、电脑上选从 iPhone 传过来的 .heic，
+   浏览器打不开，这时才去下载转换工具（heic2any，约 1.3 MB，只在要用时下一次），转成 JPG 再照常压缩。
+   工具从公共 CDN 拿，带完整性校验（SRI）：文件被改过一个字节浏览器都不会运行 */
+const HEIC_LIB = ['https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js', 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js', 'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'];
+const HEIC_SRI = 'sha384-OTofQ0MEeiSgh62havBcemCIK0gqj809wX6UA0uPISNMRnR6NZyCdGzX3SbLrgwL';
+let heicLib = null;
+const heicLoad = () => heicLib || (heicLib = (async () => {
+	for (const src of HEIC_LIB) {
+		if (window.heic2any) break;
+		await new Promise((ok) => { const s = document.createElement('script'); s.src = src; s.integrity = HEIC_SRI; s.crossOrigin = 'anonymous'; s.onload = ok; s.onerror = () => { s.remove(); ok(); }; document.head.appendChild(s); });
+	}
+	if (!window.heic2any) { heicLib = null; throw new Error('HEIC 照片要先下载转换工具，现在下不下来。在 iPhone 上直接选这张照片，或者换成截图、JPG 再试'); }
+	return window.heic2any;
+})());
+// 是不是 HEIC / HEIF：看类型、扩展名，再看文件头（有的浏览器给的类型是空的）
+async function isHeic(f) {
+	if (/image\/hei[cf]/i.test(f.type || '') || /\.hei[cf]$/i.test(f.name || '')) return true;
+	try { const b = new Uint8Array(await f.slice(4, 12).arrayBuffer()); return String.fromCharCode(...b).startsWith('ftyp') && /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(String.fromCharCode(...b.slice(4, 8))); } catch (e) { return false; }
+}
+// 打开一张图片：浏览器能直接打开就直接用；HEIC 打不开就先转成 JPG。返回 { img, done }，用完调 done()
+async function imgOpen(f, bad) {
+	const load = (blob) => new Promise((ok, no) => { const url = URL.createObjectURL(blob), i = new Image(); i.onload = () => ok({ img: i, done: () => URL.revokeObjectURL(url) }); i.onerror = () => { URL.revokeObjectURL(url); no(new Error(bad || '这张图片打不开，换一张试试')); }; i.src = url; });
+	try { return await load(f); } catch (e) {
+		if (!(await isHeic(f))) throw e;
+		const h = await heicLoad();
+		let out;
+		try { out = await h({ blob: f, toType: 'image/jpeg', quality: 0.9 }); } catch (x) { throw new Error('这张 HEIC 照片转换不了，换一张试试'); }
+		return load(Array.isArray(out) ? out[0] : out);
+	}
+}
+const imgFile = (f) => f && (/^image\//.test(f.type || 'image/') || /\.hei[cf]$/i.test(f.name || ''));
 // 选图标：内置的十几种，或者从相册选一张照片（裁成方形小图再传，不到 40 KB）
 async function devPhoto(f) {
-	const url = URL.createObjectURL(f);
+	const { img, done } = await imgOpen(f);
 	try {
-		const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('这张图片打不开，换一张试试')); i.src = url; });
 		const c = document.createElement('canvas'), n = 128, sz = Math.min(img.naturalWidth, img.naturalHeight);
 		c.width = c.height = n;
 		c.getContext('2d').drawImage(img, (img.naturalWidth - sz) / 2, (img.naturalHeight - sz) / 2, sz, sz, 0, 0, n, n);
 		for (const [t, q] of [['image/webp', 0.82], ['image/jpeg', 0.82], ['image/jpeg', 0.6]]) { const u = c.toDataURL(t, q); if (u.startsWith('data:' + t) && u.length < 40000) return u; }
 		throw new Error('图片太大了，换一张试试');
-	} finally { URL.revokeObjectURL(url); }
+	} finally { done(); }
 }
 function devIconSheet(d) {
 	const cur = d.img ? '' : d.icon || '', auto = devKind({ ...d, icon: null }), hasImg = !!d.img;
@@ -158,7 +188,7 @@ function devIconSheet(d) {
 		<button class="btn${cur || hasImg ? '' : ' on'}" data-k="" style="width:100%;margin-top:12px">自动识别（现在认成「${DV_KIND[auto][0]}」）</button></div>`,
 	(m, close) => m.querySelector('.modalbox').addEventListener('click', async (e) => {
 		if (e.target.closest('[data-photo]')) {
-			const f = await pickFile('image/*'); if (!f) return;
+			const f = await pickFile('image/*,.heic,.heif'); if (!f) return;
 			return busy(null, async () => { const u = await devPhoto(f); const r = await P('dev_rename', { mac: d.mac, img: u }, 30000); DVIMG[d.mac] = { v: r.img, u }; close(); toast('照片换好了'); await loadDev(); });
 		}
 		const b = e.target.closest('[data-k]'); if (!b) return;
@@ -1133,26 +1163,19 @@ const T = {
 $$('[data-t]').forEach((b) => (b.onclick = () => T[b.dataset.t]()));
 // 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
 // 截图压缩成 JPEG（最长边 1600，太大再降画质），手机、电脑的浏览器和安卓 App 都能用
-function shrinkImg(file, lim) {
+async function shrinkImg(file, lim) {
 	lim = lim || 1.3e6;
-	return new Promise((ok, no) => {
-		if (!file || !/^image\//.test(file.type || 'image/')) return no(new Error('只能选图片'));
-		const url = URL.createObjectURL(file), img = new Image();
-		img.onload = () => {
-			try {
-				const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
-				const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
-				const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
-				URL.revokeObjectURL(url);
-				let q = 0.82, d = c.toDataURL('image/jpeg', q);
-				while (d.length > lim && q > 0.3) { q -= 0.12; d = c.toDataURL('image/jpeg', q); }
-				if (d.length > Math.max(lim * 1.4, 1.2e6)) return no(new Error('图片太大了，换一张试试'));
-				ok(d);
-			} catch (e) { URL.revokeObjectURL(url); no(new Error('这张图片处理不了，换一张试试')); }
-		};
-		img.onerror = () => { URL.revokeObjectURL(url); no(new Error('这种图片格式打不开，换成 JPG 或 PNG 截图试试')); };
-		img.src = url;
-	});
+	if (!imgFile(file)) throw new Error('只能选图片');
+	const { img, done } = await imgOpen(file, '这种图片格式打不开，换成 JPG 或 PNG 截图试试');
+	try {
+		const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+		const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+		const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+		let q = 0.82, d = c.toDataURL('image/jpeg', q);
+		while (d.length > lim && q > 0.3) { q -= 0.12; d = c.toDataURL('image/jpeg', q); }
+		if (d.length > Math.max(lim * 1.4, 1.2e6)) throw new Error('图片太大了，换一张试试');
+		return d;
+	} catch (e) { throw /^图片太大/.test(e.message) ? e : new Error('这张图片处理不了，换一张试试'); } finally { done(); }
 }
 // 问题反馈 / 建议：托管版直接发给开发者（管理页能看到、有邮件提醒）；自建版打开 GitHub 提问题
 async function feedbackSheet(prefill) {
@@ -1167,7 +1190,7 @@ async function feedbackSheet(prefill) {
 		<p class="muted" style="margin:0 0 8px;font-size:13px;line-height:1.6">遇到什么问题、想要什么功能，写下来就行。</p>
 		<textarea class="input" data-tx rows="6" maxlength="2000" placeholder="比如：点「一键更新」以后一直停在「准备更新」……" style="resize:vertical;min-height:120px">${esc(typeof prefill === 'string' ? prefill : '')}</textarea>
 		<div class="fbims" data-ims></div>
-		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
+		${hosted ? `<label class="btn fbadd" data-addw><input type="file" accept="image/*,.heic,.heif" multiple data-file style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span data-addt>＋ 添加截图（最多 3 张）</span></label>` : '<p class="muted" style="font-size:12.5px;margin:8px 0 0">自建版会打开 GitHub 提问题页，截图在那个页面里直接粘贴或拖进去。</p>'}
 		${hosted && SVC && SVC.files ? `<div class="atts hidden" data-atts style="margin-top:8px"></div><label class="btn fbadd"><input type="file" multiple data-any style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"><span>＋ 添加视频或文件（200MB 以内）</span></label>` : ''}
 		${hosted && ME && ME.me && ME.me.email ? `<div class="kv fbmail"><span>处理进度发到</span><span>${esc(ME.me.email)}<i>账号邮箱，不能改</i></span></div>` : ''}
 		<input class="input" data-ct maxlength="80" placeholder="其他联系方式（可以不填）：微信、QQ" style="margin-top:8px" autocapitalize="off" spellcheck="false">
@@ -1255,10 +1278,9 @@ function imgTop(c) {
 }
 // 相册里的图：缩小后存成 JPEG（太大存不下就再缩）
 async function wallFromFile(f) {
-	if (!f || !/^image\//.test(f.type || 'image/')) throw new Error('请选一张图片');
-	const url = URL.createObjectURL(f);
+	if (!imgFile(f)) throw new Error('请选一张图片');
+	const { img, done } = await imgOpen(f, '读不了这张图片，换一张试试');
 	try {
-		const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('读不了这张图片，换一张试试')); i.src = url; });
 		for (const [max, q] of [[1600, 0.85], [1200, 0.8], [900, 0.75]]) {
 			const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
 			const c = document.createElement('canvas');
@@ -1268,7 +1290,7 @@ async function wallFromFile(f) {
 			try { localStorage.setItem('rp_wallimg', d); localStorage.setItem('rp_walltop', imgTop(c)); return; } catch (e) {}
 		}
 		throw new Error('图片太大，这台手机存不下，换一张试试');
-	} finally { URL.revokeObjectURL(url); }
+	} finally { done(); }
 }
 function lookSettings() {
 	const ICON_ADD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
@@ -1281,7 +1303,7 @@ function lookSettings() {
 		<div class="wgrid">${WALLS.map(([k, n]) => `<button class="wtile ${w === k ? 'on' : ''}" data-w="${k}"><i class="wp-${k}"></i><span>${n}</span></button>`).join('')}
 		${img ? `<button class="wtile ${w === 'photo' ? 'on' : ''}" data-w="photo"><i style="background-image:url('${img}')"></i><span>我的图片</span></button>` : ''}
 		<button class="wtile add" data-pick><i>${ICON_ADD}</i><span>${img ? '换一张' : '从相册选'}</span></button></div>
-		<input type="file" accept="image/*" hidden data-file>
+		<input type="file" accept="image/*,.heic,.heif" hidden data-file>
 		<div class="wsl"><span>背景模糊</span><input type="range" min="0" max="40" step="1" value="${LOOK.num('rp_wblur', 20)}" data-blur><b data-bv>${LOOK.num('rp_wblur', 20)}</b></div>
 		<div class="wsl"><span>背景变暗</span><input type="range" min="0" max="60" step="1" value="${LOOK.num('rp_wdim', 0)}" data-dim><b data-dv>${LOOK.num('rp_wdim', 0)}%</b></div>
 		</div>
@@ -2409,15 +2431,14 @@ function mpDraw() {
 }
 // 头像：裁成正方形、缩小、压缩（小于 60 KB）
 async function mpAvatar(f) {
-	const url = URL.createObjectURL(f);
+	const { img, done } = await imgOpen(f);
 	try {
-		const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('这张图片打不开，换一张试试')); i.src = url; });
 		const c = document.createElement('canvas'), n = 160, sz = Math.min(img.naturalWidth, img.naturalHeight);
 		c.width = c.height = n;
 		c.getContext('2d').drawImage(img, (img.naturalWidth - sz) / 2, (img.naturalHeight - sz) / 2, sz, sz, 0, 0, n, n);
 		for (const [t, q] of [['image/webp', 0.85], ['image/jpeg', 0.85], ['image/jpeg', 0.6]]) { const d = c.toDataURL(t, q); if (d.startsWith('data:' + t) && d.length < 60000) return d; }
 		throw new Error('图片太大了，换一张小一点的');
-	} finally { URL.revokeObjectURL(url); }
+	} finally { done(); }
 }
 // 添加家人：选能做什么、用多久，生成加入码
 function mpPermForm(perms, exp) {
@@ -2488,7 +2509,7 @@ async function mpTransfer(uid) {
 $('meBox').addEventListener('click', async (e) => {
 	const b = e.target.closest('[data-mp]'); if (!b) return;
 	const k = b.dataset.mp;
-	if (k === 'av') { const f = await pickFile('image/*'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
+	if (k === 'av') { const f = await pickFile('image/*,.heic,.heif'); if (!f) return; busy(null, async () => { const a = await mpAvatar(f); await P('fam', { op: 'profile', avatar: a }, 30000); ME.me.avatar = a; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('头像换好了'); }); }
 	else if (k === 'name') { const n = await promptBox('改名字', '最多 20 个字', meName(ME.me)); if (n == null) return; busy(null, async () => { await P('fam', { op: 'profile', name: n }, 30000); ME.me.name = n; store.set('rp_me', JSON.stringify(ME)); meRender(); mpDraw(); toast('名字改好了'); }); }
 	else if (k === 'renew') svcSheet();
 	else if (k === 'lock') { sudoLock(); MP.h = ''; if (ME && ME.me && SVC && SVC.hosted && store.get('rp_dev') && !ME_ROLE.emerg) mpDraw(); else mpLocalDraw(); toast('已锁上'); }

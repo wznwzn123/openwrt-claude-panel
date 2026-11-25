@@ -118,7 +118,7 @@ const tapRule = async (page) => { await page.evaluate(() => { const b = document
 		await page.click('#refreshBtn');
 		await page.waitForTimeout(600);
 		const s = await T(page);
-		ok('出错：左边红色感叹号，文字红色', /255, 59, 48/.test(s.icBg) && /svg/.test(s.icImg) && /255, 59, 48/.test(s.fg), s.icBg + ' ' + s.fg);
+		ok('出错：左边红色感叹号，文字深红（白底看得清）', /255, 59, 48/.test(s.icBg) && /svg/.test(s.icImg) && /215, 0, 21/.test(s.fg), s.icBg + ' ' + s.fg);
 		ok('长文字自动换行，宽度不超过 360，仍居中', s.w <= 360.5 && s.h > 40 && Math.abs(s.x - (s.vw - s.r)) <= 2, `${Math.round(s.w)}×${Math.round(s.h)}`);
 		ok('页面没有被撑出横向滚动', s.sw <= s.vw, `${s.sw}/${s.vw}`);
 		await page.screenshot({ path: path.join(OUT, 'toast-err.png') });

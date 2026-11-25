@@ -8,12 +8,13 @@ const SHOT = path.join(__dirname, 'shots'); fs.mkdirSync(SHOT, { recursive: true
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const LIST = () => [
-	{ name: 'luci-app-adblock', title: 'adblock', ver: '4.1-r1', size: 30000, plugin: true, installed: null, upd: false, desc: 'AdBlock' },
-	{ name: 'luci-app-ddns', title: '动态 DNS', ver: '2.9-r1', size: 20480, plugin: true, installed: '2.8-r1', upd: true, desc: '' },
-	{ name: 'luci-app-wol', title: '网络唤醒', ver: '1.0-r1', size: 10240, plugin: true, installed: null, upd: false, desc: 'Wake on LAN' },
-	{ name: 'luci-app-firewall', title: '防火墙', ver: '1', size: 4000, plugin: true, installed: '1', upd: false, desc: '' },
-	{ name: 'luci-app-passwall', title: 'PassWall', ver: '4.7', size: 90000, plugin: true, installed: null, upd: false, desc: '', src: 'kenzo' },
-	{ name: 'app-meta-ddnsto', title: 'DDNSTO 远程控制', ver: '1.0.0', size: 2000, plugin: true, installed: null, upd: false, desc: '', src: 'iStore' },
+	{ name: 'luci-app-adblock', cat: 'net', title: 'adblock', ver: '4.1-r1', size: 30000, plugin: true, installed: null, upd: false, desc: 'AdBlock' },
+	{ name: 'luci-app-ddns', cat: 'net', title: '动态 DNS', ver: '2.9-r1', size: 20480, plugin: true, installed: '2.8-r1', upd: true, desc: '' },
+	{ name: 'luci-app-wol', cat: 'net', title: '网络唤醒', ver: '1.0-r1', size: 10240, plugin: true, installed: null, upd: false, desc: 'Wake on LAN' },
+	{ name: 'luci-app-firewall', cat: 'net', title: '防火墙', ver: '1', size: 4000, plugin: true, installed: '1', upd: false, desc: '' },
+	{ name: 'luci-app-passwall', cat: 'proxy', title: 'PassWall', ver: '4.7', size: 90000, plugin: true, installed: null, upd: false, desc: '', src: 'kenzo' },
+	{ name: 'luci-theme-argon', cat: 'theme', title: '主题：argon', ver: '2.3', size: 300000, plugin: true, installed: null, upd: false, desc: '' },
+	{ name: 'app-meta-ddnsto', cat: 'net', title: 'DDNSTO 远程控制', ver: '1.0.0', size: 2000, plugin: true, installed: null, upd: false, desc: '', src: 'iStore' },
 ];
 const S = { list: LIST(), calls: [], state: null, age: 3 * 86400, polls: 0, role: 'owner' };
 function handle(m, p) {
@@ -33,6 +34,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	res.writeHead(200, { 'content-type': p.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream' }); res.end(fs.readFileSync(f));
 }); });
 const W = (ms) => new Promise((r) => setTimeout(r, ms));
+const expandAll = async (page) => { for (;;) { const g = page.locator('#stList .stgrp:not(.open)'); if (!(await g.count())) break; await g.first().click(); await W(150); } };
 (async () => {
 	await new Promise((r) => server.listen(8179, r));
 	const browser = await chromium.launch();
@@ -44,28 +46,36 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8179/panel/?p=store'); await W(1800);
 		const rows = page.locator('#stList .strow');
-		ok('插件：六个（含第三方、iStore 的），已装的标「已装」，能更新的标「可更新」' + T, (await rows.count()) === 6 && /已装/.test(await page.locator('.strow[data-n="luci-app-firewall"]').textContent()) && /可更新/.test(await page.locator('.strow[data-n="luci-app-ddns"]').textContent()));
+		ok('分组默认收起：只展开「可更新」，其他组一行，写着几个' + T, (await rows.count()) === 1 && (await page.locator('#stList .stgrp').count()) === 4 && (await page.locator('#stList .stgrp.open').count()) === 1 && /网络\s*4/.test(await page.textContent('#stList .stgrp[data-g="net"]')));
+		await page.screenshot({ path: path.join(SHOT, `store-closed-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('#stList .stgrp[data-g="net"]'); await W(250);
+		ok('点开「网络」：列出 4 个' + T, (await rows.count()) === 5 && (await page.locator('#stList .stgrp.open').count()) === 2);
+		await page.click('#stList .stgrp[data-g="net"]'); await W(250);
+		ok('再点收起' + T, (await rows.count()) === 1);
+		await expandAll(page);
+		ok('全部插件：七个（含第三方、iStore 的），已装的标「已装」，能更新的标「可更新」' + T, (await rows.count()) === 7 && /已装/.test(await page.locator('.strow[data-n="luci-app-firewall"]').textContent()) && (await page.locator('.stgrp[data-g="upd"] + .strow[data-n="luci-app-ddns"]').count()) === 1);
 		ok('没装的有「安装」，可更新的有「更新」，装了的没按钮' + T, (await page.locator('.strow[data-n="luci-app-wol"] [data-act="install"]').count()) === 1 && (await page.locator('.strow[data-n="luci-app-ddns"] [data-act="upgrade"]').count()) === 1 && !(await page.locator('.strow[data-n="luci-app-firewall"] [data-act]').count()));
 		ok('第三方的标软件源名，iStore 的标 iStore' + T, /kenzo/.test(await page.locator('.strow[data-n="luci-app-passwall"]').textContent()) && /iStore/.test(await page.locator('.strow[data-n="app-meta-ddnsto"]').textContent()) && !(await page.locator('.strow[data-n="luci-app-wol"] .stsrc').count()));
 		ok('软件源多久没更新、几个软件源、闪存剩多少' + T, /3 天前更新 · 3 个软件源/.test(await page.textContent('#stAge')) && /剩 20 MB/.test(await page.textContent('#stFree')));
-		ok('装了 iStore：分类多一个「iStore」，三个一行放下，写着可更新几个' + T, /iStore/.test(await page.textContent('#stView')) && await page.isVisible('#stIs') && /可更新 1/.test(await page.textContent('#stView')) && await page.evaluate(() => { const c = [...document.querySelectorAll('#stView .chip')]; return new Set(c.map((x) => Math.round(x.getBoundingClientRect().top))).size === 1; }));
+		ok('上面按来源分：全部 7、官方 5、第三方 1、iStore 1，一行放下不截断' + T, /全部 7/.test(await page.textContent('#stView')) && /官方 5/.test(await page.textContent('#stView')) && /第三方 1/.test(await page.textContent('#stView')) && /iStore 1/.test(await page.textContent('#stView')) && await page.evaluate(() => { const c = [...document.querySelectorAll('#stView .chip')].filter((x) => !x.classList.contains('hidden')); return c.length === 4 && new Set(c.map((x) => Math.round(x.getBoundingClientRect().top))).size === 1 && c.every((x) => x.scrollWidth <= x.clientWidth + 1); }));
+		ok('列表按用途分组：可更新在最前，然后代理、网络、主题' + T, JSON.stringify(await page.$$eval('#stList .stgrp', (g) => g.map((x) => x.dataset.g))) === '["upd","proxy","net","theme"]' && /可更新\s*1/.test(await page.textContent('#stList .stgrp[data-g="upd"]')), JSON.stringify(await page.$$eval('#stList .stgrp', (g) => g.map((x) => x.textContent))));
 		ok('不横向滚动' + T, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
 		await page.screenshot({ path: path.join(SHOT, `store-${w}${dark ? '-dark' : ''}.png`) });
-		await page.click('#stView [data-v="upd"]'); await W(300);
-		ok('「可更新」：只有动态 DNS' + T, (await rows.count()) === 1 && /动态 DNS/.test(await rows.nth(0).textContent()) && /2\.8-r1 → 2\.9-r1/.test(await rows.nth(0).textContent()));
-		await page.click('#stView [data-v="istore"]'); await W(300);
-		ok('「iStore」：只有 iStore 的应用' + T, (await rows.count()) === 1 && /DDNSTO/.test(await rows.nth(0).textContent()));
-		await page.click('#stList [data-act="install"]'); await W(500);
+		ok('可更新的写着版本从哪到哪' + T, /2\.8-r1 → 2\.9-r1/.test(await page.locator('.strow[data-n="luci-app-ddns"]').textContent()));
+		await page.click('#stView [data-v="custom"]'); await W(300); await expandAll(page);
+		ok('「第三方」：只有 PassWall，不再重复标来源' + T, (await rows.count()) === 1 && /PassWall/.test(await rows.nth(0).textContent()) && !(await rows.nth(0).locator('.stsrc').count()) && /第三方/.test(await page.textContent('#stTitle')));
+		await page.click('#stView [data-v="all"]'); await W(300); await expandAll(page);
+		await page.click('.strow[data-n="app-meta-ddnsto"] [data-act="install"]'); await W(500);
 		ok('装 iStore 的应用：确认框写来自 iStore' + T, /来自 iStore。/.test(await page.locator('.modal').last().textContent()));
 		await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(300);
-		await page.click('#stView [data-v="plugin"]'); await W(300);
+		await page.click('#stView [data-v="all"]'); await W(300); await expandAll(page);
 		await page.click('.strow[data-n="luci-app-passwall"] [data-act="install"]'); await W(500);
 		ok('装第三方的：确认框写来自哪个第三方软件源' + T, /来自第三方软件源「kenzo」/.test(await page.locator('.modal').last().textContent()));
 		await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(300);
 		// 搜索：问路由器
 		await page.fill('#stFilter', 'dns'); await W(1000);
 		ok('搜索：问路由器，插件以外的也出来' + T, S.calls.some((c) => c.m === 'store_list' && c.p.q === 'dns') && /dnsmasq-full/.test(await page.textContent('#stList')) && /搜索结果/.test(await page.textContent('#stTitle')));
-		await page.fill('#stFilter', ''); await W(1000);
+		await page.fill('#stFilter', ''); await W(1000); await expandAll(page);
 		// 安装
 		await page.click('.strow[data-n="luci-app-wol"] [data-act="install"]'); await W(500);
 		let m = page.locator('.modal').last();
@@ -89,9 +99,8 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		page.on('pageerror', (e) => problems.push('页面错误（没更新过）：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8179/panel/?p=store'); await W(1800);
-		ok('软件源没更新过：说清楚，给「更新软件源」按钮', /软件源没更新过/.test(await page.textContent('#stList')) && (await page.locator('#stList [data-ref]').count()) === 1);
-		await page.click('#stList [data-ref]'); await W(600);
-		ok('点了：告诉路由器更新软件源', S.calls.some((c) => c.m === 'store_refresh') && /正在更新软件源…/.test(await page.textContent('#toast')));
+		ok('软件源没更新过（路由器重启后列表就没了）：自动更新一次', S.calls.filter((c) => c.m === 'store_refresh').length === 1 && /正在更新软件源…/.test(await page.textContent('#toast')));
+		ok('还写着软件源没更新过', /软件源没更新过/.test(await page.textContent('#stList')));
 		await ctx.close();
 	}
 	// 子账号

@@ -93,6 +93,20 @@ function st_run(what, cmd, name, after) {
 	bg('sh -c ' + shq(sprintf('echo $$ > %s/pid; ( %s ) > %s/log 2>&1; rc=$?; %s; echo $rc > %s/rc; rm -f %s/pid', D, cmd, D, after ?? 'true', D, D)));
 	return { ok: true, started: true };
 }
+// 按用途分类（用户 11/26 选的）：代理 / 网络 / 存储 / 系统 / 主题 / 其他；按插件名里的关键词认，iStore 的 app-meta-xxx 同样
+const ST_CAT = [
+	['theme', /^luci-theme-|argon-config|design-config|-theme-config$/],
+	['proxy', /openclash|passwall|ssr-plus|ssrplus|vssr|bypass|homeproxy|nikki|mihomo|clash|shadowsocks|v2ray|xray|sing-?box|trojan|helloworld|momo|daed|fchomo|naive|hysteria|tuic|ssr$/],
+	['disk', /samba|ksmbd|diskman|hd-?idle|minidlna|dlna|aria2|transmission|qbittorrent|alist|filebrowser|nfs|vsftpd|ftp|webdav|usb|syncthing|rclone|linkease|cifs|kodexplorer|nextcloud|quickstart|disk|mount|raid|unishare|istorepanel/],
+	['net', /adguard|smartdns|mosdns|ddns|upnp|wol|wireguard|zerotier|tailscale|frp|nps|natmap|natter|lucky|sqm|mwan|turboacc|nlbw|oaf|appfilter|accesscontrol|arpbind|eqos|qos|adblock|dnsfilter|unblock|openvpn|ipsec|softether|n2n|cloudflared|iperf|speedtest|bandix|timecontrol|parentcontrol|firewall|dnsmasq|dhcp|ipv6|nat|vpn|socat|udpxy|igmp|wifi|wireless|wechatpush|serverchan|pushbot|bark/],
+	['sys', /ttyd|terminal|statistics|autoreboot|reboot|cpufreq|cpu-?perf|ramfree|store|package|docker|commands|wizard|attendedsysupgrade|upgrade|watchcat|netdata|uptime|poweroff|cron|log|acme|nginx|uhttpd|advanced|filetransfer|backup|fan|temp|led|vlmcsd|kms|ota/],
+];
+function st_cat(n) {
+	let k = replace(replace(n, /^luci-app-/, ''), /^app-meta-/, '');
+	if (match(n, /^luci-theme-/)) return 'theme';
+	for (let c in ST_CAT) if (match(k, c[1])) return c[0];
+	return 'other';
+}
 function st_kb(k) { return k >= 1024 ? sprintf('%.1f MB', k / 1024.0) : sprintf('%d KB', k); }
 function logger_note(s) { if (!getenv('CMCP_STORE_RUN')) sh('logger -t claude-mcp ' + shq(s)); }
 // 装完：清原版后台的菜单缓存（新插件的菜单马上出来），推送结果
@@ -112,7 +126,7 @@ P.store_list = function(a) {
 		if (match(n, /^luci-i18n-/) || match(n, /^kmod-/) && !length(q)) continue;
 		let t = x.kind == 'istore' && match(n, /^app-meta-/) ? (length(x.desc) && length(x.desc) <= 24 ? x.desc : substr(n, 9)) : app_title(n);
 		if (length(q) && index(lc(n + ' ' + t + ' ' + x.desc), q) < 0) continue;
-		push(L, { name: n, title: t, ver: x.ver, size: x.size, isize: x.isize, desc: x.desc, plugin, installed: inst[n] ?? null, upd: inst[n] != null && inst[n] != x.ver && !match(n, APP_CORE), src: x.kind == 'dist' ? null : x.kind == 'istore' ? 'iStore' : x.feed });
+		push(L, { name: n, title: t, ver: x.ver, size: x.size, isize: x.isize, desc: x.desc, plugin, cat: st_cat(n), installed: inst[n] ?? null, upd: inst[n] != null && inst[n] != x.ver && !match(n, APP_CORE), src: x.kind == 'dist' ? null : x.kind == 'istore' ? 'iStore' : x.feed });
 	}
 	L = sort(L, (p, r) => (r.plugin - p.plugin) || (p.name < r.name ? -1 : 1));
 	let upd = filter(L, (x) => x.upd);

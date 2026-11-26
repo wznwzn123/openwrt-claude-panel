@@ -67,7 +67,7 @@ const server = http.createServer((req, res) => {
 		ok('该组选的是策略组时提示不会起作用', /选的是「Auto」（策略组）/.test(await txt()), await txt());
 		await page.selectOption('[data-aswg]', 'Zou'); await page.waitForTimeout(600);
 		// 断线记录里的切换事件显示「节点」
-		ok('显示机场订阅：剩余流量和到期日', /机场订阅/.test(await txt()) && /剩 270(\.\d)? GB \/ 共 300(\.0)? GB/.test(await txt()) && /2026-11-\d\d 到期/.test(await txt()), await txt());
+		ok('显示机场订阅：剩余流量和到期日', /机场订阅/.test(await txt()) && /剩 270(\.\d)? GB \/ 共 300(\.0)? GB/.test(await txt()) && /\d{4}-\d\d-\d\d 到期/.test(await txt()), await txt());
 		ok('订阅正常时不显示「不会自动切换」', !/不会自动切换/.test(await txt()));
 		ASW.sub = { ...ASW.sub, down: ASW.sub.total };
 		await page.click('[data-aswdry]'); await page.waitForTimeout(1500);

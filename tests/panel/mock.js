@@ -144,7 +144,7 @@ const PZ = { devs: {}, calls: [], schedOn: false };
 // 设备改名字（5.2.3）：MAC → 名字
 const DN = {};
 const dnApply = (list) => list.map((d) => (d.mac && DN[d.mac] ? { ...d, name: DN[d.mac], orig: d.name, renamed: true } : { ...d, orig: d.name }));
-const ASW = { sub: { at: 1793249000, name: 'zou', up: 1224191028, down: 30586976742, total: 322122547200, expire: 1795706585 }, enabled: true, group: 'Zou', hist: [{ t: 1793240000, from: '🇭🇰香港04 专线 3x', to: '🇭🇰香港02 专线 3x', d: 38, same: true }, { t: 1793200000, from: '🇭🇰香港02 专线 3x', to: '🇹🇼台湾01', d: 120, same: false }],
+const ASW = { sub: { at: 1793249000, name: 'zou', up: 1224191028, down: 30586976742, total: 322122547200, expire: Math.floor(Date.now() / 1000) + 30 * 86400 }, enabled: true, group: 'Zou', hist: [{ t: 1793240000, from: '🇭🇰香港04 专线 3x', to: '🇭🇰香港02 专线 3x', d: 38, same: true }, { t: 1793200000, from: '🇭🇰香港02 专线 3x', to: '🇹🇼台湾01', d: 120, same: false }],
 	dryRes: { cur: '🇭🇰香港02 专线 3x', node: true, curDelay: 88, region: 'HK', pick: { n: '🇭🇰香港05 专线', d: 41 }, same: true, tested: 30, ok: 27 } };
 const PXM = { px: null, cur: 'n1', nodes: [{ id: 'n1', name: '香港 01', kind: 'Xray', addr: 'hk.example.com', port: '443', group: '' }, { id: 'n2', name: '日本 02', kind: 'sing-box', addr: 'jp.example.com', port: '8443', group: '' }, { id: 'n3', name: '美国 03', kind: 'Xray', addr: 'us.example.com', port: '443', group: '' }], calls: [], selfbuilt: false };
 const AUTO = { oc: true, memguard: true, tb: { on: true, auto: false, at: 0, status: '已开启' }, failSet: false, on: { tunrestart: true, panelrestart: true, cacheclean: true, route: true, daily: true, newdev: true, cloudbackup: true }, autosw: true, cloud: true };

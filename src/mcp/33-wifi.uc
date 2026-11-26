@@ -231,10 +231,17 @@ P.wifi_set = function(a) {
 	return { changed: true, token: tok, wait: NG_WAIT, alloff: n == 0 };
 };
 // 90 秒里点「保留」/「改回去」
+// 改动保留了（点了「保留」）：后面的文件可以往 NG_KEPT 里加要跟着做的事（比如局域网网段改了，分流规则跟着设备新的固定 IP 走）
+const NG_KEPT = [];
+function ng_kept() {
+	let what = trim(readfile(NG + '/what') ?? '');
+	sh('rm -rf ' + shq(NG));
+	for (let f in NG_KEPT) try { f(what); } catch (e) {}
+}
 P.net_confirm = function(a) {
 	let t = trim(readfile(NG + '/token') ?? '');
 	if (!length(t) || t != '' + (a?.token ?? '')) return { ok: false, gone: true };
-	sh('rm -rf ' + shq(NG));
+	ng_kept();
 	return { ok: true };
 };
 P.net_revert = function(a) {

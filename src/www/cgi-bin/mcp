@@ -4504,10 +4504,17 @@ P.wifi_set = function(a) {
 	return { changed: true, token: tok, wait: NG_WAIT, alloff: n == 0 };
 };
 // 90 秒里点「保留」/「改回去」
+// 改动保留了（点了「保留」）：后面的文件可以往 NG_KEPT 里加要跟着做的事（比如局域网网段改了，分流规则跟着设备新的固定 IP 走）
+const NG_KEPT = [];
+function ng_kept() {
+	let what = trim(readfile(NG + '/what') ?? '');
+	sh('rm -rf ' + shq(NG));
+	for (let f in NG_KEPT) try { f(what); } catch (e) {}
+}
 P.net_confirm = function(a) {
 	let t = trim(readfile(NG + '/token') ?? '');
 	if (!length(t) || t != '' + (a?.token ?? '')) return { ok: false, gone: true };
-	sh('rm -rf ' + shq(NG));
+	ng_kept();
 	return { ok: true };
 };
 P.net_revert = function(a) {
@@ -5965,7 +5972,7 @@ P.lan_keep = function(a) {
 	if (!length(t) || t != '' + (a?.token ?? '') || !st || time() - st.mtime > 300) return { gone: true };
 	if (a?.peek) { let u = +trim(readfile(NG + '/until') ?? '0'); return { left: u > time() ? u - time() : 0, what: trim(readfile(NG + '/what') ?? '') }; }
 	if (a?.revert) { bg(sprintf('sleep 1; CMCP_NG=%s CMCP_UCI_DIR=%s CMCP_SBIN=%s %s/cmcp-netguard revert %s', shq(NG), shq(ucdir()), shq(SBIN), SBIN, t)); return { ok: true }; }
-	sh('rm -rf ' + shq(NG));
+	ng_kept();
 	return { ok: true };
 };
 // 固定地址：加、改、删（不会断网，直接生效，不走 90 秒确认）
@@ -6932,7 +6939,9 @@ function sp_rules(o, main) {
 		if (!g) { g = { kind, to, lines: [] }; push(out, g); }
 		if (line) push(g.lines, line);
 	};
-	for (let mac in o.dev) { let d = o.dev[mac]; if (d?.ip) add('d', d.t, 'SRC-IP-CIDR,' + d.ip + '/32'); }
+	// 设备现在的固定 IP 优先（改了局域网网段，固定 IP 跟着搬了），没有再用设的时候记下的
+	let ipm = length(o.dev ?? {}) ? sp_ipmap() : {};
+	for (let mac in o.dev) { let d = o.dev[mac], ip = ipm[mac] || d?.ip; if (ip) { if (d) d.ip = ip; add('d', d.t, 'SRC-IP-CIDR,' + ip + '/32'); } }
 	// 按家人一键不走代理（用户 11/25）：他名下的设备（包括以后认领的）都直连；单独给某台设备设过的按设备的来
 	if (length(o.fam)) {
 		// 先占好「设备 → 直连」这一组（可以是空的）：以后家人多了设备只换规则集内容，不用重启 OpenClash
@@ -7086,6 +7095,15 @@ P.split_set = function(a) {
 	return g;
 };
 // 用户点「现在重启」
+// 局域网网段改了并保留（风险 8、43）：「不走代理」和按设备分流的规则按设备新的固定 IP 重写
+push(NG_KEPT, function(what) {
+	if (index(what, '局域网') < 0) return;
+	let k = sp_kind();
+	if (!k) return;
+	try { if (k == 'openclash' && length(bl_load())) { bl_write_ruleset(bl_load()); bl_apply(null); } } catch (e) {}
+	let o = sp_read();
+	if (length(keys(o.dev ?? {}))) sp_apply(o, k);
+});
 P.split_restart = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) die('分流只支持 OpenClash 和 Nikki');

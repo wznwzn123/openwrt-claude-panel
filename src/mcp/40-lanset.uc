@@ -163,7 +163,7 @@ P.lan_keep = function(a) {
 	if (!length(t) || t != '' + (a?.token ?? '') || !st || time() - st.mtime > 300) return { gone: true };
 	if (a?.peek) { let u = +trim(readfile(NG + '/until') ?? '0'); return { left: u > time() ? u - time() : 0, what: trim(readfile(NG + '/what') ?? '') }; }
 	if (a?.revert) { bg(sprintf('sleep 1; CMCP_NG=%s CMCP_UCI_DIR=%s CMCP_SBIN=%s %s/cmcp-netguard revert %s', shq(NG), shq(ucdir()), shq(SBIN), SBIN, t)); return { ok: true }; }
-	sh('rm -rf ' + shq(NG));
+	ng_kept();
 	return { ok: true };
 };
 // 固定地址：加、改、删（不会断网，直接生效，不走 90 秒确认）

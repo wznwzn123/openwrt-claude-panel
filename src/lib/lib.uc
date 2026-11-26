@@ -175,7 +175,12 @@ function bl_ruleset_write() {
 		// 手机打开面板：代理节点打不开、或者直连明显更快时，cmcp-route 会把面板改成直连
 		if (panel_direct()) push(lines, '  - DOMAIN-SUFFIX,' + dom);
 	}
-	for (let e in l) if (e?.ip) push(lines, sprintf('  - SRC-IP-CIDR,%s/32', e.ip));
+	// 按 MAC 找设备现在的固定 IP（改了局域网网段，固定 IP 跟着搬了，这里跟着变；风险 8、43）
+	let fix = {};
+	try { for (let l2 in split(sh('uci -q show dhcp') ?? '', '\n')) { let m = match(l2, /^dhcp\.([^.]+)\.(mac|ip)='?([^']*)'?$/); if (m) { fix[m[1]] ??= {}; fix[m[1]][m[2]] = lc(m[3]); } } } catch (x) {}
+	let m2ip = {};
+	for (let k in fix) if (fix[k].ip && fix[k].mac) for (let mm in split(fix[k].mac, ' ')) m2ip[mm] = fix[k].ip;
+	for (let e in l) { let ip = (e?.mac && m2ip[lc(e.mac)]) || e?.ip; if (ip) push(lines, sprintf('  - SRC-IP-CIDR,%s/32', ip)); }
 	mkdir('/etc/openclash'); mkdir('/etc/openclash/rule_provider');
 	writefile(BL_RULESET + '.tmp', join('\n', lines) + '\n');
 	rename(BL_RULESET + '.tmp', BL_RULESET);

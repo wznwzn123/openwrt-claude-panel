@@ -49,6 +49,16 @@ try {
 	ok('设备 → 直连：自动固定 IP，规则在最前面（设备优先于软件、国家）', /cmcp_sp_aaaaaaaaaa01/.test(rd(CFG + '/dhcp')) && /option ip '192\.168\.1\.50'/.test(rd(CFG + '/dhcp')) && rd(CUS).indexOf('cmcp_sp_d') < rd(CUS).indexOf('cmcp_sp_a') && /SRC-IP-CIDR,192\.168\.1\.50\/32/.test(fs.readdirSync(RS).filter((f) => /_d/.test(f)).map((f) => rd(RS + '/' + f)).join('')), rd(CUS));
 	r = await cgi('split_set', { dev: { mac: 'aa:aa:aa:aa:aa:02', ip: '192.168.1.99', t: '♻️ 自动选择' } });
 	ok('已经有固定 IP 的设备：沿用原来的', r.result?.dev?.['aa:aa:aa:aa:aa:02']?.ip === '192.168.1.20' && !/cmcp_sp_aaaaaaaaaa02/.test(rd(CFG + '/dhcp')));
+	{ // 风险 8：局域网网段改了并点了「保留」，按设备分流的规则跟着设备新的固定 IP 走
+		const all = () => fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('');
+		const ng = E + '/ng'; fs.mkdirSync(ng, { recursive: true }); fs.writeFileSync(ng + '/token', 'k'.repeat(16)); fs.writeFileSync(ng + '/what', '局域网设置');
+		fs.writeFileSync(CFG + '/dhcp', rd(CFG + '/dhcp').replace("option ip '192.168.1.20'", "option ip '192.168.5.20'"));
+		await cgi('net_confirm', { token: 'k'.repeat(16) }, { CMCP_NG: ng });
+		ok('改了局域网网段并保留：分流规则换成设备新的固定 IP', /192\.168\.5\.20/.test(all()) && !/192\.168\.1\.20\//.test(all()) && !fs.existsSync(ng), all().slice(0, 300));
+		fs.writeFileSync(CFG + '/dhcp', rd(CFG + '/dhcp').replace("option ip '192.168.5.20'", "option ip '192.168.1.20'"));
+		fs.mkdirSync(ng, { recursive: true }); fs.writeFileSync(ng + '/token', 'k'.repeat(16)); fs.writeFileSync(ng + '/what', '局域网设置');
+		await cgi('net_confirm', { token: 'k'.repeat(16) }, { CMCP_NG: ng });
+	}
 	r = await cgi('split_set', { dev: { mac: 'aa:aa:aa:aa:aa:01', t: '' } });
 	ok('去掉设备分流：删掉自己加的固定 IP', !r.result?.dev?.['aa:aa:aa:aa:aa:01'] && !/cmcp_sp_aaaaaaaaaa01/.test(rd(CFG + '/dhcp')) && /config host 'tv'/.test(rd(CFG + '/dhcp')));
 	ok('选了具体策略组：看门狗要查', fs.existsSync(E + '/split.grp'));

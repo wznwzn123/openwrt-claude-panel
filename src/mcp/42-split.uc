@@ -105,7 +105,9 @@ function sp_rules(o, main) {
 		if (!g) { g = { kind, to, lines: [] }; push(out, g); }
 		if (line) push(g.lines, line);
 	};
-	for (let mac in o.dev) { let d = o.dev[mac]; if (d?.ip) add('d', d.t, 'SRC-IP-CIDR,' + d.ip + '/32'); }
+	// 设备现在的固定 IP 优先（改了局域网网段，固定 IP 跟着搬了），没有再用设的时候记下的
+	let ipm = length(o.dev ?? {}) ? sp_ipmap() : {};
+	for (let mac in o.dev) { let d = o.dev[mac], ip = ipm[mac] || d?.ip; if (ip) { if (d) d.ip = ip; add('d', d.t, 'SRC-IP-CIDR,' + ip + '/32'); } }
 	// 按家人一键不走代理（用户 11/25）：他名下的设备（包括以后认领的）都直连；单独给某台设备设过的按设备的来
 	if (length(o.fam)) {
 		// 先占好「设备 → 直连」这一组（可以是空的）：以后家人多了设备只换规则集内容，不用重启 OpenClash
@@ -259,6 +261,15 @@ P.split_set = function(a) {
 	return g;
 };
 // 用户点「现在重启」
+// 局域网网段改了并保留（风险 8、43）：「不走代理」和按设备分流的规则按设备新的固定 IP 重写
+push(NG_KEPT, function(what) {
+	if (index(what, '局域网') < 0) return;
+	let k = sp_kind();
+	if (!k) return;
+	try { if (k == 'openclash' && length(bl_load())) { bl_write_ruleset(bl_load()); bl_apply(null); } } catch (e) {}
+	let o = sp_read();
+	if (length(keys(o.dev ?? {}))) sp_apply(o, k);
+});
 P.split_restart = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) die('分流只支持 OpenClash 和 Nikki');

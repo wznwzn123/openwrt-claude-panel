@@ -3120,7 +3120,7 @@ $('oDash').onclick = () => {
 			catch (e) { if (!/自建版|本地版/.test(e.message)) { if (w) w.close(); throw e; } }
 		}
 		if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else location.href = url;
-		toast('已自动登录控制面板（只在连着家里 Wi-Fi 时能打开）');
+		toast('已自动登录控制面板');
 	}, false);
 };
 

@@ -75,7 +75,9 @@ function ann_rid() {
 }
 function ann_get(url, tmo) {
 	let j = null;
-	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices?r=' + ann_rid())))); } catch (e) {}
+	// 5.3.0：带上面板版本和托管 / 自建，官网只给发给这台的公告（跟 6.0 一样）
+	let v = match(readfile(D + '/version') ?? '', /(^|\n)VER=([0-9a-z.]+)/)?.[2] ?? '', k = length(trim(readfile(D + '/hub.conf') ?? '')) ? 'h' : 's';
+	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices?r=' + ann_rid() + '&v=' + v + '&k=' + k)))); } catch (e) {}
 	return type(j) == 'object' && j.ok && type(j.list) == 'array' ? j.list : null;
 }
 function ann_fetch(tmo) {

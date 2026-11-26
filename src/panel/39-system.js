@@ -909,6 +909,7 @@ const T = {
 	svc() { svcSheet(); },
 	ckey() { ckeySheet(); },
 	update() { updSheet(); },
+	beta() { betaSheet(); },
 	hubbind() { hubBind(); },
 	logout() { signOut(); },
 	feedback() { feedbackSheet(); },
@@ -1160,7 +1161,8 @@ async function updCheck(force) {
 	if (r && typeof r === 'object' && panelVerCheck(r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
-	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
+	if (r.betast) betaLabel(r.betast);
+	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : UPD.beta ? '尝鲜版 v' + UPD.beta.ver + ' 可以装了' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
 	const later = store.get('rp_upd_later') === updLaterKey();
 	$('rUpd').classList.toggle('hidden', !UPD.newer || (later && !UPD.force));
 	if (UPD.newer) {
@@ -1187,8 +1189,67 @@ async function updSheet(forced) {
 	${u.force ? '<div class="notice w" style="margin-top:10px">这个版本必须更新，更新后才能继续使用。</div>' : ''}
 	<p class="muted" style="font-size:13px;margin:10px 0 0">路由器自己下载同一种安装包，在后台装好。网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。装完起不来会自动退回现在的版本。</p>
 	<div class="btngrid" style="margin:12px 0 0">${u.force ? '' : '<button class="btn" data-v="close">以后再说</button>'}<button class="btn primary" data-go>一键更新</button></div>`
-	: '<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>'}`,
-	(m, close) => { m.dataset.upd = 1; if (u.force) m.dataset.lock = 1; const g = m.querySelector('[data-go]'); if (g) g.onclick = () => { close(null); updStart(true); }; });
+	: u.beta ? '' : '<p class="muted" style="margin:12px 0 0">已经是最新版了。</p><div class="btngrid" style="margin:12px 0 0"><button class="btn primary" data-v="close">好的</button></div>'}
+	${u.beta && !u.force ? `<div class="notice" style="margin-top:12px;line-height:1.6;text-wrap:pretty">尝鲜申请已通过<br>v${esc(u.beta.ver)} 还没正式发布 设置都保留 不会断网</div>
+	<div class="btngrid" style="margin:12px 0 0">${u.newer ? '' : '<button class="btn" data-v="close">关闭</button>'}<button class="btn${u.newer ? '' : ' primary'}" data-beta${u.newer ? ' style="grid-column:1/-1"' : ''}>装尝鲜版 v${esc(u.beta.ver)}</button></div>` : ''}`,
+	(m, close) => {
+		m.dataset.upd = 1; if (u.force) m.dataset.lock = 1;
+		const g = m.querySelector('[data-go]'); if (g) g.onclick = () => { close(null); updStart(true); };
+		const b = m.querySelector('[data-beta]'); if (b) b.onclick = () => { close(null); updStart(false, 'beta'); };
+	});
+}
+/* ---------- 5.3.0 尝鲜：申请 → 开发者在官网后台同意；同意了在「检查更新」里装尝鲜版。只有主账号能申请 ---------- */
+const BETA_TXT = { none: '没申请', sending: '正在提交', wait: '等审核', ok: '已通过', no: '没通过 可以重新申请', rev: '已撤销 可以重新申请', err: '没提交上' };
+function betaLine(b) {
+	if (b.st === 'ok') return '已通过' + (b.ver ? '<br>v' + esc(b.ver) + ' 在「检查更新」里装' : '');
+	return esc(BETA_TXT[b.st] || BETA_TXT.none) + (b.st === 'err' && b.why ? '：' + esc(b.why) : '');
+}
+function betaLabel(b) {
+	const btn = document.querySelector('[data-t="beta"]'); if (btn) btn.classList.toggle('hidden', ME_ROLE.role === 'sub');
+	const el = $('betaState'); if (el && b) el.textContent = b.st === 'ok' && b.ver ? '已通过 v' + b.ver + ' 可以装' : (BETA_TXT[b.st] || BETA_TXT.none);
+}
+async function betaApply(b) {
+	const hosted = !!b.hosted;
+	const v = await modal(`<h3>申请尝鲜</h3>
+		<p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">仅上报型号、系统、版本、闪存、内存和当前留言内容。审核通过后将以邮件的形式通知您。</p>
+		${hosted ? '' : '<label class="lglabel" for="btMail">邮箱</label><input id="btMail" class="input" type="email" autocomplete="email" maxlength="120">'}
+		<label class="lglabel" for="btNote">留言（选填）</label><textarea id="btNote" class="input" rows="2" maxlength="200" placeholder="比如：闪存只有 16 MB" style="min-height:0;resize:none;font-family:inherit"></textarea>
+		<div class="formerr hidden" data-err></div>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-go>申请</button></div>`, (m, close) => {
+		const go = m.querySelector('[data-go]'), er = m.querySelector('[data-err]');
+		const err = (t) => { er.textContent = t; er.classList.remove('hidden'); };
+		go.onclick = () => busy(go, async () => {
+			const email = hosted ? '' : m.querySelector('#btMail').value.trim(), note = m.querySelector('#btNote').value.trim();
+			if (!hosted && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) return err('邮箱格式不对');
+			try { close(await P('beta_set', { want: true, note, email }, 40000)); } catch (e) { err(e.message); }
+		}, '正在提交');
+	});
+	return v && v.beta ? v.beta : null;
+}
+async function betaSheet() {
+	let b;
+	try { b = (await P('beta_info', { refresh: true }, 40000)).beta || {}; } catch (e) { return toast(e.message, true); }
+	betaLabel(b);
+	const draw = (m) => {
+		const st = b.st || 'none', can = ['none', 'no', 'rev', 'err'].includes(st);
+		m.querySelector('[data-body]').innerHTML = `<div class="kv" style="align-items:center;border-bottom:0"><span style="color:var(--text);line-height:1.5">${betaLine(b)}</span>
+			<button class="btn sm${can ? ' primary' : ''}" data-bt style="flex:none">${can ? '申请' : st === 'ok' ? '退出' : '撤回'}</button></div>`;
+		const bt = m.querySelector('[data-bt]');
+		bt.onclick = async () => {
+			if (can) {
+				m.style.visibility = 'hidden'; // 申请框是半透明的：先藏起下面这层，免得透出来的按钮显得乱
+				const x = await betaApply(b);
+				m.style.visibility = '';
+				if (x) { b = x; toast(b.st === 'err' ? '没提交上：' + (b.why || '稍后再试') : '已申请', b.st === 'err'); }
+				draw(m); betaLabel(b); return;
+			}
+			const ok = st === 'ok';
+			if (!(await confirmBox(ok ? '退出尝鲜' : '撤回申请', ok ? '以后收不到尝鲜版。已装的照常能用。' : '撤回后要重新申请。', ok ? '退出' : '撤回'))) return;
+			busy(bt, async () => { try { b = (await P('beta_set', { want: false }, 40000)).beta || {}; toast(ok ? '已退出尝鲜' : '已撤回申请'); } catch (e) { toast(e.message, true); } draw(m); betaLabel(b); });
+		};
+	};
+	modal(`<div class="sheethead"><h3>尝鲜</h3><button class="btn sm" data-v="close">关闭</button></div><div data-body></div>
+	<p class="muted" style="font-size:12.5px;margin:12px 0 0"><a href="${esc((store.get('rp_hub') || 'https://yrlove520.com') + '/privacy')}" target="_blank" rel="noopener">隐私政策</a></p>`, (m) => draw(m));
 }
 // 反馈编号：一行显示编号 + 复制按钮（发送成功、收到回复时都用）
 const fbCodeRow = (code) => `<div data-fbcode style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--fill);padding:10px 12px;border-radius:12px;margin-top:12px">
@@ -1616,10 +1677,12 @@ async function fbCheck() {
 	P('fb_seen', { code: x.code, updated: x.updated, done: x.done || x.nofix ? 1 : 0 }).catch(() => {});
 }
 const UPD_STEPS = [['downloading', '下载新版安装包'], ['installing', '安装（保留所有设置）'], ['check', '重新启动面板服务'], ['done', '完成']];
-async function updStart(noConfirm) {
+async function updStart(noConfirm, ch) {
 	if (!UPD) await updCheck(true);
-	if (!noConfirm && !(await confirmBox('一键更新', '更新到 v' + (UPD?.latest || '最新版') + '？\n网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。', '开始更新'))) return;
-	try { await P('update_start', { confirm: 'UPDATE' }, 20000); } catch (e) { return toast(e.message, true); }
+	const beta = ch === 'beta' && UPD && UPD.beta;
+	if (beta) { if (!(await confirmBox('装尝鲜版 v' + UPD.beta.ver, '设置都保留\n面板断开 10–30 秒 不会断网', '开始更新'))) return; }
+	else if (!noConfirm && !(await confirmBox('一键更新', '更新到 v' + (UPD?.latest || '最新版') + '？\n网址、密钥、设置都保留；面板会断开 10–30 秒，不会断网。', '开始更新'))) return;
+	try { await P('update_start', beta ? { confirm: 'UPDATE', channel: 'beta' } : { confirm: 'UPDATE' }, 20000); } catch (e) { return toast(e.message, true); }
 	let lost = 0, t0 = Date.now(), fin = false;
 	modal(`<h3>正在更新路由器面板</h3><ul class="updsteps" data-steps></ul><p class="muted" data-msg style="font-size:13px;margin:6px 0 0">开始…</p><div class="btngrid hidden" data-end style="margin:12px 0 0"><button class="btn primary" data-done>完成</button></div>`,
 	(m, close) => {

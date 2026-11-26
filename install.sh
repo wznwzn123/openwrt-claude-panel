@@ -692,12 +692,14 @@ fi
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
 touch $CR
-sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann/d' $CR
+sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann\|\/usr\/sbin\/cmcp-compat/d' $CR
 echo '0 9 * * * /usr/sbin/cmcp-daily >/dev/null 2>&1' >> $CR
 # 面板走直连还是走代理，自动选能打开的那条
 echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 # 公告：每 30 分钟取一次（脚本里再随机等 0–10 分钟，大家错开），重要的推送到手机
 echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
+# 5.3.0 尝鲜：申请了的每天问一次官网审核结果（每台路由器错开时间；没申请的什么都不报）
+echo "$(( $(date +%s) % 50 + 5 )) $(( $(date +%s) % 11 + 10 )) * * * /usr/sbin/cmcp-compat send >/dev/null 2>&1" >> $CR
 [ "$ED" = full ] && echo '7 4 * * * /usr/sbin/cmcp-backup auto >/dev/null 2>&1' >> $CR
 /etc/init.d/cron enable >/dev/null 2>&1 || true
 /etc/init.d/cron restart >/dev/null 2>&1 || true
@@ -705,7 +707,7 @@ echo '*/30 * * * * /usr/sbin/cmcp-ann >/dev/null 2>&1' >> $CR
 # ---------- 升级系统时保留 ----------
 [ "$UC_PRIV" = 1 ] && for p in $UCRT/ $UCW; do grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf; done
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-compat /usr/sbin/cmcp-backup /usr/sbin/cmcp-daily /usr/sbin/cmcp-logincode /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复

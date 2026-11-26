@@ -11,7 +11,7 @@ ok() { if [ "$2" = 0 ]; then pass=$((pass + 1)); echo "✓ $1"; else fail=$((fai
 
 # 临时测试密钥（不是发布用的那把）
 TK=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')
-eval "$(RELEASE_SIGN_KEY=$TK node tools/sign.mjs --consts | sed 's/^/K_/')"
+eval "$(RELEASE_SIGN_KEY_V6=$TK node tools/sign.mjs --consts | sed 's/^/K_/')"
 TK2=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64"))')
 
 # 假路由器：现在装的是 ai-full 1.0
@@ -25,7 +25,8 @@ mk() { # mk 目录 内容标记
 	tar -C "$1/p" -czf "$1/openwrt-claude-panel-ai-full.tar.gz" openwrt-claude-panel && rm -rf "$1/p"
 	(cd "$1" && sha256sum *.tar.gz > SHA256SUMS)
 }
-sg() { (cd "$1" && RELEASE_SIGN_KEY=${2:-$TK} CMCP_SIGN_ANY=1 node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null); }
+# 5.3.x 的路由器认旧密钥的签名（SHA256SUMS.sig，tools/sign.mjs --old）
+sg() { (cd "$1" && RELEASE_SIGN_KEY=${2:-$TK} CMCP_SIGN_ANY=1 node "$REPO/tools/sign.mjs" --old SHA256SUMS >/dev/null); }
 ST=$T/st.json
 run() { # run 官网目录 GitHub目录 [额外环境变量...]
 	b=$1; g=$2; shift 2
@@ -93,10 +94,35 @@ s=$(run "$T/old" "$T/old" CMCP_ALLOW_OLD=1)
 ok "防回滚：在路由器终端明确要退回（CMCP_ALLOW_OLD=1）：可以装" $([ "$s" = rolledback ] ; echo $?) "$s $(msg)"
 # 12. 发布用的签名脚本：私钥跟脚本里写死的公钥对不上就不签（免得发出去路由器都验不过）
 mk "$T/rel" rel
-(cd "$T/rel" && RELEASE_SIGN_KEY=$TK node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
-ok "发布签名：私钥跟一键更新脚本里的公钥对不上 → 报错、不签" $([ $r != 0 ] && [ ! -f "$T/rel/SHA256SUMS.sig" ] ; echo $?) "rc=$r"
-(cd "$T/rel" && RELEASE_SIGN_KEY= node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
+(cd "$T/rel" && RELEASE_SIGN_KEY=$TK node "$REPO/tools/sign.mjs" --old SHA256SUMS >/dev/null 2>&1); r=$?
+ok "发布签名：旧私钥跟一键更新脚本里的公钥对不上 → 报错、不签" $([ $r != 0 ] && [ ! -f "$T/rel/SHA256SUMS.sig" ] ; echo $?) "rc=$r"
+(cd "$T/rel" && RELEASE_SIGN_KEY_V6=$TK node "$REPO/tools/sign.mjs" SHA256SUMS >/dev/null 2>&1); r=$?
+ok "发布签名：新私钥跟 6.0 的公钥对不上 → 报错、不签 .sig2" $([ $r != 0 ] && [ ! -f "$T/rel/SHA256SUMS.sig2" ] ; echo $?) "rc=$r"
+(cd "$T/rel" && RELEASE_SIGN_KEY= node "$REPO/tools/sign.mjs" --old SHA256SUMS >/dev/null 2>&1); r=$?
 ok "发布签名：没设置私钥 → 报错" $([ $r != 0 ] ; echo $?) "rc=$r"
+# 5.3.0：尝鲜版（指定版本，从官网 /dl/t/版本/ 或 GitHub 这个版本下载；照样验旧密钥的签名）
+runch() { # runch 官网目录 GitHub发布目录 参数...
+	b=$1; g=$2; shift 2
+	rm -f "$ST"; rmdir /tmp/cmcp_update.lock 2>/dev/null
+	env CMCP_ROOT="$T/root" CMCP_DL="file://$b" CMCP_GHR="file://$g" CMCP_ST="$ST" CMCP_NOSVC=1 \
+		CMCP_UPUB="$K_UPUB" CMCP_PPUB="$K_PPUB" CMCP_STSIG="$K_STSIG" sh "$REPO/src/bin/cmcp-update" run "$@" >/dev/null 2>&1
+	sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' "$ST"
+}
+printf 'CODE=ai-full\nVER=1.0\n' > "$T/root/etc/claude-mcp/version"
+s=$(runch "$T/none" "$T/none" beta 'v9.9.9;reboot')
+ok "尝鲜版：版本号不对（混了别的命令）：不装" $([ "$s" = failed ] && msg | grep -q '版本号不对' ; echo $?) "$s $(msg)"
+mkdir -p "$T/bh/t" "$T/bg/download"; cp -r "$T/good" "$T/bh/t/v9.9.9"
+s=$(runch "$T/bh" "$T/bg" beta v9.9.9)
+ok "尝鲜版：从官网 /dl/t/v9.9.9/ 下载，验签过了开始装" $([ "$s" = rolledback ] && log | grep -q '验签工具' ; echo $?) "$s $(msg)"
+rm -rf "$T/bh/t/v9.9.9"; cp -r "$T/good" "$T/bg/download/v9.9.9"
+s=$(runch "$T/bh" "$T/bg" beta v9.9.9)
+ok "尝鲜版：官网没有，直连 GitHub 这个版本下载" $([ "$s" = rolledback ] ; echo $?) "$s $(msg)"
+rm -rf "$T/bg/download/v9.9.9"; cp -r "$T/evil" "$T/bg/download/v9.9.9"
+s=$(runch "$T/bh" "$T/bg" beta v9.9.9)
+ok "尝鲜版：签名不对照样不装" $([ "$s" = failed ] ; echo $?) "$s $(msg)"
+# start 把 beta 和版本号传给后台（面板点「装尝鲜版」走的是 start）
+grep -q 'cmcp-update.run run "$2" "$3"' "$REPO/src/bin/cmcp-update"; ok "start 把尝鲜参数传给后台" $? ""
+
 # 13. 脚本里写死的测试签名跟公钥是一对（换密钥时忘了改其中一个，自检就会一直过不了）
 eval "$(grep -E '^(UPUB|PPUB|STSIG)=' src/bin/cmcp-update | sed 's/=\${CMCP_[A-Z]*:-/=/; s/}$//; s/^/R_/')"
 mkdir -p "$T/st"; printf 'cmcp release key selftest\n' > "$T/st/m"; printf 'untrusted comment: x\n%s\n' "$R_STSIG" > "$T/st/s"

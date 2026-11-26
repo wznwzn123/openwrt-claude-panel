@@ -1,6 +1,7 @@
 #!/bin/sh
 # 一键更新：下载跟现在同一种的最新安装包 → 校验 → 备份现在的程序 → 后台安装（保留所有设置）→ 检查面板 → 不行就自动退回
 # 用法：cmcp-update start    面板点「一键更新」时调用：把自己复制到 /tmp 再转到后台运行，马上返回
+#       cmcp-update start beta v6.0.0   装尝鲜版（5.3.0：官网同意了尝鲜申请的路由器；照样验签）
 #       cmcp-update status   看进度（/tmp/cmcp_update.json）
 #       cmcp-update run      真正干活（start 会调用它，一般不用手动运行）
 # 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_DL / CMCP_GH（下载地址）、CMCP_ST（进度文件）、CMCP_NOSVC=1（不重启服务）
@@ -11,7 +12,8 @@ LOCK=/tmp/cmcp_update.lock
 W=/tmp/cmcp_upd
 BK=/tmp/cmcp_upd_backup.tgz
 LOG=/tmp/cmcp_update.log
-GH=${CMCP_GH:-https://github.com/wznwzn123/openwrt-claude-panel/releases/latest/download}
+GHR=${CMCP_GHR:-https://github.com/wznwzn123/openwrt-claude-panel/releases}
+GH=${CMCP_GH:-$GHR/latest/download}
 # 安全加固：发布时用开发者的私钥给 SHA256SUMS 签名（私钥只在 GitHub 的仓库密钥里），这里用写死的公钥验签：
 # 官网（下载中转）被人控制了，也没法让路由器装上改过的安装包。UPUB 是 usign 格式的公钥，PPUB 是同一把公钥给 openssl 用的写法，
 # STSIG 是固定内容「cmcp release key selftest」的签名：先拿它试一下这台路由器的验签工具能不能用。换密钥：node tools/sign.mjs --consts
@@ -81,9 +83,9 @@ start)
 	# 转到后台：用 setsid 脱离面板进程（面板重启也不会带走它）。
 	# 不用 start-stop-daemon：BusyBox 版的 -x /bin/sh 看到别的 sh 在跑（比如看门狗）就以为「已经在跑」而不启动
 	if command -v setsid >/dev/null 2>&1; then
-		( setsid /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
+		( setsid /bin/sh /tmp/cmcp-update.run run "$2" "$3" </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	else
-		( trap '' HUP; /bin/sh /tmp/cmcp-update.run run </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
+		( trap '' HUP; /bin/sh /tmp/cmcp-update.run run "$2" "$3" </dev/null >/dev/null 2>&1 & ) >/dev/null 2>&1
 	fi
 	# 等后台真的跑起来（拿到锁、或者进度已经变了）再返回：免得面板这边一结束就把还没脱离的后台进程带走。
 	# 最多等 10 次（BusyBox 的 sleep 不认小数时每次 1 秒，也不会超过面板等待的 20 秒）
@@ -99,6 +101,11 @@ run)
 	mkdir "$LOCK" 2>/dev/null || exit 0
 	trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 	: > "$LOG"
+	# 尝鲜版（5.3.0）：从指定版本下载（官网 /dl/t/版本/，不行再直连 GitHub 这个版本）
+	if [ "$2" = beta ]; then
+		echo "$3" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { state failed "尝鲜版的版本号不对"; exit 1; }
+		BASE="${CMCP_DL:-${HUB:-https://yrlove520.com}/dl}/t/$3"; GH="$GHR/download/$3"
+	fi
 	rm -rf "$W"; mkdir -p "$W" && cd "$W" || { state failed "临时目录建不了"; exit 1; }
 	# 1. 下载：先走官网（大陆快），不行再直连 GitHub
 	# 2. 校验：校验值文件的签名对得上（这台路由器能验签的话）、安装包跟校验值对得上才装；官网那份不对就再试 GitHub 的
@@ -156,5 +163,5 @@ run)
 	state rolledback "更新没成功，已经退回 v$FROM，一切照旧。原因：$(tail -n 3 "$LOG" | tr '\n' ' ' | cut -c1-200)" "$TO"
 	exit 1 ;;
 *)
-	echo "用法：$0 start | status | run"; exit 1 ;;
+	echo "用法：$0 start [beta v版本] | status | run"; exit 1 ;;
 esac

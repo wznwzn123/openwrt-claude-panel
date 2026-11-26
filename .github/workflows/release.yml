@@ -9,6 +9,14 @@ on:
         description: 版本号（例如 v1.0.0）
         required: true
         default: v1.0.0
+      prerelease:
+        description: 先发给尝鲜用户（标成「预发布」；正式用户收不到，觉得没问题再在 GitHub 上把「预发布」去掉，就变成正式版）
+        type: boolean
+        default: false
+      drop_old_key:
+        description: 不再给 6.0 以前的老路由器签名（只有大家都升到 6.0、已经删掉旧密钥 RELEASE_SIGN_KEY 时才勾；不勾时缺旧密钥会拒绝发布）
+        type: boolean
+        default: false
 permissions:
   contents: write
   id-token: write      # 安装包来源证明（GitHub 签发，说明是这个仓库的这次构建打出来的）
@@ -28,11 +36,23 @@ jobs:
           HUB_URL: ${{ vars.HUB_URL }}
           VERSION: ${{ inputs.version }}
         run: sh tools/pack.sh "$VERSION"
-      # 安全加固：给校验值文件签名，路由器一键更新时验签（官网被人改了也装不上假的安装包）。私钥只在仓库密钥 RELEASE_SIGN_KEY 里，没设置就不发布
-      - name: 给安装包签名
+      # 安全加固：给校验值文件签名，路由器一键更新时验签（官网被人改了也装不上假的安装包）。
+      # 6.0 起用新密钥（仓库密钥 RELEASE_SIGN_KEY_V6）签 SHA256SUMS.sig2，6.0 起的路由器只认它；没设置就不发布
+      - name: 给安装包签名（新密钥）
+        env:
+          RELEASE_SIGN_KEY_V6: ${{ secrets.RELEASE_SIGN_KEY_V6 }}
+        run: node tools/sign.mjs dist/SHA256SUMS
+      # 还没升到 6.0 的老路由器（v5.2.1–5.2.3 会验签）只认旧密钥：用旧密钥 RELEASE_SIGN_KEY 再签一份 SHA256SUMS.sig，让它们能升上来。
+      # 6.0 第 86 项：缺旧密钥就拒绝发布（以前只提示一句照样发，老路由器会因此升不上来）。
+      # 大家都升到 6.0、在仓库设置里删掉 RELEASE_SIGN_KEY 以后，发布时勾上「不再给 6.0 以前的老路由器签名」
+      - name: 给安装包签名（旧密钥，给老路由器升级用）
         env:
           RELEASE_SIGN_KEY: ${{ secrets.RELEASE_SIGN_KEY }}
-        run: node tools/sign.mjs dist/SHA256SUMS
+          DROP_OLD: ${{ inputs.drop_old_key }}
+        run: |
+          if [ -n "$RELEASE_SIGN_KEY" ]; then node tools/sign.mjs --old dist/SHA256SUMS
+          elif [ "$DROP_OLD" = true ]; then echo "::notice::按选择不再用旧密钥签名：6.0 以前的老路由器没法一键更新了，只能用安装命令手动升级"
+          else echo "::error::没有旧密钥 RELEASE_SIGN_KEY：v5.2.1–5.2.3 的路由器会验签失败、升不上来，已停止发布。把旧密钥加回仓库设置再发；确定不再管老路由器的话，发布时勾上「不再给 6.0 以前的老路由器签名」"; exit 1; fi
       # 来源证明：任何人都能用 gh attestation verify 查安装包是不是这个仓库的 GitHub Actions 打出来的；出错也不影响发布
       - name: 安装包来源证明
         continue-on-error: true
@@ -49,9 +69,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
+          PRE: ${{ inputs.prerelease }}
         run: |
-          gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig dist/app-version.json \
+          gh release create "$VERSION" dist/*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig* dist/app-version.json \
             --target "$GITHUB_SHA" \
+            $([ "$PRE" = true ] && echo --prerelease) \
             --title "$VERSION：托管版 + 自建版 + 安卓 App" \
             --notes-file tools/release-notes.md
       # 依赖清单（SBOM）：列出用到的所有第三方组件，跟安装包一起放进 Release；出错也不影响发布

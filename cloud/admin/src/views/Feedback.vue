@@ -5,6 +5,7 @@ import Panel from '@/components/ui/Panel.vue'
 import Button from '@/components/ui/Button.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Modal from '@/components/ui/Modal.vue'
 import { blobUrl, del, get, post, textOf } from '@/api'
@@ -86,12 +87,9 @@ onBeforeUnmount(() => { clearInterval(timer); Object.values(imgs.value).forEach(
   <div class="page">
     <PageHeader title="问题反馈" desc="面板里发的反馈、官网「报告问题」、终端安装失败按 y 上报的，都在这里。标了「已收到 / 已修复 / 无法修复」，对方查进度时马上能看到。" />
     <Panel class="reveal">
-      <div class="hub-tools">
-        <div class="hub-chips">
-          <button v-for="[k, n] in [['todo', '没处理的'], ['all', '全部'], ['done', '已修复'], ['nofix', '无法修复']]" :key="k" type="button" :class="['hub-chip', f === k && 'is-on']" @click="f = k as any">{{ n }}<b>{{ counts[k as keyof typeof counts] }}</b></button>
-        </div>
+      <FilterBar v-model="f" :items="[['todo', '待处理'], ['all', '全部'], ['done', '已修复'], ['nofix', '修不了']].map(([k, n]) => ({ k, n, c: counts[k as keyof typeof counts] }))" label="反馈筛选" style="margin-bottom: 12px">
         <TextInput v-model="q" icon="search" placeholder="搜内容、编号、邮箱、路由器" clearable />
-      </div>
+      </FilterBar>
       <div class="hub-list">
         <div v-for="x in shown" :key="x.id" class="hub-row">
           <div class="hub-row-main">

@@ -5,6 +5,7 @@ import Panel from '@/components/ui/Panel.vue'
 import Button from '@/components/ui/Button.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { get, post } from '@/api'
 import { ask } from '@/composables/ask'
@@ -61,14 +62,9 @@ onMounted(load)
   <div class="page">
     <PageHeader title="兼容性" :desc="`路由器每天匿名报上来的「开不了的功能」和终端里的安装失败，同一个问题合并成一条。最近 90 天有 ${routers} 台路由器报过。公开的兼容性表在官网 /compat。`" />
     <Panel class="reveal">
-      <div class="hub-tools">
-        <div class="hub-chips">
-          <button type="button" :class="['hub-chip', f === 'open' && 'is-on']" @click="f = 'open'">没修好<b>{{ list.filter((g) => !g.fixed).length }}</b></button>
-          <button type="button" :class="['hub-chip', f === 'fixed' && 'is-on']" @click="f = 'fixed'">已修好<b>{{ list.filter((g) => g.fixed).length }}</b></button>
-          <button type="button" :class="['hub-chip', f === 'beta' && 'is-on']" @click="f = 'beta'">尝鲜申请<b>{{ vol.filter((x) => x.st === 'wait').length }}</b></button>
-        </div>
+      <FilterBar v-model="f" :items="[{ k: 'open', n: '没修好', c: list.filter((g) => !g.fixed).length }, { k: 'fixed', n: '已修好', c: list.filter((g) => g.fixed).length }, { k: 'beta', n: '尝鲜申请', c: vol.filter((x) => x.st === 'wait').length }]" label="兼容性筛选" style="margin-bottom: 12px">
         <TextInput v-if="f !== 'beta'" v-model="q" icon="search" placeholder="搜型号、功能、原因、系统" clearable />
-      </div>
+      </FilterBar>
       <div v-if="f !== 'beta'" class="hub-list">
         <div v-for="g in shown" :key="g.key" class="hub-row">
           <div class="hub-row-main">
@@ -86,11 +82,7 @@ onMounted(load)
         <EmptyState v-if="!loading && !shown.length" :title="f === 'fixed' ? '还没有标过修好的' : '没有开不了的功能'" icon="check" />
       </div>
       <div v-else class="hub-list">
-        <div class="hub-chips" style="margin:0 0 10px">
-          <button type="button" :class="['hub-chip', bf === 'wait' && 'is-on']" @click="bf = 'wait'">等审核<b>{{ vol.filter((x) => x.st === 'wait').length }}</b></button>
-          <button type="button" :class="['hub-chip', bf === 'ok' && 'is-on']" @click="bf = 'ok'">已通过<b>{{ vol.filter((x) => x.st === 'ok').length }}</b></button>
-          <button type="button" :class="['hub-chip', bf === 'end' && 'is-on']" @click="bf = 'end'">拒绝和撤销<b>{{ vol.filter((x) => x.st === 'no' || x.st === 'rev').length }}</b></button>
-        </div>
+        <FilterBar v-model="bf" :items="[{ k: 'wait', n: '等审核', c: vol.filter((x) => x.st === 'wait').length }, { k: 'ok', n: '已通过', c: vol.filter((x) => x.st === 'ok').length }, { k: 'end', n: '拒绝和撤销', c: vol.filter((x) => x.st === 'no' || x.st === 'rev').length }]" label="尝鲜申请筛选" style="margin: 0 0 10px" />
         <div v-for="x in bShown" :key="x.id" class="hub-row">
           <div class="hub-row-main">
             <div class="hub-row-title">{{ x.model || '没认出型号' }}<Tag :tone="x.st === 'ok' ? 'ok' : x.st === 'wait' ? 'info' : 'neutral'">{{ BST[x.st] }}</Tag><Tag tone="neutral">{{ x.hosted ? '托管版' : '自建版' }}</Tag></div>

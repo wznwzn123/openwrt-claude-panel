@@ -4,6 +4,7 @@ import PageHeader from '@/components/ui/PageHeader.vue'
 import Panel from '@/components/ui/Panel.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import DataTable, { type Column } from '@/components/ui/DataTable.vue'
 import Pagination from '@/components/ui/Pagination.vue'
 import { get } from '@/api'
@@ -36,10 +37,9 @@ onMounted(async () => { try { const r = await get('mails'); all.value = r.list; 
       <p v-else-if="quota.warn" class="hub-note">用满以后，要收验证码的操作当天会先停。快满和用满时都会推送提醒你。</p>
     </Panel>
     <Panel class="reveal">
-      <div class="hub-tools">
-        <div class="hub-chips"><button type="button" :class="['hub-chip', !bad && 'is-on']" @click="bad = false">全部</button><button type="button" :class="['hub-chip', bad && 'is-on']" @click="bad = true">只看失败</button></div>
+      <FilterBar :model-value="bad ? 'bad' : 'all'" :items="[{ k: 'all', n: '全部' }, { k: 'bad', n: '只看失败' }]" label="邮件筛选" style="margin-bottom: 12px" @update:model-value="(v) => (bad = v === 'bad')">
         <TextInput v-model="q" icon="search" placeholder="搜收件人、标题" clearable />
-      </div>
+      </FilterBar>
       <DataTable :columns="columns" :data="view" row-key="i" :loading="loading" :min-width="760" empty-text="还没有发过邮件">
         <template #cell-t="{ row }"><span class="mono">{{ full(row.t) }}</span></template>
         <template #cell-ok="{ row }"><Tag :tone="row.ok ? 'ok' : 'danger'" dot>{{ row.ok ? '发出去了' : '失败' }}</Tag><div v-if="row.err" class="hub-row-meta bad" style="white-space: normal">{{ row.err }}</div></template>

@@ -6,6 +6,7 @@ import Panel from '@/components/ui/Panel.vue'
 import Button from '@/components/ui/Button.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Pagination from '@/components/ui/Pagination.vue'
 import { get } from '@/api'
@@ -22,6 +23,10 @@ const loading = ref(true)
 const k = ref('all')
 const q = ref('')
 const KN: Record<string, string> = { login: '登录', op: '操作', router: '路由器', mail: '邮件', fb: '反馈', app: '续期', chat: '对话', code: '安装码' }
+// 用户 11/27：筛选不再一大片按钮——全部和最多的两类放分段，其余收进「其他类型」下拉（只列有记录的）
+const evTypes = computed(() => Object.entries(KN).map(([key, n]) => ({ k: key, n, c: (counts.value as any)[key] || 0 })).filter(x => x.c).sort((a, b) => b.c - a.c))
+const evTop = computed(() => [{ k: 'all', n: '全部', c: d.value ? d.value.events.length : 0 }, ...evTypes.value.slice(0, 2)])
+const evMore = computed(() => evTypes.value.slice(2))
 const tone = (x: any) => (x.ok === false ? 'danger' : x.k === 'login' ? 'neutral' : x.k === 'op' ? 'info' : x.k === 'fb' || x.k === 'chat' ? 'ok' : 'neutral')
 const counts = computed(() => { const c: Record<string, number> = {}; for (const x of d.value?.events || []) c[x.k] = (c[x.k] || 0) + 1; return c })
 const rows = computed<any[]>(() => {
@@ -80,13 +85,9 @@ const go = (x: any) => {
         </div>
       </Panel>
       <Panel class="reveal" title="全部记录">
-        <div class="hub-tools">
-          <div class="hub-chips">
-            <button type="button" :class="['hub-chip', k === 'all' && 'is-on']" @click="k = 'all'">全部<b>{{ d.events.length }}</b></button>
-            <button v-for="(n, key) in KN" v-show="counts[key]" :key="key" type="button" :class="['hub-chip', k === key && 'is-on']" @click="k = key">{{ n }}<b>{{ counts[key] }}</b></button>
-          </div>
+        <FilterBar v-model="k" :items="evTop" :more="evMore" more-label="其他类型" label="记录类型" style="margin-bottom: 12px">
           <TextInput v-model="q" icon="search" placeholder="搜内容、IP、地点" clearable />
-        </div>
+        </FilterBar>
         <div class="hub-list">
           <div v-for="x in view" :key="x.i" :class="['hub-row', 'ud-ev', (x.k === 'login' && x.ip) || x.k === 'fb' || x.k === 'chat' || x.k === 'app' ? 'ud-link' : '']" @click="go(x)">
             <div class="hub-row-main">

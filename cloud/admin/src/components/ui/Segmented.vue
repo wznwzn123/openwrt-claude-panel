@@ -18,7 +18,10 @@ function activeButton() {
 }
 
 function sync(instant = false) {
-  slideThumb(thumb.value, activeButton(), 'x', instant)
+  const b = activeButton()
+  // 选中的不在这一排（比如筛选里选了下拉里的一项）：滑块藏起来
+  if (thumb.value) thumb.value.style.opacity = b ? '' : '0'
+  slideThumb(thumb.value, b, 'x', instant)
 }
 
 function onKey(event: KeyboardEvent) {

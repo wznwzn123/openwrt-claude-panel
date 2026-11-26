@@ -33,10 +33,13 @@ const now = Date.now();
 const mk = async (id, ap, extra = {}) => S().put('cp:' + id, { at: now - 864e5, last: now - 3600e3, ver: '6.0.0', code: 'hosted-ai', model: 'Xiaomi AX3000T', plat: 'mediatek/filogic', sys: 'OpenWrt 23.05.3', kernel: '5.15.150', mem: 238, flash: 21504, caps: { fw: 'fw4', pkg: 'opkg', cfd: 'ram' }, fails: [{ key: 'tunnel-aaaaaaaaaa', f: 'tunnel', why: '闪存只剩 21 MB，放不下 cloudflared', at: now - 864e5, last: now - 3600e3, ver: '6.0.0' }], ap, beta: true, betaOk: ap.st === 'ok', betaAt: ap.at, ...extra });
 const reset = async () => {
 	for (const [k] of await S().list({ prefix: 'cp:' })) await S().delete(k);
-	await mk('aaaaaaaaaaaaaaaa', { st: 'wait', at: now - 7200e3, note: '闪存只有 16 MB，想试试新版装不装得上', pid: 'K7M3PQRS', email: 'secret@mail.example', hosted: false });
-	await mk('bbbbbbbbbbbbbbbb', { st: 'ok', at: now - 5 * 864e5, dec: now - 4 * 864e5, note: '', pid: 'K7M3PQRS', email: 'secret@mail.example', hosted: false }, { model: 'GL.iNet MT3000', sys: 'OpenWrt 21.02.7', mem: 480 });
+	// 申请记的是官网账号（用户 11/27：邮箱一律用官网账号的），通知发到账号邮箱
+	await S().put('u:uidsecret123', { uid: 'uidsecret123', email: 'secret@mail.example', devs: [] });
+	await S().put('u:uidother1234', { uid: 'uidother1234', email: 'other@mail.example', devs: [] });
+	await mk('aaaaaaaaaaaaaaaa', { st: 'wait', at: now - 7200e3, note: '闪存只有 16 MB，想试试新版装不装得上', pid: 'K7M3PQRS', uid: 'uidsecret123', hosted: false });
+	await mk('bbbbbbbbbbbbbbbb', { st: 'ok', at: now - 5 * 864e5, dec: now - 4 * 864e5, note: '', pid: 'K7M3PQRS', uid: 'uidsecret123', hosted: false }, { model: 'GL.iNet MT3000', sys: 'OpenWrt 21.02.7', mem: 480 });
 	await mk('cccccccccccccccc', { st: 'ok', at: now - 3 * 864e5, dec: now - 2 * 864e5, note: '', pid: 'Z2X8WNTV', sub: 'hostabcd', hosted: true }, { model: 'x86_64', fails: [] });
-	await mk('dddddddddddddddd', { st: 'rev', at: now - 9 * 864e5, dec: now - 864e5, note: '', pid: 'Q9R4HJKL', email: 'other@mail.example', hosted: false }, { model: 'Redmi AX6000' });
+	await mk('dddddddddddddddd', { st: 'rev', at: now - 9 * 864e5, dec: now - 864e5, note: '', pid: 'Q9R4HJKL', uid: 'uidother1234', hosted: false }, { model: 'Redmi AX6000' });
 };
 await reset();
 const browser = await chromium.launch();
@@ -47,8 +50,8 @@ for (const [w, h, dark] of [[390, 844, false], [390, 844, true], [1440, 900, fal
 	const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 	await p.goto(B + '/admin'); await W(1200); await p.fill('input[type=password]', 'admin-key-1234567890'); await p.click('button[type=submit]'); await W(2200);
 	await p.goto(B + '/admin#/compat'); await W(1600);
-	await p.locator('.hub-chip', { hasText: '尝鲜申请' }).click(); await W(500);
-	ok('「尝鲜申请」上写着等审核几个' + T, /尝鲜申请\s*1/.test(await p.locator('.hub-chip', { hasText: '尝鲜申请' }).textContent()));
+	await p.locator('.segmented button', { hasText: '尝鲜申请' }).click(); await W(500);
+	ok('「尝鲜申请」上写着等审核几个' + T, /尝鲜申请\s*1/.test(await p.locator('.segmented button', { hasText: '尝鲜申请' }).textContent()));
 	let t = await p.locator('.hub-list').last().textContent();
 	ok('默认看等审核：一条，有留言、型号、系统、内核、版本、内存、闪存、开不了的功能' + T, /闪存只有 16 MB/.test(t) && /Xiaomi AX3000T/.test(t) && /OpenWrt 23\.05\.3/.test(t) && /5\.15\.150/.test(t) && /v6\.0\.0/.test(t) && /238 MB/.test(t) && /21 MB/.test(t) && /闪存只剩 21 MB，放不下 cloudflared/.test(t), t.slice(0, 400));
 	ok('申请人只显示匿名编号，写着同一个人共 2 台' + T, /申请人 K7M3/.test(t) && /共 2 台/.test(t));
@@ -61,9 +64,9 @@ for (const [w, h, dark] of [[390, 844, false], [390, 844, true], [1440, 900, fal
 	const dlg = p.locator('[role=dialog]').last();
 	ok('同意前确认：说清楚会怎样、会通知申请人' + T, /同意尝鲜申请/.test(await dlg.textContent()) && /通知申请人/.test(await dlg.textContent()));
 	await dlg.locator('button', { hasText: '同意' }).click(); await W(1200);
-	ok('同意后：记成已通过，给自建版的邮箱发了通知' + T, (await S().get('cp:aaaaaaaaaaaaaaaa')).ap.st === 'ok' && MAILS.some((m) => /尝鲜申请通过了/.test(m.subject)));
+	ok('同意后：记成已通过，给申请人官网账号的邮箱发了通知' + T, (await S().get('cp:aaaaaaaaaaaaaaaa')).ap.st === 'ok' && MAILS.some((m) => /尝鲜申请通过了/.test(m.subject)));
 	// 已通过：撤销这台、撤销此人
-	await p.locator('.hub-chip', { hasText: '已通过' }).click(); await W(400);
+	await p.locator('.segmented button', { hasText: '已通过' }).click(); await W(400);
 	t = await p.locator('.hub-list').last().textContent();
 	ok('已通过：三台，有「撤销这台」「撤销此人」' + T, (await p.locator('.hub-list').last().locator('.hub-row').count()) === 3 && /撤销这台/.test(t) && /撤销此人/.test(t));
 	if (SHOTS) await p.screenshot({ path: `${SHOTS}/beta-ok-${w}${dark ? '-dark' : ''}.png`, fullPage: true });
@@ -75,7 +78,7 @@ for (const [w, h, dark] of [[390, 844, false], [390, 844, true], [1440, 900, fal
 	ok('撤销此人：确认框写着几台' + T, /2 台/.test(await p.locator('[role=dialog]').last().textContent()));
 	await p.locator('[role=dialog]').last().locator('button', { hasText: '全部撤销' }).click(); await W(1200);
 	ok('撤销此人：这个人的两台都撤了，只发一封邮件' + T, (await S().get('cp:aaaaaaaaaaaaaaaa')).ap.st === 'rev' && (await S().get('cp:bbbbbbbbbbbbbbbb')).ap.st === 'rev' && MAILS.length === 1);
-	await p.locator('.hub-chip', { hasText: '拒绝和撤销' }).click(); await W(400);
+	await p.locator('.segmented button', { hasText: '拒绝和撤销' }).click(); await W(400);
 	t = await p.locator('.hub-list').last().textContent();
 	ok('拒绝和撤销：都在这里，能「直接同意」' + T, (await p.locator('.hub-list').last().locator('.hub-row').count()) === 4 && /已撤销/.test(t) && /直接同意/.test(t));
 	if (SHOTS) await p.screenshot({ path: `${SHOTS}/beta-end-${w}${dark ? '-dark' : ''}.png`, fullPage: true });

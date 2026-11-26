@@ -6,6 +6,7 @@ import Panel from '@/components/ui/Panel.vue'
 import Button from '@/components/ui/Button.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { get, post, type LoginRow } from '@/api'
 import { ask } from '@/composables/ask'
@@ -62,13 +63,9 @@ onMounted(load)
   <div class="page">
     <PageHeader title="账号" :desc="`官网注册的账号，共 ${users.filter(u => !u.deleted).length} 个。最近登录的 IP 来自登录记录（留 90 天）。`" />
     <Panel class="reveal">
-      <div class="hub-tools">
-        <div class="hub-chips">
-          <button type="button" :class="['hub-chip', f === 'live' && 'is-on']" @click="f = 'live'">正常<b>{{ users.filter(u => !u.deleted).length }}</b></button>
-          <button type="button" :class="['hub-chip', f === 'bin' && 'is-on']" @click="f = 'bin'">回收站<b>{{ users.filter(u => u.deleted).length }}</b></button>
-        </div>
+      <FilterBar :model-value="f" :items="[{ k: 'live', n: '正常', c: users.filter(u => !u.deleted).length }, { k: 'bin', n: '回收站', c: users.filter(u => u.deleted).length }]" label="账号筛选" style="margin-bottom: 12px" @update:model-value="(v) => (f = v as typeof f)">
         <TextInput v-model="q" icon="search" placeholder="搜邮箱、路由器" clearable />
-      </div>
+      </FilterBar>
       <div class="hub-list">
         <div v-for="u in shown" :key="u.uid" class="hub-row">
           <div class="hub-row-main">

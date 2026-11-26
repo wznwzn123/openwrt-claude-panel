@@ -95,11 +95,11 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 	ok('账号列表里有「全部记录」' + tag, (await row.locator('button', { hasText: '全部记录' }).count()) === 1);
 	await row.locator('button', { hasText: '全部记录' }).click(); await W(1600);
 	ok('点进去：资料、路由器、全部记录' + tag, page.url().includes('#/users/' + UID) && /阿明/.test(await page.textContent('.page')) && /客厅 Kwrt/.test(await page.textContent('.page')) && /全部记录/.test(await page.textContent('.page')));
-	const chips = await page.locator('.hub-chip').allTextContents();
-	ok('按种类筛的按钮带数量' + tag, chips.some((x) => /^全部\d+/.test(x)) && chips.some((x) => /^登录2/.test(x)), chips.join('|'));
-	await page.locator('.hub-chip', { hasText: '登录' }).click(); await W(300);
+	const chips = await page.locator('.segmented button').allTextContents();
+	ok('按种类筛的按钮带数量' + tag, chips.some((x) => /^全部 \d+/.test(x)) && chips.some((x) => /^登录 2/.test(x)), chips.join('|'));
+	await page.locator('.segmented button', { hasText: '登录' }).click(); await W(300);
 	ok('只看登录：2 条，带 IP 和地点' + tag, (await page.locator('.ud-ev').count()) === 2 && /5\.6\.7\.8/.test(await page.textContent('.page')) && /香港/.test(await page.textContent('.page')));
-	await page.locator('.hub-chip', { hasText: '全部' }).first().click(); await W(300);
+	await page.locator('.segmented button', { hasText: '全部' }).first().click(); await W(300);
 	await page.fill('input[placeholder="搜内容、IP、地点"]', '流量图'); await W(400);
 	ok('搜索：只剩那条反馈' + tag, (await page.locator('.ud-ev').count()) === 1 && /反馈/.test(await page.locator('.ud-ev').first().textContent()));
 	await page.fill('input[placeholder="搜内容、IP、地点"]', ''); await W(300);

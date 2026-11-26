@@ -39,7 +39,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	ok('没接住的 Promise：只报程序错误，业务错误、断网不报', ERRS.length === 1 && ERRS[0].msg === 'x is not a function', JSON.stringify(ERRS.map((e) => e.msg)));
 	// 2. 对话里的自动回复
 	await pg.goto(B + '?p=chat'); await W(2500);
-	const who = await pg.$$eval('.chwho', (l) => l.map((e) => e.textContent));
+	const who = await pg.$$eval('.chwho', (l) => l.map((e) => e.lastElementChild.textContent)); // 6.0 名字前面多了头像：只取名字
 	ok('对话：自动回复标着「自动回复」，开发者本人的标「开发者」', who.includes('自动回复') && who.includes('开发者') && who.indexOf('自动回复') < who.lastIndexOf('开发者'), JSON.stringify(who));
 	await ctx.close();
 

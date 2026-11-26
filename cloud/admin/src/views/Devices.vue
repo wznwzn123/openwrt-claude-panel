@@ -5,6 +5,7 @@ import Panel from '@/components/ui/Panel.vue'
 import Button from '@/components/ui/Button.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import FamDrawer from '@/components/hub/FamDrawer.vue'
 import { get, post } from '@/api'
@@ -38,6 +39,10 @@ const FS: Record<string, { n: string; f: (d: any) => boolean }> = {
   edfail: { n: '换版本失败', f: d => live(d) && !!d.edFail && Date.now() - d.edFail.at < 7 * 864e5 },
   bin: { n: '回收站', f: d => d.offWhy === 'deleted' },
 }
+// 用户 11/27：筛选改成「常用的分段 + 要处理的下拉」，不再一大片按钮
+const fCount = (k: string) => devs.value.filter(FS[k].f).length
+const fMain = computed(() => [['all', '全部'], ['trial', '试用'], ['forever', '不限期'], ['paid', '续过期']].map(([k, n]) => ({ k, n, c: fCount(k) })))
+const fMore = computed(() => ['soon', 'old', 'idle', 'edfail', 'off', 'local', 'bin'].map(k => ({ k, n: FS[k].n, c: fCount(k), alert: ['soon', 'old', 'idle', 'edfail'].includes(k) })))
 // 6.0 第 94 项：托管版的版本、换版本失败在哪一步
 const ED_NAME: Record<string, string> = { ai: 'AI 版', local: '本地版', noai: '纯面板版（旧）' }
 const ED_STEP: Record<string, string> = { hub: '官网开通隧道', space: '路由器空间不够', download: '下载隧道程序', tunnel: '连接隧道', write: '写入设置', busy: '正在更新', other: '其他' }
@@ -128,10 +133,9 @@ onMounted(load)
       <Panel v-if="waitList" class="reveal"><div class="hub-list"><div v-for="x in waitList" :key="x.email" class="hub-row"><div class="hub-row-main"><div class="hub-row-title">{{ x.email }}</div><p class="hub-row-meta">{{ day(x.at) }} 排队<template v-if="x.sent"> · {{ day(x.sent) }} 发了有空位邮件</template></p></div></div><EmptyState v-if="!waitList.length" title="没有人排队" /></div></Panel>
       <div v-if="st.dnsFull" class="hub-note reveal" style="border: 1px solid var(--red); color: var(--red-text)"><b>Cloudflare 子域名名额满了</b>（{{ new Date(st.dnsFull.at).toLocaleString('zh-CN', { hour12: false }) }}，当时 {{ st.dnsFull.count }} 台）。新用户开通会提示「名额已满」：彻底删除不用的路由器，或者升级 Cloudflare 套餐。</div>
       <Panel class="reveal">
-        <div class="hub-tools">
-          <div class="hub-chips"><button v-for="(v, k) in FS" :key="k" type="button" :class="['hub-chip', f === k && 'is-on']" @click="f = k as string">{{ v.n }}<b>{{ devs.filter(v.f).length }}</b></button></div>
+        <FilterBar v-model="f" :items="fMain" :more="fMore" label="路由器筛选" style="margin-bottom: 12px">
           <TextInput v-model="q" icon="search" placeholder="搜编号、名称、型号、备注" clearable />
-        </div>
+        </FilterBar>
         <p v-if="vdist.length" class="hub-row-meta" style="margin-top: 0; margin-bottom: 6px">各版本：<template v-for="(x, i) in vdist" :key="x.v"><b :class="x.old && 'bad'">{{ x.v === '?' ? '版本未知' : 'v' + x.v }}</b> {{ x.n }} 台<template v-if="i < vdist.length - 1"> · </template></template><template v-if="latest"> · 最新 v{{ latest }}</template></p>
         <div v-if="f === 'old'" class="hub-note ov-bar"><span>必须更新时自动提醒这些路由器的主人：同一个版本最多 3 次（发现时、1 周后、再 2 周后），升级了或关了提醒就停。每台的提醒能在下面单独开关，也可以现在手动提醒一次。</span><Button size="sm" variant="primary" icon="bell" :disabled="!shown.some(d => live(d) && !d.off)" @click="remind">提醒升级</Button></div>
         <p v-if="f === 'bin'" class="hub-row-meta">回收站：网址已停用，隧道和数据都还在，随时可以恢复；到期自动彻底删除。</p>

@@ -5,6 +5,7 @@ import PageHeader from '@/components/ui/PageHeader.vue'
 import Panel from '@/components/ui/Panel.vue'
 import Tag from '@/components/ui/Tag.vue'
 import TextInput from '@/components/ui/TextInput.vue'
+import FilterBar from '@/components/ui/FilterBar.vue'
 import DataTable, { type Column } from '@/components/ui/DataTable.vue'
 import Pagination from '@/components/ui/Pagination.vue'
 import Metric from '@/components/ui/Metric.vue'
@@ -55,12 +56,11 @@ onMounted(load)
         </div>
       </Panel>
       <Panel title="全部记录" :meta="rows.length + ' 条'" class="reveal">
-        <div class="hub-tools">
-          <div class="hub-chips">
-            <button v-for="[v, n] in [['', '全部'], ['user', '账号登录'], ['admin', '管理后台'], ['reg', '注册'], ['reset', '找回密码']]" :key="v" type="button" :class="['hub-chip', k === v && 'is-on']" @click="k = v">{{ n }}</button>
-            <button v-for="[v, n] in [['ok', '只看成功'], ['bad', '只看失败']]" :key="v" type="button" :class="['hub-chip', r === v && 'is-on']" @click="r = r === v ? '' : v">{{ n }}</button>
-          </div>
-          <TextInput v-model="q" icon="search" placeholder="搜邮箱、IP、地点、设备" clearable />
+        <div style="display: grid; gap: 8px; margin-bottom: 12px">
+          <FilterBar v-model="k" :items="[{ k: '', n: '全部' }, { k: 'user', n: '账号登录' }, { k: 'admin', n: '管理后台' }]" :more="[{ k: 'reg', n: '注册' }, { k: 'reset', n: '找回密码' }]" more-label="其他" label="登录类型" />
+          <FilterBar v-model="r" :items="[{ k: '', n: '成功和失败' }, { k: 'ok', n: '只看成功' }, { k: 'bad', n: '只看失败' }]" label="登录结果">
+            <TextInput v-model="q" icon="search" placeholder="搜邮箱、IP、地点、设备" clearable />
+          </FilterBar>
         </div>
         <DataTable :columns="columns" :data="view" row-key="i" :loading="loading" :min-width="1000" empty-text="没有记录">
           <template #cell-t="{ row }"><span class="mono">{{ full(row.t) }}</span></template>

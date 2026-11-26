@@ -68,7 +68,7 @@ const DEV = {
 };
 // 互相盖住的检查：同一层的卡片、按钮、文字块
 const overlap = (p) => p.evaluate(() => {
-	const sel = '.page-head > *, .bento-grid > *, .hub-stack > *, .todo-row > *, .hub-row > *, .hub-row-acts > *, .hub-tools > *, .hub-chips > *, .panel-head > *, .chat-wrap > *, .chat-head > *, .chat-in > *, .topbar > *, .hub-form > *';
+	const sel = '.page-head > *, .bento-grid > *, .hub-stack > *, .todo-row > *, .hub-row > *, .hub-row-acts > *, .hub-tools > *, .hub-chips > *, .fb-row > *, .panel-head > *, .chat-wrap > *, .chat-head > *, .chat-in > *, .topbar > *, .hub-form > *';
 	const els = [...document.querySelectorAll(sel)].filter((e) => e.offsetParent && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden');
 	const bad = [];
 	for (const e of els) { const r = e.getBoundingClientRect(); if (r.right > innerWidth + 1 || r.left < -1) bad.push('超出：' + (e.className || e.tagName).toString().slice(0, 30) + ' ' + (e.textContent || '').trim().slice(0, 8)); }
@@ -144,7 +144,7 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 	await shot('chat-reply');
 	// 反馈：截图显示、标已修复（发邮件）
 	await page.goto(B + '/admin#/feedback'); await W(1500);
-	await page.click('.hub-chip:has-text("全部")'); await W(800);
+	await page.click('.segmented button:has-text("全部")'); await W(800);
 	ok('反馈：两条、截图显示出来' + sfx, (await page.locator('.hub-row').count()) >= 1 && await page.evaluate(() => [...document.querySelectorAll('.hub-imgs img')].some((i) => i.complete && i.naturalWidth > 0)));
 	if (dn === 'windows' && !dark) {
 		const row = page.locator('.hub-row', { hasText: '流量图' });

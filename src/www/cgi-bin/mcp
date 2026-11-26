@@ -6858,7 +6858,7 @@ const SP_APPS = [
 	['wechat', '微信', ['weixin.qq.com', 'wechat.com', 'qpic.cn', 'qlogo.cn']],
 	['taobao', '淘宝 / 支付宝', ['taobao.com', 'tmall.com', 'alicdn.com', 'alipay.com', 'alipayobjects.com']]];
 const SP_GEO = [['CN', '中国大陆'], ['HK', '香港'], ['TW', '台湾'], ['JP', '日本'], ['KR', '韩国'], ['SG', '新加坡'], ['US', '美国'], ['GB', '英国'], ['DE', '德国'], ['FR', '法国'], ['CA', '加拿大'], ['AU', '澳大利亚'], ['RU', '俄罗斯'], ['IN', '印度'], ['TH', '泰国'], ['MY', '马来西亚'], ['VN', '越南']];
-function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo']) if (type(o[k]) != 'object') o[k] = {}; return o; }
+function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo', 'fam']) if (type(o[k]) != 'object') o[k] = {}; return o; }
 function sp_kind() {
 	let k = getenv('CMCP_SP_KIND');
 	if (k != null) return k == 'none' ? null : k;
@@ -6902,6 +6902,13 @@ function sp_main(groups) {
 	return null;
 }
 function sp_target(t, main) { return t == 'DIRECT' ? 'DIRECT' : t == 'PROXY' ? main : t; }
+// MAC → IP：固定 IP 优先，然后是 DHCP 分配记录
+function sp_ipmap() {
+	let m = {};
+	try { let lm = lease_map(); for (let ip in lm) if (lm[ip]?.mac) m[lm[ip].mac] = ip; } catch (e) {}
+	for (let s in (uci_load('dhcp') ?? [])) if (s['.type'] == 'host' && s.ip) for (let x in as_list(s.mac)) m[lc(x)] = s.ip;
+	return m;
+}
 // 按「设备 → 软件 → 国家」、每种按去向分好的规则
 function sp_rules(o, main) {
 	let out = [];
@@ -6911,21 +6918,31 @@ function sp_rules(o, main) {
 		let g = null;
 		for (let x in out) if (x.kind == kind && x.to == to) g = x;
 		if (!g) { g = { kind, to, lines: [] }; push(out, g); }
-		push(g.lines, line);
+		if (line) push(g.lines, line);
 	};
 	for (let mac in o.dev) { let d = o.dev[mac]; if (d?.ip) add('d', d.t, 'SRC-IP-CIDR,' + d.ip + '/32'); }
+	// 按家人一键不走代理（用户 11/25）：他名下的设备（包括以后认领的）都直连；单独给某台设备设过的按设备的来
+	if (length(o.fam)) {
+		// 先占好「设备 → 直连」这一组（可以是空的）：以后家人多了设备只换规则集内容，不用重启 OpenClash
+		add('d', 'DIRECT', null);
+		let own = own_load(), ip = sp_ipmap();
+		for (let mac in own) if (own[mac]?.ok && o.fam[own[mac].uid] && !o.dev[mac] && ip[mac]) add('d', 'DIRECT', 'SRC-IP-CIDR,' + ip[mac] + '/32');
+	}
 	for (let a in SP_APPS) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
 	for (let g in SP_GEO) if (o.geo[g[0]]) add('g', o.geo[g[0]], 'GEOIP,' + g[0]);
 	let n = 0;
 	for (let g in out) g.name = sprintf('cmcp_sp_%s%d', g.kind, n++);
 	return out;
 }
-// OpenClash：自定义规则里自己那一段 + 规则集文件。返回要不要重启
+// OpenClash：自定义规则里自己那一段 + 规则集文件。返回要不要重启；内容变了的规则集记在 SP_CHG（只让 OpenClash 重新读这几个）
+let SP_CHG = [];
 function sp_oc_write(rules) {
 	mkdir(SP_DIR);
-	let old = split(trim(sh('ls ' + shq(SP_DIR) + ' 2>/dev/null').out ?? ''), '\n');
-	for (let f in old) if (match(f, /^cmcp_sp_[dag][0-9]+\.yaml$/)) unlink(SP_DIR + '/' + f);
-	for (let g in rules) writefile(SP_DIR + '/' + g.name + '.yaml', '# 由路由器面板「分流」自动生成，不要手动修改\npayload:\n' + join('', map(g.lines, (l) => '  - ' + l + '\n')));
+	let old = split(trim(sh('ls ' + shq(SP_DIR) + ' 2>/dev/null').out ?? ''), '\n'), want = {};
+	SP_CHG = [];
+	for (let g in rules) want[g.name + '.yaml'] = '# 由路由器面板「分流」自动生成，不要手动修改\n' + (length(g.lines) ? 'payload:\n' + join('', map(g.lines, (l) => '  - ' + l + '\n')) : 'payload: []\n');
+	for (let f in old) if (match(f, /^cmcp_sp_[dag][0-9]+\.yaml$/) && !want[f]) unlink(SP_DIR + '/' + f);
+	for (let f in want) if (readfile(SP_DIR + '/' + f) != want[f]) { writefile(SP_DIR + '/' + f, want[f]); push(SP_CHG, replace(f, /\.yaml$/, '')); }
 	let s = readfile(SP_CUSTOM);
 	if (s == null) s = 'rules:\n';
 	// 规则集声明（rule-providers 里）有 4 行：名字那行带标记，下面 3 行缩进更深；一起去掉
@@ -6976,13 +6993,14 @@ function sp_nk_write(rules) {
 function sp_mark(o) {
 	let any = false;
 	for (let k in ['dev', 'app', 'geo']) for (let id in o[k]) { let t = k == 'dev' ? o[k][id].t : o[k][id]; if (t != 'DIRECT' && t != 'PROXY') any = true; }
+	if (length(o.fam)) any = true; // 家人新认领的设备、IP 变了，看门狗每分钟补上
 	if (any) writefile(ETC + '/split.grp', '1'); else unlink(ETC + '/split.grp');
 }
 function sp_apply(o, kind) {
 	sp_mark(o);
 	let groups = sp_groups() ?? sp_cfg_groups(kind), main = sp_main(groups);
 	let rules = sp_rules(o, main), need = kind == 'nikki' ? sp_nk_write(rules) : sp_oc_write(rules);
-	if (kind == 'openclash' && !need) for (let g in rules) try { if (!getenv('CMCP_SP_PROXIES')) api('PUT', '/providers/rules/' + g.name, null, 10); } catch (e) {}
+	if (kind == 'openclash' && !need) for (let n in SP_CHG) try { if (!getenv('CMCP_SP_PROXIES')) api('PUT', '/providers/rules/' + n, null, 10); } catch (e) {}
 	if (need) { o.pending = true; cmcp_writej(SP_F, o); }
 	return { restart: need };
 }
@@ -7010,7 +7028,7 @@ P.split_get = function() {
 	try { devs = P.devices().devices ?? []; } catch (e) {}
 	return {
 		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [],
-		dev: o.dev, app: o.app, geo: o.geo,
+		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam,
 		apps: map(SP_APPS, (a) => ({ id: a[0], name: a[1] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
 	};
@@ -7020,6 +7038,15 @@ P.split_set = function(a) {
 	let kind = sp_kind();
 	if (!kind) die('分流只支持 OpenClash 和 Nikki');
 	let o = sp_read(), x = a?.dev ?? a?.app ?? a?.geo, t = x?.t ? '' + x.t : null;
+	if (a?.fam) {
+		let uid = '' + (a.fam.uid ?? '');
+		if (!match(uid, /^[A-Za-z0-9_-]{1,64}$/)) die('选一个家人');
+		if (a.fam.on) o.fam[uid] = 'DIRECT'; else delete o.fam[uid];
+		cmcp_writej(SP_F, o);
+		let r = sp_apply(o, kind), g = P.split_get();
+		g.restart = r.restart || g.pending;
+		return g;
+	}
 	if (!x) die('不支持的操作');
 	if (t && t != 'DIRECT' && t != 'PROXY') {
 		let g = sp_groups() ?? sp_cfg_groups(kind) ?? [];
@@ -7060,6 +7087,11 @@ P.split_check = function() {
 	if (!kind) return { ok: true };
 	let want = [];
 	for (let k in ['dev', 'app', 'geo']) for (let id in o[k]) { let t = k == 'dev' ? o[k][id].t : o[k][id]; if (t != 'DIRECT' && t != 'PROXY' && index(want, t) < 0) push(want, t); }
+	if (length(o.fam)) {
+		// 家人的设备变了（新认领、IP 变了）：OpenClash 只换规则集内容；Nikki 要重启，留给用户点
+		sp_apply(o, kind);
+		o = sp_read();
+	}
 	if (!length(want)) return { ok: true };
 	let groups = sp_groups() ?? sp_cfg_groups(kind);
 	if (groups == null) return { ok: true };

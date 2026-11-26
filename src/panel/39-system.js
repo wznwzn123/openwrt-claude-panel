@@ -2560,13 +2560,28 @@ async function mpJoin() {
 }
 async function mpSub(uid) {
 	const x = ((MP.mem && MP.mem.subs) || []).find((y) => y.uid === uid); if (!x) return;
+	// 6.0 第 69 项（用户 11/25）：一键让他名下所有设备不走代理（以后认领的也跟着）；只有 OpenClash / Nikki 能做
+	let sp = null;
+	if (pxAct()?.kind === 'clash') { try { sp = await P('split_get'); } catch (e) {} }
 	const v = await modal(`<div class="sheethead"><h3>${esc(meName(x))}</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<p class="muted" style="margin:0 0 10px">${esc(x.email || '')} · ${esc(ymd(x.at))} 加入${x.off ? ' · <b>已停用</b>' : ''}</p>
+	${sp && sp.kind ? `<label class="fld row" style="margin-bottom:8px"><div class="lb"><b>他的设备都不走代理</b></div><label class="sw"><input type="checkbox" data-fmbl${sp.fam && sp.fam[uid] ? ' checked' : ''} aria-label="他的设备都不走代理"><i></i></label></label>` : ''}
 	${mpPermForm(x.perms || [], x.exp)}
 	<button class="btn primary" data-ok style="width:100%;margin-top:14px">保存</button>
 	<div class="btngrid three" style="margin:10px 0 0"><button class="btn" data-v="${x.off ? 'on' : 'off'}">${x.off ? '恢复' : '停用'}</button><button class="btn" data-v="owner">设为主账号</button><button class="btn danger" data-v="rm">移除</button></div>`, (m, close) => {
 		const get = mpPermBind(m);
 		m.querySelector('[data-ok]').onclick = () => close({ save: get() });
+		const bl = m.querySelector('[data-fmbl]');
+		if (bl) bl.onchange = async () => {
+			const on = bl.checked; bl.disabled = true;
+			try {
+				const r = await P('split_set', { fam: { uid, on } }, 30000);
+				toast(on ? '已设置：' + meName(x) + '的设备都不走代理' : '已恢复：' + meName(x) + '的设备跟随全局');
+				const px = r.kind === 'nikki' ? 'Nikki' : 'OpenClash';
+				if (r.restart && (await confirmBox('重启 ' + px, '重启后生效，断网十几秒。', '现在重启'))) { await P('split_restart'); toast('正在重启 ' + px); }
+			} catch (e) { bl.checked = !on; toast(e.message, true); }
+			bl.disabled = false;
+		};
 	});
 	if (!v) return;
 	try {

@@ -73,6 +73,21 @@ try {
 	for (const [k, id] of [['app', 'netflix'], ['app', 'youtube'], ['app', 'bilibili'], ['geo', 'JP']]) await cgi('split_set', { [k]: { id, t: '' } });
 	await cgi('split_set', { dev: { mac: 'aa:aa:aa:aa:aa:02', t: '' } });
 	ok('全部去掉：自定义规则恢复原样，规则集文件删掉', rd(CUS) === CUS0 && !fs.readdirSync(RS).some((f) => /cmcp_sp_/.test(f)), rd(CUS));
+	// 按家人一键不走代理：他名下（主账号确认过的）设备都直连，以后认领的也跟着
+	fs.writeFileSync(E + '/devown.json', JSON.stringify({ 'bb:bb:bb:bb:bb:01': { uid: 'u1', ok: true }, 'bb:bb:bb:bb:bb:02': { uid: 'u1', ok: false }, 'bb:bb:bb:bb:bb:03': { uid: 'u2', ok: true } }));
+	fs.appendFileSync(CFG + '/dhcp', "\nconfig host 'k1'\n\toption mac 'bb:bb:bb:bb:bb:01'\n\toption ip '192.168.1.31'\n\nconfig host 'k2'\n\toption mac 'bb:bb:bb:bb:bb:02'\n\toption ip '192.168.1.32'\n\nconfig host 'k3'\n\toption mac 'bb:bb:bb:bb:bb:03'\n\toption ip '192.168.1.33'\n");
+	ok('家人：不对的编号', /选一个家人/.test(err(await cgi('split_set', { fam: { uid: 'a b', on: true } }))));
+	r = await cgi('split_set', { fam: { uid: 'u1', on: true } });
+	const famRs = () => fs.readdirSync(RS).filter((f) => /cmcp_sp_d/.test(f)).map((f) => rd(RS + '/' + f)).join('');
+	ok('家人不走代理：只算他名下确认过的设备，要重启一次', r.result?.fam?.u1 === 'DIRECT' && r.result.restart === true && /192\.168\.1\.31\/32/.test(famRs()) && !/\.32\//.test(famRs()) && !/\.33\//.test(famRs()) && /cmcp_sp_d0,DIRECT/.test(rd(CUS)), famRs());
+	await cgi('split_restart'); fs.writeFileSync(RUN, '');
+	const own = JSON.parse(rd(E + '/devown.json')); own['bb:bb:bb:bb:bb:02'].ok = true; fs.writeFileSync(E + '/devown.json', JSON.stringify(own));
+	const cus1 = rd(CUS);
+	r = await cgi('split_check');
+	ok('他后来认领的设备：看门狗补上，只换规则集内容，不重启', /192\.168\.1\.32\/32/.test(famRs()) && rd(CUS) === cus1 && rd(RUN) === '' && (await cgi('split_get')).result.pending === false, rd(RUN));
+	ok('有家人设置：看门狗要查', fs.existsSync(E + '/split.grp'));
+	r = await cgi('split_set', { fam: { uid: 'u1', on: false } });
+	ok('关掉：自定义规则恢复原样', !r.result?.fam?.u1 && rd(CUS) === CUS0 && !fs.existsSync(E + '/split.grp'));
 	// Nikki
 	KIND = 'nikki';
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: 'PROXY' } });

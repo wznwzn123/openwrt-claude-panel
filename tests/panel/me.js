@@ -40,6 +40,7 @@ function famOp(a) {
 	return { error: '不支持' };
 }
 const now = Date.now();
+const SPF = {}; // 分流：按家人不走代理
 const LSU = 'l'.repeat(24); // 路由器后台密码换来的凭证
 const msgs = [{ s: 1, f: 'u', t: now - 600e3, x: '节点页打不开了' }, { s: 2, f: 'u', t: now - 590e3, x: '一直转圈' }, { s: 3, f: 'a', t: now - 300e3, x: '你好，我看一下' }, { s: 4, f: 'a', t: now - 290e3, x: '先刷新试试' }];
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { const u = new URL(req.url, 'http://x');
@@ -48,6 +49,9 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 		if (m === 'svc_info') result = hosted ? { hosted: true, hub: 'https://panel.example', exp: Date.now() + 7 * 864e5 - 3600e3, off: false } : { hosted: false };
 		else if (m === 'cloud_info') result = hosted ? { enabled: true, url: 'https://ab3cd4ef.panel.example/cloud', tablet: true, pkey: 'p'.repeat(32), hosted: true, hub: 'https://panel.example' } : { enabled: false };
 		else if (m === 'hub_accounts') result = accs;
+		else if (m === 'split_get') result = { kind: 'openclash', fam: { ...SPF } };
+		else if (m === 'split_set') { if (body.params.fam.on) SPF[body.params.fam.uid] = 'DIRECT'; else delete SPF[body.params.fam.uid]; result = { kind: 'openclash', fam: { ...SPF }, restart: true }; }
+		else if (m === 'split_restart') result = { ok: true };
 		// 6.0 第 63 项：登录着的手机要带着确认本人的凭证才给（邮箱验证码的，或者路由器后台密码换的）
 		else if (['device_list', 'device_remove', 'ckey_info', 'tablet_url', 'rotate_key'].includes(m) && !body.params.self && !(body.params.sudo && (body.params.sudo === F.sudo || body.params.sudo === LSU))) return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: '要先确认是你本人：在「我的主页 → 敏感信息」里验证' } }));
 		else if (m === 'sudo_local') { if (body.params.pw !== 'rootpw') return res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: '密码不对（还能再试 4 次）' } })); result = { sudo: LSU, exp: Date.now() + 600e3 }; }
@@ -159,6 +163,18 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		await page.screenshot({ path: path.join(SHOT, `me-joincode-${w}.png`) });
 		await page.locator('.modal').last().locator('button:has-text("完成")').click(); await W(1300);
 		ok('家人列表里出现还没用的加入码，能撤回' + T, /ABCD2345/.test(await page.textContent('#meBox')) && await page.isVisible('[data-mp="jcancel"]'));
+		// 第 69 项：管理爸爸——一键让他的设备都不走代理
+		await page.click('[data-mp="sub"]'); await W(800);
+		ok('管理家人：有「他的设备都不走代理」开关（默认关）' + T, await page.isVisible('.modal [data-fmbl]') && !(await page.isChecked('.modal [data-fmbl]')));
+		await page.screenshot({ path: path.join(SHOT, `me-fambl-${w}.png`) });
+		await page.click('.modal [data-fmbl]'); await W(600);
+		ok('打开：告诉路由器，问要不要现在重启 OpenClash' + T, SPF.sub000000002 === 'DIRECT' && /重启后生效/.test(await page.locator('.modal').last().textContent()));
+		await page.locator('.modal').last().locator('button:has-text("现在重启")').click(); await W(600);
+		ok('点「现在重启」才重启' + T, calls.some((c) => c.m === 'split_restart'));
+		await page.click('.modal [data-fmbl]'); await W(600);
+		await page.locator('.modal').last().locator('button:has-text("取消")').click(); await W(500);
+		ok('关掉：恢复跟随全局' + T, !SPF.sub000000002 && /跟随全局/.test(await page.textContent('#toast')));
+		await page.locator('.modal').last().locator('[data-v="close"]').first().click(); await W(500);
 		// 管理爸爸：加上完全控制
 		await page.click('[data-mp="sub"]'); await W(600);
 		ok('管理家人：没勾高风险权限时不显示提醒' + T, !(await page.isVisible('.modal [data-risk]')));

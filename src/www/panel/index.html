@@ -1069,7 +1069,7 @@ html,body{overscroll-behavior-y:contain}
 /* 第 36 项：远程页面 */
 #xpBody .xprow{gap:8px;align-items:center}#xpBody .xprow .muted,#xpBody .xprow b{white-space:nowrap}#xpBody>.sectitle:first-child{margin-top:4px}#xpBody .xprow .btn{flex:none}#xpBody .xpcur{display:flex;align-items:center;gap:10px}#xpBody .xpcur span{flex:1;min-width:0}
 /* 6.0 横幅公告 */
-.annbar{display:flex;align-items:center;gap:8px;margin:10px 16px 12px;padding:8px 8px 8px 14px;border-radius:12px;background:var(--fill);color:var(--text);font-size:14px;line-height:1.5}.annbar.hidden{display:none}.annbar>span{flex:1;min-width:0;text-wrap:pretty}.annbar .btn{flex:none}.annbar .annx{flex:none;width:32px;height:32px;border:0;background:none;color:var(--muted,#8e8e93);font-size:20px;line-height:1;cursor:pointer;border-radius:8px}
+/* 横幅公告（用户 11/27）：前面一个喇叭，一行字放不下就从右往左滚 */.annbar{display:flex;align-items:center;gap:8px;margin:10px 16px 12px;padding:6px 6px 6px 12px;border-radius:12px;background:var(--fill);color:var(--text);font-size:14px;line-height:1.5}.annbar.hidden{display:none}.annbar .abi{flex:none;width:18px;height:18px;color:var(--accent)}.annbar .abv{flex:1;min-width:0;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8px,#000 calc(100% - 12px),transparent);mask-image:linear-gradient(90deg,transparent,#000 8px,#000 calc(100% - 12px),transparent)}.annbar .abt{display:inline-block;padding-left:4px}.annbar.roll .abt{animation:abRoll var(--abd,12s) linear infinite}.annbar.roll .abt>span+span{padding-left:48px}.annbar:not(.roll) .abt>span+span{display:none}.annbar.roll:hover .abt,.annbar.roll.paused .abt{animation-play-state:paused}@keyframes abRoll{from{transform:translateX(0)}to{transform:translateX(var(--abx,-50%))}}@media(prefers-reduced-motion:reduce){.annbar .abv{white-space:normal;-webkit-mask-image:none;mask-image:none}.annbar .abt>span+span{display:none}}.annbar .btn{flex:none}.annbar .annx{flex:none;width:32px;height:32px;border:0;background:none;color:var(--muted,#8e8e93);font-size:20px;line-height:1;cursor:pointer;border-radius:8px}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -7500,9 +7500,18 @@ function annBarDraw() {
 	const a = (NT.d.ann || []).find((x) => x.level === 'banner' && !pop.includes(x.id));
 	bar.classList.toggle('hidden', !a);
 	if (!a) return;
-	bar.innerHTML = `<span>${esc(a.title)}</span>${a.body ? '<button class="btn sm" type="button" data-ab="go">查看</button>' : ''}<button class="annx" type="button" data-ab="x" aria-label="关掉横幅">×</button>`;
+	// 喇叭 + 滚动的字（放得下就不滚；系统设了「减少动态效果」就不滚、换行显示）；点字暂停 / 接着滚
+	bar.innerHTML = `<svg class="abi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg><div class="abv" data-ab="p"><div class="abt"><span>${esc(a.title)}</span><span aria-hidden="true">${esc(a.title)}</span></div></div>${a.body ? '<button class="btn sm" type="button" data-ab="go">查看</button>' : ''}<button class="annx" type="button" data-ab="x" aria-label="关掉横幅">×</button>`;
+	bar.classList.remove('roll', 'paused');
+	requestAnimationFrame(() => {
+		const v = bar.querySelector('.abv'), t = bar.querySelector('.abt>span'); if (!v || !t) return;
+		const w = t.getBoundingClientRect().width, over = w > v.clientWidth - 4;
+		bar.classList.toggle('roll', over);
+		if (over) { const d = w + 48; bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's'); }
+	});
 	bar.onclick = (e) => {
 		const k = e.target.closest('[data-ab]')?.dataset.ab; if (!k) return;
+		if (k === 'p') return bar.classList.toggle('paused');
 		if (k === 'go') return go('notice');
 		NT.d.seen.pop = [...pop, a.id]; P('notices_seen', { pop: a.id }).catch(() => {}); annBarDraw();
 	};

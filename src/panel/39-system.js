@@ -1708,9 +1708,18 @@ function annBarDraw() {
 	const a = (NT.d.ann || []).find((x) => x.level === 'banner' && !pop.includes(x.id));
 	bar.classList.toggle('hidden', !a);
 	if (!a) return;
-	bar.innerHTML = `<span>${esc(a.title)}</span>${a.body ? '<button class="btn sm" type="button" data-ab="go">查看</button>' : ''}<button class="annx" type="button" data-ab="x" aria-label="关掉横幅">×</button>`;
+	// 喇叭 + 滚动的字（放得下就不滚；系统设了「减少动态效果」就不滚、换行显示）；点字暂停 / 接着滚
+	bar.innerHTML = `<svg class="abi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg><div class="abv" data-ab="p"><div class="abt"><span>${esc(a.title)}</span><span aria-hidden="true">${esc(a.title)}</span></div></div>${a.body ? '<button class="btn sm" type="button" data-ab="go">查看</button>' : ''}<button class="annx" type="button" data-ab="x" aria-label="关掉横幅">×</button>`;
+	bar.classList.remove('roll', 'paused');
+	requestAnimationFrame(() => {
+		const v = bar.querySelector('.abv'), t = bar.querySelector('.abt>span'); if (!v || !t) return;
+		const w = t.getBoundingClientRect().width, over = w > v.clientWidth - 4;
+		bar.classList.toggle('roll', over);
+		if (over) { const d = w + 48; bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's'); }
+	});
 	bar.onclick = (e) => {
 		const k = e.target.closest('[data-ab]')?.dataset.ab; if (!k) return;
+		if (k === 'p') return bar.classList.toggle('paused');
 		if (k === 'go') return go('notice');
 		NT.d.seen.pop = [...pop, a.id]; P('notices_seen', { pop: a.id }).catch(() => {}); annBarDraw();
 	};

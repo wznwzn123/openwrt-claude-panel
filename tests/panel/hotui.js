@@ -36,6 +36,16 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		ok('横幅公告：一打开就在顶上' + T, await page.isVisible('#annBar') && /官网维护/.test(await page.textContent('#annBar')));
 		ok('横幅不出界、不横向滚动' + T, await page.evaluate(() => { const r = document.getElementById('annBar').getBoundingClientRect(); return r.left >= 8 && r.right <= innerWidth - 8 && document.documentElement.scrollWidth <= innerWidth + 1; }));
 		await page.screenshot({ path: path.join(SHOT, `hotui-banner-${w}${dark ? '-dark' : ''}.png`) });
+		// 用户 11/27：前面有喇叭；一行放不下就滚动（字在动），点字暂停
+		ok('横幅前面有喇叭' + T, await page.isVisible('#annBar .abi'));
+		const x0 = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('#annBar .abt')).transform).m41); await W(700);
+		const x1 = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('#annBar .abt')).transform).m41);
+		ok('放不下：字从右往左滚' + T, (await page.getAttribute('#annBar', 'class')).includes('roll') && x1 < x0 - 5, x0 + ' → ' + x1);
+		await page.screenshot({ path: path.join(SHOT, `hotui-banner-${w}${dark ? '-dark' : ''}-b.png`) });
+		if (process.env.GIF && w === 390) for (let i = 0; i < 60; i++) { await page.screenshot({ path: path.join(process.env.GIF, `f${String(i).padStart(3, '0')}.png`), clip: { x: 0, y: 0, width: 390, height: 140 } }); await W(80); }
+		await page.click('#annBar .abv'); const y0 = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('#annBar .abt')).transform).m41); await W(500);
+		ok('点字：暂停' + T, Math.abs((await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('#annBar .abt')).transform).m41)) - y0) < 1);
+		await page.click('#annBar .abv');
 		await page.click('#annBar [data-ab="x"]'); await W(400);
 		ok('点 ×：关掉，记在路由器上' + T, !(await page.isVisible('#annBar')) && S.pop.includes('b1'));
 		await page.reload(); await W(2000);

@@ -26,7 +26,7 @@
 .cp-feats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .cp-f { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--c); background: var(--cb); white-space: nowrap; }
 .cp-f::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
-.cp-ok { --c: var(--accent); --cb: rgb(74 222 128 / .12); } .cp-part { --c: #fbbf24; --cb: rgb(251 191 36 / .12); } .cp-no { --c: #f87171; --cb: rgb(248 113 113 / .12); }
+.cp-ok { --c: var(--accent); --cb: color-mix(in oklab, var(--ok) 12%, transparent); } .cp-part { --c: var(--warn); --cb: color-mix(in oklab, var(--warn) 12%, transparent); } .cp-no { --c: var(--danger); --cb: color-mix(in oklab, var(--danger) 12%, transparent); }
 .cp-empty { padding: 18px; border-radius: 16px; background: var(--glass); border: 1px solid var(--hair); font-size: 14.5px; color: var(--muted); }
 .cp-more { display: block; width: 100%; margin-top: 12px; }
 .cp-note { margin: clamp(24px, 4vw, 34px) 0 0; font-size: 13px; line-height: 1.8; color: var(--muted); }
@@ -39,7 +39,7 @@
   <div class="pg-hero cp-hero">
     <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="31" aria-hidden="true"></div>
     <div class="wrap">
-      <h1>兼容性。</h1>
+      <h1>兼容性</h1>
       <p class="pg-sub">哪些路由器实际装过、哪些功能能用。数据来自路由器每天的匿名上报（型号、系统版本、功能能不能用），只写实测到的，每小时更新。</p>
       <div class="cp-sum" id="cpSum" aria-live="polite"><span>正在读取…</span></div>
     </div>

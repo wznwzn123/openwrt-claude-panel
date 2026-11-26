@@ -14,7 +14,7 @@
 .cl-live i { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
 .cl-live i::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: clPing 2.4s ease-out infinite; }
 .cl-live b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.cl-live.off i { background: #f59e0b; } .cl-live.off i::after { display: none; }
+.cl-live.off i { background: var(--warn); } .cl-live.off i::after { display: none; }
 @keyframes clPing { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.6); opacity: 0; } }
 
 /* 发布节奏图 */
@@ -33,7 +33,7 @@
 .cl-lab { fill: var(--muted); font: 500 11.5px/1 var(--font-text); }
 .cl-lab.v { fill: color-mix(in oklab, var(--ink) 80%, var(--bg)); font-weight: 600; }
 .cl-scan { fill: url(#clScanG); pointer-events: none; }
-.cl-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 12px)); padding: 7px 11px; border-radius: 12px; background: #1c2723; border: 1px solid var(--hair); box-shadow: 0 12px 30px -12px #000; font-size: 13px; white-space: nowrap; pointer-events: none; }
+.cl-tip { position: absolute; z-index: 3; transform: translate(-50%, calc(-100% - 12px)); padding: 7px 11px; border-radius: 12px; background: var(--p-surface); border: 1px solid var(--hair); box-shadow: 0 12px 30px -12px #000; font-size: 13px; white-space: nowrap; pointer-events: none; }
 .cl-tip b { color: var(--accent); font-weight: 650; margin-right: 6px; }
 .cl-tip-go { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
 
@@ -67,8 +67,8 @@
 .cl-meta { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin-top: 8px; font-size: 13.5px; color: var(--muted); }
 .cl-meta time { color: color-mix(in oklab, var(--ink) 78%, var(--bg)); }
 .cl-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 99px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-.cl-tag.must { color: #fbbf24; background: rgb(251 191 36 / .12); }
-.cl-tag.sec { color: #60a5fa; background: rgb(96 165 250 / .12); }
+.cl-tag.must { color: var(--warn); background: color-mix(in oklab, var(--warn) 12%, transparent); }
+.cl-tag.sec { color: var(--info); background: color-mix(in oklab, var(--info) 12%, transparent); }
 .cl-tag.major { color: var(--accent); background: color-mix(in oklab, var(--accent) 13%, transparent); }
 .cl-tag.first { color: var(--ink); background: color-mix(in oklab, var(--ink) 10%, transparent); }
 .cl-tag.new { color: var(--p-accent-ink); background: var(--accent); }
@@ -129,7 +129,7 @@
     <div class="wrap">
       <div class="cl-top">
         <div>
-          <h1>更新日志。</h1>
+          <h1>更新日志</h1>
           <p class="pg-sub" id="clSub">每个版本更新了什么。内容是 GitHub 上每次发布的说明原文，新版本发布后几分钟内自动出现在这里。</p>
         </div>
         <p class="cl-live" id="clLive" role="status"><i aria-hidden="true"></i><span>实时同步</span></p>
@@ -234,7 +234,7 @@
     const max = Math.max(...R.map((r) => Math.sqrt(count(r))));
     const h = (r) => Math.max(10, (Math.sqrt(count(r)) / max) * (H - top - bot));
     const x = (i) => gap * i + gap / 2;
-    let s = '<defs><linearGradient id="clScanG" x1="0" x2="1"><stop offset="0" stop-color="#4ade80" stop-opacity="0"/><stop offset=".5" stop-color="#4ade80" stop-opacity=".22"/><stop offset="1" stop-color="#4ade80" stop-opacity="0"/></linearGradient></defs>';
+    let s = '<defs><linearGradient id="clScanG" x1="0" x2="1"><stop offset="0" stop-color="var(--ok)" stop-opacity="0"/><stop offset=".5" stop-color="var(--ok)" stop-opacity=".22"/><stop offset="1" stop-color="var(--ok)" stop-opacity="0"/></linearGradient></defs>';
     s += '<line class="cl-base" x1="0" x2="' + W + '" y1="' + (H - bot + .5) + '" y2="' + (H - bot + .5) + '"/>';
     R.forEach((r, i) => {
       const hh = h(r), last = i === n - 1;

@@ -19,6 +19,7 @@ import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 import { installTotp } from './totp.js';
 import { installEdition, edDev, edAccount, ED_NAME } from './edition.js';
 import { installXpage, xDev } from './xpage.js';
+import { installMove, moveDev } from './move.js';
 import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled } from './oldver.js';
 
@@ -2092,7 +2093,7 @@ async function accountApi0(req, env, H, p, body) {
 	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [], files: Array.isArray(b.files) ? b.files.slice(0, 5).map(s) : [] }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
-	{ const fx = (await famDev(p, H, b)) || (await edDev(p, H, b)) || (await xDev(p, H, b)); if (fx) return fx; }
+	{ const fx = (await famDev(p, H, b)) || (await edDev(p, H, b)) || (await xDev(p, H, b)) || (await moveDev(p, H, b)); if (fx) return fx; }
 	const a = p.slice('/api/account/'.length);
 	{ const k = { code: 'code', register: 'reg', login: 'login', reset: 'reset', wait: 'reg' }[a]; if (k) { const g = await captchaGate(env, H, k, ip, s(b.cft)); if (g) return g; } }
 	if (a === 'wait') return out(await H.waitJoin({ email: s(b.email), ip })); // 第 46 项：名额满了，留邮箱排队
@@ -2147,6 +2148,7 @@ installFam(Hub);
 installInst(Hub);
 installEdition(Hub, { edToTunnel, edToLocal });
 installXpage(Hub, { cf, host });
+installMove(Hub);
 installFiles(Hub);
 installHelp(Hub);
 export { hubObj };

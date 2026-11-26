@@ -56,6 +56,10 @@ code { font: 500 .9em ui-monospace, "SF Mono", Menlo, monospace; background: var
 .pill.ghost { background: transparent; color: var(--link); box-shadow: inset 0 0 0 1px currentColor; }
 .pill.ghost:hover { background: color-mix(in srgb, var(--blue) 8%, transparent); }
 .lk { color: var(--link); font-size: 17px; display: inline-flex; align-items: center; gap: 6px; }
+/* 6.0 尝鲜期间首页顶上的一行（用户 11/26 定：新官网跟 5.3.0 一起上线，这时装上的是 5.3.0）。6.0 正式发布时删掉这一行和下面的 betabar */
+.betabar { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; padding: 6px 14px; border-radius: 999px; background: var(--card); color: var(--link); font-size: 14px; line-height: 1.4; text-wrap: pretty; }
+.betabar:hover { text-decoration: underline; }
+@media (max-width: 360px) { .betabar { font-size: 13px; padding: 5px 11px; gap: 4px; } }
 .lk:hover { text-decoration: underline; }
 .chev { width: 7px; height: 12px; }
 
@@ -312,6 +316,7 @@ footer.site { background: var(--bg2); color: var(--mut); font-size: 12px; paddin
 <main id="top">
   <section class="hero" aria-labelledby="hero-h">
     <div class="gw">
+      <a class="betabar enter" href="/help#beta-6">6.0 尝鲜中 在「系统操作 → 尝鲜」申请<svg class="chev" viewBox="0 0 8 14" aria-hidden="true" width="7" height="12"><path d="M1.5 1.5 6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <p class="eyebrow enter">路由器面板</p>
       <h1 id="hero-h" class="enter" style="--d:.06s"><span class="grad"><span class="nw">您的掌上</span><br><span class="nw">OpenWrt 管理面板</span></span></h1>
       <p class="lead enter" style="--d:.12s">把复杂留给我们<br>把好用的路由体验带给更多人</p>

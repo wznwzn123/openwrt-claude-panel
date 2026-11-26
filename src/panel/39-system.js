@@ -2844,20 +2844,35 @@ function betaLine(b) {
 	if (b.st === 'ok') return '已通过' + (b.ver ? '：v' + esc(b.ver) + ' 在「检查更新」里装' : '');
 	return esc(BETA_TXT[b.st] || BETA_TXT.none) + (b.st === 'err' && b.why ? '：' + esc(b.why) : '');
 }
-// 申请尝鲜：说清楚会交什么；托管版用账号认人、推送结果，自建版留邮箱
-async function betaApply(r) {
-	const hosted = !!(r.beta && r.beta.hosted);
+// 申请尝鲜：说清楚会交什么。邮箱一律用官网账号的、打码显示、不能改（用户 11/26 定）：托管版是这台路由器主账号的；自建版先在官网登录关联
+async function betaApply() {
+	let who = null, tm = 0;
 	const v = await modal(`<h3>申请尝鲜</h3><div class="cscroll">
 		<p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">仅上报型号、系统、版本、闪存、内存和当前留言内容。审核通过后将以邮件的形式通知您。</p>
-		${hosted ? '' : '<label class="lglabel" for="btMail" style="margin-top:12px">邮箱</label><input id="btMail" class="input" type="email" autocomplete="email" maxlength="120">'}
-		<label class="lglabel" for="btNote" style="margin-top:12px">留言（选填）</label><textarea id="btNote" class="input" rows="2" maxlength="200" placeholder="比如：闪存只有 16 MB" style="min-height:0;resize:none"></textarea>
+		<label class="lglabel" for="btMail" style="margin-top:12px">邮箱</label><div style="display:flex;gap:8px;align-items:center"><input id="btMail" class="input" disabled placeholder="正在读取…" style="flex:1;min-width:0"><button class="btn sm hidden" data-login style="flex:none">登录官网账号</button></div>
+		<label class="lglabel" for="btNote" style="margin-top:12px">留言（选填）</label><textarea id="btNote" class="input" rows="2" maxlength="200" placeholder="比如：闪存只有 16 MB" style="min-height:0;resize:none;font-family:inherit"></textarea>
 		<div class="formerr hidden" data-err></div></div>
-		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-go>申请</button></div>`, (m, close) => {
-		const go = m.querySelector('[data-go]'), er = m.querySelector('[data-err]');
+		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-go disabled>申请</button></div>`, (m, close) => {
+		const go = m.querySelector('[data-go]'), er = m.querySelector('[data-err]'), mail = m.querySelector('#btMail'), lg = m.querySelector('[data-login]');
+		const err = (t) => { er.textContent = t; er.classList.toggle('hidden', !t); };
+		// 问路由器（路由器问官网）：邮箱打码显示；自建版没关联账号时显示「登录官网账号」，登录回来自动再问
+		const ask = async () => {
+			clearTimeout(tm);
+			try { who = await P('beta_who', {}, 30000); } catch (e) { mail.placeholder = '读不到'; err(e.message); return; }
+			if (!document.body.contains(m)) return;
+			mail.value = who.mail || ''; mail.placeholder = who.login ? '登录后自动填入' : '读不到';
+			lg.classList.toggle('hidden', !who.login);
+			go.disabled = !who.mail;
+			err(who.mail || who.login ? '' : who.why || '读不到官网账号的邮箱，稍后再试');
+			if (who.login) tm = setTimeout(ask, 4000);
+		};
+		lg.onclick = () => { if (who && who.lk) window.open(String(who.hub || 'https://yrlove520.com').replace(/\/$/, '') + '/app?bl=' + encodeURIComponent(who.lk), '_blank', 'noopener'); };
+		const vis = () => { if (document.visibilityState === 'visible' && who && who.login) ask(); };
+		document.addEventListener('visibilitychange', vis);
+		new MutationObserver((_, o) => { if (!document.body.contains(m)) { clearTimeout(tm); document.removeEventListener('visibilitychange', vis); o.disconnect(); } }).observe(document.body, { childList: true });
+		ask();
 		go.onclick = () => busy(go, async () => {
-			const email = hosted ? '' : m.querySelector('#btMail').value.trim(), note = m.querySelector('#btNote').value.trim();
-			if (!hosted && !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email)) { er.textContent = '留一个邮箱：只用来通知你申请结果'; er.classList.remove('hidden'); return; }
-			try { close(await P('beta_set', { want: true, note, email }, 40000)); } catch (e) { er.textContent = e.message; er.classList.remove('hidden'); }
+			try { close(await P('beta_set', { want: true, note: m.querySelector('#btNote').value.trim() }, 40000)); } catch (e) { err(e.message); }
 		}, '交给官网');
 	}, { compact: true });
 	return v && v.beta ? v : null;
@@ -2876,7 +2891,7 @@ async function compatSheet() {
 		${owner ? '' : '<p class="muted" style="font-size:12.5px;margin:10px 0 0">只有主账号能改。</p>'}`;
 		const bt = m.querySelector('[data-bt]');
 		if (bt) bt.onclick = async () => {
-			if (bt.dataset.bt === 'apply') { const x = await betaApply(r); if (x) { r = x; toast(r.beta.st === 'err' ? '没提交上：' + (r.beta.why || '稍后再试') : '已申请', r.beta.st === 'err'); } draw(m); compatLabel(r); return; }
+			if (bt.dataset.bt === 'apply') { const x = await betaApply(); if (x) { r = x; toast(r.beta.st === 'err' ? '没提交上：' + (r.beta.why || '稍后再试') : '已申请', r.beta.st === 'err'); } draw(m); compatLabel(r); return; }
 			const ok = b.st === 'ok';
 			if (!(await confirmBox(ok ? '退出尝鲜' : '撤回申请', ok ? '以后收不到尝鲜版，已装的照常能用。再试要重新申请。' : '撤回后要重新申请。', ok ? '退出' : '撤回'))) return;
 			busy(bt, async () => { try { r = await P('beta_set', { want: false }, 40000); toast(ok ? '已退出尝鲜' : '已撤回申请'); } catch (e) { toast(e.message, true); } draw(m); compatLabel(r); });

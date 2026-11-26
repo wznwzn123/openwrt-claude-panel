@@ -21,7 +21,7 @@ import { installEdition, edDev, edAccount, ED_NAME } from './edition.js';
 import { installXpage, xDev } from './xpage.js';
 import { installMove, moveDev } from './move.js';
 import { installAppAuth, appStrict } from './appauth.js';
-import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
+import { installCompat, compatPublic, compatAdminApi, compatAccount, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled } from './oldver.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
@@ -2128,7 +2128,7 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
 	if (a === 'app_info') return out(await H.appInfo(me.uid, s(b.code)));
 	if (a === 'app_ok') return out(await H.appOk(me.uid, s(b.code), b.ok === true, me.email));
-	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)) || (await edAccount(a, H, me, b, sid)); if (fx) return fx; }
+	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)) || (await edAccount(a, H, me, b, sid)) || (await compatAccount(a, H, me, b)); if (fx) return fx; }
 	// 官网各页右上角：登录了就显示头像和名字（很轻，只要名字和头像）
 	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
 	if (a === 'profile') return out(await H.setProfile(me.uid, { name: b.name === undefined ? undefined : s(b.name), avatar: b.avatar === undefined ? undefined : s(b.avatar), layout: b.layout === undefined ? undefined : b.layout }));

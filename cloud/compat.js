@@ -8,6 +8,8 @@
 // - 95 尝鲜改成申请制（用户 11/25 定）：申请 → 后台同意 / 拒绝；随时能撤销这台设备或这个申请人的全部设备，撤销后要重新申请。
 //   后台只看匿名信息（型号、系统、版本、闪存、内存、兼容问题、留言），申请人只显示匿名编号：托管版按官网账号算，自建版按邮箱算。
 //   托管版的专属网址编号、自建版的邮箱只存在这里用来认人和通知结果（托管版推送，自建版发邮件），管理后台的接口不返回
+// - 用户 11/26 定：申请用的邮箱一律是官网账号的邮箱，不能自己填。托管版就是这台路由器主账号的；自建版先在官网登录、
+//   把路由器的关联码（beta_lk，路由器自己生成的随机串）关联到账号（/app?bl=关联码）。面板上只显示打码的邮箱（me***@qq.com）
 const DAY = 86400e3, KEEP = 90 * DAY;
 const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 const ID_RE = /^[a-z2-9]{16}$/;
@@ -32,7 +34,8 @@ export async function issueKey(f, why) {
 }
 // 尝鲜申请人的匿名编号：同一个人（托管版的官网账号 / 自建版的邮箱）几台路由器一样，看不出是谁
 const pidOf = async (k) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('bp|' + k)))].slice(0, 8).map((b) => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('');
-const MAIL_RE = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[A-Za-z]{2,24}$/;
+const LK_RE = /^[a-z2-9]{24}$/;
+const mask = (e) => { const [a, b] = String(e || '').split('@'); if (!b) return ''; return (a.length <= 2 ? a[0] + '*' : a.slice(0, 2) + '***') + '@' + b; };
 export const BETA_ST = { wait: '等审核', ok: '已通过', no: '没通过', rev: '已撤销' };
 const verLt = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
 const okVer = (v) => /^\d+\.\d+\.\d+$/.test(String(v || ''));
@@ -41,6 +44,35 @@ const CAPS = ['fw', 'pkg', 'nft', 'ipset', 'pause', 'verify', 'crypt', 'rpcd', '
 
 export function installCompat(Hub) {
 	Object.assign(Hub.prototype, {
+		// 申请人是谁：托管版凭专属网址编号和路由器钥匙找主账号；自建版凭关联码找关联过的官网账号
+		async _betaWho(app) {
+			app = app && typeof app === 'object' ? app : {};
+			if (app.sub) {
+				if (!(await this.devOk(String(app.sub), String(app.rkey || '')))) return null;
+				const d = await this.ctx.storage.get('d:' + app.sub), u = d && (d.owner || (d.users || [])[0]);
+				return u ? { pid: await pidOf('u|' + u), uid: u, sub: String(app.sub), hosted: true } : null;
+			}
+			if (LK_RE.test(String(app.lk || ''))) {
+				const l = await this.ctx.storage.get('blk:' + app.lk), u = l && l.uid;
+				return u && (await this.ctx.storage.get('u:' + u)) ? { pid: await pidOf('u|' + u), uid: u, hosted: false } : null;
+			}
+			return null;
+		},
+		async _betaMail(uid) { const u = uid && (await this.ctx.storage.get('u:' + uid)); return (u && u.email) || ''; },
+		// 自建版在官网登录后把路由器的关联码关联到账号（关联码只在这台路由器和它的面板上）
+		compatLink(uid, lk) { return this.lock(async () => {
+			if (!LK_RE.test(String(lk || ''))) return { st: 400, error: '关联链接不完整：回到路由器面板重新点「登录官网账号」' };
+			if (!(await this.hit('blk:' + uid, 20, 86400e3))) return { st: 429, error: '今天关联太多次了，明天再试' };
+			await this.ctx.storage.put('blk:' + lk, { uid, at: Date.now() });
+			return { st: 200, ok: true, mail: mask(await this._betaMail(uid)) };
+		}); },
+		// 面板打开申请框时问：用哪个邮箱（打码），自建版还没关联的要先登录
+		async compatWho(app, ip) {
+			if (!(await this.hit('cpw:' + (await ipKey(ip)), 120, 3600e3))) return { st: 429, error: '问得太频繁了' };
+			const who = await this._betaWho(app);
+			if (!who) return { st: 200, ok: true, mail: '', login: !(app && app.sub), why: app && app.sub ? '官网认不出这台路由器：确认托管服务没到期' : '' };
+			return { st: 200, ok: true, mail: mask(await this._betaMail(who.uid)), login: false };
+		},
 		compatPut(b, ip) { return this.lock(() => this._compatPut(b, ip)); },
 		async _compatPut(b, ip) {
 			const id = String(b.id || '');
@@ -62,11 +94,9 @@ export function installCompat(Hub) {
 			else {
 				const app = b.app && typeof b.app === 'object' ? b.app : {}, appAt = Math.max(0, +app.at || 0) * 1000;
 				const fresh = !ap || ((ap.st === 'no' || ap.st === 'rev') && appAt > (ap.dec || 0));
-				if (fresh || (ap && !ap.pid)) {
-					let who = null;
-					if (app.sub) { if (await this.devOk(String(app.sub), String(app.rkey || ''))) { const d = await this.ctx.storage.get('d:' + app.sub); const u = d && (d.owner || (d.users || [])[0]); who = u ? { pid: await pidOf('u|' + u), sub: String(app.sub), hosted: true } : null; } }
-					else if (MAIL_RE.test(String(app.email || ''))) { const em = String(app.email).trim().toLowerCase(); who = { pid: await pidOf('m|' + em), email: em, hosted: false }; }
-					if (!who) apErr = app.sub ? '官网认不出这台路由器：确认托管服务没到期再申请' : '申请尝鲜要留一个邮箱（只用来通知结果）';
+				if (fresh || (ap && !ap.uid)) {
+					const who = await this._betaWho(app);
+					if (!who) apErr = app.sub ? '官网认不出这台路由器：确认托管服务没到期再申请' : '先登录官网账号';
 					else if (fresh) ap = { st: 'wait', at: now, note: str(scrub(app.note), 200), ...who };
 					else ap = { ...ap, ...who };
 				}
@@ -81,6 +111,7 @@ export function installCompat(Hub) {
 			let beta = null;
 			if (rec.betaOk) { const p = await this.meta('prerel'); beta = { ok: true, st: 'ok', ...(p && p.tag ? { tag: p.tag, ver: p.ver } : {}) }; }
 			else if (rec.ap) beta = { ok: false, st: rec.ap.st, at: rec.ap.at, dec: rec.ap.dec || 0 };
+			if (beta && rec.ap && rec.ap.uid) beta.mail = mask(await this._betaMail(rec.ap.uid));
 			else if (apErr) beta = { ok: false, st: 'err', why: apErr };
 			return { st: 200, ok: true, fixed, beta };
 		},
@@ -170,18 +201,17 @@ export function installCompat(Hub) {
 			// 通知申请人：托管版推送到手机，自建版发邮件（同一个人只发一次）
 			const sent = new Set();
 			for (const x of done) {
-				const st = x.ap.st, key = x.ap.sub || x.ap.email || '';
+				const st = x.ap.st, key = x.ap.uid || x.ap.sub || '';
 				if (!key || sent.has(key)) continue;
 				sent.add(key);
 				const title = st === 'ok' ? '✅ 尝鲜申请通过了' : st === 'no' ? '尝鲜申请没通过' : '尝鲜资格已撤销';
 				const body = st === 'ok' ? '有尝鲜版时在「检查更新」里装，随时能退回正式版。' : st === 'no' ? '想再试可以在面板里重新申请。' : '以后收不到尝鲜版，已装的照常能用。想再试可以重新申请。';
 				try {
-					// 都发邮件（托管版发到这台路由器主账号的邮箱）；托管版另外推送到手机
-					let to = x.ap.email || '';
+					// 都发邮件到申请人官网账号的邮箱；托管版另外推送到手机
+					let to = await this._betaMail(x.ap.uid);
 					if (x.ap.sub) {
 						await this.watch(x.ap.sub).push({ title, body, tag: 'beta', lvl: st === 'ok' ? 'ok' : 'info' });
-						const d = await this.ctx.storage.get('d:' + x.ap.sub), u = d && (d.owner || (d.users || [])[0]), ux = u && (await this.ctx.storage.get('u:' + u));
-						to = (ux && ux.email) || '';
+						if (!to) { const d = await this.ctx.storage.get('d:' + x.ap.sub), u = d && (d.owner || (d.users || [])[0]); to = await this._betaMail(u); }
 					}
 					if (to) await this.mail(to, '路由器面板：' + title.replace(/^✅ /, ''), `<p>${title.replace(/^✅ /, '')}（${String(x.model || '路由器').replace(/[&<>"']/g, '')}）。${body}</p><p>你在路由器面板里申请了尝鲜，所以收到这封邮件。</p>`);
 				} catch (e) {}
@@ -229,8 +259,15 @@ export async function prereleaseRefresh(env, H, repo) {
 }
 export async function compatPublic(req, p, H, body) {
 	if (p === '/api/compat' && req.method === 'POST') { let b = {}; try { b = await body(); } catch (e) {} const { st, ...rest } = await H.compatPut(b || {}, req.headers.get('cf-connecting-ip') || ''); return J(rest, st); }
+	if (p === '/api/compat/who' && req.method === 'POST') { let b = {}; try { b = await body(); } catch (e) {} const { st, ...rest } = await H.compatWho((b && b.app) || {}, req.headers.get('cf-connecting-ip') || ''); return J(rest, st); }
 	if (p === '/api/compat/table' && req.method === 'GET') { const t = await H.compatTable(); return new Response(JSON.stringify({ ok: true, ...t }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=600' } }); }
 	return null;
+}
+// 官网账号页：自建版把路由器的尝鲜申请关联到这个账号（/app?bl=关联码 打开后点「关联」）
+export async function compatAccount(a, H, me, b) {
+	if (a !== 'beta_link') return null;
+	const { st, ...rest } = await H.compatLink(me.uid, String((b && b.lk) || ''));
+	return J(rest, st);
 }
 export async function compatAdminApi(req, a, H, body) {
 	if (a[0] !== 'compat') return null;

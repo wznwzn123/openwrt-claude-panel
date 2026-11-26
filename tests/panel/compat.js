@@ -11,8 +11,9 @@ function handle(m, p) {
 	S.calls.push({ m, p });
 	if (m === 'compat_info') return { on: S.on, beta: { want: S.want, st: S.betaOk ? 'ok' : S.st, ok: S.betaOk, hosted: S.hosted, note: S.note || '', ver: S.betaOk ? '6.0.1' : '', tag: S.betaOk ? 'v6.0.1' : '' }, last: Math.floor(Date.now() / 1000) - 3600 };
 	if (m === 'compat_set') { S.on = p.on; return handle('compat_info'); }
+	// 申请框问邮箱：托管版是主账号的（打码）；自建版没关联时要登录（带关联码），关联以后是打码的账号邮箱
+	if (m === 'beta_who') return S.hosted ? { mail: 'ow***@x.com', login: false, hosted: true, hub: 'https://hub.test' } : S.linked ? { mail: 'm*@x.com', login: false, hosted: false, hub: 'https://hub.test' } : { mail: '', login: true, hosted: false, hub: 'https://hub.test', lk: 'abcdefghijkmnpqrstuvwxyz' };
 	if (m === 'beta_set') {
-		if (p.want && !S.hosted && !/@/.test(p.email || '')) throw new Error('留一个邮箱：只用来通知你申请结果');
 		S.want = p.want; S.st = p.want ? 'wait' : 'none'; S.note = p.note || ''; S.email = p.email; if (!p.want) S.betaOk = false; return handle('compat_info');
 	}
 	if (m === 'update_check') return S.upd;
@@ -37,7 +38,7 @@ const SHOT = path.join(__dirname, 'shots');
 	const browser = await chromium.launch();
 	for (const [w, h, dark] of [[320, 568, false], [390, 844, true], [1280, 800, false]]) {
 		const T = `［${w}${dark ? ' 深色' : ''}］`;
-		S.on = true; S.want = false; S.st = 'none'; S.hosted = w === 390; S.betaOk = false; S.calls = []; S.started = null; S.upd = { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '' };
+		S.on = true; S.want = false; S.st = 'none'; S.hosted = w === 390; S.linked = false; S.betaOk = false; S.calls = []; S.started = null; S.upd = { cur: '6.0.0', latest: '6.0.0', newer: false, notes: '' };
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900, colorScheme: dark ? 'dark' : 'light' });
 		const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误' + T + '：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); if (matchMedia('(prefers-color-scheme: dark)').matches) localStorage.setItem('rp_dark', '1'); });
@@ -55,18 +56,24 @@ const SHOT = path.join(__dirname, 'shots');
 		ok('关掉上报：告诉路由器' + T, S.on === false && S.calls.some((c) => c.m === 'compat_set' && c.p.on === false) && !(await page.isChecked('.modal [data-sw="on"]')));
 		await page.click('.modal [data-bt="apply"]'); await W(600);
 		const ap = page.locator('.modal').last(), at = await ap.textContent();
-		ok('申请框：一句话说清楚仅上报什么' + T, /^申请尝鲜\s*仅上报型号、系统、版本、闪存、内存和当前留言内容。/.test(at.trim()) && !/看不到你是谁/.test(at) && /审核通过后将以邮件的形式通知您/.test(at) && (S.hosted ? !(await ap.locator('#btMail').count()) : await ap.locator('#btMail').isVisible()), at);
+		ok('申请框：一句话说清楚仅上报什么' + T, /^申请尝鲜\s*仅上报型号、系统、版本、闪存、内存和当前留言内容。/.test(at.trim()) && !/看不到你是谁/.test(at) && /审核通过后将以邮件的形式通知您/.test(at) && (await ap.locator('#btMail').isDisabled()) && (true || await ap.locator('#btMail').isVisible()), at);
 		const ab = await ap.locator('.modalbox').boundingBox();
 		ok('申请框在屏幕里、不超过 70% 高' + T, ab && ab.x >= 0 && ab.x + ab.width <= w + 1 && ab.height <= h * 0.7 + 1);
 		await page.screenshot({ path: path.join(SHOT, `compat-apply-${w}${dark ? '-dark' : ''}.png`) });
-		if (!S.hosted) {
-			await ap.locator('[data-go]').click(); await W(500);
-			ok('自建版没填邮箱：说要留邮箱' + T, /留一个邮箱/.test(await ap.textContent()) && S.want === false);
-			await ap.locator('#btMail').fill('me@example.com');
+		if (S.hosted) ok('托管版：邮箱是主账号的 打码 不能改 不用登录' + T, (await ap.locator('#btMail').inputValue()) === 'ow***@x.com' && !(await ap.locator('[data-login]').isVisible()) && !(await ap.locator('[data-go]').isDisabled()));
+		else {
+			ok('自建版没关联：显示「登录官网账号」 申请按钮先灰着' + T, (await ap.locator('[data-login]').isVisible()) && (await ap.locator('[data-go]').isDisabled()) && !(await ap.locator('#btMail').inputValue()));
+			await page.context().route('https://hub.test/**', (rt) => rt.fulfill({ body: 'ok' }));
+			const [pop] = await Promise.all([page.context().waitForEvent('page', { timeout: 5000 }).catch(() => null), ap.locator('[data-login]').click()]);
+			if (pop) await pop.waitForLoadState().catch(() => {});
+			ok('点「登录官网账号」：打开官网 带着关联码' + T, pop && /^https:\/\/hub\.test\/app\?bl=abcdefghijkmnpqrstuvwxyz$/.test(pop.url()), pop && pop.url());
+			if (pop) await pop.close();
+			S.linked = true; await W(4600);
+			ok('官网关联好回来：自动填上打码的邮箱 申请按钮能点' + T, (await ap.locator('#btMail').inputValue()) === 'm*@x.com' && !(await ap.locator('[data-login]').isVisible()) && !(await ap.locator('[data-go]').isDisabled()));
 		}
 		await ap.locator('#btNote').fill('闪存只有 16 MB');
 		await ap.locator('[data-go]').click(); await W(900);
-		ok('申请：告诉路由器（带留言' + (S.hosted ? '' : '、邮箱') + '），写着等开发者审核' + T, S.want === true && S.note === '闪存只有 16 MB' && (S.hosted || S.email === 'me@example.com') && /等审核/.test(await page.textContent('.modal')));
+		ok('申请：告诉路由器（带留言 不带邮箱），写着等开发者审核' + T, S.want === true && S.note === '闪存只有 16 MB' && S.email === undefined && /等审核/.test(await page.textContent('.modal')));
 		ok('等审核时能撤回' + T, await page.isVisible('.modal [data-bt="quit"]'));
 		await page.screenshot({ path: path.join(SHOT, `compat-wait-${w}${dark ? '-dark' : ''}.png`) });
 		// 被撤销：变回「申请」

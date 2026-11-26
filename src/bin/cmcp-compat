@@ -4,17 +4,18 @@
 //       cmcp-compat probe            看这台路由器哪些功能能用（打印 JSON，不上报）
 //       cmcp-compat send [now]       上报一次（定时任务每天一次，先随机等 0–30 分钟；now 马上报）
 //       cmcp-compat show             看上一次报了什么（打印 JSON）
+//       cmcp-compat who              问官网申请尝鲜用哪个邮箱（官网账号的，打码）；自建版还没关联账号时告诉面板去官网登录
 // 报的只有：随机编号（这台路由器自己生成的，不跟账号挂钩）、面板版本、型号、平台、系统版本、内核、内存和闪存大小、
 // 哪些功能能用、开不了的功能和原因。不报账号、IP、设备、网址、钥匙、任何设置的内容。
 // 关掉：面板「我的主页 → 设置 → 帮助改进兼容性」，或者 touch /etc/claude-mcp/compat_off
 // 申请了尝鲜的（面板「帮助改进、尝鲜」里申请，/etc/claude-mcp/beta_want）：上报时带上申请（时间、留言；托管版带专属网址编号让官网认出是谁的，
-// 自建版带邮箱），官网后台只看到匿名信息；同意 / 拒绝 / 撤销的结果下次上报时带回来（第 95 项）。申请了尝鲜的，关掉兼容上报也照样报型号这些（申请时说清楚了）
+// 自建版带关联码 beta_lk：用户在官网登录后把它关联到自己的账号；邮箱一律用官网账号的，不能自己填，用户 11/26 定），官网后台只看到匿名信息；同意 / 拒绝 / 撤销的结果下次上报时带回来（第 95 项）。申请了尝鲜的，关掉兼容上报也照样报型号这些（申请时说清楚了）
 'use strict';
 import * as L from 'cmcp.lib';
 import { readfile, writefile, stat, unlink } from 'fs';
 
 const D = getenv('CMCP_COMPAT_D') || L.D;
-const FAIL = D + '/compat_fail.json', RES = D + '/compat_res.json', ID = D + '/compat_id', OFF = D + '/compat_off', BW = D + '/beta_want', NOTED = D + '/compat_noted.json';
+const FAIL = D + '/compat_fail.json', RES = D + '/compat_res.json', ID = D + '/compat_id', OFF = D + '/compat_off', BW = D + '/beta_want', NOTED = D + '/compat_noted.json', LK = D + '/beta_lk';
 const FEATS = ['install', 'tunnel', 'update', 'pause', 'ban', 'backup', 'lfull', 'sudo', 'proxy', 'wifi', 'other'];
 const has = (c) => length(trim(L.sh('command -v ' + c))) > 0;
 const ok = (cmd) => trim(L.sh(cmd + ' >/dev/null 2>&1 && echo Y')) == 'Y';
@@ -24,6 +25,19 @@ function hub() {
 	if (h) return h;
 	h = match(readfile(L.D + '/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/)?.[2];
 	return h ?? 'https://yrlove520.com';
+}
+function rnd(n) {
+	const A = 'abcdefghijkmnpqrstuvwxyz23456789';
+	let r = trim(L.sh('head -c 64 /dev/urandom 2>/dev/null | od -An -tu1 2>/dev/null')), x = map(filter(split(r, /\s+/), (v) => length(v)), (v) => +v);
+	return length(x) < n ? null : join('', map(slice(x, 0, n), (v) => substr(A, v % 32, 1)));
+}
+// 自建版的关联码：第一次用时生成，一直用同一个（官网那边关联一次就行）
+function mylk() {
+	let s = trim(readfile(LK) ?? '');
+	if (match(s, /^[a-z2-9]{24}$/)) return s;
+	s = rnd(24);
+	if (s) writefile(LK, s);
+	return s;
 }
 function myid() {
 	let s = trim(readfile(ID) ?? '');
@@ -87,15 +101,28 @@ function fail(f, why) {
 	push(l, { f, why, at: L.now(), last: L.now(), n: 1 });
 	L.writej(FAIL, slice(l, -20));
 }
-// 尝鲜申请：时间、留言、自建版的邮箱；托管版加上专属网址编号和路由器钥匙（官网凭它认出是哪个账号的，只用来认人和推送结果）
+// 申请人：托管版是专属网址编号和路由器钥匙（官网凭它认出主账号，只用来认人和推送结果），自建版是关联码
+function who_app() {
+	let sub = match(readfile(D + '/hub.conf') ?? '', /(^|\n)SUB=([a-z0-9]+)/)?.[2], rk = match(readfile(D + '/cloud.conf') ?? '', /(^|\n)RKEY=([A-Za-z0-9]+)/)?.[2];
+	if (sub) return { sub, rkey: rk ?? '' };
+	let lk = mylk();
+	return lk ? { lk } : {};
+}
+// 尝鲜申请：时间、留言和申请人
 function beta_app() {
 	let a = null; try { a = json(readfile(BW) ?? 'null'); } catch (e) {}
 	if (type(a) != 'object') a = { at: 0 };
-	let o = { at: +a.at || 0, note: substr('' + (a.note ?? ''), 0, 200) };
-	let sub = match(readfile(D + '/hub.conf') ?? '', /(^|\n)SUB=([a-z0-9]+)/)?.[2], rk = match(readfile(D + '/cloud.conf') ?? '', /(^|\n)RKEY=([A-Za-z0-9]+)/)?.[2];
-	if (sub && rk) { o.sub = sub; o.rkey = rk; }
-	else if (length(a.email ?? '')) o.email = '' + a.email;
-	return o;
+	return { at: +a.at || 0, note: substr(scrub(a.note), 0, 200), ...who_app() };
+}
+// 申请框打开时问：邮箱（打码）；自建版没关联时 login=true，面板带着关联码去官网登录
+function who() {
+	let app = who_app(), tmp = '/tmp/cmcp_compat_who.' + (rnd(6) ?? 'x') + '.json';
+	writefile(tmp, sprintf('%J', { app }));
+	let out = L.sh(sprintf("curl -s -m 20 -X POST -H 'Content-Type: application/json' --data-binary @%s %s", tmp, L.shq(hub() + '/api/compat/who')));
+	unlink(tmp);
+	let r = null; try { r = json(out); } catch (e) {}
+	if (type(r) != 'object' || !r.ok) return { error: (type(r) == 'object' && r.error) || '连不上官网' };
+	return { mail: r.mail ?? '', login: !!r.login, why: r.why ?? '', hosted: !!app.sub, hub: hub(), ...(app.lk && r.login ? { lk: app.lk } : {}) };
 }
 function send() {
 	let beta = !!stat(BW);
@@ -114,7 +141,7 @@ function send() {
 	if (type(r) != 'object' || !r.ok) return { error: '没报上去', out: substr(out ?? '', 0, 200) };
 	// 报上去了：开不了的功能清掉（官网那边记着），留着回复给面板看（尝鲜挑中没有、哪些问题修好了）
 	if (full) L.writej(FAIL, []);
-	if (body.app) { delete body.app.rkey; delete body.app.email; } // 留给面板看的那份不存钥匙和邮箱
+	if (body.app) { delete body.app.rkey; delete body.app.lk; } // 留给面板看的那份不存钥匙和关联码
 	r.at = L.now(); r.sent = body;
 	L.writej(RES, r);
 	// 修好了：比现在的版本新，就推送一次（同一个问题只推一次）
@@ -135,11 +162,12 @@ function send() {
 let cmd = ARGV[0] ?? '';
 if (cmd == 'fail') { fail(ARGV[1], ARGV[2]); exit(0); }
 if (cmd == 'probe') { print(sprintf('%J\n', probe())); exit(0); }
+if (cmd == 'who') { print(sprintf('%J\n', who())); exit(0); }
 if (cmd == 'show') { print(sprintf('%J\n', L.readj(RES, {}))); exit(0); }
 if (cmd == 'send') {
 	if (ARGV[1] != 'now') { let n = (+trim(L.sh('echo $RANDOM')) || 0) % 1800; if (n > 0) L.sh('sleep ' + n); }
 	print(sprintf('%J\n', send()));
 	exit(0);
 }
-print('用法：cmcp-compat fail 功能 原因 | probe | send [now] | show\n');
+print('用法：cmcp-compat fail 功能 原因 | probe | send [now] | show | who\n');
 exit(1);

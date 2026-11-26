@@ -594,6 +594,8 @@ const pair = new URLSearchParams(location.search).get('pair') || '';
 // 6.0 第 71 项：App 6.0 起只能授权登录；浏览器里带 ?ok=编号 打开的，是在确认 App 登录
 const APP6 = /RouterPanelApp\/([6-9]|\d\d)\./.test(navigator.userAgent);
 const okCode = (new URLSearchParams(location.search).get('ok') || '').toLowerCase().replace(/[^a-z2-9]/g, '').slice(0, 8);
+// 自建版申请尝鲜：路由器面板带着关联码打开 /app?bl=关联码，登录后点「关联」，审核结果发到这个账号的邮箱
+const blCode = (new URLSearchParams(location.search).get('bl') || '').toLowerCase().replace(/[^a-z2-9]/g, '').slice(0, 24);
 const joinCode = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
 let mailOn = false, regFull = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
@@ -1260,7 +1262,8 @@ function report(where, e) {
 function showLogin() {
 	show('auth');
 	if (APP6) return appAuth();
-	lgView(((pair || joinCode || okCode || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	lgView(((pair || joinCode || okCode || blCode || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	if (blCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录后关联尝鲜申请。</div>'); }
 	if (okCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录后确认 App 登录。</div>'); }
 	if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
 	if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
@@ -1308,6 +1311,7 @@ async function load(after) {
 	if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').closest('details').open = true; $('fBind').code.value = pair; $('fBind').requestSubmit(); }
 	if (joinCode && !sessionStorage.getItem('joined:' + joinCode) && !document.querySelector('.mask')) { sessionStorage.setItem('joined:' + joinCode, '1'); joinBox(joinCode); }
 	if (okCode && /^[a-z2-9]{8}$/.test(okCode) && !document.querySelector('.mask')) appOkBox(okCode);
+	if (blCode && !document.querySelector('.mask')) blBox(blCode);
 	return me;
 }
 // App 里：要授权码，「用官网登录」到浏览器里确认（或者另一台登录着的手机扫码），App 每 2 秒问一次
@@ -1349,6 +1353,27 @@ async function appOkBox(code) {
 	const go = async (ok, b) => { b.disabled = true; try { await api('app_ok', { code, ok }); done(ok ? '已允许' : '已拒绝'); } catch (e) { b.disabled = false; m.querySelector('[data-err]').textContent = e.message; } };
 	m.querySelector('[data-ok]').onclick = (e) => go(true, e.currentTarget);
 	m.querySelector('[data-no]').onclick = (e) => go(false, e.currentTarget);
+	document.body.appendChild(m);
+}
+// 自建版申请尝鲜：把路由器的尝鲜申请关联到这个账号（审核结果发到账号邮箱）
+function blBox(lk) {
+	const m = document.createElement('div'); m.className = 'mask';
+	const bad = !/^[a-z2-9]{24}$/.test(lk);
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>关联尝鲜申请</h3>
+		<p class="muted" style="margin:8px 0 0;font-size:14.5px;line-height:1.7;text-wrap:pretty">${bad ? '链接不完整。回到路由器面板重新点「登录官网账号」。' : '审核结果发到这个账号的邮箱。不是你自己点的就取消。'}</p>
+		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-no>取消</button>${bad ? '' : '<button type="button" class="btn primary" data-ok>关联</button>'}</div></div>`;
+	const end = () => { history.replaceState(null, '', '/app'); m.remove(); };
+	m.querySelector('[data-no]').onclick = end;
+	const ok = m.querySelector('[data-ok]');
+	if (ok) ok.onclick = async () => {
+		ok.disabled = true;
+		try {
+			const r = await api('beta_link', { lk });
+			history.replaceState(null, '', '/app');
+			m.querySelector('.card').innerHTML = `<h3>已关联</h3><p class="muted" style="margin:8px 0 0;font-size:14.5px;line-height:1.7">邮箱 ${esc(r.mail || '')}<br>回到路由器面板点「申请」。</p><div class="acts"><button type="button" class="btn primary" data-x>好的</button></div>`;
+			m.querySelector('[data-x]').onclick = () => m.remove();
+		} catch (e) { ok.disabled = false; m.querySelector('[data-err]').textContent = e.message; }
+	};
 	document.body.appendChild(m);
 }
 // 浏览器关掉了 Cookie：登录不了，先说清楚

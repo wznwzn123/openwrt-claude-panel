@@ -22,7 +22,7 @@
 .cp-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .cp-top h3 { margin: 0; font-size: 15.5px; font-weight: 650; overflow-wrap: anywhere; }
 .cp-top span { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.cp-sys { margin: 3px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.cp-sys { margin: 3px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; text-wrap: pretty; }
 .cp-feats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .cp-f { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--c); background: var(--cb); white-space: nowrap; }
 .cp-f::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
@@ -40,12 +40,23 @@
     <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="31" aria-hidden="true"></div>
     <div class="wrap">
       <h1>兼容性</h1>
-      <p class="pg-sub">哪些路由器实际装过、哪些功能能用。数据来自路由器每天的匿名上报（型号、系统版本、功能能不能用），只写实测到的，每小时更新。</p>
+      <p class="pg-sub">能装在哪些系统上，哪些路由器实际装过、哪些功能能用。实测数据来自 6.0 起路由器每天的匿名上报（型号、系统版本、功能能不能用），每小时更新。</p>
       <div class="cp-sum" id="cpSum" aria-live="polite"><span>正在读取…</span></div>
     </div>
   </div>
   <div class="cp-body">
     <div class="wrap">
+      <!-- 系统要求（用户 11/26 定）：报上来的路由器不到 10 台时放最上面，多了以后挪到实测表下面。内容跟 docs/compatibility.md「系统要求」一致 -->
+      <section class="cp-sec" id="cpReq" aria-labelledby="cpRH">
+        <h2 class="cp-h" id="cpRH">能装在哪些系统上</h2>
+        <ul class="cp-list">
+          <li class="cp-row"><div class="cp-top"><h3>系统</h3></div><p class="cp-sys">OpenWrt 22.03 或更新<br>Kwrt、ImmortalWrt 都可以<br>21.02 这类老固件安装时自动补运行环境</p></li>
+          <li class="cp-row"><div class="cp-top"><h3>软件包</h3></div><p class="cp-sys">opkg 和 apk 都支持</p></li>
+          <li class="cp-row"><div class="cp-top"><h3>闪存</h3></div><p class="cp-sys">面板约 2 MB，剩不到 6 MB 装不了<br>远程访问另要约 30 MB<br>闪存不够时放进内存</p></li>
+          <li class="cp-row"><div class="cp-top"><h3>架构</h3></div><p class="cp-sys">aarch64、arm、x86_64、i386<br>MIPS 用不了远程访问<br>只能在家里 Wi-Fi 下用</p></li>
+          <li class="cp-row"><div class="cp-top"><h3>真机实测</h3></div><p class="cp-sys">Kwrt 25.12（aarch64）<br>装着 OpenClash 和 PassWall<br>其他架构还没有真机实测</p></li>
+        </ul>
+      </section>
       <section class="cp-sec" aria-labelledby="cpMH">
         <h2 class="cp-h" id="cpMH">按型号</h2>
         <div class="cp-find"><input id="cpQ" type="search" placeholder="搜型号，比如 AX3000T、R4S、x86" aria-label="搜型号" autocomplete="off"></div>
@@ -85,6 +96,8 @@
   $('cpMore').onclick = () => { shown += 60; render(); };
   fetch('/api/compat/table').then((r) => r.json()).then((j) => {
     T = j; T.models = T.models || []; T.systems = T.systems || []; T.feats = T.feats || {};
+    // 报上来的够多了：系统要求挪到实测表下面
+    if ((T.routers || 0) >= 10) { const rq = $('cpReq'); rq.parentNode.insertBefore(rq, document.querySelector('.cp-note')); }
     $('cpSum').innerHTML = '<span><b>' + (T.routers || 0) + '</b>台路由器报过</span><span><b>' + T.models.length + '</b>种型号</span><span><b>' + T.systems.length + '</b>种系统版本</span>';
     render();
   }).catch(() => { $('cpSum').innerHTML = '<span>暂时读不出来，稍后刷新再看</span>'; $('cpModels').innerHTML = ''; });

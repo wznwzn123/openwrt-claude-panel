@@ -86,7 +86,7 @@ function sp_main(groups) {
 	for (let n in (groups ?? [])) if (!p || p[n]?.type == 'Selector') return n;
 	return null;
 }
-function sp_target(t, main) { return t == 'DIRECT' ? 'DIRECT' : t == 'PROXY' ? main : t; }
+function sp_target(t, mg) { return t == 'DIRECT' ? 'DIRECT' : t == 'PROXY' ? mg : t; }
 // MAC → IP：固定 IP 优先，然后是 DHCP 分配记录
 function sp_ipmap() {
 	let m = {};
@@ -95,10 +95,10 @@ function sp_ipmap() {
 	return m;
 }
 // 按「设备 → 软件 → 国家」、每种按去向分好的规则
-function sp_rules(o, main) {
+function sp_rules(o, mg) {
 	let out = [];
 	let add = (kind, t, line) => {
-		let to = sp_target(t, main);
+		let to = sp_target(t, mg);
 		if (!to) return;
 		let g = null;
 		for (let x in out) if (x.kind == kind && x.to == to) g = x;
@@ -185,8 +185,8 @@ function sp_mark(o) {
 }
 function sp_apply(o, kind) {
 	sp_mark(o);
-	let groups = sp_groups() ?? sp_cfg_groups(kind), main = sp_main(groups);
-	let rules = sp_rules(o, main), need = kind == 'nikki' ? sp_nk_write(rules) : sp_oc_write(rules);
+	let groups = sp_groups() ?? sp_cfg_groups(kind), mg = sp_main(groups);
+	let rules = sp_rules(o, mg), need = kind == 'nikki' ? sp_nk_write(rules) : sp_oc_write(rules);
 	if (kind == 'openclash' && !need) for (let n in SP_CHG) try { if (!getenv('CMCP_SP_PROXIES')) api('PUT', '/providers/rules/' + n, null, 10); } catch (e) {}
 	if (need) { o.pending = true; cmcp_writej(SP_F, o); }
 	return { restart: need };

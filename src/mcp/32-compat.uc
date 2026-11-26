@@ -2,7 +2,7 @@
 const CP_OFF = ETC + '/compat_off', CP_BW = ETC + '/beta_want', CP_RES = ETC + '/compat_res.json';
 const AU_OFF = ETC + '/autoupd_off'; // 6.0 第 86 项：有这个文件 = 关掉「必须更新夜里自动装」
 function compat_res() { let r = null; try { r = json(readfile(CP_RES) ?? 'null'); } catch (e) {} return type(r) == 'object' ? r : {}; }
-// 尝鲜申请（第 95 项）：beta_want 里是申请时间、留言、自建版的邮箱
+// 尝鲜申请（第 95 项）：beta_want 里是申请时间、留言（邮箱一律用官网账号的，不在路由器上填）
 function beta_app() { let a = null; try { a = json(readfile(CP_BW) ?? 'null'); } catch (e) {} return type(a) == 'object' ? a : (stat(CP_BW) ? { at: 0 } : null); }
 // 尝鲜的状态：none 没申请；wait 等审核；ok 已通过；no 没通过；rev 被撤销（这两种要重新申请）；err 申请没交上（原因在 why）；sending 刚申请还没报上去
 function beta_state() {
@@ -12,7 +12,7 @@ function beta_state() {
 	// 拒绝 / 撤销以后又申请了（申请时间比那次决定晚）：等这次报上去
 	if ((st == 'no' || st == 'rev') && (+a.at || 0) * 1000 > (+b?.dec || 0)) st = 'sending';
 	if (st == 'err' && (+a.at || 0) > (compat_res().at ?? 0)) st = 'sending';
-	return { want: true, st: st ?? 'sending', ok: st == 'ok', ver: b?.ver ?? '', tag: b?.tag ?? '', why: st == 'err' ? (b?.why ?? '') : '', at: +a.at || 0, note: a.note ?? '', hosted: !!stat(ETC + '/hub.conf') };
+	return { want: true, st: st ?? 'sending', ok: st == 'ok', ver: b?.ver ?? '', tag: b?.tag ?? '', why: st == 'err' ? (b?.why ?? '') : '', at: +a.at || 0, note: a.note ?? '', mail: b?.mail ?? '', hosted: !!stat(ETC + '/hub.conf') };
 }
 P.compat_info = function(a) {
 	// 等审核时打开面板看一眼：马上问一次官网（每天最多几次，官网也限次）
@@ -32,12 +32,19 @@ P.compat_set = function(a) {
 P.beta_set = function(a) {
 	if (ROLE == 'sub') die('只有主账号能改');
 	if (a?.want === true) {
-		let hosted = !!stat(ETC + '/hub.conf'), email = trim('' + (a.email ?? '')), note = substr(trim(replace('' + (a.note ?? ''), /[[:cntrl:]]/g, ' ')), 0, 200);
-		if (!hosted && !match(email, /^[^ \t@<>]{1,64}@[^ \t@<>]{1,190}\.[A-Za-z]{2,24}$/)) die('留一个邮箱：只用来通知你申请结果');
-		writefile(CP_BW, sprintf('%J', { at: time(), note, ...(hosted ? {} : { email }) }));
+		let note = substr(trim(replace('' + (a.note ?? ''), /[[:cntrl:]]/g, ' ')), 0, 200);
+		writefile(CP_BW, sprintf('%J', { at: time(), note }));
 	} else sh('rm -f ' + shq(CP_BW));
 	sh(sprintf('CMCP_COMPAT_D=%s %s/cmcp-compat send now >/dev/null 2>&1', shq(ETC), SBIN));
 	return P.compat_info();
+};
+// 申请框打开时：问官网申请用哪个邮箱（官网账号的，打码）；自建版没关联账号时带回关联码，面板拿它去官网登录
+P.beta_who = function() {
+	if (ROLE == 'sub') die('只有主账号能申请');
+	let r = null; try { r = json(trim(sh(sprintf('CMCP_COMPAT_D=%s %s/cmcp-compat who 2>/dev/null', shq(ETC), SBIN)).out ?? '')); } catch (e) {}
+	if (type(r) != 'object') die('连不上官网，稍后再试');
+	if (r.error) die('' + r.error);
+	return r;
 };
 // 一键更新：有挑中的尝鲜版就告诉面板；在用尝鲜版的能退回正式版
 const UPD_CHECK0 = P.update_check;

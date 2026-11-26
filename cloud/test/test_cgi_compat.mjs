@@ -103,28 +103,39 @@ ok('关掉以后：不上报', r.off === true && (await H().ctx.storage.get('cp:
 const cpBefore = new Set([...(await H().ctx.storage.list({ prefix: 'cp:' })).keys()]);
 // ---- 尝鲜（第 95 项：申请 → 后台同意；撤销后要重新申请；后台只看匿名信息） ----
 env.RESEND_API_KEY = 're_test';
+// 邮箱一律用官网账号的（用户 11/26 定）：自建版先在官网登录、把路由器的关联码关联到账号
 fs.writeFileSync(A + '/beta_want', '1');
 r = await cp(A, 'send', 'now');
-ok('老的报名（没有邮箱的自建版）：官网说要留邮箱', r.beta && r.beta.st === 'err' && /邮箱/.test(r.beta.why), JSON.stringify(r.beta));
-let c = await cgi(A, 'beta_set', { want: true, note: '想试试' });
-ok('面板申请：自建版不留邮箱不让申请', /邮箱/.test(c.error?.message || ''), JSON.stringify(c));
-fs.writeFileSync(A + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000), note: '闪存小，见 http://x.example/a 192.168.1.1', email: 'Me@X.com' }));
+ok('自建版没关联官网账号：官网说先登录', r.beta && r.beta.st === 'err' && /先登录官网账号/.test(r.beta.why), JSON.stringify(r.beta));
+let w = await cp(A, 'who');
+const lkA = fs.readFileSync(A + '/beta_lk', 'utf8').trim();
+ok('申请框问邮箱：自建版没关联 → 要登录 带回关联码和官网地址', w.login === true && !w.mail && w.lk === lkA && /^[a-z2-9]{24}$/.test(lkA) && w.hub === HUB, JSON.stringify(w));
+await H().ctx.storage.put('u:uidself1234', { uid: 'uidself1234', email: 'me@x.com', devs: [] });
+let lr = await H().compatLink('uidself1234', 'short');
+ok('关联码不对：不关联', lr.st === 400);
+lr = await H().compatLink('uidself1234', lkA);
+ok('官网登录后关联：回打码的邮箱', lr.ok && lr.mail === 'm*@x.com', JSON.stringify(lr));
+w = await cp(A, 'who');
+ok('关联后再问：邮箱打码 不用再登录 不再给关联码', w.mail === 'm*@x.com' && w.login === false && !w.lk, JSON.stringify(w));
+let c = await cgi(A, 'beta_set', { want: true, note: '想试试', email: 'evil@y.com' });
+ok('面板申请：不收自己填的邮箱', !fs.readFileSync(A + '/beta_want', 'utf8').includes('evil'), fs.readFileSync(A + '/beta_want', 'utf8'));
+fs.writeFileSync(A + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000), note: '闪存小，见 http://x.example/a 192.168.1.1' }));
 r = await cp(A, 'send', 'now');
 const sent = r.sent || {};
 ok('申请尝鲜（就算关了兼容上报）：报型号这些（申请时说清楚了），带申请', r.ok && sent.beta === true && 'model' in sent && sent.app && sent.app.note, JSON.stringify(sent).slice(0, 200));
-ok('留给面板看的那份不存邮箱', !JSON.stringify(sent).includes('Me@X.com') && !JSON.stringify(sent).toLowerCase().includes('me@x.com'));
+ok('留给面板看的那份不存关联码 回复里只有打码的邮箱', !JSON.stringify(sent).includes(lkA) && r.beta.mail === 'm*@x.com' && !JSON.stringify(r).includes('me@x.com'), JSON.stringify(r).slice(0, 300));
 ok('等审核：路由器知道', r.beta && r.beta.st === 'wait' && r.beta.ok === false, JSON.stringify(r.beta));
 let rec2 = await H().ctx.storage.get('cp:' + id);
-ok('官网记着申请人匿名编号和邮箱（邮箱只用来通知），留言里的网址和 IP 洗掉了', rec2.ap && /^[A-Z2-9]{8}$/.test(rec2.ap.pid) && rec2.ap.email === 'me@x.com' && /<网址>/.test(rec2.ap.note) && /<IP>/.test(rec2.ap.note), JSON.stringify(rec2.ap));
+ok('官网记着申请人匿名编号和官网账号（不存邮箱），留言里的网址和 IP 洗掉了', rec2.ap && /^[A-Z2-9]{8}$/.test(rec2.ap.pid) && rec2.ap.uid === 'uidself1234' && !rec2.ap.email && /<网址>/.test(rec2.ap.note) && /<IP>/.test(rec2.ap.note), JSON.stringify(rec2.ap));
 ad = await api('/api/admin/compat', null, ADM);
 let v = ad.volunteers.find((x) => x.id === id);
 ok('后台：看得到申请（型号、系统、版本、内存、闪存、留言、匿名编号）', v && v.st === 'wait' && v.pid && v.model !== undefined && 'mem' in v && 'flash' in v && v.note && v.hosted === false, JSON.stringify(v).slice(0, 300));
-ok('后台：看不到邮箱、专属网址编号', !JSON.stringify(ad.volunteers).includes('me@x.com') && !JSON.stringify(ad.volunteers).includes('"sub"') && !JSON.stringify(ad.volunteers).includes('"email"'));
+ok('后台：看不到邮箱、官网账号、专属网址编号', !JSON.stringify(ad.volunteers).includes('uidself1234') && !JSON.stringify(ad.volunteers).includes('me@x.com') && !JSON.stringify(ad.volunteers).includes('"sub"') && !JSON.stringify(ad.volunteers).includes('"email"'));
 r = await api('/api/admin/compat/beta', { id, act: 'rev' }, ADM);
 ok('后台：等审核的也能撤销', r.ok === true);
 r = await api('/api/admin/compat/beta', { id, act: 'ok' }, ADM);
 ok('后台：撤销以后能直接同意', r.ok === true);
-ok('同意：给自建版的邮箱发邮件', MAIL.some((m) => (Array.isArray(m.to) ? m.to : [m.to]).includes('me@x.com') && /尝鲜申请通过了/.test(m.subject)), JSON.stringify(MAIL.slice(-2)).slice(0, 300));
+ok('同意：发邮件到申请人官网账号的邮箱', MAIL.some((m) => (Array.isArray(m.to) ? m.to : [m.to]).includes('me@x.com') && /尝鲜申请通过了/.test(m.subject)), JSON.stringify(MAIL.slice(-2)).slice(0, 300));
 await H().setMeta('prerel', { tag: 'v9.9.10', ver: '9.9.10' });
 r = await cp(A, 'send', 'now');
 ok('通过了：路由器拿到尝鲜版的版本号', r.beta && r.beta.ok === true && r.beta.st === 'ok' && r.beta.tag === 'v9.9.10', JSON.stringify(r.beta));
@@ -133,13 +144,14 @@ ok('面板：看得到上报关着、已通过、尝鲜版 v9.9.10', c.result &&
 fs.writeFileSync('/tmp/cmcp_latest.json', JSON.stringify({ at: Math.floor(Date.now() / 1000), latest: '9.9.9', notes: '' }));
 c = await cgi(A, 'update_check');
 ok('一键更新：告诉面板有尝鲜版可以装', c.result && c.result.beta && c.result.beta.tag === 'v9.9.10', JSON.stringify(c));
-// 同一个人的第二台（同一个邮箱）：按人撤销两台都撤
+// 同一个人的第二台（关联到同一个官网账号）：按人撤销两台都撤
 const B2 = mkRouter();
-fs.writeFileSync(B2 + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000), note: '', email: 'me@x.com' }));
+fs.writeFileSync(B2 + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000), note: '' }));
+await cp(B2, 'who'); await H().compatLink('uidself1234', fs.readFileSync(B2 + '/beta_lk', 'utf8').trim());
 r = await cp(B2, 'send', 'now');
 const id2 = fs.readFileSync(B2 + '/compat_id', 'utf8').trim();
 ad = await api('/api/admin/compat', null, ADM);
-ok('同一个邮箱的两台：匿名编号一样，后台写着共 2 台', ad.volunteers.find((x) => x.id === id2).pid === ad.volunteers.find((x) => x.id === id).pid && ad.volunteers.find((x) => x.id === id).pidN === 2);
+ok('同一个官网账号的两台：匿名编号一样，后台写着共 2 台', ad.volunteers.find((x) => x.id === id2).pid === ad.volunteers.find((x) => x.id === id).pid && ad.volunteers.find((x) => x.id === id).pidN === 2);
 const nm = MAIL.length;
 r = await api('/api/admin/compat/beta', { id, act: 'revp' }, ADM);
 ok('按人撤销：两台都撤（等审核的也算）', r.ok && r.n === 2 && (await H().ctx.storage.get('cp:' + id)).ap.st === 'rev' && (await H().ctx.storage.get('cp:' + id2)).ap.st === 'rev', JSON.stringify(r));
@@ -153,7 +165,7 @@ ok('撤销后：检查更新里没有尝鲜版', c.result && !c.result.beta, JSO
 r = await cp(A, 'send', 'now');
 ok('不重新申请：一直是撤销', r.beta && r.beta.st === 'rev');
 await new Promise((z) => setTimeout(z, 1100));
-fs.writeFileSync(A + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000) + 1, note: '再试一次', email: 'me@x.com' }));
+fs.writeFileSync(A + '/beta_want', JSON.stringify({ at: Math.floor(Date.now() / 1000) + 1, note: '再试一次' }));
 c = await cgi(A, 'compat_info');
 ok('重新申请、还没报上去：面板显示正在提交', c.result && c.result.beta.st === 'sending', JSON.stringify(c.result && c.result.beta));
 r = await cp(A, 'send', 'now');
@@ -173,6 +185,8 @@ r = await cp(C3, 'send', 'now');
 
 const id3 = fs.readFileSync(C3 + '/compat_id', 'utf8').trim(), rec3 = await H().ctx.storage.get('cp:' + id3);
 ok('托管版申请：不用邮箱，官网凭专属网址编号认人', r.beta && r.beta.st === 'wait' && rec3.ap.hosted === true && rec3.ap.sub === 'hostabcd' && !rec3.ap.email && /^[A-Z2-9]{8}$/.test(rec3.ap.pid), JSON.stringify(rec3.ap));
+w = await cp(C3, 'who');
+ok('托管版申请框：邮箱是主账号的（打码） 不用登录', w.mail === 'ow***@x.com' && w.login === false && w.hosted === true && !w.lk, JSON.stringify(w));
 ok('托管版：路由器钥匙不留在面板看的那份里', !JSON.stringify(r.sent).includes('r'.repeat(32)));
 fs.writeFileSync(C3 + '/cloud.conf', 'URL=' + HUB + '/cloud\nRKEY=' + 'x'.repeat(32) + '\n'); fs.unlinkSync(C3 + '/compat_id');
 r = await cp(C3, 'send', 'now');

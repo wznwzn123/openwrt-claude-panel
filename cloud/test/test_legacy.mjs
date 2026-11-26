@@ -43,17 +43,19 @@ const look = async (old) => {
 	}
 	const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 	await p.goto(B + '/'); await p.waitForTimeout(1500);
-	await p.evaluate(() => document.querySelector('#features').scrollIntoView()); await p.waitForTimeout(1500);
+	await p.evaluate(() => document.querySelector('#watchdog').scrollIntoView()); await p.waitForTimeout(1500);
 	const r = await p.evaluate(() => {
 		const a = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s); if (!m) return s.includes('oklab') || s.includes('color(') ? 1 : 0; const v = m[1].split(/[ ,/]+/).filter(Boolean); return v.length > 3 ? +v[3] : 1; };
-		const card = getComputedStyle(document.querySelector('.ly-piece--speed')).backgroundColor;
-		const box = document.querySelector('.ui-check.is-done .ui-check__box'), cs = getComputedStyle(box);
-		const art = document.querySelector('.hero__art').getBoundingClientRect().height;
-		const sec = getComputedStyle(document.querySelector('.hero .btn--secondary')).backgroundColor;
-		return { card: a(card), tick: cs.color !== cs.backgroundColor, tickc: cs.color, boxc: cs.backgroundColor, art, sec: a(sec), hasMarks: document.querySelectorAll('[data-h0],[data-h1],[data-h2],[data-h3],[data-h4],[data-h5]').length };
+		const card = getComputedStyle(document.querySelector('.pc.wd')).backgroundColor;
+		const box = document.querySelector('.pc.wd .ev[data-s="2"] i'), cs = getComputedStyle(box);
+		const art = document.querySelector('.hero .stage').getBoundingClientRect().height;
+		const sec = getComputedStyle(document.querySelector('#heroMain')).backgroundColor;
+		return { card: a(card), tick: cs.color !== cs.backgroundColor, tickc: cs.color, boxc: cs.backgroundColor, art, sec: a(sec), hasMarks: [...document.querySelectorAll('*')].filter((e) => [...e.attributes].some((x) => /^data-h\d+$/.test(x.name))).length };
 	});
 	await p.goto(B + '/app#login'); await p.waitForTimeout(1200);
 	r.tabPill = await p.evaluate(() => getComputedStyle(document.querySelector('#lgCard .tabs'), '::before').opacity);
+	// 首页改版后不用 :has 了；账号页还用：在账号页数标记
+	r.hasMarks += await p.evaluate(() => [...document.querySelectorAll('*')].filter((e) => [...e.attributes].some((x) => /^data-h\d+$/.test(x.name))).length);
 	await c.close();
 	return { ...r, errs };
 };
@@ -61,10 +63,10 @@ const NEW = await look(false), OLD = await look(true);
 ok('[新浏览器] 不受影响：没有 data-h 标记（只有旧浏览器才标）', NEW.hasMarks === 0, JSON.stringify(NEW));
 ok('[新浏览器] 登录页「登录 / 注册」切换的绿色滑块看得见（补给旧浏览器的规则不能影响新浏览器）', NEW.tabPill === '1', NEW.tabPill);
 ok('[旧浏览器] 登录页切换滑块也看得见', OLD.tabPill === '1', OLD.tabPill);
-ok('[旧浏览器] 首屏「实时网速」卡片不透明', OLD.card > 0.5, JSON.stringify(OLD));
+ok('[旧浏览器] 首屏「看门狗」卡片不透明', OLD.card > 0.5, JSON.stringify(OLD));
 ok('[旧浏览器] 看门狗检查的勾看得见（勾和底色不一样）', OLD.tick, OLD.tickc + ' / ' + OLD.boxc);
 ok('[旧浏览器] 首屏手机截图区域没塌（和新浏览器差不多高）', Math.abs(OLD.art - NEW.art) < 40, OLD.art + ' / ' + NEW.art);
-ok('[旧浏览器] 「查看安装步骤」按钮有底色', OLD.sec > 0.5, JSON.stringify(OLD));
+ok('[旧浏览器] 「免费试用 7 天」按钮有底色', OLD.sec > 0.5, JSON.stringify(OLD));
 ok('[旧浏览器] 页面没有报错', !OLD.errs.length, OLD.errs.join(' | '));
 ok('[旧浏览器] 不认识 :has 时，补的规则用上了（有元素被标记）', OLD.hasMarks > 0, String(OLD.hasMarks));
 await browser.close(); server.close();

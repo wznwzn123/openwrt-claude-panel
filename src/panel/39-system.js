@@ -1546,7 +1546,7 @@ async function updSheet(forced) {
 		};
 		m.querySelectorAll('[data-ch]').forEach((b) => (b.onclick = async () => {
 			const beta = b.dataset.ch === 'beta';
-			if (!(await confirmBox(beta ? '装尝鲜版' : '退回正式版', beta ? '更新到 v' + u.beta.ver + '（尝鲜版）？\n设置都保留，面板断开 10–30 秒，不会断网；装完起不来会自动退回。用着有问题，在「系统操作 → 问题反馈」里告诉我们。' : '退回正式版 v' + u.latest + '？\n设置都保留，面板断开 10–30 秒，不会断网。', beta ? '装尝鲜版' : '退回正式版'))) return;
+			if (!(await confirmBox(beta ? '装尝鲜版' : '退回正式版', beta ? '更新到 v' + u.beta.ver + '（尝鲜版）？\n设置都保留，面板断开 10–30 秒，不会断网；装完起不来会自动退回。用着有问题，在「系统操作 → 问题反馈」里告诉我们。' : '退回正式版 v' + u.latest + '？\n' + (/^[0-5]\./.test(u.latest || '') ? '限速、上网计划和自动拉黑会停用，被暂停的设备恢复上网。\n' : '') + '设置都保留，面板断开 10–30 秒，不会断网。', beta ? '装尝鲜版' : '退回正式版'))) return;
 			close(null);
 			updStart(true, beta ? 'beta' : 'stable');
 		}));

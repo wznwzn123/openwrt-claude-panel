@@ -127,6 +127,25 @@ printf 'CODE=ai-full\nVER=9.9.9\n' > "$T/root/etc/claude-mcp/version"
 mkdir -p "$T/sg"; cp -r "$T/old" "$T/sg/latest"; mv "$T/sg/latest" "$T/sg/latest-tmp"; mkdir -p "$T/sg/latest"; mv "$T/sg/latest-tmp" "$T/sg/latest/download"
 s=$(runch "$T/evil" "$T/sg" stable)
 ok "退回正式版：允许装比现在旧的正式版（1.0 < 9.9.9），先直连 GitHub（官网那份没用到）" $([ "$s" = rolledback ] && ! log | grep -q "签名不对：file://$T/evil" ; echo $?) "$s $(msg) $(log | tail -2)"
+# 退回 6.0 以前的正式版：先停掉老版本管不了的（6.0 才有的程序、定时任务）；装不上退回 6.0 时定时任务和程序都放回去
+mkdir -p "$T/root/etc/crontabs" "$T/root/usr/sbin"
+printf '0 3 * * * /usr/sbin/cmcp-weekly\n*/5 * * * * /usr/sbin/cmcp-guard\n0 4 * * * /bin/true # 用户自己的\n' > "$T/root/etc/crontabs/root"
+for b in ratelimit guard watchdog; do printf '#!/bin/sh\n' > "$T/root/usr/sbin/cmcp-$b"; done
+mkdir -p "$T/o5/p/openwrt-claude-panel"; printf 'echo "CRON:$(tr "\\n" " " < "$CMCP_ROOT/etc/crontabs/root") BINS:$(ls "$CMCP_ROOT/usr/sbin" | tr "\\n" " ")"; exit 1\n' > "$T/o5/p/openwrt-claude-panel/install.sh"
+printf 'PKG_VER=5.3.0\n' > "$T/o5/p/openwrt-claude-panel/EDITION"
+tar -C "$T/o5/p" -czf "$T/o5/openwrt-claude-panel-ai-full.tar.gz" openwrt-claude-panel && rm -rf "$T/o5/p"; (cd "$T/o5" && sha256sum *.tar.gz > SHA256SUMS); sg "$T/o5"
+rm -rf "$T/sg5"; mkdir -p "$T/sg5/latest"; cp -r "$T/o5" "$T/sg5/latest/download"
+printf 'CODE=ai-full\nVER=6.0.1\n' > "$T/root/etc/claude-mcp/version"
+s=$(CMCP_ROOT="$T/root" runch "$T/evil" "$T/sg5" stable)
+ok "退回 6.0 以前：装之前停掉 6.0 才有的定时任务和程序，用户自己的定时任务留着" $([ "$s" = rolledback ] && log | grep -q '退回 6.0 以前的版本' && log | grep 'CRON:' | grep -q '/bin/true' && ! log | grep 'CRON:' | grep -q 'cmcp-weekly' && ! log | grep 'BINS:' | grep -q 'cmcp-ratelimit' && log | grep 'BINS:' | grep -q 'cmcp-watchdog' ; echo $?) "$s $(log | grep -E 'CRON|BINS|退回' | head -3)"
+ok "退回 6.0 以前没装上：定时任务和程序放回去" $(grep -q 'cmcp-weekly' "$T/root/etc/crontabs/root" && [ -e "$T/root/usr/sbin/cmcp-ratelimit" ] ; echo $?) "$(cat "$T/root/etc/crontabs/root")"
+mkdir -p "$T/o6/p/openwrt-claude-panel"; printf 'exit 1\n' > "$T/o6/p/openwrt-claude-panel/install.sh"; printf 'PKG_VER=6.0.1\n' > "$T/o6/p/openwrt-claude-panel/EDITION"
+tar -C "$T/o6/p" -czf "$T/o6/openwrt-claude-panel-ai-full.tar.gz" openwrt-claude-panel && rm -rf "$T/o6/p"; (cd "$T/o6" && sha256sum *.tar.gz > SHA256SUMS); sg "$T/o6"
+rm -rf "$T/sg6"; mkdir -p "$T/sg6/latest"; cp -r "$T/o6" "$T/sg6/latest/download"
+printf 'CODE=ai-full\nVER=6.0.2\n' > "$T/root/etc/claude-mcp/version"
+s=$(runch "$T/evil" "$T/sg6" stable)
+ok "退回的正式版也是 6.x：不动 6.0 的程序和定时任务" $(! log | grep -q '退回 6.0 以前的版本' && grep -q 'cmcp-weekly' "$T/root/etc/crontabs/root" ; echo $?) "$s"
+printf 'CODE=ai-full\nVER=9.9.9\n' > "$T/root/etc/claude-mcp/version"
 s=$(run "$T/old" "$T/old")
 ok "不是退回正式版（普通更新）：照样不装旧版本" $([ "$s" = failed ] && msg | grep -q '旧版本' ; echo $?) "$s $(msg)"
 printf 'CODE=ai-full\nVER=1.0\n' > "$T/root/etc/claude-mcp/version"

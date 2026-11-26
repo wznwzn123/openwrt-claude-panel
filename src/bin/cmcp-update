@@ -89,6 +89,29 @@ fi
 [ -n "$FROM" ] || FROM=旧版
 TO=""
 AU_OFF=$D/autoupd_off AU_FAIL=$D/autoupd_fail
+# 退回 6.0 以前的版本前，停掉老版本管不了的东西（见下面 run 里的说明）。测试时（CMCP_NOSVC=1）只记日志、只动 $R 下的文件
+old_clean() {
+	echo "退回 6.0 以前的版本：停掉限速、设备暂停、自动拉黑、原版后台菜单和 6.0 才有的定时任务" >>"$LOG"
+	mkdir -p "$W" && cp -f "$R/etc/crontabs/root" "$W/cron.bak" 2>/dev/null
+	sed -i '/\/usr\/sbin\/cmcp-/d' "$R/etc/crontabs/root" 2>/dev/null
+	if [ "$CMCP_NOSVC" != 1 ]; then
+		[ -x /usr/sbin/cmcp-ratelimit ] && /usr/sbin/cmcp-ratelimit off >>"$LOG" 2>&1
+		if command -v nft >/dev/null 2>&1; then nft delete table inet cmcp_pause 2>/dev/null; nft delete table inet cmcp_ban 2>/dev/null; fi
+		# 设备暂停和上网计划：清空规则（被暂停的设备恢复上网；老版本启动后按它自己的规则重新暂停）
+		for t in iptables ip6tables; do command -v $t >/dev/null 2>&1 && $t -t mangle -F CMCP_PAUSE 2>/dev/null; done
+		if command -v ipset >/dev/null 2>&1; then
+			iptables -D INPUT -m set --match-set cmcp_ban src -j DROP 2>/dev/null; ip6tables -D INPUT -m set --match-set cmcp_ban6 src -j DROP 2>/dev/null
+			ipset destroy cmcp_ban 2>/dev/null; ipset destroy cmcp_ban6 2>/dev/null
+		fi
+		rm -f /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /usr/lib/lua/luci/controller/cmcp.lua
+		rm -rf /www/luci-static/resources/view/cmcp /tmp/luci-indexcache* /tmp/luci-modulecache
+		sec=$(uci -q show rpcd | sed -n "s/^rpcd\.\(@login\[[0-9]*\]\)\.username='cmcp'$/\1/p" | head -n1)
+		[ -n "$sec" ] && { uci delete rpcd.$sec; uci commit rpcd; }
+		/etc/init.d/rpcd reload >/dev/null 2>&1
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
+	for b in bkcrypt edition guard guest hot lfull netguard ratelimit sched weekly; do rm -f "$R/usr/sbin/cmcp-$b"; done
+}
 notify() { [ -x "$R/usr/sbin/cmcp-notify" ] && [ "$CMCP_NOSVC" != 1 ] && "$R/usr/sbin/cmcp-notify" "$@" >/dev/null 2>&1; }
 # 自动更新没成功：记下这个版本失败了几次（「版本 次数」），第一次失败推送告诉用户
 autofail() {
@@ -206,6 +229,10 @@ run)
 	state installing "正在安装 v$TO（面板会断开一会儿，不会断网）"
 	( cd "${R:-/}" && tar czf "$BK" www-claude-mcp usr/share/ucode/cmcp usr/sbin/cmcp-* etc/init.d/claude-mcp etc/init.d/cmcp-watchdog \
 		etc/hotplug.d/ntp/90-cmcp-synced etc/claude-mcp/luci-gate etc/claude-mcp/oc_cbi.lua etc/claude-mcp/oc_line.lua etc/claude-mcp/version 2>>"$LOG" ) || true
+	# 退回 6.0 以前的正式版（尝鲜用户点「退回正式版」）：老版本管不了的先停掉——限速、设备暂停和上网计划的 nft 表、自动拉黑、
+	# 原版后台里的「路由器面板」菜单、6.0 才有的定时任务和程序。不然退回去以后设备会一直被限速或断网，面板里又找不到地方关。
+	# 访客 Wi-Fi 是普通的网络设置，留着。定时任务先备份一份，装不上退回 6.0 时放回去
+	if [ "$CH" = stable ] && vlt "$TO" 6.0.0; then old_clean; fi
 	# 4. 安装：版本类型跟现在一样，不问任何问题
 	case "$CODE" in *noai*) AIF=--no-ai ;; *) AIF=--ai ;; esac
 	case "$CODE" in *-lite) EDF=--lite ;; *-full) EDF=--full ;; *) EDF="" ;; esac
@@ -232,6 +259,7 @@ run)
 	# 6. 不行：退回旧版本
 	state rollback "新版没能正常启动，正在退回 v$FROM"
 	if [ -s "$BK" ]; then ( cd "${R:-/}" && tar xzf "$BK" ) >>"$LOG" 2>&1; fi
+	[ -s "$W/cron.bak" ] && cp -f "$W/cron.bak" "$R/etc/crontabs/root" && svc cron restart
 	svc claude-mcp restart; svc cmcp-watchdog restart
 	state rolledback "更新没成功，已经退回 v$FROM，一切照旧。原因：$(tail -n 3 "$LOG" | tr '\n' ' ' | cut -c1-200)" "$TO"
 	exit 1 ;;

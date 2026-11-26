@@ -76,7 +76,7 @@ onMounted(load)
             <div class="ann-files-top"><span>附件（可以不加）：图片、视频、文件，最多 5 个，每个最大 200MB</span><Button size="sm" icon="clip" @click="att?.pick()">加文件</Button></div>
             <FileAttach ref="att" ctx="ann" />
           </div>
-          <Field label="级别"><Segmented v-model="form.level" label="级别" :options="[{ label: '普通', value: 'normal' }, { label: '重要（推送到手机）', value: 'important' }, { label: '横幅（面板顶上一条）', value: 'banner' }]" /></Field>
+          <Field label="级别"><Segmented v-model="form.level" label="级别" :options="[{ label: '普通', value: 'normal' }, { label: '重要（推送）', value: 'important' }, { label: '横幅', value: 'banner' }]" /></Field>
           <Field label="显示几天（0 = 一直显示）"><TextInput v-model="form.days" type="number" placeholder="0" /></Field>
           <Field label="什么时候发"><Segmented v-model="form.when" label="什么时候发" :options="[{ label: '马上', value: 'now' }, { label: '定时', value: 'later' }]" /></Field>
           <Field v-if="form.when === 'later'" label="发布时间（你这台设备的时间）" hint="到时间才出现在大家的面板里；「重要」的到时间才推送"><input v-model="form.at" class="ann-dt input-shell" type="datetime-local" :min="minAt"></Field>

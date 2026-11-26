@@ -665,3 +665,5 @@ section.page{display:none}section.page.on{display:block}
 :root.lowfx.glass .modal{background:rgba(0,0,0,.32)}
 :root.lowfx .top,:root.lowfx .dock,:root.lowfx .savebar,:root.lowfx .side{background:rgba(249,249,251,.98)!important}
 :root.lowfx.dark .top,:root.lowfx.dark .dock,:root.lowfx.dark .savebar,:root.lowfx.dark .side{background:rgba(24,24,28,.98)!important}
+/* 5.3.0 尝鲜（跟 6.0 一样的一行：标题、状态、右边按钮） */
+.cpk{align-items:center;gap:14px;border-bottom:0}.cpk>div{flex:1;min-width:0}.cpk b{display:block;font-size:15px}.cpk .muted{display:block;font-size:12.5px;line-height:1.55;margin-top:3px}.cpk .btn{flex:none}

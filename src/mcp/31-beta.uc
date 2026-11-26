@@ -10,9 +10,18 @@ function beta_state() {
 	let st = b?.st ?? (b?.ok ? 'ok' : null);
 	if ((st == 'no' || st == 'rev') && (+a.at || 0) * 1000 > (+b?.dec || 0)) st = 'sending';
 	if (st == 'err' && (+a.at || 0) > (compat_res().at ?? 0)) st = 'sending';
-	return { want: true, st: st ?? 'sending', ok: st == 'ok', ver: b?.ver ?? '', tag: b?.tag ?? '', why: st == 'err' ? (b?.why ?? '') : '', at: +a.at || 0, note: a.note ?? '', hosted: !!stat(ETC + '/hub.conf') };
+	return { want: true, st: st ?? 'sending', ok: st == 'ok', ver: b?.ver ?? '', tag: b?.tag ?? '', why: st == 'err' ? (b?.why ?? '') : '', at: +a.at || 0, note: a.note ?? '', mail: b?.mail ?? '', hosted: !!stat(ETC + '/hub.conf') };
 }
-function beta_send() { sh(sprintf('CMCP_COMPAT_D=%s %s/cmcp-compat send now >/dev/null 2>&1', shq(ETC), getenv('CMCP_SBIN') || '/usr/sbin')); }
+const BETA_BIN = () => sprintf('CMCP_COMPAT_D=%s %s/cmcp-compat', shq(ETC), getenv('CMCP_SBIN') || '/usr/sbin');
+function beta_send() { sh(BETA_BIN() + ' send now >/dev/null 2>&1'); }
+// 申请框打开时：问官网申请用哪个邮箱（官网账号的，打码）；自建版没关联账号时带回关联码，面板拿它去官网登录
+P.beta_who = function() {
+	if (ROLE == 'sub') die('只有主账号能申请');
+	let r = null; try { r = json(trim(sh(BETA_BIN() + ' who 2>/dev/null').out ?? '')); } catch (e) {}
+	if (type(r) != 'object') die('连不上官网，稍后再试');
+	if (r.error) die('' + r.error);
+	return r;
+};
 P.beta_info = function(a) {
 	// 等审核时打开看一眼：马上问一次官网（10 分钟最多一次，官网也限次）
 	if (a?.refresh && stat(CP_BW) && index(['wait', 'sending'], beta_state().st) >= 0) {
@@ -21,13 +30,12 @@ P.beta_info = function(a) {
 	}
 	return { beta: beta_state() };
 };
-// 申请 / 撤回 / 退出：马上跟官网说一声（等它报完，最多 25 秒，好告诉你交上了没有）
+// 申请 / 撤回 / 退出：马上跟官网说一声（邮箱不在这里填：一律用官网账号的）（等它报完，最多 25 秒，好告诉你交上了没有）
 P.beta_set = function(a) {
 	if (ROLE == 'sub') die('只有主账号能改');
 	if (a?.want === true) {
-		let hosted = !!stat(ETC + '/hub.conf'), email = trim('' + (a.email ?? '')), note = substr(trim(replace('' + (a.note ?? ''), /[[:cntrl:]]/g, ' ')), 0, 200);
-		if (!hosted && !match(email, /^[^ \t@<>]{1,64}@[^ \t@<>]{1,190}\.[A-Za-z]{2,24}$/)) die('邮箱格式不对');
-		writefile(CP_BW, sprintf('%J', { at: time(), note, ...(hosted ? {} : { email }) }));
+		let note = substr(trim(replace('' + (a.note ?? ''), /[[:cntrl:]]/g, ' ')), 0, 200);
+		writefile(CP_BW, sprintf('%J', { at: time(), note }));
 	} else sh('rm -f ' + shq(CP_BW));
 	beta_send();
 	return P.beta_info();

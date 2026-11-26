@@ -167,6 +167,20 @@ await S().delete('m:rver');
 T += 8 * DAY; n0 = PUSH.length; await mod.default.scheduled({}, env);
 ok('查不到最新版本：不提醒', PUSH.length === n0);
 
+/* ---------- 用户 11/27：后台单独开关某台的升级提醒 ---------- */
+{
+	let r = await adm('POST', '/devices/aaaaaaaa/ovoff', {});
+	ok('后台关掉一台的升级提醒', r.status === 200 && (await S().get('ovoff:aaaaaaaa')).by === 'admin');
+	let l = await (await adm('GET', '/devices')).json();
+	ok('路由器列表里标出提醒关了', l.list.find((d) => d.sub === 'aaaaaaaa').ovOff === true && l.list.find((d) => d.sub === 'bbbbbbbb').ovOff === false);
+	r = await adm('POST', '/devices/aaaaaaaa/ovon', {});
+	ok('后台再打开', r.status === 200 && !(await S().get('ovoff:aaaaaaaa')));
+	r = await adm('POST', '/devices/zzzzzzzz/ovoff', {});
+	ok('没有这台：不记', r.status === 404 && !(await S().get('ovoff:zzzzzzzz')));
+	r = await mod.default.fetch(new Request('https://panel.example/api/admin/devices/aaaaaaaa/ovoff', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } }), env);
+	ok('没有管理员密钥：不让改', r.status === 401 && !(await S().get('ovoff:aaaaaaaa')));
+}
+
 let fail = 0;
 for (const [n, c, note] of results) { console.log((c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '  → ' + note)); if (!c) fail++; }
 console.log(`\n${results.length - fail}/${results.length} 通过`);

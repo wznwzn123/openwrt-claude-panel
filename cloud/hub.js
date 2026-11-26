@@ -1746,6 +1746,12 @@ export async function hubFetch(req, env) {
 			if (op === 'restore') return done(await H.restore(sub), '从回收站恢复');
 			if (op === 'purge') return done(await H.purge(sub, b.confirm), '彻底删除');
 			if (op === 'protect' || op === 'unprotect') return done({ ok: await H.setProtect(sub, op === 'protect') }, op === 'protect' ? '标为受保护' : '取消保护');
+			// 用户 11/27：后台自己定哪台发升级提醒（跟主人点邮件里「不再提醒」是同一个开关）
+			if (op === 'ovoff' || op === 'ovon') {
+				if (!(await H.ctx.storage.get('d:' + sub))) return J({ error: '没有这台路由器' }, 404);
+				if (op === 'ovoff') await H.ctx.storage.put('ovoff:' + sub, { at: Date.now(), by: 'admin' }); else await H.ctx.storage.delete('ovoff:' + sub);
+				return done({ ok: true }, op === 'ovoff' ? '关掉升级提醒' : '打开升级提醒');
+			}
 			if (op === 'extend') { const r = await H.extend(sub, b.days); return J(r.st === 200 ? r : { error: r.error }, r.st); }
 			if (op === 'note') return done({ ok: await H.setNote(sub, b.note) }, '备注：' + noteText(b.note, 100));
 		}

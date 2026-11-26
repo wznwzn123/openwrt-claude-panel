@@ -1039,3 +1039,5 @@ html,body{overscroll-behavior-y:contain}
 
 /* 第 32 项：常用服务 */
 #ssBody .sport{width:96px;flex:none;text-align:center}#ssBody .kv.aswon:has(.sport){gap:8px}#ssBody .ssshare{gap:10px;align-items:center}#ssBody>.card{margin-bottom:14px}#ssBody>.card:first-child{margin-top:12px}#ssBody .sshd{display:flex;align-items:center;gap:6px;min-width:0}#ssBody .sshd .pill{flex:none}.ssdisks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* 第 30、34 项：固件升级 */
+#fwBody>.card:first-child,#fwBody>.notice+.card{margin-top:12px}#fwBody .fwfile{display:flex;align-items:baseline;gap:10px;min-width:0}#fwBody .fwfile b{flex:1;min-width:0}#fwBody .fwfile .muted{flex:none;font-size:13px}#fwBody .fwbar{height:6px;border-radius:3px;background:var(--fill);margin-top:10px;overflow:hidden}#fwBody .fwbar i{display:block;height:100%;background:var(--blue,#0a84ff);transition:width .2s}#fwBody label.btn.disabled{opacity:.45;pointer-events:none}

@@ -1057,6 +1057,8 @@ html,body{overscroll-behavior-y:contain}
 
 /* 第 32 项：常用服务 */
 #ssBody .sport{width:96px;flex:none;text-align:center}#ssBody .kv.aswon:has(.sport){gap:8px}#ssBody .ssshare{gap:10px;align-items:center}#ssBody>.card{margin-bottom:14px}#ssBody>.card:first-child{margin-top:12px}#ssBody .sshd{display:flex;align-items:center;gap:6px;min-width:0}#ssBody .sshd .pill{flex:none}.ssdisks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* 第 30、34 项：固件升级 */
+#fwBody>.card:first-child,#fwBody>.notice+.card{margin-top:12px}#fwBody .fwfile{display:flex;align-items:baseline;gap:10px;min-width:0}#fwBody .fwfile b{flex:1;min-width:0}#fwBody .fwfile .muted{flex:none;font-size:13px}#fwBody .fwbar{height:6px;border-radius:3px;background:var(--fill);margin-top:10px;overflow:hidden}#fwBody .fwbar i{display:block;height:100%;background:var(--blue,#0a84ff);transition:width .2s}#fwBody label.btn.disabled{opacity:.45;pointer-events:none}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1532,6 +1534,9 @@ html,body{overscroll-behavior-y:contain}
 	<section class="card" id="wsSt"><div class="empty">读取中…</div></section>
 	<div id="wsBody"></div>
 </section>
+<section class="page" id="p-fwup">
+	<div id="fwBody"><section class="card empty">读取中…</section></div>
+</section>
 <section class="page" id="p-svcsw">
 	<div id="ssBody"><section class="card empty">读取中…</section></div>
 </section>
@@ -1639,7 +1644,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2079,7 +2084,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2137,6 +2142,7 @@ const NAV = [
 	{ g: '系统', items: [
 		{ p: 'more', i: '⌘', t: '系统操作' },
 		{ p: 'apps', i: '⬚', t: '应用管理', kw: '插件 卸载 软件 安装时间 最近装的' },
+		{ p: 'fwup', i: '⇪', t: '固件升级', kw: '刷机 升级固件 sysupgrade 恢复出厂 重置 出厂设置 firstboot 刷固件' },
 		{ p: 'svcsw', i: '⇆', t: '常用服务', kw: 'samba smb 文件共享 共享文件夹 硬盘 u盘 nas ftp ssh dropbear 端口 密钥 指示灯 led 灯 关灯' },
 		{ p: 'store', i: '⬇', t: '软件中心', kw: '安装 插件 更新 软件包 下载 opkg apk 软件源' },
 		['admin/system/system', '系统设置', '⚙'],
@@ -2263,6 +2269,7 @@ const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 // 6.0 第 24、25、22 项：上网设置、局域网设置、无线中继
 NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
+NAV_IC.fwup = ['<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>', '#34c759'];
 NAV_IC.svcsw = ['<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>', '#8e8e93'];
 NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circle cx="12" cy="17" r="1"/><path d="M3 20h18"/>', '#5ac8fa'];
 NAV_IC.lanset = ['<path d="M4 11l8-7 8 7v9H4z"/><path d="M9 20v-4h6v4"/><path d="M12 4v3"/>', '#ff9500'];
@@ -4337,6 +4344,122 @@ function svcOffPop(msg) {
 		}, '核对中');
 	}, { compact: true });
 }
+/* ---------- 6.0 第 30、34 项：固件升级、恢复出厂 ----------
+ * 用户 11/26 定：只能连着家里 Wi-Fi 时做（在外面灰掉，写「要连家里 Wi-Fi」）；做之前必须备份、输路由器后台密码。只有主账号能用。
+ * 固件分块传到路由器内存（每块 512 KB），传完路由器先检查型号，通过了才能刷。 */
+const FW = { d: null, up: null };
+const FW_CH = 512 * 1024;
+async function loadFwup() {
+	FW.d = await P('sysmnt_get');
+	setStatus(true, '在线');
+	fwRender();
+}
+const fwMB = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB');
+function fwRender() {
+	const d = FW.d;
+	if (!d) return;
+	const away = !d.home, dis = away ? ' disabled' : '', f = d.file, u = FW.up;
+	const kv = [['固件', d.fw.desc || '—'], ['型号', d.fw.model || d.fw.board || '—'], ['平台', d.fw.target || '—']].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+	let up;
+	if (d.up !== true) up = `<div class="empty">${esc(d.up)}</div>`;
+	else if (u) up = `<div class="fwfile"><b class="ell">${esc(u.name)}</b><span class="muted">上传中 ${Math.floor((u.got / u.size) * 100)}%</span></div><div class="fwbar"><i style="width:${(u.got / u.size) * 100}%"></i></div><div style="margin-top:10px"><button class="btn sm" id="fwCancel" type="button">取消</button></div>`;
+	else if (f) up = `<div class="fwfile"><b class="ell">${esc(f.name)}</b><span class="muted">${fwMB(f.size)}</span></div>
+		${f.ok ? '<div class="notice" style="margin-top:10px">检查通过</div>' : `<div class="notice w" style="margin-top:10px">${esc(f.msg || '固件检查没通过')}</div>`}
+		${f.ok ? `<label class="fld row"><div class="lb"><b>保留设置</b></div><label class="sw"><input type="checkbox" id="fwKeep" checked${dis} aria-label="保留设置"><i></i></label></label>` : ''}
+		<div class="btngrid" style="margin-top:12px"><button class="btn" id="fwCancel" type="button"${dis}>换一个</button><button class="btn primary" id="fwGo" type="button"${f.ok ? dis : ' disabled'}>升级</button></div>`;
+	else up = `<label class="btn${away ? ' disabled' : ''}" style="display:flex;justify-content:center;position:relative"><input type="file" id="fwFile" accept=".bin,.img,.itb,.gz,.ubi,.trx,.chk" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"${dis}>选择固件文件</label>`;
+	$('fwBody').innerHTML = `${away ? '<div class="notice w" style="margin-top:12px">要连家里 Wi-Fi</div>' : ''}
+		<section class="card"><dl class="mp-kv">${kv}</dl></section>
+		<div class="sectitle"><b>固件升级</b></div><section class="card">${up}</section>
+		<div class="sectitle"><b>恢复出厂</b></div><section class="card">${d.reset ? `<button class="btn danger" id="fwReset" type="button" style="width:100%"${dis}>恢复出厂</button>` : '<div class="empty">固件不支持恢复出厂（没有 firstboot）</div>'}</section>`;
+}
+async function fwUpload(file) {
+	const r0 = await P('fw_up', { op: 'begin', size: file.size, name: file.name });
+	FW.up = { name: file.name, size: file.size, got: r0.got || 0, stop: false };
+	fwRender();
+	let off = FW.up.got, last = null;
+	while (off < file.size && !FW.up.stop) {
+		const buf = new Uint8Array(await file.slice(off, off + FW_CH).arrayBuffer());
+		let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+		last = await P('fw_up', { op: 'chunk', off, data: btoa(s) }, 60000);
+		off = last.ok === false ? last.got : last.got;
+		FW.up.got = off;
+		fwRender();
+	}
+	const stopped = FW.up.stop;
+	FW.up = null;
+	if (stopped) return;
+	FW.d = await P('sysmnt_get');
+	fwRender();
+	if (last && last.good === false) toast(last.msg || '固件检查没通过', true);
+}
+// 30 分钟内没备份过：先备份（云端，或者下载到手机）
+async function fwBackup() {
+	if (FW.d.bk_fresh) return true;
+	const cloud = FW.d.cloud;
+	const v = await modal(`<h3>先备份</h3><div class="notice" style="color:var(--text)">${cloud ? '把现在的设置备份到云端。' : '把现在的设置下载到手机。'}</div>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn primary" data-v="true">${cloud ? '备份到云端' : '下载备份'}</button></div>`);
+	if (v !== true) return false;
+	try {
+		if (cloud) {
+			await P('bk_now');
+			toast('正在备份…');
+			for (let i = 0; i < 60; i++) {
+				await new Promise((z) => setTimeout(z, 3000));
+				FW.d = await P('sysmnt_get');
+				if (FW.d.bk_fresh) break;
+				if (FW.d.job && /fail|error/.test(FW.d.job.state || '')) throw new Error(FW.d.job.msg || '备份失败');
+			}
+			if (!FW.d.bk_fresh) throw new Error('备份没完成，稍后再试');
+			toast('已备份到云端');
+		} else {
+			const r = await P('sys_lbk', {}, 60000);
+			download(r.url, r.name);
+			FW.d.bk_fresh = true;
+			toast('开始下载备份');
+		}
+		return true;
+	} catch (e) { toast(e.message, true); return false; }
+}
+// 最后一步：说后果、输密码
+function fwPw(title, body, ok) {
+	return modal(`<h3>${esc(title)}</h3><div class="notice" style="color:var(--text);line-height:1.6">${esc(body)}</div>
+		<input class="input" type="password" id="fwPw" placeholder="路由器后台密码" autocomplete="current-password" style="margin-top:12px">
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn danger" data-ok>${esc(ok)}</button></div>`,
+	(m, close) => {
+		const b = m.querySelector('[data-ok]'), i = m.querySelector('#fwPw');
+		const go = () => { if (!i.value) return i.focus(); close(i.value); };
+		b.onclick = go; i.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+		setTimeout(() => i.focus(), 50);
+	});
+}
+async function fwDo(kind) {
+	if (!(await fwBackup())) return;
+	const keep = kind === 'flash' && $('fwKeep') ? $('fwKeep').checked : true;
+	const [t, b, ok] = kind === 'reset' ? ['恢复出厂', '所有设置清空，面板会被删掉，要重新安装。', '恢复出厂'] : ['升级固件', keep ? '断网 3–5 分钟，设置和面板保留。' : '断网 3–5 分钟，设置清空，面板要重新安装。', '升级'];
+	const pw = await fwPw(t, b, ok);
+	if (typeof pw !== 'string' || !pw) return;
+	try {
+		if (kind === 'reset') await P('factory_reset', { confirm: 'RESET', pw });
+		else await P('fw_flash', { pw, keep });
+		setStatus(false, kind === 'reset' ? '正在恢复出厂' : '正在升级');
+		$('fwBody').innerHTML = `<section class="card empty" style="margin-top:12px">${kind === 'reset' ? '路由器正在恢复出厂，重启后是全新的系统。' : '路由器正在升级，3–5 分钟后重新打开面板。'}</section>`;
+	} catch (e) { toast(e.message, true); }
+}
+$('fwBody').addEventListener('change', (e) => {
+	if (e.target.id !== 'fwFile' || !e.target.files[0]) return;
+	const f = e.target.files[0];
+	fwUpload(f).catch((er) => { FW.up = null; toast(er.message, true); P('sysmnt_get').then((d) => { FW.d = d; fwRender(); }).catch(() => fwRender()); });
+});
+$('fwBody').addEventListener('click', async (e) => {
+	if (e.target.id === 'fwCancel') {
+		if (FW.up) FW.up.stop = true;
+		try { await P('fw_up', { op: 'cancel' }); FW.d = await P('sysmnt_get'); } catch (er) { toast(er.message, true); }
+		FW.up = null; return fwRender();
+	}
+	if (e.target.id === 'fwGo') return fwDo('flash');
+	if (e.target.id === 'fwReset') return fwDo('reset');
+});
 /* ---------- 6.0 第 25 项：局域网设置 ----------
  * 路由器地址、子网掩码（只有主账号能改）；DHCP 开关、地址范围、租期。改了底部出现「保存」，保存走 90 秒确认。
  * 改了路由器地址：在家里局域网用旧地址打开面板的，要去新地址点「保留」（新地址上不用登录，凭编号确认，见 lsKeepHash）；
@@ -9101,7 +9224,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

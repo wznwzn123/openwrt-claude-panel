@@ -11,7 +11,7 @@ if (ARGV[0] != 'local' && readfile(L.D + '/off.daily') != null) exit(0);
 const t = L.now(), since = t - 86400;
 let items = [];
 const add = (lvl, title, detail) => push(items, { lvl, title, detail: detail ?? '' });
-const mins = (s) => s < 60 ? s + ' 秒' : s < 3600 ? int(s / 60 + 0.5) + ' 分钟' : sprintf('%.1f 小时', s / 3600);
+const mins = (s) => s < 60 ? s + ' 秒' : s < 3600 ? int(s / 60 + 0.5) + ' 分钟' : sprintf('%.1f 小时', s / 3600.0);
 
 // 1) 断线
 let evs = [];

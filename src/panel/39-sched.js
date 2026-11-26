@@ -10,7 +10,7 @@ const schDays = (d) => (d.length === 7 ? '每天' : d.join() === '1,2,3,4,5' ? '
 function schRender() {
 	const d = SCH.d, box = $('scBox');
 	if (!box) return;
-	if (!d) { box.innerHTML = ''; return; }
+	if (!d || !d.reboot || !d.wifi) { box.innerHTML = ''; return; }
 	const r = d.reboot, w = d.wifi, ro = !d.owner;
 	const row = (k, t, on, sub) => `<div class="kv aswon schrow" data-sch="${k}"><span><b>${t}</b><span class="muted">${esc(sub)}</span></span>${ro ? `<span class="pill">${on ? '开着' : '关着'}</span>` : `<button class="btn sm" data-sch-set="${k}" type="button">设置</button><span class="sw"><input type="checkbox" data-sch-on="${k}"${on ? ' checked' : ''} aria-label="${t}"><i></i></span>`}</div>`;
 	box.innerHTML = `<div class="sectitle"><b>定时</b>${ro ? '<span class="muted" style="font-size:13px">只有主账号能设</span>' : ''}</div><section class="card aucard">

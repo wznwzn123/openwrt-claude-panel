@@ -53,14 +53,14 @@ const loadAgain = async (page) => { await page.reload(); await page.waitForTimeo
 const goWdReal = async (page) => { await page.click('#menuBtn'); await page.waitForTimeout(400); await page.click('#sidenav [data-p="wd"]'); await page.waitForTimeout(900); };
 const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPill')?.textContent, rows: [...document.querySelectorAll('#auCard [data-au]')].map((l) => l.dataset.au + ':' + l.querySelector('input').checked), txt: document.querySelector('#auCard')?.textContent || '' }));
 (async () => {
-	const ALL = ['tunrestart', 'panelrestart', 'cacheclean', 'memguard', 'autosw', 'tunbypass', 'route', 'daily', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'ipchange', 'health', 'diskfull'];
+	const ALL = ['tunrestart', 'panelrestart', 'cacheclean', 'memguard', 'autosw', 'tunbypass', 'route', 'daily', 'weekly', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'ipchange', 'health', 'diskfull'];
 	const flip = async (page, k) => { await page.locator(`#auCard [data-au="${k}"] .sw`).click(); await page.waitForTimeout(600); };
 	const browser = await chromium.launch();
 	let { page, ctx } = await open(browser);
 	await page.goto('http://panel.test/panel/'); await page.waitForTimeout(1200);
 	await goWd(page);
 	let s = await st(page);
-	ok('自动任务页：所有自动任务都有开关（15 项），默认只有「公网 IP 变了提醒」关着', s.rows.map((r) => r.split(':')[0]).join() === ALL.join() && s.rows.every((r) => r.endsWith(r.startsWith('ipchange') ? ':false' : ':true')) && s.pill === '开了 14 / 15 项', JSON.stringify(s));
+	ok('自动任务页：所有自动任务都有开关（16 项），默认只有「公网 IP 变了提醒」关着', s.rows.map((r) => r.split(':')[0]).join() === ALL.join() && s.rows.every((r) => r.endsWith(r.startsWith('ipchange') ? ':false' : ':true')) && s.pill === '开了 15 / 16 项', JSON.stringify(s));
 	ok('分成五组，每组一张卡片：出问题时自动修、网络、提醒和备份、安全、状态提醒', await page.evaluate(() => [...document.querySelectorAll('#auCard .sectitle b')].map((x) => x.textContent).join()) === '出问题时自动修,网络,提醒和备份,安全,状态提醒' && await page.evaluate(() => document.querySelectorAll('#auCard section.card').length) === 5);
 	ok('侧边栏「特色功能」（以前叫自动任务）用的是画好的图标（跟其他项一样）', await page.evaluate(() => !!document.querySelector('#sidenav [data-p="auto"] .nic svg')));
 	ok('每一项都写清楚关掉以后会怎样', /关掉后只记录/.test(s.txt) && /关掉后保持现在的走法/.test(s.txt) && /「现在体检」照样能用/.test(s.txt) && /「立即备份」照样能用/.test(s.txt) && /在「设备」页能看到/.test(s.txt));
@@ -76,11 +76,11 @@ const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPil
 	ok('[第 70 项] 点入口去那一页', /流量统计/.test(await txt(page, '#pageTitle')));
 	await page.goBack().catch(() => {}); await page.waitForTimeout(800);
 	await flip(page, 'memguard'); s = await st(page);
-	ok('关掉「内存不够时自动重启 OpenClash」：路由器那边关了，显示「开了 13 / 15 项」', AUTO.memguard === false && s.pill === '开了 13 / 15 项', JSON.stringify(s));
+	ok('关掉「内存不够时自动重启 OpenClash」：路由器那边关了，显示「开了 14 / 16 项」', AUTO.memguard === false && s.pill === '开了 14 / 16 项', JSON.stringify(s));
 	ok('关掉后有提示', await page.evaluate(() => /已关闭：内存不够时自动重启 OpenClash/.test(document.body.textContent)));
-	for (const k of ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'health', 'diskfull']) { await flip(page, k); }
+	for (const k of ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'weekly', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'health', 'diskfull']) { await flip(page, k); }
 	await flip(page, 'autosw'); await flip(page, 'tunbypass'); s = await st(page);
-	ok('每一项都能关：隧道重启、面板重启、清缓存、线路自动选择、每日体检、新设备提醒、云端备份、节点自动换、隧道直连、登录提醒、自动拉黑、温度负载、存储', Object.values(AUTO.on).every((v) => v === false) && AUTO.autosw === false && AUTO.tb.on === false && s.pill === '全部关闭', JSON.stringify([AUTO.on, s.pill]));
+	ok('每一项都能关：隧道重启、面板重启、清缓存、线路自动选择、每日体检、每周报告、新设备提醒、云端备份、节点自动换、隧道直连、登录提醒、自动拉黑、温度负载、存储', Object.values(AUTO.on).every((v) => v === false) && AUTO.autosw === false && AUTO.tb.on === false && s.pill === '全部关闭', JSON.stringify([AUTO.on, s.pill]));
 	for (const k of ALL) if (k !== 'ipchange') await flip(page, k);
 	await flip(page, 'ipchange');
 	s = await st(page);
@@ -152,7 +152,7 @@ const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPil
 	await page.goto('http://panel.test/panel/'); await page.waitForTimeout(1200); await goWd(page);
 	s = await st(page);
 	await page.locator('#auCard').scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(OUT, 'auto_dark.png') });
-	ok('没装代理插件、没开云端：只显示用得上的（隧道重启、面板重启、清缓存、每日体检、新设备提醒、安全和状态提醒）', s.rows.map((r) => r.split(':')[0]).join() === 'tunrestart,panelrestart,cacheclean,daily,newdev,loginalert,autoban,ipchange,health,diskfull' && /没装代理插件/.test(s.txt), JSON.stringify(s));
+	ok('没装代理插件、没开云端：只显示用得上的（隧道重启、面板重启、清缓存、每日体检、每周报告、新设备提醒、安全和状态提醒）', s.rows.map((r) => r.split(':')[0]).join() === 'tunrestart,panelrestart,cacheclean,daily,weekly,newdev,loginalert,autoban,ipchange,health,diskfull' && /没装代理插件/.test(s.txt), JSON.stringify(s));
 	await ctx.close();
 	await browser.close();
 	for (const [n, c, note] of results) console.log((c ? '✓ ' : '✗ ') + n + (c ? '' : '（' + note + '）'));

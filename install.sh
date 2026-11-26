@@ -776,8 +776,9 @@ fi
 # ---------- 定时任务 ----------
 CR=/etc/crontabs/root
 touch $CR
-sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann\|\/usr\/sbin\/cmcp-compat\|\/usr\/sbin\/cmcp-update/d' $CR
+sed -i '/\/usr\/sbin\/cmcp-backup\|\/usr\/sbin\/cmcp-daily\|\/usr\/sbin\/cmcp-weekly\|\/usr\/sbin\/cmcp-route\|\/usr\/sbin\/cmcp-ann\|\/usr\/sbin\/cmcp-compat\|\/usr\/sbin\/cmcp-update/d' $CR
 echo '0 9 * * * /usr/sbin/cmcp-daily >/dev/null 2>&1' >> $CR
+echo '10 9 * * 1 /usr/sbin/cmcp-weekly >/dev/null 2>&1' >> $CR
 # 面板走直连还是走代理，自动选能打开的那条
 echo '*/3 * * * * /usr/sbin/cmcp-route >/dev/null 2>&1' >> $CR
 # 公告：每 30 分钟取一次（脚本里再随机等 0–10 分钟，大家错开），重要的推送到手机
@@ -794,7 +795,7 @@ echo "$(( $(date +%s) / 7 % 60 )) $(( $(date +%s) / 13 % 3 + 3 )) * * * /usr/sbi
 # ---------- 升级系统时保留 ----------
 [ "$UC_PRIV" = 1 ] && for p in $UCRT/ $UCW; do grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf; done
 for p in /etc/claude-mcp/ /www-claude-mcp/ /usr/share/ucode/cmcp/ /etc/init.d/claude-mcp /etc/init.d/cmcp-watchdog /etc/hotplug.d/ntp/90-cmcp-synced \
-	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /www/luci-static/resources/view/cmcp/ /usr/lib/lua/luci/controller/cmcp.lua /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-ratelimit /usr/sbin/cmcp-sched /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-edition /usr/sbin/cmcp-uninstall; do
+	/usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/sbin/cmcp-weekly /usr/libexec/rpcd/cmcp /usr/share/rpcd/acl.d/luci-app-cmcp.json /usr/share/luci/menu.d/luci-app-cmcp.json /www/luci-static/resources/view/cmcp/ /usr/lib/lua/luci/controller/cmcp.lua /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-ratelimit /usr/sbin/cmcp-sched /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-edition /usr/sbin/cmcp-uninstall; do
 	grep -qxF "$p" /etc/sysupgrade.conf 2>/dev/null || echo "$p" >> /etc/sysupgrade.conf
 done
 [ "$ED" = lite ] && [ -f $D/cloud.conf ] && mv -f $D/cloud.conf $D/cloud.conf.off  # 换回精简版：云端设置先停用，重装完整版时会自动恢复

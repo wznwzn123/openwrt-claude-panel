@@ -3690,7 +3690,7 @@ P.px_delay = function(a) {
 };
 
 /* ---------- 自动处理的开关：内存不够时自动重启代理插件、隧道直连 Cloudflare ---------- */
-const AUTO_KEYS = ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup', 'loginalert', 'health', 'diskfull', 'autoban'];
+const AUTO_KEYS = ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'weekly', 'newdev', 'cloudbackup', 'loginalert', 'health', 'diskfull', 'autoban'];
 // 默认关、要自己打开的（打开 = on.名字）：公网 IP 变化（宽带每天重拨的会天天推）
 const AUTO_OPTIN = ['ipchange'];
 P.auto = function(a) {

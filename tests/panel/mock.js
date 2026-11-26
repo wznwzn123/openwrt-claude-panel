@@ -158,7 +158,7 @@ const dnApply = (list) => list.filter((d) => !DH[d.mac || 'ip:' + d.ip] || d.onl
 const ASW = { sub: { at: 1793249000, name: 'zou', up: 1224191028, down: 30586976742, total: 322122547200, expire: 1795706585 }, enabled: true, group: 'Zou', hist: [{ t: 1793240000, from: '🇭🇰香港04 专线 3x', to: '🇭🇰香港02 专线 3x', d: 38, same: true }, { t: 1793200000, from: '🇭🇰香港02 专线 3x', to: '🇹🇼台湾01', d: 120, same: false }],
 	dryRes: { cur: '🇭🇰香港02 专线 3x', node: true, curDelay: 88, region: 'HK', kind: 'line', mult: 3, pick: { n: '🇭🇰香港05 专线 3x', d: 41, tier: 0, why: '同地区、同类型（专线、3 倍）' }, same: true, tested: 30, ok: 27 } };
 const PXM = { px: null, cur: 'n1', nodes: [{ id: 'n1', name: '香港 01', kind: 'Xray', addr: 'hk.example.com', port: '443', group: '' }, { id: 'n2', name: '日本 02', kind: 'sing-box', addr: 'jp.example.com', port: '8443', group: '' }, { id: 'n3', name: '美国 03', kind: 'Xray', addr: 'us.example.com', port: '443', group: '' }], calls: [], selfbuilt: false };
-const AUTO = { oc: true, memguard: true, tb: { on: true, auto: false, at: 0, status: '已开启' }, failSet: false, on: { tunrestart: true, panelrestart: true, cacheclean: true, route: true, daily: true, newdev: true, cloudbackup: true, loginalert: true, autoban: true, ipchange: false, health: true, diskfull: true }, autosw: true, cloud: true, ban: { tool: 'nft', ips: {} }, unbans: [] };
+const AUTO = { oc: true, memguard: true, tb: { on: true, auto: false, at: 0, status: '已开启' }, failSet: false, on: { tunrestart: true, panelrestart: true, cacheclean: true, route: true, daily: true, weekly: true, newdev: true, cloudbackup: true, loginalert: true, autoban: true, ipchange: false, health: true, diskfull: true }, autosw: true, cloud: true, ban: { tool: 'nft', ips: {} }, unbans: [] };
 function respond(method, p) {
 	const m = method.replace(/^panel\//, '');
 	switch (method) {
@@ -226,7 +226,7 @@ function respond(method, p) {
 	case 'feedback': PXM.calls.push(['fb', p.text, p.contact, p.diag, (p.images || []).length, (p.images || []).every((x) => /^data:image\/jpeg;base64,/.test(x))]); return PXM.selfbuilt ? { ok: true, sent: 'github', url: 'https://github.com/x/y/issues/new?title=a' } : { ok: true, sent: 'hub', images: (p.images || []).length };
 	case 'auto': {
 		if (p && p.set) { if (p.memguard != null) AUTO.memguard = !!p.memguard; if (p.tunbypass != null) { if (AUTO.failSet) throw new Error('设置失败：测试'); AUTO.tb = { on: !!p.tunbypass, want: !!p.tunbypass, auto: false, at: 0, status: p.tunbypass ? '已开启' : '已关闭：面板关闭' }; }
-			for (const k of ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'ipchange', 'health', 'diskfull']) if (p[k] != null) AUTO.on[k] = !!p[k];
+			for (const k of ['tunrestart', 'panelrestart', 'cacheclean', 'route', 'daily', 'weekly', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'ipchange', 'health', 'diskfull']) if (p[k] != null) AUTO.on[k] = !!p[k];
 			if (p.autosw != null) { AUTO.autosw = !!p.autosw; ASW.enabled = !!p.autosw; } } // 路由器上两边读写的是同一个 autosw.json
 		return { oc: AUTO.oc, px: AUTO.px || (AUTO.oc ? 'OpenClash' : ''), memguard: AUTO.memguard, tb: AUTO.tb, on: { ...AUTO.on }, autosw: AUTO.autosw === null ? null : AUTO.oc ? ASW.enabled !== false && AUTO.autosw !== false : null, autosw_why: AUTO.autosw_why || null, route_why: AUTO.route_why || null, cloud: AUTO.cloud, route: AUTO.route === false ? false : AUTO.oc, ban: JSON.parse(JSON.stringify(AUTO.ban)) };
 	}

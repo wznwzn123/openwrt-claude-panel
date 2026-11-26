@@ -1,0 +1,69 @@
+#!/usr/bin/ucode
+// 6.0 第 28 项：每周报告（定时任务每周一 9:00 运行）
+// 汇总上周 7 天：断线几次、节点出过什么问题、流量最多的设备、新设备 → 写 /etc/claude-mcp/weekly.json 并推送到手机
+// 报告里不带钥匙和 IP（新设备只写名字）。特色功能里关掉「每周报告」（off.weekly）后不推送。
+// 参数 local：只算、只写 weekly.json，不推送。测试用环境变量：CMCP_WK_D（数据目录）、CMCP_WK_NOW（现在的时间戳）、CMCP_SBIN
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile, stat } from 'fs';
+
+const D = getenv('CMCP_WK_D') || L.D, SBIN = getenv('CMCP_SBIN') || '/usr/sbin';
+if (ARGV[0] != 'local' && stat(D + '/off.weekly')) exit(0);
+const t = +(getenv('CMCP_WK_NOW') || L.now()), since = t - 7 * 86400;
+const mins = (s) => s < 3600 ? (int(s / 60 + 0.5) || 1) + ' 分钟' : sprintf("%.1f 小时", s / 3600.0);
+const gb = (b) => b >= 1073741824 ? sprintf("%.1f GB", b / 1073741824.0) : sprintf('%d MB', int(b / 1048576 + 0.5));
+const ymd = (x) => trim(L.sh(sprintf('date -d @%d +%%Y-%%m-%%d 2>/dev/null || date -r %d +%%Y-%%m-%%d', x, x)));
+const md = (x) => { let s = ymd(x); return +substr(s, 5, 2) + '/' + +substr(s, 8, 2); };
+let lines = [], lvl = 'info';
+
+// 1) 断线
+let evs = [];
+for (let l in split(readfile(D + '/events.log') ?? '', '\n')) { try { let e = json(l); if (e.t >= since && e.t < t) push(evs, e); } catch (e) {} }
+const NET = ['wan', 'net', 'tunnel', 'boot', 'dns', 'clash', 'panel'];
+const KN = { wan: '宽带断开', net: '外网不通', tunnel: '隧道断开', boot: '意外重启', dns: 'DNS 故障', clash: '代理插件停止', panel: '面板服务停止' };
+let outs = filter(evs, (e) => e.lvl == 'err' && e.kind in NET), longest = 0, kinds = {};
+for (let e in evs) if (e.lvl == 'ok' && e.kind in NET && e.from && e.to && e.to - e.from > longest) longest = e.to - e.from;
+for (let e in outs) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
+let net = { n: length(outs), longest, kinds };
+if (length(outs)) { lvl = 'warn'; push(lines, '断线 ' + length(outs) + ' 次' + (longest ? '，最长 ' + mins(longest) : '') + '：' + join('、', map(keys(kinds), (k) => (KN[k] ?? k) + ' ' + kinds[k] + ' 次'))); }
+else push(lines, '没断过线');
+
+// 2) 节点：自动切换几次、所有节点都不通几次（没装代理插件、也没有节点记录的不写）
+let sw = 0, dead = 0;
+for (let e in evs) if (e.kind == 'node') { if (e.lvl == 'err') dead++; else if (e.lvl == 'warn') sw++; }
+let pxon = getenv('CMCP_WK_PX') ?? (stat('/etc/init.d/openclash') || stat('/etc/init.d/nikki') ? '1' : '0');
+let node = { sw, dead };
+if (dead) { lvl = 'warn'; push(lines, '所有节点都连不上 ' + dead + ' 次' + (sw ? '，自动换节点 ' + sw + ' 次' : '')); }
+else if (sw) push(lines, '节点自动换了 ' + sw + ' 次');
+else if (pxon == '1') push(lines, '节点没出过问题');
+
+// 3) 流量最多的设备（经过代理插件统计的，按 7 天合计）
+let tot = {}, names = {}, all = 0;
+for (let i = 1; i <= 7; i++) {
+	let day = ymd(t - i * 86400), m = L.readj(D + '/traffic/' + substr(day, 0, 7) + '.json', null);
+	if (!m) continue;
+	for (let k in (m.names ?? {})) names[k] = m.names[k];
+	for (let k in (m.days?.[day] ?? {})) {
+		let a = m.days[day][k], s = 0;
+		for (let x in a) s += +x || 0;
+		all += s;
+		if (k != 'other') tot[k] = (tot[k] ?? 0) + s;
+	}
+}
+let top = slice(sort(filter(keys(tot), (k) => tot[k] > 0), (a, b) => tot[b] - tot[a]), 0, 3);
+let known = L.readj(D + '/known_devices.json', {});
+const dn = (m) => known[m]?.name || names[m] || '未知设备';
+let traf = { all, top: map(top, (m) => ({ name: dn(m), b: tot[m] })) };
+if (length(top)) push(lines, '流量最多：' + join('、', map(traf.top, (x) => x.name + ' ' + gb(x.b))) + '（全家 ' + gb(all) + '）');
+
+// 4) 新设备（只写名字，不带 IP）
+let nd = [];
+for (let m in known) if (+known[m].first >= since && +known[m].first < t) push(nd, known[m].name || '未知设备');
+if (length(nd)) push(lines, '新设备 ' + length(nd) + ' 台：' + join('、', slice(nd, 0, 6)) + (length(nd) > 6 ? ' 等' : ''));
+else push(lines, '没有新设备');
+
+let title = '每周报告（' + md(since) + '–' + md(t - 86400) + '）';
+let rep = { t, from: since, title, lvl, net, node, traf, newdev: nd, lines };
+L.writej(D + '/weekly.json', rep);
+if (ARGV[0] != 'local') L.sh(sprintf('CMCP_NOLOG=1 %s/cmcp-notify %s weekly %s %s weekly >/dev/null 2>&1', SBIN, L.shq(lvl), L.shq(title), L.shq(join('\n', lines))));
+print(sprintf('%J\n', rep));

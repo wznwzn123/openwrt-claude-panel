@@ -727,6 +727,7 @@ function autoItems(d) {
 	if (!d.route && d.route_why) L.push({ g: '网络', k: 'route', t: '面板线路自动选择', desc: d.route_why, na: true });
 	if (d.route) add('网络', 'route', on.route !== false, '面板线路自动选择', '连着家里 Wi-Fi 时，自动选能打开面板的那条路（直连或走代理）。关掉后保持现在的走法' + (d.route_ready === false ? '。现在还没起作用：要先在「不走代理」页启用' : ''));
 	add('提醒和备份', 'daily', on.daily !== false, '每日体检', '每天 9:00 自动检查一遍，结果推送到手机。关掉后不再自动体检，「现在体检」照样能用');
+	add('提醒和备份', 'weekly', on.weekly !== false, '每周报告', '每周一 9:10 推送上周断线几次、节点、流量最多的设备和新设备');
 	add('提醒和备份', 'newdev', on.newdev !== false, '新设备连上提醒', '有没见过的设备连上 Wi-Fi 时推送通知。关掉后照样记下来，在「设备」页能看到');
 	if (d.cloud) add('提醒和备份', 'cloudbackup', on.cloudbackup !== false, '云端自动备份', '每天 4:07 把路由器设置备份到云端，保留最近 10 份。关掉后「立即备份」照样能用');
 	// 6.0 第 3、4 项：安全和状态提醒、自动拉黑

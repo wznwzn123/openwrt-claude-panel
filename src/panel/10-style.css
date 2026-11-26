@@ -1036,3 +1036,6 @@ html,body{overscroll-behavior-y:contain}
 .ofu{padding:9px 0;border-bottom:1px solid var(--line)}
 .ofu-t{display:flex;justify-content:space-between;gap:10px;font-size:14.5px}
 .ofu i{display:block;height:5px;border-radius:3px;background:var(--text);opacity:.75;margin-top:6px}
+
+/* 第 32 项：常用服务 */
+#ssBody .sport{width:96px;flex:none;text-align:center}#ssBody .kv.aswon:has(.sport){gap:8px}#ssBody .ssshare{gap:10px;align-items:center}#ssBody>.card{margin-bottom:14px}#ssBody>.card:first-child{margin-top:12px}#ssBody .sshd{display:flex;align-items:center;gap:6px;min-width:0}#ssBody .sshd .pill{flex:none}.ssdisks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}

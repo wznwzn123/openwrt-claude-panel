@@ -1054,6 +1054,9 @@ html,body{overscroll-behavior-y:contain}
 .ofu{padding:9px 0;border-bottom:1px solid var(--line)}
 .ofu-t{display:flex;justify-content:space-between;gap:10px;font-size:14.5px}
 .ofu i{display:block;height:5px;border-radius:3px;background:var(--text);opacity:.75;margin-top:6px}
+
+/* 第 32 项：常用服务 */
+#ssBody .sport{width:96px;flex:none;text-align:center}#ssBody .kv.aswon:has(.sport){gap:8px}#ssBody .ssshare{gap:10px;align-items:center}#ssBody>.card{margin-bottom:14px}#ssBody>.card:first-child{margin-top:12px}#ssBody .sshd{display:flex;align-items:center;gap:6px;min-width:0}#ssBody .sshd .pill{flex:none}.ssdisks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1529,6 +1532,9 @@ html,body{overscroll-behavior-y:contain}
 	<section class="card" id="wsSt"><div class="empty">读取中…</div></section>
 	<div id="wsBody"></div>
 </section>
+<section class="page" id="p-svcsw">
+	<div id="ssBody"><section class="card empty">读取中…</section></div>
+</section>
 <section class="page" id="p-oaf">
 	<div id="ofBody"><section class="card empty">读取中…</section></div>
 </section>
@@ -1633,7 +1639,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2073,7 +2079,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2131,6 +2137,7 @@ const NAV = [
 	{ g: '系统', items: [
 		{ p: 'more', i: '⌘', t: '系统操作' },
 		{ p: 'apps', i: '⬚', t: '应用管理', kw: '插件 卸载 软件 安装时间 最近装的' },
+		{ p: 'svcsw', i: '⇆', t: '常用服务', kw: 'samba smb 文件共享 共享文件夹 硬盘 u盘 nas ftp ssh dropbear 端口 密钥 指示灯 led 灯 关灯' },
 		{ p: 'store', i: '⬇', t: '软件中心', kw: '安装 插件 更新 软件包 下载 opkg apk 软件源' },
 		['admin/system/system', '系统设置', '⚙'],
 		{ t: '管理权', i: '⚿', kids: [['admin/system/admin/password', '路由器密码'], ['admin/system/admin/dropbear', 'SSH 访问'], ['admin/system/admin/sshkeys', 'SSH 密钥'], ['admin/system/admin/uhttpd', 'HTTP(S) 访问'], ['admin/system/admin/repokeys', '软件源公钥']] },
@@ -2256,6 +2263,7 @@ const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 // 6.0 第 24、25、22 项：上网设置、局域网设置、无线中继
 NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
+NAV_IC.svcsw = ['<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>', '#8e8e93'];
 NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circle cx="12" cy="17" r="1"/><path d="M3 20h18"/>', '#5ac8fa'];
 NAV_IC.lanset = ['<path d="M4 11l8-7 8 7v9H4z"/><path d="M9 20v-4h6v4"/><path d="M12 4v3"/>', '#ff9500'];
 NAV_IC.wan = ['<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/>', '#34c759'];
@@ -2284,7 +2292,8 @@ function renderNav() {
 		nav.innerHTML = hits.length ? hits.join('') : '<div class="empty">没有找到这个功能</div>';
 	} else {
 		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.filter((g) => !g.items.length || g.items.some(pxShow)).map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
-			!g.items.length && g.empty ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:${PKG_PAGE}">去安装 ›</button></div>` :
+			// 「服务」里只剩面板自己的页面（比如应用过滤）也算没装插件
+			(g.empty && !g.items.some((x) => Array.isArray(x) || x.kids || x.link) ? `<div class="navhint">路由器上还没有安装插件，请去安装新的插件<button data-p="k:${PKG_PAGE}">去安装 ›</button></div>` : '') +
 			g.items.filter(pxShow).map((it) => {
 				if (!it.kids) return navBtn(it, false, g.noic);
 				const id = g.g + '/' + it.t;
@@ -5328,6 +5337,103 @@ $('stList').addEventListener('click', (e) => {
 	const x = SC.list.find((y) => y.name === b.closest('.strow').dataset.n);
 	if (x) stAct(b.dataset.act, x);
 });
+/* ---------- 6.0 第 32 项：常用服务——文件共享、FTP、SSH、指示灯 ----------
+ * 开关直接生效；开 FTP、放开 SSH、关 SSH 和密码登录前确认（只写后果）。外网能连的标出来。只有主账号能用。
+ * 用户 11/26 定：新建共享默认不用密码，只限家里局域网。 */
+const SSW = { d: null };
+async function loadSvcsw() {
+	SSW.d = await P('svcsw_get');
+	setStatus(true, '在线');
+	sswRender();
+}
+const sswSw = (k, on, t) => `<span class="sw"><input type="checkbox" data-ss="${k}"${on ? ' checked' : ''} aria-label="${t}"><i></i></span>`;
+const sswRow = (t, sub, right) => `<div class="kv aswon"><span><b>${t}</b>${sub ? `<span class="muted">${esc(sub)}</span>` : ''}</span>${right || '<i></i>'}</div>`;
+const sswSt = (x) => (!x.on ? '关着' : x.run ? '运行中' : '开着，没在运行');
+const sswNo = (pkg, q) => (pkg === false ? '<span class="muted" style="font-size:13px">软件源里没有</span>' : `<button class="btn sm" data-ssget="${esc(pkg || q)}" type="button">去软件中心装</button>`);
+function sswRender() {
+	const d = SSW.d;
+	if (!d) return;
+	const s = d.smb, f = d.ftp, h = d.ssh, l = d.led, warn = (t) => `<div class="notice w" style="margin:2px 0 10px">${t}</div>`;
+	let smb;
+	if (!s.kind) smb = sswRow('文件共享', '没装', sswNo(s.pkg, 'samba4'));
+	else smb = sswRow('文件共享', `${s.name} · ${sswSt(s)}${s.lan ? '' : ' · 不只局域网'}`, sswSw('smb', s.on, '文件共享'))
+		+ (s.wan ? warn('外网能连：防火墙放行了 445 端口') : '')
+		+ s.shares.map((x) => `<div class="file ssshare"><div style="flex:1;min-width:0"><div class="sshd"><b class="ell">${esc(x.name)}</b>${x.ro ? '<span class="pill">只读</span>' : ''}${x.guest ? '' : '<span class="pill">要密码</span>'}</div><span class="muted ell mono" style="display:block;font-size:12.5px">${esc(x.path)}</span></div><button class="btn sm" data-ssdel="${esc(x.id)}" type="button">删除</button></div>`).join('')
+		+ `<div style="padding:10px 0 8px"><button class="btn sm" id="ssAdd" type="button">添加共享</button></div>`;
+	const ftp = !f.kind ? sswRow('FTP', '没装', sswNo(f.pkg, 'vsftpd')) : sswRow('FTP', `${f.kind} · ${sswSt(f)}`, sswSw('ftp', f.on, 'FTP')) + (f.wan ? warn('外网能连：防火墙放行了 21 端口') : '');
+	let ssh;
+	if (!h.kind) ssh = sswRow('SSH', '没装', '');
+	else if (h.kind === 'openssh') ssh = sswRow('SSH', `OpenSSH · 端口 ${h.port} · ${sswSt(h)}`, sswSw('ssh', h.on, 'SSH')) + (h.wan ? warn(`外网能连：防火墙放行了 ${h.port} 端口`) : '');
+	else ssh = sswRow('SSH', sswSt(h), sswSw('ssh', h.on, 'SSH')) + (h.wan ? warn(`外网能连：防火墙放行了 ${h.port} 端口`) : '')
+		+ (h.on ? `<div class="kv aswon"><span><b>端口</b></span><input class="input sport" id="ssPort" inputmode="numeric" value="${h.port}" aria-label="SSH 端口"><button class="btn sm hidden" id="ssPortSave" type="button">保存</button></div>`
+		+ sswRow('只允许局域网', '', sswSw('lan', h.lan, '只允许局域网'))
+		+ sswRow('密码登录', h.keys ? `密钥 ${h.keys} 个` : '没有密钥', sswSw('pw', h.pw, '密码登录')) : '');
+	const led = l.n ? sswRow('指示灯', `${l.n} 个`, sswSw('led', l.on, '指示灯')) : sswRow('指示灯', '没有能控制的指示灯', '');
+	$('ssBody').innerHTML = [smb, ftp, ssh, led].map((x) => `<section class="card aucard">${x}</section>`).join('');
+}
+async function sswSet(body, okMsg) {
+	SSW.d = await P('svcsw_set', body, 30000);
+	sswRender();
+	if (okMsg) toast(okMsg);
+}
+// 开关：要确认的先问；失败了拨回去
+const SSW_ASK = {
+	ftp: (on) => on && ['开启 FTP', 'FTP 不加密，账号和密码明文传输。', '开启'],
+	ssh: (on) => !on && ['关闭 SSH', '不能再用 SSH 登录路由器，面板不受影响。', '关闭'],
+	lan: (on) => !on && ['允许所有网络连 SSH', '访客 Wi-Fi、VPN 等也能连到 SSH。', '允许'],
+	pw: (on) => !on && ['关闭密码登录', '只能用密钥登录 SSH。', '关闭'],
+	led: (on) => !on && ['关闭指示灯', '所有灯都灭，重启后也是灭的。', '关闭'],
+};
+const SSW_DONE = { smb: ['已开启文件共享', '已关闭文件共享'], ftp: ['已开启 FTP', '已关闭 FTP'], ssh: ['已开启 SSH', '已关闭 SSH'], lan: ['SSH 只允许局域网', 'SSH 允许所有网络'], pw: ['已开启密码登录', '已关闭密码登录'], led: ['已打开指示灯', '已关闭指示灯'] };
+$('ssBody').addEventListener('change', async (e) => {
+	const k = e.target.dataset.ss; if (!k) return;
+	const on = e.target.checked, ask = SSW_ASK[k]?.(on);
+	if (ask && !(await confirmBox(ask[0], ask[1], ask[2], !on))) { e.target.checked = !on; return; }
+	e.target.disabled = true;
+	const body = k === 'smb' ? { smb: { on } } : k === 'ftp' ? { ftp: { on } } : k === 'led' ? { led: { on } } : { ssh: { [k === 'ssh' ? 'on' : k]: on } };
+	try { await sswSet(body, SSW_DONE[k][on ? 0 : 1]); } catch (er) { e.target.checked = !on; e.target.disabled = false; toast(er.message, true); }
+});
+$('ssBody').addEventListener('input', (e) => { if (e.target.id === 'ssPort') $('ssPortSave').classList.toggle('hidden', e.target.value.trim() === String(SSW.d.ssh.port)); });
+$('ssBody').addEventListener('click', async (e) => {
+	const g = e.target.closest('[data-ssget]');
+	if (g) return stFind(g.dataset.ssget);
+	if (e.target.id === 'ssPortSave') {
+		const p = $('ssPort').value.trim();
+		return busy(e.target, async () => { try { await sswSet({ ssh: { port: p } }, 'SSH 端口改成 ' + p); } catch (er) { toast(er.message, true); } });
+	}
+	const del = e.target.closest('[data-ssdel]');
+	if (del) {
+		const x = SSW.d.smb.shares.find((s) => s.id === del.dataset.ssdel);
+		if (!x || !(await confirmBox('删除共享「' + x.name + '」', '文件夹里的文件不会删。', '删除', true))) return;
+		return busy(del, async () => { try { await sswSet({ smb: { del: x.id } }, '已删除共享「' + x.name + '」'); } catch (er) { toast(er.message, true); } });
+	}
+	if (e.target.id === 'ssAdd') sswAdd();
+	// 点整行也能开关（跟特色功能一样）
+	const row = e.target.closest('.kv.aswon');
+	if (row && !e.target.closest('.sw,button,input')) { const i = row.querySelector('input[data-ss]'); if (i && !i.disabled) i.click(); }
+});
+async function sswAdd() {
+	const disks = SSW.d.smb.disks || [];
+	await modal(`<h3>添加共享</h3>
+		<div class="fld"><div class="lb"><b>名字</b></div><div class="ctl"><input class="input" data-a="name" autocomplete="off" placeholder="电影"></div></div>
+		<div class="fld"><div class="lb"><b>文件夹</b></div><div class="ctl"><input class="input mono" data-a="path" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(disks[0] || '')}" placeholder="/mnt/sda1"></div></div>
+		${disks.length > 1 ? `<div class="chips ssdisks" style="flex-wrap:wrap;margin-top:8px">${disks.map((x) => `<button class="chip${x === disks[0] ? ' on' : ''}" type="button" data-dk="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : ''}
+		${disks.length ? '' : '<div class="notice w" style="margin-top:10px">没插硬盘或 U 盘</div>'}
+		<label class="fld row"><div class="lb"><b>只读</b></div><label class="sw"><input type="checkbox" data-a="ro" aria-label="只读"><i></i></label></label>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-v="add">添加</button></div>`,
+	(m, close) => {
+		const pi = m.querySelector('[data-a="path"]');
+		m.querySelectorAll('[data-dk]').forEach((b) => (b.onclick = () => { pi.value = b.dataset.dk; m.querySelectorAll('[data-dk]').forEach((x) => x.classList.toggle('on', x === b)); }));
+		const add = m.querySelector('[data-v="add"]');
+		add.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const name = m.querySelector('[data-a="name"]').value.trim(), path = pi.value.trim();
+			if (!name) return m.querySelector('[data-a="name"]').focus();
+			if (!path) return pi.focus();
+			busy(add, async () => { try { await sswSet({ smb: { add: { name, path, ro: m.querySelector('[data-a="ro"]').checked } } }, '已添加共享「' + name + '」'); close('ok'); } catch (er) { toast(er.message, true); } });
+		});
+	});
+}
 /* =====================================================================
    设备 / 连接 / 系统（沿用）
    ===================================================================== */
@@ -8994,7 +9100,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

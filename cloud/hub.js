@@ -1481,8 +1481,16 @@ export class Hub extends DurableObject {
 			if (files) { const drop = (a.files || []).filter((x) => !files.some((y) => y.id === x.id)).map((x) => x.id); if (drop.length) await this.fileGone(drop); if (files.length) a.files = files; else delete a.files; }
 			if (start) { a.start = start; a.at = start; } else if (a.start && a.start > now) { delete a.start; a.at = now; }
 			void from;
+			// 用户 11/27：同时只能有一条横幅。发新的横幅，别的横幅改成普通公告（还在通知里）；新的是定时发的，旧的显示到新的开始那一刻
+			const replaced = [];
+			if (level === 'banner') for (const x of l) {
+				if (x === a || x.level !== 'banner' || (x.exp && x.exp <= now)) continue;
+				if (a.start && a.start > now && !(x.start && x.start >= a.start)) { x.exp = x.exp ? Math.min(x.exp, a.start) : a.start; }
+				else x.level = 'normal';
+				replaced.push(x.title);
+			}
 			await this.ctx.storage.put('ann', l.slice(0, 50));
-			return { st: 200, ok: true, ann: a };
+			return { st: 200, ok: true, ann: a, ...(replaced.length ? { replaced } : {}) };
 		});
 	}
 	annDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('ann')) || [], a = l.find((x) => x.id === id); if (!a) return false; await this.ctx.storage.put('ann', l.filter((x) => x.id !== id)); if (a.files && a.files.length) await this.fileGone(a.files.map((x) => x.id)); return true; }); }

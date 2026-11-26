@@ -53,6 +53,19 @@ ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.lis
 	ok('[公告定向] 改成都发：去掉发给谁', j.ok && !j.ann.ed && !j.ann.vmin && !j.ann.vmax && await has('?r=x&v=6.0.0&k=h'));
 	await adm('DELETE', '/ann/' + t1);
 }
+{ // 用户 11/27：同时只能有一条横幅
+	const b1 = (await (await adm('POST', '/ann', { title: '横幅一', level: 'banner' })).json()).ann.id;
+	j = await (await adm('POST', '/ann', { title: '横幅二', level: 'banner' })).json();
+	const L = (await (await adm('GET', '/ann')).json()).list, x1 = L.find((x) => x.id === b1);
+	ok('[横幅] 发第二条横幅：第一条改成普通公告（还在通知里）', j.ok && j.replaced && j.replaced[0] === '横幅一' && x1.level === 'normal' && L.filter((x) => x.level === 'banner').length === 1, JSON.stringify(j.replaced));
+	const b2 = j.ann.id;
+	j = await (await adm('POST', '/ann', { title: '横幅三', level: 'banner', start: T + 2 * 3600e3 })).json();
+	const x2 = (await (await adm('GET', '/ann')).json()).list.find((x) => x.id === b2);
+	ok('[横幅] 定时发的新横幅：旧的显示到新的开始那一刻', j.ok && x2.level === 'banner' && x2.exp === T + 2 * 3600e3, JSON.stringify(x2));
+	j = await (await adm('POST', '/ann', { title: '普通', level: 'normal' })).json();
+	ok('[横幅] 发普通公告不影响横幅', j.ok && !j.replaced);
+	for (const id of [b1, b2, j.ann.id, (await (await adm('GET', '/ann')).json()).list.find((x) => x.title === '横幅三').id]) await adm('DELETE', '/ann/' + id);
+}
 j = await (await adm('GET', '/ann')).json();
 ok('[公告] 管理页仍能看到过期的', j.list.length === 2);
 ok('[公告] 删除', (await (await adm('DELETE', '/ann/' + a2)).json()).ok === true);

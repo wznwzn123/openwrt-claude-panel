@@ -47,12 +47,15 @@ async function save() {
   if (!form.title.trim()) { err.value = '标题不能是空的'; return }
   if (form.when === 'later' && (!startMs.value || startMs.value < Date.now() + 60e3)) { err.value = '定时发布要选一个以后的时间'; return }
   if (form.level === 'important' && !ed.value && !(await confirm({ title: '发布重要公告', message: (startMs.value ? `到 ${dt(startMs.value)} 时，` : '') + '「重要」公告会推送到所有人的手机，打开面板时也会弹出来一次。确定发布？', confirmText: startMs.value ? '定时发布' : '发布' }))) return
+  // 用户 11/27：同时只能有一条横幅，发新的会把现在的换掉（旧的改成普通公告）
+  const oldBan = form.level === 'banner' ? list.value.filter(a => a.id !== ed.value && a.level === 'banner' && (!a.exp || a.exp > Date.now())) : []
+  if (oldBan.length && !(await confirm({ title: '换掉现在的横幅', message: startMs.value ? `「${oldBan[0].title}」显示到 ${dt(startMs.value)} 结束` : `「${oldBan[0].title}」会改成普通公告`, confirmText: '换掉' }))) return
   if (att.value?.busy) { err.value = '文件还在上传，传完再发'; return }
   if (att.value?.bad) { err.value = '有文件没传上：去掉它（点 ×）或者重新选'; return }
   busy.value = true
   try {
-    await post('ann' + (ed.value ? '/' + ed.value : ''), { title: form.title, body: form.body, level: form.level, days: +form.days || 0, start: startMs.value || 0, files: att.value ? att.value.ids() : undefined })
-    pushToast(ed.value ? '公告已修改' : startMs.value ? `定好了：${dt(startMs.value)} 发布` : '公告已发布'); edit(null); await load()
+    const r = await post('ann' + (ed.value ? '/' + ed.value : ''), { title: form.title, body: form.body, level: form.level, days: +form.days || 0, start: startMs.value || 0, files: att.value ? att.value.ids() : undefined })
+    pushToast((ed.value ? '公告已修改' : startMs.value ? `定好了：${dt(startMs.value)} 发布` : '公告已发布') + (r && r.replaced ? '，旧横幅已换掉' : '')); edit(null); await load()
   } catch (e: any) { err.value = e.message || '没成功' } finally { busy.value = false }
 }
 async function remove(a: any) {
@@ -92,7 +95,7 @@ onMounted(load)
         <div class="hub-list">
           <div v-for="a in list" :key="a.id" class="hub-row" :style="a.exp && a.exp <= Date.now() ? 'opacity: .6' : ''">
             <div class="hub-row-main">
-              <div class="hub-row-title"><Tag v-if="a.start && a.start > Date.now()" tone="info">定时 · {{ dt(a.start) }} 发布</Tag><Tag v-if="a.level === 'important'" tone="danger">重要</Tag>{{ a.title }}</div>
+              <div class="hub-row-title"><Tag v-if="a.start && a.start > Date.now()" tone="info">定时 · {{ dt(a.start) }} 发布</Tag><Tag v-if="a.level === 'important'" tone="danger">重要</Tag><Tag v-if="a.level === 'banner'" tone="info">横幅</Tag>{{ a.title }}</div>
               <div v-if="a.body" class="hub-row-text">{{ a.body }}</div>
               <FileList v-if="a.files?.length" :files="a.files" class="ann-fl" />
               <div class="hub-row-meta">{{ full(a.at) }} {{ a.start && a.start > Date.now() ? '发布（还没到时间，大家现在看不到）' : '发布' }}<template v-if="a.upd && a.upd !== a.at && !(a.start && a.upd === a.start)"> · {{ ago(a.upd) }}改过</template> · {{ a.exp && a.exp <= Date.now() ? '已过期，大家看不到了' : a.exp ? day(a.exp) + ' 以后不再显示' : '一直显示' }}<template v-if="stats[a.id] && !(a.start && a.start > Date.now())"> · <b>{{ stats[a.id].got }}</b> 台路由器收到，<b>{{ stats[a.id].seen }}</b> 台点开看了</template></div>

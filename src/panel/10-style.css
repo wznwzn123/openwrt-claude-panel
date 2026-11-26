@@ -1044,3 +1044,5 @@ html,body{overscroll-behavior-y:contain}
 /* 第 69 项：分流 */
 #splBody .splrow{width:100%;text-align:left;gap:10px;align-items:center}#splBody .splrow .pill{flex:none;display:block;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#splBody .splrow .pill.on{color:var(--blue,#0a84ff)}#splBody .splpend{display:flex;align-items:center;gap:10px;justify-content:space-between}#splBody .splpend span{flex:1;min-width:0}.splopts .mact{width:100%}.splopts .mact>span:first-child{flex:1;min-width:0}.splck{flex:none;color:var(--blue,#0a84ff);font-weight:700}
 .subflow .mact{cursor:default;gap:10px}.subflow .mact>span:first-child{flex:1;min-width:0}.subflow .pill.w{flex:none;color:var(--orange,#ff9500)}
+/* 第 36 项：远程页面 */
+#xpBody .xprow{gap:8px;align-items:center}#xpBody .xprow .btn{flex:none}#xpBody .xpcur{display:flex;align-items:center;gap:10px}#xpBody .xpcur span{flex:1;min-width:0}

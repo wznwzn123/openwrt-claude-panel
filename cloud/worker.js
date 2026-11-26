@@ -6,6 +6,7 @@
 // - 面板在路由器断线时也能从这里读到实时情况（路由 <你的面板域名>/cloud/*，在隧道之前就被 Cloudflare 接住）
 import { DurableObject } from 'cloudflare:workers';
 import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE, hubObj } from './hub.js';
+import { xGate, X_SUFFIX } from './xpage.js';
 export { Hub };
 export { dayKey, mustUpdate } from './hub.js';
 export { totp, b32enc } from './v5.js'; // 测试用：两步验证的验证码算法
@@ -188,6 +189,7 @@ export class Watch extends DurableObject {
 	}
 	// 6.0 第 94 项：换版本。探测地址（本地版没有隧道，不探测）；官网发给路由器的「换版本」指令（路由器下次心跳时带回去）
 	async setProbe(url) { const c = await this.getCfg(); if (!c) return; c.probe = url || ''; await this.ctx.storage.put('cfg', c); if (!url) await this.ctx.storage.delete('probe'); }
+	async setX(port) { const c = await this.getCfg(); if (!c) return; if (port) c.x = port; else delete c.x; await this.ctx.storage.put('cfg', c); }
 	async setCmd(cmd) { const c = await this.getCfg(); if (!c) return; if (cmd) c.cmd = cmd; else delete c.cmd; await this.ctx.storage.put('cfg', c); }
 	async setOff(off) { const c = await this.getCfg(); if (!c) return; c.off = !!off; await this.ctx.storage.put('cfg', c); }
 	async wipe() { await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll(); }
@@ -496,6 +498,12 @@ export default {
 			if (env.BASE_DOMAIN) {
 				const h = new URL(req.url).hostname;
 				if (h === env.BASE_DOMAIN && new URL(req.url).pathname.startsWith('/api/relay/')) return await relay(req, env);
+				// 6.0 第 36 项：「子域名-x」——路由器上其他端口的页面，先验通行证
+				if (h.endsWith(X_SUFFIX + '.' + env.BASE_DOMAIN)) {
+					const sub = h.slice(0, -(X_SUFFIX.length + env.BASE_DOMAIN.length + 1));
+					if (!SUB_RE.test(sub)) return new Response('not found', { status: 404 });
+					return await xGate(req, sub, await env.W.get(env.W.idFromName('dev:' + sub)).getCfg());
+				}
 				if (h === env.BASE_DOMAIN || h === 'www.' + env.BASE_DOMAIN) {
 					try { return await hubFetch(req, env); }
 					// 官网 / 开通中心出错：记到管理后台的「出错记录」里

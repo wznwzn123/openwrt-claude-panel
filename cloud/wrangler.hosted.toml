@@ -10,7 +10,9 @@ routes = [
   # www 开头的也能打开（自动跳到不带 www 的主域名）
   { pattern = "www.example.com", custom_domain = true },
   # 每台路由器的子域名下的 /cloud/：推送、云端备份、断电断网判断（其他路径直接走隧道到路由器）
-  { pattern = "*.example.com/cloud/*", zone_name = "example.com" }
+  { pattern = "*.example.com/cloud/*", zone_name = "example.com" },
+  # 6.0：「子域名-x」——在外面打开路由器上其他端口的页面（OpenClash 控制面板、AdGuard 等），先在这里验通行证
+  { pattern = "*-x.example.com/*", zone_name = "example.com" }
 ]
 
 # 每小时检查一次：试用 / 续期到期提醒和暂停；90 天没上线的路由器自动回收

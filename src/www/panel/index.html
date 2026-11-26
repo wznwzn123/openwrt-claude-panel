@@ -1062,6 +1062,8 @@ html,body{overscroll-behavior-y:contain}
 /* 第 69 项：分流 */
 #splBody .splrow{width:100%;text-align:left;gap:10px;align-items:center}#splBody .splrow .pill{flex:none;display:block;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#splBody .splrow .pill.on{color:var(--blue,#0a84ff)}#splBody .splpend{display:flex;align-items:center;gap:10px;justify-content:space-between}#splBody .splpend span{flex:1;min-width:0}.splopts .mact{width:100%}.splopts .mact>span:first-child{flex:1;min-width:0}.splck{flex:none;color:var(--blue,#0a84ff);font-weight:700}
 .subflow .mact{cursor:default;gap:10px}.subflow .mact>span:first-child{flex:1;min-width:0}.subflow .pill.w{flex:none;color:var(--orange,#ff9500)}
+/* 第 36 项：远程页面 */
+#xpBody .xprow{gap:8px;align-items:center}#xpBody .xprow .btn{flex:none}#xpBody .xpcur{display:flex;align-items:center;gap:10px}#xpBody .xpcur span{flex:1;min-width:0}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1537,6 +1539,9 @@ html,body{overscroll-behavior-y:contain}
 	<section class="card" id="wsSt"><div class="empty">读取中…</div></section>
 	<div id="wsBody"></div>
 </section>
+<section class="page" id="p-xpage">
+	<div id="xpBody"><section class="card empty">读取中…</section></div>
+</section>
 <section class="page" id="p-split">
 	<div id="splBody"><section class="card empty">读取中…</section></div>
 </section>
@@ -1650,7 +1655,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { xpage: 'owner', split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2091,7 +2096,7 @@ function watchJobs(onDone) {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { xpage: '远程页面', split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2168,6 +2173,7 @@ const NAV = [
 		{ p: 'files', i: '▣', t: '文件管理' },
 		{ p: 'cbk', i: '☁', t: '云端备份' },
 		{ p: 'lfull', i: '⧉', t: '完整原版后台' },
+		{ p: 'xpage', i: '⧉', t: '远程页面', kw: 'openclash 控制面板 dashboard yacd metacubexd adguard 网页终端 ttyd docker 其他端口 在外面打开' },
 		['admin/quickstart', 'LuCI 首页', '⌂'],
 	] },
 	{ g: '消息与帮助', items: [
@@ -2277,6 +2283,7 @@ const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 // 6.0 第 24、25、22 项：上网设置、局域网设置、无线中继
 NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
+NAV_IC.xpage = ['<rect x="3" y="4" width="18" height="15" rx="2"/><path d="M3 9h18M14 13h4M14 16h2"/><circle cx="6" cy="6.5" r=".6"/>', '#ff9500'];
 NAV_IC.split = ['<path d="M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', '#af52de'];
 NAV_IC.fwup = ['<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>', '#34c759'];
 NAV_IC.svcsw = ['<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>', '#8e8e93'];
@@ -9090,6 +9097,75 @@ $('wsBody').addEventListener('click', (e) => {
 	if (r && !r.classList.contains('off')) wsConnect(WS.list[+r.dataset.i]);
 });
 $('wsBody').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('wsrow')) e.target.click(); });
+/* ---------- 6.0 第 36 项：远程页面——在外面打开路由器上其他端口的页面 ----------
+ * 托管版：点「打开」，官网把「子域名-x」切到这个页面（同一时间只开一个），几秒后在新标签页打开；
+ * 自建版：给教程；本地版：在家里直接打开（局域网地址）。只有主账号能用。 */
+const XP = { d: null };
+const XP_DOC = 'https://github.com/wznwzn123/openwrt-claude-panel/blob/main/docs/remote-pages.md';
+async function loadXpage() {
+	XP.d = await P('xp_get');
+	setStatus(true, '在线');
+	xpRender();
+}
+function xpRender() {
+	const d = XP.d;
+	if (!d) return;
+	const cur = d.list.find((x) => x.port === d.cur);
+	const head = d.mode === 'self' ? `<div class="notice" style="margin-top:12px">自建版要在你自己的 Cloudflare 里加一个地址</div><a class="btn" href="${XP_DOC}" target="_blank" rel="noopener" style="display:flex;justify-content:center;margin-top:10px">看教程</a>`
+		: d.mode === 'local' ? '<div class="notice" style="margin-top:12px">本地版：连着家里 Wi-Fi 时直接打开</div>'
+		: cur ? `<div class="notice xpcur" style="margin-top:12px"><span>正在开着：${esc(cur.name)}</span><button class="btn sm" id="xpClose" type="button">关掉</button></div>` : '';
+	const row = (x) => {
+		const sub = [x.https ? 'https' : '', '端口 ' + x.port, x.port === d.cur && d.mode === 'hosted' ? '正在用' : '', x.up ? '' : '没在运行'].filter(Boolean).join(' · ');
+		const act = d.mode === 'hosted' ? `<button class="btn sm${x.up ? ' blue' : ''}" type="button" data-xo="${esc(x.id)}"${x.up ? '' : ' disabled'}>打开</button>`
+			: d.mode === 'local' && d.lan && x.up ? `<a class="btn sm blue" href="${x.https ? 'https' : 'http'}://${esc(d.lan)}:${x.port}${esc(x.path || '/')}" target="_blank" rel="noopener">打开</a>` : '';
+		return `<div class="file xprow"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.name)}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(sub)}</span></div>${x.auto ? '' : `<button class="btn sm" type="button" data-xd="${x.port}">删除</button>`}${act}</div>`;
+	};
+	$('xpBody').innerHTML = `${head}<section class="card list" style="margin-top:12px">${d.list.length ? d.list.map(row).join('') : '<div class="empty">没找到能打开的页面</div>'}</section>
+		<button class="btn" id="xpAdd" type="button" style="width:100%;margin-top:12px">添加页面</button>`;
+}
+async function xpAdd() {
+	const v = await modal(`<h3>添加页面</h3>
+		<div class="fld"><div class="lb"><b>名字</b></div><div class="ctl"><input class="input" data-a="name" placeholder="Docker 管理" maxlength="40"></div></div>
+		<div class="fld"><div class="lb"><b>端口</b></div><div class="ctl"><input class="input" data-a="port" inputmode="numeric" placeholder="9000"></div></div>
+		<div class="fld"><div class="lb"><b>路径（选填）</b></div><div class="ctl"><input class="input mono" data-a="path" placeholder="/" autocapitalize="off" spellcheck="false"></div></div>
+		<label class="fld row"><div class="lb"><b>https</b></div><label class="sw"><input type="checkbox" data-a="https" aria-label="https"><i></i></label></label>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-ok>添加</button></div>`,
+	(m, close) => {
+		m.querySelector('[data-ok]').onclick = () => {
+			const g = (k) => m.querySelector(`[data-a="${k}"]`);
+			if (!g('name').value.trim()) return g('name').focus();
+			if (!g('port').value.trim()) return g('port').focus();
+			close({ name: g('name').value.trim(), port: g('port').value.trim(), path: g('path').value.trim() || '/', https: g('https').checked });
+		};
+	});
+	if (!v || typeof v !== 'object') return;
+	try { XP.d = await P('xp_set', { op: 'add', ...v }); xpRender(); toast('已添加：' + v.name); } catch (e) { toast(e.message, true); }
+}
+$('xpBody').addEventListener('click', async (e) => {
+	if (e.target.id === 'xpAdd') return xpAdd();
+	if (e.target.id === 'xpClose') return busy(e.target, async () => { try { await P('xp_close', {}, 30000); XP.d.cur = 0; xpRender(); toast('已关掉'); } catch (er) { toast(er.message, true); } });
+	const del = e.target.closest('[data-xd]');
+	if (del) {
+		const x = XP.d.list.find((y) => String(y.port) === del.dataset.xd);
+		if (!x || !(await confirmBox('删除「' + x.name + '」', '只从列表里删掉，不影响这个页面本身。', '删除', true))) return;
+		try { XP.d = await P('xp_set', { op: 'del', port: x.port }); xpRender(); toast('已删除：' + x.name); } catch (er) { toast(er.message, true); }
+		return;
+	}
+	const b = e.target.closest('[data-xo]');
+	if (!b) return;
+	// 先开好新标签页（不然浏览器会当成弹窗挡掉），等官网切好再跳过去
+	const w = window.open('', '_blank');
+	busy(b, async () => {
+		try {
+			const r = await P('xp_open', { id: b.dataset.xo }, 40000);
+			XP.d.cur = XP.d.list.find((x) => x.id === b.dataset.xo)?.port || 0; xpRender();
+			toast('正在打开 ' + r.name + '…');
+			await new Promise((z) => setTimeout(z, (r.wait || 5) * 1000));
+			if (w && !w.closed) w.location.href = r.url;
+			else modal(`<h3>${esc(r.name)}</h3><div class="btngrid" style="margin:14px 0 0;grid-template-columns:1fr"><a class="btn primary" href="${esc(r.url)}" target="_blank" rel="noopener" data-v="close">打开</a></div>`, null, { compact: true });
+		} catch (er) { if (w) w.close(); toast(er.message, true); }
+	});
+});
 /* =====================================================================
    Kwrt 原版页面（在面板里打开，自动登录）
    ===================================================================== */
@@ -9366,7 +9442,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

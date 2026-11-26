@@ -36,7 +36,7 @@ export function installEdition(Hub, { edToTunnel, edToLocal }) {
 				if (d.local) return { st: 200, ok: true, local: true };
 				try { const r = await edToLocal(this.env, sub, d); d.dns = r.dns; }
 				catch (e) { await this.ctx.storage.put('d:' + sub, d); return { st: 502, error: '官网这边改不了网址：' + e.message, step: 'hub' }; }
-				delete d.tunnel; d.local = true;
+				delete d.tunnel; delete d.xport; d.local = true;
 				await this.ctx.storage.put('d:' + sub, d);
 				await this.watch(sub).setProbe('');
 				return { st: 200, ok: true, local: true };

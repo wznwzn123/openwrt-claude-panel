@@ -18,6 +18,7 @@ import { changelogOf } from './changelog.js';
 import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 import { installTotp } from './totp.js';
 import { installEdition, edDev, edAccount, ED_NAME } from './edition.js';
+import { installXpage, xDev } from './xpage.js';
 import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled } from './oldver.js';
 
@@ -129,12 +130,15 @@ export async function edToLocal(env, sub, d) {
 	let dns;
 	try { dns = await dnsAddLocal(env, sub); } catch (e) { try { d.dns = await dnsAdd(env, sub, d.tunnel); } catch (x) { d.dns = null; } throw e; }
 	await deprovision(env, { tunnel: d.tunnel }).catch(() => {});
+	// 本地版没有隧道：第 36 项的「子域名-x」也删掉
+	if (d.xdns) { await dnsDel(env, d.xdns).catch(() => {}); delete d.xdns; }
 	return { dns };
 }
 // 子域名名额满了（Cloudflare 免费版每个域名的 DNS 记录有上限：2024-09 以后加的域名 200 条，以前的 1000 条）
 export const dnsFull = (e) => !!(e && e.dnsStep && ((e.codes || []).includes(81045) || /quota|limit|exceed/i.test(e.message || '')));
-export async function deprovision(env, { tunnel, dns }) {
+export async function deprovision(env, { tunnel, dns, xdns }) {
 	await dnsDel(env, dns);
+	await dnsDel(env, xdns); // 第 36 项「子域名-x」
 	if (tunnel) {
 		const acc = env.CF_ACCOUNT_ID;
 		try { await cf(env, 'DELETE', `/accounts/${acc}/cfd_tunnel/${tunnel}/connections`); } catch (e) {}
@@ -2062,7 +2066,7 @@ async function accountApi0(req, env, H, p, body) {
 	if (p === '/api/dev/feedback') return out(await H.feedback({ sub: s(b.sub), rkey: s(b.rkey), uid: s(b.uid), text: s(b.text), contact: s(b.contact), diag: s(b.diag), images: Array.isArray(b.images) ? b.images.slice(0, 3).map(s) : [], files: Array.isArray(b.files) ? b.files.slice(0, 5).map(s) : [] }));
 	if (p === '/api/dev/renew') return out(await H.devRenew({ sub: s(b.sub), rkey: s(b.rkey), code: s(b.code) }));
 	// 5.2 主账号 / 子账号：路由器问成员和权限、拿「打开面板」的票、主账号在面板里管子账号
-	{ const fx = (await famDev(p, H, b)) || (await edDev(p, H, b)); if (fx) return fx; }
+	{ const fx = (await famDev(p, H, b)) || (await edDev(p, H, b)) || (await xDev(p, H, b)); if (fx) return fx; }
 	const a = p.slice('/api/account/'.length);
 	{ const k = { code: 'code', register: 'reg', login: 'login', reset: 'reset', wait: 'reg' }[a]; if (k) { const g = await captchaGate(env, H, k, ip, s(b.cft)); if (g) return g; } }
 	if (a === 'wait') return out(await H.waitJoin({ email: s(b.email), ip })); // 第 46 项：名额满了，留邮箱排队
@@ -2116,6 +2120,7 @@ installV5(Hub);
 installFam(Hub);
 installInst(Hub);
 installEdition(Hub, { edToTunnel, edToLocal });
+installXpage(Hub, { cf, host });
 installFiles(Hub);
 installHelp(Hub);
 export { hubObj };

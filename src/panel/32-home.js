@@ -391,6 +391,7 @@ async function runQuick(k, btn) {
 renderQuick($('qGrid'));
 $('qEdit').onclick = () => quickEdit();
 async function updateSubs(btn) {
+	if (!pxOC()) return subxUpdate(btn);
 	const st = await state();
 	const subs = (st.subs || []).filter((s) => s.enabled !== '0');
 	if (!subs.length) return toast('还没有订阅，先到「订阅」页添加', true);
@@ -556,7 +557,7 @@ $('dock').onclick = async (e) => {
 		try { await P('quick', { action: 'restart' }); toast('OpenClash 正在重启'); setStatus(false, '重启中'); S.state = null; watchJobs(); } catch (x) { handleErr(x); }
 		setTimeout(() => b.classList.remove('run'), 20000);
 	}
-	if (d === 'subs') { if (pxOC()) updateSubs(null); else toast(a ? a.name + ' 的订阅在它的原版页面里更新' : '这台路由器没装代理插件'); }
+	if (d === 'subs') updateSubs(null);
 	if (d === 'mode') { if (a && a.kind === 'other') pxNodeSheet(); else if (a) modeSheet(); else toast('这台路由器没装代理插件'); }
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });

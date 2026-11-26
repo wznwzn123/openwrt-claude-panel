@@ -3187,6 +3187,7 @@ async function runQuick(k, btn) {
 renderQuick($('qGrid'));
 $('qEdit').onclick = () => quickEdit();
 async function updateSubs(btn) {
+	if (!pxOC()) return subxUpdate(btn);
 	const st = await state();
 	const subs = (st.subs || []).filter((s) => s.enabled !== '0');
 	if (!subs.length) return toast('还没有订阅，先到「订阅」页添加', true);
@@ -3352,7 +3353,7 @@ $('dock').onclick = async (e) => {
 		try { await P('quick', { action: 'restart' }); toast('OpenClash 正在重启'); setStatus(false, '重启中'); S.state = null; watchJobs(); } catch (x) { handleErr(x); }
 		setTimeout(() => b.classList.remove('run'), 20000);
 	}
-	if (d === 'subs') { if (pxOC()) updateSubs(null); else toast(a ? a.name + ' 的订阅在它的原版页面里更新' : '这台路由器没装代理插件'); }
+	if (d === 'subs') updateSubs(null);
 	if (d === 'mode') { if (a && a.kind === 'other') pxNodeSheet(); else if (a) modeSheet(); else toast('这台路由器没装代理插件'); }
 	if (d === 'ip') modal(`<div class="sheethead"><h3>IP 检查</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm blue" data-re>重新检查</button><button class="btn sm" data-v="close">关闭</button></div></div><div data-box></div>`,
 		(m) => { const box = m.querySelector('[data-box]'), re = m.querySelector('[data-re]'); re.onclick = () => checkIp(re, box); checkIp(re, box); });
@@ -3620,11 +3621,37 @@ function subInfoHtml(i, short) {
 	return `<div class="bar flat ${pct >= 90 ? 'd' : pct >= 70 ? 'w' : ''}"><i style="width:${pct}%"></i></div><div class="muted">已用 ${B(used)} / ${total ? B(total) : '不限'}（${pct}%）· 到期 ${exp}</div>`;
 }
 // 点任何「更新订阅」都顺便查流量（用户 11/26）：点的时候就开始查，更新完一起告诉结果
-function subFlowStart(subs) {
-	return Promise.all(subs.filter((s) => s && s.sid).map(async (s) => {
-		delete subCache[s.sid];
-		try { return { name: s.name, i: await subInfo(s.sid), err: '' }; } catch (e) { return { name: s.name, i: null, err: e.message }; }
+function subFlowStart(subs, get) {
+	return Promise.all(subs.filter((s) => s && (s.sid || s.id)).map(async (s) => {
+		if (s.sid) delete subCache[s.sid];
+		try {
+			if (get) { const r = await get(s); return { name: s.name, i: r.ok ? r : null, err: r.ok ? '' : r.msg || '' }; }
+			return { name: s.name, i: await subInfo(s.sid), err: '' };
+		} catch (e) { return { name: s.name, i: null, err: e.message }; }
 	}));
+}
+// 别的代理插件（Nikki、PassWall、PassWall 2、SSR Plus+、HomeProxy）：用它自己的脚本更新全部订阅，更新完一样查流量
+async function subxUpdate(btn) {
+	let L;
+	try { L = await P('subx_list'); } catch (e) { return handleErr(e); }
+	const a = pxAct();
+	if (!L.name) return toast(a ? a.name + ' 的订阅在它的原版页面里更新' : '这台路由器没装代理插件');
+	if (!L.subs.length) return toast(L.name + ' 还没有订阅：先在它的原版页面里添加', true);
+	if (L.busy) return toast('订阅正在更新，稍等');
+	const tail = L.px === 'nikki' ? '更新完 Nikki 会重启，断网十几秒。' : '节点有变化时 ' + L.name + ' 会自动重启，断网十几秒。';
+	if (!(await confirmBox('更新全部订阅', `${L.subs.length} 个订阅：${L.subs.map((s) => s.name).join('、')}\n${tail}`, '开始更新'))) return;
+	const flow = subFlowStart(L.subs, (s) => P('subx_info', { id: s.id }, 30000));
+	await busy(btn, async () => {
+		await P('subx_update');
+		toast('订阅开始在后台更新');
+		let n = 0;
+		const tick = async () => {
+			let st = null; try { st = await P('subx_state'); } catch (e) {}
+			if (st && !st.busy) return subFlowDone(flow, '订阅已更新');
+			if (++n < 200) setTimeout(tick, 3000);
+		};
+		setTimeout(tick, 3000);
+	}, false);
 }
 const subMD = (t) => { const d = new Date(t * 1000); return `${d.getMonth() + 1}/${d.getDate()}`; };
 function subFlowLine(x) {

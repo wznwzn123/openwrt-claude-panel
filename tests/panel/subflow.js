@@ -13,6 +13,12 @@ function handle(m, p) {
 	S.calls.push({ m, p, at: Date.now() });
 	if (m === 'sub_update') { S.busyUntil = Date.now() + 2500; return { ok: true }; }
 	if (m === 'jobs') { const r = mock.respond(m, p); return { ...r, jobs: { ...r.jobs, sub: Date.now() < S.busyUntil } }; }
+	if (m === 'px' && S.px) return S.px;
+	if (m === 'overview' && S.px) return { ...mock.respond(m, p), px: S.px };
+	if (m === 'subx_list') return S.subx;
+	if (m === 'subx_info') return S.info[p.id] || { ok: false, msg: '这个机场没有提供流量信息' };
+	if (m === 'subx_update') { S.busyUntil = Date.now() + 2500; return { ok: true, n: S.subx.subs.length }; }
+	if (m === 'subx_state') return { busy: Date.now() < S.busyUntil };
 	if (m === 'oc_state') { const r = JSON.parse(JSON.stringify(mock.respond(m, p))); if (S.both) r.subs = r.subs.map((x) => ({ ...x, enabled: '1' })); return r; }
 	if (m === 'sub_info') return S.info[p.sid] || { ok: false, msg: '这个机场没有提供流量信息' };
 	return mock.respond(m, p);
@@ -68,6 +74,33 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		S.both = false;
 		await ctx.close();
 	}
+	// 别的插件：Nikki（底部栏「更新订阅」）、PassWall（订阅里一个机场没给流量）
+	for (const [px, nm, subs] of [['nikki', 'Nikki', [{ id: 'sub1', name: '机场一' }]], ['passwall', 'PassWall', [{ id: 'pw1', name: '机场二' }, { id: 'pw2', name: '备用机场' }]]]) {
+		S.px = { active: px, list: [{ id: px, name: nm, kind: px === 'nikki' ? 'clash' : 'other', enabled: true, running: true }], cur: 'n1', curName: '香港 01', count: 3 };
+		S.subx = { px, name: nm, subs, busy: false };
+		S.info = { sub1: { ok: true, upload: 0, download: 50 * G, total: 200 * G, expire: NOW + 20 * 86400 }, pw1: { ok: true, upload: 0, download: 10 * G, total: 100 * G } };
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
+		page.on('pageerror', (e) => problems.push('页面错误（' + nm + '）：' + e.message));
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8196/panel/?p=home'); await W(1800);
+		S.calls = [];
+		await page.click('#dock [data-d="subs"]'); await W(400);
+		const c = (await page.$('.modal')) ? await page.textContent('.modal') : '';
+		ok(`${nm}：底部栏「更新订阅」能用，确认里列出订阅、说清会不会重启`, /更新全部订阅/.test(c) && subs.every((x) => c.includes(x.name)) && (px === 'nikki' ? /Nikki 会重启/.test(c) : /PassWall 会自动重启/.test(c)), c);
+		await page.click('.modal [data-v="true"]'); await W(600);
+		ok(`${nm}：点了就开始查流量`, S.calls.some((x) => x.m === 'subx_update') && S.calls.some((x) => x.m === 'subx_info' && x.at < S.busyUntil));
+		await W(4500);
+		if (px === 'nikki') {
+			const t = await page.textContent('#toast');
+			ok('Nikki：更新完提示剩多少、哪天到期', /订阅已更新 · 剩 150/.test(t) && /到期/.test(t), t);
+		} else {
+			const t = (await page.$('.modal')) ? await page.textContent('.modal') : '';
+			ok('PassWall：两个订阅用小卡片，没给流量的说清楚', /机场二：剩 90\.0 GB/.test(t) && /备用机场：这个机场没有提供流量信息/.test(t), t);
+			await page.screenshot({ path: path.join(SHOT, 'subflow-passwall.png') });
+		}
+		await ctx.close();
+	}
+	S.px = null;
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));
 	console.log(`\n通过 ${results.filter((r) => r[1]).length}/${results.length}`);

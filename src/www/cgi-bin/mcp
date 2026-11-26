@@ -2858,13 +2858,13 @@ const EMERG_VIA = '路由器终端的应急登录码';
 const LAN_VIA_LUCI = '原版后台（局域网）', LAN_VIA_PW = '路由器后台密码（局域网）';
 // 子账号的权限分组：view 人人都有；其他的由主账号勾选；不在任何一组里的（终端、文件管理、备份、托管服务设置、手机管理、换密钥……）只有主账号能用
 const FAM_GROUPS = {
-	view: ['compat_info', 'mon', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'rl_get', 'sched_get', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
+	view: ['compat_info', 'mon', 'overview', 'groups', 'live', 'home_stats', 'devices', 'connections', 'oc_state', 'sub_info', 'subx_list', 'subx_info', 'subx_state', 'jobs', 'myip', 'site_check', 'providers', 'rules', 'dashboard_state', 'logs', 'wd', 'traffic', 'speed_last', 'px', 'px_nodes', 'pause_list', 'rl_get', 'sched_get', 'black_state', 'dev_imgs', 'wifi_get', 'net_pending', 'push_id', 'dev_own', 'dev_claim', 'notices', 'notices_seen', 'client_error', 'svc_info', 'edition_get', 'edition_state', 'update_check', 'update_status', 'wd_check', 'daily', 'whoami', 'fam', 'device_list', 'device_remove',
 		'tools:router_status', 'tools:list_proxy_groups', 'tools:list_connections', 'tools:list_rules', 'tools:net_speed', 'tools:device_list'],
 	msg: ['chat', 'feedback', 'fb_replies', 'fb_seen', 'feedback_diag'],
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
 	parent: ['oaf_get', 'oaf_switch', 'oaf_rule', 'lan_scan', 'rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
-	proxy: ['split_get', 'split_set', 'split_restart', 'oc_set', 'oc_sec', 'sub_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
+	proxy: ['split_get', 'split_set', 'split_restart', 'oc_set', 'oc_sec', 'sub_update', 'subx_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
@@ -7079,6 +7079,73 @@ P.split_check = function() {
 	try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('分流：策略组「' + join('」「', gone) + '」没了'), shq('订阅更新后找不到这个组，选它的设备和软件已改走主策略组。'))); } catch (e) {}
 	sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart');
 	return { ok: true, moved: gone };
+};
+/* ---------------- 订阅更新：除 OpenClash 外的代理插件（用户 11/26：所有的都要适配） ----------------
+ * Nikki（config subscription）、PassWall / PassWall 2（subscribe_list）、SSR Plus+（server_subscribe_item，老版本 server_subscribe.subscribe_url）、
+ * HomeProxy（subscription.subscription_url）。更新用插件自己的脚本（跟它原版页面的「更新」按钮一样），在后台跑；
+ * 流量：直接问订阅地址，看机场回的 subscription-userinfo（跟 OpenClash 的 sub_info 一样）。订阅地址不发给手机。
+ * 测试用：CMCP_SX_PX（假装正在用的插件）、CMCP_SX_RUN（把命令记到文件，不执行）、CMCP_SX_BUSY（「正在更新」标记文件） */
+const SX_BUSY = getenv('CMCP_SX_BUSY') || '/tmp/cmcp_subx.busy';
+const SX_NAME = { nikki: 'Nikki', passwall: 'PassWall', passwall2: 'PassWall 2', shadowsocksr: 'SSR Plus+', homeproxy: 'HomeProxy' };
+function sx_px() { let e = getenv('CMCP_SX_PX'); return e != null ? e : (px_detect()?.active ?? ''); }
+function sx_first(cfg, typ) { for (let s in (uci_load(cfg) ?? [])) if (s['.type'] == typ) return s; return null; }
+function sx_host(u) { let m = match(u, /^[a-z]+:\/\/([^\/?#:]+)/i); return m ? m[1] : '订阅'; }
+// [{ id, name, url, ua }]
+function sx_list(px) {
+	let out = [];
+	if (px == 'nikki') {
+		for (let s in (uci_load('nikki') ?? [])) if (s['.type'] == 'subscription' && s.url) push(out, { id: s['.name'], name: s.name || s['.name'], url: s.info_url || s.url, ua: s.user_agent || 'clash.meta' });
+	} else if (px == 'passwall' || px == 'passwall2') {
+		for (let s in (uci_load(px) ?? [])) if (s['.type'] == 'subscribe_list' && s.url) push(out, { id: s['.name'], name: s.remark || s['.name'], url: s.url, ua: s.user_agent || 'v2rayN/9.99' });
+	} else if (px == 'shadowsocksr') {
+		let g = sx_first('shadowsocksr', 'server_subscribe'), ua = g?.user_agent || 'v2rayN/9.99';
+		for (let s in (uci_load('shadowsocksr') ?? [])) if (s['.type'] == 'server_subscribe_item' && s.url && s.enabled != '0') push(out, { id: s['.name'], name: s.alias || sx_host(s.url), url: trim(s.url), ua });
+		if (!length(out)) { let i = 0; for (let u in as_list(g?.subscribe_url)) if (length(trim(u))) push(out, { id: 'legacy_' + ++i, name: sx_host(u), url: trim(u), ua }); }
+	} else if (px == 'homeproxy') {
+		let g = null; for (let s in (uci_load('homeproxy') ?? [])) if (s['.name'] == 'subscription') g = s;
+		let i = 0; for (let u in as_list(g?.subscription_url)) if (length(trim(u))) push(out, { id: 'u' + ++i, name: sx_host(u), url: trim(u), ua: g?.user_agent || 'sing-box' });
+	}
+	return out;
+}
+function sx_run(cmd) { let f = getenv('CMCP_SX_RUN'); if (f) { let h = fs_open(f, 'a'); if (h) { h.write(cmd + '\n'); h.close(); } return; } bg(cmd); }
+function sx_busy() { let st = stat(SX_BUSY); return !!st && time() - st.mtime < 900; }
+function sx_need(px) { if (!SX_NAME[px]) die(px ? '这个插件的订阅在它的原版页面里更新' : '这台路由器没装代理插件'); }
+P.subx_list = function() {
+	let px = sx_px();
+	if (!SX_NAME[px]) return { px: px || null, subs: [] };
+	return { px, name: SX_NAME[px], subs: map(sx_list(px), (s) => ({ id: s.id, name: s.name })), busy: sx_busy() };
+};
+P.subx_info = function(a) {
+	let px = sx_px(); sx_need(px);
+	let s = null; for (let x in sx_list(px)) if (x.id == '' + a?.id) s = x;
+	if (!s) die('没有这个订阅');
+	let r = sh(sprintf('curl -sS -L -m 12 -o /dev/null -D - -A %s %s', shq(s.ua), shq(s.url)));
+	let m = match(lc(r.out ?? ''), /subscription-userinfo:[ \t]*([^\r\n]+)/);
+	if (!m) return { ok: false, msg: r.code != 0 ? '订阅地址连接失败' : '这个机场没有提供流量信息' };
+	let o = { ok: true };
+	for (let kv in split(m[1], ';')) { let p = match(trim(kv), /^([a-z]+)=([0-9.e+]+)/); if (p) o[p[1]] = +p[2]; }
+	return o;
+};
+P.subx_state = function() { return { busy: sx_busy() }; };
+// 更新全部订阅：插件自己的脚本，在后台跑，跑完删掉「正在更新」标记
+P.subx_update = function() {
+	let px = sx_px(); sx_need(px);
+	if (sx_busy()) die('订阅正在更新，稍等');
+	let subs = sx_list(px);
+	if (!length(subs)) die(SX_NAME[px] + ' 还没有订阅：先在它的原版页面里添加');
+	let cmd;
+	if (px == 'nikki') {
+		let prof = uci_get('nikki.config.profile') ?? '', cmds = map(subs, (s) => '/etc/init.d/nikki update_subscription ' + shq(s.id));
+		// 正在用的配置就是其中一个订阅：更新完重启 Nikki 才会用上新的
+		if (match(prof, /^subscription:/)) push(cmds, '/etc/init.d/nikki restart');
+		cmd = join('; ', cmds);
+	}
+	else if (px == 'passwall' || px == 'passwall2') cmd = sprintf('lua /usr/share/%s/subscribe.lua start all manual', px);
+	else if (px == 'shadowsocksr') cmd = '/usr/bin/lua /usr/share/shadowsocksr/subscribe.lua >>/var/log/ssrplus.log 2>&1';
+	else cmd = '/etc/homeproxy/scripts/update_subscriptions.uc';
+	writefile(SX_BUSY, '' + time());
+	sx_run(sprintf('%s; rm -f %s', cmd, shq(SX_BUSY)));
+	return { ok: true, n: length(subs) };
 };
 function rpc_result(id, result) { return { jsonrpc: '2.0', id, result }; }
 function rpc_error(id, code, message) { return { jsonrpc: '2.0', id, error: { code, message } }; }

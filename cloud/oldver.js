@@ -88,12 +88,14 @@ export function installOldVer(Hub) {
 // 官网账号：主人点邮件里的「不再提醒这台路由器」，登录后确认（只有这台路由器的主账号能关）
 export async function ovAccount(a, H, me, b) {
 	if (a !== 'ov_off') return null;
-	const sub = String((b && b.sub) || '').slice(0, 40), d = sub && (await H.ctx.storage.get('d:' + sub));
-	if (!d || H.famOf(d).owner !== me.uid) return new Response(JSON.stringify({ error: '只有这台路由器的主账号能关掉提醒' }), { status: 403, headers: { 'content-type': 'application/json' } });
-	if (b && b.peek) return new Response(JSON.stringify({ ok: true, name: String(d.name || sub).slice(0, 40), off: !!(await H.ctx.storage.get('ovoff:' + sub)) }), { headers: { 'content-type': 'application/json' } });
-	await H.ctx.storage.put('ovoff:' + sub, { at: Date.now(), by: me.uid });
-	await H.alog('ov_off', sub, '主人关掉了升级提醒', me.uid);
-	return new Response(JSON.stringify({ ok: true, name: String(d.name || sub).slice(0, 40) }), { headers: { 'content-type': 'application/json' } });
+	// 路由代码拿到的 H 是远程句柄：只能调方法（不能读 H.ctx，famOf 这种同步方法也会变成 Promise）
+	const sub = String((b && b.sub) || '').slice(0, 40), peek = !!(b && b.peek);
+	const r = await H.ovSet(sub, { uid: me.uid, peek, off: true });
+	const J = (o, st) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json' } });
+	if (r.st !== 200) return J({ error: r.st === 404 ? '只有这台路由器的主账号能关掉提醒' : r.error }, 403);
+	if (!peek) await H.alog('ov_off', sub, '主人关掉了升级提醒', me.uid);
+	const { st, ...o } = r;
+	return J(o, 200);
 }
 // 定时任务（每小时一次）里调用：发了新版本时马上看一遍，平时每 6 小时看一遍
 export async function ovScheduled(H, rv) {

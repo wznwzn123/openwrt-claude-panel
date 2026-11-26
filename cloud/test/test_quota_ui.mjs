@@ -1,4 +1,4 @@
-// 6.0 第 46 项（官网界面）：名额满了，注册那一页换成「名额已满」+ 留邮箱排队；排上了说第几位；没满照常注册
+// 6.0 第 46 项（官网界面）：名额满了照样能注册（用户 11/27），注册页写一行托管名额已满；账号页试用那一行换成排队（用账号邮箱）；没满照常
 import http from 'http';
 import { createRequire } from 'module';
 import { load, memStorage } from './load.mjs';
@@ -21,7 +21,9 @@ const server = http.createServer(async (req, res) => {
 	const body = chunks.length ? Buffer.concat(chunks) : undefined;
 	const r0 = new Request('http://localhost' + req.url, { method: req.method, headers: { ...req.headers, 'cf-connecting-ip': '127.0.0.' + Math.floor(Math.random() * 200) }, body: ['GET', 'HEAD'].includes(req.method) ? undefined : body });
 	const r = await mod.default.fetch(Object.assign(r0, { cf: { country: 'TW' } }), env);
-	res.writeHead(r.status, Object.fromEntries(r.headers)); res.end(Buffer.from(await r.arrayBuffer()));
+	const h = {}; r.headers.forEach((v, k) => { if (k !== 'set-cookie') h[k] = v; });
+	const sc = r.headers.getSetCookie ? r.headers.getSetCookie() : []; if (sc.length) h['set-cookie'] = sc;
+	res.writeHead(r.status, h); res.end(Buffer.from(await r.arrayBuffer()));
 });
 await new Promise((z) => server.listen(8195, z));
 const H = env.H.get('hub');
@@ -35,11 +37,19 @@ try {
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, colorScheme: dark ? 'dark' : 'light' });
 		const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 		await p.goto('http://localhost:8195/app#reg'); await p.waitForTimeout(1200);
-		ok('名额满了：注册换成「名额已满」+ 邮箱排队' + T, await p.isVisible('#fWait') && !(await p.isVisible('#fReg')) && /名额已满/.test(await p.textContent('#fWait')));
+		ok('名额满了：照样能注册，表单上面写着托管名额已满' + T, await p.isVisible('#fReg') && !(await p.isVisible('#fWait')) && await p.isVisible('#fReg [data-fullnote]') && /托管名额已满/.test(await p.textContent('#fReg [data-fullnote]')));
 		ok('不横向滚动' + T, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
 		await p.screenshot({ path: `test/shots-quota-${w}.png` }).catch(() => {});
-		await p.fill('#fWait [name=email]', 'q' + w + '@x.com'); await p.click('#fWait button.primary'); await p.waitForTimeout(800);
-		ok('排上了：说第几位、发到哪个邮箱' + T, /已排队，排第 \d+ 位。有空位时发邮件到 q\d+@x\.com/.test(await p.textContent('#fWait')) && !(await p.isVisible('#fWait [name=email]')), await p.textContent('#fWait'));
+		const rk = env.RESEND_API_KEY; delete env.RESEND_API_KEY; // 注册不要验证码
+		await p.fill('#fReg [name=email]', 'q' + w + '@x.com'); await p.fill('#fReg [name=password]', 'pass-q' + w + '-12345'); await p.click('#fReg button.primary'); await p.waitForTimeout(1500);
+		env.RESEND_API_KEY = rk;
+		ok('注册上了：试用那一行换成「托管名额已满」+ 排队' + T, await p.isVisible('#waitGo') && /托管名额已满/.test(await p.textContent('#trialRow')) && !(await p.isVisible('#trialGo')), await p.textContent('#trialRow'));
+		ok('账号页不横向滚动' + T, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+		await p.locator('#trialRow').scrollIntoViewIfNeeded(); await p.waitForTimeout(300);
+		await p.screenshot({ path: `test/shots-quota-acct-${w}.png` }).catch(() => {});
+		await p.click('#waitGo'); await p.waitForTimeout(800);
+		ok('排上了：按钮变成「已排队」' + T, (await p.textContent('#waitGo')) === '已排队' && (await p.isDisabled('#waitGo')));
+		ok('排队用的是账号邮箱' + T, (await H.waitList()).some((x) => x.email === 'q' + w + '@x.com'));
 		ok('页面没报错' + T, !errs.length, errs.join('|'));
 		await ctx.close();
 	}
@@ -47,10 +57,10 @@ try {
 	await H.setMax(10);
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const p = await ctx.newPage();
 	await p.goto('http://localhost:8195/app#reg'); await p.waitForTimeout(1200);
-	ok('没满：照常显示注册', await p.isVisible('#fReg') && !(await p.isVisible('#fWait')));
+	ok('没满：照常显示注册，没有名额已满那一行', await p.isVisible('#fReg') && !(await p.isVisible('#fWait')) && !(await p.isVisible('#fReg [data-fullnote]')));
 	await ctx.close();
 } finally { await browser.close(); server.close(); }
-for (const f of ['test/shots-quota-320.png', 'test/shots-quota-390.png']) try { (await import('fs')).rmSync(f); } catch (e) {}
+if (!process.env.KEEP) for (const f of ['test/shots-quota-320.png', 'test/shots-quota-390.png', 'test/shots-quota-acct-320.png', 'test/shots-quota-acct-390.png']) try { (await import('fs')).rmSync(f); } catch (e) {}
 let pass = 0; for (const [n, c, note] of results) { console.log((c ? '✓ ' : '✗ ') + n + (c ? '' : '  ' + (note || '').slice(0, 300))); if (c) pass++; }
 console.log(`\n通过 ${pass}/${results.length}`);
 process.exit(pass === results.length ? 0 : 1);

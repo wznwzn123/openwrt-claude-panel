@@ -227,12 +227,29 @@ export class Hub extends DurableObject {
 	// 排队的邮箱：发过有空位通知 30 天、排了 180 天还没排到的自动删掉（隐私政策里写了）
 	async waitList() { const l = await this.ctx.storage.get('wl'), now = Date.now(); return Array.isArray(l) ? l.filter((x) => (x.sent ? now - x.sent < 30 * DAY : now - x.at < 180 * DAY)) : []; }
 	// 留邮箱排队（同一个 IP 一小时最多 5 次；最多排 2000 人）
-	async waitJoin({ email, ip }) {
+	// 名额满了：已登录的用账号邮箱排队
+	async waitMe(uid, ip) {
+		const u = await this.ctx.storage.get('u:' + uid);
+		if (!u) return { st: 401, error: '请先登录' };
+		return this.waitJoin({ email: u.email, ip, acct: true });
+	}
+	// 升级提醒开关（主人点邮件里的「不再提醒」、后台每行的开关都走这里）。uid 给了就只许这台的主账号改；peek 只看不改
+	async ovSet(sub, { uid = '', by = '', off = true, peek = false } = {}) {
+		sub = String(sub || '').slice(0, 40);
+		const d = sub && (await this.ctx.storage.get('d:' + sub));
+		if (!d) return { st: 404, error: '没有这台路由器' };
+		if (uid && this.famOf(d).owner !== uid) return { st: 403, error: '只有这台路由器的主账号能关掉提醒' };
+		const name = String(d.name || sub).slice(0, 40);
+		if (peek) return { st: 200, ok: true, name, off: !!(await this.ctx.storage.get('ovoff:' + sub)) };
+		if (off) await this.ctx.storage.put('ovoff:' + sub, { at: Date.now(), by: by || uid }); else await this.ctx.storage.delete('ovoff:' + sub);
+		return { st: 200, ok: true, name };
+	}
+	async waitJoin({ email, ip, acct = false }) {
 		email = normEmail(email);
 		if (!email) return { st: 400, error: '邮箱格式不对' };
-		if (!(await this.isFull())) return { st: 400, error: '现在有名额，直接注册就行' };
+		if (!(await this.isFull())) return { st: 400, error: acct ? '现在有名额，直接领试用或开通' : '现在有名额，直接注册就行' };
 		if (!this.env.RESEND_API_KEY) return { st: 501, error: '官网还没开通发邮件，排不了队，过几天再来看' };
-		if (await this.ctx.storage.get('e:' + email)) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
+		if (!acct && (await this.ctx.storage.get('e:' + email))) return { st: 409, error: '这个邮箱已经注册过，登录后在账号页排队' };
 		if (!(await this.hit('wl:' + ip, 5, 3600e3))) return { st: 429, error: '太频繁了，一小时后再试' };
 		const l = await this.waitList();
 		let i = l.findIndex((x) => x.email === email);
@@ -247,7 +264,7 @@ export class Hub extends DurableObject {
 		for (const x of l) {
 			if (n >= Math.min(free, 20)) break;
 			if (x.sent) continue;
-			if (!(await this.mail(x.email, '路由器面板有空位了', `<p>你之前排队的路由器面板托管服务有空位了，现在可以注册：</p><p><a href="https://${this.env.BASE_DOMAIN}/app">https://${this.env.BASE_DOMAIN}/app</a></p><p>名额先到先得，晚了可能又满了。</p>`))) break; // 发不出去（额度用完）：下次再发
+			if (!(await this.mail(x.email, '路由器面板有空位了', `<p>你排队的路由器面板托管服务有空位了。登录官网就能领试用或开通：</p><p><a href="https://${this.env.BASE_DOMAIN}/app">https://${this.env.BASE_DOMAIN}/app</a></p><p>名额先到先得，晚了可能又满了。</p>`))) break; // 发不出去（额度用完）：下次再发
 			x.sent = Date.now(); n++;
 		}
 		if (n) { await this.ctx.storage.put('wl', l); await this.alog('wait-mail', '', `有空位了，给排队的 ${n} 个人发了邮件`, 'system'); }
@@ -868,14 +885,12 @@ export class Hub extends DurableObject {
 		if (!email) return { st: 400, error: '邮箱格式不对' };
 		const pe = pwError(password); if (pe) return { st: 400, error: pe };
 		if (await this.ctx.storage.get('e:' + email)) return { st: 409, error: '这个邮箱已经注册过，直接登录就行' };
-		// 第 46 项：名额满了不再注册新账号（只能留邮箱排队）
-		if (await this.isFull()) return { st: 403, error: '名额已满，暂时不能注册', full: true };
+		// 用户 11/27：名额只管开通托管，满了也能注册账号（自建版申请尝鲜、反馈都要账号）；领试用、开通托管时才排队
 		if (!(await this.hit('ri:' + ip, 10, 3600e3))) return { st: 429, error: '注册太频繁了，一小时后再试' };
 		if (this.env.RESEND_API_KEY && !(await this.useCode(email, 'reg', code))) return { st: 400, error: '验证码不对或已过期' };
 		const uid = rnd(12), salt = rnd(16);
 		const u = { uid, email, salt, pw: await pwHash(password, salt), created: Date.now(), devs: [], sids: [], verified: !!this.env.RESEND_API_KEY };
 		await this.ctx.storage.put({ ['u:' + uid]: u, ['e:' + email]: uid });
-		{ const wl = await this.waitList(); if (wl.some((x) => x.email === email)) await this.ctx.storage.put('wl', wl.filter((x) => x.email !== email)); } // 排过队的注册了：从队里去掉
 		await this.loginLog({ k: 'reg', who: email, ok: true, why: '注册', ip, place: dev && dev.place, ua: dev && dev.ua });
 		const nd = this.newDeviceCode() ? await this.trust(u, did) : ''; // 注册时邮箱验证过了，这台设备就算验证过
 		return { st: 200, sid: await this.newSession(u, dev), did: nd };
@@ -1526,6 +1541,7 @@ export class Hub extends DurableObject {
 		if (this.env.RESEND_API_KEY && !u.verified) return { st: 403, error: '先验证邮箱才能领试用' };
 		const open = (await this.instList(u)).find((x) => x.kind === 'trial');
 		if (open) return { st: 200, ok: true, days, code: open.code, exp: open.exp };
+		if (await this.isFull()) return { st: 403, error: '托管名额已满，排队后有空位发邮件给你', full: true };
 		const ts = await this.trialState(u);
 		if (!ts.max) return { st: 403, error: '现在没有开放免费试用，找提供服务的人要邀请码' };
 		if (ts.left <= 0) return { st: 403, error: ts.max > 1 ? `每个账号最多领 ${ts.max} 次试用，你已经领完了。想继续用，找提供服务的人要邀请码` : '这个账号已经领过试用了。想继续用，找提供服务的人要邀请码' };
@@ -1537,6 +1553,7 @@ export class Hub extends DurableObject {
 		if (u.trialUsed == null && ts.used) u.trialUsed = ts.used;
 		u.inst = [...(u.inst || []), code].slice(-20);
 		await this.ctx.storage.put({ ['i:' + code]: inv, ['u:' + uid]: u });
+		{ const wl = await this.waitList(); if (wl.some((x) => x.email === u.email)) await this.ctx.storage.put('wl', wl.filter((x) => x.email !== u.email)); } // 排过队的领到了：从队里去掉
 		await this.alog('trial', u.email, `领了 ${days} 天免费试用（第 ${ts.used + 1} 次，安装码 7 天内有效）`, 'user');
 		return { st: 200, ok: true, days, code, exp: inv.exp };
 	}
@@ -1748,8 +1765,8 @@ export async function hubFetch(req, env) {
 			if (op === 'protect' || op === 'unprotect') return done({ ok: await H.setProtect(sub, op === 'protect') }, op === 'protect' ? '标为受保护' : '取消保护');
 			// 用户 11/27：后台自己定哪台发升级提醒（跟主人点邮件里「不再提醒」是同一个开关）
 			if (op === 'ovoff' || op === 'ovon') {
-				if (!(await H.ctx.storage.get('d:' + sub))) return J({ error: '没有这台路由器' }, 404);
-				if (op === 'ovoff') await H.ctx.storage.put('ovoff:' + sub, { at: Date.now(), by: 'admin' }); else await H.ctx.storage.delete('ovoff:' + sub);
+				const r = await H.ovSet(sub, { by: 'admin', off: op === 'ovoff' });
+				if (r.st !== 200) return J({ error: r.error }, r.st);
 				return done({ ok: true }, op === 'ovoff' ? '关掉升级提醒' : '打开升级提醒');
 			}
 			if (op === 'extend') { const r = await H.extend(sub, b.days); return J(r.st === 200 ? r : { error: r.error }, r.st); }
@@ -2152,6 +2169,8 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'logincode') return out(await H.loginCode(me.uid, s(b.sub)));
 	if (a === 'renew') return out(await H.accountRenew(me.uid, me.email, s(b.sub), s(b.code)));
 	if (a === 'trial') return out(await H.trial(me.uid, ip));
+	// 名额满了：已登录的直接用账号邮箱排队
+	if (a === 'wait_me') return out(await H.waitMe(me.uid, ip));
 	if (a === 'apply') return out(await H.apply(me.uid, me.email, { sub: s(b.sub), source: s(b.source), contact: s(b.contact), note: s(b.note) }));
 	if (a === 'link') return out(await H.addLink(me.uid, s(b.name), s(b.url)));
 	if (a === 'unlink') return out(await H.delLink(me.uid, s(b.id)));

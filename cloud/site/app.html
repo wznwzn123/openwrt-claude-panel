@@ -414,6 +414,7 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 			<p class="fine" style="text-align:center">验证过以后，这台设备 30 天内登录只要密码。</p>
 		</form>
 		<form id="fReg" class="hidden">
+			<div class="notice hidden" data-fullnote style="margin-bottom:6px">托管名额已满<br>账号照样能注册 开通托管要排队</div>
 			<label class="f">邮箱</label><input class="input" name="email" type="email" autocomplete="email" placeholder="常用邮箱，找回密码要用" required>
 			<div data-mail class="hidden"><label class="f">邮箱验证码</label><div class="row" style="flex-wrap:nowrap"><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="6 位数字" autocomplete="one-time-code"><button type="button" class="btn" data-send="reg">发送</button></div></div>
 			<label class="f">密码（至少 8 位）</label><input class="input" name="password" type="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位，字母加数字更安全" required>
@@ -603,7 +604,7 @@ let mailOn = false, regFull = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
 	document.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === (t === 'code' || t === 'totp' ? 'login' : t)));
-	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg' || regFull); $('fWait').classList.toggle('hidden', !(t === 'reg' && regFull)); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); $('fTotp').classList.toggle('hidden', t !== 'totp'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code' || t === 'totp');
+	$('fLogin').classList.toggle('hidden', t !== 'login'); $('fReg').classList.toggle('hidden', t !== 'reg'); $('fWait').classList.toggle('hidden', true); $('fReg').querySelector('[data-fullnote]').classList.toggle('hidden', !regFull); $('fReset').classList.toggle('hidden', t !== 'reset'); $('fCode').classList.toggle('hidden', t !== 'code'); $('fTotp').classList.toggle('hidden', t !== 'totp'); document.querySelector('#lgCard .tabs').classList.toggle('hidden', t === 'code' || t === 'totp');
 }
 document.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => tab(b.dataset.tab)));
 // 欢迎页 ↔ 登录 / 注册卡片：网址带 #login、#reg（手机上按返回键回到欢迎页；直接打开 /app#reg 就是注册）
@@ -706,7 +707,7 @@ form('fTotp', async (d, f) => {
 $('fTotp').querySelector('[data-tf-rc]').onclick = (e) => { e.preventDefault(); tfMode(!$('fTotp').dataset.rc); };
 $('fTotp').querySelector('[data-codeback]').onclick = (e) => { e.preventDefault(); tfTok = ''; tab('login'); };
 form('fReg', async (d) => {
-	try { await api('register', d); } catch (e) { if (e.data && e.data.full) { regFull = true; tab('reg'); } throw e; }
+	await api('register', d);
 	toast('注册成功'); await load('reg');
 });
 form('fWait', async (d) => {
@@ -751,9 +752,18 @@ const oldSelf = (v) => newer('2.0.2', String(v || '').replace(/^v/, ''));
 const upCmd = () => 'cd /tmp && wget -O p.tar.gz https://' + location.host + '/dl/openwrt-claude-panel-hosted.tar.gz && tar xzf p.tar.gz && cd openwrt-claude-panel && sh install.sh';
 function renderInst(me) {
 	const t = me.trial, tr = $('trialRow');
+	// 用户 11/27：名额满了不能领试用：这里换成排队（用账号邮箱）
+	if (regFull && !(me.inst || []).some((x) => x.kind === 'trial')) {
+		tr.innerHTML = `<div class="trialrow"><div><b>托管名额已满</b><span>有空位发邮件通知</span></div><button class="btn primary sm" id="waitGo">排队</button></div>`;
+		$('waitGo').onclick = async () => { const b = $('waitGo'); b.disabled = true; try { const r = await api('wait_me', {}); b.textContent = '已排队'; toast('已排队，排第 ' + r.pos + ' 位'); } catch (e) { toast(e.message, true); b.disabled = false; } };
+		return renderInstList(me);
+	}
 	tr.innerHTML = t && t.left > 0 ? `<div class="trialrow"><div><b>🎁 免费试用 ${t.days} 天</b><span>${t.max > 1 ? '每个账号能领 ' + t.max + ' 次，还剩 ' + t.left + ' 次' : '每个账号能领一次'}</span></div><button class="btn primary sm" id="trialGo">领取</button></div>` : '';
 	const go = $('trialGo');
-	if (go) go.onclick = async () => { go.disabled = true; try { await api('trial', {}); await load(); toast('领好了：复制下面的安装命令到路由器上运行'); } catch (e) { toast(e.message, true); go.disabled = false; } };
+	if (go) go.onclick = async () => { go.disabled = true; try { await api('trial', {}); await load(); toast('领好了：复制下面的安装命令到路由器上运行'); } catch (e) { if (e.data && e.data.full) { regFull = true; renderInst(me); } toast(e.message, true); go.disabled = false; } };
+	return renderInstList(me);
+}
+function renderInstList(me) {
 	const L = me.inst || [];
 	$('instList').innerHTML = L.map((x) => {
 		const days = Math.max(1, Math.ceil((x.exp - Date.now()) / 86400e3));
@@ -1265,11 +1275,11 @@ function showLogin() {
 	show('auth');
 	if (APP6) return appAuth();
 	lgView(((pair || joinCode || okCode || blCode || ovOff || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
-	if (ovOff) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">用路由器主账号登录后关掉升级提醒。</div>'); }
-	if (blCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录后关联尝鲜申请。</div>'); }
-	if (okCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录后确认 App 登录。</div>'); }
-	if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
-	if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
+	if (ovOff) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">用路由器主账号登录后关掉升级提醒。</div>'); }
+	if (blCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">登录后关联尝鲜申请。</div>'); }
+	if (okCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">登录后确认 App 登录。</div>'); }
+	if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
+	if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
 }
 let firstLoad = true;
 // 这个浏览器上次是登录着的（只是个提示，不存任何账号信息）：有它就直接读账号，不多问一次「登录了吗」，打开更快

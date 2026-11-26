@@ -16,6 +16,33 @@ function subInfoHtml(i, short) {
 	if (short) return `${B(used)} / ${total ? B(total) : '∞'} · 到期 ${exp}`;
 	return `<div class="bar flat ${pct >= 90 ? 'd' : pct >= 70 ? 'w' : ''}"><i style="width:${pct}%"></i></div><div class="muted">已用 ${B(used)} / ${total ? B(total) : '不限'}（${pct}%）· 到期 ${exp}</div>`;
 }
+// 点任何「更新订阅」都顺便查流量（用户 11/26）：点的时候就开始查，更新完一起告诉结果
+function subFlowStart(subs) {
+	return Promise.all(subs.filter((s) => s && s.sid).map(async (s) => {
+		delete subCache[s.sid];
+		try { return { name: s.name, i: await subInfo(s.sid), err: '' }; } catch (e) { return { name: s.name, i: null, err: e.message }; }
+	}));
+}
+const subMD = (t) => { const d = new Date(t * 1000); return `${d.getMonth() + 1}/${d.getDate()}`; };
+function subFlowLine(x) {
+	const i = x.i;
+	if (!i) return { t: `${x.name}：${x.err || '机场没提供流量信息'}`, warn: false };
+	const used = (i.upload || 0) + (i.download || 0), total = i.total || 0, left = Math.max(0, total - used);
+	const days = i.expire ? Math.floor((i.expire * 1000 - Date.now()) / 86400000) : null;
+	const exp = i.expire ? (days < 0 ? '，已过期' : `，${subMD(i.expire)} 到期`) : '';
+	return { t: `${x.name}：${total ? '剩 ' + B(left) : '流量不限'}${exp}`, warn: (total && left / total < 0.1) || (days != null && days <= 7) };
+}
+// 更新完：一个订阅用提示条，多个用小卡片
+async function subFlowDone(p, title) {
+	const l = (await p).map(subFlowLine);
+	if (!l.length) return toast(title);
+	if (l.length === 1) return toast(`${title} · ${l[0].t.replace(/^[^：]*：/, '')}`, l[0].warn ? 'warn' : false);
+	modal(`<h3>${esc(title)}</h3><div class="mlist subflow">${l.map((x) => `<div class="mact"><span><b style="display:block;white-space:normal">${esc(x.t)}</b></span>${x.warn ? '<span class="pill w">快用完了</span>' : ''}</div>`).join('')}</div><div class="btngrid" style="margin:14px 0 0;grid-template-columns:1fr"><button class="btn" data-v="close">好的</button></div>`, null, { compact: true });
+}
+function subUpdate(subs, body, btn, startMsg, doneMsg) {
+	const flow = subFlowStart(subs);
+	return busy(btn, async () => { await P('sub_update', body); toast(startMsg); watchJobs(() => subFlowDone(flow, doneMsg)); }, false);
+}
 function maskUrl(u) {
 	u = String(u || '').split('\n')[0];
 	try { const x = new URL(u); return x.host + (x.pathname.length > 1 ? x.pathname.slice(0, 12) + '…' : ''); } catch (e) { return u.slice(0, 28) + (u.length > 28 ? '…' : ''); }
@@ -46,7 +73,7 @@ $('subList').addEventListener('click', async (e) => {
 	if (t.closest('[data-up]')) {
 		const f = (st.files || []).find((x) => x.sub === s.name);
 		if (f && f.active && !(await confirmBox('更新订阅「' + s.name + '」', '这是正在使用的配置，更新完成后 OpenClash 会自动重启，断网 10–30 秒。', '更新'))) return;
-		return busy(t.closest('[data-up]'), async () => { await P('sub_update', { name: s.name }); toast('「' + s.name + '」开始在后台更新'); watchJobs(); }, false);
+		return subUpdate([s], { name: s.name }, t.closest('[data-up]'), '「' + s.name + '」开始在后台更新', '「' + s.name + '」已更新');
 	}
 	// 6.0 第 88 项：查流量、编辑、使用这个配置收进「更多」
 	let act = t.closest('[data-flowbtn]') ? 'flow' : t.closest('[data-ed]') ? 'ed' : t.closest('[data-use]') ? 'use' : null;
@@ -90,7 +117,7 @@ async function editSub(s) {
 		after: async (sid, form) => {
 			S.state = null;
 			await loadSubs();
-			if (!s && sid && form && await confirmBox('现在下载这个订阅吗？', '下载完成后会生成配置文件，可以在「配置文件」页切换使用。', '下载')) { await P('sub_update', { name: form.str('name') }); toast('开始下载'); watchJobs(); }
+			if (!s && sid && form && await confirmBox('现在下载这个订阅吗？', '下载完成后会生成配置文件，可以在「配置文件」页切换使用。', '下载')) { const nm = form.str('name'); await subUpdate([{ name: nm, sid }], { name: nm }, null, '开始下载', '「' + nm + '」已下载'); }
 		},
 	});
 }

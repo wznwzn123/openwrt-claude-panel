@@ -395,7 +395,7 @@ async function updateSubs(btn) {
 	const subs = (st.subs || []).filter((s) => s.enabled !== '0');
 	if (!subs.length) return toast('还没有订阅，先到「订阅」页添加', true);
 	if (!(await confirmBox('更新全部订阅', `将更新 ${subs.length} 个订阅：${subs.map((s) => s.name).join('、')}\n更新当前在用的配置后 OpenClash 会自动重启，期间断网 10–30 秒。`, '开始更新'))) return;
-	await busy(btn, async () => { await P('sub_update', {}); toast('订阅开始在后台更新'); watchJobs(); }, false);
+	await subUpdate(subs, {}, btn, '订阅开始在后台更新', '订阅已更新');
 }
 async function closeAll(btn) {
 	if (!(await confirmBox('断开全部连接', '所有 App 会重新建立连接，并按当前的规则和节点走。正在下载的内容可能会中断。', '断开'))) return;

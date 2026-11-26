@@ -435,7 +435,8 @@ const RUNM = { 'fake-ip': 'Fake-IP 增强', 'fake-ip-tun': 'TUN', 'fake-ip-mix':
 /* ---------- 后台任务（订阅、GEO、内核更新）---------- */
 const JOBN = { sub: '订阅更新', geo: 'GEO 更新', chnroute: '大陆白名单', core: '内核更新', plugin: '插件更新', debug: '调试日志', service: 'OpenClash 启停' };
 let jobTimer = null, jobSeen = false;
-function watchJobs() {
+// onDone：后台任务做完时调用（比如订阅更新完查流量），代替「后台任务已完成」
+function watchJobs(onDone) {
 	clearTimeout(jobTimer);
 	jobSeen = false;
 	let n = 0;
@@ -449,7 +450,7 @@ function watchJobs() {
 			$('jobPill').setAttribute('aria-label', $('jobText').textContent);
 			if (run.length) jobSeen = true;
 			if (!run.length && (jobSeen || n > 4)) {
-				if (jobSeen) { toast('后台任务已完成'); S.state = null; if (LOAD[page]) refresh(true); }
+				if (jobSeen || onDone) { S.state = null; if (LOAD[page]) refresh(true); if (onDone) onDone(); else toast('后台任务已完成'); }
 				return;
 			}
 		} catch (e) {}

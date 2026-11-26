@@ -74,6 +74,13 @@ async function xpGo(w, r) {
 // 完整原版后台里点到的「路由器:端口」页面（lfx.js 拦下来转给这里）：用远程页面的地址打开
 window.addEventListener('message', (e) => {
 	if (e.origin !== location.origin || !e.data || e.data.cmcpx !== 1) return;
-	const d = e.data, w = window.open('', '_blank');
-	P('xp_open', { port: +d.port, https: !!d.https, path: String(d.path || '/').slice(0, 500) }, 40000).then((r) => xpGo(w, r)).catch((er) => { if (w) w.close(); toast(er.message, true); });
+	const d = e.data, q = { port: +d.port, https: !!d.https, path: String(d.path || '/').slice(0, 500) };
+	// 嵌着的页面：等官网切好，把地址交回去，在原处打开
+	if (d.inline) {
+		const back = (o) => { try { e.source.postMessage({ cmcpxr: 1, id: d.inline, ...o }, location.origin); } catch (x) {} };
+		P('xp_open', q, 40000).then(async (r) => { await new Promise((z) => setTimeout(z, (r.wait || 5) * 1000)); back({ url: r.url }); }).catch((er) => back({ err: er.message }));
+		return;
+	}
+	const w = window.open('', '_blank');
+	P('xp_open', q, 40000).then((r) => xpGo(w, r)).catch((er) => { if (w) w.close(); toast(er.message, true); });
 });

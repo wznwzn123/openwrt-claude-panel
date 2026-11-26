@@ -7281,7 +7281,11 @@ P.xp_open = function(a) {
 	let c = hub_conf(), exp = +(getenv('CMCP_XP_NOW') || time()) + 7200, sig = xp_hmac(c.RKEY, c.SUB + '|' + x.port + '|' + exp);
 	let to = x.path || '/';
 	// 控制面板：告诉它接口就在这个地址（https 443），带上密钥，打开就能用
-	if (x.kind == 'clash') to = sprintf('/ui/?hostname=%s&port=443&secret=%s', r.host, urlenc(x.secret ?? ''));
+	if (x.kind == 'clash') {
+		let q = sprintf('hostname=%s&port=443&secret=%s', r.host, urlenc(x.secret ?? '')), ui = '' + (a?.ui ?? '');
+		// 面板「打开控制面板」带上用的是哪个（metacubexd / zashboard 的设置在 #/setup，yacd 在网址参数里）
+		to = !match(ui, /^[a-z0-9_-]{1,30}$/) ? '/ui/?' + q : ui == 'metacubexd' || ui == 'zashboard' ? '/ui/' + ui + '/#/setup?' + q : ui == 'yacd' ? '/ui/' + ui + '/?' + q : '/ui/' + ui + '/';
+	}
 	return { url: sprintf('https://%s/__cmcpx?p=%d&e=%d&s=%s&to=%s', r.host, x.port, exp, sig, urlenc(to)), name: x.name, host: r.host, wait: 5 };
 };
 P.xp_close = function() {

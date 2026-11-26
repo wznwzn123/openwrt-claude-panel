@@ -94,16 +94,13 @@ const lay = (page) => page.evaluate(() => {
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://panel.test:8197/panel/?p=home'); await W(1500);
 		await page.evaluate(() => { const f = document.createElement('iframe'); f.id = 'lf'; f.src = '/fake-luci'; f.style.cssText = 'position:fixed;inset:60px 0 0 0;width:100%;height:80%;z-index:99;background:#fff'; document.body.appendChild(f); });
-		await W(1200);
+		await W(400);
 		const fr = page.frame({ url: /fake-luci/ });
-		ok('原版后台里嵌着的终端（路由器:7681）：换成「在新标签页打开」', fr && !(await fr.$('iframe#tt')) && /7681 端口/.test(await fr.textContent('body')));
+		ok('原版后台里嵌着的终端（路由器:7681）：先写「正在打开…」', fr && /正在打开…/.test(await fr.textContent('body')));
+		await W(2500);
+		ok('官网切好后在原处打开（不另开标签页），地址换成远程页面的', S.calls.some((c) => c.m === 'xp_open' && c.p.port === 7681 && c.p.https === false) && /fake-x\?port=7681/.test(await fr.getAttribute('iframe#tt', 'src') || '') && /端口 7681/.test(await page.frame({ url: /fake-x\?port=7681/ })?.textContent('body') || ''), JSON.stringify(S.calls.filter((c) => c.m === 'xp_open')));
 		await page.screenshot({ path: path.join(SHOT, 'xpage-lfull.png') });
-		S.calls = [];
-		let popP = ctx.waitForEvent('page');
-		await fr.click('button:has-text("在新标签页打开")');
-		let pop = await popP; await W(2200);
-		ok('点了：面板按端口打开（https 跟着原地址），新标签页跳到远程页面的地址', S.calls.some((c) => c.m === 'xp_open' && c.p.port === 7681 && c.p.https === false) && /fake-x\?port=7681/.test(pop.url()), JSON.stringify(S.calls.filter((c) => c.m === 'xp_open')));
-		await pop.close();
+		let popP, pop;
 		S.calls = [];
 		popP = ctx.waitForEvent('page');
 		await fr.click('#oc');
@@ -113,6 +110,14 @@ const lay = (page) => page.evaluate(() => {
 		S.calls = [];
 		await fr.click('#same'); await W(500);
 		ok('同一个地址的普通链接不拦', !S.calls.some((c) => c.m === 'xp_open'));
+		// 概览「控制面板」按钮：在外面也用远程页面的地址打开
+		await page.evaluate(() => document.getElementById('lf').remove());
+		S.calls = [];
+		popP = ctx.waitForEvent('page');
+		await page.evaluate(() => document.getElementById('oDash').click());
+		pop = await popP; await W(2200);
+		ok('概览「控制面板」：在外面按端口 + 控制面板名字打开', S.calls.some((c) => c.m === 'xp_open' && c.p.port > 0 && typeof c.p.ui === 'string' && c.p.ui.length > 0) && /fake-x/.test(pop.url()), JSON.stringify(S.calls.filter((c) => c.m === 'xp_open')));
+		await pop.close();
 		await ctx.close(); await b2.close();
 	}
 	// 在家（网址是路由器的 IP）：不拦

@@ -3110,10 +3110,15 @@ $('oDash').onclick = () => {
 	let w = null;
 	try { w = window.open('', '_blank'); } catch (e) {}
 	busy($('oDash'), async () => {
-		let url = null;
-		try { url = dashUrl(await P('dashboard_state')); }
+		let url = null, ds = null;
+		try { ds = await P('dashboard_state'); url = dashUrl(ds); }
 		catch (e) { if (w) w.close(); throw e; }
 		if (!url) { if (w) w.close(); return toast('还没有安装控制面板，到「插件设置 → 外部控制」里下载', true); }
+		// 6.0 第 36 项：在外面（网址不是路由器的 IP / .lan）用远程页面的地址打开
+		if (!/^(\d+\.\d+\.\d+\.\d+|\[[0-9a-f:.]+\]|localhost|[a-z0-9-]+|.+\.(lan|local|home|internal|home\.arpa))$/i.test(location.hostname) && ME_ROLE.role !== 'sub') {
+			try { const r = await P('xp_open', { port: +ds.port, ui: url.split('/ui/')[1].split('/')[0] }, 40000); return xpGo(w, r); }
+			catch (e) { if (!/自建版|本地版/.test(e.message)) { if (w) w.close(); throw e; } }
+		}
 		if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else location.href = url;
 		toast('已自动登录控制面板（只在连着家里 Wi-Fi 时能打开）');
 	}, false);
@@ -9173,8 +9178,15 @@ async function xpGo(w, r) {
 // 完整原版后台里点到的「路由器:端口」页面（lfx.js 拦下来转给这里）：用远程页面的地址打开
 window.addEventListener('message', (e) => {
 	if (e.origin !== location.origin || !e.data || e.data.cmcpx !== 1) return;
-	const d = e.data, w = window.open('', '_blank');
-	P('xp_open', { port: +d.port, https: !!d.https, path: String(d.path || '/').slice(0, 500) }, 40000).then((r) => xpGo(w, r)).catch((er) => { if (w) w.close(); toast(er.message, true); });
+	const d = e.data, q = { port: +d.port, https: !!d.https, path: String(d.path || '/').slice(0, 500) };
+	// 嵌着的页面：等官网切好，把地址交回去，在原处打开
+	if (d.inline) {
+		const back = (o) => { try { e.source.postMessage({ cmcpxr: 1, id: d.inline, ...o }, location.origin); } catch (x) {} };
+		P('xp_open', q, 40000).then(async (r) => { await new Promise((z) => setTimeout(z, (r.wait || 5) * 1000)); back({ url: r.url }); }).catch((er) => back({ err: er.message }));
+		return;
+	}
+	const w = window.open('', '_blank');
+	P('xp_open', q, 40000).then((r) => xpGo(w, r)).catch((er) => { if (w) w.close(); toast(er.message, true); });
 });
 /* =====================================================================
    Kwrt 原版页面（在面板里打开，自动登录）

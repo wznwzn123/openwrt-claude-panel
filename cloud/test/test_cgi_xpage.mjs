@@ -56,7 +56,9 @@ try {
 	ok('按端口开：认识的用它的名字，路径用原版后台里的', r.result?.name === 'AdGuard Home' && new URL(r.result.url).searchParams.get('to') === '/#/settings', JSON.stringify(r));
 	r = await cgi('xp_open', { port: 9093, path: '/ui/?hostname=192.168.1.1&port=9093' });
 	ok('按端口开控制面板：换成这个地址的接口（不用原版后台里的局域网地址）', /^\/ui\/\?hostname=abcd2345-x\.panel\.example&port=443/.test(new URL(r.result.url).searchParams.get('to')));
-	ok('按端口开：没人在听的端口说原因', /端口 5555 没在运行/.test(err(await cgi('xp_open', { port: 5555 }))));
+	r = await cgi('xp_open', { port: 9093, ui: 'metacubexd' });
+	ok('面板「打开控制面板」：metacubexd 打开就连好（#/setup）', new URL(r.result.url).searchParams.get('to') === `/ui/metacubexd/#/setup?hostname=${SUB}-x.panel.example&port=443&secret=p%40ss%20word`, r.result?.url);
+		ok('按端口开：没人在听的端口说原因', /端口 5555 没在运行/.test(err(await cgi('xp_open', { port: 5555 }))));
 	ok('按端口开：面板自己的端口不行', /不能开/.test(err(await cgi('xp_open', { port: 18765 }))));
 	// 长钥匙（超过 64 字节）也对
 	fs.writeFileSync(E + '/cloud.conf', `RKEY=${'L'.repeat(80)}\nPKEY=pk\n`);

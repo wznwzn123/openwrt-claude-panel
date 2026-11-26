@@ -8,7 +8,16 @@
 		try { var x = new URL(u, location.href); if (x.hostname === h && x.port && x.port !== location.port) return { port: +x.port, https: x.protocol === 'https:', path: x.pathname + x.search + x.hash }; } catch (e) {}
 		return null;
 	}
-	function ask(t) { window.top.postMessage({ cmcpx: 1, port: t.port, https: t.https, path: t.path }, location.origin); }
+	function ask(t, inline) { window.top.postMessage({ cmcpx: 1, port: t.port, https: t.https, path: t.path, inline: inline || 0 }, location.origin); }
+	// 嵌着的页面：直接在原处打开（换成远程页面的地址），不用另开标签页
+	var wait = {}, seq = 0;
+	window.addEventListener('message', function (e) {
+		var d = e.data;
+		if (e.origin !== location.origin || !d || d.cmcpxr !== 1 || !wait[d.id]) return;
+		var f = wait[d.id]; delete wait[d.id];
+		if (d.url) { f.ph.parentNode && f.ph.parentNode.replaceChild(f.el, f.ph); f.el.src = d.url; }
+		else f.msg.textContent = d.err || '打不开';
+	});
 	var wo = window.open;
 	window.open = function (u) { var t = tgt(u); if (t) { ask(t); return null; } return wo.apply(window, arguments); };
 	document.addEventListener('click', function (e) { var a = e.target && e.target.closest && e.target.closest('a[href]'); var t = a && tgt(a.href); if (t) { e.preventDefault(); ask(t); } }, true);
@@ -16,11 +25,13 @@
 		var t = tgt(f.getAttribute('src') || '');
 		if (!t || f.getAttribute('data-cmcpx')) return;
 		f.setAttribute('data-cmcpx', '1');
-		var d = document.createElement('div');
-		d.style.cssText = 'padding:28px 16px;text-align:center;font:15px/1.6 -apple-system,system-ui,sans-serif';
-		var p = document.createElement('p'); p.style.textWrap = 'pretty'; p.textContent = '这个页面在路由器的 ' + t.port + ' 端口，在外面要在新标签页打开'; d.appendChild(p);
-		var b = document.createElement('button'); b.type = 'button'; b.className = 'btn cbi-button cbi-button-action'; b.textContent = '在新标签页打开'; b.onclick = function () { ask(t); }; d.appendChild(b);
-		f.parentNode && f.parentNode.replaceChild(d, f);
+		var id = ++seq, ph = document.createElement('div');
+		ph.style.cssText = 'padding:28px 16px;text-align:center;font:15px/1.6 -apple-system,system-ui,sans-serif;color:#888';
+		var msg = document.createElement('p'); msg.style.textWrap = 'pretty'; msg.textContent = '正在打开…'; ph.appendChild(msg);
+		f.removeAttribute('src');
+		f.parentNode && f.parentNode.replaceChild(ph, f);
+		wait[id] = { el: f, ph: ph, msg: msg };
+		ask(t, id);
 	}
 	function scan() { var l = document.querySelectorAll('iframe[src]'); for (var i = 0; i < l.length; i++) fix(l[i]); }
 	new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });

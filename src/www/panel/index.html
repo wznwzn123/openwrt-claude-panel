@@ -852,12 +852,12 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
 .chip.on{background:var(--text);color:var(--card)}
 :root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#splTab,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.hidden{display:none}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
-:root.dark :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
-@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
+:is(#modeChips,#runChips,#stView,#apView,#wgSeg,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#splTab,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
+:is(#modeChips,#runChips,#stView,#apView,#wgSeg,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
+:is(#modeChips,#runChips,#stView,#apView,#wgSeg,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.hidden{display:none}
+:is(#modeChips,#runChips,#stView,#apView,#wgSeg,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
+:root.dark :is(#modeChips,#runChips,#stView,#apView,#wgSeg,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:#3a3e48;color:#fff}
+@media(max-width:360px){:is(#modeChips,#runChips,#stView,#apView,#wgSeg,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{font-size:12.5px;padding:6px 3px}}
 /* 按钮 */
 .btn.sm{background:var(--fill);color:var(--brand);font-weight:700}
 /* 黑（深色模式白）只给主操作（.btn.primary）；蓝色按钮是浅蓝底蓝字，同一种操作一个样子（评审 11/26） */
@@ -1058,6 +1058,7 @@ html,body{overscroll-behavior-y:contain}
 /* 第 32 项：常用服务 */
 #ssBody .sport{width:96px;flex:none;text-align:center}#ssBody .kv.aswon:has(.sport){gap:8px}#ssBody .ssshare{gap:10px;align-items:center}#ssBody>.card{margin-bottom:14px}#ssBody>.card:first-child{margin-top:12px}#ssBody .sshd{display:flex;align-items:center;gap:6px;min-width:0}#ssBody .sshd .pill{flex:none}.ssdisks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 /* 第 30、34 项：固件升级 */
+#wgBody .wgkv{gap:10px;align-items:center}#wgBody .wgkv>span:first-child{flex:none;color:var(--muted)}#wgBody .wgkv>.mono{flex:1;min-width:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#wgBody .wgkv .btn{flex:none}#wgBody .wgrow{gap:8px;align-items:center}#wgBody .wgrow .muted,#wgBody .wgrow b{white-space:nowrap}#wgBody #wgSeg{margin:4px 0 8px}#wgBody .wgonly .kv>span:last-child{flex:none}#wgBody .kv.aswon{cursor:pointer}.wgqr{max-width:260px;margin:0 auto;background:#fff;border-radius:12px;padding:8px}.wgqr svg{display:block;width:100%;height:auto}.wgpick{max-height:50vh;overflow:auto}.wgpick .kv.aswon>span:first-child{min-width:0;display:block}.wgpick .kv.aswon b{display:block}.wgpick .kv .muted{font-size:12.5px}
 #mvBody>.sectitle:first-child{margin-top:4px}#mvBody .mvcode{font-size:17px;font-weight:600;letter-spacing:.02em;overflow-wrap:anywhere;padding:12px;border-radius:10px;background:var(--fill);margin:4px 0 6px;user-select:all;-webkit-user-select:all}#mvBody .mvitems{display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 4px}#mvBody .btngrid{margin:12px 0 4px}#mvBody .mvin{display:flex;gap:8px;align-items:center;padding:4px 0}#mvBody .mvin .input{flex:1;min-width:0}#mvBody .mvin .btn{flex:none}#mvBody .kv>span:last-child{text-align:right;min-width:0;overflow-wrap:anywhere}#mvBody .mvnet i{display:block;font-style:normal;font-size:12px;color:var(--muted)}#mvBody .kv.aswon{cursor:pointer}
 #fwBody>.card:first-child,#fwBody>.notice+.card{margin-top:12px}#fwBody .fwfile{display:flex;align-items:baseline;gap:10px;min-width:0}#fwBody .fwfile b{flex:1;min-width:0}#fwBody .fwfile .muted{flex:none;font-size:13px}#fwBody .fwbar{height:6px;border-radius:3px;background:var(--fill);margin-top:10px;overflow:hidden}#fwBody .fwbar i{display:block;height:100%;background:var(--blue,#0a84ff);transition:width .2s}#fwBody label.btn.disabled{opacity:.45;pointer-events:none}
 /* 第 69 项：分流 */
@@ -1552,6 +1553,9 @@ html,body{overscroll-behavior-y:contain}
 <section class="page" id="p-fwup">
 	<div id="fwBody"><section class="card empty">读取中…</section></div>
 </section>
+<section class="page" id="p-wg">
+	<div id="wgBody"><section class="card empty">读取中…</section></div>
+</section>
 <section class="page" id="p-move">
 	<div id="mvBody"><section class="card empty">读取中…</section></div>
 </section>
@@ -1662,7 +1666,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { move: 'owner', xpage: 'owner', split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { wg: 'owner', move: 'owner', xpage: 'owner', split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2109,7 +2113,7 @@ function watchJobs(onDone) {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { move: '换路由器', xpage: '远程页面', split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { wg: '加密通道', move: '换路由器', xpage: '远程页面', split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2187,6 +2191,7 @@ const NAV = [
 		{ p: 'cbk', i: '☁', t: '云端备份' },
 		{ p: 'move', i: '⇄', t: '换路由器', kw: '搬家 新路由器 迁移 转移设置 换机 搬家码' },
 		{ p: 'lfull', i: '⧉', t: '完整原版后台' },
+		{ p: 'wg', i: '⛨', t: '加密通道', kw: 'wireguard wg vpn 回家 连回家 在外面 nas 监控 摄像头 视频 大文件 局域网' },
 		{ p: 'xpage', i: '⧉', t: '远程页面', kw: 'openclash 控制面板 dashboard yacd metacubexd adguard 网页终端 ttyd docker 其他端口 在外面打开' },
 		['admin/quickstart', 'LuCI 首页', '⌂'],
 	] },
@@ -2299,6 +2304,7 @@ NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 
 NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
 NAV_IC.xpage = ['<rect x="3" y="4" width="18" height="15" rx="2"/><path d="M3 9h18M14 13h4M14 16h2"/><circle cx="6" cy="6.5" r=".6"/>', '#ff9500'];
 NAV_IC.split = ['<path d="M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', '#af52de'];
+NAV_IC.wg = ['<path d="M12 3 5 6v5c0 4.5 3 8.3 7 9.5 4-1.2 7-5 7-9.5V6z"/><path d="M9.5 12.5 11 14l3.5-3.5"/>', '#30b0c7'];
 NAV_IC.move = ['<rect x="2.5" y="7" width="7" height="10" rx="1.5"/><rect x="14.5" y="7" width="7" height="10" rx="1.5"/><path d="M10.5 10h3M12 8.5l1.5 1.5L12 11.5M13.5 14h-3M12 12.5 10.5 14l1.5 1.5"/>', '#5856d6'];
 NAV_IC.fwup = ['<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>', '#34c759'];
 NAV_IC.svcsw = ['<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>', '#8e8e93'];
@@ -8839,6 +8845,128 @@ $('wanSave').onclick = async () => {
 		wfConfirm(r.token, r.wait + 2, null, '上网设置');
 	});
 };
+/* ---------- 6.0 第 55 项：家庭加密通道（WireGuard） ----------
+ * 用户 11/26 定：WireGuard；没公网 IP 写原因；默认整个家里网络，可以只通指定设备；手机只有去家里的流量走通道。
+ * 加手机要先确认本人；配置（含手机的私钥）只显示这一次：二维码 + 下载文件。只有主账号能用。 */
+const WGP = { d: null };
+async function loadWg() {
+	WGP.d = await P('wg_get', { cands: true });
+	setStatus(true, '在线');
+	wgRender();
+}
+const wgAgo = (t) => (t ? ago(new Date(t * 1000).toISOString()) + '连过' : '没连过');
+const wgMB = (b) => (b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB');
+function wgRender() {
+	const d = WGP.d;
+	if (!d) return;
+	if (!d.caps) {
+		$('wgBody').innerHTML = `<section class="card aucard"><div class="kv aswon"><span><b>WireGuard</b><span class="muted">没装</span></span><button class="btn sm" data-wgget type="button">去软件中心装</button></div></section>`;
+		return;
+	}
+	const r = d.reach || {};
+	const warn = !r.ok ? `<div class="notice w" style="margin-top:12px">${esc(r.msg)}</div>` : r.nat ? `<div class="notice w" style="margin-top:12px">上一级路由器（光猫）要把 UDP ${d.port} 转发到 ${esc(r.wan4)}</div>` : '';
+	const sw = `<span class="sw"><input type="checkbox" id="wgOn"${d.on ? ' checked' : ''}${!r.ok && !d.on ? ' disabled' : ''} aria-label="加密通道"><i></i></span>`;
+	let main = `<div class="kv aswon"><span><b>加密通道</b></span>${sw}</div>`;
+	if (d.on) main += `<div class="kv wgkv"><span>地址</span><span class="mono">${esc(d.host || '—')}</span><button class="btn sm" id="wgHost" type="button">修改</button></div>
+		<div class="kv wgkv"><span>端口</span><span class="mono">UDP ${d.port}</span><button class="btn sm" id="wgPort" type="button">修改</button></div>`;
+	let html = warn + `<section class="card aucard" style="margin-top:12px">${main}</section>`;
+	if (d.on) {
+		const ps = d.peers || [];
+		html += `<div class="sectitle"><b>手机</b></div><section class="card list">${ps.length ? ps.map((p) => `<div class="file wgrow"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(p.name)}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(p.ip)} · ${esc(wgAgo(p.hs))}${p.hs ? ' · ↓' + wgMB(p.tx) + ' ↑' + wgMB(p.rx) : ''}</span></div><button class="btn sm" data-wgdel="${esc(p.id)}" type="button">删除</button></div>`).join('') : '<div class="empty">还没加手机</div>'}</section>
+			<button class="btn" id="wgAdd" type="button" style="width:100%;margin-top:12px">添加手机</button>`;
+		const only = d.only;
+		html += `<div class="sectitle"><b>能连的设备</b></div><section class="card">
+			<div class="chips" id="wgSeg"><button type="button" data-wgmode="all" class="chip${only ? '' : ' on'}">整个家里网络</button><button type="button" data-wgmode="only" class="chip${only ? ' on' : ''}">只通指定设备</button></div>
+			${only ? `<div class="wgonly">${only.length ? only.map((x) => `<div class="kv"><span class="ell">${esc(x.name)}</span><span class="mono">${esc(x.ip)}</span></div>`).join('') : '<div class="empty">一台都不通</div>'}<button class="btn" id="wgPick" type="button" style="width:100%;margin-top:10px">选设备</button></div>` : ''}
+		</section>`;
+	}
+	$('wgBody').innerHTML = html;
+}
+async function wgSet(body, tmo) {
+	const r = await P('wg_set', body, tmo || 30000);
+	WGP.d = r; wgRender();
+	if (r.msg) toast(r.msg);
+	return r;
+}
+// 加手机：先确认本人（配置里有私钥），配置只显示这一次
+async function wgAdd() {
+	const name = await modal(`<h3>添加手机</h3>
+		<div class="fld"><div class="lb"><b>名字</b></div><div class="ctl"><input class="input" data-a="name" maxlength="30" placeholder="我的手机" autocomplete="off"></div></div>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-ok>下一步</button></div>`,
+	(m, close) => { const i = m.querySelector('[data-a="name"]'); setTimeout(() => i.focus(), 60); m.querySelector('[data-ok]').onclick = () => (i.value.trim() ? close(i.value.trim()) : i.focus()); });
+	if (!name || typeof name !== 'string') return;
+	let tok;
+	if (isHosted()) { tok = await needSudo('添加手机要先确认是你本人'); if (!tok) return; }
+	else if (!sudoOn()) { toast('先在「我的主页 → 敏感信息」里验证是你本人', true); return go('me'); }
+	else tok = SUDO.tok;
+	try { await loadQr(); } catch (e) {}
+	let r;
+	try { r = await wgSet({ add: name, sudo: tok }, 40000); }
+	catch (e) { if (/确认是你本人/.test(e.message)) sudoSet(null); return toast(e.message, true); }
+	wgShow(r);
+}
+function wgShow(r) {
+	const url = URL.createObjectURL(new Blob([r.conf], { type: 'text/plain' }));
+	modal(`<div class="sheethead"><h3>${esc(r.name)}</h3><button class="btn sm" data-v="close">完成</button></div>
+		<div class="notice w" style="margin:0 0 10px">只显示这一次。手机装 WireGuard，扫码导入。</div>
+		${window.qrcode ? `<div class="qrbox wgqr">${qrSvg(r.conf)}</div>` : ''}
+		<div class="btngrid" style="margin:12px 0 0"><button class="btn" data-wgcopy type="button">复制配置</button><a class="btn primary" href="${url}" download="${esc(r.file)}">下载配置文件</a></div>`,
+	(m) => { m.querySelector('[data-wgcopy]').onclick = () => copyText(r.conf); }).then(() => setTimeout(() => URL.revokeObjectURL(url), 1000));
+}
+async function wgPick() {
+	const c = WGP.d.cands || [], cur = new Set((WGP.d.only || []).map((x) => x.ip));
+	const v = await modal(`<div class="sheethead"><h3>选设备</h3><button class="btn sm" data-v="close">取消</button></div>
+		<div class="wgpick">${c.length ? c.map((x, i) => `<label class="kv aswon"><span class="ell"><b>${esc(x.name || x.ip)}</b><span class="muted">${esc(x.ip)}</span></span><span class="sw"><input type="checkbox" data-i="${i}"${cur.has(x.ip) ? ' checked' : ''} aria-label="${esc(x.name || x.ip)}"><i></i></span></label>`).join('') : '<div class="empty">家里没有在线的设备</div>'}</div>
+		<div class="btngrid" style="margin:14px 0 0;grid-template-columns:1fr"><button class="btn primary" data-ok>保存</button></div>`,
+	(m, close) => { m.querySelector('[data-ok]').onclick = () => close([...m.querySelectorAll('[data-i]:checked')].map((x) => c[+x.dataset.i])); });
+	if (!Array.isArray(v)) return;
+	try { await wgSet({ only: v.map((x) => ({ ip: x.ip, mac: x.mac, name: x.name || x.ip })) }); } catch (e) { toast(e.message, true); }
+}
+async function wgAsk(title, label, val, ph, mode) {
+	return modal(`<h3>${title}</h3><div class="fld"><div class="lb"><b>${label}</b></div><div class="ctl"><input class="input mono" data-a="v" value="${esc(val)}" placeholder="${esc(ph)}" inputmode="${mode}" autocapitalize="off" spellcheck="false"></div></div>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-ok>保存</button></div>`,
+	(m, close) => { const i = m.querySelector('[data-a="v"]'); m.querySelector('[data-ok]').onclick = () => close(i.value.trim()); });
+}
+$('wgBody').addEventListener('change', async (e) => {
+	if (e.target.id !== 'wgOn') return;
+	const on = e.target.checked;
+	const ask = on ? ['开启加密通道', `防火墙放行 UDP ${WGP.d.port}，网络会重新加载几秒。`, '开启', false] : ['关闭加密通道', '手机都连不上家里了。再打开不用重新扫码。', '关闭', true];
+	if (!(await confirmBox(...ask))) { e.target.checked = !on; return; }
+	e.target.disabled = true;
+	try { await wgSet({ on }, 60000); } catch (er) { e.target.checked = !on; e.target.disabled = false; toast(er.message, true); }
+});
+$('wgBody').addEventListener('click', async (e) => {
+	const t = e.target;
+	if (t.closest('[data-wgget]')) return stFind(WGP.d.pkg);
+	if (t.id === 'wgAdd') return wgAdd();
+	if (t.id === 'wgPick') return wgPick();
+	if (t.id === 'wgHost') {
+		const v = await wgAsk('地址', '域名（选填）', WGP.d.own || '', '自动', 'url');
+		if (v == null || typeof v !== 'string') return;
+		return busy(t, async () => { try { await wgSet({ host: v }); } catch (er) { toast(er.message, true); } });
+	}
+	if (t.id === 'wgPort') {
+		const v = await wgAsk('端口', 'UDP 端口', String(WGP.d.port), '51820', 'numeric');
+		if (!v || typeof v !== 'string' || v === String(WGP.d.port)) return;
+		if (WGP.d.peers.length && !(await confirmBox('改端口', '已经加的手机要重新扫码。', '改'))) return;
+		return busy(t, async () => { try { await wgSet({ port: v }, 60000); } catch (er) { toast(er.message, true); } });
+	}
+	const del = t.closest('[data-wgdel]');
+	if (del) {
+		const p = WGP.d.peers.find((x) => x.id === del.dataset.wgdel);
+		if (!p || !(await confirmBox('删除「' + p.name + '」', '这台手机连不上家里了，要连得重新添加。', '删除', true))) return;
+		return busy(del, async () => { try { await wgSet({ del: p.id }); } catch (er) { toast(er.message, true); } });
+	}
+	const m = t.closest('[data-wgmode]');
+	if (m) {
+		const want = m.dataset.wgmode;
+		if ((want === 'only') === !!WGP.d.only) return;
+		if (want === 'only') return wgPick();
+		return busy(m, async () => { try { await wgSet({ only: null }); } catch (er) { toast(er.message, true); } });
+	}
+	const row = t.closest('.kv.aswon');
+	if (row && !t.closest('.sw,button')) { const i = row.querySelector('#wgOn'); if (i && !i.disabled) i.click(); }
+});
 
 /* ---------- 6.0 第 14 项：Wi-Fi 设置 ----------
  * 每个频段一张卡片：开关、名字、密码、隐藏、信道。两个频段名字和密码一样时合成一份（「用同一个名字」）。
@@ -9634,7 +9762,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { move: loadMove, xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); setStatus(true, '在线'); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { wg: loadWg, move: loadMove, xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); setStatus(true, '在线'); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

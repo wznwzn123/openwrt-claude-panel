@@ -121,6 +121,24 @@ dnsFull = true;
 r = await post('/api/dev/xtarget', { sub: R2.sub, rkey: R2.rkey, port: 9090 });
 ok('网址名额满了：说清楚', r.st === 502 && /名额满了/.test(r.j.error), JSON.stringify(r.j));
 
+// ---------- 第 55 项：加密通道的地址「子域名-w」 ----------
+dnsFull = false; CF.length = 0;
+for (const [ip4, ip6] of [['192.168.1.5', ''], ['100.64.3.4', ''], ['10.0.0.1', ''], ['', 'fe80::1'], ['', ''], ['', 'fd00::1']])
+	if ((await post('/api/dev/wgdns', { sub: R2.sub, rkey: R2.rkey, ip4, ip6 })).st !== 400) ok('只认公网地址：' + ip4 + ip6, false);
+ok('只认公网地址（私有、运营商内网、链路本地、ULA 都不行）', !CF.length);
+ok('钥匙不对：拒绝', (await post('/api/dev/wgdns', { sub: R2.sub, rkey: 'x', ip4: '1.2.3.4' })).st === 403);
+r = await post('/api/dev/wgdns', { sub: R2.sub, rkey: R2.rkey, ip4: '1.2.3.4', ip6: '2408:8000::1' });
+const wa = CF.filter((x) => x.m === 'POST' && /dns_records/.test(x.p));
+ok('第一次：建 A、AAAA 两条，不走代理（手机直接连家里）', r.st === 200 && r.j.host === R2.sub + '-w.panel.example' && wa.length === 2 && wa.every((x) => x.body.name === R2.sub + '-w.panel.example' && x.body.proxied === false) && wa[0].body.type === 'A' && wa[0].body.content === '1.2.3.4' && wa[1].body.type === 'AAAA', JSON.stringify(wa.map((x) => x.body)));
+CF.length = 0;
+r = await post('/api/dev/wgdns', { sub: R2.sub, rkey: R2.rkey, ip4: '5.6.7.8', ip6: '' });
+ok('IP 变了：改 A 记录，没 IPv6 了删掉 AAAA', r.st === 200 && CF.some((x) => x.m === 'PUT' && x.body.content === '5.6.7.8') && CF.some((x) => x.m === 'DELETE') && !CF.some((x) => x.m === 'POST'), JSON.stringify(CF.map((x) => x.m + ' ' + x.p)));
+const wd = (await S().get('d:' + R2.sub)).wdns;
+ok('记着记录编号', wd && wd.A && !wd.AAAA, JSON.stringify(wd));
+CF.length = 0;
+r = await post('/api/dev/wgdns', { sub: R2.sub, rkey: R2.rkey, off: true });
+ok('关掉：删掉记录', r.st === 200 && CF.some((x) => x.m === 'DELETE' && x.p.endsWith('/' + wd.A)) && !(await S().get('d:' + R2.sub)).wdns);
+
 let fail = 0;
 for (const [n, c, note] of results) { console.log((c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '  ← ' + String(note).slice(0, 400))); if (!c) fail++; }
 console.log(`\n${results.length - fail}/${results.length} 通过`);

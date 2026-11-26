@@ -137,9 +137,10 @@ export async function edToLocal(env, sub, d) {
 }
 // 子域名名额满了（Cloudflare 免费版每个域名的 DNS 记录有上限：2024-09 以后加的域名 200 条，以前的 1000 条）
 export const dnsFull = (e) => !!(e && e.dnsStep && ((e.codes || []).includes(81045) || /quota|limit|exceed/i.test(e.message || '')));
-export async function deprovision(env, { tunnel, dns, xdns }) {
+export async function deprovision(env, { tunnel, dns, xdns, wdns }) {
 	await dnsDel(env, dns);
 	await dnsDel(env, xdns); // 第 36 项「子域名-x」
+	for (const id of Object.values(wdns || {})) await dnsDel(env, id); // 第 55 项「子域名-w」（加密通道）
 	if (tunnel) {
 		const acc = env.CF_ACCOUNT_ID;
 		try { await cf(env, 'DELETE', `/accounts/${acc}/cfd_tunnel/${tunnel}/connections`); } catch (e) {}

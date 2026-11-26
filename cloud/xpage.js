@@ -3,7 +3,10 @@
 // 只有用的时候才建这条域名记录（不用的路由器不占名额）。托管版自动；自建版写教程。
 // 进这个地址先过 Worker：没有路由器签的通行证（HMAC，绑定子域名、端口、到期时间）一律挡掉；通行证只放在这个地址自己的 Cookie 里。
 const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
-export const X_SUFFIX = '-x';
+export const X_SUFFIX = '-x', W_SUFFIX = '-w';
+// 公网地址（加密通道用）：IPv4 不是私有、运营商内网、本机、组播；IPv6 是全球单播 2000::/3
+export const PUB4 = (ip) => { const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip || ''); if (!m) return false; const a = m.slice(1).map(Number); if (a.some((x) => x > 255)) return false; return !(a[0] === 0 || a[0] === 10 || a[0] === 127 || a[0] >= 224 || (a[0] === 100 && a[1] >= 64 && a[1] <= 127) || (a[0] === 169 && a[1] === 254) || (a[0] === 172 && a[1] >= 16 && a[1] <= 31) || (a[0] === 192 && a[1] === 168)); };
+export const PUB6 = (ip) => /^[23][0-9a-f]{0,3}:[0-9a-f:]+$/i.test(ip || '') && ip.length <= 39 && (ip.match(/::/g) || []).length <= 1;
 const PORT_OK = (p) => Number.isInteger(p) && p >= 1 && p <= 65535 && ![18765, 22, 53, 67].includes(p);
 // 6.0 第 37 项：家里其他设备（NAS、摄像头）的页面——只认家里局域网的私有地址（10.x、172.16–31.x、192.168.x），不认 127.x、公网地址
 export const LAN_IP = (ip) => { const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip || ''); if (!m) return false; const a = m.slice(1).map(Number); if (a.some((x) => x > 255) || a[3] === 0 || a[3] === 255) return false; return a[0] === 10 || (a[0] === 172 && a[1] >= 16 && a[1] <= 31) || (a[0] === 192 && a[1] === 168); };
@@ -43,10 +46,42 @@ export function installXpage(Hub, { cf, host }) {
 			await this.watch(sub).setX(t);
 			return { st: 200, ok: true, host: xh, port, t };
 		},
+		// 6.0 第 55 项：加密通道的地址「子域名-w」，跟着家里的 IP 变（不走 Cloudflare 代理：手机直接连家里）；off 删掉
+		devWgDns(a) { return this.lock(() => this._devWgDns(a)); },
+		async _devWgDns({ sub, rkey, ip4, ip6, off }) {
+			if (!(await this.devOk(sub, rkey))) return { st: 403, error: '钥匙不对' };
+			const d = await this.ctx.storage.get('d:' + sub);
+			if (!d || d.state !== 'ok') return { st: 404, error: '没有这台路由器' };
+			if (d.off) return { st: 403, error: '这台路由器的托管服务停用了' };
+			const env = this.env, wh = host(env, sub + W_SUFFIX), have = d.wdns || {};
+			if (!off) {
+				if (ip4 && !PUB4(ip4)) return { st: 400, error: '不是公网 IPv4' };
+				if (ip6 && !PUB6(ip6)) return { st: 400, error: '不是公网 IPv6' };
+				if (!ip4 && !ip6) return { st: 400, error: '没有公网地址' };
+				if (!(await this.hit('wd:' + sub, 30, 3600e3))) return { st: 429, error: '改得太频繁了：一小时后再试' };
+			}
+			const want = off ? {} : { A: ip4 || '', AAAA: ip6 || '' }, next = {};
+			try {
+				for (const t of ['A', 'AAAA']) {
+					const id = have[t], ip = want[t];
+					if (ip && id) { await cf(env, 'PUT', `/zones/${env.CF_ZONE_ID}/dns_records/${id}`, { type: t, name: wh, content: ip, proxied: false, ttl: 60, comment: 'cmcp w ' + sub }); next[t] = id; }
+					else if (ip) next[t] = (await cf(env, 'POST', `/zones/${env.CF_ZONE_ID}/dns_records`, { type: t, name: wh, content: ip, proxied: false, ttl: 60, comment: 'cmcp w ' + sub })).id;
+					else if (id) { try { await cf(env, 'DELETE', `/zones/${env.CF_ZONE_ID}/dns_records/${id}`); } catch (e) {} }
+				}
+			} catch (e) { return { st: 502, error: (e.codes || []).includes(81045) || /quota|limit|exceed/i.test(e.message || '') ? '官网的网址名额满了，暂时开不了' : '官网这边改不了：' + e.message }; }
+			if (Object.keys(next).length) d.wdns = next; else delete d.wdns;
+			await this.ctx.storage.put('d:' + sub, d);
+			return off ? { st: 200, ok: true } : { st: 200, ok: true, host: wh };
+		},
 	});
 }
 // 路由器那边的接口
 export async function xDev(p, H, b) {
+	if (p === '/api/dev/wgdns') {
+		const s = (v) => String(v == null ? '' : v);
+		const { st, ...rest } = await H.devWgDns({ sub: s(b.sub), rkey: s(b.rkey), ip4: s(b.ip4), ip6: s(b.ip6).toLowerCase(), off: b.off === true });
+		return J(rest, st);
+	}
 	if (p !== '/api/dev/xtarget') return null;
 	const s = (v) => String(v == null ? '' : v);
 	const r = await H.devXTarget({ sub: s(b.sub), rkey: s(b.rkey), port: +b.port || 0, https: b.https === true, ip: s(b.ip) });

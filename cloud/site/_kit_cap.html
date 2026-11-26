@@ -1,12 +1,23 @@
 <style>
-.capm{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:16px;background:rgba(10,14,24,.46);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-.capm .capc{width:100%;max-width:380px;border-radius:22px;padding:22px 20px 18px;background:var(--p-surface,#fff);color:var(--ink,#111);box-shadow:0 24px 60px rgba(0,0,0,.28)}
-.capm h3{margin:0 0 6px;font-size:18px}
-.capm p{margin:0 0 14px;font-size:14px;line-height:1.7;opacity:.78;text-wrap:pretty}
-.capm .capw{min-height:70px;display:grid;place-items:center}
-.capm .cape{color:#c0392b;font-size:13.5px;line-height:1.6;margin:10px 0 0}
-.capm .capx{margin-top:14px;width:100%;height:42px;border-radius:999px;border:1px solid rgba(128,128,128,.38);background:none;color:inherit;font:inherit;cursor:pointer}
-@media (prefers-color-scheme:dark){.capm .capc{background:var(--p-surface,#1b1f2a);color:var(--ink,#eee)}}
+/* 人机验证弹窗（用户 11/27：弄美观一点）：跟官网一样的白卡片、居中、上面一个盾牌图标；验证组件放在浅灰底里，窄屏用小号组件 */
+.capm{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.42);-webkit-backdrop-filter:blur(10px) saturate(140%);backdrop-filter:blur(10px) saturate(140%);animation:capIn .2s ease-out}
+.capm .capc{width:100%;max-width:360px;border-radius:24px;padding:20px 20px 18px;background:var(--p-surface,#fff);color:var(--p-ink,#1d1d1f);box-shadow:0 30px 80px rgba(0,0,0,.25);text-align:center;animation:capUp .26s cubic-bezier(.2,.8,.2,1)}
+.capm .capb{display:inline-flex;align-items:center;gap:7px;margin:0 0 20px;padding:5px 12px 5px 6px;border-radius:999px;background:var(--p-bg,#f5f5f7);font-size:12.5px;font-weight:600;letter-spacing:.01em;color:var(--p-ink,#1d1d1f)}
+.capm .capb svg{flex:none;border-radius:6px}
+.capm .capi{width:52px;height:52px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:color-mix(in oklab,var(--p-accent,#0066cc) 12%,transparent);color:var(--p-accent,#0066cc)}
+.capm .capi svg{width:26px;height:26px}
+.capm h3{margin:0 0 6px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.capm p{margin:0;font-size:14px;line-height:1.6;color:var(--p-muted,#6e6e73);text-wrap:pretty}
+.capm .capw{margin:18px 0 0;min-height:76px;padding:6px 0;border-radius:16px;background:var(--p-bg,#f5f5f7);display:grid;place-items:center;overflow:hidden}
+.capm .capl{font-size:13.5px;color:var(--p-muted,#6e6e73)}
+.capm .cape{color:var(--danger,#d70015);font-size:13.5px;line-height:1.6;margin:12px 0 0;text-wrap:pretty}
+.capm .capx{margin-top:14px;width:100%;height:44px;border-radius:999px;border:0;background:var(--p-bg,#f5f5f7);color:var(--p-ink,#1d1d1f);font:inherit;font-size:15px;cursor:pointer}
+.capm .capx:hover{filter:brightness(.97)}
+.capm .capx:focus-visible{outline:2px solid var(--p-accent,#0066cc);outline-offset:2px}
+@keyframes capIn{from{opacity:0}}
+@keyframes capUp{from{opacity:0;transform:translateY(12px) scale(.98)}}
+@media (prefers-reduced-motion:reduce){.capm,.capm .capc{animation:none}}
+@media (prefers-color-scheme:dark){.capm .capc{background:var(--p-surface,#1c1c1e);color:var(--p-ink,#f5f5f7)}.capm .capb,.capm .capw,.capm .capx{background:color-mix(in oklab,var(--p-ink,#f5f5f7) 8%,transparent)}}
 </style>
 <script>
 // 6.0 第 66 项：人机验证（Cloudflare Turnstile）。平时不出现；同一来源短时间试太多次、或者官网开了「受攻击模式」时，
@@ -24,7 +35,7 @@
   }));
   window.capSolve = (site) => new Promise((resolve) => {
     const m = document.createElement('div'); m.className = 'capm';
-    m.innerHTML = '<div class="capc" role="dialog" aria-modal="true" aria-labelledby="capT"><h3 id="capT">确认是你本人在操作</h3><p>这个网络刚才试了好几次，或者官网正在防攻击<br>过了验证就继续</p><div class="capw"></div><div class="cape" hidden></div><button type="button" class="capx" data-x>取消</button></div>';
+    m.innerHTML = '<div class="capc" role="dialog" aria-modal="true" aria-labelledby="capT"><div class="capb"><svg viewBox="0 0 100 100" width="22" height="22" aria-hidden="true"><rect width="100" height="100" rx="22.5" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg><span>OpenWrt AI Panel</span></div><div class="capi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m8.8 12.2 2.2 2.2 4.3-4.4"/></svg></div><h3 id="capT">确认是你本人在操作</h3><p>试了好几次，或者官网在防攻击<br>过了验证就继续</p><div class="capw"><span class="capl">正在加载验证…</span></div><div class="cape" hidden></div><button type="button" class="capx" data-x>取消</button></div>';
     document.body.appendChild(m);
     let done = false;
     const end = (v) => { if (done) return; done = true; if (m.isConnected) m.remove(); resolve(v); };
@@ -34,8 +45,10 @@
     const err = (t) => { const e = m.querySelector('.cape'); e.textContent = t; e.hidden = false; };
     loadTs().then(() => {
       try {
-        window.turnstile.render(m.querySelector('.capw'), {
+        const w = m.querySelector('.capw'); w.textContent = '';
+        window.turnstile.render(w, {
           sitekey: site, language: 'zh-cn', theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+          size: w.clientWidth < 304 ? 'compact' : 'normal', // 组件正常宽 300px；窄屏（320 宽的手机）用小号的，不超出卡片
           callback: (tok) => setTimeout(() => end(tok), 300),
           'error-callback': () => err('验证没成功，刷新页面再试一次；还不行的话换个网络（比如关掉 Wi-Fi 用手机流量）。'),
           'expired-callback': () => err('验证过期了，再点一次。'),

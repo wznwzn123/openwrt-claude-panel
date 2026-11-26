@@ -11,6 +11,20 @@ deny() {
 export HTTPS=on
 APP=${0##*/}
 [ "$APP" = luci ] || exec "/www/cgi-bin/$APP"
+# 6.0 第 36 项：GET 打开的 LuCI 页面里插一段 lfx.js（在外面时，把页面里「路由器:其他端口」的地址交给面板的「远程页面」打开）
+luci() {
+	if [ "$REQUEST_METHOD" = GET ]; then
+		# 先放进内存里的临时文件：只改网页（Content-Type: text/html），下载的备份这类原样给
+		o=/tmp/cmcp_lg.$$
+		/www/cgi-bin/luci > "$o"
+		if head -c 4096 "$o" | tr -d '\r' | sed '/^$/q' | grep -qi '^content-type: *text/html'; then
+			awk 'd != 1 && /<head[^>]*>/ { sub(/<head[^>]*>/, "&<script src=\"/panel/lfx.js\"></script>"); d = 1 } { print }' "$o"
+		else cat "$o"; fi
+		rm -f "$o"
+		exit 0
+	fi
+	exec /www/cgi-bin/luci
+}
 # 6.0 第 1 项：完整原版后台（面板发的入口票 cmcp_f）：不自动登录，要输路由器密码；核对、锁定、推送都在 cmcp-lfull 里
 if [ -n "$(ck cmcp_f)" ]; then
 	F=/tmp/cmcp_lf.$$
@@ -19,7 +33,7 @@ if [ -n "$(ck cmcp_f)" ]; then
 		10|11)
 			HTTP_COOKIE=$(cat "$F.ck" 2>/dev/null); export HTTP_COOKIE
 			if [ $rc = 10 ]; then [ -f "$F.body" ] || : > "$F.body"; exec 3< "$F.body"; rm -f "$F.ck" "$F.body"; exec /www/cgi-bin/luci <&3; fi
-			rm -f "$F.ck"; exec /www/cgi-bin/luci ;;
+			rm -f "$F.ck"; luci ;;
 		*) rm -f "$F.ck" "$F.body"; exit 0 ;;
 	esac
 fi
@@ -28,7 +42,7 @@ SID=$(ck sysauth_https)
 [ -n "$SID" ] || SID=$(ck sysauth)
 case "$SID" in *[!0-9a-f]*) SID= ;; esac
 if [ -n "$SID" ] && ubus call session get "{\"ubus_rpc_session\":\"$SID\"}" 2>/dev/null | grep -q '"token"'; then
-	exec /www/cgi-bin/luci
+	luci
 fi
 # 没登录或已过期：用面板专用账号自动登录
 SID=$(ubus call session login "{\"username\":\"cmcp\",\"password\":\"$(cat /etc/claude-mcp/luci_pass)\",\"timeout\":86400}" 2>/dev/null | jsonfilter -e '@.ubus_rpc_session')

@@ -51,6 +51,13 @@ try {
 	const u2 = new URL(r.result.url), to = u2.searchParams.get('to');
 	ok('控制面板：打开就连好接口（这个地址的 443、带密钥）', to === `/ui/?hostname=${SUB}-x.panel.example&port=443&secret=p%40ss%20word` && u2.searchParams.get('s') === crypto.createHmac('sha256', RKEY).update(`${SUB}|9093|${NOW + 7200}`).digest('hex'), to);
 	ok('记下现在开着哪个', (await cgi('xp_get')).result?.cur === 9093);
+	// 完整原版后台里拦下来的「路由器:端口」：按端口开
+	r = await cgi('xp_open', { port: 3001, path: '/#/settings' });
+	ok('按端口开：认识的用它的名字，路径用原版后台里的', r.result?.name === 'AdGuard Home' && new URL(r.result.url).searchParams.get('to') === '/#/settings', JSON.stringify(r));
+	r = await cgi('xp_open', { port: 9093, path: '/ui/?hostname=192.168.1.1&port=9093' });
+	ok('按端口开控制面板：换成这个地址的接口（不用原版后台里的局域网地址）', /^\/ui\/\?hostname=abcd2345-x\.panel\.example&port=443/.test(new URL(r.result.url).searchParams.get('to')));
+	ok('按端口开：没人在听的端口说原因', /端口 5555 没在运行/.test(err(await cgi('xp_open', { port: 5555 }))));
+	ok('按端口开：面板自己的端口不行', /不能开/.test(err(await cgi('xp_open', { port: 18765 }))));
 	// 长钥匙（超过 64 字节）也对
 	fs.writeFileSync(E + '/cloud.conf', `RKEY=${'L'.repeat(80)}\nPKEY=pk\n`);
 	r = await cgi('xp_open', { id: 'oc' });

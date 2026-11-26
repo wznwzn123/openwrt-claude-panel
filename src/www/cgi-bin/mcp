@@ -7263,7 +7263,16 @@ P.xp_open = function(a) {
 	let m = xp_mode();
 	if (m == 'self') die('自建版要在你自己的 Cloudflare 里加一条，见教程');
 	if (m == 'local') die('本地版没有隧道：在家里局域网直接打开');
-	let x = null; for (let y in xp_list()) if (y.id == '' + a?.id) x = y;
+	let x = null;
+	if (a?.port != null) {
+		// 完整原版后台里点到的「路由器:端口」页面（lfx.js 转过来）：按端口找，不认识的也能开
+		let port = +a.port;
+		if (!match('' + a.port, /^[0-9]+$/) || port < 1 || port > 65535 || index([18765, 22, 53, 67], port) >= 0) die('这个端口不能开');
+		for (let y in xp_list()) if (y.port == port) x = y;
+		x ??= { id: 'p' + port, name: '端口 ' + port, port, path: '/', https: !!a.https, up: !!xp_listen()[port] };
+		let pa = '' + (a.path ?? '');
+		if (x.kind != 'clash' && match(pa, /^\/[^\r\n]{0,500}$/)) x.path = pa;
+	} else for (let y in xp_list()) if (y.id == '' + a?.id) x = y;
 	if (!x) die('没有这个页面');
 	if (!x.up) die(x.name + ' 没在运行（端口 ' + x.port + ' 没人在听）');
 	let r = hub_call('/api/dev/xtarget', { port: x.port, https: !!x.https }, 30);

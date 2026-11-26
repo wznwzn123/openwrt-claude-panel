@@ -13,13 +13,14 @@ function handle(m, p) {
 	S.calls.push({ m, p });
 	const d = S.d;
 	if (m === 'xp_get') return d;
-	if (m === 'xp_open') { const x = d.list.find((y) => y.id === p.id); d.cur = x.port; return { url: 'http://localhost:8197/fake-x?port=' + x.port, name: x.name, host: 'abcd2345-x.panel.example', wait: 1 }; }
+	if (m === 'xp_open') { const x = d.list.find((y) => (p.port ? y.port === p.port : y.id === p.id)) || { name: '端口 ' + p.port, port: p.port }; d.cur = x.port; return { url: 'http://localhost:8197/fake-x?port=' + x.port, name: x.name, host: 'abcd2345-x.panel.example', wait: 1 }; }
 	if (m === 'xp_close') { d.cur = 0; return { ok: true }; }
 	if (m === 'xp_set') { if (p.op === 'del') d.list = d.list.filter((x) => x.port !== +p.port); else d.list.push({ id: 'm' + p.port, name: p.name, port: +p.port, path: p.path, https: p.https, up: true }); return d; }
 	return mock.respond(m, p);
 }
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (x) => (b += x)); req.on('end', () => {
 	const u = new URL(req.url, 'http://x'), J = (o) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+	if (u.pathname === '/fake-luci') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><html><head><script src="/panel/lfx.js"></script></head><body><h1>终端</h1><iframe id="tt" src="http://' + req.headers.host.split(':')[0] + ':7681/" style="width:100%;height:300px"></iframe><button id="oc" onclick="window.open(\'http://' + req.headers.host.split(':')[0] + ':9090/ui/?hostname=192.168.1.1\')">打开控制面板</button><a id="same" href="/cgi-bin/luci/admin">同一个地址的链接</a></body></html>'); }
 	if (u.pathname === '/fake-x') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<title>远程页面</title>端口 ' + u.searchParams.get('port')); }
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); const m = body.method.replace(/^panel\//, ''); return setTimeout(() => { try { J({ jsonrpc: '2.0', id: body.id, result: handle(m, body.params || {}) }); } catch (e) { J({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } }); } }, 60); }
 	if (u.pathname.startsWith('/cloud/')) return J({ error: 'x' });
@@ -82,6 +83,43 @@ const lay = (page) => page.evaluate(() => {
 		if (mode === 'self') ok('自建版：说明 + 看教程，没有「打开」', re.test(t) && (await page.locator('a:has-text("看教程")').count()) === 1 && (await page.locator('[data-xo]').count()) === 0);
 		else ok('本地版：「打开」是局域网地址', re.test(t) && (await page.getAttribute('#xpBody a:has-text("打开")', 'href')) === 'http://192.168.1.1:9090/ui/');
 		await page.screenshot({ path: path.join(SHOT, `xpage-${mode}.png`) });
+		await ctx.close();
+	}
+	// 完整原版后台里嵌着的「路由器:端口」页面（lfx.js）：在外面拦下来交给面板
+	{
+		const b2 = await chromium.launch({ args: ['--host-resolver-rules=MAP panel.test 127.0.0.1'] });
+		S = fresh();
+		const ctx = await b2.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
+		page.on('pageerror', (e) => problems.push('页面错误（原版后台）：' + e.message));
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://panel.test:8197/panel/?p=home'); await W(1500);
+		await page.evaluate(() => { const f = document.createElement('iframe'); f.id = 'lf'; f.src = '/fake-luci'; f.style.cssText = 'position:fixed;inset:60px 0 0 0;width:100%;height:80%;z-index:99;background:#fff'; document.body.appendChild(f); });
+		await W(1200);
+		const fr = page.frame({ url: /fake-luci/ });
+		ok('原版后台里嵌着的终端（路由器:7681）：换成「在新标签页打开」', fr && !(await fr.$('iframe#tt')) && /7681 端口/.test(await fr.textContent('body')));
+		await page.screenshot({ path: path.join(SHOT, 'xpage-lfull.png') });
+		S.calls = [];
+		let popP = ctx.waitForEvent('page');
+		await fr.click('button:has-text("在新标签页打开")');
+		let pop = await popP; await W(2200);
+		ok('点了：面板按端口打开（https 跟着原地址），新标签页跳到远程页面的地址', S.calls.some((c) => c.m === 'xp_open' && c.p.port === 7681 && c.p.https === false) && /fake-x\?port=7681/.test(pop.url()), JSON.stringify(S.calls.filter((c) => c.m === 'xp_open')));
+		await pop.close();
+		S.calls = [];
+		popP = ctx.waitForEvent('page');
+		await fr.click('#oc');
+		pop = await popP; await W(2200);
+		ok('原版后台里 window.open 到「路由器:9090」：也交给面板', S.calls.some((c) => c.m === 'xp_open' && c.p.port === 9090 && /^\/ui\//.test(c.p.path)) && /fake-x\?port=9090/.test(pop.url()));
+		await pop.close();
+		S.calls = [];
+		await fr.click('#same'); await W(500);
+		ok('同一个地址的普通链接不拦', !S.calls.some((c) => c.m === 'xp_open'));
+		await ctx.close(); await b2.close();
+	}
+	// 在家（网址是路由器的 IP）：不拦
+	{
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage();
+		await page.goto('http://127.0.0.1:8197/fake-luci'); await W(600);
+		ok('在家里（网址是 IP）：原版后台里的终端照常嵌着', !!(await page.$('iframe#tt')));
 		await ctx.close();
 	}
 	await browser.close(); server.close();

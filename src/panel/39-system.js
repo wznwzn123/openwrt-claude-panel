@@ -744,6 +744,7 @@ const AU_GO = [
 		{ v: 'wifi', t: 'Wi-Fi 设置', ic: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', ok: () => canPage('wifi') },
 		{ v: 'guest', t: '访客 Wi-Fi', ic: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.6-5.5 7-5.5s6 2 7 5.5"/>', ok: () => canPage('wifi') },
 		{ v: 'dev', t: '上网计划、暂停上网', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', ok: () => canPerm('parent') },
+		{ v: 'split', t: '分流', ic: '<path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', ok: () => canPerm('proxy') && pxShow({ p: 'split', px: 'clash' }) },
 		{ v: 'black', t: '不走代理', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', ok: () => canPerm('parent') && pxShow({ p: 'black', px: 'oc' }) }] },
 	{ g: '家里网络', items: [
 		{ v: 'traf', t: '流量统计', ic: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', ok: () => true },

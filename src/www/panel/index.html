@@ -852,7 +852,7 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
 .chip.on{background:var(--text);color:var(--card)}
 :root.dark .chip.on{background:#eef0f4;color:#0b0c0f}
-:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
+:is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#splTab,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"]){display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--fill);border-radius:11px;padding:2px;gap:2px!important;overflow:hidden}
 :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip{background:transparent;border-radius:9px;padding:6px 6px;text-align:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
 :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.hidden{display:none}
 :is(#modeChips,#runChips,#stView,#apView,#logSeg,#logLevel,#ruSeg,#cfgSeg,#ndTool,#tfRange,#slSeg,#prSort,#cnChips,#wanMode,#lsLease,#wsBand,[data-k="proto"])>.chip.on{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.14),0 2px 8px -2px rgba(0,0,0,.12)}
@@ -1059,6 +1059,8 @@ html,body{overscroll-behavior-y:contain}
 #ssBody .sport{width:96px;flex:none;text-align:center}#ssBody .kv.aswon:has(.sport){gap:8px}#ssBody .ssshare{gap:10px;align-items:center}#ssBody>.card{margin-bottom:14px}#ssBody>.card:first-child{margin-top:12px}#ssBody .sshd{display:flex;align-items:center;gap:6px;min-width:0}#ssBody .sshd .pill{flex:none}.ssdisks .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 /* 第 30、34 项：固件升级 */
 #fwBody>.card:first-child,#fwBody>.notice+.card{margin-top:12px}#fwBody .fwfile{display:flex;align-items:baseline;gap:10px;min-width:0}#fwBody .fwfile b{flex:1;min-width:0}#fwBody .fwfile .muted{flex:none;font-size:13px}#fwBody .fwbar{height:6px;border-radius:3px;background:var(--fill);margin-top:10px;overflow:hidden}#fwBody .fwbar i{display:block;height:100%;background:var(--blue,#0a84ff);transition:width .2s}#fwBody label.btn.disabled{opacity:.45;pointer-events:none}
+/* 第 69 项：分流 */
+#splBody .splrow{width:100%;text-align:left;gap:10px;align-items:center}#splBody .splrow .pill{flex:none;display:block;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#splBody .splrow .pill.on{color:var(--blue,#0a84ff)}#splBody .splpend{display:flex;align-items:center;gap:10px;justify-content:space-between}#splBody .splpend span{flex:1;min-width:0}.splopts .mact{width:100%}.splopts .mact>span:first-child{flex:1;min-width:0}.splck{flex:none;color:var(--blue,#0a84ff);font-weight:700}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1534,6 +1536,9 @@ html,body{overscroll-behavior-y:contain}
 	<section class="card" id="wsSt"><div class="empty">读取中…</div></section>
 	<div id="wsBody"></div>
 </section>
+<section class="page" id="p-split">
+	<div id="splBody"><section class="card empty">读取中…</section></div>
+</section>
 <section class="page" id="p-fwup">
 	<div id="fwBody"><section class="card empty">读取中…</section></div>
 </section>
@@ -1644,7 +1649,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -2084,7 +2089,7 @@ function watchJobs() {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2103,6 +2108,7 @@ const NAV = [
 	] },
 	{ g: '代理', items: [
 		{ p: 'proxy', i: '⇢', t: '节点', px: 'clash' },
+		{ p: 'split', i: '⑂', t: '分流', px: 'clash', kw: '分流 按设备 按软件 按国家 直连 代理 策略组 netflix youtube chatgpt geoip 走代理' },
 		{ p: 'subs', i: '⇣', t: '订阅', px: 'oc' },
 		{ p: 'cfg', i: '▤', t: '配置文件', px: 'oc' },
 		{ p: 'ow', i: '✎', t: '覆写设置', px: 'oc' },
@@ -2269,6 +2275,7 @@ const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 // 6.0 第 24、25、22 项：上网设置、局域网设置、无线中继
 NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
+NAV_IC.split = ['<path d="M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', '#af52de'];
 NAV_IC.fwup = ['<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>', '#34c759'];
 NAV_IC.svcsw = ['<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>', '#8e8e93'];
 NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circle cx="12" cy="17" r="1"/><path d="M3 20h18"/>', '#5ac8fa'];
@@ -5356,6 +5363,69 @@ $('pwOff').addEventListener('click', async () => {
 	if (!(await confirmBox('关机', '关了要拔插电源才能开。', '关机', true))) return;
 	try { await P('poweroff', { confirm: 'OFF' }); setStatus(false, '已关机'); toast('路由器正在关机'); } catch (e) { toast(e.message, true); }
 });
+/* ---------- 6.0 第 69 项：分流——按设备、按软件、按国家和地区选直连 / 代理 / 某个策略组 ----------
+ * 只支持 OpenClash 和 Nikki；要重启插件才生效的改动，顶上一直提示「现在重启」，用户点了才重启（用户 11/26 定）。
+ * 订阅更新后选的策略组没了：路由器自动改走主策略组并推送，这里列出来。 */
+const SPL = { d: null, tab: 'dev' };
+async function loadSplit() {
+	SPL.d = await P('split_get', {}, 20000);
+	setStatus(true, '在线');
+	splRender();
+}
+const SPL_PX = (d) => (d.kind === 'nikki' ? 'Nikki' : 'OpenClash');
+function splName(t) {
+	const d = SPL.d;
+	if (!t) return '跟随全局';
+	if (t === 'DIRECT') return '直连';
+	if (t === 'PROXY') return '代理';
+	return t;
+}
+function splRows() {
+	const d = SPL.d, row = (k, id, name, sub, t) => `<button class="file splrow" type="button" data-sk="${k}" data-sid="${esc(id)}"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(name)}</b>${sub ? `<span class="muted ell" style="display:block;font-size:12.5px">${esc(sub)}</span>` : ''}</div><span class="pill${t ? ' on' : ''}">${esc(splName(t))}</span></button>`;
+	if (SPL.tab === 'app') return d.apps.map((a) => row('app', a.id, a.name, '', d.app[a.id])).join('');
+	if (SPL.tab === 'geo') return d.geos.map((g) => row('geo', g.id, g.name, '', d.geo[g.id])).join('');
+	// 设备：设了分流的在前，再按在线、名字
+	const seen = {}, list = [];
+	for (const x of d.devices) { seen[x.mac] = 1; list.push(x); }
+	for (const [mac, v] of Object.entries(d.dev)) if (!seen[mac]) list.push({ mac, name: v.name, ip: v.ip, online: false });
+	list.sort((a, b) => (!!d.dev[b.mac] - !!d.dev[a.mac]) || (b.online - a.online) || String(a.name || '').localeCompare(String(b.name || '')));
+	return list.length ? list.map((x) => row('dev', x.mac, x.name || x.mac, (d.dev[x.mac]?.ip || x.ip || '') + (x.online ? '' : (x.ip || d.dev[x.mac]?.ip ? ' · ' : '') + '离线'), d.dev[x.mac]?.t)).join('') : '<div class="empty">还没有设备</div>';
+}
+function splRender() {
+	const d = SPL.d;
+	if (!d) return;
+	if (!d.kind) { $('splBody').innerHTML = '<section class="card empty" style="margin-top:12px">分流只支持 OpenClash 和 Nikki</section>'; return; }
+	const mv = (d.moved || []).filter((x) => Date.now() / 1000 - x.at < 7 * 86400).map((x) => `<div class="notice w" style="margin-top:12px">策略组「${esc(x.g)}」没了，已改走代理（${esc(d.main || '主策略组')}）</div>`).join('');
+	$('splBody').innerHTML = `${d.pending ? `<div class="notice w splpend" style="margin-top:12px"><span>重启 ${SPL_PX(d)} 后生效</span><button class="btn sm" id="splRs" type="button">现在重启</button></div>` : ''}
+		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的</div>`}${mv}
+		<div class="chips" id="splTab" style="margin-top:12px">${[['dev', '设备'], ['app', '软件'], ['geo', '国家和地区']].map(([k, t]) => `<button class="chip${SPL.tab === k ? ' on' : ''}" type="button" data-st="${k}">${t}</button>`).join('')}</div>
+		<section class="card list" style="margin-top:12px">${splRows()}</section>`;
+}
+async function splPick(k, id) {
+	const d = SPL.d, name = k === 'app' ? d.apps.find((a) => a.id === id)?.name : k === 'geo' ? d.geos.find((g) => g.id === id)?.name : (d.devices.find((x) => x.mac === id)?.name || d.dev[id]?.name || id);
+	const cur = k === 'dev' ? d.dev[id]?.t || '' : d[k][id] || '';
+	const opts = [['', '跟随全局'], ['DIRECT', '直连'], ...(d.main ? [['PROXY', '代理（' + d.main + '）']] : []), ...d.groups.filter((g) => g !== d.main).map((g) => [g, g])];
+	const v = await modal(`<h3 class="ell">${esc(name)}</h3><div class="mlist splopts">${opts.map(([t, n]) => `<button class="mact" type="button" data-v="o:${esc(t)}"><span><b class="ell" style="display:block">${esc(n)}</b></span>${t === cur ? '<span class="splck">✓</span>' : ''}</button>`).join('')}</div>`);
+	if (typeof v !== 'string' || !v.startsWith('o:')) return;
+	const t = v.slice(2);
+	if (t === cur) return;
+	const body = k === 'dev' ? { dev: { mac: id, ip: d.devices.find((x) => x.mac === id)?.ip, name, t } } : { [k]: { id, t } };
+	try {
+		SPL.d = await P('split_set', body, 30000);
+		splRender();
+		toast(`已设置：${name} → ${splName(t)}`);
+	} catch (e) { toast(e.message, true); }
+}
+$('splBody').addEventListener('click', async (e) => {
+	const tb = e.target.closest('[data-st]');
+	if (tb) { SPL.tab = tb.dataset.st; return splRender(); }
+	if (e.target.id === 'splRs') {
+		if (!(await confirmBox('重启 ' + SPL_PX(SPL.d), '断网十几秒。', '重启'))) return;
+		return busy(e.target, async () => { try { await P('split_restart'); SPL.d.pending = false; splRender(); toast('正在重启 ' + SPL_PX(SPL.d)); } catch (er) { toast(er.message, true); } });
+	}
+	const r = e.target.closest('[data-sk]');
+	if (r) splPick(r.dataset.sk, r.dataset.sid);
+});
 /* ---------- 6.0 第 19 项：软件中心（搜索、安装、更新） ----------
    路由器上配置的软件源都认（固件自带、第三方、iStore）。
    分类（用户 11/26：太杂乱，按来源分）：上面按来源（全部 / 官方 / 第三方 / iStore，没有的来源不出现），
@@ -6303,6 +6373,7 @@ const AU_GO = [
 		{ v: 'wifi', t: 'Wi-Fi 设置', ic: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', ok: () => canPage('wifi') },
 		{ v: 'guest', t: '访客 Wi-Fi', ic: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.6-5.5 7-5.5s6 2 7 5.5"/>', ok: () => canPage('wifi') },
 		{ v: 'dev', t: '上网计划、暂停上网', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', ok: () => canPerm('parent') },
+		{ v: 'split', t: '分流', ic: '<path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', ok: () => canPerm('proxy') && pxShow({ p: 'split', px: 'clash' }) },
 		{ v: 'black', t: '不走代理', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', ok: () => canPerm('parent') && pxShow({ p: 'black', px: 'oc' }) }] },
 	{ g: '家里网络', items: [
 		{ v: 'traf', t: '流量统计', ic: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', ok: () => true },
@@ -9224,7 +9295,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

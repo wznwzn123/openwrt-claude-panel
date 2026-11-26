@@ -30,6 +30,8 @@ const server = http.createServer((req, res) => {
 });
 const SUB = { on: false };
 const TV = '11:22:33:44:55:66', IP = 'aa:bb:cc:dd:ee:ff', NEW = '5c:cf:7f:12:34:56';
+// 路由器那边的时间也固定在周三 17:00（跟手机上的 page.clock 一样），不然换一天跑结果就不一样
+PZ.now = Math.floor(new Date('2026-11-25T17:00:00+08:00').getTime() / 1000);
 const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; PZ.calls.length = 0; PZ.planOk = true; PZ.schedOn = false; };
 (async () => {
 	await new Promise((r) => server.listen(8100, r));
@@ -110,7 +112,7 @@ const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; P
 		await sh().locator('[data-v="close"]').click(); await page.waitForTimeout(400);
 		// 推送点进来：延长
 		reset();
-		PZ.devs[TV] = { name: 'TV', plan: { slots: [{ d: [1, 2, 3, 4, 5], from: '16:00', to: '21:00' }], by: 'u1' }, pn: { ok: true, at: Math.floor(Date.now() / 1000) + 540, ext: null }, on: false };
+		PZ.devs[TV] = { name: 'TV', plan: { slots: [{ d: [1, 2, 3, 4, 5], from: '16:00', to: '21:00' }], by: 'u1' }, pn: { ok: true, at: PZ.now + 540, ext: null }, on: false };
 		await page.goto(`http://localhost:8100/panel/?p=dev&ask=ext&min=60&mac=${TV}`); await page.waitForTimeout(2800);
 		const ex = page.locator('.modal[data-ext]');
 		ok(`[${tag}] 推送点「延长 1 小时」进来：问延长多久，1 小时是蓝色的`, (await ex.count()) === 1 && /「TV」能上网，(明天 )?\d\d:\d\d 停网/.test(await ex.textContent()) && /primary/.test(await ex.locator('[data-e="60"]').getAttribute('class')) && !/primary/.test(await ex.locator('[data-e="30"]').getAttribute('class')), (await ex.count()) && await ex.textContent());
@@ -132,7 +134,7 @@ const reset = () => { for (const k of Object.keys(PZ.devs)) delete PZ.devs[k]; P
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
 		const page = await ctx.newPage();
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_role', JSON.stringify({ role: 'sub', perms: ['msg'] })); });
-		PZ.devs[TV] = { name: 'TV', plan: { slots: [{ d: [1], from: '16:00', to: '21:00' }] }, pn: { ok: true, at: Math.floor(Date.now() / 1000) + 540 } };
+		PZ.devs[TV] = { name: 'TV', plan: { slots: [{ d: [1], from: '16:00', to: '21:00' }] }, pn: { ok: true, at: PZ.now + 540 } };
 		await page.goto(`http://localhost:8100/panel/?p=dev&ask=ext&mac=${TV}`); await page.waitForTimeout(2800);
 		ok('子账号没有「家长控制」：推送点进来也不能延长', /不能延长上网时间/.test(await page.textContent('#toast')) && !(await page.locator('.modal[data-ext]').count()) && !PZ.calls.length);
 		await page.locator('#dvList [data-i="1"] [data-more]').click(); await page.waitForTimeout(500);

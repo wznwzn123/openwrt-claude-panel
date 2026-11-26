@@ -15,7 +15,7 @@ function renderSub(o) {
 	if (o.px) pxSet(o.px);
 	const s = o.system || {}, a = pxAct(), run = a && (a.kind === 'clash' ? (o.clash || {}).running : a.running);
 	// 型号一定显示；后面的插件状态放不下时藏起来（fitTop），概览页里有
-	$('topSub').innerHTML = esc(s.model || 'OpenWrt') + '<span class="subx">' + esc(a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件') + '</span>';
+	$('topSub').innerHTML = esc(s.model || 'OpenWrt') + '<span class="subx">' + esc(a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : '') + '</span>'; // 没装代理插件：顶上只写型号（统一概览，用户 11/27）
 }
 // 不是 Clash 内核的插件：节点列表、测延迟、切换（切换要重启插件，断网十几秒）
 async function pxNodeSheet() {
@@ -168,7 +168,8 @@ function renderOv(o, cached) {
 	$('pxRow').classList.toggle('hidden', kind === 'none');
 	$('modeBox').classList.toggle('hidden', kind !== 'clash');
 	$('runBox').classList.toggle('hidden', !isOC);
-	$('pxNone').classList.toggle('hidden', kind !== 'none');
+	// 统一概览：没装代理插件就不显示代理卡片（首屏只有网络状态和网速，占满一行）
+	$('pxCard').classList.toggle('hidden', kind === 'none'); $('homeTop').classList.toggle('two', kind !== 'none');
 	$('ocHead').classList.toggle('hidden', kind !== 'clash'); $('ocCard').classList.toggle('hidden', kind !== 'clash');
 	$('oDash').classList.toggle('hidden', !isOC);
 	$$('#ocCard .oconly').forEach((x) => x.classList.toggle('hidden', !isOC));
@@ -188,10 +189,11 @@ function renderOv(o, cached) {
 	} else {
 		pxRender(c.running, c.mode, !cached);
 		$('hHead').textContent = !c.running ? a.name + ' 没有运行' : !wanOk ? '宽带未连接' : '网络一切正常';
-		$('hDesc').textContent = c.running
-			? `${MODE[c.mode] || c.mode || ''}模式 · ${c.connections ?? 0} 个连接${c.custom_rules && isOC ? ' · 自定义规则已开启' : ''}`
-			: (c.error ? '代理内核未响应，可以试试重启 ' + a.name : '');
+		$('hDesc').textContent = !c.running && c.error ? '代理内核未响应，可以试试重启 ' + a.name : '';
 	}
+	// 代理卡片上的一行：只有开了自定义规则时写一下
+	const pd = kind === 'clash' && c.running && c.custom_rules && isOC ? '自定义规则已开启' : ''; // 模式在开关下面、连接数在下面的格子里，这里不重复
+	$('pxDesc').textContent = pd; $('pxDesc').classList.toggle('hidden', !pd);
 	$$('#modeChips .chip').forEach((b) => b.classList.toggle('on', b.dataset.mode === c.mode));
 	S.mode = c.mode;
 	$('dockMode').textContent = kind === 'other' ? '节点' : kind === 'clash' && MODE[c.mode] ? MODE[c.mode] + '模式' : '模式';

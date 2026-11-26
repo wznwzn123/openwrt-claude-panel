@@ -240,7 +240,7 @@ function respond(method, p) {
 	case 'svc_info': return { hosted: false };
 	case 'live': { const t = Date.now() / 1000; return { dev: 'pppoe-wan', rx: Math.round(3.6e6 + 1.2e6 * Math.sin(t / 3) + 8e5 * Math.sin(t * 1.7)), tx: Math.round(7e5 + 2.5e5 * Math.sin(t / 2)) }; }
 	case 'home_stats': return { today: { day: '2026-11-01', dl: 26.3e9, ul: 3.1e9, counting: true, top: [{ id: 'aa:bb:cc:00:00:01', name: 'Living-Room-TV', dl: 9.6e9, ul: 0.4e9 }, { id: 'aa:bb:cc:00:00:02', name: 'Desk-PC', dl: 4.9e9, ul: 0.3e9 }, { id: 'aa:bb:cc:00:00:03', name: null, dl: 4.1e9, ul: 0.4e9 }] }, devices: { online: 13, wifi: 9, wired: 4, total: 15 } };
-	case 'pause_list': return { devs: PZ.devs, now: Math.floor(Date.now() / 1000) };
+	case 'pause_list': return { devs: PZ.devs, now: PZ.now || Math.floor(Date.now() / 1000) };
 	case 'pause_set': {
 		PZ.calls.push(p);
 		const e = PZ.devs[p.mac] || {};
@@ -249,12 +249,12 @@ function respond(method, p) {
 		if (p.until) e.until = p.until;
 		if (p.sched) e.sched = p.sched;
 		// 6.0 第 16 项：上网计划（PZ.planOk：测试里设现在在不在能上网的时段）
-		const now = Math.floor(Date.now() / 1000);
+		const now = PZ.now || Math.floor(Date.now() / 1000); // PZ.now：测试里把路由器的时间固定住，跟手机上固定的时间对上
 		if ('plan' in p) { if (p.plan) { if (!p.plan.length) throw new Error('至少要有一个能上网的时段'); e.plan = { slots: p.plan, by: 'u1', at: now }; } else { delete e.plan; delete e.ext; } }
 		if ('ext' in p) { if (!e.plan) throw new Error('这台设备没有上网计划'); e.ext = (e.ext || (PZ.planOk !== false ? now + 600 : now)) + p.ext * 60; }
 		if (e.plan) e.pn = e.ext ? { ok: true, at: e.ext, ext: e.ext } : PZ.planOk !== false ? { ok: true, at: now + 600, ext: null } : { ok: false, at: now + 36000, ext: null }; else delete e.pn;
 		if (!e.until && !(e.sched || []).length && !e.plan) delete PZ.devs[p.mac]; else { e.on = !!e.until || PZ.schedOn || (!!e.plan && !e.pn.ok); PZ.devs[p.mac] = e; }
-		return { devs: PZ.devs, now: Math.floor(Date.now() / 1000) };
+		return { devs: PZ.devs, now: PZ.now || Math.floor(Date.now() / 1000) };
 	}
 	case 'autosw': {
 		if (p.set) { if (p.enabled != null) ASW.enabled = !!p.enabled; if (p.group) ASW.group = p.group; }

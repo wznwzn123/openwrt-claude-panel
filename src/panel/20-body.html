@@ -109,10 +109,19 @@
 
 <!-- 概览 -->
 <section class="page" id="p-home">
-	<section class="grid two">
-		<div class="hero">
-			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
+	<!-- 6.0 概览（用户 11/27 定）：首屏人人一样——网络状态和网速；装了代理插件的旁边（手机上是下面）多一张「代理」卡片，没装就没有这张，不写说明 -->
+	<section class="grid two" id="homeTop">
+		<div class="hero" id="netHero">
+			<div class="herohead"><h1 id="hHead">正在读取…</h1></div>
 			<p class="muted" id="hDesc">&nbsp;</p>
+			<div class="urgent hspd">
+				<div><div class="muted">实时下载</div><b id="hRx">—</b></div>
+				<div class="muted" style="text-align:right">上传 <b id="hTx" style="font-size:15px">—</b><br>开机累计 <b id="hTotal" style="font-size:13px">—</b><br><span id="hDev"></span></div>
+			</div>
+		</div>
+		<div class="hero pxcard" id="pxCard">
+			<div class="herohead"><b class="pxh">代理</b><span class="pill" id="ocPill">—</span></div>
+			<p class="muted hidden" id="pxDesc"></p>
 			<label class="pxrow" id="pxRow"><span class="pxtxt"><b id="pxTitle">代理</b><span class="muted" id="pxSub">读取中…</span></span><span class="sw"><input type="checkbox" id="pxSw" disabled aria-label="代理开关"><i></i></span><span class="pxlog" id="pxLog"></span></label>
 			<button class="pxpick hidden" id="pxPick"></button>
 			<div id="modeBox"><div class="muted" style="font-weight:600">代理模式</div>
@@ -127,11 +136,6 @@
 				<button class="chip" data-run="fake-ip-tun">TUN</button>
 				<button class="chip" data-run="fake-ip-mix">TUN 混合</button>
 			</div></div>
-			<div id="pxNone" class="notice hidden" style="margin-top:4px;line-height:1.65">这台路由器没装代理插件。设备、网速、流量、断线记录、定时断网这些照常能用。<br><span class="muted">以后装了 OpenClash、Nikki、PassWall、PassWall2、HomeProxy 或 SSR Plus+，这里会自动显示它的开关和节点。</span></div>
-		</div>
-		<div class="card urgent">
-			<div><div class="muted">实时下载</div><b id="hRx">—</b></div>
-			<div class="muted" style="text-align:right">上传 <b id="hTx" style="font-size:15px">—</b><br>开机累计 <b id="hTotal" style="font-size:13px">—</b><br><span id="hDev"></span></div>
 		</div>
 	</section>
 	<section class="stat4">

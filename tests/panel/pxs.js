@@ -107,7 +107,7 @@ const home = async (page) => { await page.goto('http://panel.test/panel/?p=home'
 	// 2 没装代理插件
 	PXM.px = PL('', []);
 	({ page, ctx } = await open(browser)); await home(page);
-	ok('[没装插件] 概览：写着没装代理插件、哪些功能照常能用，不显示代理开关', await vis(page, '#pxNone') && !(await vis(page, '#pxRow')) && /没装代理插件/.test(await txt(page, '#ocPill')) && /照常能用/.test(await txt(page, '#pxNone')));
+	ok('[没装插件] 概览：没有代理卡片、没有说明小字，网络状态占满一行', !(await vis(page, '#pxCard')) && !(await vis(page, '#pxRow')) && !(await page.$('#pxNone')) && !/没装代理插件/.test(await page.evaluate(() => document.getElementById('p-home').innerText)) && (await page.evaluate(() => !document.getElementById('homeTop').classList.contains('two'))));
 	ok('[没装插件] 不显示 OpenClash 卡片，也不报错，右上角在线', !(await vis(page, '#ocCard')) && !(await vis(page, '#pgCard')) && /在线/.test(await txt(page, '#statusText')) && /网络一切正常/.test(await txt(page, '#hHead')));
 	const dk = await page.$$eval('#dock [data-d]', (b) => b.filter((x) => !x.classList.contains('hidden')).map((x) => x.textContent.trim()));
 	ok('[没装插件] 底部快捷栏换成通用的：设备、实时监控、IP 检查、网络诊断、快捷', JSON.stringify(dk) === '["设备","实时监控","IP 检查","网络诊断","快捷"]', JSON.stringify(dk));

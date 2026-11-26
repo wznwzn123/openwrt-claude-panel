@@ -180,7 +180,9 @@ article.card{cursor:pointer}article.card:active{transform:scale(.98)}
 .hero{padding:18px;border-radius:26px;background:var(--card);box-shadow:var(--shadow);transition:background-color .35s var(--ease)}
 .hero h1{margin:0;font-size:clamp(20px,5.6vw,26px);font-weight:700;line-height:1.2}.herohead .btn{white-space:nowrap;flex:none}
 .herohead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.hero p{margin:6px 0 12px}
-.two{grid-template-columns:1.25fr .75fr}
+.two{grid-template-columns:1fr 1fr}
+/* 6.0 统一概览：左边（手机上是上面）网络状态和网速，右边代理卡片 */
+.hspd{margin-top:2px}.pxcard .herohead{align-items:center;margin-bottom:12px}.pxh{font-size:17px;font-weight:700}#pxDesc{margin:-6px 0 12px;font-size:13.5px}.pxcard .pxrow{margin-bottom:12px}
 .tasks{grid-template-columns:repeat(2,1fr)}
 .urgent{display:flex;justify-content:space-between;align-items:center;gap:10px}.urgent b{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .urgent .unit{font-size:14px;font-weight:600;color:var(--muted);margin-left:2px}
@@ -1179,10 +1181,19 @@ html,body{overscroll-behavior-y:contain}
 
 <!-- 概览 -->
 <section class="page" id="p-home">
-	<section class="grid two">
-		<div class="hero">
-			<div class="herohead"><h1 id="hHead">正在读取…</h1><span class="pill" id="ocPill">—</span></div>
+	<!-- 6.0 概览（用户 11/27 定）：首屏人人一样——网络状态和网速；装了代理插件的旁边（手机上是下面）多一张「代理」卡片，没装就没有这张，不写说明 -->
+	<section class="grid two" id="homeTop">
+		<div class="hero" id="netHero">
+			<div class="herohead"><h1 id="hHead">正在读取…</h1></div>
 			<p class="muted" id="hDesc">&nbsp;</p>
+			<div class="urgent hspd">
+				<div><div class="muted">实时下载</div><b id="hRx">—</b></div>
+				<div class="muted" style="text-align:right">上传 <b id="hTx" style="font-size:15px">—</b><br>开机累计 <b id="hTotal" style="font-size:13px">—</b><br><span id="hDev"></span></div>
+			</div>
+		</div>
+		<div class="hero pxcard" id="pxCard">
+			<div class="herohead"><b class="pxh">代理</b><span class="pill" id="ocPill">—</span></div>
+			<p class="muted hidden" id="pxDesc"></p>
 			<label class="pxrow" id="pxRow"><span class="pxtxt"><b id="pxTitle">代理</b><span class="muted" id="pxSub">读取中…</span></span><span class="sw"><input type="checkbox" id="pxSw" disabled aria-label="代理开关"><i></i></span><span class="pxlog" id="pxLog"></span></label>
 			<button class="pxpick hidden" id="pxPick"></button>
 			<div id="modeBox"><div class="muted" style="font-weight:600">代理模式</div>
@@ -1197,11 +1208,6 @@ html,body{overscroll-behavior-y:contain}
 				<button class="chip" data-run="fake-ip-tun">TUN</button>
 				<button class="chip" data-run="fake-ip-mix">TUN 混合</button>
 			</div></div>
-			<div id="pxNone" class="notice hidden" style="margin-top:4px;line-height:1.65">这台路由器没装代理插件。设备、网速、流量、断线记录、定时断网这些照常能用。<br><span class="muted">以后装了 OpenClash、Nikki、PassWall、PassWall2、HomeProxy 或 SSR Plus+，这里会自动显示它的开关和节点。</span></div>
-		</div>
-		<div class="card urgent">
-			<div><div class="muted">实时下载</div><b id="hRx">—</b></div>
-			<div class="muted" style="text-align:right">上传 <b id="hTx" style="font-size:15px">—</b><br>开机累计 <b id="hTotal" style="font-size:13px">—</b><br><span id="hDev"></span></div>
 		</div>
 	</section>
 	<section class="stat4">
@@ -2843,7 +2849,7 @@ function renderSub(o) {
 	if (o.px) pxSet(o.px);
 	const s = o.system || {}, a = pxAct(), run = a && (a.kind === 'clash' ? (o.clash || {}).running : a.running);
 	// 型号一定显示；后面的插件状态放不下时藏起来（fitTop），概览页里有
-	$('topSub').innerHTML = esc(s.model || 'OpenWrt') + '<span class="subx">' + esc(a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : ' · 没装代理插件') + '</span>';
+	$('topSub').innerHTML = esc(s.model || 'OpenWrt') + '<span class="subx">' + esc(a ? ' · ' + a.name + (run ? ' 运行中' : a.enabled === false ? ' 已关闭' : ' 未运行') : '') + '</span>'; // 没装代理插件：顶上只写型号（统一概览，用户 11/27）
 }
 // 不是 Clash 内核的插件：节点列表、测延迟、切换（切换要重启插件，断网十几秒）
 async function pxNodeSheet() {
@@ -2996,7 +3002,8 @@ function renderOv(o, cached) {
 	$('pxRow').classList.toggle('hidden', kind === 'none');
 	$('modeBox').classList.toggle('hidden', kind !== 'clash');
 	$('runBox').classList.toggle('hidden', !isOC);
-	$('pxNone').classList.toggle('hidden', kind !== 'none');
+	// 统一概览：没装代理插件就不显示代理卡片（首屏只有网络状态和网速，占满一行）
+	$('pxCard').classList.toggle('hidden', kind === 'none'); $('homeTop').classList.toggle('two', kind !== 'none');
 	$('ocHead').classList.toggle('hidden', kind !== 'clash'); $('ocCard').classList.toggle('hidden', kind !== 'clash');
 	$('oDash').classList.toggle('hidden', !isOC);
 	$$('#ocCard .oconly').forEach((x) => x.classList.toggle('hidden', !isOC));
@@ -3016,10 +3023,11 @@ function renderOv(o, cached) {
 	} else {
 		pxRender(c.running, c.mode, !cached);
 		$('hHead').textContent = !c.running ? a.name + ' 没有运行' : !wanOk ? '宽带未连接' : '网络一切正常';
-		$('hDesc').textContent = c.running
-			? `${MODE[c.mode] || c.mode || ''}模式 · ${c.connections ?? 0} 个连接${c.custom_rules && isOC ? ' · 自定义规则已开启' : ''}`
-			: (c.error ? '代理内核未响应，可以试试重启 ' + a.name : '');
+		$('hDesc').textContent = !c.running && c.error ? '代理内核未响应，可以试试重启 ' + a.name : '';
 	}
+	// 代理卡片上的一行：只有开了自定义规则时写一下
+	const pd = kind === 'clash' && c.running && c.custom_rules && isOC ? '自定义规则已开启' : ''; // 模式在开关下面、连接数在下面的格子里，这里不重复
+	$('pxDesc').textContent = pd; $('pxDesc').classList.toggle('hidden', !pd);
 	$$('#modeChips .chip').forEach((b) => b.classList.toggle('on', b.dataset.mode === c.mode));
 	S.mode = c.mode;
 	$('dockMode').textContent = kind === 'other' ? '节点' : kind === 'clash' && MODE[c.mode] ? MODE[c.mode] + '模式' : '模式';

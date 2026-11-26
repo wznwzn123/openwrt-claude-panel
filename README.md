@@ -82,6 +82,9 @@ cd /tmp && wget -O p.tar.gz https://yrlove520.com/dl/openwrt-claude-panel.tar.gz
 
 在官网下载：**[yrlove520.com/app/router-panel.apk](https://yrlove520.com/app/router-panel.apk)**（大陆也能下），或者在 [Releases](../../releases) 下载 `router-panel.apk`。安卓 7.0 以上可用。
 
+- 登录官网账号（6.0）：App 里不输密码，点「用官网登录」到浏览器里确认，或者用登录着的手机扫 App 上的码
+- 在家里 Wi-Fi 下自动找到路由器（6.0），点「打开」登录
+- 桌面小组件（6.0）：网速和在线设备数，在 App 里打开面板，「系统操作 → 桌面小组件」
 - 添加路由器四种方式：**扫码**（扫面板里「添加新手机」的二维码）、**相册识别**（二维码在截图里）、**粘贴**登录地址、**手动添加**（输入框里填登录地址）
 - 几台路由器一键切换；下载备份、从相册选背景图都能用
 - 有新版本时打开 App 就弹窗提醒，一键下载安装；重要更新会要求必须更新

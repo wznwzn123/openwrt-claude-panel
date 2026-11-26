@@ -20,6 +20,7 @@ import { installTotp } from './totp.js';
 import { installEdition, edDev, edAccount, ED_NAME } from './edition.js';
 import { installXpage, xDev } from './xpage.js';
 import { installMove, moveDev } from './move.js';
+import { installAppAuth, appStrict } from './appauth.js';
 import { installCompat, compatPublic, compatAdminApi, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled } from './oldver.js';
 
@@ -559,7 +560,7 @@ export class Hub extends DurableObject {
 			rn[sub] = (d && d.name) || sub;
 			devs.push(d ? { sub, name: d.name || sub, model: d.model || '', role: d.owner === uid ? '主账号' : '家人', exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', seen: d.seen || 0, created: d.created || 0, ver: d.ver || '' } : { sub, name: sub, gone: true });
 		}
-		const KL = { login: '登录官网', reg: '注册', reset: '找回密码', code: '收邮箱验证码', totp: '两步验证', admin: '管理后台' };
+		const KL = { app: 'App 授权', login: '登录官网', reg: '注册', reset: '找回密码', code: '收邮箱验证码', totp: '两步验证', admin: '管理后台' };
 		for (const x of (await this.ctx.storage.get('ll')) || []) if (String(x.who || '').toLowerCase() === email)
 			ev.push({ t: x.t, k: 'login', text: (KL[x.k] || x.k) + (x.ok ? '' : '失败'), detail: x.why || '', ok: !!x.ok, ip: x.ip || '', place: x.place || '', ua: x.ua || '' });
 		for (const x of (await this.ctx.storage.get('alog')) || []) {
@@ -2100,6 +2101,10 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'wait') return out(await H.waitJoin({ email: s(b.email), ip })); // 第 46 项：名额满了，留邮箱排队
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
+	// 6.0 第 71 项：App 里不输密码，只能授权（在浏览器里确认，或者用登录着的手机扫码）
+	if (appStrict(req.headers.get('user-agent')) && ['register', 'login', 'login2', 'reset'].includes(a)) return J({ error: 'App 里不能输密码：点「用官网登录」，在浏览器里确认', app: true }, 403);
+	if (a === 'app_start') return out(await H.appStart({ ip, dev }));
+	if (a === 'app_poll') return out(await H.appPoll({ code: s(b.code), key: s(b.key), dev }));
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev, did }));
 	if (a === 'login') return out(await H.userLogin({ email: s(b.email), password: s(b.password), ip, dev, did }));
 	if (a === 'login2') return out(await H.userLogin2({ token: s(b.token), code: s(b.code), op: s(b.op), ip, dev, did }));
@@ -2111,6 +2116,8 @@ async function accountApi0(req, env, H, p, body) {
 	const me = await H.who(sid);
 	if (!me) return a === 'brief' ? J({ ok: false }) : J({ error: '请先登录', login: true }, 401);
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
+	if (a === 'app_info') return out(await H.appInfo(me.uid, s(b.code)));
+	if (a === 'app_ok') return out(await H.appOk(me.uid, s(b.code), b.ok === true, me.email));
 	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)) || (await edAccount(a, H, me, b, sid)); if (fx) return fx; }
 	// 官网各页右上角：登录了就显示头像和名字（很轻，只要名字和头像）
 	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
@@ -2150,6 +2157,7 @@ installInst(Hub);
 installEdition(Hub, { edToTunnel, edToLocal });
 installXpage(Hub, { cf, host });
 installMove(Hub);
+installAppAuth(Hub, { rnd, safeEq });
 installFiles(Hub);
 installHelp(Hub);
 export { hubObj };

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 6.0 第 38 项：桌面小组件（网速、在线设备数），系统最快 30 分钟更新一次，点一下立刻刷新 -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="80dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_speed"
+    android:previewLayout="@layout/widget_speed"
+    android:description="@string/widget_desc"
+    android:widgetCategory="home_screen" />

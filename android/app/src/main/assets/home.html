@@ -66,11 +66,13 @@ h2{font-size:18px;margin:22px 4px 10px;letter-spacing:-.02em}
 	<div class="aerr" id="aerr"></div>
 </div>
 
+<div id="found"></div>
 <h2>我的路由器</h2>
 <div id="list"></div>
 
 <h2>怎么添加</h2>
 <div class="card"><p class="tip">
+	<b>在家里</b>：连着家里 Wi-Fi 时，这里会自动找到路由器，点「打开」登录。<br>
 	<b>托管版</b>：点上面的「官网账号（我的路由器）」，登录你的官网账号，在路由器下面点「打开面板」就行，不用输任何码。家里人用主账号发的加入码加入后，也这样打开。<br>
 	<b>扫码</b>：在已经能用的手机上打开面板，「系统操作 → 添加新手机」，用这里的「扫码」扫一下。<br>
 	<b>相册识别</b>：二维码在截图里（比如别人发给你的），点「相册识别」选那张图。<br>
@@ -140,10 +142,11 @@ $('pasteBtn').onclick = async () => {
 if (HUB) { $('hubBtn').classList.remove('hidden'); $('hubBtn').onclick = () => A.open(HUB + '/app'); }
 const ago = (t) => { if (!t) return ''; const s = (Date.now() - t) / 1000; return s < 3600 ? '刚刚打开过' : s < 86400 ? Math.round(s / 3600) + ' 小时前打开' : Math.round(s / 86400) + ' 天前打开'; };
 function refresh() {
+	findLan();
 	let list = [];
 	try { list = JSON.parse(A.routers()); } catch (e) {}
 	list.sort((a, b) => (b.at || 0) - (a.at || 0));
-	$('list').innerHTML = list.length ? list.map((r, i) => `<div class="card" data-i="${i}"><div class="r"><div class="ic"><svg viewBox="6 7 20 18" width="24" height="24" aria-hidden="true"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="currentColor" stroke-opacity=".5" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="currentColor"/><circle cx="11.4" cy="19.75" r="1.1" fill="var(--card-solid)"/><circle cx="14.6" cy="19.75" r="1.1" fill="var(--card-solid)"/><path d="M18 19.75h3.4" stroke="var(--card-solid)" stroke-width="1.6" stroke-linecap="round"/></svg></div><div class="t"><b>${esc(r.name)}</b><span>${esc(r.url.replace(/^https:\/\//, '').replace(/\/panel\/$/, ''))} · ${ago(r.at)}</span></div><button class="btn primary sm" data-open>打开</button></div>
+	$('list').innerHTML = list.length ? list.map((r, i) => `<div class="card" data-i="${i}"><div class="r"><div class="ic"><svg viewBox="6 7 20 18" width="24" height="24" aria-hidden="true"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="currentColor" stroke-opacity=".5" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="currentColor"/><circle cx="11.4" cy="19.75" r="1.1" fill="var(--card-solid)"/><circle cx="14.6" cy="19.75" r="1.1" fill="var(--card-solid)"/><path d="M18 19.75h3.4" stroke="var(--card-solid)" stroke-width="1.6" stroke-linecap="round"/></svg></div><div class="t"><b>${esc(r.name)}</b><span>${esc(r.url.replace(/^https?:\/\//, '').replace(/\/panel\/$/, ''))} · ${ago(r.at)}</span></div><button class="btn primary sm" data-open>打开</button></div>
 		<div class="more"><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-del>移除</button></div></div>`).join('')
 		: '<div class="card"><p class="tip" style="text-align:center">还没有路由器。托管版点上面的「官网账号（我的路由器）」打开；自建版点「扫码」或「粘贴」登录地址。</p></div>';
 	$('list').querySelectorAll('[data-i]').forEach((el) => {
@@ -153,6 +156,16 @@ function refresh() {
 		el.querySelector('[data-del]').onclick = () => { if (!confirm('从列表里移除「' + r.name + '」？路由器本身不受影响，以后可以重新扫码添加。')) return; list.splice(+el.dataset.i, 1); A.saveRouters(JSON.stringify(list)); refresh(); };
 	});
 }
+// 6.0 第 40 项：在家里 Wi-Fi 下找路由器面板（App 问网关的 906 端口）。只发现，不自动登录；已经在列表里的不重复列
+let findAt = 0;
+function findLan() { if (!A.discover || Date.now() - findAt < 30000) return; findAt = Date.now(); A.discover(); }
+window.onFound = (l) => {
+	let have = [];
+	try { have = JSON.parse(A.routers()).map((r) => r.url); } catch (e) {}
+	l = (Array.isArray(l) ? l : []).filter((x) => x && /^http:\/\/[0-9.]+:\d+\/panel\/$/.test(x.url) && !have.includes(x.url));
+	$('found').innerHTML = l.length ? '<h2>在家里找到</h2>' + l.map((x, i) => `<div class="card"><div class="r"><div class="t"><b>${esc(x.ip)}</b><span>家里 Wi-Fi</span></div><button class="btn primary sm" data-fo="${i}">打开</button></div></div>`).join('') : '';
+	$('found').querySelectorAll('[data-fo]').forEach((b) => (b.onclick = () => A.open(l[+b.dataset.fo].url)));
+};
 // 检查更新：问托管服务最新版本号，比现在的新就提示
 const vnum = (v) => String(v || '').replace(/^v/, '').split('.').map((x) => parseInt(x, 10) || 0);
 const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };

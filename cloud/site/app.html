@@ -71,6 +71,8 @@ body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 #vAuth::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(40% 30% at 50% 38%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 70%); animation: breathe 6s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: .45; transform: scale(.94); } }
 @keyframes lgPop { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+.apqr { margin-top: 16px; width: min(240px, 70vw); padding: 10px; border-radius: 18px; background: #fff; } .apqr svg { display: block; width: 100%; height: auto; }
+#lgApp p#apMsg { text-wrap: pretty; }
 .lgwelcome { position: relative; z-index: 1; width: 100%; max-width: 380px; margin: auto 0; padding: 10px 4px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .lgwelcome > * { animation: lgPop .7s cubic-bezier(.22,1,.36,1) both; }
 .lgwelcome > :nth-child(2) { animation-delay: .08s; } .lgwelcome > :nth-child(3) { animation-delay: .16s; } .lgwelcome > :nth-child(4) { animation-delay: .24s; } .lgwelcome > :nth-child(5) { animation-delay: .3s; } .lgwelcome > :nth-child(6) { animation-delay: .36s; } .lgwelcome > :nth-child(7) { animation-delay: .42s; }
@@ -374,6 +376,16 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 		<a class="lgbig light" href="/admin" id="goAdmin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>管理员登录</span></a>
 		<div class="lgreg">还没有账号？<button type="button" class="lglink" id="goReg">注册新账号</button></div>
 	</div>
+	<div class="lgwelcome hidden" id="lgApp">
+		<div class="lgbiglogo" role="img" aria-label="路由器面板"><svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" fill="#1a2621"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#e9eeeb"/><circle cx="63" cy="37" r="7" fill="#4ade80"/></svg></div>
+		<h1>登录官网账号</h1>
+		<p id="apMsg">在浏览器里确认后回到这里</p>
+		<a class="lgbig dark" id="apGo" href="#" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>用官网登录</span></a>
+		<div class="lgor"><span>或</span></div>
+		<button type="button" class="lgbig light" id="apQrBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg><span>用登录着的手机扫码</span></button>
+		<div class="apqr hidden" id="apQr"></div>
+		<div class="lgreg">还没有账号？在浏览器里打开 <b id="apHost"></b> 注册</div>
+	</div>
 	<div class="lgcard hidden" id="lgCard">
 		<div class="lgcardtop"><button type="button" class="lgback" id="lgBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="lgbrand"><i><svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" fill="#1a2621"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#e9eeeb"/><circle cx="63" cy="37" r="7" fill="#4ade80"/></svg></i>路由器面板</div></div>
 		<div class="tabs"><button data-tab="login" class="on">登录</button><button data-tab="reg">注册</button></div>
@@ -579,6 +591,9 @@ async function api(path, body) {
 	return j;
 }
 const pair = new URLSearchParams(location.search).get('pair') || '';
+// 6.0 第 71 项：App 6.0 起只能授权登录；浏览器里带 ?ok=编号 打开的，是在确认 App 登录
+const APP6 = /RouterPanelApp\/([6-9]|\d\d)\./.test(navigator.userAgent);
+const okCode = (new URLSearchParams(location.search).get('ok') || '').toLowerCase().replace(/[^a-z2-9]/g, '').slice(0, 8);
 const joinCode = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
 let mailOn = false, regFull = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
@@ -1243,7 +1258,9 @@ function report(where, e) {
 // 没登录：显示登录框（带着配对码、加入码的提示）
 function showLogin() {
 	show('auth');
-	lgView(((pair || joinCode || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	if (APP6) return appAuth();
+	lgView(((pair || joinCode || okCode || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	if (okCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录后确认 App 登录。</div>'); }
 	if (joinCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">家里人邀请你加入他的路由器。先登录，没有账号就点「注册」（用你自己的邮箱），登录后会显示邀请详情。</div>'); }
 	if (pair) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice')) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">登录或注册后，会自动把这台路由器绑定到你的账号。</div>'); }
 }
@@ -1289,7 +1306,49 @@ async function load(after) {
 	} catch (e) { report('显示「我的路由器」出错', e); toast('页面有一部分没显示出来，刷新一下试试', true); }
 	if (pair && !sessionStorage.getItem('paired:' + pair)) { sessionStorage.setItem('paired:' + pair, '1'); $('fBind').closest('details').open = true; $('fBind').code.value = pair; $('fBind').requestSubmit(); }
 	if (joinCode && !sessionStorage.getItem('joined:' + joinCode) && !document.querySelector('.mask')) { sessionStorage.setItem('joined:' + joinCode, '1'); joinBox(joinCode); }
+	if (okCode && /^[a-z2-9]{8}$/.test(okCode) && !document.querySelector('.mask')) appOkBox(okCode);
 	return me;
+}
+// App 里：要授权码，「用官网登录」到浏览器里确认（或者另一台登录着的手机扫码），App 每 2 秒问一次
+const AP = { code: '', key: '', exp: 0, t: 0 };
+async function appAuth() {
+	$('lgWelcome').classList.add('hidden'); $('lgCard').classList.add('hidden'); $('lgApp').classList.remove('hidden');
+	$('apHost').textContent = location.host;
+	clearTimeout(AP.t);
+	try { const r = await api('app_start', {}); Object.assign(AP, r); }
+	catch (e) { $('apMsg').textContent = e.message; return; }
+	const url = location.origin + '/app?ok=' + AP.code;
+	$('apGo').href = url;
+	$('apMsg').textContent = '在浏览器里确认后回到这里';
+	$('apQr').classList.add('hidden'); $('apQr').innerHTML = '';
+	$('apQrBtn').onclick = async () => { try { await tfLoadQr(); const q = window.qrcode(0, 'M'); q.addData(url); q.make(); $('apQr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); $('apQr').classList.remove('hidden'); $('apMsg').textContent = '用登录着官网的手机扫码确认'; } catch (e) { toast(e.message, true); } };
+	const poll = async () => {
+		if (Date.now() > AP.exp) return appAuth();
+		try {
+			const r = await api('app_poll', { code: AP.code, key: AP.key });
+			if (r.ok) { wasIn.set(true); $('lgApp').classList.add('hidden'); return load('login'); }
+			if (r.denied) { $('apMsg').textContent = '已拒绝'; AP.t = setTimeout(appAuth, 2500); return; }
+		} catch (e) { if (e.data && e.data.expired) return appAuth(); }
+		AP.t = setTimeout(poll, 2000);
+	};
+	AP.t = setTimeout(poll, 2000);
+	// 浏览器里点了「回到 App」：马上去取（App 调）
+	window.appPollNow = () => { clearTimeout(AP.t); poll(); };
+}
+// 浏览器里：确认 App 登录（看清是哪台、在哪）
+async function appOkBox(code) {
+	let r; try { r = await api('app_info', { code }); } catch (x) { history.replaceState(null, '', '/app'); toast(x.message, true); return; }
+	const m = document.createElement('div'); m.className = 'mask';
+	const ag = Math.max(0, Math.round((Date.now() - r.at) / 60000));
+	m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><h3>允许 App 登录</h3>
+		<p class="muted" style="margin:8px 0 0;font-size:14.5px;line-height:1.7">${esc(r.ua || '路由器面板 App')}${r.place ? ' · ' + esc(r.place) : ''} · ${ag ? ag + ' 分钟前' : '刚刚'}</p>
+		<p class="muted" style="margin:6px 0 0;font-size:13.5px">不是你自己点的，就拒绝。</p>
+		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-no>拒绝</button><button type="button" class="btn primary" data-ok>允许</button></div></div>`;
+	const done = (t) => { history.replaceState(null, '', '/app'); m.querySelector('.card').innerHTML = `<h3>${t}</h3><div class="acts">${/Android/.test(navigator.userAgent) && t === '已允许' ? '<a class="btn primary" href="routerpanel://auth">回到 App</a>' : '<button type="button" class="btn primary" data-x>好的</button>'}</div>`; m.querySelector('[data-x]')?.addEventListener('click', () => m.remove()); };
+	const go = async (ok, b) => { b.disabled = true; try { await api('app_ok', { code, ok }); done(ok ? '已允许' : '已拒绝'); } catch (e) { b.disabled = false; m.querySelector('[data-err]').textContent = e.message; } };
+	m.querySelector('[data-ok]').onclick = (e) => go(true, e.currentTarget);
+	m.querySelector('[data-no]').onclick = (e) => go(false, e.currentTarget);
+	document.body.appendChild(m);
 }
 // 浏览器关掉了 Cookie：登录不了，先说清楚
 if (navigator.cookieEnabled === false) { const n = $('vAuth').querySelector('.lgcard'); if (n) n.insertAdjacentHTML('afterbegin', '<div class="notice" style="margin-bottom:6px">这个浏览器关掉了 Cookie，登录不了。请在浏览器设置里打开 Cookie，或者换手机自带的浏览器。</div>'); }

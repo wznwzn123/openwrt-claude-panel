@@ -14,7 +14,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/AppTheme"
         android:allowBackup="false"
-        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
@@ -26,7 +26,24 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 6.0 第 71 项：浏览器里确认 App 登录后「回到 App」 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="routerpanel" android:host="auth" />
+            </intent-filter>
         </activity>
+        <!-- 6.0 第 38 项：桌面小组件（网速、在线设备数） -->
+        <receiver
+            android:name=".SpeedWidget"
+            android:exported="false"
+            android:label="网速">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_speed_info" />
+        </receiver>
         <!-- 扫码界面跟着手机方向转，不强制横屏 -->
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"

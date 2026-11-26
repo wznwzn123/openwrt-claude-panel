@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 6.0：本地版在家里用 http://路由器地址:906 打开面板，App 要能连 http。
+     放开的是系统层面；App 代码里只让家里局域网的私有地址（10.x、172.16–31.x、192.168.x）走 http，别的一律只走 https -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors><certificates src="system" /></trust-anchors>
+    </base-config>
+</network-security-config>

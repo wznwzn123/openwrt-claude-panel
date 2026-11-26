@@ -31,6 +31,20 @@ import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.appwidget.AppWidgetManager;
+import android.content.ComponentName;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.RouteInfo;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.io.ByteArrayInputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -167,6 +181,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /* 6.0 第 71 项：浏览器里确认 App 登录后点「回到 App」（routerpanel://auth）：让账号页马上去取登录，不用等下一次 */
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        Uri d = i.getData();
+        if (d != null && "routerpanel".equals(d.getScheme()) && "auth".equals(d.getHost()) && site != null)
+            site.evaluateJavascript("window.appPollNow && appPollNow()", null);
+    }
+
     /* ---------- 深色模式：老版本系统 WebView 不认系统设置，由 App 自己告诉首页 ---------- */
     private boolean isDark() { return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES; }
     private void applyBars() {
@@ -298,9 +320,22 @@ public class MainActivity extends AppCompatActivity {
         site.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
+                // 面板「桌面小组件」：只认面板自己的网址跳过来的
+                if ("routerpanel".equals(u.getScheme())) { if ("widget".equals(u.getHost())) addWidget(u); return true; }
+                // 确认 App 登录要在浏览器里（那里登录着官网账号）
+                String hub = hubHost();
+                if (hub != null && hub.equals(u.getHost()) && "/app".equals(u.getPath()) && u.getQueryParameter("ok") != null) { external(u.toString()); return true; }
                 if ("https".equals(u.getScheme()) && allowed(u.getHost())) return false;
+                // 本地版：家里局域网的面板（http://路由器地址:906）
+                if ("http".equals(u.getScheme()) && SpeedWidget.lanHost(u.getHost())) return false;
                 external(u.toString());
                 return true;
+            }
+            // http 只给家里局域网的地址（系统层面放开了 http，这里管住）
+            @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                Uri u = r.getUrl();
+                if ("http".equals(u.getScheme()) && !SpeedWidget.lanHost(u.getHost())) return new WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", null, new ByteArrayInputStream(new byte[0]));
+                return null;
             }
             @Override public void onPageFinished(WebView v, String url) { remember(url); pollBar(); }
             @Override public void onPageStarted(WebView v, String url, Bitmap fav) { if (edge) { edge = false; barColor = 0; layoutBars(); } }
@@ -347,8 +382,9 @@ public class MainActivity extends AppCompatActivity {
     // 打开过的路由器面板记到首页列表里（只记网址，不记密钥）
     private void remember(String url) {
         Uri u = Uri.parse(url);
-        if (!"https".equals(u.getScheme()) || u.getPath() == null || !u.getPath().startsWith("/panel")) return;
-        String key = "https://" + u.getAuthority() + "/panel/";
+        boolean lan = "http".equals(u.getScheme()) && SpeedWidget.lanHost(u.getHost());
+        if ((!"https".equals(u.getScheme()) && !lan) || u.getPath() == null || !u.getPath().startsWith("/panel")) return;
+        String key = u.getScheme() + "://" + u.getAuthority() + "/panel/";
         try {
             JSONArray a = routers();
             for (int i = 0; i < a.length(); i++) if (key.equals(a.getJSONObject(i).getString("url"))) { a.getJSONObject(i).put("at", System.currentTimeMillis()); save(a); return; }
@@ -361,7 +397,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void openUrl(String url) {
         Uri u = Uri.parse(url);
-        if ("https".equals(u.getScheme()) && (allowed(u.getHost()) || (u.getPath() != null && u.getPath().startsWith("/panel")))) {
+        boolean lan = "http".equals(u.getScheme()) && SpeedWidget.lanHost(u.getHost()) && u.getPath() != null && u.getPath().startsWith("/panel");
+        if (lan || ("https".equals(u.getScheme()) && (allowed(u.getHost()) || (u.getPath() != null && u.getPath().startsWith("/panel"))))) {
             showSite();
             site.loadUrl(url);
         } else external(url);
@@ -404,6 +441,60 @@ public class MainActivity extends AppCompatActivity {
             toast("这张图片里没找到二维码。请用清楚一点的截图（面板里的二维码要先点一下，去掉模糊再截图）");
         }
     }
+    /* 6.0 第 38 项：面板发来小组件钥匙（routerpanel://widget?k=编号.密钥&n=路由器名字）。
+       只认现在打开着的是面板自己的网址（托管、自建的 https，或者家里局域网的 http），数据地址就用这个网址 */
+    private void addWidget(Uri u) {
+        String cur = site.getUrl(), k = u.getQueryParameter("k"), n = u.getQueryParameter("n");
+        Uri c = cur == null ? null : Uri.parse(cur);
+        boolean ok = c != null && c.getPath() != null && c.getPath().startsWith("/panel")
+                && (("https".equals(c.getScheme()) && allowed(c.getHost())) || ("http".equals(c.getScheme()) && SpeedWidget.lanHost(c.getHost())));
+        if (!ok || k == null || !k.matches("[a-z0-9]{8}\\.[a-z0-9]{32}")) { toast("小组件没加上，在面板里再点一次"); return; }
+        SpeedWidget.prefs(this).edit().putString("url", c.getScheme() + "://" + c.getAuthority() + "/cgi-bin/mcp/widget").putString("k", k)
+                .putString("name", n == null ? "" : n.substring(0, Math.min(40, n.length()))).remove("last").apply();
+        SpeedWidget.update(this);
+        AppWidgetManager m = AppWidgetManager.getInstance(this);
+        int have = m.getAppWidgetIds(new ComponentName(this, SpeedWidget.class)).length;
+        if (have > 0) { toast("桌面小组件已更新"); return; }
+        if (Build.VERSION.SDK_INT >= 26 && m.isRequestPinAppWidgetSupported()) m.requestPinAppWidget(new ComponentName(this, SpeedWidget.class), null, null);
+        else toast("长按桌面空白处 →「小组件」→「路由器面板」");
+    }
+
+    /* 6.0 第 40 项：在家里 Wi-Fi 下找路由器面板：问一下网关（路由器）的 906 端口（装的时候被占用会换 9906、19906）。
+       只发现，不自动登录；找到了在首页列出来，点了打开登录页 */
+    private void discover() {
+        new Thread(() -> {
+            JSONArray out = new JSONArray();
+            try {
+                ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                Network n = cm == null ? null : cm.getActiveNetwork();
+                LinkProperties lp = n == null ? null : cm.getLinkProperties(n);
+                if (lp != null) for (RouteInfo r : lp.getRoutes()) {
+                    InetAddress g = r.getGateway();
+                    if (!r.isDefaultRoute() || !(g instanceof Inet4Address)) continue;
+                    String ip = g.getHostAddress();
+                    if (!SpeedWidget.lanHost(ip)) continue;
+                    for (int port : new int[] { 906, 9906, 19906 }) if (probe(ip, port)) { out.put(new JSONObject().put("ip", ip).put("url", "http://" + ip + ":" + port + "/panel/")); break; }
+                }
+            } catch (Exception e) {}
+            js(home, "window.onFound && onFound(" + out + ")");
+        }).start();
+    }
+    // 不走 http 库（不用放开整个 App 的 http）：直接连端口要首页，看是不是路由器面板
+    private static boolean probe(String ip, int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(ip, port), 1500);
+            s.setSoTimeout(2500);
+            OutputStream o = s.getOutputStream();
+            o.write(("GET /panel/ HTTP/1.0\r\nHost: " + ip + ":" + port + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            o.flush();
+            InputStream in = s.getInputStream();
+            byte[] buf = new byte[65536]; int len = 0, n;
+            while (len < buf.length && (n = in.read(buf, len, buf.length - len)) > 0) len += n;
+            String t = new String(buf, 0, len, StandardCharsets.UTF_8);
+            return t.startsWith("HTTP/1.") && t.contains("RP_EDGE");
+        } catch (Exception e) { return false; }
+    }
+
     private void js(WebView w, String code) { runOnUiThread(() -> w.evaluateJavascript(code, null)); }
     private void toast(String t) { runOnUiThread(() -> Toast.makeText(this, t, Toast.LENGTH_SHORT).show()); }
 
@@ -416,6 +507,7 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface public void saveRouters(String json) { try { save(new JSONArray(json)); } catch (Exception e) {} }
         @JavascriptInterface public void open(String url) { runOnUiThread(() -> openUrl(url)); }
         @JavascriptInterface public void external(String url) { runOnUiThread(() -> MainActivity.this.external(url)); }
+        @JavascriptInterface public void discover() { MainActivity.this.discover(); }
         // 读手机剪贴板（网页自己读剪贴板在 App 里经常被拦，改用系统的）
         @JavascriptInterface public String clipboard() {
             try {

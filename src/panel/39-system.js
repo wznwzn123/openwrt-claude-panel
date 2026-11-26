@@ -1224,6 +1224,7 @@ const T = {
 	async lock() { lockSettings(); },
 	look() { lookSettings(); },
 	addphone() { addPhone(); },
+	widget() { widgetAdd(); },
 	rotatekey() { rotateKey(); },
 	svc() { svcSheet(); },
 	ckey() { ckeySheet(); },
@@ -2344,7 +2345,7 @@ function mpKeysHtml() {
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
-	return `<div class="mp-sub">登录着的设备${dl ? ' · ' + dl.length + ' 台' : ''}</div><section class="card">${!dl ? '<p class="muted" style="margin:0">读不到，稍后刷新再试</p>' : dl.map((d) => `<div class="mp-fb"><div><b>${esc(d.name)}${d.me ? ' <span class="pill blue">这台</span>' : ''}</b><span>${esc([new Date(d.at * 1000).toLocaleDateString('zh-CN') + ' 登录', d.via || '', d.me ? '' : '最近使用：' + (d.seen ? agoSec(d.seen) : '路由器重启后还没用过')].filter(Boolean).join(' · '))}</span></div>${d.me ? '' : `<button class="btn sm danger" data-mp="drm" data-i="${esc(d.id)}">移除</button>`}</div>`).join('') || '<p class="muted" style="margin:0">没有记录</p>'}
+	return `<div class="mp-sub">登录着的设备${dl ? ' · ' + dl.length + ' 台' : ''}</div><section class="card">${!dl ? '<p class="muted" style="margin:0">读不到，稍后刷新再试</p>' : dl.map((d) => `<div class="mp-fb"><div><b>${esc(d.name)}${d.me ? ' <span class="pill blue">这台</span>' : ''}</b><span>${esc([new Date(d.at * 1000).toLocaleDateString('zh-CN') + (d.kind === 'widget' ? ' 添加' : ' 登录'), d.via || '', d.me ? '' : '最近使用：' + (d.seen ? agoSec(d.seen) : '路由器重启后还没用过')].filter(Boolean).join(' · '))}</span></div>${d.me ? '' : `<button class="btn sm danger" data-mp="drm" data-i="${esc(d.id)}">移除</button>`}</div>`).join('') || '<p class="muted" style="margin:0">没有记录</p>'}
 		${dl && dl.length > 1 ? '<button class="btn sm danger" data-mp="drmall" style="width:100%;margin-top:6px">除了这台，全部移除</button>' : ''}</section>
 		<p class="mp-note" style="text-align:left;margin:7px 4px 0!important">${note}</p>`;
 }
@@ -2693,7 +2694,17 @@ async function svcSheet() {
 	});
 }
 // 6.0：已登录的手机、AI 连接器地址、换登录密钥、自建版的「添加新手机」都只在「我的主页 → 敏感信息」里；系统操作里只留托管版的「添加新手机」（扫码只是打开官网）
-function moreBtns() { const a = document.querySelector('#p-more [data-t="addphone"]'); if (a) a.classList.toggle('hidden', !isHosted()); }
+function moreBtns() { const a = document.querySelector('#p-more [data-t="addphone"]'); if (a) a.classList.toggle('hidden', !isHosted()); const w = document.querySelector('#p-more [data-t="widget"]'); if (w) w.classList.toggle('hidden', !IN_APP6); }
+/* 6.0 第 38 项：安卓桌面小组件（只在 App 6.0 里有）：路由器发一把只能看网速和在线设备数的钥匙，交给 App 存起来
+   （面板网页碰不到手机功能，只能跳一个 routerpanel://widget 地址，App 只认面板自己的网址跳过来的） */
+const IN_APP6 = /RouterPanelApp\/([6-9]|\d\d)\./.test(navigator.userAgent);
+async function widgetAdd() {
+	if (!(await confirmBox('添加桌面小组件', '桌面上显示网速和在线设备数。', '添加'))) return;
+	try {
+		const r = await P('widget_new');
+		location.href = 'routerpanel://widget?k=' + encodeURIComponent(r.k) + '&n=' + encodeURIComponent(r.name);
+	} catch (e) { toast(e.message, true); }
+}
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 // 平板（证人）网址：带着平板的钥匙，只在「我的主页 → 敏感信息」验证后给
 async function tabletUrlSheet() {

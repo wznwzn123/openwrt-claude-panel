@@ -25,6 +25,12 @@ function handle(msg) {
 		try { return rpc_result(id, msg.method == 'panel/lan_open' ? P.lan_open(p) : msg.method == 'panel/lan_keep' ? P.lan_keep(p) : P.lan_pw(p)); }
 		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
 	}
+	// 6.0 第 38 项：桌面小组件的地址：只能拿网速和在线设备数（凭小组件钥匙）
+	if (MODE == 'widget') {
+		if (msg.method != 'panel/widget') return is_notification ? null : rpc_error(id, -32601, 'not found');
+		try { return rpc_result(id, P.widget(p)); }
+		catch (e) { return rpc_error(id, -32000, type(e) == 'object' ? e.message : '' + e); }
+	}
 	// 6.0 第 6 项：通行证地址。只有「拿手机钥匙换通行证」不用带通行证；别的请求都要带，并且只给手机面板用
 	if (MODE == 'pass') {
 		if (msg.method == 'panel/pass_new') return is_notification ? null : pass_new_rpc(id, p);
@@ -146,6 +152,8 @@ function main() {
 		MODE = 'pass';
 	else if (path == '/lan')
 		MODE = 'lan';
+	else if (path == '/widget')
+		MODE = 'widget';
 	else if (length(token) < 16 || path != '/' + token) {
 		reply('404 Not Found', { error: 'not found' });
 		return;

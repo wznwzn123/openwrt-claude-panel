@@ -81,6 +81,25 @@ ok('带通行证：放行到隧道，自己的 Cookie 拿掉、页面自己的 C
 await post('/api/dev/xtarget', { sub: R.sub, rkey: R.rkey, port: 9090 });
 res = await xget(R.sub, '/control', ck);
 ok('切到别的页面后，旧通行证失效', res.status === 403 && /切到别的页面/.test(await res.text()));
+// ---------- 第 37 项：家里其他设备（NAS、摄像头） ----------
+for (const bad of ['127.0.0.1', '8.8.8.8', '192.168.1.255', '169.254.1.1', '172.32.0.5', 'nas.local', '192.168.1.5:80'])
+	if ((await post('/api/dev/xtarget', { sub: R.sub, rkey: R.rkey, port: 80, ip: bad })).st !== 400) ok('只认局域网私有地址：' + bad, false);
+ok('只认局域网私有地址（127.x、公网、广播、链路本地都不行）', true);
+CF.length = 0;
+r = await post('/api/dev/xtarget', { sub: R.sub, rkey: R.rkey, port: 5000, ip: '192.168.1.20' });
+ok('家里设备：「-x」指到这台设备的 IP 和端口', r.st === 200 && r.j.t === '192.168.1.20:5000' && CF.some((x) => x.m === 'PUT' && JSON.stringify(x.body).includes('"http://192.168.1.20:5000"')) && (await W(R.sub).getCfg()).x === '192.168.1.20:5000', JSON.stringify(r.j));
+const sd = await sign(R.rkey, '192.168.1.20:5000', exp);
+res = await xget(R.sub, `/__cmcpx?p=192.168.1.20:5000&e=${exp}&s=${sd}`);
+const ckd = (res.headers.get('set-cookie') || '').split(';')[0];
+ok('家里设备的通行证：签的是「IP:端口」', res.status === 302 && /^cmcpx=192\.168\.1\.20:5000\.\d+\.[0-9a-f]{64}$/.test(ckd), ckd);
+ORIGIN.length = 0;
+res = await xget(R.sub, '/webman', ckd);
+ok('带通行证：放行', res.status === 200 && ORIGIN.length === 1);
+res = await xget(R.sub, `/__cmcpx?p=5000&e=${exp}&s=${await sign(R.rkey, 5000, exp)}`);
+ok('路由器同一个端口的通行证打不开这台设备', res.status === 403);
+await post('/api/dev/xtarget', { sub: R.sub, rkey: R.rkey, port: 5000, ip: '192.168.1.21' });
+res = await xget(R.sub, '/webman', ckd);
+ok('切到另一台设备（端口一样）：旧通行证失效', res.status === 403);
 res = await xget('zzzzzzzz', '/', ck);
 ok('不存在的路由器：没开', res.status === 404);
 // 关掉

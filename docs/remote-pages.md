@@ -15,6 +15,7 @@ OpenClash 控制面板、AdGuard Home、网页终端这类页面不在面板的�
    - Subdomain：随便起一个，比如 `router-x`（不要跟面板的地址一样）
    - Domain：选你的域名
    - Service：选 **HTTP**，URL 填 `127.0.0.1:端口`（端口在面板「远程页面」里能看到，比如 AdGuard Home 是 `127.0.0.1:3000`）
+   - 家里的其他设备（NAS、摄像头）：URL 填这台设备的局域网地址和端口，比如 `192.168.1.20:5000`。最好在路由器里给它固定 IP，不然地址变了要回来改
    - 网页终端开了 https 的，Service 选 **HTTPS**，并在 **Additional application settings → TLS** 里打开 **No TLS Verify**
 3. 保存。以后想换成别的页面，改这里的端口就行。
 
@@ -31,3 +32,8 @@ Cloudflare Zero Trust 免费版最多 50 个用户，自己家用足够。
 
 - OpenClash / Nikki 控制面板：打开 `https://router-x.你的域名/ui/`，控制面板里「后端地址」填 `router-x.你的域名`，端口填 `443`，密钥填 OpenClash 设置里的「管理页面登录密钥」。
 - 其他页面：直接打开 `https://router-x.你的域名/`。
+
+## 家里的设备要注意
+
+- 设备还在用出厂默认密码的，先改掉。
+- 只能看网页，不能长时间看监控视频（Cloudflare 不允许用免费隧道传大量视频）。

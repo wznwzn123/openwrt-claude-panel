@@ -1,5 +1,6 @@
 // 6.0 第 36 项（面板）：远程页面——认识的页面列出来（端口、没在运行的灰掉）；点「打开」先开好新标签页，官网切好再跳过去；
 // 正在开着的能关掉；手动加 / 删页面；自建版给教程、本地版给局域网地址；320 / 390 / 430、深色
+// 第 37 项：家里的设备——默认没有；从局域网设备里选或者手动填 IP，提醒改默认密码；打开、删除
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
 const mock = require('./mock');
@@ -8,13 +9,16 @@ const SHOT = path.join(__dirname, 'shots'); fs.mkdirSync(SHOT, { recursive: true
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 let S;
-const fresh = (o = {}) => ({ calls: [], d: { mode: 'hosted', cur: 0, lan: '192.168.1.1', list: [{ id: 'oc', name: 'OpenClash 控制面板', port: 9090, path: '/ui/', https: false, up: true, auto: true }, { id: 'agh', name: 'AdGuard Home', port: 3000, path: '/', up: true, auto: true }, { id: 'ttyd', name: '网页终端（ttyd）', port: 7681, path: '/', https: true, up: false, auto: true }, { id: 'm9000', name: '一个名字特别长的 Docker 管理页面', port: 9000, path: '/', up: true }], ...o } });
+const fresh = (o = {}) => ({ calls: [], d: { mode: 'hosted', cur: 0, lan: '192.168.1.1', list: [{ id: 'oc', name: 'OpenClash 控制面板', port: 9090, path: '/ui/', https: false, up: true, auto: true }, { id: 'agh', name: 'AdGuard Home', port: 3000, path: '/', up: true, auto: true }, { id: 'ttyd', name: '网页终端（ttyd）', port: 7681, path: '/', https: true, up: false, auto: true }, { id: 'm9000', name: '一个名字特别长的 Docker 管理页面', port: 9000, path: '/', up: true }], curip: '', devs: [], cands: [{ ip: '192.168.1.20', mac: 'aa:bb:cc:00:00:20', name: 'DS920+' }, { ip: '192.168.1.130', mac: 'aa:bb:cc:00:00:30', name: '客厅摄像头一个特别长的名字' }], ...o } });
 function handle(m, p) {
 	S.calls.push({ m, p });
 	const d = S.d;
 	if (m === 'xp_get') return d;
+	if (m === 'xp_open' && p.dev) { const x = d.devs.find((y) => y.id === p.dev); d.cur = x.port; d.curip = x.ip; return { url: 'http://localhost:8197/fake-x?port=' + x.ip + ':' + x.port, name: x.name, host: 'abcd2345-x.panel.example', wait: 1 }; }
 	if (m === 'xp_open') { const x = d.list.find((y) => (p.port ? y.port === p.port : y.id === p.id)) || { name: '端口 ' + p.port, port: p.port }; d.cur = x.port; return { url: 'http://localhost:8197/fake-x?port=' + x.port, name: x.name, host: 'abcd2345-x.panel.example', wait: 1 }; }
 	if (m === 'xp_close') { d.cur = 0; return { ok: true }; }
+	if (m === 'xp_set' && p.op === 'dadd') { if (p.ip === '8.8.8.8') throw new Error('只能开家里局域网的设备'); d.devs.push({ id: 'd' + (d.devs.length + 1), name: p.name, mac: p.mac, ip: p.ip, port: +p.port, path: p.path, https: p.https }); return d; }
+	if (m === 'xp_set' && p.op === 'ddel') { d.devs = d.devs.filter((x) => x.id !== p.id); return d; }
 	if (m === 'xp_set') { if (p.op === 'del') d.list = d.list.filter((x) => x.port !== +p.port); else d.list.push({ id: 'm' + p.port, name: p.name, port: +p.port, path: p.path, https: p.https, up: true }); return d; }
 	return mock.respond(m, p);
 }
@@ -70,18 +74,55 @@ const lay = (page) => page.evaluate(() => {
 		ok('添加页面：名字、端口、https' + T, S.calls.some((c) => c.m === 'xp_set' && c.p.op === 'add' && c.p.name === 'NAS' && c.p.port === '5000' && c.p.https === true && c.p.path === '/') && /已添加：NAS/.test(await page.textContent('#toast')));
 		await page.click('[data-xd="9000"]'); await W(300); await page.click('.modal [data-v="true"]'); await W(500);
 		ok('删除前确认，删掉' + T, !S.d.list.some((x) => x.port === 9000));
+		// ---------- 第 37 项：家里的设备 ----------
+		ok('家里的设备：默认没有' + T, /家里的设备/.test(await page.textContent('#xpBody')) && /还没加设备/.test(await page.textContent('#xpBody')));
+		await page.click('#xpDAdd'); await W(300);
+		const mt = await page.textContent('.modal');
+		ok('添加设备：提醒改默认密码、不能长时间看监控；默认选第一台，名字带出来，不用填 IP' + T, /先改掉设备的默认密码/.test(mt) && /不能长时间看监控视频/.test(mt) && (await page.inputValue('.modal [data-a="name"]')) === 'DS920+' && !(await page.isVisible('.modal [data-a="ip"]')));
+		const mh = await page.evaluate(() => { const r = document.querySelector('.modal .sheet, .modal > div').getBoundingClientRect(); return [r.height <= innerHeight, document.querySelector('.modal [data-ok]').getBoundingClientRect().bottom <= innerHeight + 1]; });
+		await page.screenshot({ path: path.join(SHOT, `xpage-dadd-${w}${dark ? '-dark' : ''}.png`) });
+		ok('添加设备的框放得下' + T, mh[0], JSON.stringify(mh));
+		await page.selectOption('.modal [data-a="dev"]', 'ip'); await W(100);
+		ok('选「手动填 IP」：出现 IP 输入框' + T, await page.isVisible('.modal [data-a="ip"]'));
+		await page.fill('.modal [data-a="ip"]', '8.8.8.8'); await page.fill('.modal [data-a="name"]', 'x'); await page.fill('.modal [data-a="port"]', '80');
+		await page.click('.modal [data-ok]'); await W(500);
+		ok('公网地址：说原因' + T, /只能开家里局域网/.test(await page.textContent('#toast')));
+		await page.click('#xpDAdd'); await W(300);
+		await page.fill('.modal [data-a="port"]', '5000'); await page.fill('.modal [data-a="path"]', '/webman');
+		await page.click('.modal [data-ok]'); await W(500);
+		ok('选局域网里的设备加：带 IP、MAC、名字、端口、路径' + T, S.calls.some((c) => c.m === 'xp_set' && c.p.op === 'dadd' && c.p.ip === '192.168.1.20' && c.p.mac === 'aa:bb:cc:00:00:20' && c.p.name === 'DS920+' && c.p.port === '5000' && c.p.path === '/webman') && /已添加：DS920\+/.test(await page.textContent('#toast')));
+		await page.click('#xpDAdd'); await W(300);
+		await page.selectOption('.modal [data-a="dev"]', '1'); await W(100);
+		ok('换一台：名字跟着换' + T, (await page.inputValue('.modal [data-a="name"]')) === '客厅摄像头一个特别长的名字');
+		await page.fill('.modal [data-a="port"]', '443'); await page.click('.modal [data-a="https"]');
+		await page.click('.modal [data-ok]'); await W(500);
+		let td = await page.textContent('#xpBody');
+		ok('设备列出来：IP:端口、https' + T, /DS920\+/.test(td) && /192\.168\.1\.20:5000/.test(td) && /https · 192\.168\.1\.130:443/.test(td));
+		l = await lay(page); ok('有设备时不错位' + T, !l.length, l.join('；'));
+		const pop2P = ctx.waitForEvent('page');
+		await page.click('[data-xdo="d1"]');
+		const pop2 = await pop2P; await W(2200);
+		ok('打开设备：新标签页跳到这台设备' + T, S.calls.some((c) => c.m === 'xp_open' && c.p.dev === 'd1') && /fake-x\?port=192\.168\.1\.20:5000/.test(pop2.url()), pop2.url());
+		await pop2.close();
+		td = await page.textContent('#xpBody');
+		ok('顶上写「正在开着：DS920+」，路由器上的页面不再标「正在用」' + T, /正在开着：DS920\+/.test(td) && !/正在用/.test(td));
+		await page.screenshot({ path: path.join(SHOT, `xpage-dev-${w}${dark ? '-dark' : ''}.png`), fullPage: true });
+		await page.click('[data-xdd="d2"]'); await W(300);
+		ok('删设备前确认：不影响设备本身' + T, /删除「客厅摄像头一个特别长的名字」/.test(await page.textContent('.modal')) && /不影响设备本身/.test(await page.textContent('.modal')));
+		await page.click('.modal [data-v="true"]'); await W(500);
+		ok('删掉设备' + T, S.d.devs.length === 1 && /已删除：客厅摄像头/.test(await page.textContent('#toast')));
 		await ctx.close();
 	}
 	// 自建版、本地版
 	for (const [mode, re] of [['self', /自建版要在你自己的 Cloudflare 里加一个地址/], ['local', /本地版：连着家里 Wi-Fi 时直接打开/]]) {
-		S = fresh({ mode });
+		S = fresh({ mode, devs: [{ id: 'd1', name: 'NAS', ip: '192.168.1.20', port: 5000, path: '/webman' }] });
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
 		page.on('pageerror', (e) => problems.push('页面错误（' + mode + '）：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8197/panel/?p=xpage'); await W(1500);
 		const t = await page.textContent('#xpBody');
 		if (mode === 'self') ok('自建版：说明 + 看教程，没有「打开」', re.test(t) && (await page.locator('a:has-text("看教程")').count()) === 1 && (await page.locator('[data-xo]').count()) === 0);
-		else ok('本地版：「打开」是局域网地址', re.test(t) && (await page.getAttribute('#xpBody a:has-text("打开")', 'href')) === 'http://192.168.1.1:9090/ui/');
+		else ok('本地版：「打开」是局域网地址（设备也是）', re.test(t) && (await page.getAttribute('#xpBody a:has-text("打开")', 'href')) === 'http://192.168.1.1:9090/ui/' && (await page.getAttribute('#xpBody .xprow:has-text("NAS") a', 'href')) === 'http://192.168.1.20:5000/webman');
 		await page.screenshot({ path: path.join(SHOT, `xpage-${mode}.png`) });
 		await ctx.close();
 	}

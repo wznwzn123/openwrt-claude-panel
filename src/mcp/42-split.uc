@@ -10,7 +10,7 @@
 const SP_F = ETC + '/split.json', SP_DIR = getenv('CMCP_SP_DIR') || '/etc/openclash/rule_provider';
 const SP_CUSTOM = getenv('CMCP_SP_CUSTOM') || '/etc/openclash/custom/openclash_custom_rules.list', SP_MARK = '# [cmcp-split]';
 // 常用软件：网址后缀（跟着面板更新）；路由器只能按网址认，认不了 App 本身
-const SP_APPS = [
+const SP_APPS0 = [
 	['chatgpt', 'ChatGPT', ['openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'sora.com']],
 	['claude', 'Claude', ['anthropic.com', 'claude.ai', 'claudeusercontent.com']],
 	['gemini', 'Gemini', ['gemini.google.com', 'bard.google.com', 'aistudio.google.com', 'generativelanguage.googleapis.com']],
@@ -31,6 +31,17 @@ const SP_APPS = [
 	['douyin', '抖音', ['douyin.com', 'douyinvod.com', 'douyincdn.com', 'amemv.com', 'snssdk.com']],
 	['wechat', '微信', ['weixin.qq.com', 'wechat.com', 'qpic.cn', 'qlogo.cn']],
 	['taobao', '淘宝 / 支付宝', ['taobao.com', 'tmall.com', 'alicdn.com', 'alipay.com', 'alipayobjects.com']]];
+// 远程数据（热补丁带来的 /etc/claude-mcp/remote.json 里的 split_apps）有就用它：网址变了、加新软件不用发版本。格式不对就用上面写死的
+function sp_apps() {
+	let r = cmcp_readj(ETC + '/remote.json', null)?.split_apps, out = [];
+	if (type(r) != 'array') return SP_APPS0;
+	for (let a in r) {
+		if (type(a) != 'array' || !match('' + a[0], /^[a-z0-9_-]{1,30}$/) || !length('' + a[1]) || type(a[2]) != 'array') return SP_APPS0;
+		for (let d in a[2]) if (!match('' + d, /^[a-z0-9.-]{1,80}$/)) return SP_APPS0;
+		push(out, [a[0], substr('' + a[1], 0, 40), a[2]]);
+	}
+	return length(out) ? out : SP_APPS0;
+}
 const SP_GEO = [['CN', '中国大陆'], ['HK', '香港'], ['TW', '台湾'], ['JP', '日本'], ['KR', '韩国'], ['SG', '新加坡'], ['US', '美国'], ['GB', '英国'], ['DE', '德国'], ['FR', '法国'], ['CA', '加拿大'], ['AU', '澳大利亚'], ['RU', '俄罗斯'], ['IN', '印度'], ['TH', '泰国'], ['MY', '马来西亚'], ['VN', '越南']];
 function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo', 'fam']) if (type(o[k]) != 'object') o[k] = {}; return o; }
 function sp_kind() {
@@ -102,7 +113,7 @@ function sp_rules(o, main) {
 		let own = own_load(), ip = sp_ipmap();
 		for (let mac in own) if (own[mac]?.ok && o.fam[own[mac].uid] && !o.dev[mac] && ip[mac]) add('d', 'DIRECT', 'SRC-IP-CIDR,' + ip[mac] + '/32');
 	}
-	for (let a in SP_APPS) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
+	for (let a in sp_apps()) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
 	for (let g in SP_GEO) if (o.geo[g[0]]) add('g', o.geo[g[0]], 'GEOIP,' + g[0]);
 	let n = 0;
 	for (let g in out) g.name = sprintf('cmcp_sp_%s%d', g.kind, n++);
@@ -203,7 +214,7 @@ P.split_get = function() {
 	return {
 		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [],
 		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam,
-		apps: map(SP_APPS, (a) => ({ id: a[0], name: a[1] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
+		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
 	};
 };
@@ -233,7 +244,7 @@ P.split_set = function(a) {
 		if (t) { let ip = sp_pin(mac, x.ip); o.dev[mac] = { t, ip, name: substr('' + (x.name ?? ''), 0, 40) }; }
 		else if (o.dev[mac]) { delete o.dev[mac]; sp_unpin(mac); }
 	} else if (a.app) {
-		let ok = false; for (let p in SP_APPS) if (p[0] == x.id) ok = true;
+		let ok = false; for (let p in sp_apps()) if (p[0] == x.id) ok = true;
 		if (!ok) die('没有这个软件');
 		if (t) o.app[x.id] = t; else delete o.app[x.id];
 	} else {
@@ -285,4 +296,10 @@ P.split_check = function() {
 	try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('分流：策略组「' + join('」「', gone) + '」没了'), shq('订阅更新后找不到这个组，选它的设备和软件已改走主策略组。'))); } catch (e) {}
 	sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart');
 	return { ok: true, moved: gone };
+};
+
+// 远程开关（remote.json 的 off：页面名列表）：出了问题的功能先关掉，等热补丁修好再开。大家都能读（view 组）
+P.remote_flags = function() {
+	let off = cmcp_readj(ETC + '/remote.json', null)?.off;
+	return { off: type(off) == 'array' ? filter(map(slice(off, 0, 50), (x) => '' + x), (x) => match(x, /^[a-z0-9_]{1,20}$/)) : [] };
 };

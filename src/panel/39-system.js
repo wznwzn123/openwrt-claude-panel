@@ -1465,7 +1465,7 @@ function panelVerCheck(cur) {
 	let tried = ''; try { tried = sessionStorage.getItem('rp_verfix') || ''; } catch (e) {}
 	if (tried === cur) return false;
 	try { sessionStorage.setItem('rp_verfix', cur); } catch (e) {}
-	toast('路由器面板已更新到 v' + cur + '，正在换成新版…');
+	toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' 补丁 $1') + '，正在换成新版…');
 	refreshPanel();
 	return true;
 }
@@ -1485,7 +1485,7 @@ async function updCheck(force) {
 	updAt = Date.now();
 	let r;
 	try { r = await P('update_check', { force: !!force }, 25000); } catch (e) { if (force) toast(e.message, true); return null; }
-	if (r && typeof r === 'object' && panelVerCheck(r.cur)) return null;
+	if (r && typeof r === 'object' && panelVerCheck(r.pv || r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
 	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
@@ -1688,6 +1688,7 @@ async function ntCheck() {
 	try { await ntFetch(); } catch (e) { return; }
 	if (page === 'notice') return void ntRender();
 	ntBadge();
+	annBarDraw();
 	// 有别的弹窗（新手引导、必须更新…）：等它关掉马上弹
 	if (popBusy()) { NT.popWait = true; return; }
 	const pop = (NT.d.seen && NT.d.seen.pop) || [];
@@ -1699,6 +1700,20 @@ async function ntCheck() {
 }
 addEventListener('cmcp-popfree', () => { if (NT.popWait) { NT.popWait = false; setTimeout(ntCheck, 200); } if (FB_WAIT) { FB_WAIT = false; setTimeout(fbCheck, 400); } if (UPD_WAIT) { UPD_WAIT = false; setTimeout(() => updCheck(false), 300); } });
 let FB_WAIT = false, UPD_WAIT = false;
+// 6.0 横幅公告（官网后台发的「横幅」级别）：面板顶上一条，不弹窗；点 × 关掉，同一条不再出（记在路由器上，换手机也算）
+function annBarDraw() {
+	const bar = $('annBar'); if (!bar || !NT.d) return;
+	const pop = (NT.d.seen && NT.d.seen.pop) || [];
+	const a = (NT.d.ann || []).find((x) => x.level === 'banner' && !pop.includes(x.id));
+	bar.classList.toggle('hidden', !a);
+	if (!a) return;
+	bar.innerHTML = `<span>${esc(a.title)}</span>${a.body ? '<button class="btn sm" type="button" data-ab="go">查看</button>' : ''}<button class="annx" type="button" data-ab="x" aria-label="关掉横幅">×</button>`;
+	bar.onclick = (e) => {
+		const k = e.target.closest('[data-ab]')?.dataset.ab; if (!k) return;
+		if (k === 'go') return go('notice');
+		NT.d.seen.pop = [...pop, a.id]; P('notices_seen', { pop: a.id }).catch(() => {}); annBarDraw();
+	};
+}
 function ntAnnPop(a) {
 	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
 	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>

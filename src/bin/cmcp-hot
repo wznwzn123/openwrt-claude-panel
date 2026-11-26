@@ -1,0 +1,79 @@
+#!/bin/sh
+# 热补丁（6.0，用户 11/26：全程静默，不问）：不重装、不重启、不断网，换掉面板网页 / 接口文件 / 小工具脚本 / 远程数据。
+# 定时任务每 6 小时跑一次 check：问官网这个版本（VER）有没有更新的热补丁（编号 n 比现在的 HOT 大）→ 下载 → 验签（跟一键升级同一把公钥）
+# → 只认白名单里的文件 → 备份 → 一个个原子替换 → 自检（面板网页和接口都能打开）→ 不行就全部退回；同一个补丁失败 3 次不再试。
+# 装好了在「通知」里记一条（不推送到手机），面板发现版本号变了自己换成新的。
+# 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_HOT_URL（问哪里）、CMCP_HOT_DL（下载地址前缀）、CMCP_HOT_CHECK（自检命令）、CMCP_VERIFY（验签命令）
+R=${CMCP_ROOT:-}
+D=$R/etc/claude-mcp
+W=/tmp/cmcp_hot.$$
+LOG=/tmp/cmcp_hot.log
+HUB=$(sed -n 's/^HUB=//p' "$D/hub.conf" 2>/dev/null); HUB=${HUB:-https://yrlove520.com}
+VER=$(sed -n 's/^VER=//p' "$D/version" 2>/dev/null)
+HOT=$(sed -n 's/^HOT=//p' "$D/version" 2>/dev/null); case "$HOT" in ''|*[!0-9]*) HOT=0 ;; esac
+VERIFY=${CMCP_VERIFY:-/usr/sbin/cmcp-update verify}
+log() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
+jget() { printf '%s' "$J" | jsonfilter -e "@.$1" 2>/dev/null; }
+# 白名单：面板网页、接口、共用库、小工具脚本（cmcp-*，下次运行时生效）、远程数据。别的（开机脚本、系统文件）一律不认
+okpath() {
+	case "$1" in
+		*..*|/*) return 1 ;;
+		www-claude-mcp/panel/*|www-claude-mcp/cgi-bin/mcp|usr/share/ucode/cmcp/lib.uc|etc/claude-mcp/remote.json) return 0 ;;
+		usr/sbin/cmcp-*) case "$1" in */*/*/*) return 1 ;; esac; return 0 ;;
+	esac
+	return 1
+}
+selfcheck() {
+	[ -n "$CMCP_HOT_CHECK" ] && { sh -c "$CMCP_HOT_CHECK"; return; }
+	[ "$(curl -s -m 8 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json)" = 200 ] || return 1
+	curl -s -m 8 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"panel/whoami","params":{},"client":"panel"}' http://127.0.0.1:18765/cgi-bin/mcp/x | grep -q '"jsonrpc"'
+}
+fail() { log "热补丁 $N 没装上：$1"; c=$(sed -n "s/^$N=//p" "$D/hot_fail" 2>/dev/null); c=$(( ${c:-0} + 1 )); { grep -v "^$N=" "$D/hot_fail" 2>/dev/null; echo "$N=$c"; } > "$D/hot_fail.tmp" && mv -f "$D/hot_fail.tmp" "$D/hot_fail"; rm -rf "${W:?}"; exit 1; }
+
+case "$1" in
+check) ;;
+*) echo "用法：$0 check"; exit 1 ;;
+esac
+[ -n "$VER" ] || exit 0
+mkdir /tmp/cmcp_hot.lock 2>/dev/null || { [ $(( $(date +%s) - $(stat -c %Y /tmp/cmcp_hot.lock 2>/dev/null || echo 0) )) -lt 1800 ] && exit 0; }
+trap 'rmdir /tmp/cmcp_hot.lock 2>/dev/null' EXIT
+J=$(curl -fsS -m 20 "${CMCP_HOT_URL:-$HUB/api/router/hot}?v=$VER" 2>/dev/null)
+N=$(jget n); TAG=$(jget tag); NOTES=$(jget notes)
+case "$N" in ''|*[!0-9]*) exit 0 ;; esac
+[ "$N" -gt "$HOT" ] || exit 0
+case "$TAG" in hot-[0-9]*.[0-9]*.[0-9]*-[0-9]*) ;; *) log "官网给的补丁标签不对：$TAG"; exit 1 ;; esac
+[ "$(sed -n "s/^$N=//p" "$D/hot_fail" 2>/dev/null || echo 0)" -ge 3 ] 2>/dev/null && exit 0
+mkdir -p "$W" && cd "$W" || exit 1
+# 先从官网下（大陆连 GitHub 慢），不行再直接从 GitHub
+got=0
+for b in "${CMCP_HOT_DL:-$HUB/dl/h}/$TAG" "https://github.com/wznwzn123/openwrt-claude-panel/releases/download/$TAG"; do
+	rm -f hot.tar.gz SHA256SUMS SHA256SUMS.sig2
+	curl -fsSL -m 120 -o hot.tar.gz "$b/hot.tar.gz" 2>>"$LOG" && curl -fsSL -m 30 -o SHA256SUMS "$b/SHA256SUMS" 2>>"$LOG" && curl -fsSL -m 30 -o SHA256SUMS.sig2 "$b/SHA256SUMS.sig2" 2>>"$LOG" && { got=1; break; }
+done
+[ $got = 1 ] || fail "下载失败"
+$VERIFY "$W/SHA256SUMS" "$W/SHA256SUMS.sig2" || fail "签名不对"
+grep ' hot\.tar\.gz$' SHA256SUMS > one.sum && sha256sum -c one.sum >/dev/null 2>&1 || fail "文件校验不对"
+mkdir x && tar xzf hot.tar.gz -C x 2>>"$LOG" || fail "解压失败"
+# 补丁说明：给哪个版本、第几个（防止拿别的版本的补丁来装、或者拿旧补丁回滚）
+[ "$(jsonfilter -i x/hot.json -e '@.base' 2>/dev/null)" = "$VER" ] && [ "$(jsonfilter -i x/hot.json -e '@.n' 2>/dev/null)" = "$N" ] || fail "补丁跟这个版本对不上"
+FILES=$(cd x/root 2>/dev/null && find . -type f | sed 's|^\./||')
+[ -n "$FILES" ] || fail "补丁是空的"
+for f in $FILES; do okpath "$f" || fail "补丁里有不允许换的文件：$f"; done
+# 备份现在的（原来没有的记下来，退回时删掉）
+: > new.list
+for f in $FILES; do [ -e "$R/$f" ] && echo "$f" >> bk.list || echo "$f" >> new.list; done
+if [ -s bk.list ]; then ( cd "${R:-/}" && tar czf "$W/bk.tgz" $(cat "$W/bk.list") ) 2>>"$LOG" || fail "备份失败"; fi
+restore() { [ -s "$W/bk.tgz" ] && ( cd "${R:-/}" && tar xzf "$W/bk.tgz" ) 2>>"$LOG"; while read -r f; do rm -f "$R/$f"; done < "$W/new.list"; }
+for f in $FILES; do
+	mkdir -p "$(dirname "$R/$f")"
+	cp -f "x/root/$f" "$R/$f.hotnew" || { restore; fail "写不进去（空间不够？）"; }
+	case "$f" in usr/sbin/*|*/cgi-bin/mcp) chmod 755 "$R/$f.hotnew" ;; *) chmod 644 "$R/$f.hotnew" ;; esac
+	mv -f "$R/$f.hotnew" "$R/$f"
+done
+if ! selfcheck; then restore; fail "装完面板打不开，已退回原来的"; fi
+# 记下现在是第几个补丁（面板据此发现自己该换新的）
+{ grep -v '^HOT=' "$D/version"; echo "HOT=$N"; } > "$D/version.tmp" && mv -f "$D/version.tmp" "$D/version"
+esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新（v$VER 补丁 $N）" "$(esc "$NOTES")" >> "$D/events.log"
+log "热补丁 $N 装好了"
+cd / && rm -rf "${W:?}"

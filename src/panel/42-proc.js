@@ -373,6 +373,8 @@ function start() {
 	clearInterval(fbTimer); fbTimer = setInterval(() => { if (Date.now() - fbAt > 55000) fbCheck(); if (Date.now() - NT.at > 60000) ntCheck(); }, 15000);
 	// 通知：打开马上查一次（铃铛上的数字、重要公告弹一次：同一条公告弹过就不再弹，记在路由器上，换手机也算），之后每分钟一次
 	setTimeout(ntCheck, 700);
+	// 远程开关：跟上次不一样就重画菜单
+	P('remote_flags').then((r) => { const k = JSON.stringify((r && r.off) || []); if (k !== (store.get('rp_roff') || '[]')) { store.set('rp_roff', k); REMOTE_OFF = new Set(JSON.parse(k)); try { renderNav(); } catch (e) {} } }).catch(() => {});
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { setTimeout(() => aiCheck(true), 800); refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 

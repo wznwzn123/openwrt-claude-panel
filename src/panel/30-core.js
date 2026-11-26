@@ -24,8 +24,11 @@ let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') |
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
 function roleShow(it) { if (ME_ROLE.role !== 'sub') return true; if (Array.isArray(it)) return canPerm('net'); if (it.kids) return it.kids.some((k) => (Array.isArray(k) ? canPerm('net') : canPage(k.p))); return canPage(it.p); }
+// 远程开关：路由器 remote.json 里关掉的页面（出了问题先关，热补丁修好再开），菜单里不显示
+let REMOTE_OFF = new Set(); try { REMOTE_OFF = new Set(JSON.parse(localStorage.getItem('rp_roff') || '[]')); } catch (e) {}
 function pxShow(it) {
 	if (!roleShow(it)) return false;
+	if (it && it.p && REMOTE_OFF.has(it.p)) return false;
 	if (!it || !it.px || !PXS) return true;
 	const a = pxAct();
 	if (it.px === 'oc') return (PXS.list || []).some((x) => x.id === 'openclash');
@@ -710,6 +713,7 @@ const DIRTY = {};
 // how：'boot' 刚打开面板；'pop' 按了返回（历史里已经退了一步，不再记）
 async function go(p, how) {
 	if (!canPage(p)) { toast(PAGE_PERM[p] === 'owner' ? '只有主账号能用这个功能' : '主账号没有给你开这个功能'); p = 'main'; }
+	if (REMOTE_OFF.has(p)) { toast('这个功能暂时关了，修好后会自动打开'); p = 'main'; }
 	if (p !== page && DIRTY[page] && DIRTY[page]() && !(await confirmBox('还有没保存的修改', '离开这一页会丢掉这些修改。', '不保存，离开', true))) { if (how === 'pop') hsSet({ p: page }, true); return; }
 	hsNav(p, how);
 	const prev = page;

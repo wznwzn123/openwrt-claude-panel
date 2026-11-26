@@ -220,9 +220,9 @@ export function installCompat(Hub) {
 // 最新的尝鲜版（GitHub 上标成「预发布」、比正式版新的）：一小时查一次，记在 meta 里给上报的回复用
 export async function prereleaseRefresh(env, H, repo) {
 	try {
-		const r = await fetch('https://api.github.com/repos/' + repo + '/releases?per_page=10', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
+		const r = await fetch('https://api.github.com/repos/' + repo + '/releases?per_page=30', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
 		if (!r.ok) return;
-		const l = await r.json(), st = l.find((x) => !x.prerelease && !x.draft), pr = l.find((x) => x.prerelease && !x.draft);
+		const l = await r.json(), st = l.find((x) => !x.prerelease && !x.draft), pr = l.find((x) => x.prerelease && !x.draft && !/^hot-/.test(String(x.tag_name)));
 		const sv = st ? String(st.tag_name).replace(/^v/, '') : '0.0.0', pv = pr ? String(pr.tag_name).replace(/^v/, '') : '';
 		await H.setMeta('prerel', pv && okVer(pv) && verLt(sv, pv) ? { tag: pr.tag_name, ver: pv, at: pr.published_at || '' } : null);
 	} catch (e) {}

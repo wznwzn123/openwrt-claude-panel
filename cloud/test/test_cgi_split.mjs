@@ -88,6 +88,13 @@ try {
 	ok('有家人设置：看门狗要查', fs.existsSync(E + '/split.grp'));
 	r = await cgi('split_set', { fam: { uid: 'u1', on: false } });
 	ok('关掉：自定义规则恢复原样', !r.result?.fam?.u1 && rd(CUS) === CUS0 && !fs.existsSync(E + '/split.grp'));
+	// 远程数据（热补丁带来的 remote.json）：软件网址表能换
+	fs.writeFileSync(E + '/remote.json', JSON.stringify({ split_apps: [['newapp', '新软件', ['new.example']]] }));
+	r = await cgi('split_get');
+	ok('远程数据里的软件表：用它', JSON.stringify(r.result?.apps) === '[{"id":"newapp","name":"新软件"}]', JSON.stringify(r.result?.apps));
+	fs.writeFileSync(E + '/remote.json', JSON.stringify({ split_apps: [['bad', 'x', ['evil.com; rm -rf /']]] }));
+	ok('远程数据格式不对：用写死的', (await cgi('split_get')).result?.apps?.some((a) => a.id === 'netflix'));
+	fs.unlinkSync(E + '/remote.json');
 	// Nikki
 	KIND = 'nikki';
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: 'PROXY' } });

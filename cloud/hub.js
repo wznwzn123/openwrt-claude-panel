@@ -1433,7 +1433,8 @@ export class Hub extends DurableObject {
 	async annSave(id, b) {
 		const title = String(b.title || '').trim().slice(0, 80), body = String(b.body || '').trim().slice(0, 2000);
 		if (!title) return { st: 400, error: '标题不能是空的' };
-		const level = b.level === 'important' ? 'important' : 'normal', days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
+		// 6.0：banner = 面板顶上一条横幅（轻提醒，比如今晚维护），不弹窗、不推送
+		const level = b.level === 'important' ? 'important' : b.level === 'banner' ? 'banner' : 'normal', days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
 		// 定时发布（5.0）：到时间才出现在面板里；路由器按发布时间判断要不要推送到手机
 		let start = Math.round(+b.start || 0);
 		if (start && start <= Date.now() + 60e3) start = 0;
@@ -1780,6 +1781,8 @@ export async function hubFetch(req, env) {
 	// 路由器面板查新版本用 /api/router/version。v2.0.2–v2.0.4 的路由器问的还是 /api/app/version（用 curl），
 	// 那时它返回的是路由器的版本；后来 App 有了自己的版本号，这些路由器就再也看不到更新了。所以 curl 来问的照旧回答路由器的版本
 	if (p === '/api/router/version') return routerVersion(env);
+	if (p === '/api/router/hot') return hotInfo(env, new URL(req.url).searchParams.get('v'));
+	if (p.startsWith('/dl/h/') && (req.method === 'GET' || req.method === 'HEAD')) { const m = /^\/dl\/h\/([^/]+)\/([^/]+)$/.exec(p); return m ? hotDl(env, m[1], m[2]) : J({ error: '没有这个文件' }, 404); }
 	if (p === '/api/changelog' && req.method === 'GET') return changelogApi(env);
 	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
 	if (p === '/app/router-panel.apk' && req.method === 'GET') return appApk(env);
@@ -1964,6 +1967,29 @@ export function routerVerInfo(env) {
 		try { await hubObj(env).setMeta('rver', o); } catch (e) {}
 		return o;
 	});
+}
+// 6.0 热补丁：GitHub 上的预发布「hot-版本-编号」（比如 hot-6.0.0-3），路由器问「我这个版本最新的补丁是第几个」。缓存 10 分钟
+export const HOT_TAG = /^hot-(\d+\.\d+\.\d+)-(\d+)$/;
+async function hotInfo(env, v) {
+	if (!/^\d+\.\d+\.\d+$/.test(v || '')) return J({ ok: false, error: '版本号不对' }, 400);
+	try {
+		const l = await cached('hot-list', 600, async () => {
+			const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
+			if (!r.ok) throw new Error('GitHub ' + r.status);
+			return (await r.json()).map((x) => ({ tag: String(x.tag_name || ''), body: String(x.body || '').slice(0, 300), draft: !!x.draft })).filter((x) => !x.draft && HOT_TAG.test(x.tag));
+		});
+		let best = null;
+		for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
+		return J({ ok: true, ...(best || { n: 0 }) });
+	} catch (e) { return J({ ok: false, error: '查不到热补丁' }, 502); }
+}
+const HOT_FILES = ['hot.tar.gz', 'SHA256SUMS', 'SHA256SUMS.sig2'];
+async function hotDl(env, tag, name) {
+	if (!HOT_TAG.test(tag) || !HOT_FILES.includes(name)) return J({ error: '没有这个文件' }, 404);
+	const get = () => fetch('https://github.com/' + repoOf(env) + '/releases/download/' + tag + '/' + name, { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	let r = await get(); if (!r.ok) r = await get();
+	if (!r.ok) return J({ error: '还没有发布这个补丁' }, 404);
+	return new Response(r.body, { headers: { 'content-type': name.endsWith('.gz') ? 'application/gzip' : 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 }
 async function routerVersion(env) {
 	try {

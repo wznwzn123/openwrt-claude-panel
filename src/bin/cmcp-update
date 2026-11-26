@@ -108,6 +108,13 @@ PKG=openwrt-claude-panel-$CODE.tar.gz
 case "$1" in
 status)
 	cat "$ST" 2>/dev/null || echo '{"state":"idle"}' ;;
+verify)
+	# 热补丁（cmcp-hot）共用这里的验签：cmcp-update verify 内容文件 签名文件（都要绝对路径）。0 = 签名对
+	vd=$(mktemp -d /tmp/cmcp_vf.XXXXXX) || exit 2
+	cd "$vd" || exit 2
+	pick_v || inst_v || { cd /; rm -rf "${vd:?}"; exit 2; }
+	$VT "$2" "$3"; rc=$?
+	cd /; rm -rf "${vd:?}"; exit $rc ;;
 start)
 	if [ -d "$LOCK" ] && [ $(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) )) -lt 900 ]; then echo '{"busy":true}'; exit 0; fi
 	rmdir "$LOCK" 2>/dev/null
@@ -229,5 +236,5 @@ run)
 	state rolledback "更新没成功，已经退回 v$FROM，一切照旧。原因：$(tail -n 3 "$LOG" | tr '\n' ' ' | cut -c1-200)" "$TO"
 	exit 1 ;;
 *)
-	echo "用法：$0 start | status | run | auto"; exit 1 ;;
+	echo "用法：$0 start | status | run | auto | verify 文件 签名"; exit 1 ;;
 esac

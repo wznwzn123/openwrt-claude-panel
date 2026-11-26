@@ -1064,6 +1064,8 @@ html,body{overscroll-behavior-y:contain}
 .subflow .mact{cursor:default;gap:10px}.subflow .mact>span:first-child{flex:1;min-width:0}.subflow .pill.w{flex:none;color:var(--orange,#ff9500)}
 /* 第 36 项：远程页面 */
 #xpBody .xprow{gap:8px;align-items:center}#xpBody .xprow .btn{flex:none}#xpBody .xpcur{display:flex;align-items:center;gap:10px}#xpBody .xpcur span{flex:1;min-width:0}
+/* 6.0 横幅公告 */
+.annbar{display:flex;align-items:center;gap:8px;margin:10px 16px 6px;padding:8px 8px 8px 14px;border-radius:12px;background:var(--fill);color:var(--text);font-size:14px;line-height:1.5}.annbar.hidden{display:none}.annbar>span{flex:1;min-width:0;text-wrap:pretty}.annbar .btn{flex:none}.annbar .annx{flex:none;width:32px;height:32px;border:0;background:none;color:var(--muted,#8e8e93);font-size:20px;line-height:1;cursor:pointer;border-radius:8px}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1149,6 +1151,7 @@ html,body{overscroll-behavior-y:contain}
 <main class="wrap">
 
 <!-- 首页：打开面板默认就是这一页 -->
+<div id="annBar" class="annbar hidden" role="status"></div>
 <section class="page" id="p-main">
 	<div class="card updcard hidden" id="rUpd"><div class="updtop"><div><b>路由器有新版本 <span id="rUpdV"></span></b><span class="muted" id="rUpdCur"></span></div><button class="btn sm primary" id="rUpdGo">一键更新</button></div>
 		<p class="muted" id="rUpdN"></p><div class="updfoot"><button class="linkbtn" id="rUpdMore">查看完整更新内容</button><button class="linkbtn" id="rUpdLater">以后再说</button></div></div>
@@ -1660,8 +1663,11 @@ let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') |
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
 function roleShow(it) { if (ME_ROLE.role !== 'sub') return true; if (Array.isArray(it)) return canPerm('net'); if (it.kids) return it.kids.some((k) => (Array.isArray(k) ? canPerm('net') : canPage(k.p))); return canPage(it.p); }
+// 远程开关：路由器 remote.json 里关掉的页面（出了问题先关，热补丁修好再开），菜单里不显示
+let REMOTE_OFF = new Set(); try { REMOTE_OFF = new Set(JSON.parse(localStorage.getItem('rp_roff') || '[]')); } catch (e) {}
 function pxShow(it) {
 	if (!roleShow(it)) return false;
+	if (it && it.p && REMOTE_OFF.has(it.p)) return false;
 	if (!it || !it.px || !PXS) return true;
 	const a = pxAct();
 	if (it.px === 'oc') return (PXS.list || []).some((x) => x.id === 'openclash');
@@ -2346,6 +2352,7 @@ const DIRTY = {};
 // how：'boot' 刚打开面板；'pop' 按了返回（历史里已经退了一步，不再记）
 async function go(p, how) {
 	if (!canPage(p)) { toast(PAGE_PERM[p] === 'owner' ? '只有主账号能用这个功能' : '主账号没有给你开这个功能'); p = 'main'; }
+	if (REMOTE_OFF.has(p)) { toast('这个功能暂时关了，修好后会自动打开'); p = 'main'; }
 	if (p !== page && DIRTY[page] && DIRTY[page]() && !(await confirmBox('还有没保存的修改', '离开这一页会丢掉这些修改。', '不保存，离开', true))) { if (how === 'pop') hsSet({ p: page }, true); return; }
 	hsNav(p, how);
 	const prev = page;
@@ -7167,7 +7174,7 @@ function panelVerCheck(cur) {
 	let tried = ''; try { tried = sessionStorage.getItem('rp_verfix') || ''; } catch (e) {}
 	if (tried === cur) return false;
 	try { sessionStorage.setItem('rp_verfix', cur); } catch (e) {}
-	toast('路由器面板已更新到 v' + cur + '，正在换成新版…');
+	toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' 补丁 $1') + '，正在换成新版…');
 	refreshPanel();
 	return true;
 }
@@ -7187,7 +7194,7 @@ async function updCheck(force) {
 	updAt = Date.now();
 	let r;
 	try { r = await P('update_check', { force: !!force }, 25000); } catch (e) { if (force) toast(e.message, true); return null; }
-	if (r && typeof r === 'object' && panelVerCheck(r.cur)) return null;
+	if (r && typeof r === 'object' && panelVerCheck(r.pv || r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
 	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
@@ -7390,6 +7397,7 @@ async function ntCheck() {
 	try { await ntFetch(); } catch (e) { return; }
 	if (page === 'notice') return void ntRender();
 	ntBadge();
+	annBarDraw();
 	// 有别的弹窗（新手引导、必须更新…）：等它关掉马上弹
 	if (popBusy()) { NT.popWait = true; return; }
 	const pop = (NT.d.seen && NT.d.seen.pop) || [];
@@ -7401,6 +7409,20 @@ async function ntCheck() {
 }
 addEventListener('cmcp-popfree', () => { if (NT.popWait) { NT.popWait = false; setTimeout(ntCheck, 200); } if (FB_WAIT) { FB_WAIT = false; setTimeout(fbCheck, 400); } if (UPD_WAIT) { UPD_WAIT = false; setTimeout(() => updCheck(false), 300); } });
 let FB_WAIT = false, UPD_WAIT = false;
+// 6.0 横幅公告（官网后台发的「横幅」级别）：面板顶上一条，不弹窗；点 × 关掉，同一条不再出（记在路由器上，换手机也算）
+function annBarDraw() {
+	const bar = $('annBar'); if (!bar || !NT.d) return;
+	const pop = (NT.d.seen && NT.d.seen.pop) || [];
+	const a = (NT.d.ann || []).find((x) => x.level === 'banner' && !pop.includes(x.id));
+	bar.classList.toggle('hidden', !a);
+	if (!a) return;
+	bar.innerHTML = `<span>${esc(a.title)}</span>${a.body ? '<button class="btn sm" type="button" data-ab="go">查看</button>' : ''}<button class="annx" type="button" data-ab="x" aria-label="关掉横幅">×</button>`;
+	bar.onclick = (e) => {
+		const k = e.target.closest('[data-ab]')?.dataset.ab; if (!k) return;
+		if (k === 'go') return go('notice');
+		NT.d.seen.pop = [...pop, a.id]; P('notices_seen', { pop: a.id }).catch(() => {}); annBarDraw();
+	};
+}
 function ntAnnPop(a) {
 	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
 	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
@@ -9742,6 +9764,8 @@ function start() {
 	clearInterval(fbTimer); fbTimer = setInterval(() => { if (Date.now() - fbAt > 55000) fbCheck(); if (Date.now() - NT.at > 60000) ntCheck(); }, 15000);
 	// 通知：打开马上查一次（铃铛上的数字、重要公告弹一次：同一条公告弹过就不再弹，记在路由器上，换手机也算），之后每分钟一次
 	setTimeout(ntCheck, 700);
+	// 远程开关：跟上次不一样就重画菜单
+	P('remote_flags').then((r) => { const k = JSON.stringify((r && r.off) || []); if (k !== (store.get('rp_roff') || '[]')) { store.set('rp_roff', k); REMOTE_OFF = new Set(JSON.parse(k)); try { renderNav(); } catch (e) {} } }).catch(() => {});
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { setTimeout(() => aiCheck(true), 800); refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 

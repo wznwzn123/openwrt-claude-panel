@@ -68,6 +68,30 @@ for (const [w, h, dark] of [[320, 640, false], [390, 844, true], [1280, 860, fal
 	ok('关联码不完整：说回面板重新点 没有「关联」按钮', /链接不完整/.test(await p.textContent('.mask').catch(() => '')) && !(await p.$('.mask [data-ok]')));
 	await c.close();
 }
+// 升级提醒邮件里的「不再提醒这台路由器」：/app?ovoff=专属网址编号，主账号登录后确认（用户 11/27）
+{
+	const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const p = await c.newPage();
+	const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+	await p.goto(B + '/app?ovoff=ovtestaa'); await W(1000);
+	ok('[不再提醒] 没登录：登录框上写着用主账号登录后关掉', /用路由器主账号登录后关掉升级提醒/.test(await p.textContent('#vAuth')));
+	await p.click('[data-tab="reg"]').catch(() => {}); await W(300);
+	await p.fill('#fReg [name=email]', 'ov@x.com'); await p.fill('#fReg [name=password]', 'pass-ov-12345'); await p.click('#fReg button.primary');
+	await p.waitForSelector('.mask', { timeout: 8000 }).catch(() => {});
+	ok('[不再提醒] 不是这台的主账号：说关不了', /关不了升级提醒/.test(await p.textContent('.mask').catch(() => '')) && /只有这台路由器的主账号/.test(await p.textContent('.mask').catch(() => '')));
+	await p.click('.mask [data-no]'); await W(300);
+	const uid = await S().get('e:ov@x.com');
+	await S().put('d:ovtestaa', { sub: 'ovtestaa', state: 'ok', name: '客厅路由器', owner: uid, users: [uid] });
+	await p.goto(B + '/app?ovoff=ovtestaa'); await p.waitForSelector('.mask', { timeout: 8000 }).catch(() => {});
+	const t = await p.textContent('.mask').catch(() => '');
+	ok('[不再提醒] 主账号：确认框写着路由器名字和后果', /不再提醒「客厅路由器」升级/.test(t) && /打开面板时照样会提示更新/.test(t), t);
+	await W(700); if (SHOTS) await p.screenshot({ path: `${SHOTS}/ovoff-box-390.png` });
+	await p.click('.mask [data-ok]'); await W(800);
+	ok('[不再提醒] 点了：官网记下 不再提醒', !!(await S().get('ovoff:ovtestaa')) && /已关掉升级提醒/.test(await p.textContent('.mask')));
+	await p.goto(B + '/app?ovoff=ovtestaa'); await p.waitForSelector('.mask', { timeout: 8000 }).catch(() => {});
+	ok('[不再提醒] 再点一次链接：说已经关了', /已经关了/.test(await p.textContent('.mask').catch(() => '')));
+	ok('[不再提醒] 页面没报错', !errs.length, errs.join(' | '));
+	await c.close();
+}
 await browser.close(); server.close();
 console.log(results.map(([n, c, note]) => (c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '（' + String(note).slice(0, 300) + '）')).join('\n'));
 const pass = results.filter((r) => r[1]).length;

@@ -128,7 +128,7 @@ onMounted(load)
           <TextInput v-model="q" icon="search" placeholder="搜编号、名称、型号、备注" clearable />
         </div>
         <p v-if="vdist.length" class="hub-row-meta" style="margin-top: 0; margin-bottom: 6px">各版本：<template v-for="(x, i) in vdist" :key="x.v"><b :class="x.old && 'bad'">{{ x.v === '?' ? '版本未知' : 'v' + x.v }}</b> {{ x.n }} 台<template v-if="i < vdist.length - 1"> · </template></template><template v-if="latest"> · 最新 v{{ latest }}</template></p>
-        <div v-if="f === 'old'" class="hub-note ov-bar"><span>必须更新时官网会自动提醒这些路由器的主人（发现后马上一次，之后每周一次，升级了就停）。也可以现在手动提醒一次。</span><Button size="sm" variant="primary" icon="bell" :disabled="!shown.some(d => live(d) && !d.off)" @click="remind">提醒升级</Button></div>
+        <div v-if="f === 'old'" class="hub-note ov-bar"><span>必须更新时自动提醒这些路由器的主人：同一个版本最多 3 次（发现时、1 周后、再 2 周后），升级了或主人关了提醒就停。也可以现在手动提醒一次。</span><Button size="sm" variant="primary" icon="bell" :disabled="!shown.some(d => live(d) && !d.off)" @click="remind">提醒升级</Button></div>
         <p v-if="f === 'bin'" class="hub-row-meta">回收站：网址已停用，隧道和数据都还在，随时可以恢复；到期自动彻底删除。</p>
         <div class="hub-list">
           <div v-for="d in shown" :key="d.sub" class="hub-row">
@@ -143,7 +143,7 @@ onMounted(load)
                 <Tag v-if="d.edFail && Date.now() - d.edFail.at < 7 * 864e5" tone="danger">换版本失败</Tag>
               </div>
               <div v-if="d.offWhy === 'deleted'" class="hub-row-meta">{{ day(d.delAt) }} {{ d.delWhy === 'idle' ? '因为 90 天没上线被放进回收站' : '删除' }} · <b class="bad">{{ day(d.purgeAt) }} 彻底删除</b> · {{ (d.users || []).length }} 个账号</div>
-              <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号{{ d.owner ? '' : (d.users || []).length > 1 ? '（还没选主账号）' : '' }} · 邀请码 {{ d.invite || '—' }}{{ d.ov ? ` · 提醒过升级 ${d.ov.n || 1} 次（最近 ${ago(d.ov.at)}）` : '' }}</div>
+              <div v-else class="hub-row-meta">{{ status(d) }} · {{ d.exp ? '到期 ' + day(d.exp) : '不限期' }}{{ d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : '' }} · {{ d.model || '未知型号' }} · {{ day(d.created) }} 开通 · {{ (d.users || []).length }} 个账号{{ d.owner ? '' : (d.users || []).length > 1 ? '（还没选主账号）' : '' }} · 邀请码 {{ d.invite || '—' }}{{ d.ov ? ` · 提醒过升级 ${d.ov.n || 1} 次（最近 ${ago(d.ov.at)}）` : '' }}{{ d.ovOff ? ' · 主人关了升级提醒' : '' }}</div>
               <div v-if="d.edFail && Date.now() - d.edFail.at < 7 * 864e5" class="hub-note">换成{{ d.edFail.to === 'ai' ? ' AI 版' : ED_NAME[d.edFail.to] || d.edFail.to }}失败（{{ ED_STEP[d.edFail.step] || d.edFail.step }}，{{ ago(d.edFail.at) }}）：{{ d.edFail.why || '没说原因' }}。已自动退回原来的版本</div>
               <div v-if="d.anote" class="hub-note">📝 {{ d.anote }}</div>
             </div>

@@ -1,10 +1,13 @@
 // 6.0 第 86 项：还停在旧版本的托管路由器，提醒主账号升级（推送到手机 + 发邮件）
 // 自动提醒：最新版是「必须更新」（发布说明写了【必须更新】，或者路由器低于「最低版本」）、路由器 30 天内上过线。
-//   发现后马上提醒一次，之后每 7 天一次；升级了就不再提醒。每 6 小时（或者发了新版本时）看一遍，一次最多提醒 25 台。
+//   用户 11/27 定：同一个必须更新的版本最多自动提醒 3 次（发现时、1 周后、再 2 周后），之后不再发；有新的必须更新版本再从头算。
+//   升级了就不再提醒。邮件底下有「不再提醒这台路由器」（官网 /app?ovoff=专属网址编号，主账号登录后确认），点了自动、手动都不再发。
+//   每 6 小时（或者发了新版本时）看一遍，一次最多提醒 25 台。
 // 手动提醒：管理后台「路由器」筛「旧版本」→「提醒升级」，只要有新版本就提醒（同一台 12 小时内只提醒一次）。
 // 怎么说：v2.0.2 起一键更新能用 → 打开面板点「一键更新」；
 //         v2.0.1 及更早（一键更新有毛病或者没有）、心跳里报不上版本的（v1.3.0 及更早）→ 在路由器终端运行一次升级命令（网址和设置都保留）
 const DAY = 86400e3;
+export const OV_NMAX = 3, OV_WAIT = [0, 7 * DAY, 14 * DAY]; // 第 2 次等 7 天，第 3 次再等 14 天
 export const OV_WEEK = 7 * DAY, OV_GAP = 12 * 3600e3, OV_SEEN = 30 * DAY, OV_SCAN = 6 * 3600e3, OV_SELF = '2.0.2', OV_MAX = 25, OV_MAX_MANUAL = 100;
 const num = (v) => /^\d+(\.\d+){0,3}$/.test(String(v || ''));
 const clean = (v) => String(v || '').replace(/^v/, '');
@@ -49,10 +52,12 @@ export function installOldVer(Hub) {
 					if (want) out.skip++;
 					continue;
 				}
-				const same = !!rec && rec.to === rv.version;
-				if (same && now - (rec.at || 0) < (want ? OV_GAP : OV_WEEK)) { out.skip++; continue; }
+				if (await this.ctx.storage.get('ovoff:' + d.sub)) { out.skip++; continue; } // 主人点过「不再提醒」
+				const same = !!rec && rec.to === rv.version, n = same ? rec.n || 1 : 0;
+				if (same && !want && n >= OV_NMAX) { out.skip++; continue; } // 这个版本已经自动提醒满 3 次
+				if (same && now - (rec.at || 0) < (want ? OV_GAP : OV_WAIT[Math.min(n, OV_NMAX - 1)])) { out.skip++; continue; }
 				const r = await this.ovSend(d, b.ver, rv);
-				await this.ctx.storage.put(k, { at: now, to: rv.version, from: clean(b.ver), n: same ? (rec.n || 1) + 1 : 1, push: r.push, mail: r.mail, by: want ? 'admin' : 'auto' });
+				await this.ctx.storage.put(k, { at: now, to: rv.version, from: clean(b.ver), n: n + 1, push: r.push, mail: r.mail, by: want ? 'admin' : 'auto' });
 				out.sent++; out.list.push(d.sub);
 			}
 			return out;
@@ -73,12 +78,22 @@ export function installOldVer(Hub) {
 				const steps = self
 					? `<ol><li>打开 <a href="https://${esc(host)}/app">官网「我的路由器」</a>，点这台路由器的「打开面板」</li><li>在弹出的提示里点「一键更新」，等一两分钟</li></ol>`
 					: `<p>这台路由器的版本太旧，面板里的「一键更新」用不了，要手动升级一次：</p><ol><li>手机连上家里的 Wi-Fi，打开路由器后台「服务 → 终端」（或者用电脑 SSH 登录路由器，用户名 root）</li><li>粘贴下面这条命令，回车：<pre style="white-space:pre-wrap;word-break:break-all;background:#f4f4f5;padding:8px;border-radius:6px">${esc(ovCmd(host))}</pre></li><li>问「装哪个版本」时直接回车（默认就是现在装的），等它装完</li></ol><p>命令也可以在 <a href="https://${esc(host)}/app">官网「我的路由器」</a>里点「要手动升级一次」复制。</p>`;
-				const html = `<p>你好，</p><p>你的路由器「<b>${esc(nm)}</b>」上的路由器面板还是 <b>${esc(cur)}</b>，最新是 <b>v${esc(rv.version)}</b>${must ? '，这次是<b>必须更新</b>' : ''}。</p>${steps}<p>升级不会断网，网址、登录着的手机和所有设置都保留。</p><p style="color:#71717a">升级好以后就不会再收到这个提醒；还没升级的话，每周提醒一次。</p>`;
+				const html = `<p>你好，</p><p>你的路由器「<b>${esc(nm)}</b>」上的路由器面板还是 <b>${esc(cur)}</b>，最新是 <b>v${esc(rv.version)}</b>${must ? '，这次是<b>必须更新</b>' : ''}。</p>${steps}<p>升级不会断网，网址、登录着的手机和所有设置都保留。</p><p style="color:#71717a">升级好就不会再收到。这个版本最多提醒 3 次。<br><a style="color:#71717a" href="https://${esc(host)}/app?ovoff=${encodeURIComponent(d.sub)}">不再提醒这台路由器</a></p>`;
 				try { mail = await this.mail(u.email, title, html); } catch (e) {}
 			}
 			return { push, mail };
 		},
 	});
+}
+// 官网账号：主人点邮件里的「不再提醒这台路由器」，登录后确认（只有这台路由器的主账号能关）
+export async function ovAccount(a, H, me, b) {
+	if (a !== 'ov_off') return null;
+	const sub = String((b && b.sub) || '').slice(0, 40), d = sub && (await H.ctx.storage.get('d:' + sub));
+	if (!d || H.famOf(d).owner !== me.uid) return new Response(JSON.stringify({ error: '只有这台路由器的主账号能关掉提醒' }), { status: 403, headers: { 'content-type': 'application/json' } });
+	if (b && b.peek) return new Response(JSON.stringify({ ok: true, name: String(d.name || sub).slice(0, 40), off: !!(await H.ctx.storage.get('ovoff:' + sub)) }), { headers: { 'content-type': 'application/json' } });
+	await H.ctx.storage.put('ovoff:' + sub, { at: Date.now(), by: me.uid });
+	await H.alog('ov_off', sub, '主人关掉了升级提醒', me.uid);
+	return new Response(JSON.stringify({ ok: true, name: String(d.name || sub).slice(0, 40) }), { headers: { 'content-type': 'application/json' } });
 }
 // 定时任务（每小时一次）里调用：发了新版本时马上看一遍，平时每 6 小时看一遍
 export async function ovScheduled(H, rv) {

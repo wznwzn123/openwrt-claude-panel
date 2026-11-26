@@ -82,6 +82,40 @@ ok('过了 6 小时再扫，但一周内提醒过的不再提醒', PUSH.length =
 T += 7 * DAY; await mod.default.scheduled({}, env);
 ok('满一周再提醒一次', PUSH.length > n0 && PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa'));
 ok('第二次提醒记成第 2 次', (await S().get('ov:aaaaaaaa')).n === 2);
+/* ---------- 用户 11/27：同一个版本最多自动提醒 3 次（发现时、1 周后、再 2 周后） ---------- */
+const T_SAVE = T, REL_SAVE = REL; // 这一段把时间往后拨了很多：做完拨回来，后面的测试不受影响（试用会到期）
+await beat('aaaaaaaa', '5.2.3');
+T += 8 * DAY; n0 = PUSH.length; await mod.default.scheduled({}, env);
+ok('第 2 次以后：过了 1 周还不提醒（要等 2 周）', !PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa'));
+await beat('aaaaaaaa', '5.2.3');
+T += 7 * DAY; n0 = PUSH.length; await mod.default.scheduled({}, env);
+ok('第 2 次后满 2 周：第 3 次', PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa') && (await S().get('ov:aaaaaaaa')).n === 3);
+for (let i = 0; i < 4; i++) { await beat('aaaaaaaa', '5.2.3'); T += 15 * DAY; n0 = PUSH.length; await mod.default.scheduled({}, env); if (PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa')) break; }
+ok('提醒满 3 次：之后不再自动提醒', (await S().get('ov:aaaaaaaa')).n === 3 && !PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa'));
+const mlast = MAILS.filter((m) => /aaaaaaaa|主路由/.test(m.html) || true).pop();
+ok('邮件底下有「不再提醒这台路由器」的链接', mlast && /https:\/\/panel\.example\/app\?ovoff=[a-z]+/.test(mlast.html) && /不再提醒这台路由器/.test(mlast.html) && /最多提醒 3 次/.test(mlast.html));
+/* ---------- 主人点了「不再提醒」：自动、手动都不再发；只有主账号能关 ---------- */
+{
+	const { ovAccount } = ov;
+	const d = await S().get('d:aaaaaaaa'), own = hub().famOf(d).owner;
+	let r = await ovAccount('ov_off', hub(), { uid: 'someoneelse1' }, { sub: 'aaaaaaaa' });
+	ok('不是主账号：关不了', r.status === 403 && !(await S().get('ovoff:aaaaaaaa')));
+	r = await ovAccount('ov_off', hub(), { uid: own }, { sub: 'aaaaaaaa', peek: true });
+	const pj = await r.json();
+	ok('确认框先拿名字、现在开没开', pj.ok && pj.off === false && pj.name, JSON.stringify(pj));
+	r = await ovAccount('ov_off', hub(), { uid: own }, { sub: 'aaaaaaaa' });
+	ok('主账号：关掉了', r.status === 200 && !!(await S().get('ovoff:aaaaaaaa')));
+	ok('别的账号接口不管', (await ovAccount('xx', hub(), { uid: own }, {})) === null);
+	REL = { tag_name: 'v6.0.0', body: '【必须更新】', published_at: '2026-12-01T00:00:00Z' };
+	await S().delete('ov:aaaaaaaa'); await beat('aaaaaaaa', '5.2.3');
+	T += DAY; n0 = PUSH.length; const nm = MAILS.length;
+	const r2 = await hub().ovTick({ version: '6.0.0', force: true, min: '' });
+	ok('关了提醒：自动不发', !PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa') && MAILS.length === nm);
+	const r3 = await hub().ovTick({ version: '6.0.0', force: true, min: '' }, { subs: ['aaaaaaaa'] });
+	ok('关了提醒：后台手动提醒也跳过', r3.sent === 0 && !PUSH.slice(n0).some((p) => p.sub === 'aaaaaaaa'));
+	await S().delete('ovoff:aaaaaaaa'); await S().delete('ov:aaaaaaaa');
+	T = T_SAVE; REL = REL_SAVE; await hub().setMeta('ovScan', { at: 0, ver: '' }); await beat('aaaaaaaa', '5.2.3');
+}
 
 /* ---------- 升级了：不再提醒，记录清掉 ---------- */
 await beat('aaaaaaaa', '6.0.0');

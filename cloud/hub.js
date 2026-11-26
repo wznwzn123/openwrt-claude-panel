@@ -22,7 +22,7 @@ import { installXpage, xDev } from './xpage.js';
 import { installMove, moveDev } from './move.js';
 import { installAppAuth, appStrict } from './appauth.js';
 import { installCompat, compatPublic, compatAdminApi, compatAccount, prereleaseRefresh } from './compat.js';
-import { installOldVer, ovScheduled } from './oldver.js';
+import { installOldVer, ovScheduled, ovAccount } from './oldver.js';
 
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
@@ -646,7 +646,10 @@ export class Hub extends DurableObject {
 		// 6.0 第 86 项：上次提醒升级是什么时候、提醒了几次
 		const ovm = new Map();
 		for (let i = 0; i < list.length; i += 100) for (const [k, v] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ov:' + d.sub))) ovm.set(k.slice(3), v);
-		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		// 主人点过「不再提醒」的
+		const ovo = new Set();
+		for (let i = 0; i < list.length; i += 100) for (const [k] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ovoff:' + d.sub))) ovo.add(k.slice(6));
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
@@ -2128,7 +2131,7 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'me') return J({ ok: true, ...(await H.me(me.uid)) });
 	if (a === 'app_info') return out(await H.appInfo(me.uid, s(b.code)));
 	if (a === 'app_ok') return out(await H.appOk(me.uid, s(b.code), b.ok === true, me.email));
-	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)) || (await edAccount(a, H, me, b, sid)) || (await compatAccount(a, H, me, b)); if (fx) return fx; }
+	{ const fx = (await famAccount(a, H, me, b, sid)) || (await instAccount(a, H, me, b)) || (await edAccount(a, H, me, b, sid)) || (await compatAccount(a, H, me, b)) || (await ovAccount(a, H, me, b)); if (fx) return fx; }
 	// 官网各页右上角：登录了就显示头像和名字（很轻，只要名字和头像）
 	if (a === 'brief') return J({ ok: true, ...(await H.brief(me.uid)) });
 	if (a === 'profile') return out(await H.setProfile(me.uid, { name: b.name === undefined ? undefined : s(b.name), avatar: b.avatar === undefined ? undefined : s(b.avatar), layout: b.layout === undefined ? undefined : b.layout }));

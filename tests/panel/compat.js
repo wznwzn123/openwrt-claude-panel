@@ -110,7 +110,7 @@ const SHOT = path.join(__dirname, 'shots');
 		p2.on('pageerror', (e) => problems.push('页面错误2' + T + '：' + e.message));
 		S.upd = { cur: '6.0.0', latest: '6.0.1', newer: true, notes: '修好了你遇到的问题', force: false };
 		await p2.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890abc'); });
-		await p2.goto('http://localhost:8173/panel/?p=home&ask=update'); await W(3000);
+		await p2.goto('http://localhost:8173/panel/?p=home&ask=update'); await p2.waitForSelector('.modal[data-upd] [data-go]', { timeout: 8000 }).catch(() => {});
 		ok('推送「修好了」点进来：打开检查更新，能一键更新' + T, (await p2.locator('.modal[data-upd] [data-go]').count()) === 1);
 		await c2.close();
 	}

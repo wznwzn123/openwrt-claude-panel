@@ -8684,7 +8684,7 @@ function compatFailPop(msg, method) {
 	if (document.querySelector('.modal[data-cpf]')) return;
 	modal(`<div class="sheethead"><h3>这台路由器开不了这个功能</h3></div>
 	<div class="cscroll"><div class="notice" style="line-height:1.6;margin:0">${esc(msg)}</div>
-	<p class="muted" style="font-size:12.5px;margin:10px 0 0;line-height:1.6">已经记下来了（开着「帮助改进兼容性」的话，会匿名报给开发者，修好后推送告诉你）。想让开发者马上知道，点「报告这个问题」，内容已经填好。</p></div>
+	<p class="muted" style="font-size:12.5px;margin:10px 0 0;line-height:1.6">已记录 开着帮助改进会匿名报给开发者<br>修好后推送给你</p></div>
 	<div class="cfoot"><div class="btngrid"><button class="btn" data-v="close">知道了</button><button class="btn primary" data-rep>报告这个问题</button></div></div>`,
 	(m, close) => { m.dataset.cpf = 1; m.querySelector('[data-rep]').onclick = () => { close(null); feedbackSheet('功能开不了：' + msg + (method ? '（' + method + '）' : '')); }; }, { compact: true });
 }

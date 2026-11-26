@@ -67,13 +67,13 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	ok('7 个一级分组（「消息」：通知、我的反馈）', await page.locator('#sidenav .nghead').count() === 7);
 	ok('默认展开 状态/代理/网络/工具，收起 服务/系统', await page.evaluate(() => ['状态', '代理', '网络', '工具'].every((g) => document.querySelector(`.ng[data-g="${g}"]`).classList.contains('open')) && ['服务', '系统'].every((g) => !document.querySelector(`.ng[data-g="${g}"]`).classList.contains('open'))));
 	ok('收起的分组里的入口看不见', !(await vis('#sidenav button[data-p="k:admin/system/system"]')));
-	ok('二级分组默认收起', !(await vis('#sidenav button[data-p="k:admin/network/firewall/forwards"]')));
+	ok('二级分组默认收起', !(await vis('#sidenav button[data-p="k:admin/network/firewall/rules"]')));
 	ok('不加多余标记，界面干净', await page.locator('#sidenav .org').count() === 0);
 	ok('当前页高亮', await page.evaluate(() => document.querySelector('#sidenav button.on')?.dataset.p === 'home'));
 	await page.click('.ng[data-g="系统"] > .nghead'); await page.waitForTimeout(450);
 	ok('点「系统」展开', await vis('#sidenav button[data-p="k:admin/system/system"]'));
 	await page.click('.ng[data-g="网络/防火墙"] > .nsub'); await page.waitForTimeout(450);
-	ok('点「防火墙」展开下一级', await vis('#sidenav button[data-p="k:admin/network/firewall/forwards"]'));
+	ok('点「防火墙」展开下一级', await vis('#sidenav button[data-p="k:admin/network/firewall/rules"]'));
 	await shot('nav-02-expanded');
 	await page.click('.ng[data-g="状态"] > .nghead'); await page.waitForTimeout(450);
 	ok('点「状态」收起', !(await vis('#sidenav button[data-p="conn"]')));
@@ -81,10 +81,13 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	ok('点分组标题不会关掉侧边栏', await page.evaluate(() => document.getElementById('side').classList.contains('open')));
 
 	/* ---------- 搜索 ---------- */
+	// 6.0 第 18 项起「端口转发」是面板自己的页面（原版的那页不再列）
 	await page.fill('#sideQ', '端口');
 	await page.waitForTimeout(200);
-	ok('搜「端口」找到端口转发', await page.locator('#sidenav button[data-p="k:admin/network/firewall/forwards"]').count() === 1);
-	ok('搜索结果显示所在位置', /网络 › 防火墙/.test(await page.locator('#sidenav button[data-p="k:admin/network/firewall/forwards"] .path').textContent()));
+	ok('搜「端口」找到端口转发（面板自己的）', await page.locator('#sidenav button[data-p="pf"]').count() === 1 && await page.locator('#sidenav button[data-p="k:admin/network/firewall/forwards"]').count() === 0);
+	await page.fill('#sideQ', '通信规则');
+	await page.waitForTimeout(200);
+	ok('搜索结果显示所在位置', /网络 › 防火墙/.test(await page.locator('#sidenav button[data-p="k:admin/network/firewall/rules"] .path').textContent()));
 	await shot('nav-03-search');
 	await page.fill('#sideQ', '没有这个功能xyz'); await page.waitForTimeout(150);
 	ok('搜不到有提示', /没有找到/.test(await page.locator('#sidenav').textContent()));

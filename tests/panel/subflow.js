@@ -17,8 +17,8 @@ function handle(m, p) {
 	if (m === 'overview' && S.px) return { ...mock.respond(m, p), px: S.px };
 	if (m === 'subx_list') return S.subx;
 	if (m === 'subx_info') return S.info[p.id] || { ok: false, msg: '这个机场没有提供流量信息' };
-	if (m === 'subx_update') { S.busyUntil = Date.now() + 2500; return { ok: true, n: S.subx.subs.length }; }
-	if (m === 'subx_state') return { busy: Date.now() < S.busyUntil };
+	if (m === 'subx_update') { S.xbusyUntil = Date.now() + 2500; return { ok: true, n: S.subx.subs.length }; }
+	if (m === 'subx_state') return { busy: Date.now() < S.xbusyUntil };
 	if (m === 'oc_state') { const r = JSON.parse(JSON.stringify(mock.respond(m, p))); if (S.both) r.subs = r.subs.map((x) => ({ ...x, enabled: '1' })); return r; }
 	if (m === 'sub_info') return S.info[p.sid] || { ok: false, msg: '这个机场没有提供流量信息' };
 	return mock.respond(m, p);
@@ -88,7 +88,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		const c = (await page.$('.modal')) ? await page.textContent('.modal') : '';
 		ok(`${nm}：底部栏「更新订阅」能用，确认里列出订阅、说清会不会重启`, /更新全部订阅/.test(c) && subs.every((x) => c.includes(x.name)) && (px === 'nikki' ? /Nikki 会重启/.test(c) : /PassWall 会自动重启/.test(c)), c);
 		await page.click('.modal [data-v="true"]'); await W(600);
-		ok(`${nm}：点了就开始查流量`, S.calls.some((x) => x.m === 'subx_update') && S.calls.some((x) => x.m === 'subx_info' && x.at < S.busyUntil));
+		ok(`${nm}：点了就开始查流量`, S.calls.some((x) => x.m === 'subx_update') && S.calls.some((x) => x.m === 'subx_info' && x.at < S.xbusyUntil));
 		await W(4500);
 		if (px === 'nikki') {
 			const t = await page.textContent('#toast');

@@ -311,6 +311,9 @@ function hsNav(p, how) {
 }
 // opts.compact：打开面板时自己弹出来的（必须更新、重要公告、反馈有回复）——手机上也是居中的小卡片，不占满屏幕；
 // 长内容放在卡片里的 .cscroll 里上下滑，按钮一直在下面
+// 打开面板时要自己弹出来的（新手引导、必须更新、重要公告、反馈回复）一个接一个：前一个关掉马上出下一个（用户 11/26）
+const popBusy = () => !!document.querySelector('.modal, .tour');
+function popFree() { if (!popBusy()) dispatchEvent(new Event('cmcp-popfree')); }
 function modal(html, onMount, opts) {
 	return new Promise((resolve) => {
 		const m = document.createElement('div');
@@ -320,7 +323,7 @@ function modal(html, onMount, opts) {
 			if (m.classList.contains('closing')) return;
 			m.classList.add('closing');
 			hsShut(m);
-			setTimeout(() => m.remove(), 300);
+			setTimeout(() => { m.remove(); popFree(); }, 300);
 			resolve(v);
 		};
 		m.addEventListener('click', (e) => {
@@ -669,14 +672,16 @@ function renderNav() {
 		for (const g of NAV) for (const it of g.items) {
 			const one = (x, path) => {
 				const t = Array.isArray(x) ? x[1] : x.t, p = Array.isArray(x) ? 'k:' + x[0] : x.p;
+				// 名字里有的排前面，只是别名 / 所在分组里有的排后面（搜「dhcp」先出 DHCP，再出局域网设置）
 				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : x.kw || '')).toLowerCase().includes(q)) // kw：别名（比如以前叫「自动任务」）
-					hits.push(`<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`);
+					hits.push([t.toLowerCase().includes(q) ? 0 : 1, `<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`]);
 			};
 			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
-		if ('首页 主页 home'.includes(q)) hits.unshift(navBtn(NAV_TOP, false, false));
-		nav.innerHTML = hits.length ? hits.join('') : '<div class="empty">没有找到这个功能</div>';
+		const hs = hits.sort((a, b) => a[0] - b[0]).map((h) => h[1]);
+		if ('首页 主页 home'.includes(q)) hs.unshift(navBtn(NAV_TOP, false, false));
+		nav.innerHTML = hs.length ? hs.join('') : '<div class="empty">没有找到这个功能</div>';
 	} else {
 		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.filter((g) => !g.items.length || g.items.some(pxShow)).map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
 			// 「服务」里只剩面板自己的页面（比如应用过滤）也算没装插件

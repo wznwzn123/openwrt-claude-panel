@@ -111,7 +111,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); setStatus(true, '在线'); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -367,12 +367,12 @@ function start() {
 	if (!$('about').textContent) setTimeout(() =>
 		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器面板 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
 	watchJobs();
-	updAt = Date.now(); setTimeout(() => updCheck(false), 4000);
+	updAt = Date.now(); setTimeout(() => updCheck(false), 500);
 	// 反馈的新进展：打开 3 秒后查一次，开着的时候每分钟查一次（路由器那边缓存 45 秒）
-	setTimeout(fbCheck, 3000);
+	setTimeout(fbCheck, 1000);
 	clearInterval(fbTimer); fbTimer = setInterval(() => { if (Date.now() - fbAt > 55000) fbCheck(); if (Date.now() - NT.at > 60000) ntCheck(); }, 15000);
-	// 通知：打开 6 秒后查一次（铃铛上的数字、重要公告弹一次），之后每分钟一次
-	setTimeout(ntCheck, 6000);
+	// 通知：打开马上查一次（铃铛上的数字、重要公告弹一次：同一条公告弹过就不再弹，记在路由器上，换手机也算），之后每分钟一次
+	setTimeout(ntCheck, 700);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { setTimeout(() => aiCheck(true), 800); refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 

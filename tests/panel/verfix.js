@@ -43,7 +43,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 
 	// 2. 路由器升级到 2.0.3（终端里装的 / 远程升级），手机再打开
 	S.panel = '2.0.3'; S.router = '2.0.3';
-	navs = 0; await page.reload(); await W(1000);
+	navs = 0; await page.reload(); await W(150);
 	ok('升级后第一次打开：先显示的是缓存里的旧面板（这就是要修的情况）', (await ver()) === '2.0.2');
 	for (let i = 0; i < 40 && (await ver().catch(() => '')) !== '2.0.3'; i++) await W(500);
 	ok('发现路由器是 2.0.3：自动换成新版面板，不用关掉重开', (await ver()) === '2.0.3', 'ver=' + (await ver()));

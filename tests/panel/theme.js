@@ -22,7 +22,11 @@ const SHOT = process.argv.includes('--shots');
 	await page.goto('http://localhost:8122/panel/?p=home'); await W(1800);
 	const st = () => page.evaluate(() => { const R = document.documentElement, cs = getComputedStyle(document.querySelector('.card')); return { glass: R.classList.contains('glass'), wall: R.dataset.wall || '', wallShown: getComputedStyle(document.getElementById('wall')).display, card: cs.backgroundColor, body: getComputedStyle(document.body).backgroundColor, blur: R.style.getPropertyValue('--wblur'), dim: R.style.getPropertyValue('--wdim'), img: !!document.getElementById('wall').style.getPropertyValue('--wimg') }; });
 	let s = await st();
-	ok('默认就是玻璃效果，显示背景', s.glass && s.wallShown === 'block' && s.body === 'rgba(0, 0, 0, 0)', JSON.stringify(s));
+	// 用户 11/26 定「石墨」：壁纸 / 毛玻璃默认关（设置里能打开）
+	ok('默认是简洁（没有毛玻璃和背景）', !s.glass && s.wallShown !== 'block', JSON.stringify(s));
+	await page.evaluate(() => localStorage.setItem('rp_glass', '1')); await page.reload(); await W(1800);
+	s = await st();
+	ok('打开毛玻璃后：显示背景', s.glass && s.wallShown === 'block' && s.body === 'rgba(0, 0, 0, 0)', JSON.stringify(s));
 	ok('卡片是半透明的', /rgba\(255, 255, 255, 0\.6\)/.test(s.card), s.card);
 	await shot('home');
 	// 进设置
@@ -75,12 +79,16 @@ const SHOT = process.argv.includes('--shots');
 	await page.click('[data-t="look"]'); await W(500);
 	await page.click('[data-reset]'); await W(400);
 	s = await st();
-	ok('恢复默认：玻璃开、晨雾、图片删掉', s.glass && s.wall === '' && !(await page.evaluate(() => localStorage.getItem('rp_wallimg'))) && (await page.locator('.wtile[data-w="photo"]').count()) === 0);
+	ok('恢复默认：回到简洁（毛玻璃关）、晨雾、图片删掉', !s.glass && s.wall === '' && !(await page.evaluate(() => localStorage.getItem('rp_wallimg'))) && (await page.locator('.wtile[data-w="photo"]').count()) === 0);
 	await page.click('.modalbox [data-v="close"]'); await W(400);
 	// 深色：默认星空
 	await page.click('[data-t="theme"]'); await W(400);
 	s = await st();
-	ok('深色模式：卡片变成深色半透明，默认背景星空', /rgba\(28, 28, 32, 0\.56\)/.test(s.card) && /星空/.test(await page.textContent('#lookState')), s.card);
+	ok('深色模式（默认简洁）：卡片是深色的', !/255, 255, 255/.test(s.card) && /简洁/.test(await page.textContent('#lookState')), s.card);
+	// 深色 + 毛玻璃：默认背景星空
+	await page.evaluate(() => localStorage.setItem('rp_glass', '1')); await page.reload(); await W(1500);
+	s = await st();
+	ok('深色 + 毛玻璃：卡片深色半透明，默认背景星空', /rgba\(28, 28, 32, 0\.56\)/.test(s.card) && /星空/.test(await page.textContent('#lookState')), s.card);
 	const w = await page.evaluate(() => document.documentElement.scrollWidth);
 	ok('不横向滚动', w <= 390, w);
 	if (SHOT) {

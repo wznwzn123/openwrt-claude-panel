@@ -8,10 +8,14 @@ const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') 
 const SHOT = path.join(__dirname, 'shots'); fs.mkdirSync(SHOT, { recursive: true });
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
-const S = { n: 0 };
+const S = { n: 0, ann: null, pop: [] };
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
 	const u = new URL(req.url, 'http://x'), J = (o) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
-	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); const m = body.method.replace(/^panel\//, ''); if (m === 'overview') S.n++; try { return J({ jsonrpc: '2.0', id: body.id, result: mock.respond(m, body.params || {}) }); } catch (e) { return J({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } }); } }
+	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); const m = body.method.replace(/^panel\//, ''); if (m === 'overview') S.n++;
+		// 重要公告：弹过的记在「路由器」上（S.pop），同一条不再弹
+		if (m === 'notices' && S.ann) { const r = mock.respond(m, {}); return J({ jsonrpc: '2.0', id: body.id, result: { ...r, ann: [S.ann], seen: { ...r.seen, pop: S.pop.slice() } } }); }
+		if (m === 'notices_seen' && body.params && body.params.pop) S.pop.push(body.params.pop);
+		try { return J({ jsonrpc: '2.0', id: body.id, result: mock.respond(m, body.params || {}) }); } catch (e) { return J({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } }); } }
 	if (u.pathname.startsWith('/cloud/')) return J({ error: 'x' });
 	const p = u.pathname.replace(/^\/panel\//, '') || 'index.html', f = path.join(ROOT, p);
 	if (!fs.existsSync(f)) { res.writeHead(404); return res.end(''); }
@@ -34,8 +38,9 @@ async function drag(page, x, y0, y1) {
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' });
 		const page = await ctx.newPage(); page.on('pageerror', (e) => problems.push('页面错误' + T + '：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_tourtest', '1'); });
-		await page.goto('http://localhost:8173/panel/?p=home'); await W(6500);
-		ok('第一次打开：出引导' + T, await page.isVisible('.tour'), JSON.stringify(await page.evaluate(() => ({ dot: document.getElementById('statusDot').className, modal: [...document.querySelectorAll('.modal')].map((m) => m.textContent.slice(0, 40)), url: location.href }))));
+		// 用户 11/26：一进去就出来
+		await page.goto('http://localhost:8173/panel/?p=home'); await W(2500);
+		ok('一打开：2 秒内出引导' + T, await page.isVisible('.tour'), JSON.stringify(await page.evaluate(() => ({ dot: document.getElementById('statusDot').className, modal: [...document.querySelectorAll('.modal')].map((m) => m.textContent.slice(0, 40)), url: location.href }))));
 		if (!(await page.isVisible('.tour'))) break;
 		let t = await page.textContent('.tourcard');
 		ok('第 1 步：左上角图标是菜单，写着从这里切换' + T, /点这里打开菜单/.test(t) && /切换/.test(t) && /1 \/ 4/.test(t), t);
@@ -82,7 +87,12 @@ async function drag(page, x, y0, y1) {
 	{
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_tourtest', '1'); });
-		await page.goto('http://localhost:8173/panel/?p=home'); await W(6500);
+		// 新打开默认是首页；一键升级是在「系统操作」点的，刷新后停在那页：都马上出
+		await page.goto('http://localhost:8173/panel/'); await W(2500);
+		ok('默认首页：也马上出引导', await page.isVisible('.tour'));
+		await page.goto('http://localhost:8173/panel/?p=more'); await W(2500);
+		ok('在别的页面（升级完刷新后）：也马上出引导', await page.isVisible('.tour'));
+		await page.goto('http://localhost:8173/panel/?p=home'); await W(2500);
 		await page.click('.tourskip'); await W(300);
 		ok('点「跳过」：关掉，以后不再出', !(await page.isVisible('.tour')) && (await page.evaluate(() => localStorage.getItem('rp_tour6'))) === '1');
 		await ctx.close();
@@ -105,6 +115,21 @@ async function drag(page, x, y0, y1) {
 		await page.goto('http://localhost:8173/panel/?p=home'); await W(6500);
 		ok('自动化测试环境：不出引导', !(await page.isVisible('.tour')));
 		await ctx.close();
+	}
+	// 引导和重要公告：一个接一个，都马上出；同一条公告弹过就不再弹
+	{
+		S.ann = { id: 'a60', level: 'important', title: '6.0 更新了什么', body: '新手引导、远程页面、分流……', at: Math.floor(Date.now() / 1000) - 60 };
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_tourtest', '1'); });
+		await page.goto('http://localhost:8173/panel/'); await W(2500);
+		ok('引导和公告不叠在一起：先出引导', await page.isVisible('.tour') && !(await page.$('.modal')));
+		await page.click('.tourskip'); await W(1500);
+		ok('引导一关，公告马上弹出来', /6\.0 更新了什么/.test((await page.$('.modal')) ? await page.textContent('.modal') : ''), String(S.pop));
+		await page.click('.modal [data-v="close"]'); await W(600);
+		await page.reload(); await W(3000);
+		ok('同一条公告弹过一次，再打开不弹', !(await page.$('.modal')) && S.pop.length === 1);
+		await ctx.close();
+		S.ann = null;
 	}
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));

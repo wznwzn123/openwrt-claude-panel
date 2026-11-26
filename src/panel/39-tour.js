@@ -13,7 +13,8 @@ function tourSteps() {
 	return st.filter((x) => x && (() => { const e = document.querySelector(x.el); return e && e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden'; })());
 }
 function tourReady() {
-	return token && !LK.on && page === 'home' && $('statusDot').classList.contains('on') && !document.querySelector('.modal') && !$('side').classList.contains('open') && $('needcode').classList.contains('hidden') && !document.hidden;
+	// 用户 11/26：一进去就出来（哪一页都行，升级完刷新后也是）；有别的弹窗就等它关掉
+	return token && !LK.on && $('statusDot').classList.contains('on') && !popBusy() && !$('side').classList.contains('open') && $('needcode').classList.contains('hidden') && !document.hidden;
 }
 function tourRun() {
 	const steps = tourSteps();
@@ -24,7 +25,7 @@ function tourRun() {
 	ov.innerHTML = '<div class="tourhole"></div><div class="tourcard"><b></b><p></p><div class="tourbar"><span class="tourn"></span><button class="btn sm tourskip" type="button">跳过</button><button class="btn sm primary tournext" type="button"></button></div></div>';
 	document.body.appendChild(ov);
 	const hole = ov.querySelector('.tourhole'), card = ov.querySelector('.tourcard');
-	const end = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} removeEventListener('resize', draw); removeEventListener('keydown', key); ov.remove(); };
+	const end = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} removeEventListener('resize', draw); removeEventListener('keydown', key); ov.remove(); popFree(); };
 	function draw() {
 		const s = steps[i], e = document.querySelector(s.el);
 		if (!e) return end();
@@ -52,15 +53,15 @@ function tourRun() {
 	draw();
 	card.querySelector('.tournext').focus({ preventScroll: true });
 }
-// 打开面板后等时机：每 2 秒看一次，最多等 2 分钟
+// 打开面板就等时机：连上路由器、没有别的弹窗就马上出来（每 0.3 秒看一次，最多等 30 分钟）
 (function tourWait() {
 	// 自动化测试（navigator.webdriver）里不出，免得挡住别的测试；测引导本身时设 rp_tourtest=1
 	try { if (localStorage.getItem(TOUR_KEY) || (navigator.webdriver && !localStorage.getItem('rp_tourtest'))) return; } catch (e) { return; }
 	let n = 0;
 	const t = setInterval(() => {
-		if (++n > 60) return clearInterval(t);
+		if (++n > 6000) return clearInterval(t);
 		if (!tourReady()) return;
 		clearInterval(t);
-		setTimeout(() => { if (tourReady() && !document.querySelector('.tour')) tourRun(); }, 1500);
-	}, 2000);
+		tourRun();
+	}, 300);
 })();

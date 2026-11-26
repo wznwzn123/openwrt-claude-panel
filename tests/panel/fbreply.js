@@ -33,11 +33,12 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 (async () => {
 	await new Promise((r) => server.listen(8153, r));
 	const browser = await chromium.launch();
-	const open = async (dark) => {
+	const open = async (dark, pre) => {
 		const ctx = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light' });
 		await ctx.route('https://yrlove520.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'ok' }));
 		const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 		await page.addInitScript((d) => { localStorage.setItem('rp_token', 'testtokentesttokentest'); localStorage.setItem('rp_dark', d ? '1' : '0'); }, dark);
+		if (pre) await page.addInitScript(pre);
 		await page.goto('http://localhost:8153/panel/'); return { ctx, page, errs };
 	};
 	// 1 没有回复：不弹
@@ -112,8 +113,8 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	await ctx.close();
 	// 5 有更新提示（必须更新弹窗）开着时：不叠在一起
 	LIST = [{ code: 'K7F2Q9AB', at: Date.now(), done: 1, reply: 'x', updated: Date.now(), seen: 0 }];
-	({ ctx, page } = await open(false)); await page.waitForTimeout(2500);
-	await page.evaluate(() => { const d = document.createElement('div'); d.className = 'modal'; d.id = 'fake'; document.body.appendChild(d); });
+	// 现在打开面板马上就查反馈（用户 11/26）：假的弹窗在页面一出来就放进去
+	({ ctx, page } = await open(false, () => document.addEventListener('DOMContentLoaded', () => { const d = document.createElement('div'); d.className = 'modal'; d.id = 'fake'; document.body.appendChild(d); })));
 	await page.waitForTimeout(9000);
 	ok('别的弹窗开着时不弹（不叠在一起）', !(await page.isVisible('.modal[data-fbr]')));
 	await ctx.close();

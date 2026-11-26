@@ -1947,6 +1947,9 @@ function hsNav(p, how) {
 }
 // opts.compact：打开面板时自己弹出来的（必须更新、重要公告、反馈有回复）——手机上也是居中的小卡片，不占满屏幕；
 // 长内容放在卡片里的 .cscroll 里上下滑，按钮一直在下面
+// 打开面板时要自己弹出来的（新手引导、必须更新、重要公告、反馈回复）一个接一个：前一个关掉马上出下一个（用户 11/26）
+const popBusy = () => !!document.querySelector('.modal, .tour');
+function popFree() { if (!popBusy()) dispatchEvent(new Event('cmcp-popfree')); }
 function modal(html, onMount, opts) {
 	return new Promise((resolve) => {
 		const m = document.createElement('div');
@@ -1956,7 +1959,7 @@ function modal(html, onMount, opts) {
 			if (m.classList.contains('closing')) return;
 			m.classList.add('closing');
 			hsShut(m);
-			setTimeout(() => m.remove(), 300);
+			setTimeout(() => { m.remove(); popFree(); }, 300);
 			resolve(v);
 		};
 		m.addEventListener('click', (e) => {
@@ -2305,14 +2308,16 @@ function renderNav() {
 		for (const g of NAV) for (const it of g.items) {
 			const one = (x, path) => {
 				const t = Array.isArray(x) ? x[1] : x.t, p = Array.isArray(x) ? 'k:' + x[0] : x.p;
+				// 名字里有的排前面，只是别名 / 所在分组里有的排后面（搜「dhcp」先出 DHCP，再出局域网设置）
 				if ((t + ' ' + path.join(' ') + ' ' + (Array.isArray(x) ? x[0] : x.kw || '')).toLowerCase().includes(q)) // kw：别名（比如以前叫「自动任务」）
-					hits.push(`<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`);
+					hits.push([t.toLowerCase().includes(q) ? 0 : 1, `<button data-p="${esc(p)}">${g.noic ? '' : navIc(Array.isArray(x) ? (NAV_IC[x[0]] ? x[0] : path.join('/')) : x.p, Array.isArray(x) ? x[2] : x.i)}<span>${esc(t)}<span class="path">${esc(path.join(' › '))}</span></span></button>`]);
 			};
 			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
-		if ('首页 主页 home'.includes(q)) hits.unshift(navBtn(NAV_TOP, false, false));
-		nav.innerHTML = hits.length ? hits.join('') : '<div class="empty">没有找到这个功能</div>';
+		const hs = hits.sort((a, b) => a[0] - b[0]).map((h) => h[1]);
+		if ('首页 主页 home'.includes(q)) hs.unshift(navBtn(NAV_TOP, false, false));
+		nav.innerHTML = hs.length ? hs.join('') : '<div class="empty">没有找到这个功能</div>';
 	} else {
 		nav.innerHTML = navBtn(NAV_TOP, false, false).replace('<button', '<button class="navtop"') + NAV.filter((g) => !g.items.length || g.items.some(pxShow)).map((g) => `<div class="ng${navOpen[g.g] ? ' open' : ''}" data-g="${esc(g.g)}"><button class="nghead" data-ng="${esc(g.g)}" aria-expanded="${!!navOpen[g.g]}"><span>${esc(g.g)}</span><s class="chev">›</s></button><div class="ngb"><div>${
 			// 「服务」里只剩面板自己的页面（比如应用过滤）也算没装插件
@@ -3116,7 +3121,7 @@ $('oDash').onclick = () => {
 		if (!url) { if (w) w.close(); return toast('还没有安装控制面板，到「插件设置 → 外部控制」里下载', true); }
 		// 6.0 第 36 项：在外面（网址不是路由器的 IP / .lan）用远程页面的地址打开
 		if (!/^(\d+\.\d+\.\d+\.\d+|\[[0-9a-f:.]+\]|localhost|[a-z0-9-]+|.+\.(lan|local|home|internal|home\.arpa))$/i.test(location.hostname) && ME_ROLE.role !== 'sub') {
-			try { const r = await P('xp_open', { port: +ds.port, ui: url.split('/ui/')[1].split('/')[0] }, 40000); return xpGo(w, r); }
+			try { const r = await P('xp_open', { port: +ds.port, ui: url.split('/ui/')[1].split('/')[0] }, 40000); if (r && r.url) return xpGo(w, r); }
 			catch (e) { if (!/自建版|本地版/.test(e.message)) { if (w) w.close(); throw e; } }
 		}
 		if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else location.href = url;
@@ -7195,9 +7200,9 @@ async function updCheck(force) {
 		// 首页只放前 3 行；「查看完整更新内容」在弹窗里能上下滑着看全
 		$('rUpdLater').classList.toggle('hidden', !!UPD.force);
 		// 必须更新：弹窗关不掉
-		if (UPD.force && !document.querySelector('.modal[data-upd]')) updSheet(true);
-		// 普通新版本：自动检查时（不是用户自己点开的）没弹过就弹一次；有别的弹窗、面板锁着时先不弹，下次检查再弹
-		else if (!force && !UPD.force && !later && !document.querySelector('.modal') && !LK.on) updSheet(true);
+		if (UPD.force && !document.querySelector('.modal[data-upd]')) { if (popBusy() && !force) UPD_WAIT = true; else updSheet(true); }
+		// 普通新版本：自动检查时（不是用户自己点开的）没弹过就弹一次；有别的弹窗时等它关掉马上弹；面板锁着时先不弹
+		else if (!force && !UPD.force && !later && !LK.on) { if (popBusy()) UPD_WAIT = true; else updSheet(true); }
 	}
 	return UPD;
 }
@@ -7274,7 +7279,10 @@ function fbSent(r) {
 let fbAt = 0, fbTimer = 0, FB_FOCUS = '';
 const FB_EV = { fixed: '已修复', nofix: '无法修复', open: '重新打开，继续处理', note: '补充说明' };
 const fbWhen = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// 这次进「我的反馈」时标了「新」的：在这一页上一直标着（列表每分钟刷新一次，路由器那边已经记成看过了）
+const MYFB_NEW = new Set();
 async function loadMyFb(quiet) {
+	if (!quiet) MYFB_NEW.clear();
 	const r = await P('fb_replies', { force: !quiet }, 30000);
 	fbAt = Date.now();
 	myfbRender(r);
@@ -7292,7 +7300,8 @@ function myfbRender(r) {
 	box.innerHTML = (r.stale ? '<div class="notice w" style="margin-bottom:12px">暂时连不上托管服务，下面是上次查到的</div>' : '') + list.map((x) => {
 		const stage = Math.max(x.stage || 1, x.reply ? 2 : 1), st = x.state || (x.done ? 'fixed' : 'open');
 		const pill = st === 'fixed' ? '<i class="ok">已修复</i>' : st === 'nofix' ? '<i class="bad">无法修复</i>' : stage >= 2 ? '<i>开发人员已收到</i>' : '<i class="wait">等开发人员查看</i>';
-		const isNew = x.updated && x.updated > (x.seen || 0);
+		const isNew = (x.updated && x.updated > (x.seen || 0)) || MYFB_NEW.has(x.code);
+		if (isNew) MYFB_NEW.add(x.code);
 		const evs = (x.history || []).map((h) => ({ ...h, n: FB_EV[h.st] || '更新' }));
 		if (x.ackAt) evs.push({ at: x.ackAt, st: 'ack', n: '开发人员已收到' });
 		evs.sort((a, b) => b.at - a.at); evs.push({ at: x.at, st: 'sent', n: '反馈成功' });
@@ -7381,7 +7390,8 @@ async function ntCheck() {
 	try { await ntFetch(); } catch (e) { return; }
 	if (page === 'notice') return void ntRender();
 	ntBadge();
-	if (document.querySelector('.modal')) return;
+	// 有别的弹窗（新手引导、必须更新…）：等它关掉马上弹
+	if (popBusy()) { NT.popWait = true; return; }
 	const pop = (NT.d.seen && NT.d.seen.pop) || [];
 	// 6.0 第 85 项：新装的路由器只弹开始记之前 7 天以内发的重要公告（更早的在「通知」里能翻到，不一打开就刷屏）。
 	// 从老版本升上来的没有 since，照旧（弹过的都记着，不会重弹）
@@ -7389,6 +7399,8 @@ async function ntCheck() {
 	const a = (NT.d.ann || []).find((x) => x.level === 'important' && !pop.includes(x.id) && ntMs(x.at || x.upd) >= since - 7 * 864e5);
 	if (a) ntAnnPop(a);
 }
+addEventListener('cmcp-popfree', () => { if (NT.popWait) { NT.popWait = false; setTimeout(ntCheck, 200); } if (FB_WAIT) { FB_WAIT = false; setTimeout(fbCheck, 400); } if (UPD_WAIT) { UPD_WAIT = false; setTimeout(() => updCheck(false), 300); } });
+let FB_WAIT = false, UPD_WAIT = false;
 function ntAnnPop(a) {
 	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
 	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
@@ -7750,13 +7762,15 @@ async function chSend(x, img, files, names) {
 }
 // 问题反馈有回复了：开发者在管理页标了已修复、或者写了回复，打开面板时提示一次（托管版；看过的不再提示）
 async function fbCheck() {
-	if (!token || LK.on || document.hidden || document.querySelector('.modal')) return;
+	if (!token || LK.on || document.hidden) return;
+	if (popBusy()) { FB_WAIT = true; return; }
 	fbAt = Date.now();
 	let r; try { r = await P('fb_replies', {}, 30000); } catch (e) { return; }
 	// 正在看「我的反馈」：不弹窗，直接刷新列表（列表里会标「新」）
 	if (page === 'myfb') return void myfbRender(r);
 	const x = (r?.list || []).filter((y) => (y.reply || y.done || y.nofix || y.ackAt) && y.updated > (y.seen || 0)).sort((a, b) => b.updated - a.updated)[0];
-	if (!x || document.querySelector('.modal')) return;
+	if (!x) return;
+	if (popBusy()) { FB_WAIT = true; return; }
 	const when = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	const stage = Math.max(x.stage || (x.done || x.nofix ? 3 : 1), x.reply ? 2 : 1);
 	modal(`<div class="sheethead"><h3>${x.done ? '你反馈的问题修好了' : x.nofix ? '你反馈的问题暂时没法修复' : x.reply ? '你的反馈有新的说明' : '开发人员已收到你的反馈'}</h3></div>
@@ -7797,7 +7811,8 @@ async function updStart(noConfirm, channel) {
 			fin = true;
 			draw(ok ? 'done' : 'failed', msg);
 			m.querySelector('[data-end]').classList.remove('hidden');
-			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) refreshPanel(); };
+			// 升级好了：刷新后回到首页（老用户第一次用 6.0，新手引导在首页出来）
+			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) { try { sessionStorage.setItem('rp_page', 'main'); } catch (e) {} refreshPanel(); } };
 		};
 		const poll = async () => {
 			if (fin) return;
@@ -8580,7 +8595,8 @@ function tourSteps() {
 	return st.filter((x) => x && (() => { const e = document.querySelector(x.el); return e && e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden'; })());
 }
 function tourReady() {
-	return token && !LK.on && page === 'home' && $('statusDot').classList.contains('on') && !document.querySelector('.modal') && !$('side').classList.contains('open') && $('needcode').classList.contains('hidden') && !document.hidden;
+	// 用户 11/26：一进去就出来（哪一页都行，升级完刷新后也是）；有别的弹窗就等它关掉
+	return token && !LK.on && $('statusDot').classList.contains('on') && !popBusy() && !$('side').classList.contains('open') && $('needcode').classList.contains('hidden') && !document.hidden;
 }
 function tourRun() {
 	const steps = tourSteps();
@@ -8591,7 +8607,7 @@ function tourRun() {
 	ov.innerHTML = '<div class="tourhole"></div><div class="tourcard"><b></b><p></p><div class="tourbar"><span class="tourn"></span><button class="btn sm tourskip" type="button">跳过</button><button class="btn sm primary tournext" type="button"></button></div></div>';
 	document.body.appendChild(ov);
 	const hole = ov.querySelector('.tourhole'), card = ov.querySelector('.tourcard');
-	const end = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} removeEventListener('resize', draw); removeEventListener('keydown', key); ov.remove(); };
+	const end = () => { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} removeEventListener('resize', draw); removeEventListener('keydown', key); ov.remove(); popFree(); };
 	function draw() {
 		const s = steps[i], e = document.querySelector(s.el);
 		if (!e) return end();
@@ -8619,17 +8635,17 @@ function tourRun() {
 	draw();
 	card.querySelector('.tournext').focus({ preventScroll: true });
 }
-// 打开面板后等时机：每 2 秒看一次，最多等 2 分钟
+// 打开面板就等时机：连上路由器、没有别的弹窗就马上出来（每 0.3 秒看一次，最多等 30 分钟）
 (function tourWait() {
 	// 自动化测试（navigator.webdriver）里不出，免得挡住别的测试；测引导本身时设 rp_tourtest=1
 	try { if (localStorage.getItem(TOUR_KEY) || (navigator.webdriver && !localStorage.getItem('rp_tourtest'))) return; } catch (e) { return; }
 	let n = 0;
 	const t = setInterval(() => {
-		if (++n > 60) return clearInterval(t);
+		if (++n > 6000) return clearInterval(t);
 		if (!tourReady()) return;
 		clearInterval(t);
-		setTimeout(() => { if (tourReady() && !document.querySelector('.tour')) tourRun(); }, 1500);
-	}, 2000);
+		tourRun();
+	}, 300);
 })();
 /* ---------- 6.0 第 24 项：上网设置 ----------
  * 上面一张卡片是 WAN 口现在的状态；下面选上网方式（自动获取 / 宽带拨号 / 固定 IP）和 DNS，改了底部出现「保存」。
@@ -9464,7 +9480,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); setStatus(true, '在线'); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {
@@ -9720,12 +9736,12 @@ function start() {
 	if (!$('about').textContent) setTimeout(() =>
 		rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'panel', version: '3' } }).then((r) => ($('about').textContent = '路由器面板 ' + (r.serverInfo?.version || ''))).catch(() => {}), 3000);
 	watchJobs();
-	updAt = Date.now(); setTimeout(() => updCheck(false), 4000);
+	updAt = Date.now(); setTimeout(() => updCheck(false), 500);
 	// 反馈的新进展：打开 3 秒后查一次，开着的时候每分钟查一次（路由器那边缓存 45 秒）
-	setTimeout(fbCheck, 3000);
+	setTimeout(fbCheck, 1000);
 	clearInterval(fbTimer); fbTimer = setInterval(() => { if (Date.now() - fbAt > 55000) fbCheck(); if (Date.now() - NT.at > 60000) ntCheck(); }, 15000);
-	// 通知：打开 6 秒后查一次（铃铛上的数字、重要公告弹一次），之后每分钟一次
-	setTimeout(ntCheck, 6000);
+	// 通知：打开马上查一次（铃铛上的数字、重要公告弹一次：同一条公告弹过就不再弹，记在路由器上，换手机也算），之后每分钟一次
+	setTimeout(ntCheck, 700);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { setTimeout(() => aiCheck(true), 800); refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 

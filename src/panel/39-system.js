@@ -1498,9 +1498,9 @@ async function updCheck(force) {
 		// 首页只放前 3 行；「查看完整更新内容」在弹窗里能上下滑着看全
 		$('rUpdLater').classList.toggle('hidden', !!UPD.force);
 		// 必须更新：弹窗关不掉
-		if (UPD.force && !document.querySelector('.modal[data-upd]')) updSheet(true);
-		// 普通新版本：自动检查时（不是用户自己点开的）没弹过就弹一次；有别的弹窗、面板锁着时先不弹，下次检查再弹
-		else if (!force && !UPD.force && !later && !document.querySelector('.modal') && !LK.on) updSheet(true);
+		if (UPD.force && !document.querySelector('.modal[data-upd]')) { if (popBusy() && !force) UPD_WAIT = true; else updSheet(true); }
+		// 普通新版本：自动检查时（不是用户自己点开的）没弹过就弹一次；有别的弹窗时等它关掉马上弹；面板锁着时先不弹
+		else if (!force && !UPD.force && !later && !LK.on) { if (popBusy()) UPD_WAIT = true; else updSheet(true); }
 	}
 	return UPD;
 }
@@ -1577,7 +1577,10 @@ function fbSent(r) {
 let fbAt = 0, fbTimer = 0, FB_FOCUS = '';
 const FB_EV = { fixed: '已修复', nofix: '无法修复', open: '重新打开，继续处理', note: '补充说明' };
 const fbWhen = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// 这次进「我的反馈」时标了「新」的：在这一页上一直标着（列表每分钟刷新一次，路由器那边已经记成看过了）
+const MYFB_NEW = new Set();
 async function loadMyFb(quiet) {
+	if (!quiet) MYFB_NEW.clear();
 	const r = await P('fb_replies', { force: !quiet }, 30000);
 	fbAt = Date.now();
 	myfbRender(r);
@@ -1595,7 +1598,8 @@ function myfbRender(r) {
 	box.innerHTML = (r.stale ? '<div class="notice w" style="margin-bottom:12px">暂时连不上托管服务，下面是上次查到的</div>' : '') + list.map((x) => {
 		const stage = Math.max(x.stage || 1, x.reply ? 2 : 1), st = x.state || (x.done ? 'fixed' : 'open');
 		const pill = st === 'fixed' ? '<i class="ok">已修复</i>' : st === 'nofix' ? '<i class="bad">无法修复</i>' : stage >= 2 ? '<i>开发人员已收到</i>' : '<i class="wait">等开发人员查看</i>';
-		const isNew = x.updated && x.updated > (x.seen || 0);
+		const isNew = (x.updated && x.updated > (x.seen || 0)) || MYFB_NEW.has(x.code);
+		if (isNew) MYFB_NEW.add(x.code);
 		const evs = (x.history || []).map((h) => ({ ...h, n: FB_EV[h.st] || '更新' }));
 		if (x.ackAt) evs.push({ at: x.ackAt, st: 'ack', n: '开发人员已收到' });
 		evs.sort((a, b) => b.at - a.at); evs.push({ at: x.at, st: 'sent', n: '反馈成功' });
@@ -1684,7 +1688,8 @@ async function ntCheck() {
 	try { await ntFetch(); } catch (e) { return; }
 	if (page === 'notice') return void ntRender();
 	ntBadge();
-	if (document.querySelector('.modal')) return;
+	// 有别的弹窗（新手引导、必须更新…）：等它关掉马上弹
+	if (popBusy()) { NT.popWait = true; return; }
 	const pop = (NT.d.seen && NT.d.seen.pop) || [];
 	// 6.0 第 85 项：新装的路由器只弹开始记之前 7 天以内发的重要公告（更早的在「通知」里能翻到，不一打开就刷屏）。
 	// 从老版本升上来的没有 since，照旧（弹过的都记着，不会重弹）
@@ -1692,6 +1697,8 @@ async function ntCheck() {
 	const a = (NT.d.ann || []).find((x) => x.level === 'important' && !pop.includes(x.id) && ntMs(x.at || x.upd) >= since - 7 * 864e5);
 	if (a) ntAnnPop(a);
 }
+addEventListener('cmcp-popfree', () => { if (NT.popWait) { NT.popWait = false; setTimeout(ntCheck, 200); } if (FB_WAIT) { FB_WAIT = false; setTimeout(fbCheck, 400); } if (UPD_WAIT) { UPD_WAIT = false; setTimeout(() => updCheck(false), 300); } });
+let FB_WAIT = false, UPD_WAIT = false;
 function ntAnnPop(a) {
 	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
 	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
@@ -2053,13 +2060,15 @@ async function chSend(x, img, files, names) {
 }
 // 问题反馈有回复了：开发者在管理页标了已修复、或者写了回复，打开面板时提示一次（托管版；看过的不再提示）
 async function fbCheck() {
-	if (!token || LK.on || document.hidden || document.querySelector('.modal')) return;
+	if (!token || LK.on || document.hidden) return;
+	if (popBusy()) { FB_WAIT = true; return; }
 	fbAt = Date.now();
 	let r; try { r = await P('fb_replies', {}, 30000); } catch (e) { return; }
 	// 正在看「我的反馈」：不弹窗，直接刷新列表（列表里会标「新」）
 	if (page === 'myfb') return void myfbRender(r);
 	const x = (r?.list || []).filter((y) => (y.reply || y.done || y.nofix || y.ackAt) && y.updated > (y.seen || 0)).sort((a, b) => b.updated - a.updated)[0];
-	if (!x || document.querySelector('.modal')) return;
+	if (!x) return;
+	if (popBusy()) { FB_WAIT = true; return; }
 	const when = (t) => new Date(t).toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	const stage = Math.max(x.stage || (x.done || x.nofix ? 3 : 1), x.reply ? 2 : 1);
 	modal(`<div class="sheethead"><h3>${x.done ? '你反馈的问题修好了' : x.nofix ? '你反馈的问题暂时没法修复' : x.reply ? '你的反馈有新的说明' : '开发人员已收到你的反馈'}</h3></div>
@@ -2100,7 +2109,8 @@ async function updStart(noConfirm, channel) {
 			fin = true;
 			draw(ok ? 'done' : 'failed', msg);
 			m.querySelector('[data-end]').classList.remove('hidden');
-			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) refreshPanel(); };
+			// 升级好了：刷新后回到首页（老用户第一次用 6.0，新手引导在首页出来）
+			m.querySelector('[data-done]').onclick = () => { close(null); if (ok) { try { sessionStorage.setItem('rp_page', 'main'); } catch (e) {} refreshPanel(); } };
 		};
 		const poll = async () => {
 			if (fin) return;

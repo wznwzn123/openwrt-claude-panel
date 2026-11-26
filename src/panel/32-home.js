@@ -313,7 +313,7 @@ $('oDash').onclick = () => {
 		if (!url) { if (w) w.close(); return toast('还没有安装控制面板，到「插件设置 → 外部控制」里下载', true); }
 		// 6.0 第 36 项：在外面（网址不是路由器的 IP / .lan）用远程页面的地址打开
 		if (!/^(\d+\.\d+\.\d+\.\d+|\[[0-9a-f:.]+\]|localhost|[a-z0-9-]+|.+\.(lan|local|home|internal|home\.arpa))$/i.test(location.hostname) && ME_ROLE.role !== 'sub') {
-			try { const r = await P('xp_open', { port: +ds.port, ui: url.split('/ui/')[1].split('/')[0] }, 40000); return xpGo(w, r); }
+			try { const r = await P('xp_open', { port: +ds.port, ui: url.split('/ui/')[1].split('/')[0] }, 40000); if (r && r.url) return xpGo(w, r); }
 			catch (e) { if (!/自建版|本地版/.test(e.message)) { if (w) w.close(); throw e; } }
 		}
 		if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else location.href = url;

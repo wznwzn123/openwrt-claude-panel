@@ -170,7 +170,7 @@ App 的签名密钥已经加密放在仓库里（`android/signing/router-panel.j
 | `GET /api/admin/stats?days=30` / `GET /api/admin/visitors?day=YYYY-MM-DD` | 每天的访问次数、访客数、各项计数；某一天的访客 IP |
 | `GET /api/admin/logins` / `log` / `mails` / `errors` | 登录记录（带 IP）、操作记录、邮件记录、出错记录 |
 | `GET /api/admin/chat` / `GET /api/admin/chat/{对话}?read=1` / `POST /api/admin/chat/{对话}` | 实时对话：列表、看消息、回复（`{"text","img"}`） |
-| `GET/POST/DELETE /api/admin/ann[/{编号}]` | 公告：列表、发布 / 修改、删除 |
+| `GET/POST/DELETE /api/admin/ann[/{编号}]` | 公告：列表、发布 / 修改、删除。级别 normal / important / banner（面板顶上一条横幅）；`ed` = h 只发托管版、s 只发自建版；`vmin`、`vmax` = 面板版本范围（含两头） |
 | `GET /api/admin/devices` | 所有路由器、已用名额、排队人数 |
 | `POST /api/admin/max` | 改名额上限（`{"max": 1–1000}`），改大后马上给排队的人发邮件 |
 | `GET /api/admin/wait` | 排队的邮箱 |

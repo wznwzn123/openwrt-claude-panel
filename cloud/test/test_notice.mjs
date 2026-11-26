@@ -38,6 +38,21 @@ ok('[公告] 编号格式不对 → 不处理', (await adm('POST', '/ann/../x', 
 T += 2 * DAY;
 j = await (await api('GET', '/api/notices')).json();
 ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.list[0].id === a2);
+{ // 6.0：只发给某些路由器（托管版 / 自建版、版本范围）
+	r = await adm('POST', '/ann', { title: '自建版 5.x 升级提醒', level: 'banner', ed: 's', vmin: '5.0', vmax: '5.2.3' }); j = await r.json();
+	ok('[公告定向] 存下发给谁：自建版、版本 5.0 到 5.2.3、横幅', j.ok && j.ann.ed === 's' && j.ann.vmin === '5.0' && j.ann.vmax === '5.2.3' && j.ann.level === 'banner', JSON.stringify(j));
+	const t1 = j.ann.id, has = async (q) => (await (await api('GET', '/api/notices' + q)).json()).list.some((x) => x.id === t1);
+	ok('[公告定向] 自建版 5.1：收到', await has('?r=x&v=5.1.0&k=s'));
+	ok('[公告定向] 自建版 6.0：版本不在范围里，收不到', !(await has('?r=x&v=6.0.0&k=s')));
+	ok('[公告定向] 托管版 5.1：收不到', !(await has('?r=x&v=5.1.0&k=h')));
+	ok('[公告定向] 老版本不带版本和类型：当成最老的版本 托管自建都算（5.0 起的公告收不到）', !(await has('?r=x')));
+	ok('[公告定向] 5.2.3 正好在范围里（含两头）', await has('?r=x&v=5.2.3&k=s'));
+	ok('[公告定向] 版本写错不收', /版本写成/.test((await (await adm('POST', '/ann', { title: 'x', vmin: '六点零' })).json()).error));
+	ok('[公告定向] 范围前大后小不收', /前面的要比后面的小/.test((await (await adm('POST', '/ann', { title: 'x', vmin: '6.0', vmax: '5.0' })).json()).error));
+	r = await adm('POST', '/ann/' + t1, { title: '改成都发', level: 'normal' }); j = await r.json();
+	ok('[公告定向] 改成都发：去掉发给谁', j.ok && !j.ann.ed && !j.ann.vmin && !j.ann.vmax && await has('?r=x&v=6.0.0&k=h'));
+	await adm('DELETE', '/ann/' + t1);
+}
 j = await (await adm('GET', '/ann')).json();
 ok('[公告] 管理页仍能看到过期的', j.list.length === 2);
 ok('[公告] 删除', (await (await adm('DELETE', '/ann/' + a2)).json()).ok === true);

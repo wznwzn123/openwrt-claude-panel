@@ -51,6 +51,8 @@ export const safeEq = (a, b) => {
 const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 const clean = (s, n) => String(s || '').replace(/[^\p{L}\p{N} ._()\-]/gu, '').slice(0, n);
 const DAY = 86400e3;
+// 比较版本号（6.0 > 5.2.3 > 5.2）：返回 -1 / 0 / 1
+function verCmp(a, b) { const x = String(a).split('.').map((n) => +n || 0), y = String(b).split('.').map((n) => +n || 0); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0) ? -1 : 1; } return 0; }
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10); // 按北京 / 台北时间显示日期
 export const LIMITS = { perIpHour: 5, allHour: 60, idleDays: 90, pendingMs: 3600e3 };
 export const TRASH_DAYS = 30;
@@ -1438,6 +1440,11 @@ export class Hub extends DurableObject {
 		if (!title) return { st: 400, error: '标题不能是空的' };
 		// 6.0：banner = 面板顶上一条横幅（轻提醒，比如今晚维护），不弹窗、不推送
 		const level = b.level === 'important' ? 'important' : b.level === 'banner' ? 'banner' : 'normal', days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
+		// 6.0：只发给某些路由器：ed = h 托管版 / s 自建版 / 空 = 都发；vmin、vmax = 面板版本范围（含两头，可以只填一个）
+		const ed = b.ed === 'h' || b.ed === 's' ? b.ed : '', vok = (v) => v === '' || /^\d{1,3}(\.\d{1,3}){0,2}$/.test(v);
+		const vmin = String(b.vmin || '').trim(), vmax = String(b.vmax || '').trim();
+		if (!vok(vmin) || !vok(vmax)) return { st: 400, error: '版本写成 6.0 或 5.2.3 这样' };
+		if (vmin && vmax && verCmp(vmin, vmax) > 0) return { st: 400, error: '版本范围前面的要比后面的小' };
 		// 定时发布（5.0）：到时间才出现在面板里；路由器按发布时间判断要不要推送到手机
 		let start = Math.round(+b.start || 0);
 		if (start && start <= Date.now() + 60e3) start = 0;
@@ -1452,6 +1459,7 @@ export class Hub extends DurableObject {
 			if (!a) { a = { id: rnd(10), at: now }; l.unshift(a); }
 			const from = start || (a.start && a.start > now ? now : 0) || now;
 			Object.assign(a, { title, body, level, exp: days ? Math.max(now, start || 0) + days * DAY : 0, upd: start || now });
+			for (const [k, v] of [['ed', ed], ['vmin', vmin], ['vmax', vmax]]) { if (v) a[k] = v; else delete a[k]; }
 			if (files) { const drop = (a.files || []).filter((x) => !files.some((y) => y.id === x.id)).map((x) => x.id); if (drop.length) await this.fileGone(drop); if (files.length) a.files = files; else delete a.files; }
 			if (start) { a.start = start; a.at = start; } else if (a.start && a.start > now) { delete a.start; a.at = now; }
 			void from;
@@ -1657,7 +1665,9 @@ export async function hubFetch(req, env) {
 	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
 	// 公告（公开、只读；面板经路由器每 30 分钟来拿一次，缓存 5 分钟）
 	if (p === '/api/notices' && req.method === 'GET') {
-		const anns = await H.anns(false);
+		// 路由器带着自己的版本（v）和托管 / 自建（k = h / s）来拿：只给发给它的；老版本不带，当成最老的版本、托管自建都算
+		const qv = u.searchParams.get('v') || '0', qk = u.searchParams.get('k') || '';
+		const anns = (await H.anns(false)).filter((a) => (!a.ed || !qk || a.ed === qk) && (!a.vmin || verCmp(qv, a.vmin) >= 0) && (!a.vmax || verCmp(qv, a.vmax) <= 0));
 		// 路由器带着匿名编号来拿：记下「这台收到了」（公告统计用；编号是路由器随机生成的，跟账号、IP 都没关系）
 		const rid = u.searchParams.get('r') || '';
 		if (rid && anns.length) { try { await H.annGot(rid, anns.slice(0, 20).map((a) => a.id)); } catch (e) {} }

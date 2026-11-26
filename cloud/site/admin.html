@@ -41,11 +41,13 @@ code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:1px}
 	<div class="card"><div id="fbs"></div></div>
 	<div class="sech"><h2>公告 <span class="pill" id="annN" style="font-size:13px;vertical-align:middle"></span></h2></div>
 	<div class="card">
-		<p class="muted" style="margin:0 0 6px;font-size:13px">发出去以后，所有人（托管版和自建版）打开面板的「通知」都能看到。选「重要」的，路由器还会推送到手机，打开面板时也会弹出来一次。</p>
+		<p class="muted" style="margin:0 0 6px;font-size:13px">发出去以后，选中的路由器打开面板的「通知」都能看到。「重要」的还会推送到手机，打开面板时弹出一次。「横幅」只在面板顶上显示一条，不弹窗不推送。</p>
 		<form id="fAnn" class="g3">
 			<div class="full"><label class="f">标题</label><input class="input" name="title" maxlength="80" required></div>
 			<div class="full"><label class="f">内容（选填）</label><textarea class="input" name="body" rows="3" maxlength="2000" style="resize:vertical"></textarea></div>
-			<div><label class="f">级别</label><select class="input" name="level"><option value="normal">普通</option><option value="important">重要（推送到手机）</option></select></div>
+			<div><label class="f">级别</label><select class="input" name="level"><option value="normal">普通</option><option value="important">重要（推送到手机）</option><option value="banner">横幅（面板顶上一条）</option></select></div>
+			<div><label class="f">发给</label><select class="input" name="ed"><option value="">托管版和自建版</option><option value="h">只发托管版</option><option value="s">只发自建版</option></select></div>
+			<div><label class="f">版本（选填）</label><div style="display:flex;gap:6px;align-items:center"><input class="input" name="vmin" placeholder="从 比如 5.0" maxlength="12"><span>到</span><input class="input" name="vmax" placeholder="到 比如 5.2.3" maxlength="12"></div></div>
 			<div><label class="f">显示几天（0 = 一直显示）</label><input class="input" name="days" type="number" min="0" max="365" value="0" required></div>
 			<div class="full"><button class="btn primary" data-go>发布公告</button> <button class="btn hidden" type="button" data-cancel>不改了</button><span class="err" data-err></span></div>
 		</form>
@@ -402,12 +404,14 @@ function renderLogs() {
 }
 /* ---------- 公告 ---------- */
 let ANNS = [], ANN_ED = '';
+// 发给谁：「只发托管版 · 5.0 到 5.2.3」；全部发的不写
+function annWho(a) { const v = a.vmin && a.vmax ? a.vmin + ' 到 ' + a.vmax : a.vmin ? a.vmin + ' 及以上' : a.vmax ? a.vmax + ' 及以下' : ''; return [a.ed === 'h' ? '只发托管版' : a.ed === 's' ? '只发自建版' : '', v].filter(Boolean).join(' · '); }
 function renderAnns() {
 	const now = Date.now(), live = ANNS.filter((a) => !a.exp || a.exp > now);
 	$('annN').textContent = live.length ? live.length + ' 条在显示' : '';
 	$('anns').innerHTML = ANNS.length ? ANNS.map((a) => {
 		const gone = a.exp && a.exp <= now;
-		return `<div class="item" data-ann="${esc(a.id)}" style="align-items:flex-start${gone ? ';opacity:.6' : ''}"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${a.level === 'important' ? '<span class="pill" style="background:rgba(255,149,0,.16);color:var(--warn);margin-right:6px">重要</span>' : ''}${esc(a.title)}</b>
+		return `<div class="item" data-ann="${esc(a.id)}" style="align-items:flex-start${gone ? ';opacity:.6' : ''}"><div class="l" style="min-width:0;flex:1"><b style="white-space:normal">${a.level === 'important' ? '<span class="pill" style="background:rgba(255,149,0,.16);color:var(--warn);margin-right:6px">重要</span>' : a.level === 'banner' ? '<span class="pill" style="margin-right:6px">横幅</span>' : ''}${annWho(a) ? '<span class="pill" style="margin-right:6px">' + esc(annWho(a)) + '</span>' : ''}${esc(a.title)}</b>
 			${a.body ? `<span style="display:block;white-space:pre-wrap;color:var(--text);font-size:14px;margin:4px 0">${esc(a.body)}</span>` : ''}
 			<span>${new Date(a.at).toLocaleString('zh-CN', { hour12: false })} 发布${a.upd && a.upd !== a.at ? ' · ' + ago(a.upd) + '改过' : ''} · ${gone ? '已过期，大家看不到了' : a.exp ? day(a.exp) + ' 以后不再显示' : '一直显示'}</span></div>
 			<div style="display:flex;gap:6px;flex:none"><button class="btn sm" data-aed>修改</button><button class="btn sm" data-adel>删除</button></div></div>`;
@@ -416,6 +420,7 @@ function renderAnns() {
 function annEdit(a) {
 	const f = $('fAnn'); ANN_ED = a ? a.id : '';
 	f.title.value = a ? a.title : ''; f.body.value = a ? a.body : ''; f.level.value = a ? a.level : 'normal';
+	f.ed.value = a?.ed || ''; f.vmin.value = a?.vmin || ''; f.vmax.value = a?.vmax || '';
 	f.days.value = a && a.exp ? Math.max(1, Math.ceil((a.exp - Date.now()) / 86400e3)) : 0;
 	f.querySelector('[data-go]').textContent = a ? '保存修改' : '发布公告';
 	f.querySelector('[data-cancel]').classList.toggle('hidden', !a);
@@ -428,7 +433,7 @@ $('fAnn').onsubmit = async (e) => {
 	if (f.level.value === 'important' && !ANN_ED && !confirm('「重要」公告会推送到所有人的手机，确定发布？')) return;
 	b.disabled = true; er.textContent = '';
 	try {
-		await api('POST', 'ann' + (ANN_ED ? '/' + ANN_ED : ''), { title: f.title.value, body: f.body.value, level: f.level.value, days: +f.days.value || 0 });
+		await api('POST', 'ann' + (ANN_ED ? '/' + ANN_ED : ''), { title: f.title.value, body: f.body.value, level: f.level.value, days: +f.days.value || 0, ed: f.ed.value, vmin: f.vmin.value.trim(), vmax: f.vmax.value.trim() });
 		toast(ANN_ED ? '公告已修改' : '公告已发布'); annEdit(null);
 		ANNS = (await api('GET', 'ann')).list; renderAnns();
 	} catch (x) { er.textContent = x.message; }

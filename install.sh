@@ -734,6 +734,8 @@ say "启动服务"
 /usr/sbin/cmcp-route --init >/dev/null 2>&1 || true
 # 公告：先取一次（记下从现在开始，以前的公告不推送到手机；面板「通知」里马上就能看到）
 ( /usr/sbin/cmcp-ann now >/dev/null 2>&1 & ) 2>/dev/null || true
+# 5.3.1：申请过尝鲜的，装好马上重报一次（5.3.0 在没有 od 的路由器上报不上去，更新后不用再点「申请」）
+[ -f $D/beta_want ] && { ( /usr/sbin/cmcp-compat send now >/dev/null 2>&1 & ) 2>/dev/null || true; }
 sleep 3
 code=$(curl -s -m 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json || true)
 [ "$code" = 200 ] && ok "面板服务已运行" || warn "面板服务没响应（HTTP $code），看看 logread | grep uhttpd"

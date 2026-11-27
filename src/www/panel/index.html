@@ -1480,6 +1480,8 @@ html,body{overscroll-behavior-y:contain}
 
 <!-- 不走代理的设备（以前叫「拉黑名单」） -->
 <section class="page" id="p-black"><div id="blBody"></div></section>
+<section class="page" id="p-nksub"><div id="nsBody"></div></section>
+<section class="page" id="p-nkcfg"><div id="ncBody"></div></section>
 
 <!-- 终端 -->
 <section class="page" id="p-term">
@@ -1709,7 +1711,7 @@ const pxAct = () => !PXS ? { id: 'openclash', name: 'OpenClash', kind: 'clash', 
 const pxOC = () => pxAct()?.id === 'openclash';
 // 侧边栏：只显示用得上的页面（oc = 只有 OpenClash 有；clash = OpenClash / Nikki 都有）
 // 5.2 子账号：主账号没给的功能不显示（路由器那边也会挡）
-const PAGE_PERM = { wg: 'owner', move: 'owner', xpage: 'owner', split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
+const PAGE_PERM = { wg: 'owner', move: 'owner', xpage: 'owner', split: 'proxy', fwup: 'owner', svcsw: 'owner', oaf: 'parent', wisp: 'net', lanset: 'net', wan: 'net', store: 'sys', pf: 'net', lfull: 'net', wifi: 'net', apps: 'sys', ndiag: 'sys', term: 'owner', files: 'owner', cbk: 'owner', auto: 'sys', slog: 'sys', proc: 'sys', cfg: 'proxy', nkcfg: 'proxy', ow: 'proxy', set: 'proxy', chat: 'msg', myfb: 'msg' };
 let ME_ROLE = (() => { try { return JSON.parse(localStorage.getItem('rp_role') || 'null') || { role: 'owner', perms: [] }; } catch (e) { return { role: 'owner', perms: [] }; } })();
 function canPerm(g) { return ME_ROLE.role !== 'sub' || (!!g && g !== 'owner' && (ME_ROLE.perms || []).includes(g)); }
 function canPage(p) { if (ME_ROLE.role !== 'sub') return true; const g = /^k:/.test(p || '') ? 'net' : PAGE_PERM[p]; return !g || canPerm(g); }
@@ -1721,10 +1723,16 @@ function pxShow(it) {
 	if (it && it.p && REMOTE_OFF.has(it.p)) return false;
 	if (!it || !it.px || !PXS) return true;
 	const a = pxAct();
-	if (it.px === 'oc') return (PXS.list || []).some((x) => x.id === 'openclash');
+	// OpenClash 和 Nikki 各有一套订阅、配置文件页：两个都装了按正在用的那个显示（第五阶段 Nikki 页面）
+	const has = (id) => (PXS.list || []).some((x) => x.id === id), nk = has('nikki') && (a?.id === 'nikki' || !has('openclash'));
+	if (it.px === 'oc') return has('openclash') && !nk;
+	if (it.px === 'nk') return nk;
+	if (it.px === 'ocnk') return nk || has('openclash');
 	if (it.px === 'clash') return !!a && a.kind === 'clash';
 	return true;
 }
+// 正在用 Nikki（两个都装了按正在用的那个）：订阅、配置文件、规则页换成 Nikki 的
+const pxNk = () => !!PXS && pxShow({ px: 'nk' });
 // 「添加新手机」扫码打开：网址带 #login=密钥（# 后面的内容浏览器不会发给服务器），存好后马上从地址栏去掉
 // 托管版安装完终端里给的链接还带着配对码（#login=密钥&pair=配对码）：输登录码那一页会带着去官网绑定账号
 // 6.0：已经有这台手机自己的钥匙了就不再存登录密钥（App 每次都带着 #login 打开，不能每次都当成新手机）
@@ -1756,7 +1764,7 @@ class NeedPwError extends Error {}
 /* ---------- 和路由器通信 ---------- */
 // 只读的请求：卡住 10 秒就自动再试一次（网络偶尔丢一个请求很常见，没必要让页面干等 60 秒）
 // 会改动东西的请求不自动重试，免得执行两次；本身就要联网测很久的（IP 检查、解锁检测、诊断）给足时间
-const READS = new Set(['live', 'home_stats', 'overview', 'oc_state', 'jobs', 'wd', 'black_state', 'cloud_info', 'groups', 'providers', 'connections', 'oc_sections', 'files', 'file_read', 'dashboard_state', 'oc_schema', 'logs', 'rules', 'core_ps', 'fs_list', 'fs_read', 'node_check', 'slog', 'procs', 'luci_key',
+const READS = new Set(['live', 'nk_get', 'home_stats', 'overview', 'oc_state', 'jobs', 'wd', 'black_state', 'cloud_info', 'groups', 'providers', 'connections', 'oc_sections', 'files', 'file_read', 'dashboard_state', 'oc_schema', 'logs', 'rules', 'core_ps', 'fs_list', 'fs_read', 'node_check', 'slog', 'procs', 'luci_key',
 	'tools/call:system_info', 'tools/call:network_info', 'tools/call:firewall_overview', 'tools/call:list_services', 'tools/call:system_log']);
 async function rpc(method, params, timeoutMs) {
 	const key = method === 'tools/call' ? 'tools/call:' + (params && params.name) : method.replace(/^panel\//, '');
@@ -2183,7 +2191,7 @@ function watchJobs(onDone) {
 }
 
 /* ---------- 页面切换 ---------- */
-const TITLES = { wg: '加密通道', move: '换路由器', xpage: '远程页面', split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
+const TITLES = { nksub: 'Nikki 订阅', nkcfg: 'Nikki 配置文件', wg: '加密通道', move: '换路由器', xpage: '远程页面', split: '分流', fwup: '固件升级', svcsw: '常用服务', oaf: '应用过滤', wisp: '无线中继', lanset: '局域网设置', wan: '上网设置', store: '软件中心', pf: '端口转发', mon: '实时监控', ndiag: '网络诊断', lfull: '完整原版后台', me: '我的主页', main: '首页', home: '概览', proxy: '节点', subs: '配置订阅', cfg: '配置文件', ow: '覆写设置', rules: '规则', set: '插件设置', log: 'OpenClash 日志', dev: '设备', wifi: 'Wi-Fi', black: '不走代理', conn: '连接', traf: '流量统计', speed: '网速测试', cbk: '云端备份', wd: '断线记录', auto: '特色功能', term: '终端', files: '文件管理', more: '系统操作', slog: '系统日志', proc: '进程', apps: '应用管理', myfb: '我的反馈', notice: '通知', chat: '实时联系开发者' };
 /* 侧边栏目录：{p} 是面板自己的页面；[路径, 名称] 是在面板里打开的 Kwrt 原版页面；kids 是可展开的下一级 */
 // 首页：不归任何分类，放在最上面
 const NAV_TOP = { p: 'main', i: '⌂', t: '首页' };
@@ -2204,10 +2212,12 @@ const NAV = [
 		{ p: 'proxy', i: '⇢', t: '节点', px: 'clash' },
 		{ p: 'split', i: '⑂', t: '分流', px: 'clash', kw: '分流 按设备 按软件 按网站 直连 代理 策略组 netflix youtube chatgpt 走代理 识别软件' },
 		{ p: 'subs', i: '⇣', t: '订阅', px: 'oc' },
+		{ p: 'nksub', i: '⇣', t: '订阅', px: 'nk', kw: 'nikki 订阅 机场' },
 		{ p: 'cfg', i: '▤', t: '配置文件', px: 'oc' },
+		{ p: 'nkcfg', i: '▤', t: '配置文件', px: 'nk', kw: 'nikki 配置文件 yaml' },
 		{ p: 'ow', i: '✎', t: '覆写设置', px: 'oc' },
-		{ p: 'rules', i: '☰', t: '规则', px: 'oc' },
-		{ p: 'black', i: '⊘', t: '不走代理', px: 'oc' },
+		{ p: 'rules', i: '☰', t: '规则', px: 'ocnk' },
+		{ p: 'black', i: '⊘', t: '不走代理', px: 'ocnk' },
 		{ p: 'set', i: '⚙', t: '插件设置', px: 'oc' },
 		{ p: 'log', i: '≡', t: 'OpenClash 日志', px: 'oc' },
 		{ t: 'OpenClash 原版', i: 'C', kids: [['admin/services/openclash/client', '运行状态'], ['admin/services/openclash/settings', '插件设置'], ['admin/services/openclash/config-overwrite', '覆写设置'], ['admin/services/openclash/config-subscribe', '配置订阅'], ['admin/services/openclash/config', '配置管理'], ['admin/services/openclash/log', '运行日志']] },
@@ -2369,6 +2379,7 @@ try { navOpen = JSON.parse(store.get('rp_nav') || 'null'); } catch (e) {}
 if (!navOpen || typeof navOpen !== 'object') navOpen = { '状态': 1, '代理': 1, '网络': 1, '工具': 1 };
 const NAV_IC = {"chat": ["<path d=\"M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5z\"/><path d=\"M9 9.5h6M9 12.5h3.5\"/>", "#34c759"], "notice": ["<path d=\"M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z\"/><path d=\"M10 21a2.2 2.2 0 0 0 4 0\"/>", "#ff9500"], "myfb": ["<path d=\"M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z\"/><path d=\"M9 9h6M9 12h4\"/>", "#34c759"], "main": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#0a84ff"], "cbk": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 16v-5M9.8 13.2 12 11l2.2 2.2\"/>", "#30b0c7"], "speed": ["<path d=\"M4.5 17a8.5 8.5 0 1 1 15 0\"/><path d=\"M12 13l4-4\"/><circle cx=\"12\" cy=\"13.5\" r=\"1\"/>", "#ff9500"], "home": ["<path d=\"M12 14l3.5-3.5\"/><path d=\"M4.9 18a8.5 8.5 0 1 1 14.2 0\"/>", "#0a84ff"], "conn": ["<path d=\"M7 7h12l-3-3M17 17H5l3 3\"/>", "#30b0c7"], "traf": ["<path d=\"M5 20v-6M10 20V9M15 20v-9M20 20V5\"/>", "#af52de"], "wd": ["<path d=\"M3 12h4l2.5-6 5 12 2.5-6h4\"/>", "#ff2d55"], "auto": ["<path d=\"M19.5 12a7.5 7.5 0 0 1-12.8 5.3\"/><path d=\"M4.5 12a7.5 7.5 0 0 1 12.8-5.3\"/><path d=\"M17.3 3v3.7h-3.7M6.7 21v-3.7h3.7\"/>", "#5e5ce6"], "slog": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M10 12h5M10 16h5\"/>", "#8e8e93"], "proc": ["<rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"2\"/><path d=\"M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4\"/>", "#5e5ce6"], "状态/实时监控": ["<path d=\"M3 20h18\"/><path d=\"M6.5 16v-5M11.5 16V6M16.5 16v-8\"/>", "#34c759"], "状态/更多状态": ["<path d=\"M5 12h.01M12 12h.01M19 12h.01\"/>", "#8e8e93"], "proxy": ["<path d=\"M4 11l16-7-7 16-2-7z\"/>", "#0a84ff"], "subs": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/><path d=\"M12 10.5v5M10 13.5l2 2 2-2\"/>", "#30b0c7"], "cfg": ["<path d=\"M7 3h7l4 4v14H7z\"/><path d=\"M14 3v4h4\"/>", "#ff9500"], "ow": ["<path d=\"M4 20h4L19 9l-4-4L4 16z\"/>", "#af52de"], "rules": ["<path d=\"M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01\"/>", "#5e5ce6"], "black": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M6 6l12 12\"/>", "#ff3b30"], "set": ["<path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/>", "#8e8e93"], "log": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5h9M7.5 13h9M7.5 16.5h5\"/>", "#48484a"], "代理/OpenClash 原版": ["<path d=\"M12 3l9 5-9 5-9-5z\"/><path d=\"M3 13l9 5 9-5\"/>", "#5e5ce6"], "代理/PassWall": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/>", "#34c759"], "dev": ["<rect x=\"7\" y=\"3\" width=\"10\" height=\"18\" rx=\"2.5\"/><path d=\"M11 18h2\"/>", "#0a84ff"], "admin/network/network": ["<rect x=\"9\" y=\"3\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"3\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><rect x=\"15\" y=\"16\" width=\"6\" height=\"5\" rx=\"1\"/><path d=\"M12 8v4M6 16v-2.5h12V16\"/>", "#30b0c7"], "admin/network/interfaceconfig": ["<path d=\"M4 7h16v10h-4v2.5H8V17H4z\"/><path d=\"M8.5 11v2M12 11v2M15.5 11v2\"/>", "#5e5ce6"], "admin/network/wireless": ["<path d=\"M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01\"/>", "#0a84ff"], "admin/network/dhcp": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"7\" rx=\"2\"/><rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M7.5 7.5h.01M7.5 16.5h.01\"/>", "#ff9500"], "admin/network/dns": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z\"/>", "#00c7be"], "admin/network/routes": ["<circle cx=\"6\" cy=\"18\" r=\"2\"/><circle cx=\"18\" cy=\"6\" r=\"2\"/><path d=\"M8 18h5a3 3 0 0 0 0-6h-2a3 3 0 0 1 0-6h5\"/>", "#af52de"], "admin/network/diagnostics": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "网络/防火墙": ["<rect x=\"3.5\" y=\"5\" width=\"17\" height=\"14\" rx=\"2\"/><path d=\"M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19\"/>", "#ff3b30"], "服务/AdGuard Home": ["<path d=\"M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z\"/><path d=\"M9 12l2 2 4-4\"/>", "#34c759"], "服务/OAF 原版": ["<path d=\"M4 5h16l-6 7.5V19l-4-2v-4.5z\"/>", "#ff9500"], "服务/Docker": ["<path d=\"M12 3l8 4.5v9L12 21l-8-4.5v-9z\"/><path d=\"M4 7.5l8 4.5 8-4.5M12 12v9\"/>", "#0a84ff"], "admin/services/upnp": ["<path d=\"M17 3l3 3-3 3M20 6H8a4 4 0 0 0-4 4v1M7 21l-3-3 3-3M4 18h12a4 4 0 0 0 4-4v-1\"/>", "#30b0c7"], "admin/store": ["<path d=\"M5 8h14l-1 12H6z\"/><path d=\"M9 8a3 3 0 0 1 6 0\"/>", "#ff2d55"], "admin/services/linkease": ["<path d=\"M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.4 9.6 4.5 4.5 0 0 0 7 18.5z\"/>", "#5e5ce6"], "admin/services/fastnet": ["<path d=\"M13 3 5 13.5h6L10.5 21 19 10.5h-6z\"/>", "#f5a623"], "more": ["<rect x=\"4\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"4\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"4\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/><rect x=\"13.5\" y=\"13.5\" width=\"6.5\" height=\"6.5\" rx=\"1.6\"/>", "#8e8e93"], "admin/system/system": ["<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1\"/>", "#8e8e93"], "系统/管理权": ["<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M16 7l3 3\"/>", "#ff9500"], "admin/package-manager": ["<rect x=\"3.5\" y=\"4\" width=\"17\" height=\"5\" rx=\"1.5\"/><path d=\"M5 9v10h14V9M10 13h4\"/>", "#a2845e"], "admin/system/startup": ["<path d=\"M12 3v8\"/><path d=\"M6.4 7a8 8 0 1 0 11.2 0\"/>", "#34c759"], "admin/system/crontab": ["<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><path d=\"M12 7.5V12l3 2\"/>", "#5e5ce6"], "系统/存储": ["<rect x=\"3.5\" y=\"13\" width=\"17\" height=\"7\" rx=\"2\"/><path d=\"M5 13l2.5-8h9L19 13M7.5 16.5h.01\"/>", "#30b0c7"], "系统/硬件": ["<rect x=\"5\" y=\"5\" width=\"14\" height=\"14\" rx=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"2.6\"/>", "#af52de"], "系统/高级": ["<path d=\"M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z\"/>", "#8e8e93"], "admin/system/flash": ["<path d=\"M12 15V4M7.5 8.5 12 4l4.5 4.5\"/><path d=\"M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3\"/>", "#0a84ff"], "term": ["<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"3\"/><path d=\"M7.5 9.5l3 2.5-3 2.5M12.5 15h4\"/>", "#48484a"], "files": ["<path d=\"M3.5 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z\"/>", "#0a84ff"], "admin/quickstart": ["<path d=\"M4 11l8-7 8 7v9H4z\"/><path d=\"M10 20v-5h4v5\"/>", "#ff9500"], "ndiag": ["<circle cx=\"11\" cy=\"11\" r=\"6.5\"/><path d=\"M16 16l4.5 4.5\"/>", "#34c759"], "mon": ["<path d=\"M3 13h3.5l2.5-6 4 11 3-8 2 3H21\"/>", "#ff9500"], "pf": ["<path d=\"M4 12h12\"/><path d=\"M12 7l5 5-5 5\"/><path d=\"M20 5v14\"/>", "#5856d6"], "store": ["<path d=\"M12 4v11\"/><path d=\"M7 10l5 5 5-5\"/><path d=\"M5 20h14\"/>", "#007aff"]};
 // 6.0 第 14 项：Wi-Fi 页的图标（侧边栏、快捷操作里用）
+NAV_IC.nksub = NAV_IC.subs; NAV_IC.nkcfg = NAV_IC.cfg;
 NAV_IC.wifi = ['<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', '#0a84ff'];
 // 6.0 第 24、25、22 项：上网设置、局域网设置、无线中继
 NAV_IC.oaf = ['<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>', '#ff9500'];
@@ -3761,7 +3772,7 @@ async function subxUpdate(btn) {
 	try { L = await P('subx_list'); } catch (e) { return handleErr(e); }
 	const a = pxAct();
 	if (!L.name) return toast(a ? a.name + ' 的订阅在它的原版页面里更新' : '这台路由器没装代理插件');
-	if (!L.subs.length) return toast(L.name + ' 还没有订阅：先在它的原版页面里添加', true);
+	if (!L.subs.length) return toast(L.name + (L.px === 'nikki' ? ' 还没有订阅：在「代理 → 订阅」里添加' : ' 还没有订阅：先在它的原版页面里添加'), true);
 	if (L.busy) return toast('订阅正在更新，稍等');
 	const tail = L.px === 'nikki' ? '更新完 Nikki 会重启，断网十几秒。' : '节点有变化时 ' + L.name + ' 会自动重启，断网十几秒。';
 	if (!(await confirmBox('更新全部订阅', `${L.subs.length} 个订阅：${L.subs.map((s) => s.name).join('、')}\n${tail}`, '开始更新'))) return;
@@ -3967,28 +3978,37 @@ async function editFile(kind, name, active, opts = {}) {
 	let r;
 	try { toast('读取中…'); r = await P('file_read', { kind, name }); toastHide(); } catch (e) { return handleErr(e); }
 	if (r.binary) return toast('这是二进制文件，不能在手机上编辑', true);
-	const isCfg = kind === 'config';
-	await modal(`<div class="sheethead"><h3 class="ell">${esc(opts.title || name)}</h3><button class="btn sm" data-v="false">取消</button></div>
+	// Nikki 的文件（第五阶段）：nk_profile 能改；订阅下载的和正在跑的只能看（r.ro），订阅的可以另存成配置文件再改
+	const nk = /^nk_/.test(kind), pn = nk ? 'Nikki' : 'OpenClash', isCfg = kind === 'config' || kind === 'nk_profile', ro = !!r.ro, rst = !nk || active;
+	await modal(`<div class="sheethead"><h3 class="ell">${esc(opts.title || name)}</h3><button class="btn sm" data-v="false">${ro ? '关闭' : '取消'}</button></div>
 		${opts.note ? `<div class="notice" style="margin-bottom:8px">${esc(opts.note)}</div>` : ''}
-		<textarea class="input" data-t spellcheck="false" autocapitalize="off" style="min-height:52vh">${esc(r.content)}</textarea>
-		<div class="muted" style="margin-top:6px">${B(r.size)} · ${(r.content.match(/\n/g) || []).length + 1} 行${isCfg ? ' · 保存前会用内核检查格式' : ''}</div>
-		<div class="btngrid" style="margin:12px 0 0"><button class="btn blue" data-s>保存</button><button class="btn primary" data-sr>保存并重启</button></div>`,
+		<textarea class="input" data-t spellcheck="false" autocapitalize="off" style="min-height:52vh"${ro ? ' readonly' : ''}>${esc(r.content)}</textarea>
+		<div class="muted" style="margin-top:6px">${B(r.size)} · ${(r.content.match(/\n/g) || []).length + 1} 行${ro ? ' · 只能看' : isCfg ? ' · 保存前会用内核检查格式' : ''}</div>
+		${ro ? (kind === 'nk_sub' ? '<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn blue" data-as>另存成配置文件</button></div>' : '')
+			: `<div class="btngrid" style="margin:12px 0 0${rst ? '' : ';grid-template-columns:1fr'}"><button class="btn ${rst ? 'blue' : 'primary'}" data-s>保存</button>${rst ? '<button class="btn primary" data-sr>保存并重启</button>' : ''}</div>`}`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const ta = m.querySelector('[data-t]');
 		const save = (restart) => async () => {
-			if (restart && !(await confirmBox('保存并重启', '保存后重启 OpenClash，断网 10–30 秒。', '保存并重启'))) return;
+			if (restart && !(await confirmBox('保存并重启', `保存后重启 ${pn}，断网 10–30 秒。`, '保存并重启'))) return;
 			const res = await fileSave({ kind, name, content: ta.value, restart, base: r.sum });
-			close(true); toast(restart ? '已保存，OpenClash 正在重启' : '已保存' + (res && res.backup ? '（旧版本已备份）' : ''));
-			if (restart) watchJobs();
+			close(true); toast(restart ? `已保存，${pn} 正在重启` : '已保存' + (res && res.backup ? '（旧版本已备份）' : ''));
+			if (restart && !nk) watchJobs();
 			if (opts.after) opts.after();
 		};
-		m.querySelector('[data-s]').onclick = (e) => busy(e.currentTarget, save(false));
-		m.querySelector('[data-sr]').onclick = (e) => busy(e.currentTarget, save(true));
+		const sv = m.querySelector('[data-s]'), sr = m.querySelector('[data-sr]'), as = m.querySelector('[data-as]');
+		if (sv) sv.onclick = (e) => busy(e.currentTarget, save(false));
+		if (sr) sr.onclick = (e) => busy(e.currentTarget, save(true));
+		if (as) as.onclick = async () => {
+			let n = await promptBox('另存成配置文件', '文件名，例如 my.yaml');
+			if (!n) return;
+			n = n.trim(); if (!/\.ya?ml$/.test(n)) n += '.yaml';
+			await busy(as, async () => { await fileSave({ kind: 'nk_profile', name: n, content: ta.value }); close(true); toast('已存成 ' + n); if (opts.after) opts.after(); });
+		};
 	});
 }
-async function newFile(kind) {
-	const isCfg = kind === 'config';
+async function newFile(kind, after) {
+	const isCfg = kind === 'config' || kind === 'nk_profile';
 	await modal(`<div class="sheethead"><h3>新建 / 上传文件</h3><button class="btn sm" data-v="false">取消</button></div>
 		<label class="lglabel" style="margin-top:0">文件名</label><input class="input" data-n placeholder="${isCfg ? '例如 my.yaml' : '例如 rules.yaml'}" autocapitalize="off" spellcheck="false">
 		<label class="lglabel">内容</label><textarea class="input" data-t spellcheck="false" autocapitalize="off" placeholder="粘贴内容，或点下面「从手机选文件」"></textarea>
@@ -4007,7 +4027,7 @@ async function newFile(kind) {
 			if (!name) throw new Error('请填写文件名');
 			if (isCfg && !/\.ya?ml$/.test(name)) name += '.yaml';
 			await fileSave({ kind, name, content: t.value });
-			close(true); toast('已保存'); S.state = null; refresh(true);
+			close(true); toast('已保存'); S.state = null; if (after) after(); else refresh(true);
 		});
 	});
 }
@@ -4330,6 +4350,7 @@ async function loadRules(quiet) {
 		pg.querySelector('[data-nx]').onclick = () => { ruOff += 100; loadRules(); scrollTo({ top: 0 }); };
 		return;
 	}
+	if (pxNk()) return nkRulesBox(box);
 	const st = await state(true);
 	setStatus(true, '在线');
 	const on = st.cfg.enable_custom_clash_rules === '1';
@@ -5159,6 +5180,168 @@ $$('#ndTool .chip').forEach((b) => (b.onclick = () => {
 	if (rt) ndRoute();
 }));
 $('ndRecent').addEventListener('click', (e) => { const c = e.target.closest('[data-a]'); if (!c) return; $('ndAddr').value = c.dataset.a; ndRun(); });
+/* ---------- 第五阶段：Nikki 的订阅、配置文件（11/27 全面检查第 16 条） ----------
+ * 规则页、不走代理页跟 OpenClash 共用（37-rules.js 的「自定义规则」用 nkRulesBox，不走代理靠路由器那边同步到 Nikki 的访问控制）。
+ * 换订阅 / 换配置文件要重启 Nikki 才用上：先问（用户 11/26 定），Nikki 没在跑就只换不重启。 */
+const NK = { d: null };
+const NK_UA = ['clash.meta', 'mihomo', 'clash'];
+async function nkGet() { NK.d = await P('nk_get'); setStatus(true, '在线'); return NK.d; }
+const nkNone = (box) => { box.innerHTML = '<div class="card empty">这台路由器没装 Nikki</div>'; };
+const nkStat = (s) => s.file ? `${B(s.file.size)} · ${ts(s.file.mtime)} 更新${s.ok === false ? ' · 上次更新失败' : ''}` : s.ok === false ? '下载失败' : '还没下载过';
+async function loadNkSub() {
+	const box = $('nsBody'), d = await nkGet();
+	if (!d.on) return nkNone(box);
+	const prof = d.prof || {}, onFile = prof.kind === 'file' ? d.files.find((f) => f.name === prof.id) : null;
+	box.innerHTML = `<div class="hero"><div class="herohead"><h1>Nikki 订阅</h1><button class="btn primary" data-add>＋ 添加</button></div>
+		${onFile ? `<p class="muted" style="margin-bottom:0">正在用配置文件「${esc(onFile.name)}」</p>` : ''}
+		<div class="btngrid" style="margin-bottom:0;grid-template-columns:1fr"><button class="btn blue" data-all ${d.subs.length ? '' : 'disabled'}>更新全部订阅</button></div></div>
+		<div class="sectitle"><b>订阅列表</b><span class="pill">${d.subs.length} 个</span></div>
+		<div class="grid">${d.subs.length ? d.subs.map((s, i) => `<section class="card subcard" data-s="${i}">
+			<div class="sechead"><div style="min-width:0"><b style="font-size:16px">${esc(s.name)}</b>${s.active ? ' <span class="pill blue">正在使用</span>' : ''}
+				<div class="sub ell" style="font-size:12.5px">${esc(s.host || '没有地址')}</div></div></div>
+			<div class="muted" style="margin-top:8px">${nkStat(s)}</div>
+			<div data-flow></div>
+			<div class="rowbtns"><button class="btn sm blue" data-up>更新</button><button class="btn sm" data-more>更多</button></div>
+		</section>`).join('') : '<div class="card empty">还没有订阅，点右上角「＋ 添加」</div>'}</div>`;
+	box.onclick = async (e) => {
+		const t = e.target;
+		if (t.closest('[data-add]')) return nkSubEdit(null);
+		if (t.closest('[data-all]')) return subxUpdate(t.closest('[data-all]'));
+		const card = t.closest('[data-s]'); if (!card) return;
+		const s = NK.d.subs[+card.dataset.s]; if (!s) return;
+		if (t.closest('[data-up]')) return nkSubUpdate(s, t.closest('[data-up]'));
+		if (!t.closest('[data-more]')) return;
+		const act = await moreSheet({ t: s.name, sub: s.active ? '正在使用' : nkStat(s) }, [
+			{ items: [{ v: 'flow', ic: '<path d="M5 20v-6M10 20V9M15 20v-9M20 20V5"/>', t: '查流量' },
+				s.file && { v: 'view', ic: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/>', t: '看配置内容' },
+				{ v: 'ed', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '编辑' }] },
+			{ items: [!s.active && { v: 'use', ic: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', t: '使用这个订阅' }] },
+			{ items: [!s.active && { v: 'del', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '删除', danger: true }] }
+		]);
+		if (act === 'flow') return busy(null, async () => {
+			const r = await P('subx_info', { id: s.id }, 30000);
+			card.querySelector('[data-flow]').innerHTML = r.ok ? subInfoHtml(r) : `<div class="muted">${esc(r.msg || '这个机场没有提供流量信息')}</div>`;
+		});
+		if (act === 'view') return editFile('nk_sub', s.id + '.yaml', false, { title: s.name, after: () => refresh(true) });
+		if (act === 'ed') return nkSubEdit(s);
+		if (act === 'use') return nkUse('sub', s.id, s.name, !s.file);
+		if (act === 'del') {
+			if (!(await confirmBox('删除订阅「' + s.name + '」', '下载的配置文件一起删，旧文件先备份。', '删除', true))) return;
+			return busy(null, async () => { await P('nk_sub_del', { id: s.id }); toast('已删除'); refresh(true); });
+		}
+	};
+}
+async function nkSubEdit(s) {
+	const ua = s && s.ua && !NK_UA.includes(s.ua) ? [s.ua, ...NK_UA] : NK_UA;
+	const v = await modal(`<div class="sheethead"><h3>${s ? '编辑订阅' : '添加订阅'}</h3><button class="btn sm" data-v="false">取消</button></div>
+		<label class="lglabel" style="margin-top:0">名字</label><input class="input" data-n maxlength="40" value="${esc(s ? s.name : '')}" placeholder="例如 我的机场">
+		<label class="lglabel">订阅地址</label><input class="input" data-u inputmode="url" autocapitalize="off" spellcheck="false" placeholder="${s ? '不改就不填' : 'https://'}">
+		<label class="lglabel">User-Agent</label><select class="input" data-a>${ua.map((x) => `<option${(s ? s.ua || 'clash.meta' : 'clash.meta') === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+		<div class="btngrid" style="margin:14px 0 0;grid-template-columns:1fr"><button class="btn primary" data-ok>${s ? '保存' : '添加并下载'}</button></div>`,
+	(m, close) => {
+		m.dataset.lock = '1';
+		const ok = m.querySelector('[data-ok]');
+		ok.onclick = () => busy(ok, async () => {
+			const name = m.querySelector('[data-n]').value.trim(), url = m.querySelector('[data-u]').value.trim();
+			if (!name) throw new Error('要填名字');
+			if (!s && !url) throw new Error('要填订阅地址');
+			const r = await P('nk_sub_save', { id: s ? s.id : undefined, name, url: url || undefined, ua: m.querySelector('[data-a]').value });
+			close(r.id);
+		});
+	});
+	if (!v) return;
+	if (s) { toast('已保存'); return refresh(true); }
+	try { await P('nk_sub_update', { id: v }); toast('已添加，正在下载'); nkWait('已下载'); } catch (e) { toast('已添加'); handleErr(e); }
+	refresh(true);
+}
+// 等 Nikki 的更新脚本跑完（跟「更新全部订阅」用同一个标记）
+function nkWait(done, flow) {
+	let n = 0;
+	const tick = async () => {
+		let st = null; try { st = await P('subx_state'); } catch (e) {}
+		if (st && !st.busy) { if (flow) subFlowDone(flow, done); else toast(done); return refresh(true); }
+		if (++n < 100) setTimeout(tick, 3000);
+	};
+	setTimeout(tick, 3000);
+}
+async function nkSubUpdate(s, btn) {
+	if (s.active && NK.d.running && !(await confirmBox('更新订阅「' + s.name + '」', '这是正在用的订阅，更新完 Nikki 会重启，断网 10–30 秒。', '更新'))) return;
+	const flow = subFlowStart([s], (x) => P('subx_info', { id: x.id }, 30000));
+	return busy(btn, async () => { await P('nk_sub_update', { id: s.id }); toast('「' + s.name + '」开始在后台更新'); nkWait('「' + s.name + '」已更新', flow); }, false);
+}
+async function nkUse(kind, id, name, dl) {
+	const run = NK.d.running;
+	if (!(await confirmBox('换成「' + name + '」', run ? `${dl ? '先下载 再' : ''}重启 Nikki 才用上，断网 10–30 秒。` : 'Nikki 没在运行，下次启动时用它。', run ? '换并重启' : '换'))) return;
+	return busy(null, async () => {
+		const r = await P('nk_use', { kind, id, restart: run });
+		toast(r.restarting ? '已换成「' + name + '」，Nikki 正在重启' : '已换成「' + name + '」');
+		refresh(true);
+	});
+}
+async function loadNkCfg() {
+	const box = $('ncBody'), d = await nkGet();
+	if (!d.on) return nkNone(box);
+	const prof = d.prof || {}, onSub = prof.kind === 'sub' ? d.subs.find((s) => s.id === prof.id) : null;
+	box.innerHTML = `<div class="hero"><div class="herohead"><h1>Nikki 配置文件</h1><button class="btn primary" data-new>＋ 新建</button></div>
+		${onSub ? `<p class="muted" style="margin-bottom:0">正在用订阅「${esc(onSub.name)}」</p>` : ''}</div>
+		<div class="sectitle"><b>配置文件</b><span class="pill">${d.files.length} 个</span></div>
+		<section class="card list">${d.files.length ? d.files.map((f, i) => `<div class="file" data-f="${i}"><div style="min-width:0"><b class="ell">${esc(f.name)}${f.active ? ' <span class="pill blue">正在使用</span>' : ''}</b><span class="muted">${B(f.size)} · ${ts(f.mtime)}</span></div><button class="btn sm" data-more>更多</button></div>`).join('') : '<div class="empty">还没有自己的配置文件</div>'}</section>
+		<div class="sectitle"><b>正在运行</b></div>
+		<section class="card list"><button class="file" data-run><div><b>config.yaml</b></div><span class="muted">看 ›</span></button></section>`;
+	box.onclick = async (e) => {
+		const t = e.target;
+		if (t.closest('[data-new]')) return newFile('nk_profile', () => refresh(true));
+		if (t.closest('[data-run]')) return editFile('nk_run', 'config.yaml', false, { title: '正在运行的配置' });
+		const row = t.closest('[data-f]'); if (!row) return;
+		const f = NK.d.files[+row.dataset.f]; if (!f) return;
+		const act = await moreSheet({ t: f.name, sub: f.active ? '正在使用' : B(f.size) }, [
+			{ items: [{ v: 'ed', ic: '<path d="M4 20h4L19 9l-4-4L4 16z"/>', t: '编辑' }] },
+			{ items: [!f.active && { v: 'use', ic: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', t: '使用这个配置' }] },
+			{ items: [!f.active && { v: 'del', ic: '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>', t: '删除', danger: true }] }
+		]);
+		if (act === 'ed') return editFile('nk_profile', f.name, f.active && NK.d.running, { after: () => refresh(true) });
+		if (act === 'use') return nkUse('file', f.name, f.name, false);
+		if (act === 'del') {
+			if (!(await confirmBox('删除「' + f.name + '」', '旧文件先备份到路由器。', '删除', true))) return;
+			return busy(null, async () => { await P('file_delete', { kind: 'nk_profile', name: f.name }); toast('已删除'); refresh(true); });
+		}
+	};
+}
+// 规则页「自定义规则」：Nikki 里你自己写的（uci rule），排在订阅规则前面；分流加的在「分流」页管
+async function nkRulesBox(box) {
+	const d = await nkGet();
+	if (!d.on) return nkNone(box);
+	const off = d.rules.filter((r) => !r.en).length;
+	box.innerHTML = `<div class="sectitle"><b>自定义规则</b></div>
+		<section class="card list"><button class="file" data-nke><div><b>我的规则</b><span class="muted">${d.rules.length} 条${off ? ' · 停用 ' + off + ' 条' : ''}${d.split ? ' · 分流另有 ' + d.split + ' 条' : ''}</span></div><span class="muted">编辑 ›</span></button></section>
+		<div class="notice" style="margin-top:10px">每行一条 排在订阅规则前面 例如<br><span class="mono">DOMAIN-SUFFIX,douyin.com,DIRECT</span><br>行首加 # 是停用。去向要跟「节点」页里的名字一样</div>`;
+	box.querySelector('[data-nke]').onclick = () => nkRulesEdit();
+}
+const nkRuleLine = (r) => (r.en ? '' : '# ') + [r.type, r.matcher, r.node].join(',') + (r.nr ? ',no-resolve' : '');
+async function nkRulesEdit() {
+	const d = NK.d, run = d.running;
+	await modal(`<div class="sheethead"><h3>我的规则</h3><button class="btn sm" data-v="false">取消</button></div>
+		<textarea class="input mono" data-t spellcheck="false" autocapitalize="off" style="min-height:52vh" placeholder="DOMAIN-SUFFIX,douyin.com,DIRECT">${esc(d.rules.map(nkRuleLine).join('\n'))}</textarea>
+		<div class="btngrid" style="margin:12px 0 0${run ? '' : ';grid-template-columns:1fr'}"><button class="btn ${run ? 'blue' : 'primary'}" data-s>保存</button>${run ? '<button class="btn primary" data-sr>保存并重启</button>' : ''}</div>`,
+	(m, close) => {
+		m.dataset.lock = '1';
+		const ta = m.querySelector('[data-t]');
+		const save = (restart) => async () => {
+			if (restart && !(await confirmBox('保存并重启', '保存后重启 Nikki，断网 10–30 秒。', '保存并重启'))) return;
+			let r;
+			try { r = await P('nk_rules_set', { text: ta.value, restart }); }
+			catch (e) {
+				if (!/没有这个策略组或节点/.test(e.message) || !(await confirmBox('去向找不到', e.message + '\n\n仍然要保存吗？', '照样保存', true))) throw e;
+				r = await P('nk_rules_set', { text: ta.value, restart, force: true });
+			}
+			close(true);
+			toast(r.restarting ? `已保存 ${r.n} 条，Nikki 正在重启` : `已保存 ${r.n} 条${run ? '，重启 Nikki 后生效' : ''}`);
+			refresh(true);
+		};
+		m.querySelector('[data-s]').onclick = (e) => busy(e.currentTarget, save(false));
+		const sr = m.querySelector('[data-sr]'); if (sr) sr.onclick = (e) => busy(e.currentTarget, save(true));
+	});
+}
 /* ---------- 6.0 第 23 项：应用过滤（OAF） ----------
  * OAF 7：总开关、规则（名字、对谁、时间、拦哪些 App）、每台设备今天用了哪些 App（只有主账号能看）。
  * 老版 OAF：去原版页面。没装：去软件中心装；软件源里没有就说这个固件不支持。 */
@@ -10413,7 +10596,7 @@ function mTick() {
 }
 $$('[data-mgo]').forEach((c) => { c.onclick = () => go(c.dataset.mgo); c.onkeydown = (e) => { if (e.key === 'Enter') go(c.dataset.mgo); }; });
 
-const LOAD = { wg: loadWg, move: loadMove, xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); setStatus(true, '在线'); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
+const LOAD = { nksub: loadNkSub, nkcfg: loadNkCfg, wg: loadWg, move: loadMove, xpage: loadXpage, split: loadSplit, fwup: loadFwup, svcsw: loadSvcsw, oaf: loadOaf, wisp: loadWisp, lanset: loadLanset, wan: loadWan, store: loadStore, pf: loadPf, mon: loadMon, ndiag: loadNdiag, main: loadMain, traf: loadTraf, speed: loadSpeed, cbk: loadBk, home: loadHome, proxy: loadProxy, subs: loadSubs, cfg: loadCfg, ow: loadOw, rules: loadRules, set: loadSet, log: loadLog, dev: loadDev, wifi: loadWifi, black: loadBlack, conn: loadConn, wd: loadWd, auto: () => { renderAuto(); AU.at = 0; loadSched(); return loadAuto(); }, term: async () => initTerm(), files: loadFiles, more: async () => { hubBtn(); moreBtns(); svcRender(); svcLoad(false); try { cinfo = await P('cloud_info'); store.set('rp_cinfo', JSON.stringify(cinfo)); setStatus(true, '在线'); } catch (e) {} hubBtn(); moreBtns(); }, slog: loadSlog, proc: loadProc, apps: loadApps, luci: loadLuci, lfull: loadLfull, myfb: loadMyFb, me: loadMe, notice: loadNotice, chat: loadChat };
 
 /* ---------- 登录 ---------- */
 function parseToken(s) {

@@ -451,7 +451,9 @@ const BL_MARK = '# [cmcp-blacklist]';
 function bl_load() { let j = null; try { j = json(readfile(BL_FILE) ?? '[]'); } catch (e) {} return type(j) == 'array' ? j : []; }
 function bl_save(l) { writefile(BL_FILE + '.tmp', sprintf('%J', l)); rename(BL_FILE + '.tmp', BL_FILE); }
 // 规则集的内容在共用库里生成（cmcp-route 也要用）：不走代理的设备、路由器自己的隧道、面板走直连时的面板域名
-function bl_write_ruleset(l) { CL.bl_ruleset_write(); }
+// BL_HOOK：名单变了以后还要做的（48-nikki.uc：同步到 Nikki 的访问控制）；写在后面文件里的函数这里调不到，用钩子
+const BL_HOOK = [];
+function bl_write_ruleset(l) { CL.bl_ruleset_write(); for (let f in BL_HOOK) try { f(true); } catch (e) {} }
 function bl_custom_ready() { return index(readfile(BL_CUSTOM) ?? '', BL_MARK) >= 0; }
 function bl_live() { try { let r = api('GET', '/providers/rules', null, 4); return !!(r?.providers?.[BL_PROVIDER]); } catch (e) { return false; } }
 function bl_mac(m) { m = lc(trim('' + (m ?? ''))); if (!match(m, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('MAC 地址不对：' + m); return m; }

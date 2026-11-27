@@ -736,6 +736,8 @@ function sp_mac_watch(o) {
 P.split_check = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) return { ok: true };
+	// Nikki：「不走代理」名单跟它的访问控制对不上（还原了备份、原版页面里删了）就补上（48-nikki.uc 的 nk_black_sync，对得上什么也不做）
+	if (kind == 'nikki') for (let f in BL_HOOK) try { f(false); } catch (e) {}
 	// 每分钟看一次：自定义规则被原版后台或别的东西整份改掉了，「不走代理」「分流」那几段补回去；要重启 OpenClash 才生效，标「还没生效」并推送（不自动重启）
 	if (kind == 'openclash') {
 		let fixed = [];

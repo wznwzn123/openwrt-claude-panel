@@ -96,7 +96,7 @@ App 只是面板的外壳，面板的新功能更新路由器上的安装包就�
 
 - OpenWrt 22.03 或更新（需要 `ucode`；Kwrt、ImmortalWrt 等衍生版本同样可用）
 - 约 2 MB 闪存空间；`cloudflared` 本身约 30 MB，空间不够请先扩容 overlay
-- 代理插件：可选。OpenClash 功能最全（节点、订阅、配置文件、覆写、规则、测速分流）；Nikki 能用节点切换、测速、连接、代理模式；PassWall、PassWall2、HomeProxy、SSR Plus+ 能在面板里开关、换节点、测延迟，其他设置点「插件原版页面」
+- 代理插件：可选。OpenClash 功能最全（节点、订阅、配置文件、覆写、规则、测速分流）；Nikki 能用节点切换、测速、连接、代理模式、订阅、配置文件、规则、不走代理、分流；PassWall、PassWall2、HomeProxy、SSR Plus+ 能在面板里开关、换节点、测延迟，其他设置点「插件原版页面」
 - 装了好几个代理插件：概览里点「代理插件 · 切换」换着用（一次只开一个）
 - 「设备暂停上网」有 `iptables` 就用它（fw3，或装了 `iptables-nft` 的 fw4）；6.0 起只有 nftables 的固件用 `nft`（开始、结束暂停最多晚半分钟）
 

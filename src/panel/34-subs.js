@@ -32,7 +32,7 @@ async function subxUpdate(btn) {
 	try { L = await P('subx_list'); } catch (e) { return handleErr(e); }
 	const a = pxAct();
 	if (!L.name) return toast(a ? a.name + ' 的订阅在它的原版页面里更新' : '这台路由器没装代理插件');
-	if (!L.subs.length) return toast(L.name + ' 还没有订阅：先在它的原版页面里添加', true);
+	if (!L.subs.length) return toast(L.name + (L.px === 'nikki' ? ' 还没有订阅：在「代理 → 订阅」里添加' : ' 还没有订阅：先在它的原版页面里添加'), true);
 	if (L.busy) return toast('订阅正在更新，稍等');
 	const tail = L.px === 'nikki' ? '更新完 Nikki 会重启，断网十几秒。' : '节点有变化时 ' + L.name + ' 会自动重启，断网十几秒。';
 	if (!(await confirmBox('更新全部订阅', `${L.subs.length} 个订阅：${L.subs.map((s) => s.name).join('、')}\n${tail}`, '开始更新'))) return;

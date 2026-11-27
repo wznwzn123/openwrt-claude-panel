@@ -70,6 +70,7 @@ P.move_in = function(a) {
 		let bl = null; try { bl = json(pkg.files['blacklist.json']); } catch (e) {}
 		if (type(bl) == 'array') { for (let e in bl) if (e?.mac && ip[lc(e.mac)]) e.ip = ip[lc(e.mac)]; writefile(ETC + '/blacklist.json', sprintf('%J', bl)); }
 		if (kind == 'openclash') try { bl_write_ruleset(bl); } catch (e) {}
+		else for (let f in BL_HOOK) try { f(true); } catch (e) {} // Nikki：同步到它的访问控制
 	}
 	let so = sp_read(); for (let mac in so.dev) if (ip[mac]) so.dev[mac].ip = ip[mac];
 	if (type(pkg.files['split.json']) == 'string') cmcp_writej(SP_F, so);

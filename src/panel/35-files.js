@@ -55,28 +55,37 @@ async function editFile(kind, name, active, opts = {}) {
 	let r;
 	try { toast('读取中…'); r = await P('file_read', { kind, name }); toastHide(); } catch (e) { return handleErr(e); }
 	if (r.binary) return toast('这是二进制文件，不能在手机上编辑', true);
-	const isCfg = kind === 'config';
-	await modal(`<div class="sheethead"><h3 class="ell">${esc(opts.title || name)}</h3><button class="btn sm" data-v="false">取消</button></div>
+	// Nikki 的文件（第五阶段）：nk_profile 能改；订阅下载的和正在跑的只能看（r.ro），订阅的可以另存成配置文件再改
+	const nk = /^nk_/.test(kind), pn = nk ? 'Nikki' : 'OpenClash', isCfg = kind === 'config' || kind === 'nk_profile', ro = !!r.ro, rst = !nk || active;
+	await modal(`<div class="sheethead"><h3 class="ell">${esc(opts.title || name)}</h3><button class="btn sm" data-v="false">${ro ? '关闭' : '取消'}</button></div>
 		${opts.note ? `<div class="notice" style="margin-bottom:8px">${esc(opts.note)}</div>` : ''}
-		<textarea class="input" data-t spellcheck="false" autocapitalize="off" style="min-height:52vh">${esc(r.content)}</textarea>
-		<div class="muted" style="margin-top:6px">${B(r.size)} · ${(r.content.match(/\n/g) || []).length + 1} 行${isCfg ? ' · 保存前会用内核检查格式' : ''}</div>
-		<div class="btngrid" style="margin:12px 0 0"><button class="btn blue" data-s>保存</button><button class="btn primary" data-sr>保存并重启</button></div>`,
+		<textarea class="input" data-t spellcheck="false" autocapitalize="off" style="min-height:52vh"${ro ? ' readonly' : ''}>${esc(r.content)}</textarea>
+		<div class="muted" style="margin-top:6px">${B(r.size)} · ${(r.content.match(/\n/g) || []).length + 1} 行${ro ? ' · 只能看' : isCfg ? ' · 保存前会用内核检查格式' : ''}</div>
+		${ro ? (kind === 'nk_sub' ? '<div class="btngrid" style="margin:12px 0 0;grid-template-columns:1fr"><button class="btn blue" data-as>另存成配置文件</button></div>' : '')
+			: `<div class="btngrid" style="margin:12px 0 0${rst ? '' : ';grid-template-columns:1fr'}"><button class="btn ${rst ? 'blue' : 'primary'}" data-s>保存</button>${rst ? '<button class="btn primary" data-sr>保存并重启</button>' : ''}</div>`}`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const ta = m.querySelector('[data-t]');
 		const save = (restart) => async () => {
-			if (restart && !(await confirmBox('保存并重启', '保存后重启 OpenClash，断网 10–30 秒。', '保存并重启'))) return;
+			if (restart && !(await confirmBox('保存并重启', `保存后重启 ${pn}，断网 10–30 秒。`, '保存并重启'))) return;
 			const res = await fileSave({ kind, name, content: ta.value, restart, base: r.sum });
-			close(true); toast(restart ? '已保存，OpenClash 正在重启' : '已保存' + (res && res.backup ? '（旧版本已备份）' : ''));
-			if (restart) watchJobs();
+			close(true); toast(restart ? `已保存，${pn} 正在重启` : '已保存' + (res && res.backup ? '（旧版本已备份）' : ''));
+			if (restart && !nk) watchJobs();
 			if (opts.after) opts.after();
 		};
-		m.querySelector('[data-s]').onclick = (e) => busy(e.currentTarget, save(false));
-		m.querySelector('[data-sr]').onclick = (e) => busy(e.currentTarget, save(true));
+		const sv = m.querySelector('[data-s]'), sr = m.querySelector('[data-sr]'), as = m.querySelector('[data-as]');
+		if (sv) sv.onclick = (e) => busy(e.currentTarget, save(false));
+		if (sr) sr.onclick = (e) => busy(e.currentTarget, save(true));
+		if (as) as.onclick = async () => {
+			let n = await promptBox('另存成配置文件', '文件名，例如 my.yaml');
+			if (!n) return;
+			n = n.trim(); if (!/\.ya?ml$/.test(n)) n += '.yaml';
+			await busy(as, async () => { await fileSave({ kind: 'nk_profile', name: n, content: ta.value }); close(true); toast('已存成 ' + n); if (opts.after) opts.after(); });
+		};
 	});
 }
-async function newFile(kind) {
-	const isCfg = kind === 'config';
+async function newFile(kind, after) {
+	const isCfg = kind === 'config' || kind === 'nk_profile';
 	await modal(`<div class="sheethead"><h3>新建 / 上传文件</h3><button class="btn sm" data-v="false">取消</button></div>
 		<label class="lglabel" style="margin-top:0">文件名</label><input class="input" data-n placeholder="${isCfg ? '例如 my.yaml' : '例如 rules.yaml'}" autocapitalize="off" spellcheck="false">
 		<label class="lglabel">内容</label><textarea class="input" data-t spellcheck="false" autocapitalize="off" placeholder="粘贴内容，或点下面「从手机选文件」"></textarea>
@@ -95,7 +104,7 @@ async function newFile(kind) {
 			if (!name) throw new Error('请填写文件名');
 			if (isCfg && !/\.ya?ml$/.test(name)) name += '.yaml';
 			await fileSave({ kind, name, content: t.value });
-			close(true); toast('已保存'); S.state = null; refresh(true);
+			close(true); toast('已保存'); S.state = null; if (after) after(); else refresh(true);
 		});
 	});
 }

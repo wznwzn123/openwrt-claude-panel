@@ -23,6 +23,7 @@ async function loadRules(quiet) {
 		pg.querySelector('[data-nx]').onclick = () => { ruOff += 100; loadRules(); scrollTo({ top: 0 }); };
 		return;
 	}
+	if (pxNk()) return nkRulesBox(box);
 	const st = await state(true);
 	setStatus(true, '在线');
 	const on = st.cfg.enable_custom_clash_rules === '1';

@@ -127,7 +127,7 @@ const home = async (page) => { await page.goto('http://panel.test/panel/?p=home'
 	ok('[Nikki] 有代理模式，没有运行模式、配置文件、订阅、控制面板按钮', await vis(page, '#modeBox') && !(await vis(page, '#runBox')) && await vis(page, '#ocCard') && /Nikki/.test(await txt(page, '#ocName')) && !(await vis(page, '#oDash')) && !(await page.locator('#oCfgBtn').isVisible()));
 	const nt2 = await navTxt(page);
 	const has2 = (t, x) => ('|' + t + '|').includes('|' + x + '|');
-	ok('[Nikki] 侧边栏：有节点、连接；没装 OpenClash，就没有订阅、配置文件、覆写设置、不走代理', has2(nt2, 'proxy') && has2(nt2, 'conn') && !has2(nt2, 'subs') && !has2(nt2, 'cfg') && !has2(nt2, 'ow') && !has2(nt2, 'black'), nt2.slice(0, 200));
+	ok('[Nikki] 侧边栏：有节点、连接、Nikki 的订阅和配置文件、规则、不走代理（第五阶段）；没有 OpenClash 的订阅、配置文件、覆写设置', has2(nt2, 'proxy') && has2(nt2, 'conn') && has2(nt2, 'nksub') && has2(nt2, 'nkcfg') && has2(nt2, 'rules') && has2(nt2, 'black') && !has2(nt2, 'subs') && !has2(nt2, 'cfg') && !has2(nt2, 'ow'), nt2.slice(0, 200));
 	await ctx.close();
 	// 5 OpenClash：跟以前一样
 	PXM.px = PL('openclash', [OCX]);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 测试用的假 uci 命令（云端测试环境里没有 uci）：只支持面板用到的 show / get / set / delete / commit / revert。
+# 测试用的假 uci 命令（云端测试环境里没有 uci）：只支持面板用到的 show / get / set / delete / add_list / reorder / commit / revert。
 # set / delete 直接写进文件（不像真 uci 那样先暂存），commit / revert 什么都不做。
 import os, re, shlex, sys
 a = sys.argv[1:]
@@ -89,6 +89,12 @@ elif cmd in ('set', 'delete'):
     else:
         s['o'] = [x for x in s['o'] if x[0] != p[2]]
         if cmd == 'set': s['o'].append([p[2], val])
+    save(p[0], secs)
+elif cmd == 'reorder':
+    key, _, val = a[0].partition('=')
+    p = key.split('.'); secs = load(p[0]); s = find(secs, p[1]) if len(p) == 2 else None
+    if not s: die('Invalid argument')
+    secs.remove(s); secs.insert(max(0, int(val)), s)
     save(p[0], secs)
 elif cmd in ('commit', 'revert'): pass
 else: die('unknown command ' + cmd)

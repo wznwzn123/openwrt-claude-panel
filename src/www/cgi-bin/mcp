@@ -7178,7 +7178,13 @@ function sp_main(groups) {
 // 倍率（3x、×2、2倍）不算编号，倍率不同不算同名；名字里只剩编号不一样的才算
 function sp_fam(n) {
 	// 倍率先换成字母（0→a … 9→j），后面把剩下的数字（编号）都换成 #
-	let r = replace('' + n, /([xX×][ ]*[0-9]+(\.[0-9]+)?|[0-9]+(\.[0-9]+)?[ ]*([xX×]|倍))/g, (m) => '<R' + replace('' + (+replace(m, /[^0-9.]/g, '')), /[0-9]/g, (c) => chr(97 + +c)) + '>');
+	// 11/28 机场命名测试查出来：「×」是多字节字符，放进 [] 里 musl / glibc 都按字节认，会把编号认成倍率（「香港 01 ×3」和「香港 02 ×3」不算同名）——先换成 x；
+	// 「倍率:0.5」要先认（不然「01 倍率」的 01 会被当成倍率）；「Box 3」这种字母后面的 x 不是倍率
+	let mk = (v) => '<R' + replace('' + (+v), /[0-9]/g, (c) => chr(97 + +c)) + '>';
+	let r = replace('' + n, /×/g, 'x');
+	r = replace(r, /倍率[ ]*(:|：)?[ ]*([0-9]+(\.[0-9]+)?)/g, (m, c, v) => mk(v));
+	r = replace(r, /(^|[^A-Za-z])[xX][ ]*([0-9]+(\.[0-9]+)?)/g, (m, p, v) => p + mk(v));
+	r = replace(r, /([0-9]+(\.[0-9]+)?)[ ]*([xX]([^A-Za-z]|$)|倍)/g, (m, v, d, s, t) => mk(v) + (t ?? ''));
 	return replace(r, /[0-9]+/g, '#');
 }
 // 候选（用户 11/28：先同名、再同地区，同地区都挂了不换）：{ s: 同名的, r: 同地区别的节点 }，各最多 8 个；names 里的策略组不算（认不出地区）
@@ -7200,6 +7206,19 @@ function sp_ipmap() {
 	for (let s in (uci_load('dhcp') ?? [])) if (s['.type'] == 'host' && s.ip) for (let x in as_list(s.mac)) m[lc(x)] = s.ip;
 	return m;
 }
+// MAC → 这台设备现在的公网 IPv6（11/28 适配：手机多半用 IPv6 上网，只写 IPv4 的设备规则管不到它）。只要全球地址（2 和 3 开头），每台最多 8 个；测试用 CMCP_SP_NEIGH6
+function sp_ip6map() {
+	let f = getenv('CMCP_SP_NEIGH6'), out = f ? (readfile(f) ?? '') : (sh('ip -6 neigh show 2>/dev/null').out ?? ''), m = {};
+	for (let l in split(out, '\n')) {
+		let x = match(l, /^([23][0-9a-fA-F:]+) .*lladdr ([0-9a-fA-F:]{17})/);
+		if (!x || match(l, /FAILED|INCOMPLETE/)) continue;
+		let mac = lc(x[2]);
+		m[mac] ??= [];
+		if (length(m[mac]) < 8 && index(m[mac], lc(x[1])) < 0) push(m[mac], lc(x[1]));
+	}
+	for (let k in m) m[k] = sort(m[k]);
+	return m;
+}
 // 按「设备 → 软件 → 国家」、每种按去向分好的规则
 function sp_rules(o, mg) {
 	let out = [], all = [];
@@ -7207,13 +7226,22 @@ function sp_rules(o, mg) {
 	let add = (kind, t, line) => push(all, [kind, t, line]);
 	// 设备现在的固定 IP 优先（改了局域网网段，固定 IP 跟着搬了），没有再用设的时候记下的
 	let ipm = length(o.dev ?? {}) ? sp_ipmap() : {};
-	for (let mac in o.dev) { let d = o.dev[mac], ip = ipm[mac] || d?.ip; if (ip) { if (d) d.ip = ip; add('d', d.t, 'SRC-IP-CIDR,' + ip + '/32'); } }
+	// IPv6：只给 OpenClash 加（地址变了每分钟检查时只换规则集内容，不用重启）；Nikki 改规则要重启，地址又常变，不加
+	let ip6 = sp_kind() == 'openclash' && (length(o.dev ?? {}) || length(o.fam ?? {})) ? sp_ip6map() : {};
+	for (let mac in o.dev) {
+		let d = o.dev[mac], ip = ipm[mac] || d?.ip;
+		if (ip) { if (d) d.ip = ip; add('d', d.t, 'SRC-IP-CIDR,' + ip + '/32'); }
+		for (let a in (ip6[mac] ?? [])) add('d', d.t, 'SRC-IP-CIDR,' + a + '/128');
+	}
 	// 按家人一键不走代理（用户 11/25）：他名下的设备（包括以后认领的）都直连；单独给某台设备设过的按设备的来
 	if (length(o.fam)) {
 		// 先占好「设备 → 直连」这一组（可以是空的）：以后家人多了设备只换规则集内容，不用重启 OpenClash
 		add('d', 'DIRECT', null);
 		let own = own_load(), ip = sp_ipmap();
-		for (let mac in own) if (own[mac]?.ok && o.fam[own[mac].uid] && !o.dev[mac] && ip[mac]) add('d', 'DIRECT', 'SRC-IP-CIDR,' + ip[mac] + '/32');
+		for (let mac in own) if (own[mac]?.ok && o.fam[own[mac].uid] && !o.dev[mac]) {
+			if (ip[mac]) add('d', 'DIRECT', 'SRC-IP-CIDR,' + ip[mac] + '/32');
+			for (let a in (ip6[mac] ?? [])) add('d', 'DIRECT', 'SRC-IP-CIDR,' + a + '/128');
+		}
 	}
 	for (let dm in o.site) if (o.site[dm]) add('a', o.site[dm], 'DOMAIN-SUFFIX,' + dm);
 	for (let id in o.capp) { let c = o.capp[id]; if (c?.t) for (let dm in (c.doms ?? [])) add('a', c.t, 'DOMAIN-SUFFIX,' + dm); }
@@ -7675,6 +7703,30 @@ function sp_node_watch(o, kind, want, names) {
 		else if (e[0] == 'back') msg('选它的设备、网站和软件已经换回这个节点。', 'ok', '分流：节点「' + e[1] + '」恢复了');
 	}
 }
+// 手机的随机 MAC 换了（11/28 适配）：设了分流的设备不在线，又来了一台用同一个名字、随机 MAC（第二位是 2 6 A E）、没设分流的设备——多半是同一台换了地址，推送提醒去给它也设上。
+// 不自动搬（家里好几台都叫 iPhone 的会搬错）。同一个新地址 7 天只推一次；测试用 CMCP_SP_MACW
+function sp_mac_watch(o) {
+	if (!length(o.dev ?? {})) return;
+	let wf = getenv('CMCP_SP_MACW') || '/tmp/cmcp_spmac.json', w = cmcp_readj(wf, {}), now = time(), wch = false, och = false, lm = {};
+	if (type(w) != 'object') w = {};
+	try { lm = lease_map(); } catch (e) {}
+	let byMac = {};
+	for (let ip in lm) if (lm[ip]?.mac) byMac[lm[ip].mac] = lm[ip];
+	for (let mac in o.dev) {
+		let host = lc(trim('' + (byMac[mac]?.orig ?? o.dev[mac]?.host ?? '')));
+		if (byMac[mac] && length(host)) { if (o.dev[mac].host != byMac[mac].orig) { o.dev[mac].host = byMac[mac].orig; och = true; } }
+		if (!length(host) || host == '*' || byMac[mac]) continue;
+		for (let nm in byMac) {
+			let x = byMac[nm];
+			if (nm == mac || o.dev[nm] || w[nm] || lc(x.orig ?? '') != host || !match(nm, /^.[26ae]/)) continue;
+			w[nm] = now; wch = true;
+			try { sh(sprintf('%s/cmcp-notify warn split %s %s %s >/dev/null 2>&1', SBIN, shq('「' + (o.dev[mac].name || x.orig) + '」可能换了 MAC 地址'), shq('有一台新设备（' + nm + '）用的名字也是「' + x.orig + '」，分流管不到它。在「分流 → 设备」里给它也设上。'), shq('spmac-' + nm))); } catch (e) {}
+		}
+	}
+	for (let k in keys(w)) if (now - w[k] > 7 * 86400) { delete w[k]; wch = true; }
+	if (wch) cmcp_writej(wf, w);
+	if (och) { let z = sp_read(); for (let m in o.dev) if (z.dev[m] && o.dev[m].host) z.dev[m].host = o.dev[m].host; cmcp_writej(SP_F, z); }
+}
 P.split_check = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) return { ok: true };
@@ -7709,11 +7761,12 @@ P.split_check = function() {
 	}
 	let want = [];
 	for (let x in sp_each(o)) { let t = x[2]; if (t && t != 'DIRECT' && t != 'PROXY' && index(want, t) < 0) push(want, t); }
-	if (length(o.fam)) {
-		// 家人的设备变了（新认领、IP 变了）：OpenClash 只换规则集内容；Nikki 要重启，留给用户点
+	if (length(o.fam) || (kind == 'openclash' && length(o.dev))) {
+		// 家人的设备变了（新认领、IP 变了）、设了分流的设备 IPv6 地址变了：OpenClash 只换规则集内容；Nikki 要重启，留给用户点
 		sp_apply(o, kind);
 		o = sp_read();
 	}
+	sp_mac_watch(o);
 	if (!length(want)) { if (length(keys(o.nd ?? {}))) { o.nd = {}; cmcp_writej(SP_F, o); } return { ok: true }; }
 	// 插件在跑时看策略组和节点；没在跑时只能从配置文件里看策略组（节点是订阅里的，读不到就先不动）
 	let names = sp_names(), live = names != null;

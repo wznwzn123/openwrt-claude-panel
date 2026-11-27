@@ -325,6 +325,34 @@ try {
 		fs.writeFileSync(E + '/config.json', JSON.stringify(CJ));
 		await cgi('split_set', { app: { id: 'netflix', t: '' } }); await cgi('split_set', { geo: { id: 'JP', t: '' } });
 	}
+	// 11/28 适配：设备的 IPv6（OpenClash 每分钟按现在的地址换规则集内容，不重启）；手机换了随机 MAC 推送提醒（不自动搬）
+	{
+		const N6 = E + '/neigh6', MW = E + '/spmac.json', XE = { CMCP_SP_NEIGH6: N6, CMCP_SP_MACW: MW };
+		fs.writeFileSync(N6, '2408:8000:1::20 dev br-lan lladdr aa:aa:aa:aa:aa:02 REACHABLE\nfe80::20 dev br-lan lladdr aa:aa:aa:aa:aa:02 STALE\n2408:8000:1::99 dev br-lan FAILED\n');
+		r = await cgi('split_set', { dev: { mac: 'aa:aa:aa:aa:aa:02', ip: '192.168.1.20', name: '电视', t: 'DIRECT' } }, XE);
+		const rsAll = () => fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('');
+		ok('[IPv6] 设了分流的设备：IPv4 和它现在的公网 IPv6 都写进规则（fe80、没连上的不写）', /SRC-IP-CIDR,192\.168\.1\.20\/32/.test(rsAll()) && /SRC-IP-CIDR,2408:8000:1::20\/128/.test(rsAll()) && !/fe80/.test(rsAll()), rsAll());
+		await cgi('split_restart'); fs.writeFileSync(RUN, ''); fs.rmSync(E + '/notified', { force: true });
+		fs.writeFileSync(N6, '2408:8000:1::21 dev br-lan lladdr aa:aa:aa:aa:aa:02 REACHABLE\n');
+		r = await cgi('split_check', {}, XE);
+		ok('[IPv6] 地址变了：每分钟检查时换成新的，只换规则集内容，不重启、不推送', /2408:8000:1::21\/128/.test(rsAll()) && !/2408:8000:1::20\//.test(rsAll()) && rd(RUN) === '' && !(await cgi('split_get', {}, XE)).result.pending && !fs.existsSync(E + '/notified'), rsAll() + rd(RUN));
+		// 随机 MAC：电视（名字记下来了）不在线，来了一台随机 MAC、同名、没设分流的
+		const LEASE = '/tmp/dhcp.leases', lbak = fs.existsSync(LEASE) ? fs.readFileSync(LEASE) : null;
+		try {
+			fs.writeFileSync(LEASE, `${Math.floor(Date.now() / 1000) + 3600} aa:aa:aa:aa:aa:02 192.168.1.20 my-tv *\n`);
+			await cgi('split_check', {}, XE);
+			ok('[随机 MAC] 设了分流的设备在线时记下它的名字', JSON.parse(rd(E + '/split.json')).dev['aa:aa:aa:aa:aa:02']?.host === 'my-tv');
+			fs.writeFileSync(LEASE, `${Math.floor(Date.now() / 1000) + 3600} da:11:22:33:44:55 192.168.1.77 my-tv *\n${Math.floor(Date.now() / 1000) + 3600} 00:11:22:33:44:66 192.168.1.78 my-tv *\n`);
+			await cgi('split_check', {}, XE);
+			const nt = rd(E + '/notified');
+			ok('[随机 MAC] 不在线了、来了一台同名的随机 MAC：推送「可能换了 MAC 地址」，不自动搬；不是随机 MAC 的不算', /可能换了 MAC 地址/.test(nt) && /da:11:22:33:44:55/.test(nt) && !/00:11:22:33:44:66/.test(nt) && !JSON.parse(rd(E + '/split.json')).dev['da:11:22:33:44:55'], nt);
+			fs.rmSync(E + '/notified', { force: true });
+			await cgi('split_check', {}, XE);
+			ok('[随机 MAC] 同一个新地址 7 天只推一次', !fs.existsSync(E + '/notified'));
+		} finally { if (lbak == null) fs.rmSync(LEASE, { force: true }); else fs.writeFileSync(LEASE, lbak); }
+		await cgi('split_set', { dev: { mac: 'aa:aa:aa:aa:aa:02', t: '' } }, XE);
+		await cgi('split_restart');
+	}
 	// Nikki
 	KIND = 'nikki';
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: 'PROXY' } });

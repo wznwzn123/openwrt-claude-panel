@@ -215,7 +215,11 @@ const NREG = [['HK', /🇭🇰|香港|港|\bHK\b|HKG|Hong ?Kong/i], ['TW', /🇹
 function node_meta(n) {
 	n = '' + (n ?? '');
 	let reg = '?';
-	for (let r in NREG) if (match(n, r[1])) { reg = r[0]; break; }
+	// 订阅里的说明节点（剩余流量、到期时间、官网）不是真的节点，认不出地区（11/28 机场命名测试：「剩余流量：120.5 GB」被认成英国）
+	if (match(n, /剩余流量|剩余：|套餐到期|到期时间|过期时间|下次重置|距离下次|官网|Traffic|Expire/i)) return { reg, kind: 'std', mult: 1, info: true };
+	// 流量单位（GB、MB）不算地区
+	let nr = replace(n, /[0-9.]+[ ]*[KMGT]B/g, '');
+	for (let r in NREG) if (match(nr, r[1])) { reg = r[0]; break; }
 	// 类型：专线（IPLC / IEPL / 专线）、中转、家宽；认不出算普通
 	let kind = match(n, /IPLC|IEPL|专线|專線|内网专线|直连专线/i) ? 'line' : match(n, /中转|中轉|隧道|Relay|Transit|BGP/i) ? 'relay' : match(n, /家宽|家寬|家庭宽带|住宅|Residential|\bHome\b|原生/i) ? 'home' : 'std';
 	// 倍率：3x、x3、×3、3倍、倍率3、[0.5X]；没写算 1（ucode 的正则不支持前瞻，多字节字符也不放进 [] 里）

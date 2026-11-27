@@ -22,7 +22,7 @@ fs.writeFileSync(E + '/config.json', JSON.stringify({ token: 'tok' + 'p'.repeat(
 let KIND = 'openclash';
 const cgi = (method, params, xenv = {}) => new Promise((z) => {
 	const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'panel/' + method, params: params || {}, client: 'panel' });
-	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/tok' + 'p'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_SBIN: SB, CMCP_SP_KIND: KIND, CMCP_SP_PROXIES: PX, CMCP_SP_DIR: RS, CMCP_SP_CUSTOM: CUS, CMCP_SP_RUN: RUN, CMCP_SP_CFG: YML, CMCP_SP_NS: E + '/spnode.json', CMCP_SP_DELAY: E + '/delay.json', ...xenv } });
+	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/tok' + 'p'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_SBIN: SB, CMCP_SP_KIND: KIND, CMCP_SP_PROXIES: PX, CMCP_SP_DIR: RS, CMCP_SP_CUSTOM: CUS, CMCP_SP_CUSTOM2: E + '/custom2.list', CMCP_SP_PROVIDERS: E + '/providers.json', CMCP_SP_RUN: RUN, CMCP_SP_CFG: YML, CMCP_SP_NS: E + '/spnode.json', CMCP_SP_DELAY: E + '/delay.json', ...xenv } });
 	let out = ''; p.stdout.on('data', (x) => (out += x)); p.on('close', () => { const i = out.indexOf('\r\n\r\n'); let j = null; try { j = JSON.parse(out.slice(i + 4)); } catch (e) {} z(j || { raw: out }); });
 	p.stdin.end(body);
 });
@@ -34,7 +34,7 @@ try {
 	ok('没有的策略组不让选', /没有这个策略组/.test(err(await cgi('split_set', { app: { id: 'netflix', t: '不存在' } }))));
 	ok('没有的软件不让选', /没有这个软件/.test(err(await cgi('split_set', { app: { id: 'nope', t: 'DIRECT' } }))));
 	r = await cgi('split_set', { app: { id: 'netflix', t: '🎬 流媒体' } });
-	ok('软件 → 策略组：规则集写网址后缀，自定义规则加一行（在「不走代理」后面），要重启', r.result?.restart === true && /DOMAIN-SUFFIX,netflix\.com/.test(rd(RS + '/cmcp_sp_a0.yaml')) && /cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n- RULE-SET,cmcp_sp_a0,🎬 流媒体 # \[cmcp-split\]\n- DOMAIN,keep\.me/.test(rd(CUS)) && /cmcp_sp_a0: # \[cmcp-split\]\n    type: file\n    behavior: classical\n    path: \.\/rule_provider\/cmcp_sp_a0\.yaml/.test(rd(CUS)), rd(CUS));
+	ok('软件 → 策略组：规则集写网址后缀，自定义规则加一行（「不走代理」最先，你自己写的规则后面，用户 11/28），要重启', r.result?.restart === true && /DOMAIN-SUFFIX,netflix\.com/.test(rd(RS + '/cmcp_sp_a0.yaml')) && /cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n- DOMAIN,keep\.me[^\n]*\n- RULE-SET,cmcp_sp_a0,🎬 流媒体 # \[cmcp-split\]/.test(rd(CUS)) && /cmcp_sp_a0: # \[cmcp-split\]\n    type: file\n    behavior: classical\n    path: \.\/rule_provider\/cmcp_sp_a0\.yaml/.test(rd(CUS)), rd(CUS));
 	ok('原来的规则集声明、规则都在', rd(CUS).includes('  mine:\n    type: http') && rd(CUS).includes('- DOMAIN,keep.me,DIRECT'));
 	r = await cgi('split_set', { app: { id: 'youtube', t: '🎬 流媒体' } });
 	ok('同一个去向再加软件：只改规则集，不用重启（但上次的重启还没做，提醒还在）', /youtube\.com/.test(rd(RS + '/cmcp_sp_a0.yaml')) && /netflix\.com/.test(rd(RS + '/cmcp_sp_a0.yaml')) && (rd(CUS).match(/cmcp_sp_a0,/g) || []).length === 1 && r.result.pending === true);
@@ -224,7 +224,7 @@ try {
 		ok('[补回] 准备：现在有分流规则', n0 > 0 && fs.existsSync(E + '/split.grp'), rd(CUS) + rd(E + '/split.json'));
 		fs.writeFileSync(CUS, 'rules:\n- RULE-SET,cmcp_blacklist,DIRECT # [cmcp-blacklist]\n- DOMAIN,mine.example,DIRECT\n');
 		r = await cgi('split_check');
-		ok('[补回] 原版后台整份改了：每分钟检查时补回（在「不走代理」后面），自己写的规则不动', lines() === n0 && /cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n- RULE-SET,cmcp_sp_/.test(rd(CUS)) && /- DOMAIN,mine\.example,DIRECT/.test(rd(CUS)) && /cmcp_sp_[dag][0-9]+: # \[cmcp-split\]/.test(rd(CUS)), rd(CUS));
+		ok('[补回] 原版后台整份改了：每分钟检查时补回（「不走代理」最先，分流在你自己写的后面），自己写的规则不动', lines() === n0 && /cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n/.test(rd(CUS)) && /- DOMAIN,mine\.example,DIRECT[^\n]*\n(- [^\n]*\n)*- RULE-SET,cmcp_sp_/.test(rd(CUS)) && /- DOMAIN,mine\.example,DIRECT/.test(rd(CUS)) && /cmcp_sp_[dag][0-9]+: # \[cmcp-split\]/.test(rd(CUS)), rd(CUS));
 		ok('[补回] 不自动重启，标「还没生效」，推送说清楚', rd(RUN) === '' && (await cgi('split_get')).result.pending === true && /被改掉了，已补回/.test(rd(E + '/notified')), rd(E + '/notified'));
 		fs.rmSync(E + '/notified', { force: true });
 		await cgi('split_check');
@@ -242,7 +242,7 @@ try {
 			fs.mkdirSync('/etc/claude-mcp', { recursive: true }); fs.writeFileSync(BLF, JSON.stringify([{ mac: 'aa:aa:aa:aa:aa:09', ip: '192.168.1.9', name: '电视' }]));
 			r = await cgi('file_save', { kind: 'custom', name: 'openclash_custom_rules.list', content: 'rules:\n- DOMAIN,ai2.example,DIRECT\n', restart: false }, { CMCP_SP_CUSTOM: OC + '/openclash_custom_rules.list' });
 			const o2 = rd(OC + '/openclash_custom_rules.list');
-			ok('[补回] 有「不走代理」的设备：那一行也补上，放在最前面（分流跟在后面）', /^rules:\n- RULE-SET,cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n- RULE-SET,cmcp_sp_/m.test(o2) && /cmcp_blacklist: # \[cmcp-blacklist\]/.test(o2) && /「不走代理」「分流」的规则已自动保留/.test(r.result?.msg || ''), JSON.stringify(r).slice(0, 300) + o2);
+			ok('[补回] 有「不走代理」的设备：那一行也补上，放在最前面（分流在你自己写的后面）', /^rules:\n- RULE-SET,cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n/m.test(o2) && /- RULE-SET,cmcp_sp_/.test(o2) && o2.indexOf('RULE-SET,cmcp_sp_') > o2.indexOf('ai3.example') && /cmcp_blacklist: # \[cmcp-blacklist\]/.test(o2) && /「不走代理」「分流」的规则已自动保留/.test(r.result?.msg || ''), JSON.stringify(r).slice(0, 300) + o2);
 			fs.writeFileSync(BLF, '[]');
 			r = await cgi('file_save', { kind: 'custom', name: 'openclash_custom_rules.list', content: 'rules:\n- DOMAIN,ai3.example,DIRECT\n', restart: false }, { CMCP_SP_CUSTOM: OC + '/openclash_custom_rules.list' });
 			ok('[补回] 没有「不走代理」的设备：不加那一行', !/cmcp_blacklist/.test(rd(OC + '/openclash_custom_rules.list')));
@@ -257,6 +257,50 @@ try {
 	ok('Nikki：写进 uci 规则（打开 mixin.rule），原来的规则不动，要重启', r.result?.restart === true && /option rule '1'/.test(nk) && /config rule 'cmcp_sp_0'/.test(nk) && /option matcher 'openai\.com'/.test(nk) && /option node '节点选择'/.test(nk) && /config rule 'mine'/.test(nk), nk);
 	r = await cgi('split_restart');
 	ok('Nikki：现在重启', /nikki restart/.test(rd(RUN)));
+	// ---- 覆写里你自己写的规则（用户 11/28）：认出来、跟分流撞了按你写的走、「交给分流管」才搬；订阅合集里的节点不让单独选 ----
+	{
+		const K0 = KIND; KIND = 'openclash';
+		const PXo = rd(PX), CUSo = rd(CUS), JP = '🇯🇵 日本 01', US = '🇺🇸 美国 P1';
+		fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🎬 流媒体', JP, US] }, '节点选择': { type: 'Selector', now: JP }, '🎬 流媒体': { type: 'Selector' }, [JP]: { type: 'Vmess' }, [US]: { type: 'Vmess' } } }));
+		fs.writeFileSync(E + '/providers.json', JSON.stringify({ providers: { default: { vehicleType: 'Compatible', proxies: [{ name: JP }] }, airport: { vehicleType: 'HTTP', proxies: [{ name: US }] } } }));
+		fs.writeFileSync(CUS, 'rules:\n- RULE-SET,cmcp_blacklist,DIRECT # [cmcp-blacklist]\n- DOMAIN-SUFFIX,gemini.google.com,' + JP + ' # [gemini]\n- DOMAIN-SUFFIX,bard.google.com,' + JP + ' # [gemini]\n- DOMAIN-SUFFIX,youtube.com,节点选择\n- DOMAIN-KEYWORD,openai,DIRECT\n- SRC-IP-CIDR,192.168.1.20/32,DIRECT\n- MATCH,节点选择\n');
+		fs.writeFileSync(E + '/custom2.list', 'rules:\n- DOMAIN-SUFFIX,late.example,DIRECT\n');
+		r = await cgi('split_get');
+		const own = r.result?.own || [];
+		ok('[覆写] 认出你自己写的规则：类型、网址、去向、「# [名字]」；面板加的、MATCH 不算；候补框的标出来不优先', own.length === 6 && own[0].ty === 'DOMAIN-SUFFIX' && own[0].v === 'gemini.google.com' && own[0].t === JP && own[0].tag === 'gemini' && own[0].pri === true && own.some((x) => x.ty === 'DOMAIN-KEYWORD') && own.find((x) => x.v === 'late.example')?.pri === false && !own.some((x) => /cmcp|MATCH/.test(x.v + x.ty)), JSON.stringify(own));
+		ok('[订阅合集] 合集里的节点标出来（规则里不能直接写它）', (r.result.nodes || []).find((x) => x.n === US)?.p === 1 && !(r.result.nodes || []).find((x) => x.n === JP)?.p, JSON.stringify(r.result.nodes));
+		ok('[订阅合集] 不让单独选，说清楚选它所在的策略组', /在订阅合集里/.test(err(await cgi('split_set', { app: { id: 'youtube', t: US } }))));
+		r = await cgi('split_set', { app: { id: 'youtube', t: '🎬 流媒体' } });
+		ok('[覆写] 分流里设了 YouTube、覆写里也写了 youtube.com：标出来按覆写的走', r.result?.ov?.['app:youtube']?.t === '节点选择' && r.result.ov['app:youtube'].part === false, JSON.stringify(r.result?.ov));
+		const c1 = rd(CUS);
+		ok('[覆写] 分流那段放在你自己写的规则后面、MATCH 前面；「不走代理」照样最先', c1.indexOf('cmcp_blacklist,DIRECT') < c1.indexOf('gemini.google.com') && c1.indexOf('SRC-IP-CIDR,192.168.1.20/32') < c1.indexOf('RULE-SET,cmcp_sp_') && c1.indexOf('RULE-SET,cmcp_sp_') < c1.indexOf('- MATCH,'), c1);
+		r = await cgi('split_set', { site: { d: 'mail.google.com', t: 'DIRECT' } });
+		ok('[覆写] 没撞的不标', !r.result.ov['site:mail.google.com']);
+		await cgi('split_set', { site: { d: 'mail.google.com', t: '' } });
+		// 交给分流管：gemini 两行合成一个软件，youtube.com 成网站，设备那行认得出是哪台，关键词那行搬不了
+		const ks = own.filter((x) => x.src === 'f1').map((x) => x.k);
+		r = await cgi('split_own_move', { keys: ks });
+		const c2 = rd(CUS), cap = Object.values(r.result?.capp || {}).find((x) => x.name === 'gemini');
+		ok('[交给分流管] 带名字的合成一个软件（去向不变），没名字的网址成网站，设备那行成设备', cap && cap.t === JP && cap.doms.join() === 'gemini.google.com,bard.google.com' && r.result.site['youtube.com'] === '节点选择' && r.result.dev['aa:aa:aa:aa:aa:02']?.t === 'DIRECT' && r.result.movedN === 4, JSON.stringify(r.result).slice(0, 400));
+		ok('[交给分流管] 从覆写里删掉搬走的那几行，关键词那行留着、说清楚搬不了；要重启才生效', !/gemini\.google|youtube\.com|192\.168\.1\.20/.test(c2.split('rule-providers')[0] + c2.replace(/RULE-SET[^\n]*/g, '').replace(/rule-providers:[\s\S]*?rules:/, '')) && /DOMAIN-KEYWORD,openai,DIRECT/.test(c2) && r.result.skip.length === 1 && /这种写法分流管不了/.test(r.result.skip[0]) && r.result.restart === true && r.result.pending === true, c2 + JSON.stringify(r.result.skip));
+		ok('[交给分流管] 搬过来以后不算撞车，覆写里剩下的照样认得', !Object.keys(r.result.ov || {}).length && r.result.own.length === 2, JSON.stringify([r.result.ov, r.result.own]));
+		// V9 以前：分流那段在你写的规则前面，撞了才挪（每分钟检查时）
+		fs.writeFileSync(CUS, 'rule-providers:\n  cmcp_sp_a0: # [cmcp-split]\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_sp_a0.yaml\nrules:\n- RULE-SET,cmcp_sp_a0,🎬 流媒体 # [cmcp-split]\n- DOMAIN-SUFFIX,netflix.com,节点选择\n');
+		await cgi('split_set', { site: { d: 'youtube.com', t: '' } }); await cgi('split_set', { capp: { id: Object.keys((await cgi('split_get')).result.capp).find((k) => (r.result.capp[k] || {}).name === 'gemini') || 'x', del: true } }).catch(() => {});
+		fs.writeFileSync(CUS, 'rule-providers:\n  cmcp_sp_a0: # [cmcp-split]\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_sp_a0.yaml\nrules:\n- RULE-SET,cmcp_sp_a0,🎬 流媒体 # [cmcp-split]\n- DOMAIN-SUFFIX,netflix.com,节点选择\n');
+		await cgi('split_set', { app: { id: 'netflix', t: '🎬 流媒体' } });
+		fs.writeFileSync(CUS, rd(CUS).replace(/^rules:\n([\s\S]*?)(- RULE-SET,cmcp_sp_[^\n]*\n)/m, (m0, a, b) => 'rules:\n' + b + a));
+		fs.rmSync(E + '/notified', { force: true });
+		await cgi('split_check');
+		const c3 = rd(CUS);
+		ok('[覆写] 老版本分流那段在前面、跟你写的撞了：挪到你写的后面，推送说改成你写的优先', c3.indexOf('netflix.com,节点选择') < c3.indexOf('- RULE-SET,cmcp_sp_') && /改成覆写里你自己写的优先/.test(rd(E + '/notified') || ''), c3 + (rd(E + '/notified') || ''));
+		await cgi('split_set', { app: { id: 'netflix', t: '' } }); await cgi('split_set', { app: { id: 'youtube', t: '' } });
+		for (const [mac] of Object.entries((await cgi('split_get')).result.dev || {})) await cgi('split_set', { dev: { mac, t: '' } });
+		for (const id of Object.keys((await cgi('split_get')).result.capp || {})) await cgi('split_set', { capp: { id, del: true } });
+		fs.writeFileSync(PX, PXo); fs.writeFileSync(CUS, CUSo); fs.rmSync(E + '/providers.json', { force: true }); fs.rmSync(E + '/custom2.list', { force: true });
+		await cgi('split_restart');
+		KIND = K0;
+	}
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: '' } });
 	ok('Nikki：去掉后删掉自己的规则', !/cmcp_sp_/.test(rd(CFG + '/nikki')) && /config rule 'mine'/.test(rd(CFG + '/nikki')));
 	{ // Nikki 的规则里直接写节点名：节点连不上改走主策略组要重启 Nikki（节点已经不通了）
@@ -270,6 +314,12 @@ try {
 		fs.writeFileSync(E + '/delay.json', JSON.stringify({ '🇯🇵 日本 01': 0, '🇯🇵 日本 02': 70 }));
 		await cgi('split_check');
 		ok('Nikki：有同名的（日本 02）：规则换过去，重启 Nikki；Nikki 不事先占同名的组', /option node '🇯🇵 日本 02'/.test(rd(CFG + '/nikki')) && !/option node '🇯🇵 日本 01'/.test(rd(CFG + '/nikki')) && /nikki restart/.test(rd(RUN)) && (await cgi('split_get')).result.pending === false, rd(RUN) + rd(CFG + '/nikki'));
+		// 用户 11/28：你自己的规则优先——后来又加的规则排在面板的后面，下次写的时候把面板的挪到最后
+		fs.writeFileSync(CFG + '/nikki', rd(CFG + '/nikki') + "\nconfig rule 'later'\n\toption type 'DOMAIN-SUFFIX'\n\toption matcher 'chatgpt.com'\n\toption node 'DIRECT'\n");
+		await cgi('split_check');
+		const nk2 = rd(CFG + '/nikki');
+		r = await cgi('split_get');
+		ok('Nikki：你后来加的规则排到面板的后面了：面板的挪到最后（你写的优先）；认得出你写的、跟 ChatGPT 撞了', nk2.indexOf("config rule 'later'") < nk2.indexOf("config rule 'cmcp_sp_") && r.result.own.some((x) => x.k === 'nk:later' && x.v === 'chatgpt.com') && r.result.ov['app:chatgpt']?.t === 'DIRECT', nk2 + JSON.stringify(r.result.ov));
 		await cgi('split_set', { app: { id: 'chatgpt', t: '' } }); fs.writeFileSync(PX, PX0);
 	}
 	// 不支持的插件

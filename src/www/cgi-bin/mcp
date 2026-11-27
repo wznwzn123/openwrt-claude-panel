@@ -2875,7 +2875,7 @@ const FAM_GROUPS = {
 	node: ['px_set', 'node_check', 'px_delay', 'tools:switch_proxy', 'tools:test_delay', 'tools:close_connections'],
 	speed: ['speedtest'],
 	parent: ['oaf_get', 'oaf_switch', 'oaf_rule', 'lan_scan', 'rl_set', 'pause_set', 'black_setup', 'black_set', 'dev_rename', 'dev_forget'],
-	proxy: ['split_get', 'split_set', 'split_restart', 'oc_set', 'oc_sec', 'sub_update', 'subx_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
+	proxy: ['split_get', 'split_set', 'split_restart', 'split_own_move', 'oc_set', 'oc_sec', 'sub_update', 'subx_update', 'files', 'file_read', 'file_save', 'file_delete', 'file_rename', 'cfg_switch', 'versions', 'unlock', 'provider_update', 'backup', 'oc_schema', 'oc_button', 'set_mode', 'run_mode', 'age', 'backup_file', 'file_download', 'oc_reset', 'core_ps', 'oc_sections', 'oc_move', 'px_ctl', 'px_switch', 'autosw', 'quick', 'dashboard',
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
@@ -7056,18 +7056,31 @@ function sp_groups() {
 	for (let n in order) if (n != 'GLOBAL' && index(n, ',') < 0 && match(p[n]?.type ?? '', /^(Selector|URLTest|Fallback|LoadBalance|Relay)$/)) push(out, n);
 	return out;
 }
+// 订阅合集（proxy-providers）里的节点：规则里不能直接写它们（OpenClash 会跳过这条自定义规则，Nikki 会起不来），不让单独选、也不当候选。
+// 读不到（老内核没有这个接口）当成没有。测试用 CMCP_SP_PROVIDERS（假的 /providers/proxies 结果）
+function sp_prov_nodes() {
+	let f = getenv('CMCP_SP_PROVIDERS'), r = null, out = {};
+	if (f) r = cmcp_readj(f, null);
+	else try { r = api('GET', '/providers/proxies', null, 5); } catch (e) {}
+	for (let k in (type(r?.providers) == 'object' ? r.providers : {})) {
+		let pv = r.providers[k];
+		if (k == 'default' || pv?.vehicleType == 'Compatible') continue;
+		for (let x in (type(pv?.proxies) == 'array' ? pv.proxies : [])) if (x?.name) out[x.name] = 1;
+	}
+	return out;
+}
 // 单个节点（用户 11/27：能选机场里的节点）：不是策略组、不是直连 / 拒绝这些内置的。名字里有逗号的写不进规则，不列。带延迟和地区（按地区分组显示）
 function sp_nodes() {
 	let p = sp_proxies();
 	if (type(p) != 'object') return null;
-	let order = p.GLOBAL?.all ?? keys(p), out = [], seen = {};
+	let order = p.GLOBAL?.all ?? keys(p), out = [], seen = {}, pvn = sp_prov_nodes();
 	for (let n in order) {
 		let x = p[n];
 		if (seen[n] || n == 'GLOBAL' || index(n, ',') >= 0 || type(x) != 'object') continue;
 		if (match(x.type ?? '', /^(Selector|URLTest|Fallback|LoadBalance|Relay|Direct|Reject|RejectDrop|Pass|Compatible|Dns)$/i) || match(n, /^(DIRECT|REJECT|REJECT-DROP|PASS|COMPATIBLE)$/)) continue;
 		seen[n] = 1;
 		let h = type(x.history) == 'array' ? x.history : [], d = length(h) ? +(h[length(h) - 1]?.delay ?? 0) : 0;
-		push(out, { n, d: d > 0 ? d : 0, reg: CL.node_meta(n).reg });
+		push(out, { n, d: d > 0 ? d : 0, reg: CL.node_meta(n).reg, ...(pvn[n] ? { p: 1 } : {}) });
 		if (length(out) >= 500) break;
 	}
 	return out;
@@ -7165,6 +7178,32 @@ function sp_rules(o, mg) {
 }
 // OpenClash：自定义规则里自己那一段 + 规则集文件。返回要不要重启；内容变了的规则集记在 SP_CHG（只让 OpenClash 重新读这几个）
 let SP_CHG = [];
+// 自定义规则「rules:」那一段的结束位置（下一个顶格的键之前）；有 MATCH 就放在它前面
+function sp_oc_insert(s, rl) {
+	let ls = split(s, '\n'), i = 0, n = length(ls);
+	while (i < n && !match(ls[i], /^rules:[ \t]*$/)) i++;
+	if (i >= n) return s;
+	let at = i + 1;
+	for (let j = i + 1; j < n; j++) {
+		let l = ls[j];
+		if (match(l, /^[A-Za-z_-]+:/)) break;               // 下一个顶格的键
+		if (match(l, /^[ \t]*-[ \t]*['"]?MATCH,/)) { at = j; break; }
+		if (match(l, /^[ \t]*-/)) at = j + 1;
+	}
+	return join('\n', [...slice(ls, 0, at), ...split(replace(rl, /\n$/, ''), '\n'), ...slice(ls, at)]);
+}
+// 分流那段在不在你自己写的规则前面（自定义规则「优先匹配」框里，分流的行后面还有不是面板加的规则）
+function sp_oc_order_bad() {
+	let ls = split(readfile(SP_CUSTOM) ?? '', '\n'), inr = false, seen = false;
+	for (let l in ls) {
+		if (match(l, /^rules:[ \t]*$/)) { inr = true; continue; }
+		if (match(l, /^[A-Za-z_-]+:/)) { inr = false; continue; }
+		if (!inr || !match(l, /^[ \t]*-/)) continue;
+		if (index(l, SP_MARK) >= 0) seen = true;
+		else if (seen && index(l, '[cmcp-') < 0 && !match(l, /MATCH,/)) return true;
+	}
+	return false;
+}
 function sp_oc_write(rules) {
 	mkdir(SP_DIR);
 	let old = split(trim(sh('ls ' + shq(SP_DIR) + ' 2>/dev/null').out ?? ''), '\n'), want = {};
@@ -7185,9 +7224,8 @@ function sp_oc_write(rules) {
 	let pv = join('', map(rules, (g) => sprintf('  %s: %s\n    type: file\n    behavior: classical\n    path: ./rule_provider/%s.yaml\n', g.name, SP_MARK, g.name)));
 	if (length(rules)) {
 		if (!match(s, /(^|\n)rules:[ \t]*(\n|$)/)) die('自定义规则文件里找不到「rules:」行，没有修改');
-		// 放在「不走代理」那一行后面（它要最先匹配）
-		if (match(s, /\n- RULE-SET,cmcp_blacklist,[^\n]*\n/)) s = replace(s, /(\n- RULE-SET,cmcp_blacklist,[^\n]*\n)/, (m, a) => a + rl);
-		else s = replace(s, /(^|\n)rules:[ \t]*\n/, (m, p1) => p1 + 'rules:\n' + rl);
+		// 放在你自己写的规则后面（用户 11/28：覆写里自己写的优先），MATCH 前面；「不走代理」那行照样最先
+		s = sp_oc_insert(s, rl);
 		if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + pv);
 		else s = 'rule-providers:\n' + pv + s;
 	}
@@ -7204,7 +7242,10 @@ function sp_nk_write(rules) {
 	let U = conf().uci, cur = uci_load('nikki') ?? [], cmds = [], old = [], nw = [];
 	for (let s in cur) if (s['.type'] == 'rule' && match(s['.name'], /^cmcp_sp_/)) push(old, sprintf('%s|%s|%s', s.type, s.matcher, s.node));
 	for (let g in rules) for (let l in g.lines) { let p = split(l, ','); push(nw, sprintf('%s|%s|%s', p[0], join(',', slice(p, 1)), g.to)); }
-	if (join('\n', old) == join('\n', nw)) return false;
+	// 用户 11/28：你自己的规则优先——我们的要排在你所有规则后面；你后来又加了规则（排到我们后面）就重写一次
+	let seenMine = false, bad = false;
+	for (let s in cur) if (s['.type'] == 'rule') { if (match(s['.name'], /^cmcp_sp_/)) seenMine = true; else if (seenMine) bad = true; }
+	if (!bad && join('\n', old) == join('\n', nw)) return false;
 	for (let s in cur) if (s['.type'] == 'rule' && match(s['.name'], /^cmcp_sp_/)) push(cmds, 'delete ' + shq('nikki.' + s['.name']));
 	let i = 0;
 	for (let x in nw) {
@@ -7216,6 +7257,57 @@ function sp_nk_write(rules) {
 	let r = sh(join(' && ', map(cmds, (c) => U + ' ' + c)) + ' && ' + U + ' commit nikki');
 	if (r.code != 0) die('保存失败：' + trim(r.err ?? r.out ?? ''));
 	return true;
+}
+/* 你在覆写里自己写的规则（用户 11/28：自动认出来、显示在分流里；跟分流撞了按你写的走；点「交给分流管」才搬过来）
+   OpenClash：自定义规则两个框（上面「优先匹配」= f1，下面「候补匹配」= f2）里不是面板加的那些行；Nikki：uci 里不是面板加的 rule。
+   每条 { k: 编号（f1:行号 / f2:行号 / nk:段名）, ty, v, t: 去向, tag: 行尾「# [名字]」, src, pri: 比分流优先（f1 和 Nikki 是，f2 排在订阅规则后面不是） } */
+const SP_CUSTOM2 = getenv('CMCP_SP_CUSTOM2') || '/etc/openclash/custom/openclash_custom_rules_2.list';
+function sp_own_parse(l) {
+	let m = match(l, /^[ \t]*-[ \t]*['"]?([A-Z][A-Z0-9-]*),([^,'"#]+),([^,'"#]+)(,no-resolve)?['"]?[ \t]*(#.*)?$/);
+	if (!m) return null;
+	let tag = match(m[5] ?? '', /#[ \t]*\[([^\]]{1,30})\]/);
+	return { ty: m[1], v: trim(m[2]), t: trim(m[3]), tag: tag ? trim(tag[1]) : '' };
+}
+function sp_own(kind) {
+	let out = [];
+	if (kind == 'openclash') {
+		for (let fx in [['f1', SP_CUSTOM], ['f2', SP_CUSTOM2]]) {
+			let ls = split(readfile(fx[1]) ?? '', '\n'), inr = false;
+			for (let i = 0; i < length(ls) && length(out) < 300; i++) {
+				let l = ls[i];
+				if (match(l, /^rules:[ \t]*$/)) { inr = true; continue; }
+				if (match(l, /^[A-Za-z_-]+:/)) { inr = false; continue; }
+				if (!inr || index(l, '[cmcp-') >= 0 || match(l, /^[ \t]*#/)) continue;
+				let r = sp_own_parse(l);
+				// 编号用规则内容（不用行号：中间文件被改过、行号会变）
+				if (r && r.ty != 'MATCH') push(out, { k: fx[0] + ':' + r.ty + ',' + r.v + ',' + r.t, ...r, src: fx[0], pri: fx[0] == 'f1' });
+			}
+		}
+	} else if (kind == 'nikki') {
+		for (let x in (uci_load('nikki') ?? [])) if (x['.type'] == 'rule' && !match(x['.name'], /^cmcp_sp_/) && x.enabled != '0' && x.type && x.matcher && x.node && length(out) < 300)
+			push(out, { k: 'nk:' + x['.name'], ty: x.type, v: x.matcher, t: x.node, tag: '', src: 'nk', pri: true });
+	}
+	return out;
+}
+// 分流的一条设置跟你自己写的撞没撞：网址一样、或者你写的包住了它（全撞），或者它包住了你写的（部分撞）；设备看固定 IP
+function sp_dcov(a, b) { return a == b || substr(a, -length(b) - 1) == '.' + b; } // a 在 b 里面
+function sp_conflicts(o, own) {
+	let ov = {}, doms = [], ips = {};
+	for (let x in own) if (x.pri) {
+		if (x.ty == 'DOMAIN-SUFFIX' || x.ty == 'DOMAIN') push(doms, x);
+		else if (x.ty == 'SRC-IP-CIDR' && match(x.v, /\/32$/)) ips[replace(x.v, /\/32$/, '')] = x;
+	}
+	let chk = (key, ds) => {
+		for (let d in ds) for (let x in doms) {
+			let full = sp_dcov(d, x.v), part = !full && x.ty == 'DOMAIN-SUFFIX' && sp_dcov(x.v, d);
+			if (full || part) { let e = ov[key]; if (!e || (full && e.part)) ov[key] = { t: x.t, v: x.v, part: !full }; }
+		}
+	};
+	for (let d in o.site) if (o.site[d]) chk('site:' + d, [d]);
+	for (let id in o.capp) if (o.capp[id]?.t) chk('capp:' + id, o.capp[id].doms ?? []);
+	for (let a in sp_apps()) if (o.app[a[0]]) chk('app:' + a[0], a[2]);
+	for (let mac in o.dev) { let ip = o.dev[mac]?.ip; if (ip && ips[ip]) ov['dev:' + mac] = { t: ips[ip].t, v: ip, part: false }; }
+	return ov;
 }
 // 写规则；返回 { restart: 要不要重启插件 }
 // 选了具体策略组的才让看门狗每分钟查（split.grp）
@@ -7260,7 +7352,7 @@ P.split_get = function() {
 	let pv = [], used = {};
 	for (let x in sp_each(o)) if (index(o.nk ?? [], x[2]) >= 0) used[x[2]] = 1;
 	if (live) {
-		let dm = {}, nm = map(nodes, (x) => x.n);
+		let dm = {}, nm = map(filter(nodes, (x) => !x.p), (x) => x.n);
 		for (let x in nodes) dm[x.n] = x.d;
 		for (let n in keys(used)) {
 			let best = null;
@@ -7269,12 +7361,68 @@ P.split_get = function() {
 			push(pv, { n, d: dm[n] ?? 0, sibs: length(sb.s) + length(sb.r), to: best, td: best ? dm[best] : 0, same: !!best && index(sb.s, best) >= 0 });
 		}
 	}
+	let own = sp_own(kind);
 	return {
-		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [], nd: o.nd ?? {}, pv, swl: o.swl ?? [],
+		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [], nd: o.nd ?? {}, pv, swl: o.swl ?? [], own, ov: sp_conflicts(o, own),
 		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam, site: o.site, capp: o.capp, nodes,
 		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1], doms: a[2] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
 	};
+};
+// 「交给分流管」（用户 11/28）：把覆写里你自己写的几条搬进分流——从原来的地方删掉（先备份），在分流里加上同样的去向。
+// 带「# [名字]」的按名字合成一个软件；其他网址加成网站；SRC-IP-CIDR 认得出是哪台设备的加成设备。关键词、IP 段这些分流管不了，留着不动
+P.split_own_move = function(a) {
+	let kind = sp_kind();
+	if (!kind) die('分流只支持 OpenClash 和 Nikki');
+	let want = type(a?.keys) == 'array' ? a.keys : [], own = sp_own(kind), o = sp_read(), moved = [], skip = [];
+	let groups = sp_groups() ?? sp_cfg_groups(kind) ?? [], nodes = sp_nodes() ?? [], ipm = sp_ipmap(), mac_of = {};
+	for (let m in ipm) mac_of[ipm[m]] = m;
+	let tgt = (t) => {
+		if (t == 'DIRECT') return 'DIRECT';
+		if (index(groups, t) >= 0) return t;
+		for (let n in nodes) if (n.n == t && !n.p) { o.nk ??= []; if (index(o.nk, t) < 0) push(o.nk, t); return t; }
+		return null;
+	};
+	let apps = {};
+	for (let x in own) {
+		if (index(want, x.k) < 0) continue;
+		let t = tgt(x.t), d = (x.ty == 'DOMAIN-SUFFIX' || x.ty == 'DOMAIN') ? sp_dom(x.v) : null;
+		if (!t) { push(skip, x.v + '：去向「' + x.t + '」分流里选不了'); continue; }
+		if (d && length(x.tag)) { let id = x.tag + '|' + t; apps[id] ??= { name: substr(x.tag, 0, 20), t, doms: [] }; if (index(apps[id].doms, d) < 0) push(apps[id].doms, d); push(moved, x); }
+		else if (d) { o.site[d] = t; push(moved, x); }
+		else if (x.ty == 'SRC-IP-CIDR' && match(x.v, /^\d+\.\d+\.\d+\.\d+\/32$/) && mac_of[replace(x.v, /\/32$/, '')]) {
+			let ip = replace(x.v, /\/32$/, ''), mac = mac_of[ip];
+			o.dev[mac] = { t, ip, name: '' }; push(moved, x);
+		}
+		else push(skip, x.v + '：' + x.ty + ' 这种写法分流管不了');
+	}
+	if (!length(moved)) die(length(skip) ? skip[0] : '没有能搬的规则');
+	for (let id in apps) {
+		let c = apps[id], hit = null;
+		for (let k in o.capp) if (o.capp[k]?.name == c.name && o.capp[k]?.t == c.t) hit = k;
+		if (hit) { for (let d in c.doms) if (index(o.capp[hit].doms, d) < 0) push(o.capp[hit].doms, d); }
+		else { if (length(keys(o.capp)) >= 50) die('最多加 50 个软件'); o.capp['c' + rand_str(8)] = c; }
+	}
+	// 从原来的地方删掉：OpenClash 两个自定义规则文件按行号删（先备份），Nikki 删 uci 段
+	for (let fx in [['f1', SP_CUSTOM], ['f2', SP_CUSTOM2]]) {
+		let rm = {};
+		for (let x in moved) if (x.src == fx[0]) rm[x.k] = 1;
+		if (!length(keys(rm))) continue;
+		let before = readfile(fx[1]);
+		if (before == null) continue;
+		if (!getenv('CMCP_SP_KIND')) oc_backup_file('custom', fx[1]);
+		let ls = split(before, '\n'), out = [];
+		for (let l in ls) { let r = index(l, '[cmcp-') < 0 ? sp_own_parse(l) : null; if (!(r && rm[fx[0] + ':' + r.ty + ',' + r.v + ',' + r.t])) push(out, l); }
+		writefile(fx[1] + '.cmcp_tmp', join('\n', out)); rename(fx[1] + '.cmcp_tmp', fx[1]);
+	}
+	let del = map(filter(moved, (x) => x.src == 'nk'), (x) => 'delete ' + shq('nikki.' + substr(x.k, 3)));
+	if (length(del)) { let U = conf().uci, r = sh(join(' && ', map(del, (c) => U + ' ' + c)) + ' && ' + U + ' commit nikki'); if (r.code != 0) die('保存失败：' + trim(r.err ?? r.out ?? '')); }
+	cmcp_writej(SP_F, o);
+	sp_apply(o, kind);
+	o = sp_read(); o.pending = true; cmcp_writej(SP_F, o); // 覆写改了，要重启插件才生效
+	let g = P.split_get();
+	g.restart = true; g.movedN = length(moved); g.skip = skip;
+	return g;
 };
 // a: { dev: { mac, ip, name, t } } / { app: { id, t } } / { geo: { id, t } }；t 为空 = 跟随全局（去掉）；DIRECT / PROXY / 策略组名
 P.split_set = function(a) {
@@ -7294,6 +7442,7 @@ P.split_set = function(a) {
 	if (t && t != 'DIRECT' && t != 'PROXY') {
 		let g = sp_groups() ?? sp_cfg_groups(kind) ?? [], nd = sp_nodes();
 		if (index(g, t) < 0 && !length(filter(nd ?? [], (y) => y.n == t))) die(nd == null ? '要选节点，先打开 ' + (kind == 'nikki' ? 'Nikki' : 'OpenClash') : '没有这个策略组或节点：' + t);
+		if (index(g, t) < 0 && length(filter(nd ?? [], (y) => y.n == t && y.p))) die('「' + t + '」在订阅合集里，规则不能直接写它：选它所在的策略组');
 		if (index(g, t) < 0) { o.nk ??= []; if (index(o.nk, t) < 0) push(o.nk, t); o.nk = slice(o.nk, -100); }
 	}
 	if (t == 'PROXY' && !sp_main(sp_groups() ?? sp_cfg_groups(kind))) die('找不到主策略组，先打开 ' + (kind == 'nikki' ? 'Nikki' : 'OpenClash'));
@@ -7420,7 +7569,7 @@ function sp_node_watch(o, kind, want, names) {
 	// 同名节点跟着订阅变：变了要重写规则（OpenClash 先占好它们的组）
 	for (let n in keys(o.sib)) if (index(nodes, n) < 0) { delete o.sib[n]; chg = true; }
 	// 候选只要节点，不要策略组
-	let gs = sp_groups() ?? [], nm = filter(names, (x) => index(gs, x) < 0);
+	let gs = sp_groups() ?? [], pvn = sp_prov_nodes(), nm = filter(names, (x) => index(gs, x) < 0 && !pvn[x]); // 订阅合集里的节点不能写进规则，不当候选
 	for (let n in nodes) { let sb = sp_sibs(n, nm); if (sprintf('%J', sb) != sprintf('%J', o.sib[n] ?? [])) { o.sib[n] = sb; chg = true; } }
 	if (!length(nodes) && !length(keys(st)) && !chg) return;
 	for (let n in nodes) {
@@ -7468,6 +7617,22 @@ P.split_check = function() {
 		if (length(fixed)) {
 			o = sp_read(); o.pending = true; cmcp_writej(SP_F, o);
 			try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('「' + join('」「', fixed) + '」的规则被改掉了，已补回'), shq('OpenClash 的自定义规则被整份改过，面板加的那几行没了。重启 OpenClash 后生效：在「分流」里点「现在重启」。'))); } catch (e) {}
+		}
+		// 6.0 V9 以前分流那段放在你自己写的规则前面：跟你写的撞了才挪到后面（你写的优先，用户 11/28），标「还没生效」并推送，不自动重启
+		o = sp_read();
+		if (sp_oc_order_bad() && length(keys(sp_conflicts(o, sp_own(kind))))) {
+			sp_apply(o, kind);
+			try { sh(sprintf('%s/cmcp-notify info split %s %s split >/dev/null 2>&1', SBIN, shq('分流：改成覆写里你自己写的优先'), shq('分流跟你在覆写里写的规则撞了的，按你写的走。重启 OpenClash 后生效：在「分流」里点「现在重启」。'))); } catch (e) {}
+		}
+	}
+	// Nikki：你后来加的规则排到了面板的后面、又跟分流撞了：面板的挪到最后（你写的优先），要重启 Nikki 才生效，标「还没生效」并推送
+	if (kind == 'nikki') {
+		let seenMine = false, bad = false;
+		for (let x in (uci_load('nikki') ?? [])) if (x['.type'] == 'rule') { if (match(x['.name'], /^cmcp_sp_/)) seenMine = true; else if (seenMine) bad = true; }
+		o = sp_read();
+		if (bad && length(keys(sp_conflicts(o, sp_own(kind))))) {
+			sp_apply(o, kind);
+			try { sh(sprintf('%s/cmcp-notify info split %s %s split >/dev/null 2>&1', SBIN, shq('分流：改成你自己写的规则优先'), shq('分流跟你在 Nikki 里写的规则撞了的，按你写的走。重启 Nikki 后生效：在「分流」里点「现在重启」。'))); } catch (e) {}
 		}
 	}
 	let want = [];

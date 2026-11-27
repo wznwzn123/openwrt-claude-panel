@@ -6,6 +6,11 @@
 <meta name="theme-color" id="tcm" content="#f2f2f7">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>我的路由器</title>
+<!-- 老手机的系统浏览器（安卓 7 这类没更新过 WebView 的，11/27 全面检查第 29 条）：补两个缺的函数；面板脚本 10 秒还没跑起来就说清楚怎么办，不留白屏。这一段只用老写法 -->
+<script>(function(){try{if(!Object.fromEntries)Object.fromEntries=function(l){var o={};Array.prototype.forEach.call(Array.from(l),function(e){o[e[0]]=e[1]});return o};
+if(!Array.prototype.flatMap)Object.defineProperty(Array.prototype,"flatMap",{configurable:true,writable:true,value:function(f,t){var r=[];for(var i=0;i<this.length;i++){var v=f.call(t,this[i],i,this);if(Array.isArray(v))r.push.apply(r,v);else r.push(v)}return r}});}catch(e){}
+setTimeout(function(){if(window.__rpBoot)return;var dk=document.documentElement.className.indexOf("dark")>=0,d=document.createElement("div");d.id="rpOld";d.setAttribute("style","position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;overflow:auto;background:"+(dk?"#0b0c0f;color:#f2f2f7":"#f2f2f7;color:#111")+";padding:56px 24px;font:16px/1.7 -apple-system,sans-serif");
+d.innerHTML="<div style='max-width:22em;margin:0 auto'><b style='font-size:22px;display:block;margin-bottom:12px'>浏览器版本太旧</b><p style='margin:0 0 10px'>面板打不开。</p><p style='margin:0'>更新手机里的 Android System WebView 或 Chrome 后再试，也可以换 Edge、Chrome、Safari 打开。</p></div>";(document.body||document.documentElement).appendChild(d)},10000)})()</script>
 <link rel="manifest" href="./manifest.json"><link rel="icon" type="image/png" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png">
 <script>try{var d=localStorage.getItem("rp_dark");if(d==="1"||(d===null&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}
 try{var N=navigator,dm=N.deviceMemory,hc=N.hardwareConcurrency;if(/Android/i.test(N.userAgent)&&((dm&&dm<=2)||(hc&&hc<=4)))document.documentElement.classList.add("lowfx")}catch(e){}

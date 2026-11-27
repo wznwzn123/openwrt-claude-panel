@@ -44,8 +44,10 @@ function splRender() {
 	if (!d) return;
 	if (!d.kind) { $('splBody').innerHTML = '<section class="card empty" style="margin-top:12px">分流只支持 OpenClash 和 Nikki</section>'; return; }
 	const mv = (d.moved || []).filter((x) => Date.now() / 1000 - x.at < 7 * 86400).map((x) => `<div class="notice w" style="margin-top:12px">${x.node ? '节点' : '策略组'}「${esc(x.g)}」没了，已改走代理（${esc(d.main || '主策略组')}）</div>`).join('');
+	// 选的节点连不上，暂时改走主策略组（11/27 全面检查第 14 条）
+	const nd = Object.keys(d.nd || {}).map((n) => `<div class="notice w" style="margin-top:12px">节点「${esc(n)}」连不上，暂时改走代理（${esc(d.main || '主策略组')}）</div>`).join('');
 	$('splBody').innerHTML = `${d.pending ? `<div class="notice w splpend" style="margin-top:12px"><span>重启 ${SPL_PX(d)} 后生效</span><button class="btn sm" id="splRs" type="button">现在重启</button></div>` : ''}
-		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${mv}
+		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${nd}${mv}
 		<div class="spltabs" id="splTab" role="tablist">${[['dev', '设备'], ['app', '软件'], ['site', '网站'], ['geo', '国家地区']].map(([k, t]) => `<button type="button" role="tab" aria-selected="${SPL.tab === k}" class="${SPL.tab === k ? 'on' : ''}" data-st="${k}">${t}</button>`).join('')}</div>
 		${splRows()}`;
 }

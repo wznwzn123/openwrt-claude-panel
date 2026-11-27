@@ -4,6 +4,7 @@
   "description": "打包时把面板精简一下（去掉空白和注释、缩短变量名），省闪存；功能不变",
   "type": "module",
   "dependencies": {
-    "esbuild": "0.24.2"
+    "esbuild": "0.24.2",
+    "acorn": "8.12.1"
   }
 }

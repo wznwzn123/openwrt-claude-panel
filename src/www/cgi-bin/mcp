@@ -378,6 +378,15 @@ T.get_logs = function(a) {
 function rules_path(n) {
 	return conf().custom_dir + (+n == 2 ? '/openclash_custom_rules_2.list' : '/openclash_custom_rules.list');
 }
+// 面板「不走代理」「分流」在自定义规则里各有一段（带标记）。AI 整份覆盖、还原备份以后，这几段没了就补回去：
+// 后面的文件往这里加函数（ucode 前面的文件调不到后面才定义的函数），参数是规则文件路径，补了返回功能名（11/27 全面检查第 13 条）
+const RULES_KEEP = [];
+function rules_keep(p) {
+	let kept = [];
+	if (p != rules_path(1)) return kept;
+	for (let f in RULES_KEEP) try { let w = f(p); if (w) push(kept, w); } catch (e) {}
+	return kept;
+}
 
 T.get_custom_rules = function(a) {
 	let p = rules_path(a.file);
@@ -452,7 +461,8 @@ T.set_custom_rules = function(a) {
 	if (!writefile(p + '.tmp', content) || !rename(p + '.tmp', p))
 		die('写入失败：' + p);
 
-	let msg = '已保存 ' + p + (old != null ? '（旧版本备份为 .bak，可用 restore_custom_rules 还原）' : '');
+	let kept = rules_keep(p);
+	let msg = '已保存 ' + p + (old != null ? '（旧版本备份为 .bak，可用 restore_custom_rules 还原）' : '') + (length(kept) ? '；面板「' + join('」「', kept) + '」的规则已自动保留（要改去面板里改）' : '');
 	if (a.enable !== false && uci_get('openclash.config.enable_custom_clash_rules') != '1') {
 		sh(conf().uci + ' set openclash.config.enable_custom_clash_rules=1 && ' + conf().uci + ' commit openclash');
 		msg += '，并已打开「自定义规则」开关';
@@ -472,8 +482,9 @@ T.restore_custom_rules = function(a) {
 	let cur = readfile(p);
 	writefile(p, bak);
 	if (cur != null) writefile(p + '.bak', cur);
+	let kept = rules_keep(p);
 	if (a.apply !== false) restart_openclash_bg();
-	return '已从备份还原 ' + p + (a.apply !== false ? '，OpenClash 正在后台重启' : '');
+	return '已从备份还原 ' + p + (length(kept) ? '（面板「' + join('」「', kept) + '」的规则已自动保留）' : '') + (a.apply !== false ? '，OpenClash 正在后台重启' : '');
 };
 
 T.restart_openclash = function() {
@@ -3833,6 +3844,27 @@ P.black_state = function() {
 	};
 };
 
+// 把「不走代理」那一段加进自定义规则的内容里（放在 rules: 下面第一行，要最先匹配）；已经有了或者没有 rules: 行返回 null
+function bl_block_add(s) {
+	if (s == null) s = 'rules:\n';
+	if (index(s, BL_MARK) >= 0 || !match(s, /(^|\n)rules:[ \t]*(\n|$)/)) return null;
+	let entry = sprintf('  %s: %s 由路由器面板「不走代理」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
+	s = replace(s, /(^|\n)rules:[ \t]*(\n|$)/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
+	if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
+	else s = 'rule-providers:\n' + entry + s;
+	return s;
+}
+// 设过「不走代理」的设备，但自定义规则里那一段没了（AI 整份覆盖、原版后台里改了）：补回去。补了返回 true
+function bl_keep(p) {
+	if (!length(bl_load())) return false;
+	let s = bl_block_add(readfile(p ?? BL_CUSTOM));
+	if (s == null) return false;
+	writefile((p ?? BL_CUSTOM) + '.cmcp_tmp', s);
+	rename((p ?? BL_CUSTOM) + '.cmcp_tmp', p ?? BL_CUSTOM);
+	return true;
+}
+push(RULES_KEEP, (p) => bl_keep(p) ? '不走代理' : null);
+
 /* 第一次使用：把规则集写进「优先匹配」自定义规则，需要重启 OpenClash 一次 */
 P.black_setup = function(a) {
 	bl_write_ruleset(bl_load());
@@ -3840,10 +3872,7 @@ P.black_setup = function(a) {
 	if (index(s, BL_MARK) < 0) {
 		if (!match(s, /(^|\n)rules:[ \t]*(\n|$)/)) die('自定义规则文件里找不到「rules:」行，没有修改');
 		oc_backup_file('custom', BL_CUSTOM);
-		let entry = sprintf('  %s: %s 由路由器面板「不走代理」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
-		s = replace(s, /(^|\n)rules:[ \t]*\n/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
-		if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
-		else s = 'rule-providers:\n' + entry + s;
+		s = bl_block_add(s);
 		writefile(BL_CUSTOM + '.cmcp_tmp', s);
 		rename(BL_CUSTOM + '.cmcp_tmp', BL_CUSTOM);
 	}
@@ -7051,15 +7080,9 @@ function sp_ipmap() {
 }
 // 按「设备 → 软件 → 国家」、每种按去向分好的规则
 function sp_rules(o, mg) {
-	let out = [];
-	let add = (kind, t, line) => {
-		let to = sp_target(t, mg);
-		if (!to) return;
-		let g = null;
-		for (let x in out) if (x.kind == kind && x.to == to) g = x;
-		if (!g) { g = { kind, to, lines: [] }; push(out, g); }
-		if (line) push(g.lines, line);
-	};
+	let out = [], all = [];
+	// 先记下所有条目，再分组：节点连不上（o.nd）时它的条目改放进主策略组那一组，但分组和名字不变（只换规则集内容，不用重启 OpenClash）
+	let add = (kind, t, line) => push(all, [kind, t, line]);
 	// 设备现在的固定 IP 优先（改了局域网网段，固定 IP 跟着搬了），没有再用设的时候记下的
 	let ipm = length(o.dev ?? {}) ? sp_ipmap() : {};
 	for (let mac in o.dev) { let d = o.dev[mac], ip = ipm[mac] || d?.ip; if (ip) { if (d) d.ip = ip; add('d', d.t, 'SRC-IP-CIDR,' + ip + '/32'); } }
@@ -7074,6 +7097,11 @@ function sp_rules(o, mg) {
 	for (let id in o.capp) { let c = o.capp[id]; if (c?.t) for (let dm in (c.doms ?? [])) add('a', c.t, 'DOMAIN-SUFFIX,' + dm); }
 	for (let a in sp_apps()) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
 	for (let g in SP_GEO) if (o.geo[g[0]]) add('g', o.geo[g[0]], 'GEOIP,' + g[0]);
+	let grp = (kind, to) => { if (!to) return null; for (let x in out) if (x.kind == kind && x.to == to) return x; let g = { kind, to, lines: [] }; push(out, g); return g; };
+	for (let e in all) grp(e[0], sp_target(e[1], mg));
+	// 选了单个节点的那一类，先占好「主策略组」一组（可以是空的）：节点连不上时条目挪过去只换内容（11/27 全面检查第 14 条）
+	for (let e in all) if (index(o.nk ?? [], e[1]) >= 0) grp(e[0], mg);
+	for (let e in all) if (e[2]) { let g = grp(e[0], (o.nd ?? {})[e[1]] && mg ? mg : sp_target(e[1], mg)); if (g) push(g.lines, e[2]); }
 	let n = 0;
 	for (let g in out) g.name = sprintf('cmcp_sp_%s%d', g.kind, n++);
 	return out;
@@ -7136,7 +7164,8 @@ function sp_nk_write(rules) {
 // 选了具体策略组的才让看门狗每分钟查（split.grp）
 function sp_mark(o) {
 	let any = false;
-	for (let x in sp_each(o)) if (x[2] && x[2] != 'DIRECT' && x[2] != 'PROXY') any = true;
+	// 设了任何分流都每分钟查一次：规则被整份覆盖了要补回（11/27 全面检查第 13 条），选的策略组 / 节点没了要改走主策略组
+	for (let x in sp_each(o)) if (x[2]) any = true;
 	if (length(o.fam)) any = true; // 家人新认领的设备、IP 变了，看门狗每分钟补上
 	if (any) writefile(ETC + '/split.grp', '1'); else unlink(ETC + '/split.grp');
 }
@@ -7171,7 +7200,7 @@ P.split_get = function() {
 	let devs = [];
 	try { devs = P.devices().devices ?? []; } catch (e) {}
 	return {
-		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [],
+		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [], nd: o.nd ?? {},
 		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam, site: o.site, capp: o.capp, nodes,
 		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1], doms: a[2] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
@@ -7278,9 +7307,68 @@ P.split_restart = function() {
 	return { ok: true };
 };
 // 看门狗每分钟调一次：选的策略组没了（订阅更新后），改走主策略组、推送、重启插件
+// OpenClash：自定义规则里分流那一段没了（AI 整份覆盖、还原备份、原版后台里改了）：按现在的设置补回去。补了返回 true
+function sp_keep() {
+	if (sp_kind() != 'openclash') return false;
+	let o = sp_read(), s = readfile(SP_CUSTOM);
+	if (s == null || !length(sp_each(o)) && !length(o.fam)) return false;
+	let rules = sp_rules(o, sp_main(sp_groups() ?? sp_cfg_groups('openclash')));
+	if (!length(rules) || length(filter(split(s, '\n'), (l) => match(l, /^- RULE-SET,cmcp_sp_/) && index(l, SP_MARK) >= 0)) == length(rules)) return false;
+	return sp_oc_write(rules);
+}
+// AI 整份覆盖 / 还原自定义规则时顺手补上（它本来就要重启 OpenClash，不用多重启一次）
+push(RULES_KEEP, (p) => p == SP_CUSTOM && sp_keep() ? '分流' : null);
+// 节点通不通（谷歌、Cloudflare 两个网址任何一个通就算通，跟节点自动换一样）。测试用 CMCP_SP_DELAY（{ 节点: 延迟 }）
+function sp_delay(n) {
+	let f = getenv('CMCP_SP_DELAY');
+	if (f) return +(cmcp_readj(f, {})[n] ?? 0);
+	for (let u in ['https://www.gstatic.com/generate_204', 'http://cp.cloudflare.com/generate_204']) {
+		let d = 0; try { d = +(api('GET', '/proxies/' + urlenc(n) + '/delay?timeout=3000&url=' + urlenc(u), null, 8)?.delay ?? 0); } catch (e) {}
+		if (d > 0) return d;
+	}
+	return 0;
+}
+// 分流里选的单个节点（11/27 全面检查第 14 条，用户 19:2x 定）：连续 3 分钟不通，用它的条目先改走主策略组并推送；
+// 恢复后连续正常 10 分钟换回去。记在 split.json 的 nd（节点 → 什么时候挪走的）；每分钟的计数放内存盘 /tmp/cmcp_spnode.json
+const SP_NS = '/tmp/cmcp_spnode.json';
+function sp_node_watch(o, kind, want, names) {
+	let nodes = filter(want, (t) => index(o.nk ?? [], t) >= 0 && index(names, t) >= 0);
+	o.nd ??= {};
+	let st = cmcp_readj(getenv('CMCP_SP_NS') ?? SP_NS, {}), now = time(), down = [], back = [], keep = {};
+	for (let n in keys(o.nd)) if (index(nodes, n) < 0) delete o.nd[n];   // 不再选这个节点了（改了设置、节点没了）
+	if (!length(nodes) && !length(keys(st))) return;
+	for (let n in nodes) {
+		let x = st[n] ?? { f: 0, ok: 0 }, d = sp_delay(n);
+		if (o.nd[n]) {
+			if (d > 0) { if (!x.ok) x.ok = now; if (now - x.ok >= 600) { delete o.nd[n]; push(back, n); x = { f: 0, ok: 0 }; } }
+			else x.ok = 0;
+		} else if (d > 0) x.f = 0;
+		else if (++x.f >= 3) { o.nd[n] = now; push(down, n); x = { f: 0, ok: 0 }; }
+		keep[n] = x;
+	}
+	cmcp_writej(getenv('CMCP_SP_NS') ?? SP_NS, keep);
+	if (!length(down) && !length(back)) { cmcp_writej(SP_F, o); return; }
+	cmcp_writej(SP_F, o);
+	// OpenClash 只换规则集内容（主策略组那一组事先占好了）；第一次用（还没占好）或者 Nikki 要重启插件，节点已经不通了，重启比一直不通好
+	let r = sp_apply(o, kind);
+	if (r.restart) { sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart'); let z = sp_read(); delete z.pending; cmcp_writej(SP_F, z); }
+	let msg = (l, a, b) => { try { sh(sprintf('%s/cmcp-notify %s split %s %s split >/dev/null 2>&1', SBIN, a, shq(b), shq(l))); } catch (e) {} };
+	if (length(down)) msg('选它的设备、网站和软件先改走主策略组，节点恢复 10 分钟后自动换回。', 'warn', '分流：节点「' + join('」「', down) + '」连不上');
+	if (length(back)) msg('选它的设备、网站和软件已经换回这个节点。', 'ok', '分流：节点「' + join('」「', back) + '」恢复了');
+}
 P.split_check = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) return { ok: true };
+	// 每分钟看一次：自定义规则被原版后台或别的东西整份改掉了，「不走代理」「分流」那几段补回去；要重启 OpenClash 才生效，标「还没生效」并推送（不自动重启）
+	if (kind == 'openclash') {
+		let fixed = [];
+		if (SP_CUSTOM == BL_CUSTOM && bl_keep()) push(fixed, '不走代理');
+		if (sp_keep()) push(fixed, '分流');
+		if (length(fixed)) {
+			o = sp_read(); o.pending = true; cmcp_writej(SP_F, o);
+			try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('「' + join('」「', fixed) + '」的规则被改掉了，已补回'), shq('OpenClash 的自定义规则被整份改过，面板加的那几行没了。重启 OpenClash 后生效：在「分流」里点「现在重启」。'))); } catch (e) {}
+		}
+	}
 	let want = [];
 	for (let x in sp_each(o)) { let t = x[2]; if (t && t != 'DIRECT' && t != 'PROXY' && index(want, t) < 0) push(want, t); }
 	if (length(o.fam)) {
@@ -7288,11 +7376,12 @@ P.split_check = function() {
 		sp_apply(o, kind);
 		o = sp_read();
 	}
-	if (!length(want)) return { ok: true };
+	if (!length(want)) { if (length(keys(o.nd ?? {}))) { o.nd = {}; cmcp_writej(SP_F, o); } return { ok: true }; }
 	// 插件在跑时看策略组和节点；没在跑时只能从配置文件里看策略组（节点是订阅里的，读不到就先不动）
 	let names = sp_names(), live = names != null;
 	if (!live) names = sp_cfg_groups(kind);
 	if (names == null) return { ok: true };
+	if (live) sp_node_watch(o, kind, want, names);
 	// 没在跑时：选的节点先不算没了（订阅里的节点读不到），只看策略组
 	let isNode = (t) => index(o.nk ?? [], t) >= 0;
 	let gone = filter(want, (t) => index(names, t) < 0 && (live || !isNode(t)));

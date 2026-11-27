@@ -147,13 +147,14 @@ const lay = (page) => page.evaluate(() => {
 	}
 	// 策略组没了、插件没在跑、Nikki、不支持
 	{
-		S = fresh({ kind: 'nikki', live: false, moved: [{ g: '🎬 流媒体', at: Math.floor(Date.now() / 1000) - 3600 }], pending: true });
+		S = fresh({ kind: 'nikki', live: false, moved: [{ g: '🎬 流媒体', at: Math.floor(Date.now() / 1000) - 3600 }], pending: true, nd: { '🇯🇵 日本 01': Math.floor(Date.now() / 1000) - 300 } });
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
 		page.on('pageerror', (e) => problems.push('页面错误（Nikki）：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8195/panel/?p=split'); await W(1500);
 		const t = await page.textContent('#splBody');
 		ok('Nikki：「重启 Nikki 后生效」；没在运行说明；策略组没了的记录', /重启 Nikki 后生效/.test(t) && /Nikki 没在运行/.test(t) && /策略组「🎬 流媒体」没了，已改走代理（节点选择）/.test(t), t.slice(0, 200));
+		ok('选的节点连不上：写「暂时改走代理」（11/27 全面检查第 14 条）', /节点「🇯🇵 日本 01」连不上，暂时改走代理（节点选择）/.test(t), t.slice(0, 300));
 		await page.screenshot({ path: path.join(SHOT, 'split-nikki.png') });
 		S.d = { kind: null };
 		await page.reload(); await W(1500);

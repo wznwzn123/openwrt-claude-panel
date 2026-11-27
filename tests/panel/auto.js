@@ -54,7 +54,8 @@ const goWdReal = async (page) => { await page.click('#menuBtn'); await page.wait
 const st = (page) => page.evaluate(() => ({ pill: document.querySelector('#auPill')?.textContent, rows: [...document.querySelectorAll('#auCard [data-au]')].map((l) => l.dataset.au + ':' + l.querySelector('input').checked), txt: document.querySelector('#auCard')?.textContent || '' }));
 (async () => {
 	const ALL = ['tunrestart', 'panelrestart', 'cacheclean', 'memguard', 'autosw', 'tunbypass', 'route', 'daily', 'weekly', 'newdev', 'cloudbackup', 'loginalert', 'autoban', 'ipchange', 'health', 'diskfull'];
-	const flip = async (page, k) => { await page.locator(`#auCard [data-au="${k}"] .sw`).click(); await page.waitForTimeout(600); };
+	// 先滚到屏幕中间再点：贴着屏幕底部时开关的一半在底部快捷栏下面（真机手指点得到，这里的自动点击会偶尔落空）
+	const flip = async (page, k) => { const l = page.locator(`#auCard [data-au="${k}"] .sw`); await l.evaluate((e) => e.scrollIntoView({ block: 'center' })); await page.waitForTimeout(150); await l.click(); await page.waitForTimeout(600); };
 	const browser = await chromium.launch();
 	let { page, ctx } = await open(browser);
 	await page.goto('http://panel.test/panel/'); await page.waitForTimeout(1200);

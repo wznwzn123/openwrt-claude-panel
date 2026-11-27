@@ -227,6 +227,15 @@ T.get_logs = function(a) {
 function rules_path(n) {
 	return conf().custom_dir + (+n == 2 ? '/openclash_custom_rules_2.list' : '/openclash_custom_rules.list');
 }
+// 面板「不走代理」「分流」在自定义规则里各有一段（带标记）。AI 整份覆盖、还原备份以后，这几段没了就补回去：
+// 后面的文件往这里加函数（ucode 前面的文件调不到后面才定义的函数），参数是规则文件路径，补了返回功能名（11/27 全面检查第 13 条）
+const RULES_KEEP = [];
+function rules_keep(p) {
+	let kept = [];
+	if (p != rules_path(1)) return kept;
+	for (let f in RULES_KEEP) try { let w = f(p); if (w) push(kept, w); } catch (e) {}
+	return kept;
+}
 
 T.get_custom_rules = function(a) {
 	let p = rules_path(a.file);
@@ -301,7 +310,8 @@ T.set_custom_rules = function(a) {
 	if (!writefile(p + '.tmp', content) || !rename(p + '.tmp', p))
 		die('写入失败：' + p);
 
-	let msg = '已保存 ' + p + (old != null ? '（旧版本备份为 .bak，可用 restore_custom_rules 还原）' : '');
+	let kept = rules_keep(p);
+	let msg = '已保存 ' + p + (old != null ? '（旧版本备份为 .bak，可用 restore_custom_rules 还原）' : '') + (length(kept) ? '；面板「' + join('」「', kept) + '」的规则已自动保留（要改去面板里改）' : '');
 	if (a.enable !== false && uci_get('openclash.config.enable_custom_clash_rules') != '1') {
 		sh(conf().uci + ' set openclash.config.enable_custom_clash_rules=1 && ' + conf().uci + ' commit openclash');
 		msg += '，并已打开「自定义规则」开关';
@@ -321,8 +331,9 @@ T.restore_custom_rules = function(a) {
 	let cur = readfile(p);
 	writefile(p, bak);
 	if (cur != null) writefile(p + '.bak', cur);
+	let kept = rules_keep(p);
 	if (a.apply !== false) restart_openclash_bg();
-	return '已从备份还原 ' + p + (a.apply !== false ? '，OpenClash 正在后台重启' : '');
+	return '已从备份还原 ' + p + (length(kept) ? '（面板「' + join('」「', kept) + '」的规则已自动保留）' : '') + (a.apply !== false ? '，OpenClash 正在后台重启' : '');
 };
 
 T.restart_openclash = function() {

@@ -116,6 +116,7 @@ const SHOT = path.join(__dirname, 'shots');
 			await p2.click('.modal [data-aimore]'); await W(300);
 			await p2.click('.modal [data-ans="all"]'); await W(1200);
 			const st = await p2.evaluate(() => ({ modal: document.querySelectorAll('.modal').length, me: !document.getElementById('p-me').classList.contains('hidden') && getComputedStyle(document.getElementById('p-me')).display !== 'none', toast: document.getElementById('toast').textContent }));
+			await p2.screenshot({ path: path.join(SHOT, `aiask-verify-me-${w}${dark ? '-dark' : ''}.png`) });
 			ok('没验证本人点「全部都允许」：不弹确认、不发出去，卡片收起，带去「我的主页」验证' + T, st.modal === 0 && st.me && /验证是你本人/.test(st.toast) && !S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa5'), JSON.stringify(st));
 			await p2.evaluate(() => window.dispatchEvent(new Event('focus'))); await W(2500);
 			ok('在「我的主页」还没验证：这个请求先不弹出来挡着' + T, (await p2.locator('.modal .aiask').count()) === 0 && S.list.find((x) => x.id === 'aaaaaaaaa5').st === 'wait');
@@ -123,6 +124,7 @@ const SHOT = path.join(__dirname, 'shots');
 			if (await pw.count()) {
 				await pw.fill('rootpw'); await p2.click('#meBox [data-pwok]'); await W(2600);
 				const ex = await p2.evaluate(() => { const b = document.querySelector('.modal [data-aimore]'), o = document.querySelector('.modal .aiopts'); return { card: !!document.querySelector('.modal .aiask'), t: (document.querySelector('.modal .aiask h3') || {}).textContent, ex: b && b.getAttribute('aria-expanded'), vis: o && !o.hidden }; });
+				await p2.screenshot({ path: path.join(SHOT, `aiask-verify-back-${w}${dark ? '-dark' : ''}.png`) });
 				ok('验证好了：马上再弹出这个请求，「全部都允许」已经展开' + T, ex.card && /重启路由器/.test(ex.t) && ex.ex === 'true' && ex.vis, JSON.stringify(ex));
 				await p2.click('.modal [data-ans="all"]'); await W(600);
 				await p2.locator('.modal').last().locator('[data-v="true"]').click(); await W(1400);

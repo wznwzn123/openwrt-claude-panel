@@ -17,11 +17,12 @@ const CUS0 = 'rule-providers:\n  mine:\n    type: http\n    behavior: domain\n  
 fs.writeFileSync(CUS, CUS0);
 const PROX = (groups) => JSON.stringify({ proxies: Object.fromEntries([['GLOBAL', { type: 'Selector', all: groups.map((g) => g[0]) }], ...groups.map(([n, t]) => [n, { type: t }]), ['HK01', { type: 'Shadowsocks' }]]) });
 fs.writeFileSync(PX, PROX([['节点选择', 'Selector'], ['🎬 流媒体', 'Selector'], ['♻️ 自动选择', 'URLTest']]));
+fs.writeFileSync(E + '/delay.json', JSON.stringify({ '🇯🇵 日本 01': 80, '🇭🇰 香港 02 IPLC': 90 }));
 fs.writeFileSync(E + '/config.json', JSON.stringify({ token: 'tok' + 'p'.repeat(30), uci: 'python3 ' + path.resolve('test/fake/uci.py') + ' -c ' + CFG, uci_dir: CFG }));
 let KIND = 'openclash';
 const cgi = (method, params, xenv = {}) => new Promise((z) => {
 	const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'panel/' + method, params: params || {}, client: 'panel' });
-	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/tok' + 'p'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_SBIN: SB, CMCP_SP_KIND: KIND, CMCP_SP_PROXIES: PX, CMCP_SP_DIR: RS, CMCP_SP_CUSTOM: CUS, CMCP_SP_RUN: RUN, CMCP_SP_CFG: YML, ...xenv } });
+	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/tok' + 'p'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_SBIN: SB, CMCP_SP_KIND: KIND, CMCP_SP_PROXIES: PX, CMCP_SP_DIR: RS, CMCP_SP_CUSTOM: CUS, CMCP_SP_RUN: RUN, CMCP_SP_CFG: YML, CMCP_SP_NS: E + '/spnode.json', CMCP_SP_DELAY: E + '/delay.json', ...xenv } });
 	let out = ''; p.stdout.on('data', (x) => (out += x)); p.on('close', () => { const i = out.indexOf('\r\n\r\n'); let j = null; try { j = JSON.parse(out.slice(i + 4)); } catch (e) {} z(j || { raw: out }); });
 	p.stdin.end(body);
 });
@@ -77,7 +78,7 @@ try {
 	ok('插件没在跑：从配置文件读出策略组', r.result?.live === false && JSON.stringify(r.result.groups) === '["节点选择","Netflix 专用"]', JSON.stringify(r.result?.groups));
 	r = await cgi('split_check');
 	ok('配置里也没有「♻️ 自动选择」：设备改走主策略组', JSON.stringify(r.result?.moved) === '["♻️ 自动选择"]' && (await cgi('split_get')).result.dev['aa:aa:aa:aa:aa:02'].t === 'PROXY');
-	ok('没有具体策略组了：看门狗不用再查', !fs.existsSync(E + '/split.grp'));
+	ok('还有分流（改走主策略组的）：看门狗照样每分钟查（规则被整份覆盖了要补回）', fs.existsSync(E + '/split.grp'));
 	// 全部去掉：自定义规则恢复原样
 	fs.writeFileSync(PX, PROX([['节点选择', 'Selector']]));
 	for (const [k, id] of [['app', 'netflix'], ['app', 'youtube'], ['app', 'bilibili'], ['geo', 'JP']]) await cgi('split_set', { [k]: { id, t: '' } });
@@ -126,6 +127,37 @@ try {
 	ok('[节点] 节点没了：改走主策略组、推送写「节点」、重启', JSON.stringify(r.result?.moved) === '["🇯🇵 日本 01"]' && (await cgi('split_get')).result.app.youtube === 'PROXY' && /openclash restart/.test(rd(RUN)), JSON.stringify(r.result));
 	ok('[节点] 推送写清楚是节点', /分流：节点「🇯🇵 日本 01」没了/.test(rd(E + '/notified')), rd(E + '/notified'));
 	await cgi('split_set', { app: { id: 'youtube', t: '' } });
+	// ---- 11/27 全面检查第 14 条：选的单个节点连不上 → 连续 3 分钟不通改走主策略组，恢复 10 分钟换回（只换规则集内容，不重启） ----
+	{
+		fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🇯🇵 日本 01'] }, '节点选择': { type: 'Selector', now: '🇯🇵 日本 01' }, '🇯🇵 日本 01': { type: 'Vmess' } } }));
+		const DL = E + '/delay.json', NS = E + '/spnode.json', setD = (d) => fs.writeFileSync(DL, JSON.stringify({ '🇯🇵 日本 01': d }));
+		setD(80); fs.rmSync(NS, { force: true });
+		await cgi('split_set', { app: { id: 'youtube', t: '🇯🇵 日本 01' } }); await cgi('split_restart');
+		const to = () => { const m = {}; for (const x of rd(CUS).matchAll(/^- RULE-SET,(cmcp_sp_a[0-9]+),(.+) # \[cmcp-split\]$/gm)) m[x[2]] = x[1]; return m; };
+		const ytIn = () => { const m = to(); for (const [t, n] of Object.entries(m)) if (/youtube\.com/.test(rd(RS + '/' + n + '.yaml'))) return t; return null; };
+		const cus0 = rd(CUS);
+		ok('[节点挂了] 选了单个节点：主策略组那一组事先占好（空的）', to()['节点选择'] && to()['🇯🇵 日本 01'] && ytIn() === '🇯🇵 日本 01' && !/youtube/.test(rd(RS + '/' + to()['节点选择'] + '.yaml')), cus0);
+		fs.writeFileSync(RUN, ''); fs.rmSync(E + '/notified', { force: true });
+		setD(0);
+		await cgi('split_check'); await cgi('split_check');
+		ok('[节点挂了] 不通 2 分钟：先不动', ytIn() === '🇯🇵 日本 01' && !Object.keys((await cgi('split_get')).result.nd || {}).length);
+		await cgi('split_check');
+		r = await cgi('split_get');
+		ok('[节点挂了] 不通 3 分钟：改走主策略组（自定义规则不变、不重启），推送', ytIn() === '节点选择' && rd(CUS) === cus0 && rd(RUN) === '' && r.result.nd['🇯🇵 日本 01'] > 0 && r.result.app.youtube === '🇯🇵 日本 01' && /节点「🇯🇵 日本 01」连不上/.test(rd(E + '/notified')), rd(RUN) + rd(E + '/notified'));
+		setD(80); await cgi('split_check');
+		ok('[节点挂了] 刚恢复：先不换回（开始计时）', ytIn() === '节点选择');
+		const ns = JSON.parse(rd(NS)); ns['🇯🇵 日本 01'].ok -= 700; fs.writeFileSync(NS, JSON.stringify(ns));
+		await cgi('split_check');
+		ok('[节点挂了] 连续正常 10 分钟：换回这个节点，推送', ytIn() === '🇯🇵 日本 01' && !Object.keys((await cgi('split_get')).result.nd || {}).length && rd(RUN) === '' && /恢复了/.test(rd(E + '/notified')), rd(E + '/notified'));
+		// 中间又不通：重新计时
+		setD(0); await cgi('split_check'); await cgi('split_check'); await cgi('split_check');
+		setD(80); await cgi('split_check'); setD(0); await cgi('split_check'); setD(80); await cgi('split_check');
+		ok('[节点挂了] 恢复中间又不通：重新计时，不换回', ytIn() === '节点选择' && JSON.parse(rd(NS))['🇯🇵 日本 01'].ok > Date.now() / 1000 - 30);
+		// 改了设置不再选这个节点：记录清掉
+		await cgi('split_set', { app: { id: 'youtube', t: '' } }); await cgi('split_check');
+		ok('[节点挂了] 不再选这个节点：挪走的记录清掉', !Object.keys((await cgi('split_get')).result.nd || {}).length);
+		fs.writeFileSync(PX, PX0); await cgi('split_restart');
+	}
 	// ---- 用户 11/27：自己加网站和软件 ----
 	r = await cgi('split_set', { site: { d: 'https://www.Example.com/path?x=1', t: 'DIRECT' } });
 	ok('[网站] 加网站：去掉 https、www、路径，写成网址后缀规则', r.result?.site?.['example.com'] === 'DIRECT' && /DOMAIN-SUFFIX,example\.com/.test(fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('')), err(r) || JSON.stringify(r.result?.site));
@@ -168,6 +200,40 @@ try {
 	r = await cgi('split_learn', { act: 'stop' }, { CMCP_SPL_F: LF });
 	ok('[学习] 点停止', r.result?.run === false);
 	fs.writeFileSync(PX, PX0);
+	// 11/27 全面检查第 13 条：自定义规则被整份覆盖（原版后台改了、AI 写了整份）以后，分流那一段补回去
+	{
+		const lines = () => (rd(CUS).match(/^- RULE-SET,cmcp_sp_[^\n]*# \[cmcp-split\]$/gm) || []).length;
+		await cgi('split_set', { app: { id: 'netflix', t: 'DIRECT' } }); await cgi('split_set', { geo: { id: 'JP', t: 'PROXY' } }); await cgi('split_restart');
+		const n0 = lines(); fs.writeFileSync(RUN, ''); fs.rmSync(E + '/notified', { force: true });
+		ok('[补回] 准备：现在有分流规则', n0 > 0 && fs.existsSync(E + '/split.grp'), rd(CUS) + rd(E + '/split.json'));
+		fs.writeFileSync(CUS, 'rules:\n- RULE-SET,cmcp_blacklist,DIRECT # [cmcp-blacklist]\n- DOMAIN,mine.example,DIRECT\n');
+		r = await cgi('split_check');
+		ok('[补回] 原版后台整份改了：每分钟检查时补回（在「不走代理」后面），自己写的规则不动', lines() === n0 && /cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n- RULE-SET,cmcp_sp_/.test(rd(CUS)) && /- DOMAIN,mine\.example,DIRECT/.test(rd(CUS)) && /cmcp_sp_[dag][0-9]+: # \[cmcp-split\]/.test(rd(CUS)), rd(CUS));
+		ok('[补回] 不自动重启，标「还没生效」，推送说清楚', rd(RUN) === '' && (await cgi('split_get')).result.pending === true && /被改掉了，已补回/.test(rd(E + '/notified')), rd(E + '/notified'));
+		fs.rmSync(E + '/notified', { force: true });
+		await cgi('split_check');
+		ok('[补回] 已经补好了：不再改、不再推送', lines() === n0 && !fs.existsSync(E + '/notified'));
+		// AI（或面板的规则编辑）整份写自定义规则：写的时候就补上，不用多重启一次
+		const OC = E + '/oc'; fs.mkdirSync(OC, { recursive: true });
+		const CJ = JSON.parse(rd(E + '/config.json')); fs.writeFileSync(E + '/config.json', JSON.stringify({ ...CJ, custom_dir: OC }));
+		fs.copyFileSync(CUS, OC + '/openclash_custom_rules.list');
+		r = await cgi('file_save', { kind: 'custom', name: 'openclash_custom_rules.list', content: 'rules:\n- DOMAIN,ai.example,DIRECT\n', restart: false }, { CMCP_SP_CUSTOM: OC + '/openclash_custom_rules.list' });
+		const oc = rd(OC + '/openclash_custom_rules.list');
+		ok('[补回] AI 或规则编辑整份写自定义规则：分流那一段写的时候就补上，回复里说已保留', /- DOMAIN,ai\.example,DIRECT/.test(oc) && (oc.match(/^- RULE-SET,cmcp_sp_[^\n]*# \[cmcp-split\]$/gm) || []).length === n0 && /「分流」的规则已自动保留/.test(r.result?.msg || ''), JSON.stringify(r).slice(0, 300) + oc);
+		// 「不走代理」也一样（设过不走代理的设备才补）：放在 rules: 下面第一行
+		const BLF = '/etc/claude-mcp/blacklist.json', blBak = fs.existsSync(BLF) ? fs.readFileSync(BLF) : null;
+		try {
+			fs.mkdirSync('/etc/claude-mcp', { recursive: true }); fs.writeFileSync(BLF, JSON.stringify([{ mac: 'aa:aa:aa:aa:aa:09', ip: '192.168.1.9', name: '电视' }]));
+			r = await cgi('file_save', { kind: 'custom', name: 'openclash_custom_rules.list', content: 'rules:\n- DOMAIN,ai2.example,DIRECT\n', restart: false }, { CMCP_SP_CUSTOM: OC + '/openclash_custom_rules.list' });
+			const o2 = rd(OC + '/openclash_custom_rules.list');
+			ok('[补回] 有「不走代理」的设备：那一行也补上，放在最前面（分流跟在后面）', /^rules:\n- RULE-SET,cmcp_blacklist,DIRECT # \[cmcp-blacklist\]\n- RULE-SET,cmcp_sp_/m.test(o2) && /cmcp_blacklist: # \[cmcp-blacklist\]/.test(o2) && /「不走代理」「分流」的规则已自动保留/.test(r.result?.msg || ''), JSON.stringify(r).slice(0, 300) + o2);
+			fs.writeFileSync(BLF, '[]');
+			r = await cgi('file_save', { kind: 'custom', name: 'openclash_custom_rules.list', content: 'rules:\n- DOMAIN,ai3.example,DIRECT\n', restart: false }, { CMCP_SP_CUSTOM: OC + '/openclash_custom_rules.list' });
+			ok('[补回] 没有「不走代理」的设备：不加那一行', !/cmcp_blacklist/.test(rd(OC + '/openclash_custom_rules.list')));
+		} finally { if (blBak == null) fs.rmSync(BLF, { force: true }); else fs.writeFileSync(BLF, blBak); }
+		fs.writeFileSync(E + '/config.json', JSON.stringify(CJ));
+		await cgi('split_set', { app: { id: 'netflix', t: '' } }); await cgi('split_set', { geo: { id: 'JP', t: '' } });
+	}
 	// Nikki
 	KIND = 'nikki';
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: 'PROXY' } });
@@ -177,6 +243,15 @@ try {
 	ok('Nikki：现在重启', /nikki restart/.test(rd(RUN)));
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: '' } });
 	ok('Nikki：去掉后删掉自己的规则', !/cmcp_sp_/.test(rd(CFG + '/nikki')) && /config rule 'mine'/.test(rd(CFG + '/nikki')));
+	{ // Nikki 的规则里直接写节点名：节点连不上改走主策略组要重启 Nikki（节点已经不通了）
+		fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🇯🇵 日本 01'] }, '节点选择': { type: 'Selector', now: '🇯🇵 日本 01' }, '🇯🇵 日本 01': { type: 'Vmess' } } }));
+		fs.rmSync(E + '/spnode.json', { force: true }); fs.writeFileSync(E + '/delay.json', JSON.stringify({ '🇯🇵 日本 01': 80 }));
+		await cgi('split_set', { app: { id: 'chatgpt', t: '🇯🇵 日本 01' } }); await cgi('split_restart'); fs.writeFileSync(RUN, '');
+		fs.writeFileSync(E + '/delay.json', JSON.stringify({ '🇯🇵 日本 01': 0 }));
+		await cgi('split_check'); await cgi('split_check'); await cgi('split_check');
+		ok('Nikki：选的节点连不上 3 分钟：规则改走主策略组，重启 Nikki', /option node '节点选择'/.test(rd(CFG + '/nikki')) && !/option node '🇯🇵 日本 01'/.test(rd(CFG + '/nikki')) && /nikki restart/.test(rd(RUN)) && (await cgi('split_get')).result.pending === false, rd(RUN) + rd(CFG + '/nikki'));
+		await cgi('split_set', { app: { id: 'chatgpt', t: '' } }); fs.writeFileSync(PX, PX0);
+	}
 	// 不支持的插件
 	KIND = 'none';
 	ok('没装 OpenClash / Nikki：说不支持', (await cgi('split_get')).result?.kind === null && /只支持 OpenClash 和 Nikki/.test(err(await cgi('split_set', { app: { id: 'chatgpt', t: 'DIRECT' } }))));

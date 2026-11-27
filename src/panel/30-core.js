@@ -1,5 +1,7 @@
 (() => {
 'use strict';
+// 面板脚本跑起来了（页头那段 10 秒内看不到它就提示「浏览器太旧」）
+window.__rpBoot = 1;
 const $ = (id) => document.getElementById(id);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

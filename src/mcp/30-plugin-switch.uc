@@ -172,6 +172,27 @@ P.black_state = function() {
 	};
 };
 
+// 把「不走代理」那一段加进自定义规则的内容里（放在 rules: 下面第一行，要最先匹配）；已经有了或者没有 rules: 行返回 null
+function bl_block_add(s) {
+	if (s == null) s = 'rules:\n';
+	if (index(s, BL_MARK) >= 0 || !match(s, /(^|\n)rules:[ \t]*(\n|$)/)) return null;
+	let entry = sprintf('  %s: %s 由路由器面板「不走代理」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
+	s = replace(s, /(^|\n)rules:[ \t]*(\n|$)/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
+	if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
+	else s = 'rule-providers:\n' + entry + s;
+	return s;
+}
+// 设过「不走代理」的设备，但自定义规则里那一段没了（AI 整份覆盖、原版后台里改了）：补回去。补了返回 true
+function bl_keep(p) {
+	if (!length(bl_load())) return false;
+	let s = bl_block_add(readfile(p ?? BL_CUSTOM));
+	if (s == null) return false;
+	writefile((p ?? BL_CUSTOM) + '.cmcp_tmp', s);
+	rename((p ?? BL_CUSTOM) + '.cmcp_tmp', p ?? BL_CUSTOM);
+	return true;
+}
+push(RULES_KEEP, (p) => bl_keep(p) ? '不走代理' : null);
+
 /* 第一次使用：把规则集写进「优先匹配」自定义规则，需要重启 OpenClash 一次 */
 P.black_setup = function(a) {
 	bl_write_ruleset(bl_load());
@@ -179,10 +200,7 @@ P.black_setup = function(a) {
 	if (index(s, BL_MARK) < 0) {
 		if (!match(s, /(^|\n)rules:[ \t]*(\n|$)/)) die('自定义规则文件里找不到「rules:」行，没有修改');
 		oc_backup_file('custom', BL_CUSTOM);
-		let entry = sprintf('  %s: %s 由路由器面板「不走代理」管理，请勿修改\n    type: file\n    behavior: classical\n    path: ./rule_provider/cmcp_blacklist.yaml\n', BL_PROVIDER, BL_MARK);
-		s = replace(s, /(^|\n)rules:[ \t]*\n/, (m, p1) => p1 + 'rules:\n' + sprintf('- RULE-SET,%s,DIRECT %s\n', BL_PROVIDER, BL_MARK));
-		if (match(s, /(^|\n)rule-providers:[ \t]*\n/)) s = replace(s, /(^|\n)rule-providers:[ \t]*\n/, (m, p1) => p1 + 'rule-providers:\n' + entry);
-		else s = 'rule-providers:\n' + entry + s;
+		s = bl_block_add(s);
 		writefile(BL_CUSTOM + '.cmcp_tmp', s);
 		rename(BL_CUSTOM + '.cmcp_tmp', BL_CUSTOM);
 	}

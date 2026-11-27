@@ -167,6 +167,9 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		await page.fill('.ann-form input', tt);
 		await page.click('.ann-form [role="radiogroup"][aria-label="发给"] button:has-text("自建版")');
 		await page.fill('.ann-form input[aria-label="从哪个版本"]', '6.0.0'); await page.fill('.ann-form input[aria-label="到哪个版本"]', '6.9');
+		// 用户 11/27 截图：手机上「到」和第二个框被挤到屏幕外
+		const vr = await page.evaluate(() => { const f = document.querySelector('.ann-form').getBoundingClientRect(), l = [...document.querySelectorAll('.ann-ver > *')].map((e) => e.getBoundingClientRect()); return { ok: l.length === 3 && l.every((r) => r.left >= f.left - 1 && r.right <= f.right + 1 && r.width > 10) && Math.abs(l[0].top - l[2].top) < 4, sw: document.documentElement.scrollWidth <= innerWidth + 1 }; });
+		ok('公告：「从…到…」两个版本框和「到」都在表单里、同一行，不横向滚动' + sfx, vr.ok && vr.sw, JSON.stringify(vr));
 		await page.click('.ann-form button:has-text("发布公告")'); await W(1000);
 		const has = async (q) => (await api('/api/notices' + q)).list.some((x) => x.title === tt);
 		ok('公告定向：自建版 6.0.0 收得到' + sfx, await has('?v=6.0.0&k=s'));

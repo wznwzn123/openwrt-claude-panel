@@ -215,8 +215,8 @@
 /* 公告（5.0）：定时发布、面板里的样子 */
 .ann-dt { width: 100%; min-height: 38px; padding: 0 12px; font: inherit; color: var(--ink); background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
 .ann-ver { display: flex; gap: 6px; align-items: center; }
-.ann-ver > :not(span) { flex: 1; min-width: 0; }
-.ann-ver > span { flex: none; font-size: 13px; color: var(--muted); }
+.ann-ver > .input-shell { flex: 1 1 0; min-width: 0; width: auto; }
+.ann-ver > .ann-to { flex: none; font-size: 13px; color: var(--muted); }
 .ann-pv-ban { display: flex; align-items: center; gap: 8px; min-width: 0; height: 28px; font-size: 13px; color: var(--muted); }
 .ann-pv-ban i { flex: none; font-style: normal; }
 .ann-pv-ban span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

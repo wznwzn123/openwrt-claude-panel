@@ -77,4 +77,6 @@ if ! selfcheck; then restore; fail "装完面板打不开，已退回原来的";
 esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新到 v$VER V$N" "$(esc "$NOTES")" >> "$D/events.log"
 log "热补丁 $N 装好了"
+# 换了看门狗（一直在跑的程序）：重启一下才用上新的（不碰网络）
+case " $(echo $FILES) " in *" usr/sbin/cmcp-watchdog "*) [ -z "$R" ] && [ -x /etc/init.d/cmcp-watchdog ] && ( /etc/init.d/cmcp-watchdog restart >/dev/null 2>&1 & ) ;; esac
 cd / && rm -rf "${W:?}"

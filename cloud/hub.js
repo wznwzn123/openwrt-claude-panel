@@ -1453,6 +1453,17 @@ export class Hub extends DurableObject {
 	/* ---------- 公告：管理页发；托管版、自建版的面板都来拿（只读）；重要的由各自的路由器推送到手机 ---------- */
 	async anns(all) { const l = (await this.ctx.storage.get('ann')) || [], now = Date.now(); return all ? l : l.filter((a) => (!a.exp || a.exp > now) && (!a.start || a.start <= now)); }
 	// 新建（id 空）或修改；days：多少天后不再显示（0 = 一直显示）
+	// 公告即时送达（用户 11/27：后台发出、修改都要所有路由器马上收到）：每次写公告列表，版本号加 1；
+	// 路由器每分钟的心跳回复里带着「版本号.已经到点的定时数」，变了就马上去取（定时发布、到期也会让它变）
+	async annPut(l) {
+		await this.ctx.storage.put('ann', l);
+		await this.ctx.storage.put('annrev', ((await this.ctx.storage.get('annrev')) || 0) + 1);
+	}
+	async annMeta() {
+		const l = (await this.ctx.storage.get('ann')) || [], t = [];
+		for (const a of l) { if (a.start) t.push(+a.start); if (a.exp) t.push(+a.exp); }
+		return { rev: (await this.ctx.storage.get('annrev')) || 0, t: t.sort((x, y) => x - y) };
+	}
 	async annSave(id, b) {
 		// 6.0：banner = 面板顶上一条横幅（轻提醒，比如今晚维护），不弹窗、不推送
 		const level = b.level === 'important' ? 'important' : b.level === 'banner' ? 'banner' : 'normal';
@@ -1492,11 +1503,11 @@ export class Hub extends DurableObject {
 				else x.level = 'normal';
 				replaced.push(x.title);
 			}
-			await this.ctx.storage.put('ann', l.slice(0, 50));
+			await this.annPut(l.slice(0, 50));
 			return { st: 200, ok: true, ann: a, ...(replaced.length ? { replaced } : {}) };
 		});
 	}
-	annDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('ann')) || [], a = l.find((x) => x.id === id); if (!a) return false; await this.ctx.storage.put('ann', l.filter((x) => x.id !== id)); if (a.files && a.files.length) await this.fileGone(a.files.map((x) => x.id)); return true; }); }
+	annDel(id) { return this.lock(async () => { const l = (await this.ctx.storage.get('ann')) || [], a = l.find((x) => x.id === id); if (!a) return false; await this.annPut(l.filter((x) => x.id !== id)); if (a.files && a.files.length) await this.fileGone(a.files.map((x) => x.id)); return true; }); }
 	// 标为已收到 / 撤回（对方查进度时，第二段「开发人员已收到」亮起来）
 	async fbAck(id, on) {
 		const x = await this.lock(async () => { const l = (await this.ctx.storage.get('fbl')) || [], x = l.find((y) => y.id === id); if (!x) return null; const was = x.ack; x.ack = on ? x.ack || Date.now() : 0; await this.ctx.storage.put('fbl', l); return { ...x, was }; });
@@ -1695,6 +1706,11 @@ export async function hubFetch(req, env) {
 	}
 	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
 	// 公告（公开、只读；面板经路由器每 30 分钟来拿一次，缓存 5 分钟）
+	// 公告版本号（自建版每 5 分钟问一次；托管版跟着每分钟的心跳拿）：变了才去取整个公告列表
+	if (p === '/api/notices/v' && req.method === 'GET') {
+		let v = null; try { v = await annVer(env); } catch (e) {}
+		return v == null ? J({ ok: false }, 503) : new Response(JSON.stringify({ ok: true, v }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+	}
 	if (p === '/api/notices' && req.method === 'GET') {
 		// 路由器带着自己的版本（v）和托管 / 自建（k = h / s）来拿：只给发给它的；老版本不带，当成最老的版本、托管自建都算
 		const qv = u.searchParams.get('v') || '0', qk = u.searchParams.get('k') || '';
@@ -1820,8 +1836,8 @@ export async function hubFetch(req, env) {
 		if (a[0] === 'feedback' && !a[1] && req.method === 'GET') return J({ ok: true, files: !!env.F, list: await Promise.all((await H.feedbacksAdmin()).map(async (x) => (x.files ? { ...x, files: await signFiles(env, H, x.files) } : x))) });
 		// 公告：列表、新建、修改、删除
 		if (a[0] === 'ann' && !a[1] && req.method === 'GET') return J({ ok: true, files: !!env.F, list: await Promise.all((await H.anns(true)).map(async (x) => (x.files ? { ...x, files: await signFiles(env, H, x.files, DAY) } : x))) });
-		if (a[0] === 'ann' && (!a[1] || /^[a-z2-9]{10}$/.test(a[1])) && req.method === 'POST') { const b = await body(), r = await H.annSave(a[1] || '', b); if (r.st === 200) await H.alog(a[1] ? 'ann_edit' : 'ann_new', '', r.ann.title); const { st, ...rest } = r; return J(rest, st); }
-		if (a[0] === 'ann' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') { const r = await H.annDel(a[1]); if (r) await H.alog('ann_del', '', a[1]); return J({ ok: r }, r ? 200 : 404); }
+		if (a[0] === 'ann' && (!a[1] || /^[a-z2-9]{10}$/.test(a[1])) && req.method === 'POST') { const b = await body(), r = await H.annSave(a[1] || '', b); if (r.st === 200) { await H.alog(a[1] ? 'ann_edit' : 'ann_new', '', r.ann.title); await annVerDrop(); } const { st, ...rest } = r; return J(rest, st); }
+		if (a[0] === 'ann' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') { const r = await H.annDel(a[1]); if (r) { await H.alog('ann_del', '', a[1]); await annVerDrop(); } return J({ ok: r }, r ? 200 : 404); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'done' && req.method === 'POST') { const b = await body(); const r = await H.fbSet(a[1], b.state || (b.done ? 'fixed' : 'open'), b.note, !!b.mail); return J(r, r.error ? 400 : 200); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && a[2] === 'ack' && req.method === 'POST') { const b = await body(); return J({ ok: await H.fbAck(a[1], b.on !== false) }); }
 		if (a[0] === 'feedback' && /^[a-z2-9]{10}$/.test(a[1] || '') && req.method === 'DELETE') return J({ ok: await H.fbDel(a[1]) });
@@ -2026,6 +2042,15 @@ export const HOT_TAG = /^hot-(\d+\.\d+\.\d+)-(\d+)$/;
 // 这个版本最新的热补丁（{ n, tag, notes }，没有 n = 0）；读不到 GitHub 抛错
 // GitHub 接口在 Cloudflare 上常被限流（出口 IP 大家共用，返回 403）：接口能用时把补丁列表存一份；
 // 不能用时拿存的那份，再顺着编号往后试下载地址（下载地址不限流）找新补丁
+// 公告版本号：「改了几次.已经到点的定时数」。心跳、自建版的 /api/notices/v 都用它；缓存 30 秒（别的机房最多晚 30 秒）
+export async function annVer(env) {
+	if (!env.H) return null;
+	const m = await cached('ann-meta', 30, () => hubObj(env).annMeta());
+	if (!m) return null;
+	const now = Date.now();
+	return m.rev + '.' + (m.t || []).filter((x) => x <= now).length;
+}
+async function annVerDrop() { try { if (typeof caches !== 'undefined') await caches.default.delete(new Request('https://cache.local/ann-meta')); } catch (e) {} }
 async function hotBest(env, v) {
 	const repo = repoOf(env), H = { 'user-agent': 'router-panel-hub' };
 	let l = null;

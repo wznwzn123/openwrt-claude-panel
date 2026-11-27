@@ -136,6 +136,26 @@ ok('太小的分区（不到 100 MB）不提醒', !/\/mnt\/tiny/.test(notes()));
 run();
 ok('一天只推一次', (notes().match(/存储快满了/g) || []).length === 2);
 
+// 热补丁换了看门狗（用户 11/27）：看门狗是一直在跑的程序，文件比进程新就重启一次（10 分钟最多一次）；重启不碰网络
+{
+	const WDF = T + '/cmcp-watchdog', INIT = T + '/wd-init', MARK = T + '/wd-restarted';
+	fs.writeFileSync(WDF, '#!/bin/sh\n');
+	fs.writeFileSync(INIT, `#!/bin/sh\necho "$1" >> ${MARK}\n`, { mode: 0o755 });
+	fs.mkdirSync(R + '/proc/4242', { recursive: true });
+	const old = new Date(Date.now() - 3600e3); fs.utimesSync(R + '/proc/4242', old, old);
+	const runW = (pid) => spawnSync('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-guard'))], { env: { ...process.env, CMCP_GUARD_ETC: E, CMCP_GUARD_TMP: T, CMCP_TEST_PATH: BIN, CMCP_GUARD_ROOT: R, CMCP_GUARD_WD: WDF, CMCP_GUARD_WDINIT: INIT, CMCP_GUARD_WDPID: pid } });
+	const marks = () => (fs.existsSync(MARK) ? fs.readFileSync(MARK, 'utf8').trim().split('\n').filter(Boolean) : []);
+	runW('4242'); spawnSync('sleep', ['3']);
+	ok('[看门狗] 文件比在跑的看门狗新（热补丁换过）：重启一次', marks().length === 1 && marks()[0] === 'restart', marks().join(','));
+	runW('4242'); spawnSync('sleep', ['3']);
+	ok('[看门狗] 10 分钟内不重复重启', marks().length === 1);
+	fs.rmSync(T + '/cmcp_wd_fresh', { force: true }); fs.rmSync(MARK, { force: true });
+	const nw = new Date(Date.now() + 60e3); fs.utimesSync(R + '/proc/4242', nw, nw);
+	runW('4242'); spawnSync('sleep', ['3']);
+	ok('[看门狗] 看门狗是装好以后才启动的（进程比文件新）：不动', marks().length === 0);
+	runW('99999'); spawnSync('sleep', ['3']);
+	ok('[看门狗] 找不到看门狗进程：不动', marks().length === 0);
+}
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

@@ -85,6 +85,18 @@ function ban_remove(tool, ip) {
 }
 function bans() { let b = readj(BAN, {}); if (type(b) != 'object') b = {}; b.ips ??= {}; b.hist ??= {}; for (let ip in keys(b.ips)) if (b.ips[ip].until <= now) delete b.ips[ip]; return b; }
 
+// 热补丁换了看门狗（用户 11/27：公告即时送达要用新的看门狗）：看门狗一直在跑，要重启才用上新的；
+// 6.0.0 的 cmcp-hot 装完不会重启它，这里每分钟看一下（看门狗自己调这个脚本），文件比进程新就重启一次（10 分钟最多一次）。
+// 重启看门狗不碰网络，只是重新开始检查。测试用：CMCP_GUARD_WD（看门狗文件）、CMCP_GUARD_WDINIT（启动脚本）、CMCP_GUARD_WDPID（进程号）
+if (!length(ARGV)) {
+	let wf = getenv('CMCP_GUARD_WD') || '/usr/sbin/cmcp-watchdog', wi = getenv('CMCP_GUARD_WDINIT') || '/etc/init.d/cmcp-watchdog';
+	let pid = getenv('CMCP_GUARD_WDPID') || trim(sh("pgrep -f 'cmcp-watchdog run' | head -n 1"));
+	let ps = match(pid, /^[0-9]+$/) ? stat(R + '/proc/' + pid) : null, fs = stat(wf), mk = T + '/cmcp_wd_fresh';
+	if (ps && fs && fs.mtime > ps.mtime + 5 && stat(wi) && now - (stat(mk)?.mtime ?? 0) > 600) {
+		writefile(mk, '' + now);
+		sh('nohup sh -c ' + shq('sleep 2; ' + wi + ' restart') + ' >/dev/null 2>&1 </dev/null &');
+	}
+}
 if (ARGV[0] == 'list') { let b = bans(); print(sprintf('%J\n', { tool: ban_tool(), ips: b.ips })); exit(0); }
 if (ARGV[0] == 'unban') {
 	let ip = ARGV[1] ?? '', b = bans();

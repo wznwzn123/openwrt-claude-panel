@@ -5,7 +5,7 @@
 // - 根据「谁还在报告」判断离线原因，变化时记一条事件
 // - 面板在路由器断线时也能从这里读到实时情况（路由 <你的面板域名>/cloud/*，在隧道之前就被 Cloudflare 接住）
 import { DurableObject } from 'cloudflare:workers';
-import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE, hubObj } from './hub.js';
+import { Hub, hubFetch, hubScheduled, safeEq, SUB_RE, hubObj, annVer } from './hub.js';
 import { xGate, X_SUFFIX } from './xpage.js';
 export { Hub };
 export { dayKey, mustUpdate } from './hub.js';
@@ -468,7 +468,7 @@ async function beatRoute(req, env, u, who, key) {
 	if (cache) {
 		try {
 			const hit = await cache.match(ck);
-			if (hit) { const c = await hit.json(); why = c.kh !== kh ? 'key' : c.sig !== sig ? 'changed' : Date.now() - c.at >= BEAT_GAP ? 'due' : ''; if (!why) return J({ ok: true, m: 1 }); }
+			if (hit) { const c = await hit.json(); why = c.kh !== kh ? 'key' : c.sig !== sig ? 'changed' : Date.now() - c.at >= BEAT_GAP ? 'due' : ''; if (!why) return J({ ok: true, m: 1, ...(await annv(env)) }); }
 		} catch (e) { why = 'err'; }
 	}
 	const r = await w.beatIn(who, key, rep);
@@ -477,8 +477,10 @@ async function beatRoute(req, env, u, who, key) {
 	// 钥匙核对过了、轮到探测隧道：在这里（Durable Object 外面）探，结果交回去判断
 	if (r.probe) { const code = await probeFetch(r.probe, r.at); try { await w.probeIn(r.at, code); } catch (e) {} }
 	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) { why += ',puterr:' + String(e && e.message || e).slice(0, 80); } }
-	return J({ ok: true, m: 0, why, ...(r && r.cmd ? { cmd: r.cmd } : {}) });
+	return J({ ok: true, m: 0, why, ...(r && r.cmd ? { cmd: r.cmd } : {}), ...(await annv(env)) });
 }
+// 心跳回复里带上公告版本号（用户 11/27：后台发出、修改公告，所有路由器 1–2 分钟内收到）；读不到就不带
+async function annv(env) { try { const v = await annVer(env); return v == null ? {} : { annv: v }; } catch (e) { return {}; } }
 async function tenant(u, env) {
 	if (!env.BASE_DOMAIN) return { w: env.W.get(env.W.idFromName('home')), rkey: env.RKEY, tkey: env.TKEY, pkey: env.PANEL_TOKEN };
 	const h = u.hostname, base = '.' + env.BASE_DOMAIN;

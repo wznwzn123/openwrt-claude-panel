@@ -255,6 +255,30 @@ $(tunlog)"
 	fi
 }
 
+# 公告即时送达（用户 11/27：后台发出、修改都要所有路由器马上收到）：
+# 托管版每分钟的心跳回复里带着公告版本号；自建版（没有心跳）每 5 分钟问一下官网的版本号。跟上次不一样就马上取一次公告
+# 测试用：WD_ANNV（记版本号的文件）、WD_ANNB（心跳上次带版本号的时间）、WD_ANN（取公告的程序）、WD_ANNURL（问版本号的地址）、WD_ANNTEST=1（DRYRUN 时也跑）
+ANNV=${WD_ANNV:-/tmp/cmcp_ann.v}; ANNB=${WD_ANNB:-/tmp/cmcp_annv_beat}
+ann_sync() {
+	local v=$1 l=${WD_ANNV:-/tmp/cmcp_ann.v}.lock
+	case "$v" in ''|*[!0-9.]*) return ;; esac
+	[ "$v" = "$(cat "$ANNV" 2>/dev/null)" ] && return
+	mkdir "$l" 2>/dev/null || { [ $(( $(date +%s) - $(stat -c %Y "$l" 2>/dev/null || echo 0) )) -lt 120 ] && return; }
+	${WD_ANN:-/usr/sbin/cmcp-ann} now >/dev/null 2>&1 && echo "$v" > "$ANNV"
+	rmdir "$l" 2>/dev/null
+}
+ann_poll() {
+	[ "$DRYRUN" = 1 ] && [ "${WD_ANNTEST:-}" != 1 ] && return
+	local b; b=$(cat "$ANNB" 2>/dev/null); case "$b" in ''|*[!0-9]*) b=0 ;; esac
+	# 托管版刚启动、心跳还没带过版本号：先等心跳（5 分钟内没带，说明官网还是老的，再自己问）
+	[ "$b" = 0 ] && [ -f "$D/cloud.conf" ] && { ANNB0=${ANNB0:-$t}; b=$ANNB0; }
+	[ $(( t - b )) -lt 300 ] && return   # 心跳 5 分钟内带过版本号：不用自己问
+	[ $(( t - ${ANNP_T:-0} )) -ge 300 ] || return
+	ANNP_T=$t
+	local h; h=$(sed -n 's/^HUB=//p' "$D/hub.conf" 2>/dev/null); h=${h:-https://yrlove520.com}
+	( ann_sync "$(curl -s -m 10 "${WD_ANNURL:-$h/api/notices/v}" 2>/dev/null | jsonfilter -e '@.v' 2>/dev/null)" ) >/dev/null 2>&1 &
+}
+
 # 云端心跳：每分钟把状态报告给 Cloudflare（路由器断线时，面板还能从云端看到实时情况）
 cloud_beat() {
 	[ -f "$D/cloud.conf" ] || return
@@ -275,6 +299,7 @@ cloud_beat() {
 		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")" "$(sed -n 's/^VER=//p' $D/version 2>/dev/null | tr -dc '0-9a-z.')" "$ed" "$lan")
 	# 官网让路由器换版本（主账号在官网「我的路由器」里点的）：心跳的回复里带着指令
 	( r=$(curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" 2>/dev/null)
+	  v=$(printf '%s' "$r" | jsonfilter -e '@.annv' 2>/dev/null); [ -n "$v" ] && { date +%s > "$ANNB"; ann_sync "$v"; }
 	  case "$r" in *'"cmd"'*)
 		id=$(printf '%s' "$r" | jsonfilter -e '@.cmd.id' 2>/dev/null | tr -cd 'a-z0-9'); to=$(printf '%s' "$r" | jsonfilter -e '@.cmd.to' 2>/dev/null)
 		[ -n "$id" ] && [ -x /usr/sbin/cmcp-edition ] && /usr/sbin/cmcp-edition remote "$id" "$to" ;;
@@ -408,6 +433,7 @@ check() {
 
 	boot_check
 	cloud_beat
+	ann_poll
 	# 每分钟：当前节点连不上就自动换；统计流量（后台跑，不耽误检查；家里断网或 OpenClash 没跑时不动）
 	if [ $(( t - ASW_T )) -ge 55 ] && [ "$DRYRUN" != 1 ]; then
 		ASW_T=$t

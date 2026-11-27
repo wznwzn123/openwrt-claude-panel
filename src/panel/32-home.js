@@ -307,7 +307,7 @@ function dashUrl(d) {
 $('oDash').onclick = () => {
 	// 先同步开一个窗口（等路由器回复后再开，会被浏览器当成弹窗拦掉）
 	let w = null;
-	try { w = window.open('', '_blank'); } catch (e) {}
+	w = xpWin();
 	busy($('oDash'), async () => {
 		let url = null, ds = null;
 		try { ds = await P('dashboard_state'); url = dashUrl(ds); }
@@ -318,7 +318,7 @@ $('oDash').onclick = () => {
 			try { const r = await P('xp_open', { port: +ds.port, ui: url.split('/ui/')[1].split('/')[0] }, 40000); if (r && r.url) return xpGo(w, r); }
 			catch (e) { if (!/自建版|本地版/.test(e.message)) { if (w) w.close(); throw e; } }
 		}
-		if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else location.href = url;
+		if (w) { try { w.opener = null; } catch (e) {} w.location.href = url; } else location.href = url; // App 里没开新窗口：就在 App 里打开
 		toast('已自动登录控制面板');
 	}, false);
 };

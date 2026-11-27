@@ -7503,6 +7503,9 @@ P.xp_open = function(a) {
 		x ??= { id: 'p' + port, name: '端口 ' + port, port, path: '/', https: !!a.https, up: !!xp_listen()[port] };
 		let pa = '' + (a.path ?? '');
 		if (x.kind != 'clash' && match(pa, /^\/[^\r\n]{0,500}$/)) x.path = pa;
+		// 完整原版后台里点的控制面板按钮（OpenClash / Nikki 的 Metacubexd、Zashboard、Yacd，地址是 /ui/名字/…）：认出是哪个，
+		// 跟面板「打开控制面板」一样换成远程地址的接口和密钥（用户 11/27：原来打开后要自己填后端地址）
+		if (x.kind == 'clash' && a?.ui == null) { let u = match(pa, /^\/ui\/([a-z0-9_-]{1,30})(\/|$)/i); if (u) a = { ...a, ui: lc(u[1]) }; }
 	} else for (let y in xp_list()) if (y.id == '' + a?.id) x = y;
 	if (!x) die('没有这个页面');
 	if (!x.up) die(x.name + ' 没在运行（端口 ' + x.port + ' 没人在听）');

@@ -63,6 +63,13 @@ try {
 	ok('按端口开控制面板：换成这个地址的接口（不用原版后台里的局域网地址）', /^\/ui\/\?hostname=abcd2345-x\.panel\.example&port=443/.test(new URL(r.result.url).searchParams.get('to')));
 	r = await cgi('xp_open', { port: 9093, ui: 'metacubexd' });
 	ok('面板「打开控制面板」：metacubexd 打开就连好（#/setup）', new URL(r.result.url).searchParams.get('to') === `/ui/metacubexd/#/setup?hostname=${SUB}-x.panel.example&port=443&secret=p%40ss%20word`, r.result?.url);
+	// 用户 11/27：完整原版后台里点 OpenClash 的「Metacubexd」「Zashboard」按钮，原来打开后要自己填后端地址
+	r = await cgi('xp_open', { port: 9093, https: false, path: '/ui/metacubexd/#/setup?http=true&hostname=r.example&port=9093&secret=p%40ss%20word' });
+	ok('完整后台里点 Metacubexd：认出来，换成远程地址的接口和密钥', new URL(r.result.url).searchParams.get('to') === `/ui/metacubexd/#/setup?hostname=${SUB}-x.panel.example&port=443&secret=p%40ss%20word`, r.result?.url);
+	r = await cgi('xp_open', { port: 9093, https: false, path: '/ui/zashboard/' });
+	ok('完整后台里点 Zashboard：一样连好', new URL(r.result.url).searchParams.get('to') === `/ui/zashboard/#/setup?hostname=${SUB}-x.panel.example&port=443&secret=p%40ss%20word`, r.result?.url);
+	r = await cgi('xp_open', { port: 9093, https: false, path: '/ui/yacd/?hostname=x' });
+	ok('完整后台里点 Yacd：接口参数放网址里', new URL(r.result.url).searchParams.get('to') === `/ui/yacd/?hostname=${SUB}-x.panel.example&port=443&secret=p%40ss%20word`, r.result?.url);
 		ok('按端口开：没人在听的端口说原因', /端口 5555 没在运行/.test(err(await cgi('xp_open', { port: 5555 }))));
 	ok('按端口开：面板自己的端口不行', /不能开/.test(err(await cgi('xp_open', { port: 18765 }))));
 	// 长钥匙（超过 64 字节）也对

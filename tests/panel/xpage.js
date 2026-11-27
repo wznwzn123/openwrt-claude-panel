@@ -168,6 +168,17 @@ const lay = (page) => page.evaluate(() => {
 		ok('在家里（网址是 IP）：原版后台里的终端照常嵌着', !!(await page.$('iframe#tt')));
 		await ctx.close();
 	}
+	// 用户 11/27：安卓 App 里不要弹去浏览器，就在 App 里打开（按返回键回到面板）
+	{
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 RouterPanelApp/6.0.0' });
+		const page = await ctx.newPage(); let pops = 0; ctx.on('page', () => pops++);
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8197/panel/?p=xpage'); await W(1500);
+		await page.click('[data-xo="agh"]');
+		await page.waitForURL(/fake-x\?port=3000/, { timeout: 15000 }).catch(() => {});
+		ok('App 里：不开新窗口，就在 App 里打开远程页面', pops === 0 && /fake-x\?port=3000/.test(page.url()), pops + ' ' + page.url());
+		await ctx.close();
+	}
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));
 	console.log(`\n通过 ${results.filter((r) => r[1]).length}/${results.length}`);

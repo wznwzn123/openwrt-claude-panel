@@ -105,7 +105,7 @@ $('xpBody').addEventListener('click', async (e) => {
 	}
 	const bd = e.target.closest('[data-xdo]');
 	if (bd) {
-		const w = window.open('', '_blank');
+		const w = xpWin();
 		busy(bd, async () => {
 			try {
 				const r = await P('xp_open', { dev: bd.dataset.xdo }, 40000);
@@ -119,7 +119,7 @@ $('xpBody').addEventListener('click', async (e) => {
 	const b = e.target.closest('[data-xo]');
 	if (!b) return;
 	// 先开好新标签页（不然浏览器会当成弹窗挡掉），等官网切好再跳过去
-	const w = window.open('', '_blank');
+	const w = xpWin();
 	busy(b, async () => {
 		try {
 			const r = await P('xp_open', { id: b.dataset.xo }, 40000);
@@ -128,10 +128,13 @@ $('xpBody').addEventListener('click', async (e) => {
 		} catch (er) { if (w) w.close(); toast(er.message, true); }
 	});
 });
+// 远程页面在哪打开：浏览器里开新标签页；安卓 App 里就在 App 里打开（用户 11/27：不要弹去浏览器），按返回键回到面板
+function xpWin() { if (IN_APP) return null; try { return window.open('', '_blank'); } catch (e) { return null; } }
 // 等官网切好再跳；新标签页被浏览器挡掉了就给一个「打开」按钮
 async function xpGo(w, r) {
 	toast('正在打开 ' + r.name + '…');
 	await new Promise((z) => setTimeout(z, (r.wait || 5) * 1000));
+	if (IN_APP) { location.href = r.url; return; }
 	if (w && !w.closed) w.location.href = r.url;
 	else modal(`<h3>${esc(r.name)}</h3><div class="btngrid" style="margin:14px 0 0;grid-template-columns:1fr"><a class="btn primary" href="${esc(r.url)}" target="_blank" rel="noopener" data-v="close">打开</a></div>`, null, { compact: true });
 }
@@ -145,6 +148,6 @@ window.addEventListener('message', (e) => {
 		P('xp_open', q, 40000).then(async (r) => { await new Promise((z) => setTimeout(z, (r.wait || 5) * 1000)); back({ url: r.url }); }).catch((er) => back({ err: er.message }));
 		return;
 	}
-	const w = window.open('', '_blank');
+	const w = xpWin();
 	P('xp_open', q, 40000).then((r) => xpGo(w, r)).catch((er) => { if (w) w.close(); toast(er.message, true); });
 });

@@ -70,10 +70,14 @@ const SHOT = path.join(__dirname, 'shots');
 		await W(9000);
 		t = await box();
 		ok('开着面板时来了新请求：8 秒左右自己弹出来，不用刷新；密码打码' + T, /修改路由器设置/.test(t) && /key=\*\*\*\*\*\*/.test(t), t.slice(0, 80));
-		// 永久允许（用户 11/27）：「这一类都允许」「全部都允许」并排在「拒绝 / 允许」下面，不出界
-		const ab = await page.evaluate(() => { const b = document.querySelector('.modal [data-ans="always"]'), m = document.querySelector('.modal .aiask')?.closest('.modal') || document.querySelector('.modal'); if (!b) return null; const r = b.getBoundingClientRect(), y = document.querySelector('.modal [data-ans="ok"]').getBoundingClientRect(); const a = document.querySelector('.modal [data-ans="all"]').getBoundingClientRect(); return { t: b.textContent, a: document.querySelector('.modal [data-ans="all"]').textContent, below: r.top >= y.bottom - 1, row: Math.abs(a.top - r.top) < 2, inView: r.bottom <= innerHeight && r.left >= 0 && a.right <= innerWidth, oneLine: r.height < 60 && a.height < 60 }; });
-		ok('确认卡上有「这一类都允许」「全部都允许」，并排在允许下面、不出屏幕、不折行' + T, ab && ab.t === '这一类都允许' && ab.a === '全部都允许' && ab.below && ab.row && ab.inView && ab.oneLine, JSON.stringify(ab));
-		if (w === 390) await page.screenshot({ path: path.join(SHOT, `aiask-always${dark ? '-dark' : ''}.png`) });
+		// 永久允许（用户 11/27）：收在「允许」右边的小箭头里；点箭头才展开「这一类都允许」「全部都允许」，展开的那行跟上面隔开、不叠
+		const cl = await page.evaluate(() => { const o = document.querySelector('.modal .aiopts'), a = document.querySelector('.modal [data-aimore]'), ok = document.querySelector('.modal [data-ans="ok"]').getBoundingClientRect(), ar = a.getBoundingClientRect(); return { hid: o.hidden && o.getBoundingClientRect().height === 0, right: ar.left >= ok.right - 1 && Math.abs(ar.top - ok.top) < 2 && Math.abs(ar.height - ok.height) < 2, w: Math.round(ar.width) }; });
+		ok('收起：只有「拒绝 / 允许」，允许右边一个小箭头，一样高' + T, cl.hid && cl.right && cl.w <= 48, JSON.stringify(cl));
+		await page.screenshot({ path: path.join(SHOT, `aiask-fold-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-aimore]'); await W(400);
+		const ab = await page.evaluate(() => { const b = document.querySelector('.modal [data-ans="always"]'), a = document.querySelector('.modal [data-ans="all"]'); if (!b || !a) return null; const r = b.getBoundingClientRect(), ra = a.getBoundingClientRect(), y = document.querySelector('.modal [data-ans="no"]').getBoundingClientRect(); return { t: b.textContent, a: a.textContent, ex: document.querySelector('.modal [data-aimore]').getAttribute('aria-expanded'), gap: Math.round(r.top - y.bottom), row: Math.abs(ra.top - r.top) < 2, inView: r.bottom <= innerHeight && r.left >= 0 && ra.right <= innerWidth, oneLine: r.height < 60 && ra.height < 60 }; });
+		ok('点小箭头：在下面展开「这一类都允许」「全部都允许」，并排，跟上面隔开 8px 以上，不出屏幕不折行' + T, ab && ab.t === '这一类都允许' && ab.a === '全部都允许' && ab.ex === 'true' && ab.gap >= 8 && ab.row && ab.inView && ab.oneLine, JSON.stringify(ab));
+		await page.screenshot({ path: path.join(SHOT, `aiask-open-${w}${dark ? '-dark' : ''}.png`) });
 		await page.click('.modal [data-ans="always"]'); await W(1400);
 		ok('点「这一类都允许」：告诉路由器允许并且以后这一类不问，提示以后什么不问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa3' && c.p.ok === true && c.p.always === true) && /以后修改设置 wireless不再问/.test(await page.textContent('#toast')), await page.textContent('#toast'));
 		// 用户 11/27：App 切回来要刷新才弹出——窗口拿回焦点时马上查（不等 8 秒）
@@ -85,12 +89,17 @@ const SHOT = path.join(__dirname, 'shots');
 			const tt = await box();
 			ok('窗口拿回焦点（App 切回来）：一两秒内就弹出来' + T, /echo hi/.test(tt) && S.calls.filter((c) => c.m === 'ai_asks').length > c0, tt.slice(0, 60));
 			// 全部都允许：先确认（说清楚后果），取消就不动；确定才发
+			await page.click('.modal [data-aimore]'); await W(300);
 			await page.click('.modal [data-ans="all"]'); await W(600);
 			const cf = await page.locator('.modal').last().textContent();
+			const lay = await page.evaluate(() => { const ms = [...document.querySelectorAll('.modal')], top = ms[ms.length - 1], box = top.querySelector('.modalbox').getBoundingClientRect(), H = innerHeight, W = innerWidth; const under = ms[0].querySelector('.modalbox').getBoundingClientRect(); return { n: ms.length, compact: top.classList.contains('compact'), mid: Math.abs((box.top + box.bottom) / 2 - H / 2) < 40, inView: box.top >= 0 && box.bottom <= H && box.left >= 0 && box.right <= W, spin: !!document.querySelector('.modal .aiask [data-ans="all"] .spin'), dim: getComputedStyle(top).backgroundColor }; });
+			const hid = await page.evaluate(() => getComputedStyle(document.querySelector('.modal .aiask').closest('.modalbox')).visibility);
+			ok('「全部都允许」的确认：居中小卡片，下面那张卡先藏起来（屏幕上只有一张），按钮不提前转圈' + T, lay.n === 2 && lay.compact && lay.mid && lay.inView && !lay.spin && hid === 'hidden', JSON.stringify(lay) + hid);
 			ok('点「全部都允许」：先问，写清楚以后什么都不问、拿到地址的人也一样' + T, /全部允许 AI 的操作/.test(cf) && /重启路由器/.test(cf) && /拿到连接器地址的人也一样/.test(cf), cf.slice(0, 120));
-			if (w === 390) await page.screenshot({ path: path.join(SHOT, `aiask-all${dark ? '-dark' : ''}.png`) });
+			await page.screenshot({ path: path.join(SHOT, `aiask-all-${w}${dark ? '-dark' : ''}.png`) });
 			await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(500);
-			ok('取消：没发出去，确认卡还在' + T, !S.calls.some((c) => c.m === 'ai_answer' && c.p.all) && (await page.locator('.modal .aiask').count()) === 1);
+			ok('取消：没发出去，确认卡还在、重新显示出来' + T, !S.calls.some((c) => c.m === 'ai_answer' && c.p.all) && (await page.locator('.modal .aiask').count()) === 1 && (await page.isVisible('.modal .aiask')));
+			if (!(await page.isVisible('.modal [data-ans="all"]'))) { await page.click('.modal [data-aimore]'); await W(300); }
 			await page.click('.modal [data-ans="all"]'); await W(600);
 			await page.locator('.modal').last().locator('[data-v="true"]').click(); await W(1400);
 			ok('确定：告诉路由器允许并全部放开，提示以后不再问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa4' && c.p.ok && c.p.all === true) && /已全部允许/.test(await page.textContent('#toast')), await page.textContent('#toast'));

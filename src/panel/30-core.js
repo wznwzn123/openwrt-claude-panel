@@ -344,9 +344,10 @@ function modal(html, onMount, opts) {
 const mIc = (d) => (d.startsWith('<svg') ? d : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`);
 const moreSheet = (head, groups) => modal(`<div class="sheethead"><div class="mhead">${head.ic || ''}<div style="min-width:0"><h3 class="ell" style="margin:0">${esc(head.t)}</h3>${head.sub ? `<span class="muted" style="font-size:12.5px">${esc(head.sub)}</span>` : ''}</div></div><button class="btn sm" data-v="close">关闭</button></div>
 	${groups.map((g) => ({ ...g, items: (g.items || []).filter(Boolean) })).filter((g) => g.items.length).map((g) => `<div class="mgrp">${g.t ? `<div class="mgt">${esc(g.t)}</div>` : ''}<div class="mlist">${g.items.map((x) => `<button class="mact${x.danger ? ' danger' : ''}" data-v="${esc(x.v)}"><i>${mIc(x.ic)}</i><span><b>${esc(x.t)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</span></button>`).join('')}</div></div>`).join('')}`);
-const confirmBox = (title, text, ok = '确定', danger = false) => modal(
+// opts.compact：从居中小卡片里再问一次时也用居中小卡片，盖在上面（不从底下弹出来跟卡片叠在一起：用户 11/27）
+const confirmBox = (title, text, ok = '确定', danger = false, opts) => modal(
 	`<h3>${esc(title)}</h3><div class="notice" style="color:var(--text);line-height:1.6;white-space:pre-line">${esc(text)}</div>
-	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn ${danger ? 'danger' : 'primary'}" data-v="true">${esc(ok)}</button></div>`);
+	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn ${danger ? 'danger' : 'primary'}" data-v="true">${esc(ok)}</button></div>`, null, opts);
 const textBox = (title, text) => modal(
 	`<div class="sheethead"><h3>${esc(title)}</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-copy>复制</button><button class="btn sm" data-v="close">关闭</button></div></div><pre class="out">${esc(text)}</pre>`,
 	(m) => { m.querySelector('[data-copy]').onclick = () => copyText(text); });

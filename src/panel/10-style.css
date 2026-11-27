@@ -772,7 +772,16 @@ section.page{display:none}section.page.on{display:block}
 .aiask h3{margin:0;font-size:18px;overflow-wrap:anywhere}
 .aiask-d{margin:12px 0 0;text-align:left;max-height:none}
 .aiask-t{margin:10px 0 0;font-size:13px}
-.aiask-always{margin-top:8px}
+/* 「允许」右边一个小箭头（用户 11/27）：点了在下面展开「这一类都允许 / 全部都允许」，跟上面一行隔开 10px */
+.modal.under{background:transparent!important}.modal.under .modalbox{visibility:hidden}
+.aisplit{display:flex;min-width:0}
+.aisplit [data-ans="ok"]{flex:1;min-width:0;border-top-right-radius:0;border-bottom-right-radius:0}
+.aisplit .aimore{flex:none;width:44px;padding:0;display:grid;place-items:center;border-top-left-radius:0;border-bottom-left-radius:0;box-shadow:inset 1px 0 0 rgba(127,127,127,.35);box-shadow:inset 1px 0 0 color-mix(in srgb,currentColor 22%,transparent)}
+.aisplit .aimore svg{transition:transform .2s}
+.aisplit .aimore[aria-expanded="true"] svg{transform:rotate(180deg)}
+.aiopts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.aiopts[hidden]{display:none}
+.aiopts .btn:only-child{grid-column:1 / -1}
 
 /* 打开面板时自己弹出来的弹窗（必须更新、重要公告、反馈有回复）：手机上也是居中的小卡片，不占满屏幕 */
 .modal.compact{place-items:center;padding:20px 16px}

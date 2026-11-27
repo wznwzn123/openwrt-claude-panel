@@ -2817,19 +2817,31 @@ function aiAskBox(x, n) {
 	<div class="cscroll">${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
 	<p class="muted aiask-t" style="text-align:center"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
 	<div class="notice" style="margin-top:10px;text-align:left">不是你让 AI 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 AI 连接器地址。</div></div>
-	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div>${x.pt || ME_ROLE.role !== 'sub' ? `<div class="btngrid aiask-always">${x.pt ? '<button class="btn" data-ans="always">这一类都允许</button>' : ''}${ME_ROLE.role !== 'sub' ? '<button class="btn" data-ans="all">全部都允许</button>' : ''}</div>` : ''}</div>`,
+	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button>${x.pt || ME_ROLE.role !== 'sub' ? `<div class="aisplit"><button class="btn primary" data-ans="ok">允许</button><button class="btn primary aimore" type="button" data-aimore aria-label="更多允许方式" aria-expanded="false"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>` : '<button class="btn primary" data-ans="ok">允许</button>'}</div>${x.pt || ME_ROLE.role !== 'sub' ? `<div class="aiopts" hidden>${x.pt ? '<button class="btn" data-ans="always">这一类都允许</button>' : ''}${ME_ROLE.role !== 'sub' ? '<button class="btn" data-ans="all">全部都允许</button>' : ''}</div>` : ''}</div>`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const t = setInterval(() => { const el = m.querySelector('[data-left]'); if (!el || !el.isConnected) return clearInterval(t); el.textContent = mmss(); if (!left()) { clearInterval(t); toast('这个请求过期了', true); close(null); } }, 1000);
-		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = () => busy(b, async () => {
+		// 「允许」右边的小箭头（用户 11/27：两个按钮收起来）：点了才展开「这一类都允许 / 全部都允许」
+		const mb = m.querySelector('[data-aimore]'), op = m.querySelector('.aiopts');
+		if (mb && op) mb.onclick = () => { const on = op.hidden; op.hidden = !on; mb.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = async () => {
 			const ok = b.dataset.ans !== 'no', always = b.dataset.ans === 'always', all = b.dataset.ans === 'all';
-			// 全部都允许（用户 11/27）：等于「完全放开」，先说清楚后果
-			if (all && !(await confirmBox('全部允许 AI 的操作', '以后 AI 做什么都不问你，包括重启路由器、改网络。拿到连接器地址的人也一样。', '全部都允许', true))) return;
+			// 全部都允许（用户 11/27）：等于「完全放开」，先说清楚后果——居中小卡片盖在上面；问的时候按钮不转圈
+			if (all) {
+				// 问的时候先把下面这张卡藏起来，屏幕上只有一张卡（不叠在一起）
+				m.classList.add('under');
+				const yes = await confirmBox('全部允许 AI 的操作', '以后 AI 做什么都不问你，包括重启路由器、改网络。拿到连接器地址的人也一样。', '全部都允许', true, { compact: true });
+				m.classList.remove('under');
+				if (!yes) return;
+			}
+			if (!m.isConnected || m.classList.contains('closing')) return;
+			busy(b, async () => {
 			try { const r = await P('ai_answer', { id: x.id, ok, always, all }, 20000); toast(r && r.all ? '已全部允许：AI 以后不再问' : r && r.always ? '已允许：以后' + x.pt + '不再问' : ok ? '已允许，AI 会接着做' : '已拒绝'); }
 			catch (e) { toast(e.message, true); }
 			clearInterval(t); close(null);
 			setTimeout(() => aiCheck(true), 600);
-		})));
+		});
+		}));
 	}, { compact: true });
 }
 async function ckeySheet() {

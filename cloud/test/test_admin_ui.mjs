@@ -176,6 +176,15 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		await arow.locator('button:has-text("修改")').click(); await W(500);
 		ok('公告定向：修改时带出原来的版本' + sfx, (await page.inputValue('.ann-form input[aria-label="从哪个版本"]')) === '6.0.0' && (await page.getAttribute('.ann-form [aria-label="发给"] button:has-text("自建版")', 'aria-checked')) === 'true');
 		await page.click('.ann-form button:has-text("不改了")'); await W(300);
+		// 横幅：选了横幅就没有标题，只填横幅内容（用户 11/27）
+		await page.click('.ann-form [role="radiogroup"][aria-label="级别"] button:has-text("横幅")'); await W(300);
+		ok('横幅：没有标题这一项，只有横幅内容' + sfx, (await page.locator('.ann-form label:has-text("标题")').count()) === 0 && (await page.locator('.ann-form label:has-text("横幅内容")').count()) === 1);
+		const bt = '横幅测试' + sfx.replace(/\W/g, '');
+		await page.fill('.ann-form textarea', bt + '\n第二行'); await W(200);
+		ok('横幅：预览显示成顶上一行' + sfx, (await page.textContent('.ann-pv-ban')).includes(bt + '　第二行'));
+		await page.click('.ann-form button:has-text("发布公告")'); await W(600);
+		if (await page.isVisible('.modal-foot button:has-text("换掉")')) { await page.click('.modal-foot button:has-text("换掉")'); await W(1000); }
+		ok('横幅：发出去了，标题是内容第一行' + sfx, (await api('/api/notices')).list.some((x) => x.level === 'banner' && x.title === bt && x.body === bt + '\n第二行'));
 		// 路由器：备注
 		await page.goto(B + '/admin#/devices'); await W(1200);
 		await page.locator('.hub-row', { hasText: '客厅 Kwrt' }).locator('button:has-text("备注")').click(); await W(500);

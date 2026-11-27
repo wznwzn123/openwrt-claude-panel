@@ -39,7 +39,7 @@ T += 2 * DAY;
 j = await (await api('GET', '/api/notices')).json();
 ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.list[0].id === a2);
 { // 6.0：只发给某些路由器（托管版 / 自建版、版本范围）
-	r = await adm('POST', '/ann', { title: '自建版 5.x 升级提醒', level: 'banner', ed: 's', vmin: '5.0', vmax: '5.2.3' }); j = await r.json();
+	r = await adm('POST', '/ann', { body: '自建版 5.x 升级提醒', level: 'banner', ed: 's', vmin: '5.0', vmax: '5.2.3' }); j = await r.json();
 	ok('[公告定向] 存下发给谁：自建版、版本 5.0 到 5.2.3、横幅', j.ok && j.ann.ed === 's' && j.ann.vmin === '5.0' && j.ann.vmax === '5.2.3' && j.ann.level === 'banner', JSON.stringify(j));
 	const t1 = j.ann.id, has = async (q) => (await (await api('GET', '/api/notices' + q)).json()).list.some((x) => x.id === t1);
 	ok('[公告定向] 自建版 5.1：收到', await has('?r=x&v=5.1.0&k=s'));
@@ -54,12 +54,15 @@ ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.lis
 	await adm('DELETE', '/ann/' + t1);
 }
 { // 用户 11/27：同时只能有一条横幅
-	const b1 = (await (await adm('POST', '/ann', { title: '横幅一', level: 'banner' })).json()).ann.id;
-	j = await (await adm('POST', '/ann', { title: '横幅二', level: 'banner' })).json();
+	// 横幅只有内容、没有标题（用户 11/27）：标题用内容第一行；没内容不收
+	ok('[横幅] 没写内容不收', /横幅内容不能是空的/.test((await (await adm('POST', '/ann', { title: '只有标题', level: 'banner' })).json()).error));
+	{ const x = (await (await adm('POST', '/ann', { title: '不用这个', body: '\n  今晚维护  \n面板照常能用', level: 'banner', days: 1 })).json()).ann; ok('[横幅] 标题用内容第一行，填了标题也不用', x && x.title === '今晚维护' && x.body === '今晚维护  \n面板照常能用', JSON.stringify(x)); await adm('DELETE', '/ann/' + x.id); }
+	const b1 = (await (await adm('POST', '/ann', { body: '横幅一', level: 'banner' })).json()).ann.id;
+	j = await (await adm('POST', '/ann', { body: '横幅二', level: 'banner' })).json();
 	const L = (await (await adm('GET', '/ann')).json()).list, x1 = L.find((x) => x.id === b1);
 	ok('[横幅] 发第二条横幅：第一条改成普通公告（还在通知里）', j.ok && j.replaced && j.replaced[0] === '横幅一' && x1.level === 'normal' && L.filter((x) => x.level === 'banner').length === 1, JSON.stringify(j.replaced));
 	const b2 = j.ann.id;
-	j = await (await adm('POST', '/ann', { title: '横幅三', level: 'banner', start: T + 2 * 3600e3 })).json();
+	j = await (await adm('POST', '/ann', { body: '横幅三', level: 'banner', start: T + 2 * 3600e3 })).json();
 	const x2 = (await (await adm('GET', '/ann')).json()).list.find((x) => x.id === b2);
 	ok('[横幅] 定时发的新横幅：旧的显示到新的开始那一刻', j.ok && x2.level === 'banner' && x2.exp === T + 2 * 3600e3, JSON.stringify(x2));
 	j = await (await adm('POST', '/ann', { title: '普通', level: 'normal' })).json();

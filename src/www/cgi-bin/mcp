@@ -3271,8 +3271,11 @@ P.update_check = function(a) {
 		else if (!c) die('查不到最新版本：连不上官网，稍后再试');
 	}
 	let newer = !length(v.cur) || v.cur == 'dev' ? true : ver_newer(c.latest, v.cur);
+	// 用户自己点「检查更新」：顺便马上查一次热补丁（用户 11/27：紧急情况或者想快点更新，不用等 6 小时）。后台跑，装好了面板自己换新
+	let hotq = false;
+	if (a?.force && !a?.nohot && stat('/usr/sbin/cmcp-hot')) { sh('nohup /usr/sbin/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true; }
 	// pv：面板网页该是哪一版（热补丁装过第 N 个就是「6.0.0-hN」），面板发现自己不一样就换成新的
-	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))) };
+	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq };
 };
 P.update_start = function(a) {
 	if (a?.confirm != 'UPDATE') die('需要确认');
@@ -6898,6 +6901,7 @@ P.fw_flash = function(a) {
  *   只改了规则集内容时让 OpenClash 重新读规则集，不用重启；多了 / 少了一个去向（要改自定义规则）才要重启，由用户点「现在重启」。
  * Nikki：写进 uci（nikki.mixin.rule=1 + config rule 'cmcp_sp_N'），要重启 Nikki 才生效（用户 11/26 定：先问，点了才重启）。
  * 设备按 IP 认：设了分流的设备自动给固定 IP（dhcp host，cmcp_split=1），去掉分流时删掉自己加的。
+ * 用户 11/27 加：能选单个节点（不只是策略组）；自己加网站（site）和软件（capp：名字 + 几个网址）；学习模式（split_learn：记下一台设备几分钟里访问的网站，帮你认出软件用的网址）。
  * 测试用：CMCP_SP_KIND（openclash / nikki / none）、CMCP_SP_PROXIES（假的 /proxies 结果文件）、CMCP_SP_DIR、CMCP_SP_CUSTOM、CMCP_SP_CFG、CMCP_SP_RUN */
 const SP_F = ETC + '/split.json', SP_DIR = getenv('CMCP_SP_DIR') || '/etc/openclash/rule_provider';
 const SP_CUSTOM = getenv('CMCP_SP_CUSTOM') || '/etc/openclash/custom/openclash_custom_rules.list', SP_MARK = '# [cmcp-split]';
@@ -6935,7 +6939,9 @@ function sp_apps() {
 	return length(out) ? out : SP_APPS0;
 }
 const SP_GEO = [['CN', '中国大陆'], ['HK', '香港'], ['TW', '台湾'], ['JP', '日本'], ['KR', '韩国'], ['SG', '新加坡'], ['US', '美国'], ['GB', '英国'], ['DE', '德国'], ['FR', '法国'], ['CA', '加拿大'], ['AU', '澳大利亚'], ['RU', '俄罗斯'], ['IN', '印度'], ['TH', '泰国'], ['MY', '马来西亚'], ['VN', '越南']];
-function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo', 'fam']) if (type(o[k]) != 'object') o[k] = {}; return o; }
+function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo', 'fam', 'site', 'capp']) if (type(o[k]) != 'object') o[k] = {}; return o; }
+// 每一条分流的去向：[种类, 编号, 去向]（设备、软件、国家、自己加的网站和软件）
+function sp_each(o) { let l = []; for (let k in ['dev', 'app', 'geo', 'site', 'capp']) for (let id in o[k]) { let v = o[k][id]; push(l, [k, id, k == 'dev' || k == 'capp' ? v?.t : v]); } return l; }
 function sp_kind() {
 	let k = getenv('CMCP_SP_KIND');
 	if (k != null) return k == 'none' ? null : k;
@@ -6953,8 +6959,36 @@ function sp_groups() {
 	let p = sp_proxies();
 	if (type(p) != 'object') return null;
 	let order = p.GLOBAL?.all ?? keys(p), out = [];
-	for (let n in order) if (n != 'GLOBAL' && match(p[n]?.type ?? '', /^(Selector|URLTest|Fallback|LoadBalance|Relay)$/)) push(out, n);
+	for (let n in order) if (n != 'GLOBAL' && index(n, ',') < 0 && match(p[n]?.type ?? '', /^(Selector|URLTest|Fallback|LoadBalance|Relay)$/)) push(out, n);
 	return out;
+}
+// 单个节点（用户 11/27：能选机场里的节点）：不是策略组、不是直连 / 拒绝这些内置的。名字里有逗号的写不进规则，不列。带延迟和地区（按地区分组显示）
+function sp_nodes() {
+	let p = sp_proxies();
+	if (type(p) != 'object') return null;
+	let order = p.GLOBAL?.all ?? keys(p), out = [], seen = {};
+	for (let n in order) {
+		let x = p[n];
+		if (seen[n] || n == 'GLOBAL' || index(n, ',') >= 0 || type(x) != 'object') continue;
+		if (match(x.type ?? '', /^(Selector|URLTest|Fallback|LoadBalance|Relay|Direct|Reject|RejectDrop|Pass|Compatible|Dns)$/i) || match(n, /^(DIRECT|REJECT|REJECT-DROP|PASS|COMPATIBLE)$/)) continue;
+		seen[n] = 1;
+		let h = type(x.history) == 'array' ? x.history : [], d = length(h) ? +(h[length(h) - 1]?.delay ?? 0) : 0;
+		push(out, { n, d: d > 0 ? d : 0, reg: CL.node_meta(n).reg });
+		if (length(out) >= 500) break;
+	}
+	return out;
+}
+// 能选的去向（策略组 + 节点）现在还在不在；读不到（插件没在跑）返回 null
+function sp_names() {
+	let g = sp_groups(); if (g == null) return null;
+	let l = slice(g); for (let x in (sp_nodes() ?? [])) push(l, x.n);
+	return l;
+}
+// 网址：去掉 http://、路径、端口、开头的 www. 和 *.；只收像样的域名
+function sp_dom(d) {
+	d = lc(trim('' + (d ?? '')));
+	d = replace(d, /^[a-z]+:\/\//, ''); d = replace(d, /[\/?#:].*$/, ''); d = replace(d, /^(\*\.|\.)+/, ''); d = replace(d, /^www\./, '');
+	return length(d) <= 253 && match(d, /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/) ? d : null;
 }
 // 插件没在跑时：从配置文件里读策略组的名字（订阅更新后起不来，就靠这个发现组没了）
 function sp_cfg_groups(kind) {
@@ -7007,6 +7041,8 @@ function sp_rules(o, mg) {
 		let own = own_load(), ip = sp_ipmap();
 		for (let mac in own) if (own[mac]?.ok && o.fam[own[mac].uid] && !o.dev[mac] && ip[mac]) add('d', 'DIRECT', 'SRC-IP-CIDR,' + ip[mac] + '/32');
 	}
+	for (let dm in o.site) if (o.site[dm]) add('a', o.site[dm], 'DOMAIN-SUFFIX,' + dm);
+	for (let id in o.capp) { let c = o.capp[id]; if (c?.t) for (let dm in (c.doms ?? [])) add('a', c.t, 'DOMAIN-SUFFIX,' + dm); }
 	for (let a in sp_apps()) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
 	for (let g in SP_GEO) if (o.geo[g[0]]) add('g', o.geo[g[0]], 'GEOIP,' + g[0]);
 	let n = 0;
@@ -7071,7 +7107,7 @@ function sp_nk_write(rules) {
 // 选了具体策略组的才让看门狗每分钟查（split.grp）
 function sp_mark(o) {
 	let any = false;
-	for (let k in ['dev', 'app', 'geo']) for (let id in o[k]) { let t = k == 'dev' ? o[k][id].t : o[k][id]; if (t != 'DIRECT' && t != 'PROXY') any = true; }
+	for (let x in sp_each(o)) if (x[2] && x[2] != 'DIRECT' && x[2] != 'PROXY') any = true;
 	if (length(o.fam)) any = true; // 家人新认领的设备、IP 变了，看门狗每分钟补上
 	if (any) writefile(ETC + '/split.grp', '1'); else unlink(ETC + '/split.grp');
 }
@@ -7101,14 +7137,14 @@ function sp_unpin(mac) {
 P.split_get = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) return { kind: null };
-	let groups = sp_groups(), live = groups != null;
+	let groups = sp_groups(), live = groups != null, nodes = live ? sp_nodes() ?? [] : [];
 	groups ??= sp_cfg_groups(kind) ?? [];
 	let devs = [];
 	try { devs = P.devices().devices ?? []; } catch (e) {}
 	return {
 		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [],
-		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam,
-		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
+		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam, site: o.site, capp: o.capp, nodes,
+		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1], doms: a[2] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
 	};
 };
@@ -7116,7 +7152,7 @@ P.split_get = function() {
 P.split_set = function(a) {
 	let kind = sp_kind();
 	if (!kind) die('分流只支持 OpenClash 和 Nikki');
-	let o = sp_read(), x = a?.dev ?? a?.app ?? a?.geo, t = x?.t ? '' + x.t : null;
+	let o = sp_read(), x = a?.dev ?? a?.app ?? a?.geo ?? a?.site ?? a?.capp, t = x?.t ? '' + x.t : null;
 	if (a?.fam) {
 		let uid = '' + (a.fam.uid ?? '');
 		if (!match(uid, /^[A-Za-z0-9_-]{1,64}$/)) die('选一个家人');
@@ -7128,8 +7164,9 @@ P.split_set = function(a) {
 	}
 	if (!x) die('不支持的操作');
 	if (t && t != 'DIRECT' && t != 'PROXY') {
-		let g = sp_groups() ?? sp_cfg_groups(kind) ?? [];
-		if (index(g, t) < 0) die('没有这个策略组：' + t);
+		let g = sp_groups() ?? sp_cfg_groups(kind) ?? [], nd = sp_nodes();
+		if (index(g, t) < 0 && !length(filter(nd ?? [], (y) => y.n == t))) die(nd == null ? '要选节点，先打开 ' + (kind == 'nikki' ? 'Nikki' : 'OpenClash') : '没有这个策略组或节点：' + t);
+		if (index(g, t) < 0) { o.nk ??= []; if (index(o.nk, t) < 0) push(o.nk, t); o.nk = slice(o.nk, -100); }
 	}
 	if (t == 'PROXY' && !sp_main(sp_groups() ?? sp_cfg_groups(kind))) die('找不到主策略组，先打开 ' + (kind == 'nikki' ? 'Nikki' : 'OpenClash'));
 	if (a.dev) {
@@ -7137,6 +7174,25 @@ P.split_set = function(a) {
 		if (!match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) die('选一台设备');
 		if (t) { let ip = sp_pin(mac, x.ip); o.dev[mac] = { t, ip, name: substr('' + (x.name ?? ''), 0, 40) }; }
 		else if (o.dev[mac]) { delete o.dev[mac]; sp_unpin(mac); }
+	} else if (a.site) {
+		let d = sp_dom(x.d), old = x.old ? sp_dom(x.old) : null;
+		if (!d) die('网址写成 example.com 这样');
+		if (old && old != d) delete o.site[old];
+		if (t) { if (!o.site[d] && length(keys(o.site)) >= 200) die('最多 200 个网站'); o.site[d] = t; } else delete o.site[d];
+	} else if (a.capp) {
+		let id = '' + (x.id ?? '');
+		if (x.del) { if (!o.capp[id]) die('没有这个软件了'); delete o.capp[id]; }
+		else {
+			if (length(id) && !o.capp[id]) die('没有这个软件了');
+			if (!length(id)) { if (length(keys(o.capp)) >= 50) die('最多加 50 个软件'); id = 'c' + rand_str(8); }
+			let name = substr(trim('' + (x.name ?? o.capp[id]?.name ?? '')), 0, 20);
+			if (!length(name)) die('给软件起个名字');
+			let doms = type(x.doms) == 'array' ? x.doms : (o.capp[id]?.doms ?? []), ok = [];
+			for (let dm in doms) { let v = sp_dom(dm); if (!v) die('网址不对：' + substr('' + dm, 0, 60)); if (index(ok, v) < 0) push(ok, v); }
+			if (!length(ok)) die('至少填一个网址');
+			if (length(ok) > 50) die('一个软件最多 50 个网址');
+			o.capp[id] = { name, doms: ok, t: ('t' in x) ? t : (o.capp[id]?.t ?? null) };
+		}
 	} else if (a.app) {
 		let ok = false; for (let p in sp_apps()) if (p[0] == x.id) ok = true;
 		if (!ok) die('没有这个软件');
@@ -7151,6 +7207,29 @@ P.split_set = function(a) {
 	let g = P.split_get();
 	g.restart = r.restart || g.pending;
 	return g;
+};
+/* 学习模式（用户 11/27）：选一台设备，3 分钟里它访问了哪些网站（从 OpenClash / Nikki 的连接里看），帮你认出软件用的网址。
+   只有主账号能用（能看到别人访问了哪些网站，不放进任何家人权限）；记录只在内存里（/tmp），不上传 */
+const SP_LEARN = getenv('CMCP_SPL_F') || '/tmp/cmcp_sp_learn.json', SP_LEARN_SECS = 180;
+P.split_learn = function(a) {
+	let act = '' + (a?.act ?? 'get');
+	if (act == 'start') {
+		if (!sp_kind()) die('分流只支持 OpenClash 和 Nikki');
+		let ip = trim('' + (a?.ip ?? ''));
+		if (!match(ip, /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，等它连上网再识别');
+		// 每次识别一个编号：上一次还在跑的发现编号变了就自己停（不会跟这次的混在一起）
+		let rid = rand_str(10);
+		cmcp_writej(SP_LEARN, { rid, ip, name: substr('' + (a?.name ?? ''), 0, 40), at: time(), until: time() + SP_LEARN_SECS, hosts: {}, nohost: 0, run: true });
+		sp_run(sprintf('%s/cmcp-splearn %s %d %s', SBIN, shq(ip), SP_LEARN_SECS, shq(rid)));
+		return P.split_learn({ act: 'get' });
+	}
+	if (act == 'stop') { let o = cmcp_readj(SP_LEARN, null); if (type(o) == 'object') { o.run = false; o.until = time(); cmcp_writej(SP_LEARN, o); } }
+	let o = cmcp_readj(SP_LEARN, null);
+	if (type(o) != 'object') return { run: false };
+	let hl = [];
+	for (let h in (type(o.hosts) == 'object' ? o.hosts : {})) push(hl, [h, +o.hosts[h] || 0]);
+	hl = slice(sort(hl, (x, y) => y[1] - x[1]), 0, 300);
+	return { ip: o.ip, name: o.name ?? '', at: o.at, until: o.until, run: !!o.run && act != 'stop' && time() < (+o.until || 0) + 15, hosts: hl, nohost: +o.nohost || 0, err: o.err ?? null };
 };
 // 用户点「现在重启」
 // 局域网网段改了并保留（风险 8、43）：「不走代理」和按设备分流的规则按设备新的固定 IP 重写
@@ -7174,29 +7253,34 @@ P.split_check = function() {
 	let kind = sp_kind(), o = sp_read();
 	if (!kind) return { ok: true };
 	let want = [];
-	for (let k in ['dev', 'app', 'geo']) for (let id in o[k]) { let t = k == 'dev' ? o[k][id].t : o[k][id]; if (t != 'DIRECT' && t != 'PROXY' && index(want, t) < 0) push(want, t); }
+	for (let x in sp_each(o)) { let t = x[2]; if (t && t != 'DIRECT' && t != 'PROXY' && index(want, t) < 0) push(want, t); }
 	if (length(o.fam)) {
 		// 家人的设备变了（新认领、IP 变了）：OpenClash 只换规则集内容；Nikki 要重启，留给用户点
 		sp_apply(o, kind);
 		o = sp_read();
 	}
 	if (!length(want)) return { ok: true };
-	let groups = sp_groups() ?? sp_cfg_groups(kind);
-	if (groups == null) return { ok: true };
-	let gone = filter(want, (t) => index(groups, t) < 0);
+	// 插件在跑时看策略组和节点；没在跑时只能从配置文件里看策略组（节点是订阅里的，读不到就先不动）
+	let names = sp_names(), live = names != null;
+	if (!live) names = sp_cfg_groups(kind);
+	if (names == null) return { ok: true };
+	// 没在跑时：选的节点先不算没了（订阅里的节点读不到），只看策略组
+	let isNode = (t) => index(o.nk ?? [], t) >= 0;
+	let gone = filter(want, (t) => index(names, t) < 0 && (live || !isNode(t)));
 	if (!length(gone)) return { ok: true };
 	o.moved ??= [];
-	for (let k in ['dev', 'app', 'geo']) for (let id in o[k]) {
-		let cur = k == 'dev' ? o[k][id].t : o[k][id];
-		if (index(gone, cur) < 0) continue;
-		if (k == 'dev') o[k][id].t = 'PROXY'; else o[k][id] = 'PROXY';
+	for (let x in sp_each(o)) {
+		if (index(gone, x[2]) < 0) continue;
+		if (x[0] == 'dev' || x[0] == 'capp') o[x[0]][x[1]].t = 'PROXY'; else o[x[0]][x[1]] = 'PROXY';
 	}
-	for (let t in gone) push(o.moved, { g: t, at: time() });
+	for (let t in gone) push(o.moved, { g: t, at: time(), node: index(o.nk ?? [], t) >= 0 });
+	o.nk = filter(o.nk ?? [], (t) => index(gone, t) < 0);
 	o.moved = slice(o.moved, -10);
 	cmcp_writej(SP_F, o);
 	sp_apply(o, kind);
 	o = sp_read(); delete o.pending; cmcp_writej(SP_F, o);
-	try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('分流：策略组「' + join('」「', gone) + '」没了'), shq('订阅更新后找不到这个组，选它的设备和软件已改走主策略组。'))); } catch (e) {}
+	let gn = filter(gone, (t) => index(map(o.moved, (m) => m.node ? m.g : null), t) >= 0), what = length(gn) == length(gone) ? '节点' : length(gn) ? '策略组和节点' : '策略组';
+	try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('分流：' + what + '「' + join('」「', gone) + '」没了'), shq('订阅更新后找不到了，选它的设备、网站和软件已改走主策略组。'))); } catch (e) {}
 	sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart');
 	return { ok: true, moved: gone };
 };

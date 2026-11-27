@@ -1703,7 +1703,10 @@ export async function hubFetch(req, env) {
 		const rid = u.searchParams.get('r') || '';
 		if (rid && anns.length) { try { await H.annGot(rid, anns.slice(0, 20).map((a) => a.id)); } catch (e) {} }
 		const list = await Promise.all(anns.slice(0, 20).map(async (a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0, ...(a.files && a.files.length ? { files: await signFiles(env, H, a.files, 30 * DAY) } : {}) })));
-		return new Response(JSON.stringify({ ok: true, list }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
+		// 6.0：顺便说这个版本最新的热补丁是第几个（路由器每 30 分钟问一次公告，紧急补丁不用等 6 小时的定时检查）
+		let hot;
+		if (/^\d+\.\d+\.\d+$/.test(qv)) try { hot = (await hotBest(env, qv)).n; } catch (e) {}
+		return new Response(JSON.stringify({ ok: true, list, ...(hot != null ? { hot } : {}) }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 	}
 	if (p.startsWith('/api/fb/') && req.method === 'GET') {
 		const { st, ...rest } = await H.fbStatus(p.slice(8), req.headers.get('cf-connecting-ip') || '');
@@ -2020,18 +2023,21 @@ export function routerVerInfo(env) {
 }
 // 6.0 热补丁：GitHub 上的预发布「hot-版本-编号」（比如 hot-6.0.0-3），路由器问「我这个版本最新的补丁是第几个」。缓存 10 分钟
 export const HOT_TAG = /^hot-(\d+\.\d+\.\d+)-(\d+)$/;
-async function hotInfo(env, v) {
-	if (!/^\d+\.\d+\.\d+$/.test(v || '')) return J({ ok: false, error: '版本号不对' }, 400);
-	try {
-		const l = await cached('hot-list', 600, async () => {
+// 这个版本最新的热补丁（{ n, tag, notes }，没有 n = 0）；读不到 GitHub 抛错
+async function hotBest(env, v) {
+	const l = await cached('hot-list', 600, async () => {
 			const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
 			if (!r.ok) throw new Error('GitHub ' + r.status);
 			return (await r.json()).map((x) => ({ tag: String(x.tag_name || ''), body: String(x.body || '').slice(0, 300), draft: !!x.draft })).filter((x) => !x.draft && HOT_TAG.test(x.tag));
 		});
-		let best = null;
-		for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
-		return J({ ok: true, ...(best || { n: 0 }) });
-	} catch (e) { return J({ ok: false, error: '查不到热补丁' }, 502); }
+	let best = null;
+	for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
+	return best || { n: 0 };
+}
+async function hotInfo(env, v) {
+	if (!/^\d+\.\d+\.\d+$/.test(v || '')) return J({ ok: false, error: '版本号不对' }, 400);
+	try { return J({ ok: true, ...(await hotBest(env, v)) }); }
+	catch (e) { return J({ ok: false, error: '查不到热补丁' }, 502); }
 }
 const HOT_FILES = ['hot.tar.gz', 'SHA256SUMS', 'SHA256SUMS.sig2'];
 async function hotDl(env, tag, name) {

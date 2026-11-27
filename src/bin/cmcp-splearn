@@ -1,0 +1,44 @@
+#!/usr/bin/ucode
+// 6.0 分流的学习模式（用户 11/27）：cmcp-splearn <设备 IP> <秒数> <这次识别的编号>
+// 每 2 秒看一次 OpenClash / Nikki 的连接，记下这台设备访问的网址（只记网址和次数），写到 /tmp/cmcp_sp_learn.json；
+// 结果文件里的编号变了（又开了一次识别）或者标成停了，就自己停。不上传、不存到闪存。测试用：CMCP_SPL_F（结果文件）、CMCP_SPL_CONNS（假的连接列表文件）
+'use strict';
+import * as L from 'cmcp.lib';
+import { readfile } from 'fs';
+
+const F = getenv('CMCP_SPL_F') || '/tmp/cmcp_sp_learn.json';
+const ip = '' + (ARGV[0] ?? ''), secs = +(ARGV[1] ?? 180) || 180, rid = '' + (ARGV[2] ?? '');
+if (!match(ip, /^\d+\.\d+\.\d+\.\d+$/)) { print('用法：cmcp-splearn <设备 IP> <秒数>\n'); exit(1); }
+const end = time() + secs;
+let seen = {}, hosts = {}, nohost = 0, err = null, ok = false;
+function conns() {
+	let f = getenv('CMCP_SPL_CONNS');
+	if (f) { try { return json(readfile(f) ?? 'null')?.connections ?? []; } catch (e) { return []; } }
+	let r = L.api('GET', '/connections', null, 5);
+	if (r.code != 200) { err = r.code == 401 ? 'OpenClash / Nikki 的接口密钥不对' : '连不上 OpenClash / Nikki 的接口'; return null; }
+	err = null;
+	return r.json?.connections ?? [];
+}
+function save(run) {
+	let o = L.readj(F, null);
+	if (type(o) != 'object' || o.rid != rid || (run && o.run === false)) return false; // 又开了一次识别，或者用户点了停止
+	o.hosts = hosts; o.nohost = nohost; o.run = run; o.err = err; o.seen = ok;
+	L.writej(F, o);
+	return true;
+}
+while (time() < end) {
+	let l = conns();
+	if (l != null) for (let c in l) {
+		let m = c?.metadata;
+		if (type(m) != 'object' || m.sourceIP != ip) continue;
+		ok = true;
+		let id = '' + (c.id ?? ''), h = lc('' + (m.host || m.sniffHost || ''));
+		if (seen[id]) continue;
+		seen[id] = 1;
+		if (length(h) && length(h) <= 253 && match(h, /^[a-z0-9.-]+$/)) { if (hosts[h] || length(keys(hosts)) < 2000) hosts[h] = (hosts[h] ?? 0) + 1; }
+		else nohost++;
+	}
+	if (!save(true)) exit(0);
+	L.sh('sleep 2');
+}
+save(false);

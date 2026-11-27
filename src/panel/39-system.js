@@ -1489,7 +1489,11 @@ async function updCheck(force) {
 	if (r && typeof r === 'object' && panelVerCheck(r.pv || r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
-	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + ' · 已经是最新版';
+	// 热补丁装过的写上第几个（用户 11/27：能看出补丁到了没有）
+	const hv = UPD.hot ? '（修复补丁 ' + UPD.hot + '）' : '';
+	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + hv + ' · 已经是最新版';
+	// 点了「检查更新」：路由器在后台马上查修复补丁，过 20 秒再看一次，装上了面板会自己换新
+	if (force && UPD.hotq && !UPD.newer) setTimeout(() => P('update_check', { nohot: 1 }, 25000).then((x) => { if (x && typeof x === 'object') panelVerCheck(x.pv || x.cur); }).catch(() => {}), 20000);
 	const later = updSeen();
 	$('rUpd').classList.toggle('hidden', !UPD.newer || (later && !UPD.force));
 	if (UPD.newer) {

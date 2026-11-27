@@ -20,6 +20,13 @@ ok('6.0.0 最新的补丁是第 3 个（草稿不算、别的版本不算），�
 j = JSON.parse((await get('/api/router/hot?v=6.0.1')).t);
 ok('没有补丁的版本：n = 0', j.ok && j.n === 0);
 ok('版本号不对：拒绝', (await get('/api/router/hot?v=../x')).st === 400);
+// 用户 11/27：紧急补丁不用等 6 小时——路由器每 30 分钟问公告时，官网顺便说这个版本最新的热补丁是第几个
+j = JSON.parse((await get('/api/notices?v=6.0.0&k=h')).t);
+ok('公告接口顺便带上这个版本最新的热补丁编号', j.ok && j.hot === 3, JSON.stringify(j));
+j = JSON.parse((await get('/api/notices?v=5.3.1&k=h')).t);
+ok('没有补丁的版本：hot = 0', j.ok && j.hot === 0, JSON.stringify(j));
+j = JSON.parse((await get('/api/notices')).t);
+ok('老版本不带版本号：不带 hot', j.ok && !('hot' in j), JSON.stringify(j));
 r = await get('/dl/h/hot-6.0.0-3/hot.tar.gz');
 ok('下载中转：补丁文件', r.st === 200 && r.t === 'TGZ');
 ok('只转发补丁的三个文件', (await get('/dl/h/hot-6.0.0-3/install.sh')).st === 404 && (await get('/dl/h/v6.0.0/hot.tar.gz')).st === 404);

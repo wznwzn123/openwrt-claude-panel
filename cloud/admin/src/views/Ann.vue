@@ -83,11 +83,11 @@ onMounted(load)
             <div class="ann-files-top"><span>附件（可以不加）：图片、视频、文件，最多 5 个，每个最大 200MB</span><Button size="sm" icon="clip" @click="att?.pick()">加文件</Button></div>
             <FileAttach ref="att" ctx="ann" />
           </div>
-          <Field label="级别"><Segmented v-model="form.level" label="级别" :options="[{ label: '普通', value: 'normal' }, { label: '重要（推送）', value: 'important' }, { label: '横幅', value: 'banner' }]" /></Field>
-          <Field label="发给"><Segmented v-model="form.to" label="发给" :options="[{ label: '都发', value: '' }, { label: '托管版', value: 'h' }, { label: '自建版', value: 's' }]" /></Field>
-          <Field label="面板版本（选填）"><div class="ann-ver"><TextInput v-model="form.vmin" :maxlength="12" placeholder="从 比如 6.0.0" aria-label="从哪个版本" /><span>到</span><TextInput v-model="form.vmax" :maxlength="12" placeholder="到 比如 5.9.9" aria-label="到哪个版本" /></div></Field>
+          <Field label="级别" class="span-2"><Segmented v-model="form.level" label="级别" :options="[{ label: '普通', value: 'normal' }, { label: '重要（推送）', value: 'important' }, { label: '横幅', value: 'banner' }]" /></Field>
           <Field label="显示几天（0 = 一直显示）"><TextInput v-model="form.days" type="number" placeholder="0" /></Field>
+          <Field label="发给" class="span-2"><Segmented v-model="form.to" label="发给" :options="[{ label: '都发', value: '' }, { label: '托管版', value: 'h' }, { label: '自建版', value: 's' }]" /></Field>
           <Field label="什么时候发"><Segmented v-model="form.when" label="什么时候发" :options="[{ label: '马上', value: 'now' }, { label: '定时', value: 'later' }]" /></Field>
+          <Field label="面板版本（选填）" class="span-2"><div class="ann-ver"><TextInput v-model="form.vmin" :maxlength="12" placeholder="从 比如 6.0.0" aria-label="从哪个版本" /><span>到</span><TextInput v-model="form.vmax" :maxlength="12" placeholder="到 比如 5.9.9" aria-label="到哪个版本" /></div></Field>
           <Field v-if="form.when === 'later'" label="发布时间（你这台设备的时间）" hint="到时间才出现在大家的面板里；「重要」的到时间才推送"><input v-model="form.at" class="ann-dt input-shell" type="datetime-local" :min="minAt"></Field>
           <div class="span-all ann-pv" aria-label="在面板里的样子">
             <template v-if="form.level === 'banner'">

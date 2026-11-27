@@ -54,7 +54,8 @@
 }
 .hub-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; align-items: end; }
 .hub-form .span-all { grid-column: 1 / -1; }
-@media (max-width: 720px) { .hub-form { grid-template-columns: 1fr; } }
+.hub-form .span-2 { grid-column: span 2; }
+@media (max-width: 720px) { .hub-form { grid-template-columns: 1fr; } .hub-form .span-2 { grid-column: auto; } }
 .hub-stack { display: flex; flex-direction: column; gap: 16px; }
 .hub-imgs { display: flex; gap: 8px; flex-wrap: wrap; }
 .hub-imgs button { border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 0; width: 96px; height: 72px; overflow: hidden; background: var(--groove-bg); cursor: zoom-in; display: grid; place-items: center; font-size: 11px; color: var(--ink-soft); }

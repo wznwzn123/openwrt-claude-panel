@@ -101,10 +101,73 @@ try {
 	// 远程数据（热补丁带来的 remote.json）：软件网址表能换
 	fs.writeFileSync(E + '/remote.json', JSON.stringify({ split_apps: [['newapp', '新软件', ['new.example']]] }));
 	r = await cgi('split_get');
-	ok('远程数据里的软件表：用它', JSON.stringify(r.result?.apps) === '[{"id":"newapp","name":"新软件"}]', JSON.stringify(r.result?.apps));
+	ok('远程数据里的软件表：用它', JSON.stringify(r.result?.apps) === '[{"id":"newapp","name":"新软件","doms":["new.example"]}]', JSON.stringify(r.result?.apps));
 	fs.writeFileSync(E + '/remote.json', JSON.stringify({ split_apps: [['bad', 'x', ['evil.com; rm -rf /']]] }));
 	ok('远程数据格式不对：用写死的', (await cgi('split_get')).result?.apps?.some((a) => a.id === 'netflix'));
 	fs.unlinkSync(E + '/remote.json');
+	// ---- 用户 11/27：能选单个节点 ----
+	const PX0 = rd(PX);
+	fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🇯🇵 日本 01', '🇭🇰 香港 02 IPLC', 'US,bad', 'DIRECT', 'REJECT'] }, '节点选择': { type: 'Selector' },
+		'🇯🇵 日本 01': { type: 'Vmess', history: [{ delay: 80 }] }, '🇭🇰 香港 02 IPLC': { type: 'Trojan', history: [] }, 'US,bad': { type: 'Shadowsocks' }, DIRECT: { type: 'Direct' }, REJECT: { type: 'Reject' } } }));
+	r = await cgi('split_get');
+	ok('[节点] 读得到节点：带延迟和地区；名字里有逗号的、直连拒绝这些不列', JSON.stringify(r.result?.nodes) === JSON.stringify([{ n: '🇯🇵 日本 01', d: 80, reg: 'JP' }, { n: '🇭🇰 香港 02 IPLC', d: 0, reg: 'HK' }]), JSON.stringify(r.result?.nodes));
+	r = await cgi('split_set', { app: { id: 'youtube', t: '🇯🇵 日本 01' } });
+	ok('[节点] 软件 → 节点：规则直接指向这个节点', !r.error && /,🇯🇵 日本 01 # \[cmcp-split\]/.test(rd(CUS)) && r.result.app.youtube === '🇯🇵 日本 01', err(r) || rd(CUS));
+	ok('[节点] 名字里有逗号的节点不让选', /没有这个策略组或节点/.test(err(await cgi('split_set', { app: { id: 'netflix', t: 'US,bad' } }))));
+	ok('[节点] 选了节点：看门狗要查', fs.existsSync(E + '/split.grp'));
+	fs.writeFileSync(RUN, '');
+	ok('[节点] 节点都在：什么都不做', (await cgi('split_check')).result?.moved === undefined && rd(RUN) === '');
+	// 插件没在跑：节点读不到，先不动
+	fs.writeFileSync(PX, 'null');
+	ok('[节点] 插件没在跑：选的节点先不算没了', (await cgi('split_check')).result?.moved === undefined && (await cgi('split_get')).result.app.youtube === '🇯🇵 日本 01');
+	// 订阅更新后节点没了
+	fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🇯🇵 日本 03'] }, '节点选择': { type: 'Selector' }, '🇯🇵 日本 03': { type: 'Vmess' } } }));
+	r = await cgi('split_check');
+	ok('[节点] 节点没了：改走主策略组、推送写「节点」、重启', JSON.stringify(r.result?.moved) === '["🇯🇵 日本 01"]' && (await cgi('split_get')).result.app.youtube === 'PROXY' && /openclash restart/.test(rd(RUN)), JSON.stringify(r.result));
+	ok('[节点] 推送写清楚是节点', /分流：节点「🇯🇵 日本 01」没了/.test(rd(E + '/notified')), rd(E + '/notified'));
+	await cgi('split_set', { app: { id: 'youtube', t: '' } });
+	// ---- 用户 11/27：自己加网站和软件 ----
+	r = await cgi('split_set', { site: { d: 'https://www.Example.com/path?x=1', t: 'DIRECT' } });
+	ok('[网站] 加网站：去掉 https、www、路径，写成网址后缀规则', r.result?.site?.['example.com'] === 'DIRECT' && /DOMAIN-SUFFIX,example\.com/.test(fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('')), err(r) || JSON.stringify(r.result?.site));
+	ok('[网站] 乱填的不收', /网址写成 example\.com/.test(err(await cgi('split_set', { site: { d: 'not a site; rm -rf /', t: 'DIRECT' } }))));
+	r = await cgi('split_set', { site: { d: 'example.org', old: 'example.com', t: 'PROXY' } });
+	ok('[网站] 改网址：旧的去掉、新的加上', !r.result?.site?.['example.com'] && r.result?.site?.['example.org'] === 'PROXY');
+	r = await cgi('split_set', { site: { d: 'example.org', t: '' } });
+	ok('[网站] 选「跟随全局」：删掉', !r.result?.site?.['example.org']);
+	r = await cgi('split_set', { capp: { name: '我的游戏', doms: ['game.example', 'cdn.game.example', 'https://api.game.example/v1'], t: 'DIRECT' } });
+	const cid = Object.keys(r.result?.capp || {})[0];
+	ok('[软件] 自己加软件：名字和几个网址，网址规则跟去向走', cid && r.result.capp[cid].name === '我的游戏' && JSON.stringify(r.result.capp[cid].doms) === '["game.example","cdn.game.example","api.game.example"]' && /DOMAIN-SUFFIX,cdn\.game\.example/.test(fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('')), err(r) || JSON.stringify(r.result?.capp));
+	ok('[软件] 没名字、没网址、网址不对：都不收', /起个名字/.test(err(await cgi('split_set', { capp: { name: '', doms: ['a.com'], t: 'DIRECT' } }))) && /至少填一个网址/.test(err(await cgi('split_set', { capp: { name: 'x', doms: [], t: 'DIRECT' } }))) && /网址不对/.test(err(await cgi('split_set', { capp: { name: 'x', doms: ['$(reboot)'], t: 'DIRECT' } }))));
+	r = await cgi('split_set', { capp: { id: cid, doms: ['game.example'] } });
+	ok('[软件] 只改网址：去向不变', r.result?.capp?.[cid]?.t === 'DIRECT' && r.result.capp[cid].doms.length === 1);
+	r = await cgi('split_set', { capp: { id: cid, t: '' } });
+	ok('[软件] 选「跟随全局」：软件留着，规则去掉', r.result?.capp?.[cid] && r.result.capp[cid].t === null && !/game\.example/.test(fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('')));
+	r = await cgi('split_set', { capp: { id: cid, del: true } });
+	ok('[软件] 删掉', !r.result?.capp?.[cid]);
+	ok('[软件] 不存在的软件改不了', /没有这个软件了/.test(err(await cgi('split_set', { capp: { id: 'cnope', t: 'DIRECT' } }))));
+	// ---- 用户 11/27：学习模式 ----
+	const LF = E + '/learn.json';
+	fs.writeFileSync(RUN, '');
+	r = await cgi('split_learn', { act: 'start', ip: '192.168.1.50', name: '我的手机' }, { CMCP_SPL_F: LF });
+	ok('[学习] 开始：在后台跑 3 分钟的识别，带这次的编号', r.result?.run === true && r.result.ip === '192.168.1.50' && /cmcp-splearn '192\.168\.1\.50' 180 '[a-z0-9]{10}'/.test(rd(RUN)), err(r) || rd(RUN));
+	ok('[学习] 设备没 IP 不让开始', /没有 IP/.test(err(await cgi('split_learn', { act: 'start', ip: '' }, { CMCP_SPL_F: LF }))));
+	const rid = JSON.parse(rd(LF)).rid, CONNS = E + '/conns.json';
+	fs.writeFileSync(CONNS, JSON.stringify({ connections: [
+		{ id: '1', metadata: { sourceIP: '192.168.1.50', host: 'www.youtube.com' } }, { id: '2', metadata: { sourceIP: '192.168.1.50', host: 'i.ytimg.com' } },
+		{ id: '3', metadata: { sourceIP: '192.168.1.50', host: 'api.game.example' } }, { id: '4', metadata: { sourceIP: '192.168.1.50', host: '', destinationIP: '1.2.3.4' } },
+		{ id: '5', metadata: { sourceIP: '192.168.1.99', host: 'other.device.com' } }, { id: '6', metadata: { sourceIP: '192.168.1.50', host: 'bad host;rm' } }] }));
+	await new Promise((z) => { const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.50 3 ' + rid], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS } }); p.on('close', z); });
+	r = await cgi('split_learn', {}, { CMCP_SPL_F: LF });
+	const hs = Object.fromEntries(r.result?.hosts || []);
+	ok('[学习] 只记这台设备的网址和次数，别的设备的不记、乱的不记', hs['www.youtube.com'] === 1 && hs['api.game.example'] === 1 && !hs['other.device.com'] && !Object.keys(hs).some((h) => /;/.test(h)) && r.result.nohost === 2 && r.result.run === false, JSON.stringify(r.result));
+	// 又开了一次：上一次的不会再写进来
+	const old = JSON.parse(rd(LF));
+	await cgi('split_learn', { act: 'start', ip: '192.168.1.51' }, { CMCP_SPL_F: LF });
+	await new Promise((z) => { const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.50 3 ' + old.rid], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS } }); p.on('close', z); });
+	ok('[学习] 又开了一次识别：上一次的自己停，不会写进来', JSON.parse(rd(LF)).ip === '192.168.1.51' && !Object.keys(JSON.parse(rd(LF)).hosts).length);
+	r = await cgi('split_learn', { act: 'stop' }, { CMCP_SPL_F: LF });
+	ok('[学习] 点停止', r.result?.run === false);
+	fs.writeFileSync(PX, PX0);
 	// Nikki
 	KIND = 'nikki';
 	r = await cgi('split_set', { app: { id: 'chatgpt', t: 'PROXY' } });

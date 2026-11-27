@@ -11,8 +11,11 @@ P.update_check = function(a) {
 		else if (!c) die('查不到最新版本：连不上官网，稍后再试');
 	}
 	let newer = !length(v.cur) || v.cur == 'dev' ? true : ver_newer(c.latest, v.cur);
+	// 用户自己点「检查更新」：顺便马上查一次热补丁（用户 11/27：紧急情况或者想快点更新，不用等 6 小时）。后台跑，装好了面板自己换新
+	let hotq = false;
+	if (a?.force && !a?.nohot && stat('/usr/sbin/cmcp-hot')) { sh('nohup /usr/sbin/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true; }
 	// pv：面板网页该是哪一版（热补丁装过第 N 个就是「6.0.0-hN」），面板发现自己不一样就换成新的
-	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))) };
+	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq };
 };
 P.update_start = function(a) {
 	if (a?.confirm != 'UPDATE') die('需要确认');

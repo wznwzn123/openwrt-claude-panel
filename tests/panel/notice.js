@@ -102,13 +102,15 @@ const OUT = path.join(__dirname, 'shots');
 		await p.screenshot({ path: path.join(OUT, 'nt-page' + sfx + '.png'), fullPage: true });
 		// 重要公告：看全文、知道了
 		const ac = p.locator('#ntPin .ntact', { hasText: '4.0 发布了' });
-		const h0 = (await ac.boundingBox()).height; await ac.locator('[data-pa="annfull"]').click(); await p.waitForTimeout(200);
-		ok('重要公告：点「看全文」展开', (await ac.boundingBox()).height > h0 && /收起/.test(await ac.textContent()));
-		await ac.locator('[data-pa="ack"]').click(); await p.waitForTimeout(700);
-		ok('点「知道了」：记到路由器，移到下面的时间线', SEENCALLS.some((x) => x.ack === 'abcdefghij') && !(await p.textContent('#ntPin')).includes('4.0 发布了') && /重要4\.0 发布了/.test(await p.textContent('#ntList')));
+		// 用户 11/27：点公告直接弹出公告卡片
+		await ac.locator('[data-pa="annfull"]').click(); await p.waitForTimeout(400);
+		ok('重要公告：点「看全文」弹出这条公告（标题、全文）', await p.isVisible('.modal[data-annv]') && /4\.0 发布了/.test(await p.textContent('.modal[data-annv]')) && /第三行说明/.test(await p.textContent('.modal[data-annv]')));
+		await p.click('.modal[data-annv] [data-v="close"]'); await p.waitForTimeout(700);
+		ok('在弹窗里点「知道了」：记到路由器，移到下面的时间线', SEENCALLS.some((x) => x.ack === 'abcdefghij') && !(await p.textContent('#ntPin')).includes('4.0 发布了') && /重要4\.0 发布了/.test(await p.textContent('#ntList')));
 		const an = p.locator('#ntList .ntev', { hasText: '4.0 发布了' });
-		await an.click(); await p.waitForTimeout(200);
-		ok('时间线里的公告点开看全文', (await an.getAttribute('class')).includes('open') && /第三行说明/.test(await an.textContent()));
+		await an.click(); await p.waitForTimeout(400);
+		ok('时间线里的公告：点一下弹出这条公告', await p.isVisible('.modal[data-annv]') && /第三行说明/.test(await p.textContent('.modal[data-annv]')));
+		await p.click('.modal[data-annv] [data-v="close"]'); await p.waitForTimeout(400);
 		// 点健康条的某一天：跳到那天
 		await p.locator('#ntStrip .ntbars button').last().click(); await p.waitForTimeout(500);
 		ok('点健康条上的「今天」：跳到今天那一组', await p.evaluate(() => { const g = [...document.querySelectorAll('#ntList .ntday')].find((x) => x.dataset.day === '今天'); const r = g.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight / 2; }));

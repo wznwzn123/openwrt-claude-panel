@@ -50,18 +50,14 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		const geo = await page.evaluate(() => { const b = document.getElementById('annBar').getBoundingClientRect(), c = [...document.querySelectorAll('.card')].find((x) => x.offsetParent && x.getBoundingClientRect().top > b.top), cr = c && c.getBoundingClientRect(), top = document.querySelector('.topbar, header, #top'); const tr = top && top.getBoundingClientRect(); return { bl: b.left, br: b.right, cl: cr ? cr.left : null, cr: cr ? cr.right : null, gap: cr ? cr.top - b.bottom : null, over: tr ? b.top < tr.bottom - 1 && getComputedStyle(top).position !== 'static' : false }; });
 		ok('横幅在卡片的左右范围里、跟卡片隔开、不压顶栏' + T, geo.cl != null && geo.bl >= geo.cl - 1 && geo.br <= geo.cr + 1 && geo.gap >= 4 && !geo.over, JSON.stringify(geo));
 		if (process.env.GIF && w === 390) for (let i = 0; i < 60; i++) { await page.screenshot({ path: path.join(process.env.GIF, `f${String(i).padStart(3, '0')}.png`), clip: { x: 0, y: 0, width: 390, height: 120 } }); await W(80); }
+		// 用户 11/27：点横幅直接弹出这条公告（不跳页面），居中小卡片，内容完整、不重复第一行
 		await page.click('#annBar'); await W(600);
-		ok('点横幅：打开通知页看全文' + T, await page.isVisible('#p-notice'));
-		// 用户 11/27：点了像刷新。现在：展开这一条、滚到它；已经在通知页再点，不重新进这一页（不回到顶上）
-		const fo = () => page.evaluate(() => { const e = [...document.querySelectorAll('#ntList .ntev, #ntPin .ntact')].find((x) => x.dataset.k === 'ab1'); if (!e) return null; const r = e.getBoundingClientRect(); return { open: e.classList.contains('open'), inView: r.top >= 0 && r.bottom <= innerHeight, y: scrollY }; });
-		let f1 = await fo();
-		ok('点横幅：那条公告展开了、在屏幕里' + T, f1 && f1.open && f1.inView, JSON.stringify(f1));
-		await page.evaluate(() => { const e = [...document.querySelectorAll('#ntList .ntev')].find((x) => x.dataset.k === 'ab1'); if (e) e.click(); }); await W(200);
-		await page.evaluate(() => scrollTo(0, 120)); await W(200);
-		const y0 = await page.evaluate(() => scrollY);
-		await page.evaluate(() => document.getElementById('annBar').click()); await W(700); // 窄屏滚下去以后横幅在顶栏下面，直接点它本身
-		f1 = await fo();
-		ok('在通知页再点横幅：不像刷新（没回到顶上），那条又展开' + T, f1 && f1.open && f1.inView && (y0 === 0 || f1.y > 0), JSON.stringify({ y0, ...f1 }));
+		const pv = await page.evaluate(() => { const m = document.querySelector('.modal[data-annv]'); if (!m) return null; const r = m.querySelector('.modalbox')?.getBoundingClientRect() || m.getBoundingClientRect(); return { t: m.textContent, h: r.height, H: innerHeight, l: r.left, r: r.right, W: innerWidth }; });
+		ok('点横幅：弹出这条公告，标题和全文都在' + T, pv && /今晚 23:00–23:30 官网维护/.test(pv.t) && /面板在家里照常能用 在外面可能打不开/.test(pv.t), JSON.stringify(pv && pv.t.slice(0, 80)));
+		ok('公告弹窗不占满屏幕、不出界' + T, pv && pv.l >= 0 && pv.r <= pv.W && (pv.W >= 700 || pv.h <= pv.H * 0.7 + 1), JSON.stringify(pv && { h: pv.h, H: pv.H }));
+		ok('点横幅不跳页面' + T, !(await page.isVisible('#p-notice')));
+		await page.click('.modal[data-annv] [data-v="close"]'); await W(400);
+		ok('点「知道了」关掉' + T, (await page.locator('.modal[data-annv]').count()) === 0);
 		await ctx.close();
 	}
 	// 系统开了「减少动态效果」：横幅不滚、最多两行

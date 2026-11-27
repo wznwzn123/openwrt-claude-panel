@@ -1725,7 +1725,8 @@ function annBarDraw() {
 		bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's');
 	});
 	// 点横幅：去通知页展开这一条、滚到它（已经在通知页就不重新进这一页：原来会像刷新了一下）
-	bar.onclick = () => { if (!a.body) return; NT_FOCUS = 'a' + a.id; if (NT.f !== 'all' && NT.f !== 'ann') { NT.f = 'all'; if (page === 'notice') return ntRender(); } if (page === 'notice') ntFocus(); else go('notice'); };
+	// 点横幅：直接弹出这条公告看全文（用户 11/27），不跳页面
+	bar.onclick = () => { if (a.body) ntAnnView(a); };
 }
 let NT_FOCUS = '';
 function ntFocus() {
@@ -1737,6 +1738,19 @@ function ntFocus() {
 	const f = el.querySelector('.ntfull, [data-pa="annfull"]'); if (f) f.textContent = '收起';
 	el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
 	el.classList.remove('ntfocus'); void el.offsetWidth; el.classList.add('ntfocus');
+}
+// 点公告（通知页里的、顶上横幅）：直接弹出这条公告（用户 11/27），居中小卡片，长的在卡片里上下滑
+function ntAnnView(a) {
+	if (!a) return;
+	const ls = String(a.body || '').split('\n'), body = a.level === 'banner' && (ls[0] || '').trim() === a.title ? ls.slice(1).join('\n').trim() : String(a.body || '');
+	const imp = a.level === 'important', acked = ((NT.d && NT.d.seen && NT.d.seen.ack) || []).includes(a.id);
+	modal(`<div class="sheethead"><h3>${esc(a.title)}</h3></div>
+	<p class="muted" style="font-size:13px;margin:0 0 10px">${imp ? '重要公告' : '公告'} · ${esc(fbWhen(a.at))}</p>
+	<div class="cscroll">${body ? `<div class="notice" style="white-space:pre-wrap;line-height:1.65;margin:0">${esc(body)}</div>` : ''}
+	${a.files && a.files.length ? `<div style="margin-top:12px">${filesHtml(a.files)}</div>` : ''}
+	</div>
+	<div class="cfoot"><button class="btn primary" data-v="close" style="width:100%">知道了</button></div>`,
+	(m) => { m.dataset.annv = 1; if (imp && !acked) m.querySelector('[data-v="close"]').addEventListener('click', () => { ntAck(a.id); if (page === 'notice') setTimeout(ntRender, 200); }); }, { compact: true });
 }
 function ntAnnPop(a) {
 	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
@@ -1909,7 +1923,7 @@ $('ntPin').onclick = async (e) => {
 	if (a === 'app') return toast('回到 App 首页（路由器列表），会提示一键更新');
 	if (a === 'fb') { FB_FOCUS = x.fb; return go('myfb'); }
 	if (a === 'chat') return go('chat');
-	if (a === 'annfull') { c.classList.toggle('open'); b.textContent = c.classList.contains('open') ? '收起' : '看全文'; return; }
+	if (a === 'annfull') return ntAnnView(x.ann);
 	if (a === 'ack') {
 		ntAck(x.ann.id);
 		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return ntRender();
@@ -1923,6 +1937,7 @@ $('ntList').onclick = (e) => {
 	const x = ($('ntList')._items || []).find((y) => y.k === it.dataset.k); if (!x) return;
 	if (x.fb) { FB_FOCUS = x.fb; return go('myfb'); }
 	if (x.go) return go(x.go);
+	if (x.c === 'ann' && x.ann) return ntAnnView(x.ann);
 	it.classList.toggle('open');
 	const f = it.querySelector('.ntfull'); if (f) f.textContent = it.classList.contains('open') ? '收起' : '看全文';
 };

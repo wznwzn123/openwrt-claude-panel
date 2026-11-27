@@ -67,6 +67,9 @@ ok('接口：返回的内容里没有 HTML 标签、没有 Markdown 链接', !/<
 gh.mode = 'limited';
 a = await get('/api/changelog');
 ok('接口：GitHub 接口被限流（403）：用上次存下的，再把最新一版补上', a.st === 200 && a.j.list[0].v === 'v5.3.0' && a.j.list[0].groups[0].items[0] === '限流时补上的最新一版' && a.j.list.length === REL.length + 1, JSON.stringify(a.j).slice(0, 200));
+// 后台公告的版本下拉（用户 11/28 截图：线上只有「不限」）：GitHub 接口被限流时拼存下的更新日志 + 最新一版
+{ const r = await mod.default.fetch(new Request('https://panel.example/api/admin/versions', { headers: { authorization: 'Bearer admin-key-1234567890' } }), env); const j = await r.json(); const vs = (j.list || []).map((x) => x.v);
+  ok('后台版本列表：GitHub 接口被限流时照样有（最新一版 + 更新日志里的版本，新的在前）', r.status === 200 && vs[0] === '5.3.0' && vs.includes('5.2.1') && vs.includes('1.0.0'), JSON.stringify(j).slice(0, 300)); }
 // 一次都没成功过、又被限流：只有最新一版
 env.H = ns(mod.Hub);
 a = await get('/api/changelog');

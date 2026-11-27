@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
+import zlib from 'zlib';
 const UC = process.env.UCODE;
 if (!UC) { console.log('跳过：没有设置 UCODE'); process.exit(0); }
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
@@ -12,6 +13,8 @@ const E = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcpst-')), R = E + '/root', SD
 const TOKEN = 'tok' + 'a'.repeat(30);
 fs.writeFileSync(E + '/config.json', JSON.stringify({ token: TOKEN, ckey: 'k'.repeat(40) }));
 const mk = (f, s) => { fs.mkdirSync(path.dirname(R + f), { recursive: true }); fs.writeFileSync(R + f, s); };
+// 真的路由器上 opkg 把软件源列表压缩着存（用户 11/27 的 Kwrt：软件中心一个都不显示）：固件自带的两个用压缩的，第三方那个用不压缩的，两种都要认
+const mkgz = (f, s) => mk(f, zlib.gzipSync(Buffer.from(s)));
 mk('/usr/lib/opkg/status', [
 	'Package: base-files\nVersion: 1554\nStatus: install user installed\nInstalled-Time: 1700000000',
 	'Package: luci-app-ddns\nVersion: 2.8-r1\nStatus: install user installed\nInstalled-Time: 1700000000',
@@ -19,13 +22,13 @@ mk('/usr/lib/opkg/status', [
 ].join('\n\n') + '\n');
 mk('/etc/opkg/distfeeds.conf', 'src/gz openwrt_core https://downloads.openwrt.org/releases/23.05.3/targets/x/packages\nsrc/gz openwrt_luci https://downloads.openwrt.org/releases/23.05.3/packages/x/luci\n# src/gz old https://x\n');
 mk('/etc/opkg/customfeeds.conf', 'src/gz kenzo https://op.dllkids.xyz/packages\n');
-mk('/var/opkg-lists/openwrt_luci', [
+mkgz('/var/opkg-lists/openwrt_luci', [
 	'Package: luci-app-wol\nVersion: 1.0-r1\nDepends: libc, etherwake\nSize: 10240\nInstalled-Size: 30720\nDescription: Wake on LAN',
 	'Package: luci-app-ddns\nVersion: 2.9-r1\nSize: 20480\nDescription: Dynamic DNS',
 	'Package: luci-app-adblock\nVersion: 4.1-r1\nDepends: adblock\nSize: 30000\nInstalled-Size: 9000000\nDescription: AdBlock',
 	'Package: luci-i18n-wol-zh-cn\nVersion: 1\nSize: 1000',
 ].join('\n\n') + '\n');
-mk('/var/opkg-lists/openwrt_core', [
+mkgz('/var/opkg-lists/openwrt_core', [
 	'Package: etherwake\nVersion: 1.09-r1\nSize: 8000\nInstalled-Size: 20480\nDescription: Send WoL packets',
 	'Package: adblock\nVersion: 4.1\nSize: 50000\nInstalled-Size: 9000000\nDescription: blocker',
 	'Package: dnsmasq-full\nVersion: 2.90-1\nSize: 200000\nDescription: dns',
@@ -85,7 +88,7 @@ finish(0);
 // iStore：自己的软件源和列表；装 iStore 的应用用 is-opkg
 mk('/tmp/is-root/etc/opkg/distfeeds.conf', 'src/gz openwrt_core https://downloads.openwrt.org/releases/23.05.3/targets/x/packages\n');
 mk('/tmp/is-root/etc/opkg/meta.conf', 'src/gz istore_meta https://istore.istoreos.com/repo/all/meta\n');
-mk('/tmp/is-root/tmp/opkg-lists/istore_meta', 'Package: app-meta-ddnsto\nVersion: 1.0.0\nDepends: luci-app-ddnsto\nSize: 2000\nDescription: DDNSTO 远程控制\n\nPackage: luci-app-wol\nVersion: 9.9\nSize: 1\nDescription: dup\n');
+mkgz('/tmp/is-root/tmp/opkg-lists/istore_meta', 'Package: app-meta-ddnsto\nVersion: 1.0.0\nDepends: luci-app-ddnsto\nSize: 2000\nDescription: DDNSTO 远程控制\n\nPackage: luci-app-wol\nVersion: 9.9\nSize: 1\nDescription: dup\n');
 r = await cgi('store_list', {}, { CMCP_STORE_ISTORE: '1' });
 const ddnsto = (r.result?.list || []).find((x) => x.name === 'app-meta-ddnsto');
 ok('装了 iStore：认出它的软件源（拷过去的系统软件源不算两遍），它的应用标「iStore」、用它的中文名', r.result?.istore === true && r.result.feeds.filter((f) => f.kind === 'istore').length === 1 && ddnsto && ddnsto.src === 'iStore' && ddnsto.title === 'DDNSTO 远程控制' && ddnsto.plugin, JSON.stringify(r.result?.feeds) + JSON.stringify(ddnsto));

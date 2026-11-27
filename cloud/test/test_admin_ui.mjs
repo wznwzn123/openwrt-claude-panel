@@ -162,6 +162,20 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		await page.goto(B + '/admin#/ann'); await W(1000);
 		await page.fill('.ann-form input', '测试公告'); await page.click('.ann-form button:has-text("发布公告")'); await W(1000);
 		ok('公告：发布成功，公开接口拿得到' + sfx, (await api('/api/notices')).list.some((x) => x.title === '测试公告'));
+		// 公告：只发给某个版本范围、托管版或自建版（用户 11/27：新后台原来没有这两项）
+		const tt = '尝鲜说明' + sfx;
+		await page.fill('.ann-form input', tt);
+		await page.click('.ann-form [role="radiogroup"][aria-label="发给"] button:has-text("自建版")');
+		await page.fill('.ann-form input[aria-label="从哪个版本"]', '6.0.0'); await page.fill('.ann-form input[aria-label="到哪个版本"]', '6.9');
+		await page.click('.ann-form button:has-text("发布公告")'); await W(1000);
+		const has = async (q) => (await api('/api/notices' + q)).list.some((x) => x.title === tt);
+		ok('公告定向：自建版 6.0.0 收得到' + sfx, await has('?v=6.0.0&k=s'));
+		ok('公告定向：托管版、5.3.0、7.0 都收不到' + sfx, !(await has('?v=6.0.0&k=h')) && !(await has('?v=5.3.0&k=s')) && !(await has('?v=7.0&k=s')));
+		const arow = page.locator(".hub-row", { hasText: tt });
+		ok('公告定向：列表写着发给谁' + sfx, /只发自建版 · 6\.0\.0 到 6\.9/.test(await arow.textContent()), await arow.textContent());
+		await arow.locator('button:has-text("修改")').click(); await W(500);
+		ok('公告定向：修改时带出原来的版本' + sfx, (await page.inputValue('.ann-form input[aria-label="从哪个版本"]')) === '6.0.0' && (await page.getAttribute('.ann-form [aria-label="发给"] button:has-text("自建版")', 'aria-checked')) === 'true');
+		await page.click('.ann-form button:has-text("不改了")'); await W(300);
 		// 路由器：备注
 		await page.goto(B + '/admin#/devices'); await W(1200);
 		await page.locator('.hub-row', { hasText: '客厅 Kwrt' }).locator('button:has-text("备注")').click(); await W(500);

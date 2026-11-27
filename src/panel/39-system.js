@@ -1653,7 +1653,9 @@ function ntItems() {
 		for (const e of cloud.events || []) L.push({ c: 'sys', ic: 'cloud', t: e.t, lvl: e.lvl || 'info', title: e.msg || '', body: e.detail || '', src: '云端监测', kind: 'cloud', go: 'wd', k: 'c' + e.t });
 		for (const x of cloud.notes || []) L.push({ c: 'sys', ic: 'svc', t: x.t, lvl: x.lvl || 'info', title: String(x.title || '').replace(/^[\u2600-\u27bf\u{1f300}-\u{1faff}\ufe0f\s]+/u, ''), body: x.body || '', src: x.tag === 'svc' ? '托管服务' : '云端', tag: x.tag === 'svc' ? '托管' : '', k: 'n' + x.t });
 	}
-	for (const a of d.ann || []) L.push({ c: 'ann', ic: 'ann', t: a.upd || a.at, lvl: a.level === 'important' ? 'warn' : 'info', title: a.title, body: a.body || '', src: a.level === 'important' ? '重要公告' : '公告', tag: a.level === 'important' ? '重要' : '公告', imp: a.level === 'important', ann: a, k: 'a' + a.id });
+	// 横幅只有内容（官网用内容第一行当标题）：正文去掉跟标题一样的第一行，不重复
+	const banBody = (a) => { const b = a.body || '', ls = b.split('\n'); return a.level === 'banner' && ls[0].trim() === a.title ? ls.slice(1).join('\n').trim() : b; };
+	for (const a of d.ann || []) L.push({ c: 'ann', ic: 'ann', t: a.upd || a.at, lvl: a.level === 'important' ? 'warn' : 'info', title: a.title, body: banBody(a), src: a.level === 'important' ? '重要公告' : '公告', tag: a.level === 'important' ? '重要' : '公告', imp: a.level === 'important', ann: a, k: 'a' + a.id });
 	if (UPD && UPD.newer) L.push({ c: 'upd', ic: 'upd', t: ntMs(UPD.rel), lvl: UPD.force ? 'warn' : 'info', title: '新版本 v' + UPD.latest, body: UPD.notes || '', src: '版本更新', upd: 'router', force: !!UPD.force, k: 'u' + UPD.latest });
 	if (APP_VER && d.app && d.app.version && verNewer(d.app.version, APP_VER)) L.push({ c: 'upd', ic: 'upd', t: ntMs(d.app.rel), lvl: 'info', title: 'App 新版本 ' + d.app.version, body: (d.app.notes || '') + '（现在是 ' + APP_VER + '）', src: '版本更新', upd: 'app', k: 'p' + d.app.version });
 	for (const x of d.fb || []) {
@@ -1708,18 +1710,33 @@ function annBarDraw() {
 	const a = (NT.d.ann || []).find((x) => x.level === 'banner' && !pop.includes(x.id));
 	bar.classList.toggle('hidden', !a);
 	if (!a) return;
-	// 用户 11/27：手持喇叭 + 一行滚动字幕（放得下就不滚；系统设了「减少动态效果」就不滚、换行显示）；没有按钮，有正文时点整条看全文
-	bar.innerHTML = `<svg class="abi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10.2v3.6c0 .7.5 1.2 1.2 1.2H6l1.1 4.4c.2.9 1 1.6 2 1.6h.3c1 0 1.7-.9 1.5-1.9L10.3 15l8.5 3.9c.8.4 1.7-.2 1.7-1.1V6.2c0-.9-.9-1.5-1.7-1.1L10 9H4.2C3.5 9 3 9.5 3 10.2z"/><rect x="21.2" y="10" width="1.8" height="4" rx=".9" fill="currentColor"/></svg><div class="abv"><div class="abt"><span>${esc(a.title)}</span><span aria-hidden="true">${esc(a.title)}</span></div></div>`;
+	// 用户 11/27：手持喇叭 + 一行滚动字幕，没有按钮；横幅只有内容没有标题，滚的就是内容（换行连成一行），一直滚，点一下去通知页看全文
+	// 系统设了「减少动态效果」就不滚、换行显示。老的横幅（有标题、没内容）照样显示标题
+	const txt = (a.body || a.title || '').replace(/\s*\n\s*/g, '　').trim();
+	bar.innerHTML = `<svg class="abi" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 10.2v3.6c0 .7.5 1.2 1.2 1.2H6l1.1 4.4c.2.9 1 1.6 2 1.6h.3c1 0 1.7-.9 1.5-1.9L10.3 15l8.5 3.9c.8.4 1.7-.2 1.7-1.1V6.2c0-.9-.9-1.5-1.7-1.1L10 9H4.2C3.5 9 3 9.5 3 10.2z"/><rect x="21.2" y="10" width="1.8" height="4" rx=".9" fill="currentColor"/></svg><div class="abv"><div class="abt"><span>${esc(txt)}</span><span aria-hidden="true">${esc(txt)}</span></div></div>`;
 	bar.classList.remove('roll');
 	bar.classList.toggle('go', !!a.body);
-	bar.setAttribute('aria-label', '公告：' + a.title);
+	bar.setAttribute('aria-label', '公告：' + txt.slice(0, 200));
 	requestAnimationFrame(() => {
 		const v = bar.querySelector('.abv'), t = bar.querySelector('.abt>span'); if (!v || !t) return;
-		const w = t.getBoundingClientRect().width, over = w > v.clientWidth - 4;
-		bar.classList.toggle('roll', over);
-		if (over) { const d = w + 48; bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's'); }
+		// 一直滚（用户 11/27「没点开就一直滚动」，看过也照样滚）：每秒约 40 像素，最短 6 秒一圈
+		const w = t.getBoundingClientRect().width, d = w + 48;
+		bar.classList.add('roll');
+		bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's');
 	});
-	bar.onclick = () => { if (a.body) go('notice'); };
+	// 点横幅：去通知页展开这一条、滚到它（已经在通知页就不重新进这一页：原来会像刷新了一下）
+	bar.onclick = () => { if (!a.body) return; NT_FOCUS = 'a' + a.id; if (page === 'notice') ntFocus(); else go('notice'); };
+}
+let NT_FOCUS = '';
+function ntFocus() {
+	const k = NT_FOCUS; if (!k) return;
+	const el = [...document.querySelectorAll('#ntList .ntev, #ntPin .ntact')].find((x) => x.dataset.k === k);
+	if (!el) return;
+	NT_FOCUS = '';
+	el.classList.add('open');
+	const f = el.querySelector('.ntfull, [data-pa="annfull"]'); if (f) f.textContent = '收起';
+	el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+	el.classList.remove('ntfocus'); void el.offsetWidth; el.classList.add('ntfocus');
 }
 function ntAnnPop(a) {
 	// 打开面板时弹出来的重要公告：居中的小卡片（不占满屏幕），长的在卡片里上下滑
@@ -1861,6 +1878,7 @@ function ntRender() {
 	box._pend = pend;
 	// 打开这一页时：内容依次浮现一次（系统开了「减少动态效果」就不播）
 	if (first) { box.dataset.drawn = 1; const pg = $('p-notice'); pg.classList.remove('ntin'); void pg.offsetWidth; pg.classList.add('ntin'); }
+	ntFocus();
 }
 $('p-notice').querySelector('.ntqb').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
 $('ntStrip').onclick = (e) => {

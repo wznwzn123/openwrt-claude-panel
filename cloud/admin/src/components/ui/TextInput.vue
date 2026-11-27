@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<{
   maxlength?: number
   autocomplete?: string
   inputmode?: 'text' | 'numeric' | 'decimal' | 'tel' | 'email' | 'url' | 'search'
+  ariaLabel?: string
 }>(), {
   type: 'text',
   rows: 3,
@@ -69,6 +70,7 @@ defineExpose({ focus: () => el.value?.focus() })
       :autocomplete="autocomplete"
       :inputmode="inputmode"
       :aria-invalid="invalid || undefined"
+      :aria-label="ariaLabel"
       @input="onInput"
       @keydown.enter="emit('enter')"
     />

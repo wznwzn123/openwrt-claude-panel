@@ -1454,10 +1454,13 @@ export class Hub extends DurableObject {
 	async anns(all) { const l = (await this.ctx.storage.get('ann')) || [], now = Date.now(); return all ? l : l.filter((a) => (!a.exp || a.exp > now) && (!a.start || a.start <= now)); }
 	// 新建（id 空）或修改；days：多少天后不再显示（0 = 一直显示）
 	async annSave(id, b) {
-		const title = String(b.title || '').trim().slice(0, 80), body = String(b.body || '').trim().slice(0, 2000);
-		if (!title) return { st: 400, error: '标题不能是空的' };
 		// 6.0：banner = 面板顶上一条横幅（轻提醒，比如今晚维护），不弹窗、不推送
-		const level = b.level === 'important' ? 'important' : b.level === 'banner' ? 'banner' : 'normal', days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
+		const level = b.level === 'important' ? 'important' : b.level === 'banner' ? 'banner' : 'normal';
+		const body = String(b.body || '').trim().slice(0, 2000);
+		// 横幅只有内容、没有标题（用户 11/27）：面板顶上滚动的就是内容；通知页、后台列表用内容的第一行当标题
+		const title = level === 'banner' ? body.split('\n').map((x) => x.trim()).find(Boolean)?.slice(0, 40) || '' : String(b.title || '').trim().slice(0, 80);
+		if (!title) return { st: 400, error: level === 'banner' ? '横幅内容不能是空的' : '标题不能是空的' };
+		const days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
 		// 6.0：只发给某些路由器：ed = h 托管版 / s 自建版 / 空 = 都发；vmin、vmax = 面板版本范围（含两头，可以只填一个）
 		const ed = b.ed === 'h' || b.ed === 's' ? b.ed : '', vok = (v) => v === '' || /^\d{1,3}(\.\d{1,3}){0,2}$/.test(v);
 		const vmin = String(b.vmin || '').trim(), vmax = String(b.vmax || '').trim();

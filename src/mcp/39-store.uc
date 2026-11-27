@@ -39,6 +39,11 @@ function st_feeds(pm) {
 	}
 	return f;
 }
+function st_read_list(file) {
+	let h = readfile(file, 2) ?? '';
+	if (length(h) == 2 && ord(h, 0) == 0x1f && ord(h, 1) == 0x8b) return sh('gzip -dc ' + shq(file) + ' 2>/dev/null || zcat ' + shq(file)).out ?? '';
+	return readfile(file) ?? '';
+}
 function st_lists_dir() {
 	let m = match(readfile(APP_ROOT + '/etc/opkg.conf') ?? '', /lists_dir[ \t]+[^ \t]+[ \t]+([^ \t\n]+)/);
 	return m ? m[1] : '/var/opkg-lists';
@@ -54,7 +59,8 @@ function st_index(pm) {
 			let file = (kind == 'istore' ? IS_ROOT + '/tmp/opkg-lists' : sys) + '/' + f.name, st = stat(file);
 			if (!st) continue;
 			let a = time() - st.mtime; if (age == null || a > age) age = a;
-			for (let b in split(readfile(file) ?? '', /\n\n+/)) {
+			// 软件源列表一般是 gzip 压缩着存的（OpenWrt 的 opkg 都这样，iStore 也是）：先解压（用户 11/27：软件中心一个都不显示）
+			for (let b in split(st_read_list(file), /\n\n+/)) {
 				let k = app_kv(b, ':'), n = k.Package;
 				if (!n || idx[n]) continue;
 				idx[n] = { ver: k.Version ?? '', size: +(k.Size ?? 0) || 0, isize: +(k['Installed-Size'] ?? 0) || 0, desc: split(k.Description ?? '', '\n')[0], deps: app_dep_names(k.Depends), feed: f.name, kind };

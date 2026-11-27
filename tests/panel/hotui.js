@@ -7,7 +7,8 @@ const SHOT = path.join(__dirname, 'shots'); fs.mkdirSync(SHOT, { recursive: true
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c, note || '']); if (!c) problems.push(n + (note ? '：' + note : '')); };
 const S = { pop: [], off: [] };
-const BAN = { id: 'b1', level: 'banner', title: '今晚 23:00–23:30 官网维护，面板在家里照常能用，在外面可能打不开', body: '维护内容…', at: Math.floor(Date.now() / 1000) - 60 };
+// 横幅只有内容（用户 11/27）：官网用内容第一行当标题
+const BAN = { id: 'b1', level: 'banner', title: '今晚 23:00–23:30 官网维护', body: '今晚 23:00–23:30 官网维护\n面板在家里照常能用 在外面可能打不开', at: Math.floor(Date.now() / 1000) - 60 };
 function handle(m, p) {
 	if (m === 'notices') { const r = mock.respond(m, {}); return { ...r, ann: [BAN], seen: { ...r.seen, pop: S.pop.slice() } }; }
 	if (m === 'notices_seen') { if (p.pop) S.pop.push(p.pop); return { ok: true }; }
@@ -42,15 +43,35 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		ok('横幅是没底色的一行（不超过 30 高）' + T, (await page.evaluate(() => document.getElementById('annBar').getBoundingClientRect().height)) <= 30 && (await page.evaluate(() => getComputedStyle(document.getElementById('annBar')).backgroundColor)) === 'rgba(0, 0, 0, 0)');
 		const x0 = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('#annBar .abt')).transform).m41); await W(700);
 		const x1 = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('#annBar .abt')).transform).m41);
-		const fit = await page.evaluate(() => document.querySelector('#annBar .abt>span').getBoundingClientRect().width <= document.querySelector('#annBar .abv').clientWidth - 4);
-		if (fit) ok('放得下：不滚' + T, !(await page.getAttribute('#annBar', 'class')).includes('roll') && Math.abs(x1 - x0) < 1);
-		else ok('放不下：字从右往左滚' + T, (await page.getAttribute('#annBar', 'class')).includes('roll') && x1 < x0 - 5, x0 + ' → ' + x1);
+		// 用户 11/27：「没点开就一直滚动」「一直滚动」：放得下也滚
+		ok('一直滚：字从右往左滚' + T, (await page.getAttribute('#annBar', 'class')).includes('roll') && x1 < x0 - 5, x0 + ' → ' + x1);
+		ok('滚的是内容（两行连成一行），不是标题' + T, /官网维护　面板在家里照常能用/.test(await page.textContent('#annBar .abt>span')));
 		// 跟下面的卡片左右对齐、不压到顶栏、跟卡片之间留空
 		const geo = await page.evaluate(() => { const b = document.getElementById('annBar').getBoundingClientRect(), c = [...document.querySelectorAll('.card')].find((x) => x.offsetParent && x.getBoundingClientRect().top > b.top), cr = c && c.getBoundingClientRect(), top = document.querySelector('.topbar, header, #top'); const tr = top && top.getBoundingClientRect(); return { bl: b.left, br: b.right, cl: cr ? cr.left : null, cr: cr ? cr.right : null, gap: cr ? cr.top - b.bottom : null, over: tr ? b.top < tr.bottom - 1 && getComputedStyle(top).position !== 'static' : false }; });
 		ok('横幅在卡片的左右范围里、跟卡片隔开、不压顶栏' + T, geo.cl != null && geo.bl >= geo.cl - 1 && geo.br <= geo.cr + 1 && geo.gap >= 4 && !geo.over, JSON.stringify(geo));
 		if (process.env.GIF && w === 390) for (let i = 0; i < 60; i++) { await page.screenshot({ path: path.join(process.env.GIF, `f${String(i).padStart(3, '0')}.png`), clip: { x: 0, y: 0, width: 390, height: 120 } }); await W(80); }
 		await page.click('#annBar'); await W(600);
 		ok('点横幅：打开通知页看全文' + T, await page.isVisible('#p-notice'));
+		// 用户 11/27：点了像刷新。现在：展开这一条、滚到它；已经在通知页再点，不重新进这一页（不回到顶上）
+		const fo = () => page.evaluate(() => { const e = [...document.querySelectorAll('#ntList .ntev, #ntPin .ntact')].find((x) => x.dataset.k === 'ab1'); if (!e) return null; const r = e.getBoundingClientRect(); return { open: e.classList.contains('open'), inView: r.top >= 0 && r.bottom <= innerHeight, y: scrollY }; });
+		let f1 = await fo();
+		ok('点横幅：那条公告展开了、在屏幕里' + T, f1 && f1.open && f1.inView, JSON.stringify(f1));
+		await page.evaluate(() => { const e = [...document.querySelectorAll('#ntList .ntev')].find((x) => x.dataset.k === 'ab1'); if (e) e.click(); }); await W(200);
+		await page.evaluate(() => scrollTo(0, 120)); await W(200);
+		const y0 = await page.evaluate(() => scrollY);
+		await page.click('#annBar', { force: true }); await W(700);
+		f1 = await fo();
+		ok('在通知页再点横幅：不像刷新（没回到顶上），那条又展开' + T, f1 && f1.open && f1.inView && (y0 === 0 || f1.y > 0), JSON.stringify({ y0, ...f1 }));
+		await ctx.close();
+	}
+	// 系统开了「减少动态效果」：横幅不滚、最多两行
+	{
+		S.pop = [];
+		const ctx = await browser.newContext({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' }); const page = await ctx.newPage();
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8198/panel/'); await W(2500);
+		const r = await page.evaluate(() => { const t = document.querySelector('#annBar .abt'), s = document.querySelector('#annBar .abt>span'); return { an: getComputedStyle(t).animationName, h: s.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(s).lineHeight) || 19.5 }; });
+		ok('减少动态效果：横幅不滚、最多两行', r.an === 'none' && r.h <= r.lh * 2 + 2, JSON.stringify(r));
 		await ctx.close();
 	}
 	// 远程开关

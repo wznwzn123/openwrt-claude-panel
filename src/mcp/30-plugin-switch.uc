@@ -63,7 +63,7 @@ P.auto = function(a) {
 			if (a[k]) writefile(D + '/on.' + k, sprintf('%d 面板打开\n', time()));
 			else sh('rm -f ' + D + '/on.' + k);
 		}
-		if (a.autosw != null) { let f = D + '/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' }); c.enabled = !!a.autosw; cmcp_writej(f, c); }
+		if (a.autosw != null) { let f = D + '/autosw.json', c = cmcp_readj(f, { enabled: true }); c.enabled = !!a.autosw; cmcp_writej(f, c); }
 	}
 	let st = oc ? trim(sh('/usr/sbin/cmcp-tunbypass status').out) : '', off = trim(readfile(D + '/tunbypass.off') ?? '');
 	let act = null; for (let x in px.list ?? []) if (x.id == px.active) act = x;
@@ -267,7 +267,7 @@ const TOOLS = [
 	  inputSchema: S() },
 	{ name: 'list_proxy_groups', title: '查看策略组/节点', annotations: RO,
 	  description: '不带参数：列出所有策略组及当前选择。带 group：列出该组全部节点、类型和最近一次延迟（▶ 为当前选中）。节点名含国旗 emoji 和空格，修改规则或切换时必须使用这里返回的准确名称。',
-	  inputSchema: S({ group: str('策略组名，如 Zou'), filter: str('只显示名称包含该关键字的节点，如 日本') }) },
+	  inputSchema: S({ group: str('策略组名，如「节点选择」'), filter: str('只显示名称包含该关键字的节点，如 日本') }) },
 	{ name: 'test_delay', title: '测速', annotations: RO,
 	  description: '测试单个节点或整个策略组的延迟。name 是策略组时会并发测试组内全部节点并按延迟排序。',
 	  inputSchema: S({ name: str('节点名或策略组名'), url: str('测速地址，默认 https://www.gstatic.com/generate_204'), timeout: int('超时毫秒，默认 5000') }, ['name']) },

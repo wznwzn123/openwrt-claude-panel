@@ -6,10 +6,11 @@ const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') 
 const TOK = 'testtoken1234567890abc';
 const results = [], problems = [];
 const ok = (n, c, note) => { results.push([n, !!c]); if (!c) problems.push(n); console.log((c ? '✓ ' : '✗ ') + n + (note && !c ? '（' + note + '）' : '')); };
-const S = { panel: '2.0.2', router: '2.0.2', htmlHits: 0, swHits: 0, swExtra: '' };
+const S = { panel: '2.0.2', router: '2.0.2', htmlHits: 0, swHits: 0, swExtra: '', updWait: 0 };
 const html = () => fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').replace('<meta name="panel-ver" content="dev">', S.panel === 'dev' ? '<meta name="panel-ver" content="dev">' : `<meta name="panel-ver" content="${S.panel}">`);
-const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => { const u = new URL(req.url, 'http://x');
+const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) => (b += d)); req.on('end', async () => { const u = new URL(req.url, 'http://x');
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, '');
+		if (m === 'update_check' && S.updWait) await new Promise((z) => setTimeout(z, S.updWait));
 		let result;
 		if (m === 'update_check') result = { cur: S.router, code: 'hosted-ai', latest: S.router, notes: '', newer: false, force: false };
 		else if (m === 'home_stats') result = { today: { day: '2026-11-01', dl: 3261033089, ul: 389520538, counting: true, top: [{ id: '02:00:00:00:a1:01', name: 'Xiaomi-14', dl: 3185177582, ul: 351421241 }, { id: 'router', name: '路由器自己', dl: 66078706, ul: 33177817 }, { id: '02:00:00:00:c3:03', name: 'Xiaomi-14', dl: 9766553, ul: 4913644 }] }, devices: { online: 0, wifi: 0, wired: 0, total: 2 } };
@@ -72,6 +73,26 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	ok('同名的第二个 Xiaomi-14 标上「另一个地址」，第一个不标', rows.length === 3 && !/另一个地址/.test(rows[0]) && /Xiaomi-14（另一个地址）/.test(rows[2]), JSON.stringify(rows));
 	await page.locator('#p-main').screenshot({ path: path.join(__dirname, 'shots', 'verfix-home.png') });
 	await ctx.close();
+
+	// 5b. 正在输入框里打字的时候发现新版本（比如刚装好热补丁）：先不换，打完离开输入框再换（11/27 全面检查第 3 条）
+	{
+		const c3 = await browser.newContext({ viewport: { width: 1280, height: 800 } }); await c3.addInitScript((t) => { localStorage.setItem('rp_token', t); }, TOK);
+		const p3 = await c3.newPage(); let n3 = 0; p3.on('load', () => n3++);
+		S.panel = '2.0.6'; S.router = '2.0.6';
+		await p3.goto('http://localhost:8171/panel/'); await W(4000);
+		const v3 = () => p3.evaluate(() => document.querySelector('meta[name="panel-ver"]')?.content);
+		S.panel = '2.0.7'; S.router = '2.0.7'; S.updWait = 2500; n3 = 0;
+		await p3.reload(); await W(400);
+		await p3.click('#sideQ'); await p3.keyboard.type('端口', { delay: 80 });
+		await W(9000);
+		ok('正在输入框里打字：发现新版本也先不刷新，打的字还在', n3 === 1 && (await p3.inputValue('#sideQ')) === '端口', `刷新了 ${n3} 次`);
+		S.updWait = 0;
+		await p3.fill('#sideQ', ''); await p3.evaluate(() => document.activeElement && document.activeElement.blur()); 
+		for (let i = 0; i < 30 && (await v3().catch(() => '')) !== '2.0.7'; i++) await W(500);
+		ok('离开输入框以后：自动换成新版面板', (await v3()) === '2.0.7', 'ver=' + (await v3().catch(() => '')));
+		await c3.close();
+		S.panel = '2.0.4'; S.router = '2.0.4';
+	}
 
 	// 6. 开发版（没打版本号）：不管
 	S.panel = 'dev'; S.router = '2.0.4';

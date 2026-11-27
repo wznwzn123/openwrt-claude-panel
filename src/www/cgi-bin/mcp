@@ -2303,18 +2303,18 @@ function cmcp_readj(f, def) { try { let s = readfile(f); return s ? json(s) : de
 function cmcp_writej(f, o) { writefile(f + '.tmp', sprintf('%J', o)); sh('mv ' + shq(f + '.tmp') + ' ' + shq(f)); }
 
 P.autosw = function(a) {
-	let f = '/etc/claude-mcp/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' });
+	let f = '/etc/claude-mcp/autosw.json', c = cmcp_readj(f, { enabled: true });
 	if (a?.set) {
 		if (a.enabled != null) c.enabled = !!a.enabled;
 		if (a.group) c.group = '' + a.group;
 		cmcp_writej(f, c);
 	}
-	let groups = [], now = null;
-	try {
-		for (let n, p in api('GET', '/proxies', null, 6)?.proxies ?? {})
-			if (p.type == 'Selector' && n != 'GLOBAL') { push(groups, n); if (n == c.group) now = p.now; }
-	} catch (e) {}
-	let r = { enabled: !!c.enabled, group: c.group, now, groups, hist: cmcp_readj('/etc/claude-mcp/autosw_hist.json', []), sub: cmcp_readj('/tmp/cmcp_subinfo.json', null) };
+	// 没选过策略组、或者选的组没了：自动认主策略组（原来默认写死「Zou」，11/27 全面检查第 12 条）
+	let groups = [], now = null, px = null, g = c.group;
+	try { px = api('GET', '/proxies', null, 6)?.proxies; } catch (e) {}
+	if (type(px) == 'object') g = CL.main_group(px, c.group) ?? c.group;
+	for (let n, p in px ?? {}) if (p?.type == 'Selector' && n != 'GLOBAL') { push(groups, n); if (n == g) now = p.now; }
+	let r = { enabled: !!c.enabled, group: g, auto: g != c.group, now, groups, hist: cmcp_readj('/etc/claude-mcp/autosw_hist.json', []), sub: cmcp_readj('/tmp/cmcp_subinfo.json', null) };
 	// 模拟一次：当前节点要是挂了，会换到哪个
 	if (a?.dry) {
 		let o = trim(sh('/usr/sbin/cmcp-autosw test').out), j = null;
@@ -3724,7 +3724,7 @@ P.auto = function(a) {
 			if (a[k]) writefile(D + '/on.' + k, sprintf('%d 面板打开\n', time()));
 			else sh('rm -f ' + D + '/on.' + k);
 		}
-		if (a.autosw != null) { let f = D + '/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' }); c.enabled = !!a.autosw; cmcp_writej(f, c); }
+		if (a.autosw != null) { let f = D + '/autosw.json', c = cmcp_readj(f, { enabled: true }); c.enabled = !!a.autosw; cmcp_writej(f, c); }
 	}
 	let st = oc ? trim(sh('/usr/sbin/cmcp-tunbypass status').out) : '', off = trim(readfile(D + '/tunbypass.off') ?? '');
 	let act = null; for (let x in px.list ?? []) if (x.id == px.active) act = x;
@@ -3928,7 +3928,7 @@ const TOOLS = [
 	  inputSchema: S() },
 	{ name: 'list_proxy_groups', title: '查看策略组/节点', annotations: RO,
 	  description: '不带参数：列出所有策略组及当前选择。带 group：列出该组全部节点、类型和最近一次延迟（▶ 为当前选中）。节点名含国旗 emoji 和空格，修改规则或切换时必须使用这里返回的准确名称。',
-	  inputSchema: S({ group: str('策略组名，如 Zou'), filter: str('只显示名称包含该关键字的节点，如 日本') }) },
+	  inputSchema: S({ group: str('策略组名，如「节点选择」'), filter: str('只显示名称包含该关键字的节点，如 日本') }) },
 	{ name: 'test_delay', title: '测速', annotations: RO,
 	  description: '测试单个节点或整个策略组的延迟。name 是策略组时会并发测试组内全部节点并按延迟排序。',
 	  inputSchema: S({ name: str('节点名或策略组名'), url: str('测速地址，默认 https://www.gstatic.com/generate_204'), timeout: int('超时毫秒，默认 5000') }, ['name']) },
@@ -4214,6 +4214,12 @@ P.ai_answer = function(a) {
 	let o = ai_read(), x = ai_find(o, '' + (a?.id ?? ''));
 	if (!x) die('找不到这个请求了');
 	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 AI 再发一次' : '这个请求已经处理过了');
+	// 全部都允许 = 改成「完全放开」：跟在设置里改一样，要主账号、要先确认本人（11/27 全面检查第 11 条）。
+	// 没确认的先不动这个请求（还在等），面板带用户去「我的主页 → 敏感信息」验证，回来再点
+	if (a?.all === true && a?.ok === true) {
+		if (ROLE != 'owner') die('只有主账号能点「全部都允许」');
+		if (!sudo_ok(a?.sudo)) die('要先确认是你本人：在「我的主页 → 敏感信息」里验证');
+	}
 	x.st = a?.ok === true ? 'ok' : 'no'; x.by = substr('' + (DEV?.name ?? (DEV_ID ? '手机' : '面板')), 0, 40); x.ans = time();
 	ai_write(o);
 	// 永久允许：以后这一类不再问（推送告诉主账号，免得家人点了主账号不知道）
@@ -4226,7 +4232,7 @@ P.ai_answer = function(a) {
 	}
 	// 全部都允许（用户 11/27）：等于把「AI 能做什么」改成「完全放开」，只有主账号能点
 	let all = false;
-	if (x.st == 'ok' && a?.all === true && ROLE == 'owner') {
+	if (x.st == 'ok' && a?.all === true) {
 		let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 		c.ai_mode = 'full';
 		writefile(CONF_PATH + '.tmp', sprintf('%J', c)); sh('chmod 600 ' + shq(CONF_PATH + '.tmp') + ' && mv ' + shq(CONF_PATH + '.tmp') + ' ' + shq(CONF_PATH));
@@ -7026,10 +7032,12 @@ function sp_cfg_groups(kind) {
 	}
 	return out;
 }
-// 主策略组：节点自动切换选的那个；没有就用第一个「手动选择」的组
+// 主策略组：节点自动切换选的那个；没选过或者组没了，跟节点自动换一样自动认（兜底规则一路跟到选着节点的「手动选择」组）；
+// 插件没在跑（问不到接口）时用配置文件里第一个组
 function sp_main(groups) {
 	let a = cmcp_readj(ETC + '/autosw.json', {})?.group, p = sp_proxies();
-	if (a && index(groups ?? [], a) >= 0) return a;
+	if (a && index(groups ?? [], a) >= 0 && (!p || p[a]?.type == 'Selector')) return a;
+	if (type(p) == 'object') { let m = CL.main_group(p, a); if (m && index(groups ?? [], m) >= 0) return m; }
 	for (let n in (groups ?? [])) if (!p || p[n]?.type == 'Selector') return n;
 	return null;
 }

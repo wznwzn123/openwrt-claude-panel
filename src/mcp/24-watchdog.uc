@@ -33,18 +33,18 @@ function cmcp_readj(f, def) { try { let s = readfile(f); return s ? json(s) : de
 function cmcp_writej(f, o) { writefile(f + '.tmp', sprintf('%J', o)); sh('mv ' + shq(f + '.tmp') + ' ' + shq(f)); }
 
 P.autosw = function(a) {
-	let f = '/etc/claude-mcp/autosw.json', c = cmcp_readj(f, { enabled: true, group: 'Zou' });
+	let f = '/etc/claude-mcp/autosw.json', c = cmcp_readj(f, { enabled: true });
 	if (a?.set) {
 		if (a.enabled != null) c.enabled = !!a.enabled;
 		if (a.group) c.group = '' + a.group;
 		cmcp_writej(f, c);
 	}
-	let groups = [], now = null;
-	try {
-		for (let n, p in api('GET', '/proxies', null, 6)?.proxies ?? {})
-			if (p.type == 'Selector' && n != 'GLOBAL') { push(groups, n); if (n == c.group) now = p.now; }
-	} catch (e) {}
-	let r = { enabled: !!c.enabled, group: c.group, now, groups, hist: cmcp_readj('/etc/claude-mcp/autosw_hist.json', []), sub: cmcp_readj('/tmp/cmcp_subinfo.json', null) };
+	// 没选过策略组、或者选的组没了：自动认主策略组（原来默认写死「Zou」，11/27 全面检查第 12 条）
+	let groups = [], now = null, px = null, g = c.group;
+	try { px = api('GET', '/proxies', null, 6)?.proxies; } catch (e) {}
+	if (type(px) == 'object') g = CL.main_group(px, c.group) ?? c.group;
+	for (let n, p in px ?? {}) if (p?.type == 'Selector' && n != 'GLOBAL') { push(groups, n); if (n == g) now = p.now; }
+	let r = { enabled: !!c.enabled, group: g, auto: g != c.group, now, groups, hist: cmcp_readj('/etc/claude-mcp/autosw_hist.json', []), sub: cmcp_readj('/tmp/cmcp_subinfo.json', null) };
 	// 模拟一次：当前节点要是挂了，会换到哪个
 	if (a?.dry) {
 		let o = trim(sh('/usr/sbin/cmcp-autosw test').out), j = null;

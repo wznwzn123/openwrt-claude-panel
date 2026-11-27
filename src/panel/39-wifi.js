@@ -274,3 +274,5 @@ $('wfGuest').addEventListener('click', async (e) => {
 		} catch (x) { toast(x.message, true); }
 	});
 });
+// 有没保存的修改：离开这一页先问；面板装了新补丁也先不换新（11/27 全面检查第 3 条）
+DIRTY.wifi = () => !$('wfBar').classList.contains('hidden');

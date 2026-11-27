@@ -37,8 +37,10 @@ else add('ok', '内存正常（可用 ' + av + ' MB）');
 // 3) 节点：OpenClash / Nikki 测当前节点；别的代理插件看在不在跑；没装就不提
 let px = null; try { px = json(L.sh('/usr/sbin/cmcp-proxy json')); } catch (e) {}
 let pa = null; for (let x in px?.list ?? []) if (x.id == px.active) pa = x;
-let ac = L.readj(L.D + '/autosw.json', { enabled: true, group: 'Zou' });
-let g = pa && pa.kind == 'clash' ? L.api('GET', '/proxies/' + L.enc(ac.group), null, 6).json : null;
+let ac = L.readj(L.D + '/autosw.json', { enabled: true });
+// 主策略组：节点自动换选过的；没选过或者组没了自动认（原来默认写死「Zou」，11/27 全面检查第 12 条）
+let mg = pa && pa.kind == 'clash' ? L.main_group(null, ac.group) : null;
+let g = mg ? L.api('GET', '/proxies/' + L.enc(mg), null, 6).json : null;
 if (!pa) {}
 else if (pa.kind != 'clash') {
 	if (pa.running) add('ok', pa.name + ' 正在运行');

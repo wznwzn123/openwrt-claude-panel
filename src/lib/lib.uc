@@ -242,6 +242,31 @@ function node_pick(cur, cands) {
 	return null;
 }
 
+// 主策略组（11/27 全面检查第 12 条：原来默认写死成「Zou」，别人的组名对不上，节点自动换、订阅提醒、分流的「代理」都悄悄不工作）：
+// 设置里选过、而且还在的就用它；不然跟着兜底规则（MATCH）走，一路跟到选着节点的那个「手动选择」组；
+// 兜底规则是直连、问不到规则时，按配置里的顺序找第一个选着节点的「手动选择」组。认出来的记 10 分钟（组没变的话）
+const PGRP = ['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay', 'Smart'];
+const MG_CACHE = '/tmp/cmcp_maingrp.json';
+function main_group(px, want) {
+	if (!px) px = api('GET', '/proxies', null, 8).json?.proxies;
+	if (type(px) != 'object') return null;
+	if (want && px[want]?.type == 'Selector') return want;
+	let sels = sort(filter(keys(px), (n) => n != 'GLOBAL' && px[n]?.type == 'Selector')), sig = join('\n', sels);
+	if (!length(sels)) return null;
+	let c = readj(MG_CACHE, null);
+	if (c && c.sig == sig && now() - c.at < 600 && px[c.g]?.type == 'Selector') return c.g;
+	let isg = (n) => px[n] && (px[n].type in PGRP);
+	let follow = (n) => { let last = null; for (let i = 0; i < 8 && px[n]?.type == 'Selector'; i++) { last = n; if (!isg(px[n].now)) break; n = px[n].now; } return last; };
+	let g = null, rs = api('GET', '/rules', null, 8).json?.rules ?? [], lr = length(rs) ? rs[length(rs) - 1] : null;
+	if (lc('' + (lr?.type ?? '')) == 'match') g = follow(lr.proxy);
+	let order = px.GLOBAL?.all ?? sels;
+	if (!g) for (let n in order) if (n != 'GLOBAL' && px[n]?.type == 'Selector' && px[px[n].now] && !isg(px[n].now) && !(px[px[n].now].type in ['Direct', 'Reject', 'RejectDrop', 'Pass'])) { g = n; break; }
+	if (!g) for (let n in order) if (n != 'GLOBAL' && px[n]?.type == 'Selector') { g = n; break; }
+	if (!g) g = sels[0];
+	writej(MG_CACHE, { at: now(), sig, g });
+	return g;
+}
+
 // ---------------- 6.0 第 16 项：上网计划（每台设备按星期设能上网的时段） ----------------
 // 时段：[{ d: [1..7]（周一 = 1）, from: 'HH:MM', to: 'HH:MM' }]，to 不晚于 from 表示到第二天；最多 8 段。
 // 一周里的第几分钟：周一 00:00 = 0，一周 10080 分钟。off：本地时间比 UTC 快多少分钟（date +%z）
@@ -340,4 +365,4 @@ function plan_rules(slots, off) {
 	return out;
 }
 
-export { plan_norm, plan_spans, plan_blocked, plan_now, plan_rules, plan_mow, plan_ok_at, hm_min, node_meta, node_pick, D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };
+export { plan_norm, plan_spans, plan_blocked, plan_now, plan_rules, plan_mow, plan_ok_at, hm_min, node_meta, node_pick, main_group, D, DN_PATH, dev_aliases, name_clean, dev_label, shq, sh, readj, writej, now, uci, enc, api, clash_ctl, notify, lan_devices, panel_domain, panel_direct, bl_ruleset_write, local_key, ann_hub, ann_fetch, ann_list, ann_rid, ANN_CACHE };

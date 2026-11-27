@@ -110,10 +110,12 @@ function sp_cfg_groups(kind) {
 	}
 	return out;
 }
-// 主策略组：节点自动切换选的那个；没有就用第一个「手动选择」的组
+// 主策略组：节点自动切换选的那个；没选过或者组没了，跟节点自动换一样自动认（兜底规则一路跟到选着节点的「手动选择」组）；
+// 插件没在跑（问不到接口）时用配置文件里第一个组
 function sp_main(groups) {
 	let a = cmcp_readj(ETC + '/autosw.json', {})?.group, p = sp_proxies();
-	if (a && index(groups ?? [], a) >= 0) return a;
+	if (a && index(groups ?? [], a) >= 0 && (!p || p[a]?.type == 'Selector')) return a;
+	if (type(p) == 'object') { let m = CL.main_group(p, a); if (m && index(groups ?? [], m) >= 0) return m; }
 	for (let n in (groups ?? [])) if (!p || p[n]?.type == 'Selector') return n;
 	return null;
 }

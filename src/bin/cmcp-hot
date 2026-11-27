@@ -3,7 +3,8 @@
 # 定时任务每 6 小时跑一次 check：问官网这个版本（VER）有没有更新的热补丁（编号 n 比现在的 HOT 大）→ 下载 → 验签（跟一键升级同一把公钥）
 # → 只认白名单里的文件 → 备份 → 一个个原子替换 → 自检（面板网页和接口都能打开）→ 不行就全部退回；同一个补丁失败 3 次不再试。
 # 装好了在「通知」里记一条（不推送到手机），面板发现版本号变了自己换成新的。
-# 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_HOT_URL（问哪里）、CMCP_HOT_DL（下载地址前缀）、CMCP_HOT_CHECK（自检命令）、CMCP_VERIFY（验签命令）
+# 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_HOT_URL（问哪里）、CMCP_HOT_DL（下载地址前缀）、CMCP_HOT_CHECK（自检命令）、CMCP_VERIFY（验签命令）、
+# CMCP_ULOCK（一键更新的锁）、CMCP_HOT_SWAP（「正在换文件」的记号）
 R=${CMCP_ROOT:-}
 D=$R/etc/claude-mcp
 W=/tmp/cmcp_hot.$$
@@ -36,8 +37,13 @@ check) ;;
 *) echo "用法：$0 check"; exit 1 ;;
 esac
 [ -n "$VER" ] || exit 0
+# 跟一键更新不能同时动文件（11/27 全面检查第 1 条：更新到新版本时正好在装旧版本的补丁，会把新文件换回旧的、补丁号也记到新版本上）。
+# 一键更新在跑（锁不到 15 分钟）就不装；换文件之前先立「正在换」的记号再看一次更新锁，一键更新拿到锁以后也会等这个记号消失
+ULOCK=${CMCP_ULOCK:-/tmp/cmcp_update.lock}; SWAP=${CMCP_HOT_SWAP:-/tmp/cmcp_hot.swap}
+ubusy() { [ -d "$ULOCK" ] && [ $(( $(date +%s) - $(stat -c %Y "$ULOCK" 2>/dev/null || echo 0) )) -lt 900 ]; }
+ubusy && exit 0
 mkdir /tmp/cmcp_hot.lock 2>/dev/null || { [ $(( $(date +%s) - $(stat -c %Y /tmp/cmcp_hot.lock 2>/dev/null || echo 0) )) -lt 1800 ] && exit 0; }
-trap 'rmdir /tmp/cmcp_hot.lock 2>/dev/null' EXIT
+trap 'rmdir /tmp/cmcp_hot.lock "$SWAP" 2>/dev/null' EXIT
 J=$(curl -fsS -m 20 "${CMCP_HOT_URL:-$HUB/api/router/hot}?v=$VER" 2>/dev/null)
 N=$(jget n); TAG=$(jget tag); NOTES=$(jget notes)
 case "$N" in ''|*[!0-9]*) exit 0 ;; esac
@@ -65,6 +71,9 @@ for f in $FILES; do okpath "$f" || fail "补丁里有不允许换的文件：$f"
 for f in $FILES; do [ -e "$R/$f" ] && echo "$f" >> bk.list || echo "$f" >> new.list; done
 if [ -s bk.list ]; then ( cd "${R:-/}" && tar czf "$W/bk.tgz" $(cat "$W/bk.list") ) 2>>"$LOG" || fail "备份失败"; fi
 restore() { [ -s "$W/bk.tgz" ] && ( cd "${R:-/}" && tar xzf "$W/bk.tgz" ) 2>>"$LOG"; while read -r f; do rm -f "$R/$f"; done < "$W/new.list"; }
+# 开始换文件：先立记号，再看一次一键更新有没有开始、版本有没有变（这时候不算失败，下次再装）
+mkdir "$SWAP" 2>/dev/null || touch "$SWAP"
+if ubusy || [ "$(sed -n 's/^VER=//p' "$D/version" 2>/dev/null)" != "$VER" ]; then log "热补丁 $N 先不装：一键更新正在进行或者版本变了"; rmdir "$SWAP" 2>/dev/null; cd / && rm -rf "${W:?}"; exit 0; fi
 for f in $FILES; do
 	mkdir -p "$(dirname "$R/$f")"
 	cp -f "x/root/$f" "$R/$f.hotnew" || { restore; fail "写不进去（空间不够？）"; }
@@ -74,6 +83,7 @@ done
 if ! selfcheck; then restore; fail "装完面板打不开，已退回原来的"; fi
 # 记下现在是第几个补丁（面板据此发现自己该换新的）
 { grep -v '^HOT=' "$D/version"; echo "HOT=$N"; } > "$D/version.tmp" && mv -f "$D/version.tmp" "$D/version"
+rmdir "$SWAP" 2>/dev/null
 esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新到 v$VER V$N" "$(esc "$NOTES")" >> "$D/events.log"
 log "热补丁 $N 装好了"

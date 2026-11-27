@@ -1460,11 +1460,23 @@ async function refreshPanel() {
 	} catch (e) {}
 	location.reload();
 }
+// 换新面板前看看有没有正在改、还没保存的东西（11/27 全面检查第 3 条：原来装好补丁就马上刷新，填了一半的表单会丢）：
+// 各页登记的「没保存的修改」、开着的弹窗里输了字、正在输入框里打字。有就先不换，每 5 秒再看一次，保存或离开以后再换
+function reloadBusy() {
+	// 只看现在这一页（离开时选了「不保存，离开」的那一页不算）
+	try { if (DIRTY[page] && DIRTY[page]()) return true; } catch (e) {}
+	for (const el of document.querySelectorAll('.modal input, .modal textarea')) if (/^(text|search|password|email|number|tel|url)?$/.test(el.type || '') && el.value !== el.defaultValue) return true;
+	const a = document.activeElement;
+	return !!(a && (a.isContentEditable || a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|password|email|number|tel|url)$/.test(a.type))));
+}
+let verWaitT = 0;
 function panelVerCheck(cur) {
 	if (!cur || !/^\d/.test(PANEL_VER) || cur === PANEL_VER) return false;
 	// 每个版本只自动刷新一次，万一没换成功也不会一直刷
 	let tried = ''; try { tried = sessionStorage.getItem('rp_verfix') || ''; } catch (e) {}
 	if (tried === cur) return false;
+	clearTimeout(verWaitT);
+	if (reloadBusy()) { verWaitT = setTimeout(() => panelVerCheck(cur), 5000); return false; }
 	try { sessionStorage.setItem('rp_verfix', cur); } catch (e) {}
 	toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' V$1') + '，正在换成新版…');
 	refreshPanel();
@@ -2290,7 +2302,7 @@ $('sideMe').onclick = () => go('me');
 // 确认是本人：发邮箱验证码，10 分钟内有效（只记在这个浏览器标签页里）
 let SUDO = (() => { try { const x = JSON.parse(sessionStorage.getItem('rp_sudo') || 'null'); return x && x.exp > Date.now() ? x : null; } catch (e) { return null; } })();
 const sudoOn = () => !!(SUDO && SUDO.exp > Date.now() + 3000);
-function sudoSet(x) { SUDO = x; try { if (x) sessionStorage.setItem('rp_sudo', JSON.stringify(x)); else sessionStorage.removeItem('rp_sudo'); } catch (e) {} }
+function sudoSet(x) { SUDO = x; try { if (x) sessionStorage.setItem('rp_sudo', JSON.stringify(x)); else sessionStorage.removeItem('rp_sudo'); } catch (e) {} if (x) window.dispatchEvent(new Event('cmcp-sudo')); }
 // 发过验证码：10 分钟内一直显示输入框（去邮箱复制验证码再回来、页面刷新、侧滑返回都不会丢）；1 分钟内不能重发（官网也这么限制）
 const SENT_MS = 600e3, RESEND_S = 60;
 const devTag = () => (store.get('rp_dev') || '').slice(0, 8);
@@ -2818,7 +2830,9 @@ function aiAllowBind(box) {
 		busy(b, async () => { const r = await secP('ai_allow_del', { k: b.dataset.aidel }); box.innerHTML = aiAllowHtml(r.allows); toast('已收回，以后要你确认'); });
 	};
 }
-const AIQ = { on: true, at: 0, busy: false };
+const AIQ = { on: true, at: 0, busy: false, all: '' };
+// 为了「全部都允许」去验证本人的：验证好了马上把那个请求再弹出来
+window.addEventListener('cmcp-sudo', () => { if (AIQ.all) setTimeout(() => aiCheck(true), 600); });
 // 查一下有没有 AI 在等确认的请求：打开面板、回到面板（含窗口拿回焦点）、点了推送时查；开着的时候「危险操作要确认」才每 8 秒查一次
 async function aiCheck(force) {
 	if (!token || LK.on || AIQ.busy || store.get('rp_ai') !== '1' || !canPerm('net')) return;
@@ -2826,7 +2840,8 @@ async function aiCheck(force) {
 	AIQ.at = Date.now(); AIQ.busy = true;
 	let r; try { r = await P('ai_asks', {}, 20000); } catch (e) { AIQ.busy = false; return; } finally { AIQ.busy = false; }
 	AIQ.on = !!(r && r.ai && r.mode === 'ask');
-	const w = ((r && r.list) || []).filter((x) => x.st === 'wait' && x.exp * 1000 > Date.now() + 3000);
+	// 点了「全部都允许」被带去验证本人的那个请求：在「我的主页」还没验证完时先不弹，验证好了再弹（11/27 全面检查第 11 条）
+	const w = ((r && r.list) || []).filter((x) => x.st === 'wait' && x.exp * 1000 > Date.now() + 3000 && !(AIQ.all === x.id && page === 'me' && !sudoOn()));
 	if (w.length && !document.querySelector('.modal')) aiAskBox(w[0], w.length);
 }
 function aiAskBox(x, n) {
@@ -2844,10 +2859,15 @@ function aiAskBox(x, n) {
 		// 「允许」右边的小箭头（用户 11/27：两个按钮收起来）：点了才展开「这一类都允许 / 全部都允许」
 		const mb = m.querySelector('[data-aimore]'), op = m.querySelector('.aiopts');
 		if (mb && op) mb.onclick = () => { const on = op.hidden; op.hidden = !on; mb.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+		// 刚验证完本人回来：直接展开，少点一下
+		if (mb && op && AIQ.all === x.id && sudoOn()) mb.onclick();
 		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = async () => {
 			const ok = b.dataset.ans !== 'no', always = b.dataset.ans === 'always', all = b.dataset.ans === 'all';
 			// 全部都允许（用户 11/27）：等于「完全放开」，先说清楚后果——居中小卡片盖在上面；问的时候按钮不转圈
 			if (all) {
+				// 跟在设置里改档位一样要先确认本人（11/27 全面检查第 11 条）：10 分钟内验证过的直接用；
+				// 没验证的去「我的主页 → 敏感信息」验证（敏感信息只有一个入口），这个请求还在，验证好了再弹出来
+				if (!sudoOn()) { AIQ.all = x.id; clearInterval(t); close(null); toast('先在「我的主页 → 敏感信息」里验证是你本人', true); go('me'); return; }
 				// 问的时候先把下面这张卡藏起来，屏幕上只有一张卡（不叠在一起）
 				m.classList.add('under');
 				const yes = await confirmBox('全部允许 AI 的操作', '以后 AI 做什么都不问你，包括重启路由器、改网络。拿到连接器地址的人也一样。', '全部都允许', true, { compact: true });
@@ -2856,8 +2876,12 @@ function aiAskBox(x, n) {
 			}
 			if (!m.isConnected || m.classList.contains('closing')) return;
 			busy(b, async () => {
-			try { const r = await P('ai_answer', { id: x.id, ok, always, all }, 20000); toast(r && r.all ? '已全部允许：AI 以后不再问' : r && r.always ? '已允许：以后' + x.pt + '不再问' : ok ? '已允许，AI 会接着做' : '已拒绝'); }
-			catch (e) { toast(e.message, true); }
+			try { const r = await P('ai_answer', { id: x.id, ok, always, all, sudo: all ? SUDO && SUDO.tok : undefined }, 20000); if (AIQ.all === x.id) AIQ.all = ''; toast(r && r.all ? '已全部允许：AI 以后不再问' : r && r.always ? '已允许：以后' + x.pt + '不再问' : ok ? '已允许，AI 会接着做' : '已拒绝'); }
+			catch (e) {
+				// 验证过期了：再去验证一次，请求还在
+				if (all && /确认是你本人/.test(e.message)) { sudoSet(null); AIQ.all = x.id; clearInterval(t); close(null); toast('验证过期了，再验证一次', true); go('me'); return; }
+				toast(e.message, true);
+			}
 			clearInterval(t); close(null);
 			setTimeout(() => aiCheck(true), 600);
 		});

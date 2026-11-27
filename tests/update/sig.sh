@@ -172,6 +172,14 @@ rm -f "$T/good/SHA256SUMS.sig2"; cp "$T/good/SHA256SUMS" "$T/good/SHA256SUMS.sig
 s=$(run "$T/good" "$T/good")
 ok "只有旧的 .sig、没有新密钥签的 .sig2：不装（6.0 起不认旧密钥）" $([ "$s" = failed ] && msg | grep -q '没有签名' ; echo $?) "$s $(msg)"
 sg "$T/good"
+# 12b. 热补丁正在换文件（有「正在换」的记号）：一键更新拿到锁以后等它换完再开始（11/27 全面检查第 1 条）
+mkdir -p "$T/swap"; rm -f "$ST"; rmdir /tmp/cmcp_update.lock 2>/dev/null
+( env CMCP_ROOT="$T/root" CMCP_DL="file://$T/good" CMCP_GH="file://$T/good" CMCP_ST="$ST" CMCP_NOSVC=1 CMCP_HOT_SWAP="$T/swap" \
+	CMCP_UPUB="$K_UPUB" CMCP_PPUB="$K_PPUB" CMCP_STSIG="$K_STSIG" sh "$REPO/src/bin/cmcp-update" run >/dev/null 2>&1 & )
+sleep 3
+w1=$([ ! -s "$ST" ] && [ -d /tmp/cmcp_update.lock ]; echo $?)
+rmdir "$T/swap"; i=0; while [ $i -lt 20 ] && ! grep -q rolledback "$ST" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+ok "热补丁在换文件时一键更新先等着（拿着锁不动），换完再接着装" $([ "$w1" = 0 ] && grep -q rolledback "$ST" ; echo $?) "w1=$w1 $(cat "$ST" 2>/dev/null)"
 # 13. 脚本里写死的测试签名跟公钥是一对（换密钥时忘了改其中一个，自检就会一直过不了）
 eval "$(grep -E '^(UPUB|PPUB|STSIG)=' src/bin/cmcp-update | sed 's/=\${CMCP_[A-Z]*:-/=/; s/}$//; s/^/R_/')"
 mkdir -p "$T/st"; printf 'cmcp release key selftest\n' > "$T/st/m"; printf 'untrusted comment: x\n%s\n' "$R_STSIG" > "$T/st/s"

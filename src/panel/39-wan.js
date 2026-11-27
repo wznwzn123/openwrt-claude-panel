@@ -84,7 +84,8 @@ $('wanBody').addEventListener('click', (e) => {
 		wanDirty();
 		return;
 	}
-	if (e.target.id === 'wanPpp') return stFind('ppp-mod-pppoe');
+	// 没装拨号组件时选的「宽带拨号」存不了：先改回原来的方式再去软件中心（不弹「还有没保存的修改」）
+	if (e.target.id === 'wanPpp') { WAN.m = WAN.d.proto in WAN_MODE ? WAN.d.proto : null; wanRender(); return stFind('ppp-mod-pppoe'); }
 	if (e.target.dataset.wan === 'eye') { const i = $('wanBody').querySelector('[data-wan="pw"]'); const sh = i.type === 'password'; i.type = sh ? 'text' : 'password'; e.target.textContent = sh ? '隐藏' : '显示'; }
 });
 $('wanUndo').onclick = () => { WAN.m = WAN.d.proto in WAN_MODE ? WAN.d.proto : null; wanRender(); };
@@ -100,3 +101,5 @@ $('wanSave').onclick = async () => {
 		wfConfirm(r.token, r.wait + 2, null, '上网设置');
 	});
 };
+// 有没保存的修改：离开这一页先问；面板装了新补丁也先不换新（11/27 全面检查第 3 条）
+DIRTY.wan = () => !$('wanBar').classList.contains('hidden');

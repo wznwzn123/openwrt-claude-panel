@@ -345,13 +345,13 @@ const mIc = (d) => (d.startsWith('<svg') ? d : `<svg viewBox="0 0 24 24" fill="n
 const moreSheet = (head, groups) => modal(`<div class="sheethead"><div class="mhead">${head.ic || ''}<div style="min-width:0"><h3 class="ell" style="margin:0">${esc(head.t)}</h3>${head.sub ? `<span class="muted" style="font-size:12.5px">${esc(head.sub)}</span>` : ''}</div></div><button class="btn sm" data-v="close">关闭</button></div>
 	${groups.map((g) => ({ ...g, items: (g.items || []).filter(Boolean) })).filter((g) => g.items.length).map((g) => `<div class="mgrp">${g.t ? `<div class="mgt">${esc(g.t)}</div>` : ''}<div class="mlist">${g.items.map((x) => `<button class="mact${x.danger ? ' danger' : ''}" data-v="${esc(x.v)}"><i>${mIc(x.ic)}</i><span><b>${esc(x.t)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</span></button>`).join('')}</div></div>`).join('')}`);
 // opts.compact：从居中小卡片里再问一次时也用居中小卡片，盖在上面（不从底下弹出来跟卡片叠在一起：用户 11/27）
-const confirmBox = (title, text, ok = '确定', danger = false, opts) => modal(
+const confirmBox = (title, text, ok = '确定', danger = false, opts) => ldAsk(modal(
 	`<h3>${esc(title)}</h3><div class="notice" style="color:var(--text);line-height:1.6;white-space:pre-line">${esc(text)}</div>
-	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn ${danger ? 'danger' : 'primary'}" data-v="true">${esc(ok)}</button></div>`, null, opts);
+	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn ${danger ? 'danger' : 'primary'}" data-v="true">${esc(ok)}</button></div>`, null, opts));
 const textBox = (title, text) => modal(
 	`<div class="sheethead"><h3>${esc(title)}</h3><div class="actions" style="flex-wrap:nowrap"><button class="btn sm" data-copy>复制</button><button class="btn sm" data-v="close">关闭</button></div></div><pre class="out">${esc(text)}</pre>`,
 	(m) => { m.querySelector('[data-copy]').onclick = () => copyText(text); });
-const promptBox = (title, ph, val = '') => modal(
+const promptBox = (title, ph, val = '') => ldAsk(modal(
 	`<h3>${esc(title)}</h3><input class="input" placeholder="${esc(ph)}" value="${esc(val)}" autocapitalize="off" spellcheck="false">
 	<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="false">取消</button><button class="btn primary" data-ok>确定</button></div>`,
 	(m, close) => {
@@ -360,7 +360,7 @@ const promptBox = (title, ph, val = '') => modal(
 		m.querySelector('[data-ok]').onclick = ok;
 		i.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
 		setTimeout(() => i.focus(), 60);
-	}).then((v) => (v === false || v === null ? null : v));
+	})).then((v) => (v === false || v === null ? null : v));
 async function copyText(t) {
 	try { await navigator.clipboard.writeText(t); toast('已复制'); }
 	catch (e) {
@@ -389,21 +389,38 @@ function handleErr(e) {
 	toast(e.message || String(e), true);
 }
 // 加载中（用户 11/27）：不用最上面的加载线了，统一用刷新胶囊「正在刷新」，超过 4 秒后面加「内容较多请耐心等待」
-let loadN = 0, loadT = 0, loadSlow = 0;
+// 切模式、换节点、重启插件这类没有按钮可转圈的操作（busy 不带按钮）写「正在处理」，不写「正在刷新」（11/27 全面检查第 9 条）
+let loadN = 0, loadW = 0, loadT = 0, loadSlow = 0, loadLong = false;
 const ptrText = (t) => { const s = $('ptr').lastElementChild; if (s.textContent !== t) s.textContent = t; };
-function ldShow() {
-	const el = $('ptr'); el.classList.remove('ready'); el.classList.add('run'); el.style.setProperty('--py', '1'); ptrText('正在刷新');
-	clearTimeout(loadSlow); loadSlow = setTimeout(() => ptrText('正在刷新 内容较多请耐心等待'), 4000);
+const ldText = () => loadW > 0 ? (loadLong ? '正在处理 请耐心等待' : '正在处理') : (loadLong ? '正在刷新 内容较多请耐心等待' : '正在刷新');
+// 在等你点确认、输内容的时候不转圈：切模式这类操作先弹确认框，原来确认框开着时上面就写「正在处理」（11/27 修第 9 条时发现）
+let ldAskN = 0;
+function ldAsk(p) {
+	ldAskN++; if ($('ptr').classList.contains('run')) ldHide();
+	return p.finally(() => { ldAskN--; if (!ldAskN && loadN > 0) ldShow(); });
 }
-function ldHide() { clearTimeout(loadSlow); const el = $('ptr'); el.classList.remove('run', 'pull', 'ready'); el.style.setProperty('--py', '0'); }
-// now：用户自己点的刷新马上显示；页面加载等 0.12 秒（很快就好的不闪一下）
-function loadOn(now) { if (loadN++ === 0) { if (now) ldShow(); else loadT = setTimeout(ldShow, 120); } }
-function loadOff() { if (--loadN <= 0) { loadN = 0; clearTimeout(loadT); ldHide(); } }
+function ldShow() {
+	if (ldAskN) return;
+	const el = $('ptr'); el.classList.remove('ready'); el.classList.add('run'); el.style.setProperty('--py', '1'); loadLong = false; ptrText(ldText());
+	clearTimeout(loadSlow); loadSlow = setTimeout(() => { loadLong = true; ptrText(ldText()); }, 4000);
+}
+function ldHide() { clearTimeout(loadSlow); loadLong = false; const el = $('ptr'); el.classList.remove('run', 'pull', 'ready'); el.style.setProperty('--py', '0'); }
+// now：用户自己点的刷新马上显示；页面加载等 0.12 秒（很快就好的不闪一下）。work：是在处理一个操作（不是刷新）
+function loadOn(now, work) {
+	if (work) loadW++;
+	if (loadN++ === 0) { if (now) ldShow(); else loadT = setTimeout(ldShow, 120); }
+	else if ($('ptr').classList.contains('run')) ptrText(ldText());
+}
+function loadOff(work) {
+	if (work && loadW > 0) loadW--;
+	if (--loadN <= 0) { loadN = 0; loadW = 0; clearTimeout(loadT); ldHide(); }
+	else if ($('ptr').classList.contains('run')) ptrText(ldText());
+}
 async function busy(btn, fn, label) {
 	const old = btn ? btn.innerHTML : '';
 	if (btn) { btn.disabled = true; if (label !== false) btn.innerHTML = '<span class="spin">↻</span>' + (label ? ' ' + esc(label) : ''); }
-	else loadOn();
-	try { return await fn(); } catch (e) { handleErr(e); } finally { if (btn) { btn.disabled = false; btn.innerHTML = old; } else loadOff(); }
+	else loadOn(false, true);
+	try { return await fn(); } catch (e) { handleErr(e); } finally { if (btn) { btn.disabled = false; btn.innerHTML = old; } else loadOff(true); }
 }
 // 连不上时的云端查询、网络诊断要几秒：回来时已经重新连上了，就不再把状态改回「连不上」
 const isOnline = () => $('statusDot').classList.contains('on');

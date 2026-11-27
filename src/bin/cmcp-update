@@ -180,6 +180,9 @@ auto)
 	"$0" start auto "$LV" ;;
 run)
 	mkdir "$LOCK" 2>/dev/null || exit 0
+	# 热补丁正在换文件：等它换完（最多 2 分钟；记号超过 2 分钟算是没清掉的旧记号）。拿到锁以后热补丁就不会再开始换（见 cmcp-hot）
+	HSWAP=${CMCP_HOT_SWAP:-/tmp/cmcp_hot.swap}; i=0
+	while [ -d "$HSWAP" ] && [ $(( $(date +%s) - $(stat -c %Y "$HSWAP" 2>/dev/null || echo 0) )) -lt 120 ] && [ $i -lt 60 ]; do sleep 2; i=$((i + 1)); done
 	AUTO=""; [ "$2" = auto ] && AUTO=$3
 	# 自动更新（必须更新）没成功的：退出时记一笔、第一次推送告诉用户
 	trap 'rc=$?; rmdir "$LOCK" 2>/dev/null; [ -n "$AUTO" ] && [ $rc != 0 ] && autofail "$AUTO"' EXIT

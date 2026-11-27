@@ -176,6 +176,12 @@ P.ai_answer = function(a) {
 	let o = ai_read(), x = ai_find(o, '' + (a?.id ?? ''));
 	if (!x) die('找不到这个请求了');
 	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 AI 再发一次' : '这个请求已经处理过了');
+	// 全部都允许 = 改成「完全放开」：跟在设置里改一样，要主账号、要先确认本人（11/27 全面检查第 11 条）。
+	// 没确认的先不动这个请求（还在等），面板带用户去「我的主页 → 敏感信息」验证，回来再点
+	if (a?.all === true && a?.ok === true) {
+		if (ROLE != 'owner') die('只有主账号能点「全部都允许」');
+		if (!sudo_ok(a?.sudo)) die('要先确认是你本人：在「我的主页 → 敏感信息」里验证');
+	}
 	x.st = a?.ok === true ? 'ok' : 'no'; x.by = substr('' + (DEV?.name ?? (DEV_ID ? '手机' : '面板')), 0, 40); x.ans = time();
 	ai_write(o);
 	// 永久允许：以后这一类不再问（推送告诉主账号，免得家人点了主账号不知道）
@@ -188,7 +194,7 @@ P.ai_answer = function(a) {
 	}
 	// 全部都允许（用户 11/27）：等于把「AI 能做什么」改成「完全放开」，只有主账号能点
 	let all = false;
-	if (x.st == 'ok' && a?.all === true && ROLE == 'owner') {
+	if (x.st == 'ok' && a?.all === true) {
 		let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
 		c.ai_mode = 'full';
 		writefile(CONF_PATH + '.tmp', sprintf('%J', c)); sh('chmod 600 ' + shq(CONF_PATH + '.tmp') + ' && mv ' + shq(CONF_PATH + '.tmp') + ' ' + shq(CONF_PATH));

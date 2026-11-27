@@ -82,9 +82,24 @@ try {
 	mkhot('6.0.0', 3, { 'www-claude-mcp/panel/index.html': 'NEW3' });
 	run({ CMCP_HOT_CHECK: 'true' });
 	ok('下一个补丁照常装', rd('www-claude-mcp/panel/index.html') === 'NEW3' && /^HOT=3$/m.test(ver()));
-	INFO = { n: 4, tag: 'evil;rm -rf /', notes: '' }; setInfo();
+	// 跟一键更新不同时动文件（11/27 全面检查第 1 条）
+	const UL = E + '/ulock', SW = E + '/swap';
+	INFO = { n: 4, tag: 'hot-6.0.0-4', notes: 'x' }; setInfo();
+	mkhot('6.0.0', 4, { 'www-claude-mcp/panel/index.html': 'NEW4' });
+	fs.mkdirSync(UL);
+	run({ CMCP_HOT_CHECK: 'true', CMCP_ULOCK: UL, CMCP_HOT_SWAP: SW });
+	ok('一键更新正在进行（锁不到 15 分钟）：补丁先不装', rd('www-claude-mcp/panel/index.html') === 'NEW3' && /^HOT=3$/m.test(ver()) && !fs.existsSync(SW));
+	const old = Date.now() / 1000 - 1000; fs.utimesSync(UL, old, old);
+	// 下载验签的时候一键更新装好了新版本（版本号变了）：换文件之前再看一次，不装、也不算失败
+	fs.writeFileSync(BIN + '/verify-bump', `#!/bin/sh\nsed -i 's/^VER=.*/VER=6.0.1/' ${R}/etc/claude-mcp/version\n`, { mode: 0o755 });
+	run({ CMCP_HOT_CHECK: 'true', CMCP_ULOCK: UL, CMCP_HOT_SWAP: SW, CMCP_VERIFY: BIN + '/verify-bump' });
+	ok('装补丁的中途版本变了（一键更新装好了新版本）：不换文件、补丁号不记到新版本上、不算失败', rd('www-claude-mcp/panel/index.html') === 'NEW3' && /^VER=6\.0\.1$/m.test(ver()) && /^HOT=3$/m.test(ver()) && !/^4=/m.test(rd('etc/claude-mcp/hot_fail') || '') && !fs.existsSync(SW), ver());
+	V('VER=6.0.0\nCODE=hosted-ai\nHOT=3\n');
+	run({ CMCP_HOT_CHECK: 'true', CMCP_ULOCK: UL, CMCP_HOT_SWAP: SW });
+	ok('一键更新的锁超过 15 分钟（没清掉的旧锁）：照常装，装完把「正在换」的记号清掉', rd('www-claude-mcp/panel/index.html') === 'NEW4' && /^HOT=4$/m.test(ver()) && !fs.existsSync(SW));
+	INFO = { n: 5, tag: 'evil;rm -rf /', notes: '' }; setInfo();
 	run({ CMCP_HOT_CHECK: 'true' });
-	ok('官网给的标签格式不对：不下载', /^HOT=3$/m.test(ver()));
+	ok('官网给的标签格式不对：不下载', /^HOT=4$/m.test(ver()));
 } finally {
 	srv.kill(); fs.rmSync(E, { recursive: true, force: true });
 }

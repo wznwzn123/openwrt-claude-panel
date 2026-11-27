@@ -16,7 +16,8 @@ function handle(m, p) {
 	S.calls.push({ m, p });
 	if (m === 'whoami') return { ...mock.respond('whoami', p), ai: true, role: S.role, perms: S.perms };
 	if (m === 'ai_asks') { if (S.role === 'sub' && !S.perms.includes('net')) throw Object.assign(new Error('主账号没有给你开「完全控制」权限'), { code: -32012 }); return { ai: true, mode: S.mode, list: S.list }; }
-	if (m === 'ai_answer') { const x = S.list.find((y) => y.id === p.id); if (!x || x.st !== 'wait') throw new Error('这个请求已经处理过了'); x.st = p.ok ? 'ok' : 'no'; if (p.ok && p.always && x.pt) S.allows.push({ k: 'k' + x.id, t: x.pt, at: now(), by: '我的手机' }); return { ok: true, st: x.st, always: !!(p.ok && p.always && x.pt), all: !!(p.ok && p.all && S.role === 'owner') }; }
+	if (m === 'sudo_local') return { sudo: 't'.repeat(24), exp: Date.now() + 600e3 };
+	if (m === 'ai_answer') { if (p.ok && p.all && !p.sudo) throw new Error('要先确认是你本人：在「我的主页 → 敏感信息」里验证'); const x = S.list.find((y) => y.id === p.id); if (!x || x.st !== 'wait') throw new Error('这个请求已经处理过了'); x.st = p.ok ? 'ok' : 'no'; if (p.ok && p.always && x.pt) S.allows.push({ k: 'k' + x.id, t: x.pt, at: now(), by: '我的手机' }); return { ok: true, st: x.st, always: !!(p.ok && p.always && x.pt), all: !!(p.ok && p.all && S.role === 'owner') }; }
 	if (m === 'ckey_info') { if (!p.sudo) throw new Error('要先确认是你本人'); return { ai: true, url: 'https://r.example/cgi-bin/mcp/' + 'c'.repeat(40), hosted: false, mode: S.mode, allows: S.allows, asks: [{ id: 'x1', title: '重启路由器', at: now() - 3600, st: 'no' }, { id: 'x2', title: '修改路由器设置', at: now() - 600, st: 'done' }, { id: 'x3', title: '执行命令', at: now() - 60, st: 'exp' }] }; }
 	if (m === 'ai_allow_del') { if (!p.sudo) throw new Error('要先确认是你本人'); S.allows = S.allows.filter((y) => y.k !== p.k); return { ok: true, allows: S.allows }; }
 	if (m === 'ai_mode') { if (!p.sudo) throw new Error('要先确认是你本人'); S.mode = p.mode; return { ok: true, mode: p.mode }; }
@@ -102,7 +103,32 @@ const SHOT = path.join(__dirname, 'shots');
 			if (!(await page.isVisible('.modal [data-ans="all"]'))) { await page.click('.modal [data-aimore]'); await W(300); }
 			await page.click('.modal [data-ans="all"]'); await W(600);
 			await page.locator('.modal').last().locator('[data-v="true"]').click(); await W(1400);
-			ok('确定：告诉路由器允许并全部放开，提示以后不再问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa4' && c.p.ok && c.p.all === true) && /已全部允许/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+			ok('确定：告诉路由器允许并全部放开（带着确认本人的凭证），提示以后不再问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa4' && c.p.ok && c.p.all === true && c.p.sudo) && /已全部允许/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+		}
+		// 全部都允许要先确认本人（11/27 全面检查第 11 条）：没验证的带去「我的主页」验证，请求还在，验证好了马上再弹出来、直接展开
+		if (w === 390) {
+			const c2 = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' });
+			const p2 = await c2.newPage();
+			p2.on('pageerror', (e) => problems.push('页面错误' + T + '（没验证）：' + e.message));
+			await p2.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_ai', '1'); });
+			const t2 = now(); S.list.push({ id: 'aaaaaaaaa5', title: '重启路由器', detail: '', at: t2, exp: t2 + 300, st: 'wait' });
+			await p2.goto('http://localhost:8097/panel/?p=home&ask=ai'); await W(2600);
+			await p2.click('.modal [data-aimore]'); await W(300);
+			await p2.click('.modal [data-ans="all"]'); await W(1200);
+			const st = await p2.evaluate(() => ({ modal: document.querySelectorAll('.modal').length, me: !document.getElementById('p-me').classList.contains('hidden') && getComputedStyle(document.getElementById('p-me')).display !== 'none', toast: document.getElementById('toast').textContent }));
+			ok('没验证本人点「全部都允许」：不弹确认、不发出去，卡片收起，带去「我的主页」验证' + T, st.modal === 0 && st.me && /验证是你本人/.test(st.toast) && !S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa5'), JSON.stringify(st));
+			await p2.evaluate(() => window.dispatchEvent(new Event('focus'))); await W(2500);
+			ok('在「我的主页」还没验证：这个请求先不弹出来挡着' + T, (await p2.locator('.modal .aiask').count()) === 0 && S.list.find((x) => x.id === 'aaaaaaaaa5').st === 'wait');
+			const pw = p2.locator('#meBox [data-pw]');
+			if (await pw.count()) {
+				await pw.fill('rootpw'); await p2.click('#meBox [data-pwok]'); await W(2600);
+				const ex = await p2.evaluate(() => { const b = document.querySelector('.modal [data-aimore]'), o = document.querySelector('.modal .aiopts'); return { card: !!document.querySelector('.modal .aiask'), t: (document.querySelector('.modal .aiask h3') || {}).textContent, ex: b && b.getAttribute('aria-expanded'), vis: o && !o.hidden }; });
+				ok('验证好了：马上再弹出这个请求，「全部都允许」已经展开' + T, ex.card && /重启路由器/.test(ex.t) && ex.ex === 'true' && ex.vis, JSON.stringify(ex));
+				await p2.click('.modal [data-ans="all"]'); await W(600);
+				await p2.locator('.modal').last().locator('[data-v="true"]').click(); await W(1400);
+				ok('再点「全部都允许」：带着凭证发出去，全部放开' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa5' && c.p.all === true && c.p.sudo === 't'.repeat(24)) && /已全部允许/.test(await p2.textContent('#toast')));
+			} else ok('「我的主页」里有输后台密码验证的地方' + T, false, await p2.textContent('#meBox'));
+			await c2.close();
 		}
 		// AI 连接器地址：选档位
 		await page.goto('http://localhost:8097/panel/?p=me'); await W(2200);

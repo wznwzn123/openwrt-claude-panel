@@ -90,8 +90,9 @@ h1,h2,h3{letter-spacing:-.02em}
 .mic{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:10px;background:var(--soft)}.mic svg{width:20px;height:20px}
 .mgo{text-decoration:none;color:var(--muted);font-size:24px;line-height:1}
 .dn{color:var(--brand)}.up{color:#30b0c7}:root.dark .up{color:#40c8e0}.upl{stroke:#30b0c7}:root.dark .upl{stroke:#40c8e0}
-.mrates{display:flex;gap:28px;margin:16px 0 6px}.mrates>div{min-width:0}.mrates .muted{display:block;font-size:13px}.mrates s{text-decoration:none;font-weight:700}
-.mrates b{display:block;font-size:30px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;white-space:nowrap}.mrates b small{font-size:.62em;font-weight:650;margin-left:3px}
+.mrates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0 6px}.mrates>div{min-width:0}.mrates .muted{display:block;font-size:13px}.mrates s{text-decoration:none;font-weight:700}
+/* 系统字体调大（130%）时数字和单位放不下：单位换到下一行，两列不叠在一起（11/27 全面检查第 32 条） */
+.mrates b{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:3px;font-size:30px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;white-space:nowrap}.mrates b small{font-size:.62em;font-weight:650}
 .mchart{display:block;width:100%;height:120px;margin-top:6px;border-top:.5px solid var(--line)}
 .mtot{display:flex;gap:22px;flex-wrap:wrap;margin:14px 0 2px}.mtot b{font-size:28px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .msub{font-size:13px;margin-bottom:6px}
@@ -237,7 +238,8 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 /* 底部快捷操作栏 */
 .dock{position:fixed;z-index:30;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 24px));display:grid;grid-template-columns:repeat(5,1fr);padding:6px;background:var(--glass);-webkit-backdrop-filter:saturate(160%) blur(16px);backdrop-filter:saturate(160%) blur(16px);border:.5px solid var(--line);border-radius:30px;box-shadow:0 10px 30px rgba(0,0,0,.12)}
 .dock button{background:transparent;color:var(--text);padding:6px 2px 5px;font-size:10.5px;font-weight:600;border-radius:22px;display:flex;flex-direction:column;align-items:center;gap:2px;transition:transform .18s var(--spring),background-color .2s,color .2s;min-width:0}
-.dock button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* 字体调大时一行放不下就折成两行（「重启 / 插件」），不截成「重…」 */
+.dock button span{max-width:100%;line-height:1.15;text-align:center;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow-wrap:anywhere;text-wrap:balance}
 .dock button svg{width:22px;height:22px;color:var(--brand)}
 .dock button:active{transform:scale(.9);background:var(--fill)}
 .dock button.run svg{animation:spin .9s linear infinite}
@@ -779,7 +781,8 @@ section.page{display:none}section.page.on{display:block}
 .aisplit .aimore{flex:none;width:44px;padding:0;display:grid;place-items:center;border-top-left-radius:0;border-bottom-left-radius:0;box-shadow:inset 1px 0 0 rgba(127,127,127,.35);box-shadow:inset 1px 0 0 color-mix(in srgb,currentColor 22%,transparent)}
 .aisplit .aimore svg{transition:transform .2s}
 .aisplit .aimore[aria-expanded="true"] svg{transform:rotate(180deg)}
-.aiopts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+/* 两个按钮一样宽；字体调大放不下就一个一行，不把字折成两行 */
+.aiopts{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}.aiopts .btn{flex:1 1 0;min-width:max-content;white-space:nowrap}
 .aiopts[hidden]{display:none}
 .aiopts .btn:only-child{grid-column:1 / -1}
 
@@ -914,7 +917,7 @@ html,body{overscroll-behavior-y:contain}
 .ptr i{flex:none;width:16px;height:16px;border-radius:50%;border:2.2px solid var(--muted);border-top-color:transparent}
 .ptr.ready i,.ptr.run i{border-color:var(--brand);border-top-color:transparent}
 .ptr.run i{animation:spin .8s linear infinite}
-.ptr span{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis}
+.ptr span{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;min-width:0}
 @media(prefers-reduced-motion:reduce){.ptr.run i{animation:spin 1.6s linear infinite!important}}
 /* 新手引导：挖空高亮 + 小卡片 */
 .tour{position:fixed;inset:0;z-index:90}

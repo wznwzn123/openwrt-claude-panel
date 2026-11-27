@@ -2,14 +2,14 @@
 // 节点自动切换（看门狗每分钟调用一次）
 // 当前节点连续 3 分钟测不通（谷歌、Cloudflare 两个网址都不通才算） → 按「同地区同类型同倍率 → 同地区同类型 → 同地区 → 其他地区」挑延迟最低的（6.0 第 92 项，认法见 cmcp.lib 的 node_meta）
 // → 断开走旧节点的连接 → 通知；原来的节点连续正常 10 分钟后自动换回去（中间手动切过就不换）
-// 设置：/etc/claude-mcp/autosw.json {"enabled":true,"group":"Zou"}
+// 设置：/etc/claude-mcp/autosw.json {"enabled":true,"group":"选过的策略组"}；没选过、或者选的组没了，自动认主策略组（cmcp.lib 的 main_group）
 'use strict';
 import * as L from 'cmcp.lib';
 import { mkdir, stat, readfile } from 'fs';
 
 const CF = L.D + '/autosw.json', SF = '/tmp/cmcp_autosw.json', HF = L.D + '/autosw_hist.json';
 const TEST = 'https://www.gstatic.com/generate_204', TEST2 = 'http://cp.cloudflare.com/generate_204';
-const cfg = L.readj(CF, { enabled: true, group: 'Zou' });
+const cfg = L.readj(CF, { enabled: true });
 const arg = ARGV[0];
 if (!cfg.enabled && arg != 'test') exit(0);
 // test = 模拟一次（面板上的「模拟」按钮）：不真的切换、不发通知、不受锁影响
@@ -57,10 +57,12 @@ function subbad(i) {
 const GB = (b) => sprintf('%.1f GB', b / 1073741824.0);
 const day = (x) => trim(L.sh('date -d @' + x + ' +%Y-%m-%d'));
 
-const g = L.api('GET', '/proxies/' + L.enc(cfg.group), null, 6);
-if (g.code != 200 || g.json?.type != 'Selector') { out({ err: '找不到手动选择的策略组「' + cfg.group + '」（OpenClash 没在运行，或者组名变了）' }); done(); }
-const cur = g.json.now, all = g.json.all ?? [];
 const px = L.api('GET', '/proxies', null, 8).json?.proxies ?? {};
+const GRP = L.main_group(px, cfg.group);
+if (!GRP) { out({ err: '找不到手动选择的策略组（OpenClash / Nikki 没在运行）' }); done(); }
+const g = L.api('GET', '/proxies/' + L.enc(GRP), null, 6);
+if (g.code != 200 || g.json?.type != 'Selector') { out({ err: '找不到手动选择的策略组「' + GRP + '」（OpenClash / Nikki 没在运行，或者组名变了）' }); done(); }
+const cur = g.json.now, all = g.json.all ?? [];
 const isNode = (n) => px[n] && !(px[n].type in GROUPS) && !(px[n].type in ['Direct', 'Reject', 'RejectDrop', 'Pass', 'Compatible']) && !match(n, INFO);
 // 当前选的是另一个策略组（比如「自动选择」）或直连：它自己会处理，不管
 if (!isNode(cur) && !T) done();
@@ -94,7 +96,7 @@ function back() {
 	if (alive(o.from, 3000) <= 0) { o.ok = 0; return; }
 	if (!o.ok) { o.ok = t; return; }
 	if (t - o.ok < 600) return;
-	L.api('PUT', '/proxies/' + L.enc(cfg.group), { name: o.from }, 6);
+	L.api('PUT', '/proxies/' + L.enc(GRP), { name: o.from }, 6);
 	let n = cut(cur);
 	hist({ t, from: cur, to: o.from, back: true });
 	st.orig = null; st.last = t;
@@ -130,16 +132,16 @@ if (!T) {
 	st.subbad = null;
 }
 
-const res = L.api('GET', '/group/' + L.enc(cfg.group) + '/delay?timeout=3000&url=' + L.enc(TEST), null, 15).json ?? {};
+const res = L.api('GET', '/group/' + L.enc(GRP) + '/delay?timeout=3000&url=' + L.enc(TEST), null, 15).json ?? {};
 const cands = map(filter(all, (n) => n != cur && isNode(n)), (n) => ({ n, d: +res[n] || 0 }));
 const pick = L.node_pick(cur, cands), meta = L.node_meta(cur);
 if (T) { let si = subinfo(true); out({ sub: si, subbad: subbad(si), cur, node: isNode(cur), curDelay: d1, region: meta.reg, kind: meta.kind, mult: meta.mult, pick, same: !!pick && pick.tier < 3, tested: length(cands), ok: length(filter(cands, (x) => x.d > 0)) }); done(); }
 if (!pick) {
-	if (!st.allfail) { st.allfail = true; L.notify('err', 'node', '所有节点都连不上', '策略组「' + cfg.group + '」里的节点全部测不通，可能是机场出了问题或订阅过期了', 'node'); }
+	if (!st.allfail) { st.allfail = true; L.notify('err', 'node', '所有节点都连不上', '策略组「' + GRP + '」里的节点全部测不通，可能是机场出了问题或订阅过期了', 'node'); }
 	save(); done();
 }
 
-L.api('PUT', '/proxies/' + L.enc(cfg.group), { name: pick.n }, 6);
+L.api('PUT', '/proxies/' + L.enc(GRP), { name: pick.n }, 6);
 const n = cut(cur);
 // 记下原来的节点：它恢复后（连续正常 10 分钟）换回去；连着换了几次，只记最早那个
 st.orig = { from: st.orig?.from ?? cur, to: pick.n, at: t, ok: 0 };

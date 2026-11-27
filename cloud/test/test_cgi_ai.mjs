@@ -200,8 +200,15 @@ ok('改严了：在等的请求作废', (await panel('ai_asks')).result.list.eve
 	r = await ai('reboot_router', {});
 	w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
 	n0 = pushes().length;
+	// 没确认本人：不改档位，请求还在等（11/27 全面检查第 11 条）
+	fs.rmSync('/tmp/cmcp_sudo.json', { force: true });
 	r = await panel('ai_answer', { id: w.id, ok: true, all: true });
-	ok('[全部都允许] 改成「完全放开」，推送告诉主人', r.result?.all === true && JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_mode === 'full' && pushes().slice(n0).some((x) => /什么都不问/.test(x)), JSON.stringify(r));
+	ok('[全部都允许] 没确认本人不让点，请求还在等、档位没变', !!r.error && /确认是你本人/.test(JSON.stringify(r)) && JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_mode !== 'full' && (await panel('ai_asks')).result.list.some((x) => x.id === w.id && x.st === 'wait'), JSON.stringify(r));
+	r = await panel('ai_answer', { id: w.id, ok: true, all: true, sudo: 'x'.repeat(24) });
+	ok('[全部都允许] 凭证不对也不让点', !!r.error && /确认是你本人/.test(JSON.stringify(r)), JSON.stringify(r));
+	fs.writeFileSync('/tmp/cmcp_sudo.json', JSON.stringify({ [SU]: { exp: Math.floor(Date.now() / 1000) + 600, dev: '', kind: 'local' } }));
+	r = await panel('ai_answer', { id: w.id, ok: true, all: true, sudo: SU });
+	ok('[全部都允许] 确认本人后改成「完全放开」，推送告诉主人', r.result?.all === true && JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_mode === 'full' && pushes().slice(n0).some((x) => /什么都不问/.test(x)), JSON.stringify(r));
 	r = await ai('run_command', { command: 'touch ' + M2 + 'all' });
 	ok('[全部都允许] 之后任何操作都直接做', !isErr(r) && fs.existsSync(M2 + 'all'), txt(r));
 	fs.rmSync(M2 + 'all', { force: true });

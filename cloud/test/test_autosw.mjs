@@ -18,16 +18,19 @@ const BAK = {}; for (const f of [SF, HF, '/etc/claude-mcp/autosw.json']) BAK[f] 
 fs.mkdirSync('/etc/claude-mcp', { recursive: true });
 fs.writeFileSync('/etc/claude-mcp/autosw.json', JSON.stringify({ enabled: true, group: 'Zou' }));
 // 假的 Clash：节点延迟（0 = 不通）、当前选择、切换记录
-const C = { now: '', delay: {}, puts: [], dels: 0, tests: [], cfOnly: '' };
+// grp：放节点的那个「手动选择」组；extra：别的组（兜底规则走的、分流用的）；rules：规则（最后一条是兜底 MATCH）
+const C = { now: '', delay: {}, puts: [], dels: 0, tests: [], cfOnly: '', grp: 'Zou', extra: {}, rules: [] };
 const srv = http.createServer((req, res) => {
 	let b = ''; req.on('data', (d) => (b += d)); req.on('end', () => {
 		const u = new URL(req.url, 'http://x'), p = decodeURIComponent(u.pathname), J = (o, st = 200) => { res.writeHead(st, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
 		const nodes = Object.keys(C.delay);
-		if (p === '/proxies/Zou' && req.method === 'GET') return J({ type: 'Selector', now: C.now, all: nodes });
-		if (p === '/proxies/Zou' && req.method === 'PUT') { const n = JSON.parse(b).name; C.puts.push(n); C.old = C.now; C.now = n; return J({}, 204); }
-		if (p === '/proxies') { const o = { Zou: { type: 'Selector' } }; for (const n of nodes) o[n] = { type: 'Shadowsocks' }; return J({ proxies: o }); }
+		if (p === '/proxies/' + C.grp && req.method === 'GET') return J({ type: 'Selector', now: C.now, all: nodes });
+		if (p === '/proxies/' + C.grp && req.method === 'PUT') { const n = JSON.parse(b).name; C.puts.push(n); C.old = C.now; C.now = n; return J({}, 204); }
+		if (p.startsWith('/proxies/') && req.method === 'GET' && C.extra[p.slice(9)]) return J(C.extra[p.slice(9)]);
+		if (p === '/proxies') { const o = { [C.grp]: { type: 'Selector', now: C.now, all: nodes }, ...C.extra }; for (const n of nodes) o[n] = { type: 'Shadowsocks' }; return J({ proxies: o }); }
+		if (p === '/rules') return J({ rules: C.rules });
 		let m = p.match(/^\/proxies\/(.+)\/delay$/); if (m) { C.tests.push(u.searchParams.get('url')); const d = (C.cfOnly === m[1] && !/cloudflare/.test(u.searchParams.get('url'))) ? 0 : C.delay[m[1]] || 0; return d ? J({ delay: d }) : J({ message: 'timeout' }, 504); }
-		if (p === '/group/Zou/delay') { const o = {}; for (const n of nodes) if (C.delay[n]) o[n] = C.delay[n]; return J(o); }
+		if (p === '/group/' + C.grp + '/delay') { const o = {}; for (const n of nodes) if (C.delay[n]) o[n] = C.delay[n]; return J(o); }
 		if (p === '/connections' && req.method === 'GET') return J({ connections: [{ id: 'c1', chains: [C.old || C.now], metadata: { host: 'www.youtube.com' } }, { id: 'c2', chains: [C.now], metadata: { host: 'x.com' } }] });
 		if (p.startsWith('/connections/') && req.method === 'DELETE') { C.dels++; return J({}, 204); }
 		J({}, 404);
@@ -106,8 +109,34 @@ try {
 	Object.assign(C, { cfOnly: '' }); C.delay['🇯🇵 日本03'] = 0;
 	await run(); await run(); C.delay['🇯🇵 日本03'] = 90; await run(); C.delay['🇯🇵 日本03'] = 0; await run();
 	ok('不通 2 分钟、通了一次、又不通：重新从 1 数，不换', C.now === '🇯🇵 日本03' && st().fail === 1, JSON.stringify(st()));
+	// ⑨ 没选过策略组（11/27 全面检查第 12 条：原来默认写死「Zou」，别人的组名对不上就悄悄不工作）：跟着兜底规则认主策略组
+	fs.rmSync('/tmp/cmcp_maingrp.json', { force: true });
+	fs.writeFileSync('/etc/claude-mcp/autosw.json', JSON.stringify({ enabled: true }));
+	Object.assign(C, { grp: '🚀 节点选择', now: '🇭🇰 香港A', delay: { '🇭🇰 香港A': 0, '🇭🇰 香港B': 70, '🇺🇸 美国A': 20 }, puts: [],
+		extra: { Final: { type: 'Selector', now: '🚀 节点选择', all: ['🚀 节点选择', 'DIRECT'] }, '📺 流媒体': { type: 'Selector', now: 'DIRECT', all: ['DIRECT', '🚀 节点选择'] }, DIRECT: { type: 'Direct' } },
+		rules: [{ type: 'DomainSuffix', payload: 'netflix.com', proxy: '📺 流媒体' }, { type: 'Match', payload: '', proxy: 'Final' }] });
+	stSet((s) => { s.last = 0; s.fail = 0; s.orig = null; });
+	o = await run('test');
+	ok('没选过策略组：跟着兜底规则（Final → 🚀 节点选择）认出主策略组', !/找不到/.test(o) && /香港B/.test(o), o.slice(-300));
+	await run3();
+	ok('没选过策略组：节点挂了照样在主策略组里换（同地区的）', C.now === '🇭🇰 香港B' && C.puts.includes('🇭🇰 香港B'), C.puts.join());
+	// ⑩ 设置里写的是别人的组名（以前默认写进去的「Zou」）：组不在了，也自动认
+	fs.rmSync('/tmp/cmcp_maingrp.json', { force: true });
+	fs.writeFileSync('/etc/claude-mcp/autosw.json', JSON.stringify({ enabled: true, group: 'Zou' }));
+	Object.assign(C, { now: '🇭🇰 香港B', puts: [] }); C.delay['🇭🇰 香港B'] = 0; C.delay['🇭🇰 香港A'] = 60; stSet((s) => { s.last = 0; s.fail = 0; s.orig = null; });
+	await run3();
+	ok('设置里的组不在了：自动认主策略组，照样换', C.now === '🇭🇰 香港A', C.puts.join());
+	// ⑪ 兜底规则是直连（白名单模式）：按配置顺序找第一个选着节点的「手动选择」组（跳过选着直连的「流媒体」）
+	fs.rmSync('/tmp/cmcp_maingrp.json', { force: true });
+	fs.writeFileSync('/etc/claude-mcp/autosw.json', JSON.stringify({ enabled: true }));
+	C.rules = [{ type: 'Match', payload: '', proxy: 'DIRECT' }];
+	C.extra.GLOBAL = { type: 'Selector', now: 'DIRECT', all: ['📺 流媒体', 'Final', '🚀 节点选择'] };
+	delete C.extra.Final; C.extra.GLOBAL.all = ['📺 流媒体', '🚀 节点选择'];
+	Object.assign(C, { puts: [] }); C.delay['🇭🇰 香港A'] = 0; C.delay['🇭🇰 香港B'] = 50; stSet((s) => { s.last = 0; s.fail = 0; s.orig = null; });
+	await run3();
+	ok('兜底规则是直连：按配置顺序认（跳过选着直连的组），照样换', C.now === '🇭🇰 香港B', C.puts.join());
 } finally {
-	srv.close();
+	srv.close(); fs.rmSync('/tmp/cmcp_maingrp.json', { force: true });
 	for (const [f, v] of Object.entries(BAK)) { if (v == null) fs.rmSync(f, { force: true }); else fs.writeFileSync(f, v); }
 	for (const d of [LIBD, BIN]) fs.rmSync(d, { recursive: true, force: true }); fs.rmSync(MF, { force: true });
 }

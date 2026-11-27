@@ -1,4 +1,4 @@
-// 6.0 第 69 项（面板）：分流——设备 / 软件 / 网站 / 国家地区四栏（用户 11/27 加网站、单个节点、自己加软件、识别软件）；点一行选跟随全局、直连、代理（主策略组）或某个策略组；
+// 6.0 第 69 项（面板）：分流——设备 / 软件 / 网站三栏（国家地区 11/28 去掉，设过的才显示）（用户 11/27 加网站、单个节点、自己加软件、识别软件）；点一行选跟随全局、直连、代理（主策略组）或某个策略组；
 // 要重启才生效时顶上提示「现在重启」，点了才重启；策略组没了的记录；不支持的插件说清楚；320 / 390 / 430、深色
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -74,7 +74,7 @@ const lay = (page) => page.evaluate(() => {
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8195/panel/?p=split'); await W(1500);
 		let t = await page.textContent('#splBody');
-		ok('四栏：设备、软件、网站、国家地区，等宽一行放下、不截断' + T, (await page.locator('#splTab button').count()) === 4 && await page.evaluate(() => { const b = [...document.querySelectorAll('#splTab button')], r = b.map((c) => c.getBoundingClientRect()); return b.map((x) => x.textContent).join() === '设备,软件,网站,国家地区' && new Set(r.map((x) => Math.round(x.top))).size === 1 && Math.max(...r.map((x) => x.width)) - Math.min(...r.map((x) => x.width)) <= 1 && !b.some((x) => x.scrollWidth > x.clientWidth + 1); }));
+		ok('三栏：设备、软件、网站（没设过国家地区的看不到那一栏，用户 11/28），等宽一行放下、不截断' + T, (await page.locator('#splTab button').count()) === 3 && await page.evaluate(() => { const b = [...document.querySelectorAll('#splTab button')], r = b.map((c) => c.getBoundingClientRect()); return b.map((x) => x.textContent).join() === '设备,软件,网站' && new Set(r.map((x) => Math.round(x.top))).size === 1 && Math.max(...r.map((x) => x.width)) - Math.min(...r.map((x) => x.width)) <= 1 && !b.some((x) => x.scrollWidth > x.clientWidth + 1); }));
 		ok('设备：设了分流的在前（离线的也列出），写去向' + T, /^旧电视/.test((await page.textContent('#splBody .splrow')).trim()) && /离线/.test(t) && /直连/.test(t) && /跟随全局/.test(t), t.slice(0, 160));
 		ok('一打开分流就去拿官网的「网址 → App」表（用户 11/28：不能点几次才出来）' + T, S.tblCalls === 1);
 		let l = await lay(page); ok('不错位、不出界' + T, !l.length, l.join('；'));
@@ -185,10 +185,16 @@ const lay = (page) => page.evaluate(() => {
 		ok('点官网表里的微信：选去向（标题写名字）' + T, /微信/.test(await page.textContent('.modal .sheethead')));
 		await page.click('.modal [data-v="o:DIRECT"]'); await W(500);
 		ok('选了：告诉路由器编号 wechat' + T, S.calls.some((c) => c.m === 'split_set' && c.p.app && c.p.app.id === 'wechat' && c.p.app.t === 'DIRECT') && /已设置：微信 → 直连/.test(await page.textContent('#toast')));
-		// 国家栏、设备设置
+		// 国家地区（用户 11/28 去掉）：以前设过的照常显示在「国家地区」栏，方便改回跟随全局；都改回去这一栏就没了
+		S.d.geo = { JP: '♻️ 自动选择' };
+		await page.reload(); await W(1500);
+		ok('以前设过国家地区：多一栏「国家地区」，四栏等宽' + T, (await page.locator('#splTab button').count()) === 4 && /国家地区/.test(await page.textContent('#splTab')));
 		await page.click('[data-st="geo"]'); await W(200);
-		await page.click('[data-sk="geo"][data-sid="JP"]'); await W(300); await page.click('.modal [data-v="o:♻️ 自动选择"]'); await W(400);
-		ok('国家：日本 → 自动选择' + T, S.d.geo.JP === '♻️ 自动选择' && /自动选择/.test(await page.textContent('#splBody')));
+		const gt = await page.textContent('#splBody .card.list');
+		ok('国家地区栏只列设过的（日本 → 自动选择），没设过的不列' + T, /日本/.test(gt) && /自动选择/.test(gt) && !/美国/.test(gt) && !/中国大陆/.test(gt), gt);
+		await page.screenshot({ path: path.join(SHOT, `split-geo-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('[data-sk="geo"][data-sid="JP"]'); await W(300); await page.click('.modal [data-v="o:"]'); await W(500);
+		ok('改回跟随全局：国家地区这一栏没了，回到设备栏' + T, !S.d.geo.JP && (await page.locator('#splTab button').count()) === 3 && /设备/.test(await page.textContent('#splTab button.on')));
 		await page.click('[data-st="dev"]'); await W(200);
 		await page.click('[data-sk="dev"][data-sid="aa:aa:aa:aa:aa:01"]'); await W(300); await page.click('.modal [data-v="o:DIRECT"]'); await W(400);
 		ok('设备：带上 IP 和名字' + T, S.calls.some((c) => c.m === 'split_set' && c.p.dev && c.p.dev.mac === 'aa:aa:aa:aa:aa:01' && c.p.dev.ip === '192.168.1.10' && c.p.dev.name === '小米手机' && c.p.dev.t === 'DIRECT'));

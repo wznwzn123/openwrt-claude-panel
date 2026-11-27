@@ -514,7 +514,7 @@ const NAV = [
 	] },
 	{ g: '代理', items: [
 		{ p: 'proxy', i: '⇢', t: '节点', px: 'clash' },
-		{ p: 'split', i: '⑂', t: '分流', px: 'clash', kw: '分流 按设备 按软件 按国家 直连 代理 策略组 netflix youtube chatgpt geoip 走代理' },
+		{ p: 'split', i: '⑂', t: '分流', px: 'clash', kw: '分流 按设备 按软件 按网站 直连 代理 策略组 netflix youtube chatgpt 走代理 识别软件' },
 		{ p: 'subs', i: '⇣', t: '订阅', px: 'oc' },
 		{ p: 'cfg', i: '▤', t: '配置文件', px: 'oc' },
 		{ p: 'ow', i: '✎', t: '覆写设置', px: 'oc' },

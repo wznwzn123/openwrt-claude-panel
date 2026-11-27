@@ -102,7 +102,8 @@ function splRows() {
 		return `<div class="btngrid spltop one"><button class="btn sm" type="button" data-sa="site">添加网站</button></div>
 			<section class="card list" style="margin-top:12px">${l.length || ow ? l.map(([dm, t]) => row('site', dm, dm, '包括它的子域名', t, '', ovOf('site', dm))).join('') + ow : '<div class="empty">还没有加网站</div>'}</section>`;
 	}
-	if (SPL.tab === 'geo') return `<section class="card list" style="margin-top:12px">${d.geos.map((g) => row('geo', g.id, g.name, '', d.geo[g.id])).join('')}</section>`;
+	// 国家地区（用户 11/28 去掉）：只列以前设过的，方便改回跟随全局；都改回去了这一栏就没了
+	if (SPL.tab === 'geo') return `<section class="card list" style="margin-top:12px">${d.geos.filter((g) => d.geo[g.id]).map((g) => row('geo', g.id, g.name, '', d.geo[g.id])).join('')}</section>`;
 	// 设备：设了分流的在前，再按在线、名字
 	const seen = {}, list = [];
 	for (const x of d.devices) { seen[x.mac] = 1; list.push(x); }
@@ -121,9 +122,12 @@ function splRender() {
 	// 选的节点连不上，暂时改走主策略组（11/27 全面检查第 14 条）
 	// 用户 11/28：只换同地区同名的（去掉编号后一样），都挂了不换
 	const nd = Object.entries(d.nd || {}).map(([n, x]) => `<div class="notice w" style="margin-top:12px">节点「${esc(n)}」连不上，${x && x.to ? `暂时换到「${esc(x.to)}」` : '同地区的节点也连不上，先不换'}</div>`).join('');
+	// 国家地区这一栏只有设过的才显示（用户 11/28：没设过的看不到；设过的照常生效）
+	const geo = Object.values(d.geo || {}).some(Boolean);
+	if (!geo && SPL.tab === 'geo') SPL.tab = 'dev';
 	$('splBody').innerHTML = `${d.pending ? `<div class="notice w splpend" style="margin-top:12px"><span>重启 ${SPL_PX(d)} 后生效</span><button class="btn sm" id="splRs" type="button">现在重启</button></div>` : ''}
 		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${nd}${mv}${splPvHtml(d)}
-		<div class="spltabs" id="splTab" role="tablist">${[['dev', '设备'], ['app', '软件'], ['site', '网站'], ['geo', '国家地区']].map(([k, t]) => `<button type="button" role="tab" aria-selected="${SPL.tab === k}" class="${SPL.tab === k ? 'on' : ''}" data-st="${k}">${t}</button>`).join('')}</div>
+		<div class="spltabs${geo ? '' : ' three'}" id="splTab" role="tablist">${[['dev', '设备'], ['app', '软件'], ['site', '网站'], ...(geo ? [['geo', '国家地区']] : [])].map(([k, t]) => `<button type="button" role="tab" aria-selected="${SPL.tab === k}" class="${SPL.tab === k ? 'on' : ''}" data-st="${k}">${t}</button>`).join('')}</div>
 		${splRows()}`;
 }
 // 选的单个节点：现在多少毫秒、挂了换哪个（先同名、再同地区，都挂了不换）+ 最近切换（跟特色功能「节点挂了自动换」一样，用户 11/28）

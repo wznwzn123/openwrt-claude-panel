@@ -56,7 +56,7 @@ else if (g?.now) {
 // 4) 订阅流量 / 到期（用面板自己的接口拿）
 // 登录密钥在 config.json 里（以前读的 token 文件新装的路由器没有，换过登录密钥的也是旧的）
 let tok = ''; try { tok = '' + (json(readfile(L.D + '/config.json') ?? '{}')?.token ?? ''); } catch (e) {}
-const P = (m, a) => { let o = L.sh(sprintf("curl -s -m 40 -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {}, client: 'panel', dev: 'local.' + L.local_key() })), tok)); try { return json(o).result; } catch (e) { return null; } };
+const P = (m, a, tmo) => { let o = L.sh(sprintf("curl -s -m %d -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", tmo ?? 40, L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {}, client: 'panel', dev: 'local.' + L.local_key() })), tok)); try { return json(o).result; } catch (e) { return null; } };
 let stt = pa?.id == 'openclash' ? P('oc_state') : null;
 let act = filter(stt?.files ?? [], (f) => f.active)[0];
 let sub = act?.sub ? filter(stt?.subs ?? [], (x) => x.name == act.sub)[0] : null;
@@ -79,6 +79,9 @@ if (sub) {
 	}
 	if (length(msg)) add(lvl, '订阅「' + sub.name + '」' + join('，', msg));
 }
+
+// 4b) 订阅快用完（剩不到 10%）、快到期（3 天内）：单独推送一次（11/27 全面检查第 15 条；所有代理插件都看，见 43-subx.uc 的 sub_remind）
+if (ARGV[0] != 'local') P('sub_remind', {}, 150);
 
 // 5) 陌生设备
 let known = L.readj(L.D + '/known_devices.json', {});

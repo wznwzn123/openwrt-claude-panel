@@ -45,6 +45,17 @@ decl.forEach((d, i) => {
 	}
 });
 ok('[路由器程序] 内置函数被同名变量盖住以后，后面没再当内置函数用', !shadow.length, shadow.join('；'));
+// 11/28：拼好的路由器程序和 src/bin 下的 ucode 小工具都要能编译（一处注释把后面的 } 吃掉了，上面两项检查都没发现，接口全挂）。要 UCODE 才查
+if (process.env.UCODE) {
+	const { spawnSync } = await import('child_process');
+	const bins = fs.readdirSync(path.join(dir, '../bin')).filter((f) => /^#!\/usr\/bin\/ucode/.test(fs.readFileSync(path.join(dir, '../bin', f), 'utf8')));
+	const bad = [];
+	for (const f of [path.join(dir, '../www/cgi-bin/mcp'), ...bins.map((b) => path.join(dir, '../bin', b))]) {
+		const r = spawnSync('sh', ['-c', process.env.UCODE + ' -c -o /dev/null ' + JSON.stringify(f)], { encoding: 'utf8' });
+		if (r.status !== 0) bad.push(path.basename(f) + '：' + (r.stderr || r.stdout).split('\n').slice(0, 2).join(' '));
+	}
+	ok(`[路由器程序] 拼好的接口程序和 ${bins.length} 个 ucode 小工具都能编译`, !bad.length, bad.join('；'));
+}
 console.log(results.map(([n, c, note]) => (c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '（' + String(note).slice(0, 600) + '）')).join('\n'));
 const pass = results.filter((x) => x[1]).length;
 console.log(`\n通过 ${pass}/${results.length}`);

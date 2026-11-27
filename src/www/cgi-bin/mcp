@@ -7866,6 +7866,50 @@ P.subx_update = function() {
 	sx_run(sprintf('%s; rm -f %s', cmd, shq(SX_BUSY)));
 	return { ok: true, n: length(subs) };
 };
+/* 订阅快用完、快到期提前提醒（11/27 全面检查第 15 条，用户定：剩不到 10% 或 3 天内到期就提前推送一次；第五阶段）：
+   每天 9:00 体检（cmcp-daily）时调一次。所有代理插件都看：OpenClash 看正在用的配置对应的订阅，Nikki / PassWall / PassWall 2 / SSR Plus+ / HomeProxy 看全部订阅。
+   同一个订阅同一次（同样的总流量、同样的到期时间）只推一次，续费、重置以后恢复正常就清掉，下次快用完再推。不在任何权限组（只有主账号 / 路由器自己能调）。
+   测试用：CMCP_SR_SUBS（假的订阅列表 [{key, name}]）、CMCP_SR_INFO（{ key: 流量信息 }）、CMCP_SR_F（记推过的） */
+const SR_F = getenv('CMCP_SR_F') || ETC + '/subwarn.json';
+function sr_list() {
+	let f = getenv('CMCP_SR_SUBS');
+	if (f) return cmcp_readj(f, []);
+	let out = [], px = sx_px();
+	if (SX_NAME[px]) { for (let s in sx_list(px)) push(out, { key: px + ':' + s.id, name: s.name, id: s.id }); return out; }
+	if (stat('/etc/init.d/openclash')) {
+		let a = oc_all(), base = replace(replace('' + (a.config?.config_path ?? ''), /^.*\//, ''), /\.ya?ml$/, '');
+		for (let s in (a.subs ?? [])) if (s.name == base && s.address) push(out, { key: 'oc:' + s.sid, name: s.name, sid: s.sid });
+	}
+	return out;
+}
+function sr_info(x) {
+	let f = getenv('CMCP_SR_INFO');
+	if (f) return cmcp_readj(f, {})[x.key];
+	try { return x.sid ? P.sub_info({ sid: x.sid }) : P.subx_info({ id: x.id }); } catch (e) { return null; }
+}
+const sr_gb = (b) => b >= 1073741824 ? sprintf('%.1f GB', b / 1073741824.0) : sprintf('%d MB', (b - b % 1048576) / 1048576);
+P.sub_remind = function() {
+	let w = cmcp_readj(SR_F, {}), seen = {}, ch = false, sent = [], now = time();
+	if (type(w) != 'object') w = {};
+	for (let x in sr_list()) {
+		let si = sr_info(x);
+		seen[x.key] = 1;
+		if (type(si) != 'object' || si.ok === false) continue;   // 取不到（机场没给流量信息、连不上）就不管，不清掉上次推过的
+		let used = (+si.upload || 0) + (+si.download || 0), total = +si.total || 0, exp = +si.expire || 0, k = [], msg = [], low = false;
+		if (total > 0 && (total - used) * 10 < total) { low = true; push(k, 'low:' + total); push(msg, total - used <= 0 ? '流量用光了' : '只剩 ' + sr_gb(total - used)); }
+		if (exp > 0 && exp - now < 3 * 86400) { let sec = exp - now, d = (sec - sec % 86400) / 86400; /* 30-plugin-switch.uc 里的 int 不是取整，不用它 */ push(k, 'exp:' + exp); push(msg, exp <= now ? '已经到期' : d <= 0 ? '今天到期' : d + ' 天后到期'); }
+		let key = join('|', k);
+		if (!length(key)) { if (w[x.key]) { delete w[x.key]; ch = true; } continue; }
+		if (w[x.key] == key) continue;
+		w[x.key] = key; ch = true;
+		let title = '机场订阅「' + x.name + '」' + (low ? (total - used <= 0 ? '流量用光了' : '快用完了') : exp <= now ? '已经到期' : '快到期了');
+		try { sh(sprintf('%s/cmcp-notify warn sub %s %s %s >/dev/null 2>&1', SBIN, shq(title), shq(join('，', msg) + '。用完或到期以后节点都连不上，记得续费。'), shq('subwarn-' + x.key))); } catch (e) {}
+		push(sent, x.key);
+	}
+	for (let k in keys(w)) if (!seen[k]) { delete w[k]; ch = true; }   // 订阅删掉了
+	if (ch) cmcp_writej(SR_F, w);
+	return { ok: true, sent };
+};
 /* ---------------- 6.0 第 36 项：在外面打开路由器上其他端口的页面 ----------------
  * 用户 11/26 定：托管版多一个地址「子域名-x」（跟面板不同源），同一时间只指向一个页面，打开哪个就切过去；自建版写教程；本地版在家里直接打开。
  * 认识的页面自动列出（OpenClash / Nikki 控制面板、AdGuard Home、网页终端 ttyd），主账号也能手动加端口。

@@ -21,10 +21,10 @@ fs.writeFileSync(CFG + '/passwall2', `config subscribe_list 'p2'\n\toption remar
 fs.writeFileSync(CFG + '/shadowsocksr', `config server_subscribe\n\toption user_agent 'v2rayN/9.99'\n\tlist subscribe_url '${A}'\n\tlist subscribe_url '${B}'\n`);
 fs.writeFileSync(CFG + '/homeproxy', `config homeproxy 'subscription'\n\tlist subscription_url '${A}'\n`);
 fs.writeFileSync(E + '/config.json', JSON.stringify({ token: 'tok' + 'x'.repeat(30), uci: 'python3 ' + path.resolve('test/fake/uci.py') + ' -c ' + CFG, uci_dir: CFG }));
-let PX = 'nikki';
+let PX = 'nikki', XENV = {};
 const cgi = (method, params) => new Promise((z) => {
 	const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'panel/' + method, params: params || {}, client: 'panel' });
-	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/tok' + 'x'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_SX_PX: PX, CMCP_SX_RUN: RUN, CMCP_SX_BUSY: BUSY, NO_PROXY: '*', no_proxy: '*', http_proxy: '', HTTP_PROXY: '' } });
+	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: '/tok' + 'x'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)), CMCP_SX_PX: PX, CMCP_SX_RUN: RUN, CMCP_SX_BUSY: BUSY, NO_PROXY: '*', no_proxy: '*', http_proxy: '', HTTP_PROXY: '', ...XENV } });
 	let out = ''; p.stdout.on('data', (x) => (out += x)); p.on('close', () => { const i = out.indexOf('\r\n\r\n'); let j = null; try { j = JSON.parse(out.slice(i + 4)); } catch (e) {} z(j || { raw: out }); });
 	p.stdin.end(body);
 });
@@ -78,6 +78,35 @@ try {
 	ok('OpenClash 不走这里（用自己的订阅页）', (await cgi('subx_list')).result?.subs?.length === 0);
 	PX = '';
 	ok('没装代理插件：说原因', /没装代理插件/.test(err(await cgi('subx_update'))));
+	// 订阅快用完、快到期提前提醒（11/27 全面检查第 15 条：剩不到 10% 或 3 天内到期，推送一次；第五阶段）
+	{
+		const SB = E + '/sbin', NT = E + '/notified', SUBS = E + '/srsubs.json', INFO = E + '/srinfo.json', SF = E + '/subwarn.json';
+		fs.mkdirSync(SB, { recursive: true });
+		fs.writeFileSync(SB + '/cmcp-notify', `#!/bin/sh\necho "$*" >> ${NT}\n`, { mode: 0o755 });
+		XENV = { CMCP_SBIN: SB, CMCP_SR_SUBS: SUBS, CMCP_SR_INFO: INFO, CMCP_SR_F: SF };
+		const now = Math.floor(Date.now() / 1000), G = 1073741824;
+		fs.writeFileSync(SUBS, JSON.stringify([{ key: 'nikki:a', name: '机场一' }, { key: 'nikki:b', name: '机场二' }, { key: 'nikki:c', name: '机场三' }, { key: 'nikki:d', name: '机场四' }]));
+		const info = (o) => fs.writeFileSync(INFO, JSON.stringify(o));
+		info({ 'nikki:a': { ok: true, upload: G, download: 93 * G, total: 100 * G, expire: now + 30 * 86400 }, 'nikki:b': { ok: true, upload: 0, download: G, total: 100 * G, expire: now + 2 * 86400 + 3600 }, 'nikki:c': { ok: true, upload: 0, download: 10 * G, total: 100 * G, expire: now + 30 * 86400 }, 'nikki:d': { ok: false } });
+		r = await cgi('sub_remind');
+		let nt = rd(NT);
+		ok('[订阅提醒] 剩不到 10%：推「快用完了」，写剩多少', /机场订阅「机场一」快用完了/.test(nt) && /只剩 6\.0 GB/.test(nt), nt);
+		ok('[订阅提醒] 3 天内到期：推「快到期了」，写几天后', /机场订阅「机场二」快到期了/.test(nt) && /2 天后到期/.test(nt), nt);
+		ok('[订阅提醒] 正常的、机场不给流量信息的不推', !/机场三/.test(nt) && !/机场四/.test(nt) && r.result?.sent?.length === 2, JSON.stringify(r));
+		fs.rmSync(NT, { force: true });
+		r = await cgi('sub_remind');
+		ok('[订阅提醒] 同一次只推一次（明天再查不重复）', !fs.existsSync(NT) && r.result?.sent?.length === 0);
+		info({ 'nikki:a': { ok: true, upload: 0, download: G, total: 200 * G, expire: now + 30 * 86400 }, 'nikki:b': { ok: true, upload: 0, download: G, total: 100 * G, expire: now + 32 * 86400 }, 'nikki:c': { ok: true, upload: 0, download: 99 * G, total: 100 * G, expire: now + 30 * 86400 }, 'nikki:d': { ok: false } });
+		r = await cgi('sub_remind');
+		nt = rd(NT);
+		ok('[订阅提醒] 续费了不推；别的订阅快用完了照样推', !/机场一|机场二/.test(nt) && /机场三」快用完了/.test(nt) && !JSON.parse(rd(SF))['nikki:a'], nt + rd(SF));
+		fs.rmSync(NT, { force: true });
+		info({ 'nikki:a': { ok: true, upload: 0, download: 195 * G, total: 200 * G, expire: now + 30 * 86400 }, 'nikki:c': { ok: true, upload: 0, download: 100 * G, total: 100 * G, expire: now - 10 } });
+		r = await cgi('sub_remind');
+		nt = rd(NT);
+		ok('[订阅提醒] 续费以后又快用完：再推一次；用光了、已经到期写清楚', /机场一」快用完了/.test(nt) && /机场三」流量用光了/.test(nt) && /已经到期/.test(nt), nt);
+		XENV = {};
+	}
 } finally {
 	srv.close(); fs.rmSync(E, { recursive: true, force: true });
 }

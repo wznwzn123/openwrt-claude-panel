@@ -2817,13 +2817,15 @@ function aiAskBox(x, n) {
 	<div class="cscroll">${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
 	<p class="muted aiask-t" style="text-align:center"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
 	<div class="notice" style="margin-top:10px;text-align:left">不是你让 AI 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 AI 连接器地址。</div></div>
-	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div>${x.pt ? `<button class="btn aiask-always" data-ans="always">永久允许</button>` : ''}</div>`,
+	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div>${x.pt || ME_ROLE.role !== 'sub' ? `<div class="btngrid aiask-always">${x.pt ? '<button class="btn" data-ans="always">这一类都允许</button>' : ''}${ME_ROLE.role !== 'sub' ? '<button class="btn" data-ans="all">全部都允许</button>' : ''}</div>` : ''}</div>`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const t = setInterval(() => { const el = m.querySelector('[data-left]'); if (!el || !el.isConnected) return clearInterval(t); el.textContent = mmss(); if (!left()) { clearInterval(t); toast('这个请求过期了', true); close(null); } }, 1000);
 		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = () => busy(b, async () => {
-			const ok = b.dataset.ans !== 'no', always = b.dataset.ans === 'always';
-			try { const r = await P('ai_answer', { id: x.id, ok, always }, 20000); toast(r && r.always ? '已永久允许：以后' + x.pt + '不再问' : ok ? '已允许，AI 会接着做' : '已拒绝'); }
+			const ok = b.dataset.ans !== 'no', always = b.dataset.ans === 'always', all = b.dataset.ans === 'all';
+			// 全部都允许（用户 11/27）：等于「完全放开」，先说清楚后果
+			if (all && !(await confirmBox('全部允许 AI 的操作', '以后 AI 做什么都不问你，包括重启路由器、改网络。拿到连接器地址的人也一样。', '全部都允许', true))) return;
+			try { const r = await P('ai_answer', { id: x.id, ok, always, all }, 20000); toast(r && r.all ? '已全部允许：AI 以后不再问' : r && r.always ? '已允许：以后' + x.pt + '不再问' : ok ? '已允许，AI 会接着做' : '已拒绝'); }
 			catch (e) { toast(e.message, true); }
 			clearInterval(t); close(null);
 			setTimeout(() => aiCheck(true), 600);

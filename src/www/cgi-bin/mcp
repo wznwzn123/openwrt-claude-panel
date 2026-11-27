@@ -4124,7 +4124,11 @@ function ai_detail(name, a) {
 /* 永久允许（用户 11/27）：确认卡上点「永久允许」，以后这一类操作不再问。存在 config.json 的 ai_allow（最多 50 条），
    「我的主页 → 敏感信息 → AI 连接器地址」里能看到、收回（要先确认本人，只有主账号）。「只读」照样全挡。
    「这一类」：执行命令 = 一模一样的这条命令；控制服务 = 这个服务的这个动作；装卸软件 = 装或卸这个包；改设置 = 改这几份配置；其他 = 这个动作 */
-function ai_pkey(name, a) {
+// 「这一类都允许」（用户 11/27：原来只放过一模一样的那条，换条命令又要问）：按工具算一类，执行命令就是所有命令
+const AI_PT = { run_command: '执行命令（所有命令）', uci_set: '修改设置（所有配置）', oaf_uci: '改应用过滤设置', service_control: '启停服务（所有服务）', packages: '安装和卸载软件' };
+function ai_pkey(name, a) { return { k: name, t: AI_PT[name] ?? AI_NAMES[name] ?? name }; }
+// 以前点的「永久允许」是按具体那一条记的（某条命令、某个服务）：照样认
+function ai_pkey_one(name, a) {
 	let cut = (s, n) => (length(s) > n ? substr(s, 0, n) + '…' : s);
 	switch (name) {
 	case 'run_command': { let c = trim('' + (a?.command ?? '')); return length(c) ? { k: 'run_command:' + c, t: '执行命令 ' + cut(c, 60) } : null; }
@@ -4165,7 +4169,8 @@ function ai_gate(name, a) {
 	if (mode == 'ro') ai_stop('AI 现在是「只读」：只能查看，不能修改' + (name == 'run_command' ? '（命令行只能跑只看的命令，比如 cat、ls、logread、uci show）' : '') + '。要改的话，请用户在手机面板「我的主页 → 敏感信息 → AI 连接器地址」里把「AI 能做什么」改成「危险操作要确认」。');
 	if (cls == 'light') return;
 	let args = sprintf('%J', a ?? {}), now = time(), o = ai_read(), x = null, pk = ai_pkey(name, a);
-	if (pk && length(filter(ai_allows(), (y) => y.k == pk.k))) {
+	let p1 = ai_pkey_one(name, a);
+	if (length(filter(ai_allows(), (y) => y.k == pk.k || (p1 && y.k == p1.k)))) {
 		push(o.list, { id: rand_str(10), name, title: AI_NAMES[name] ?? name, detail: ai_detail(name, a), args, at: now, exp: now, st: 'auto', done: now }); ai_write(o);
 		return;
 	}
@@ -4212,7 +4217,16 @@ P.ai_answer = function(a) {
 		ai_allows_save(l); always = true;
 		try { sh(sprintf('%s/cmcp-notify info key %s %s key >/dev/null 2>&1', SBIN, shq('AI 以后' + (x.pt ?? x.title) + '不再问你'), shq(x.by + ' 点了「永久允许」。要收回：「我的主页 → 敏感信息 → AI 连接器地址」'))); } catch (e) {}
 	}
-	return { ok: true, st: x.st, always };
+	// 全部都允许（用户 11/27）：等于把「AI 能做什么」改成「完全放开」，只有主账号能点
+	let all = false;
+	if (x.st == 'ok' && a?.all === true && ROLE == 'owner') {
+		let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
+		c.ai_mode = 'full';
+		writefile(CONF_PATH + '.tmp', sprintf('%J', c)); sh('chmod 600 ' + shq(CONF_PATH + '.tmp') + ' && mv ' + shq(CONF_PATH + '.tmp') + ' ' + shq(CONF_PATH));
+		CONF = null; all = true;
+		try { sh(sprintf('%s/cmcp-notify info key %s %s key >/dev/null 2>&1', SBIN, shq('AI 以后什么都不问你'), shq(x.by + ' 点了「全部都允许」，AI 能做什么改成了「完全放开」。要改回：「我的主页 → 敏感信息 → AI 连接器地址」'))); } catch (e) {}
+	}
+	return { ok: true, st: x.st, always, all };
 };
 // 改「AI 能做什么」：要先确认本人，只有主账号
 P.ai_mode = function(a) {

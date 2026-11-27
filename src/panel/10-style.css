@@ -776,7 +776,7 @@ section.page{display:none}section.page.on{display:block}
 .aiask h3{margin:0;font-size:18px;overflow-wrap:anywhere}
 .aiask-d{margin:12px 0 0;text-align:left;max-height:none}
 .aiask-t{margin:10px 0 0;font-size:13px}
-.aiask-always{width:100%;margin-top:8px}
+.aiask-always{margin-top:8px}
 
 /* 打开面板时自己弹出来的弹窗（必须更新、重要公告、反馈有回复）：手机上也是居中的小卡片，不占满屏幕 */
 .modal.compact{place-items:center;padding:20px 16px}

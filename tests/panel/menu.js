@@ -44,21 +44,23 @@ const server = http.createServer((req, res) => {
 	// 用户 11/27：「应用管理」只有一个虚线框——面板自己的页面都要有画好的图标（服务组本来就不显示图标）
 	const noIc = await page.evaluate(() => [...document.querySelectorAll('#sidenav button[data-p]')].filter((b) => !b.dataset.p.startsWith('k:') && !b.closest('[data-g="服务"]') && b.querySelector('i') && !b.querySelector('i.nic svg')).map((b) => b.textContent.trim()));
 	ok('面板自己的页面都有画好的图标（含应用管理、完整原版后台）', !noIc.length && (await page.locator('#sidenav [data-p="apps"] i.nic svg').count()) === 1, noIc.join('、'));
-	// 点「● 在线」刷新（用户 11/27）：只转圈，顶上不再弹「正在刷新…」；超过 4 秒转圈旁写「内容较多请耐心等待」，好了就收起
+	// 点「● 在线」刷新（用户 11/27）：弹「正在刷新…」；超过 4 秒后面加「内容较多请耐心等待」；不显示下拉的转圈和最上面的加载线；好了就收起
 	let slowRpc = false;
 	await page.route('**/cgi-bin/mcp/**', async (r) => { if (slowRpc) await new Promise((z) => setTimeout(z, 5500)); try { await r.continue(); } catch (e) {} });
 	slowRpc = true;
+	const snap = () => page.evaluate(() => ({ toast: document.getElementById('toast').classList.contains('hidden') ? '' : document.getElementById('toast').textContent.trim(), ptr: document.getElementById('ptr').classList.contains('run'), bar: document.getElementById('tload').classList.contains('on') }));
 	await page.evaluate(() => document.getElementById('statusPill').click()); await page.waitForTimeout(600);
-	const p1 = await page.evaluate(() => ({ run: document.getElementById('ptr').classList.contains('run'), toast: !document.getElementById('toast').classList.contains('hidden') && /刷新/.test(document.getElementById('toast').textContent) }));
+	const p1 = await snap();
 	await page.waitForTimeout(4000);
-	const p2 = await page.evaluate(() => { const e = document.getElementById('ptr'), r = e.getBoundingClientRect(), W = document.documentElement.clientWidth; return { slow: e.classList.contains('slow'), t: e.textContent, l: r.left, r: r.right, W, mid: Math.abs((r.left + r.right) / 2 - W / 2) }; });
-	await page.screenshot({ path: require('path').join(__dirname, 'shots', 'ptr-slow.png') });
+	const p2 = await snap();
+	const tb = await page.evaluate(() => { const r = document.getElementById('toast').getBoundingClientRect(); return { l: r.left, r: r.right, W: document.documentElement.clientWidth, h: r.height }; });
+	await page.screenshot({ path: require('path').join(__dirname, 'shots', 'refresh-slow.png') });
 	slowRpc = false;
 	await page.waitForTimeout(9000);
-	const p3 = await page.evaluate(() => { const e = document.getElementById('ptr'); return { run: e.classList.contains('run'), slow: e.classList.contains('slow') }; });
-	ok('点「在线」：只转圈，顶上不弹「正在刷新…」', p1.run && !p1.toast, JSON.stringify(p1));
-	ok('超过 4 秒：转圈旁写「内容较多请耐心等待」，居中、不出屏幕', p2.slow && /内容较多请耐心等待/.test(p2.t) && p2.l >= 0 && p2.r <= p2.W && p2.mid < 2, JSON.stringify(p2));
-	ok('刷新好了：转圈和文字都收起', !p3.run && !p3.slow, JSON.stringify(p3));
+	const p3 = await snap();
+	ok('点「在线」：弹「正在刷新…」，没有下拉的转圈、没有最上面的加载线', /^正在刷新…$/.test(p1.toast) && !p1.ptr && !p1.bar, JSON.stringify(p1));
+	ok('超过 4 秒：变成「正在刷新 内容较多请耐心等待…」，还是没有加载线，不出屏幕', /正在刷新 内容较多请耐心等待…/.test(p2.toast) && !p2.bar && !p2.ptr && tb.l >= 0 && tb.r <= tb.W, JSON.stringify(p2) + JSON.stringify(tb));
+	ok('刷新好了：提示收起（不再一直转）', !/正在刷新/.test(p3.toast) && !p3.ptr && !p3.bar, JSON.stringify(p3));
 	await page.unroute('**/cgi-bin/mcp/**');
 	ok('有子页面的插件可以展开', (await page.locator('#sidenav [data-g="服务/ZeroTier"] button[data-p="k:admin/vpn/zerotier/base"]').count()) === 1);
 	// 点「服务」里的 OpenClash：展开「代理 › OpenClash 原版」

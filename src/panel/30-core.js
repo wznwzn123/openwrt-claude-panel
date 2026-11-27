@@ -420,8 +420,8 @@ function fitTop() {
 	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
 	addEventListener('resize', fit);
 	// 点「● 在线」刷新（电脑上没有下拉，这是刷新的入口；手机上也能用）
-	// 只用下面那个转圈（用户 11/27：顶上的「正在刷新…」提示去掉，两个刷新重复了）
-	const st = () => { if (!ptrBusy) ptrRun(); };
+	// 点「在线」：只弹「正在刷新…」（不显示下拉的转圈、最上面的加载线）；超过 4 秒后面加「内容较多请耐心等待」；好了就收起（用户 11/27）
+	const st = () => { if (!ptrBusy) ptrRun(true); };
 	$('statusPill').addEventListener('click', st);
 	$('statusPill').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st(); } });
 }
@@ -802,7 +802,7 @@ addEventListener('scroll', topLine, { passive: true });
 function topH() { const t = $('topbar'); document.documentElement.style.setProperty('--toph', Math.round(t.offsetHeight + (parseFloat(getComputedStyle(t).marginTop) || 0)) - 2 + 'px'); }
 addEventListener('resize', topH);
 
-let loading = false, loadSeq = 0, loadAt = 0;
+let loading = false, loadSeq = 0, loadAt = 0, ptrBusy = false;
 async function refresh(quiet) {
 	const load = LOAD[page.startsWith('k:') ? 'luci' : page];
 	if (!load) return;
@@ -810,7 +810,9 @@ async function refresh(quiet) {
 	if (loading && quiet && Date.now() - loadAt < 25000) return;
 	const my = ++loadSeq;
 	loading = true; loadAt = Date.now();
-	if (!quiet) { $('refreshBtn').innerHTML = '<span class="spin">↻</span>'; loadOn(); }
+	// 下拉 / 点「在线」刷新时有自己的提示：不再显示最上面那条加载线（用户 11/27）
+	const bar = !quiet && !ptrBusy;
+	if (!quiet) { $('refreshBtn').innerHTML = '<span class="spin">↻</span>'; if (bar) loadOn(); }
 	try { await load(quiet); }
 	catch (e) {
 		if (my !== loadSeq) return; // 已经有更新的一次加载了，这次的错误不用管
@@ -866,7 +868,7 @@ async function refresh(quiet) {
 		} else if (/连不上|超时/.test(e.message)) setStatus(false, '离线');
 		if (!quiet) toast(e.message, true);
 	} finally {
-		if (!quiet) loadOff();
+		if (bar) loadOff();
 		if (my === loadSeq) { loading = false; $('refreshBtn').textContent = '↻'; }
 	}
 }
@@ -876,16 +878,19 @@ $('refreshBtn').onclick = () => { S.state = null; S.schema = {}; refresh(); };
    电脑：触控板在最顶上继续往上滑（滚轮向上）也算；另外点顶栏的「● 在线」也能刷新。
    浏览器自己的下拉重新加载整页关掉（overscroll-behavior），不然会跟这个打架。
    有弹窗、菜单开着、在聊天页（自己有滚动）或原版后台页时不管。 */
-let ptrBusy = false;
-async function ptrRun() {
+
+// tip：点「在线」来的，用「正在刷新…」提示代替下拉的转圈
+async function ptrRun(tip) {
 	if (ptrBusy) return;
 	ptrBusy = true;
-	const el = $('ptr'); el.classList.add('run'); el.style.setProperty('--py', '1');
-	// 超过 4 秒还没好：转圈旁边写「内容较多请耐心等待」（用户 11/27）
-	const slow = setTimeout(() => el.classList.add('slow'), 4000);
+	const el = $('ptr');
+	if (tip) toast('正在刷新…'); else { el.classList.add('run'); el.style.setProperty('--py', '1'); }
+	// 超过 4 秒还没好：后面加「内容较多请耐心等待」（用户 11/27）
+	const slow = setTimeout(() => { if (tip) toast('正在刷新 内容较多请耐心等待…'); else el.classList.add('slow'); }, 4000);
 	S.state = null; S.schema = {};
 	try { await refresh(); } catch (e) {}
 	clearTimeout(slow);
+	if (tip && /^正在刷新/.test($('toast').textContent) && $('toast').classList.contains('busy')) toastHide();
 	el.classList.remove('run', 'pull', 'slow'); el.style.setProperty('--py', '0');
 	ptrBusy = false;
 }

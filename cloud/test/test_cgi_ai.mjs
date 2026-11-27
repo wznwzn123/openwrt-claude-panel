@@ -147,41 +147,64 @@ ok('改严了：在等的请求作废', (await panel('ai_asks')).result.list.eve
 	let n0 = pushes().length;
 	r = await ai('run_command', { command: 'touch ' + M2 });
 	let w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
-	ok('[永久允许] 确认卡上写着会永久允许什么', w && /^执行命令 touch /.test(w.pt || ''), JSON.stringify(w));
+	ok('[永久允许] 确认卡上写着会放过哪一类（执行命令是所有命令）', w && w.pt === '执行命令（所有命令）', JSON.stringify(w));
 	r = await panel('ai_answer', { id: w.id, ok: true, always: true });
 	let c2 = JSON.parse(fs.readFileSync(E + '/config.json', 'utf8'));
-	ok('[永久允许] 点了：记进设置，推送告诉主人', r.result?.always === true && (c2.ai_allow || []).some((x) => x.k === 'run_command:touch ' + M2) && pushes().slice(n0).some((x) => /不再问你/.test(x)), JSON.stringify(r));
+	ok('[永久允许] 点了「这一类都允许」：按一类记进设置，推送告诉主人', r.result?.always === true && (c2.ai_allow || []).some((x) => x.k === 'run_command') && pushes().slice(n0).some((x) => /不再问你/.test(x)), JSON.stringify(r));
 	r = await ai('run_command', { command: 'touch ' + M2 }); fs.rmSync(M2, { force: true });
 	n0 = pushes().length;
 	r = await ai('run_command', { command: 'touch ' + M2 });
 	ok('[永久允许] 以后同一条命令：直接执行、不推送，记一条「永久允许」', !isErr(r) && fs.existsSync(M2) && pushes().length === n0 && (await panel('ai_asks')).result.list.some((x) => x.st === 'auto'), txt(r));
 	fs.rmSync(M2, { force: true });
 	r = await ai('run_command', { command: 'touch ' + M2 + 'x' });
-	ok('[永久允许] 别的命令照样要确认', isErr(r) && !fs.existsSync(M2 + 'x') && /手机上确认/.test(txt(r)));
-	// 重启 OpenClash 这类：同一个动作以后都不问
+	ok('[永久允许] 别的命令也直接执行（用户 11/27：这一类都不问）', !isErr(r) && fs.existsSync(M2 + 'x') && pushes().length === n0, txt(r));
+	fs.rmSync(M2 + 'x', { force: true });
+	// 别的类照样要问：重启 OpenClash
 	r = await ai('restart_openclash', {});
 	w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').find((x) => x.title === '重启 OpenClash');
-	ok('[永久允许] 重启 OpenClash：卡上写「重启 OpenClash」', w && w.pt === '重启 OpenClash', JSON.stringify(w));
+	ok('[永久允许] 别的类照样要问；卡上写「重启 OpenClash」', isErr(r) && w && w.pt === '重启 OpenClash', JSON.stringify(w));
 	// 没点永久允许的：不记
 	r = await panel('ai_answer', { id: w.id, ok: true });
 	ok('[永久允许] 只点「允许」：不记', !JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_allow.some((x) => x.k === 'restart_openclash'));
 	// 拒绝时带 always 也不记
-	r = await ai('run_command', { command: 'touch ' + M2 + 'y' });
+	r = await ai('reboot_router', {});
 	w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
 	await panel('ai_answer', { id: w.id, ok: false, always: true });
-	ok('[永久允许] 拒绝的不会被记成永久允许', !JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_allow.some((x) => /y$/.test(x.k)));
+	ok('[永久允许] 拒绝的不会被记成永久允许', !JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_allow.some((x) => x.k === 'reboot_router'));
+	// 以前按具体一条记的（某条命令）：照样认
+	{
+		const c = JSON.parse(fs.readFileSync(E + '/config.json', 'utf8'));
+		c.ai_allow = [{ k: 'run_command:touch ' + M2 + 'old', t: '执行命令 touch', at: 1 }];
+		fs.writeFileSync(E + '/config.json', JSON.stringify(c));
+		r = await ai('run_command', { command: 'touch ' + M2 + 'old' });
+		ok('[永久允许] 以前按一条命令记的：那条照样直接执行', !isErr(r) && fs.existsSync(M2 + 'old'), txt(r));
+		fs.rmSync(M2 + 'old', { force: true });
+		r = await ai('run_command', { command: 'touch ' + M2 + 'old2' });
+		ok('[永久允许] 以前按一条命令记的：别的命令还要问', isErr(r) && !fs.existsSync(M2 + 'old2') && /手机上确认/.test(txt(r)));
+		c.ai_allow = [{ k: 'run_command', t: '执行命令（所有命令）', at: 1 }];
+		fs.writeFileSync(E + '/config.json', JSON.stringify(c));
+	}
 	// 只读照样挡
 	await panel('ai_mode', { mode: 'ro', sudo: SU });
 	r = await ai('run_command', { command: 'touch ' + M2 });
 	ok('[永久允许] 改成只读：永久允许过的也挡', isErr(r) && !fs.existsSync(M2) && /只读/.test(txt(r)));
 	await panel('ai_mode', { mode: 'ask', sudo: SU });
 	// 收回
-	r = await panel('ai_allow_del', { k: 'run_command:touch ' + M2 });
+	r = await panel('ai_allow_del', { k: 'run_command' });
 	ok('[永久允许] 收回：没确认本人不行', /确认是你本人/.test(r.error?.message || ''), JSON.stringify(r));
-	r = await panel('ai_allow_del', { k: 'run_command:touch ' + M2, sudo: SU });
-	ok('[永久允许] 确认本人后收回', r.result?.ok && !r.result.allows.some((x) => x.k === 'run_command:touch ' + M2), JSON.stringify(r));
+	r = await panel('ai_allow_del', { k: 'run_command', sudo: SU });
+	ok('[永久允许] 确认本人后收回', r.result?.ok && !r.result.allows.some((x) => x.k === 'run_command'), JSON.stringify(r));
 	r = await ai('run_command', { command: 'touch ' + M2 });
 	ok('[永久允许] 收回以后又要确认', isErr(r) && !fs.existsSync(M2) && /手机上确认/.test(txt(r)));
+	// 全部都允许（用户 11/27）：等于改成「完全放开」，推送告诉主人；之后什么都直接做
+	r = await ai('reboot_router', {});
+	w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
+	n0 = pushes().length;
+	r = await panel('ai_answer', { id: w.id, ok: true, all: true });
+	ok('[全部都允许] 改成「完全放开」，推送告诉主人', r.result?.all === true && JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_mode === 'full' && pushes().slice(n0).some((x) => /什么都不问/.test(x)), JSON.stringify(r));
+	r = await ai('run_command', { command: 'touch ' + M2 + 'all' });
+	ok('[全部都允许] 之后任何操作都直接做', !isErr(r) && fs.existsSync(M2 + 'all'), txt(r));
+	fs.rmSync(M2 + 'all', { force: true });
 	await panel('ai_mode', { mode: 'ro', sudo: SU });
 }
 ok('设置文件还是只有 root 能读', (fs.statSync(E + '/config.json').mode & 0o077) === 0);

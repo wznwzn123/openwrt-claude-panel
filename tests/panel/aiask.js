@@ -16,7 +16,7 @@ function handle(m, p) {
 	S.calls.push({ m, p });
 	if (m === 'whoami') return { ...mock.respond('whoami', p), ai: true, role: S.role, perms: S.perms };
 	if (m === 'ai_asks') { if (S.role === 'sub' && !S.perms.includes('net')) throw Object.assign(new Error('主账号没有给你开「完全控制」权限'), { code: -32012 }); return { ai: true, mode: S.mode, list: S.list }; }
-	if (m === 'ai_answer') { const x = S.list.find((y) => y.id === p.id); if (!x || x.st !== 'wait') throw new Error('这个请求已经处理过了'); x.st = p.ok ? 'ok' : 'no'; if (p.ok && p.always && x.pt) S.allows.push({ k: 'k' + x.id, t: x.pt, at: now(), by: '我的手机' }); return { ok: true, st: x.st, always: !!(p.ok && p.always && x.pt) }; }
+	if (m === 'ai_answer') { const x = S.list.find((y) => y.id === p.id); if (!x || x.st !== 'wait') throw new Error('这个请求已经处理过了'); x.st = p.ok ? 'ok' : 'no'; if (p.ok && p.always && x.pt) S.allows.push({ k: 'k' + x.id, t: x.pt, at: now(), by: '我的手机' }); return { ok: true, st: x.st, always: !!(p.ok && p.always && x.pt), all: !!(p.ok && p.all && S.role === 'owner') }; }
 	if (m === 'ckey_info') { if (!p.sudo) throw new Error('要先确认是你本人'); return { ai: true, url: 'https://r.example/cgi-bin/mcp/' + 'c'.repeat(40), hosted: false, mode: S.mode, allows: S.allows, asks: [{ id: 'x1', title: '重启路由器', at: now() - 3600, st: 'no' }, { id: 'x2', title: '修改路由器设置', at: now() - 600, st: 'done' }, { id: 'x3', title: '执行命令', at: now() - 60, st: 'exp' }] }; }
 	if (m === 'ai_allow_del') { if (!p.sudo) throw new Error('要先确认是你本人'); S.allows = S.allows.filter((y) => y.k !== p.k); return { ok: true, allows: S.allows }; }
 	if (m === 'ai_mode') { if (!p.sudo) throw new Error('要先确认是你本人'); S.mode = p.mode; return { ok: true, mode: p.mode }; }
@@ -57,11 +57,11 @@ const SHOT = path.join(__dirname, 'shots');
 		const ov = await page.evaluate(() => { const W = document.documentElement.clientWidth, b = document.querySelector('.modal .modalbox').getBoundingClientRect(); return { sw: document.documentElement.scrollWidth, W, l: b.left, r: b.right }; });
 		ok('弹窗不超出屏幕、不横向滚动' + T, ov.sw <= ov.W && ov.l >= 0 && ov.r <= ov.W + 0.5, JSON.stringify(ov));
 		await page.screenshot({ path: path.join(SHOT, `aiask-${w}${dark ? '-dark' : ''}.png`) });
-		ok('没有「永久允许」可选的请求：不显示这个按钮（第一个没有）' + T, (await page.locator('.modal [data-ans="always"]').count()) === 0);
+		ok('没有分类的请求：不显示「这一类都允许」，主账号有「全部都允许」（第一个）' + T, (await page.locator('.modal [data-ans="always"]').count()) === 0 && (await page.locator('.modal [data-ans="all"]').count()) === 1);
 		await page.click('.modal [data-ans="ok"]'); await W(1600);
 		ok('点「允许」：告诉路由器允许了这一个' + T, S.list[0].st === 'ok' && S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa1' && c.p.ok === true));
 		t = await box();
-		ok('有「永久允许」的才显示这个按钮（第二个有）' + T, (await page.locator('.modal [data-ans="always"]').count()) === 1);
+		ok('有分类的才显示「这一类都允许」（第二个有）' + T, (await page.locator('.modal [data-ans="always"]').count()) === 1);
 		ok('接着弹出下一个（重启路由器，写着会断网多久）' + T, /AI 想要：重启路由器/.test(t) && /1–3 分钟/.test(t) && !/后面还有/.test(t), t.slice(0, 80));
 		await page.click('.modal [data-ans="no"]'); await W(1400);
 		ok('点「拒绝」：告诉路由器拒绝了，弹窗关掉' + T, S.list[1].st === 'no' && (await page.locator('.modal .aiask').count()) === 0);
@@ -70,12 +70,12 @@ const SHOT = path.join(__dirname, 'shots');
 		await W(9000);
 		t = await box();
 		ok('开着面板时来了新请求：8 秒左右自己弹出来，不用刷新；密码打码' + T, /修改路由器设置/.test(t) && /key=\*\*\*\*\*\*/.test(t), t.slice(0, 80));
-		// 永久允许（用户 11/27）：按钮在「拒绝 / 允许」下面，一整行，不出界
-		const ab = await page.evaluate(() => { const b = document.querySelector('.modal [data-ans="always"]'), m = document.querySelector('.modal .aiask')?.closest('.modal') || document.querySelector('.modal'); if (!b) return null; const r = b.getBoundingClientRect(), y = document.querySelector('.modal [data-ans="ok"]').getBoundingClientRect(); return { t: b.textContent, below: r.top >= y.bottom - 1, inView: r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }; });
-		ok('确认卡上有「永久允许」，在允许下面、不出屏幕' + T, ab && ab.t === '永久允许' && ab.below && ab.inView, JSON.stringify(ab));
+		// 永久允许（用户 11/27）：「这一类都允许」「全部都允许」并排在「拒绝 / 允许」下面，不出界
+		const ab = await page.evaluate(() => { const b = document.querySelector('.modal [data-ans="always"]'), m = document.querySelector('.modal .aiask')?.closest('.modal') || document.querySelector('.modal'); if (!b) return null; const r = b.getBoundingClientRect(), y = document.querySelector('.modal [data-ans="ok"]').getBoundingClientRect(); const a = document.querySelector('.modal [data-ans="all"]').getBoundingClientRect(); return { t: b.textContent, a: document.querySelector('.modal [data-ans="all"]').textContent, below: r.top >= y.bottom - 1, row: Math.abs(a.top - r.top) < 2, inView: r.bottom <= innerHeight && r.left >= 0 && a.right <= innerWidth, oneLine: r.height < 60 && a.height < 60 }; });
+		ok('确认卡上有「这一类都允许」「全部都允许」，并排在允许下面、不出屏幕、不折行' + T, ab && ab.t === '这一类都允许' && ab.a === '全部都允许' && ab.below && ab.row && ab.inView && ab.oneLine, JSON.stringify(ab));
 		if (w === 390) await page.screenshot({ path: path.join(SHOT, `aiask-always${dark ? '-dark' : ''}.png`) });
 		await page.click('.modal [data-ans="always"]'); await W(1400);
-		ok('点「永久允许」：告诉路由器允许并且以后不问，提示以后什么不问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa3' && c.p.ok === true && c.p.always === true) && /以后修改设置 wireless不再问/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+		ok('点「这一类都允许」：告诉路由器允许并且以后这一类不问，提示以后什么不问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa3' && c.p.ok === true && c.p.always === true) && /以后修改设置 wireless不再问/.test(await page.textContent('#toast')), await page.textContent('#toast'));
 		// 用户 11/27：App 切回来要刷新才弹出——窗口拿回焦点时马上查（不等 8 秒）
 		await W(3500);
 		{
@@ -84,7 +84,16 @@ const SHOT = path.join(__dirname, 'shots');
 			await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await W(1500);
 			const tt = await box();
 			ok('窗口拿回焦点（App 切回来）：一两秒内就弹出来' + T, /echo hi/.test(tt) && S.calls.filter((c) => c.m === 'ai_asks').length > c0, tt.slice(0, 60));
-			if (/echo hi/.test(tt)) { await page.click('.modal [data-ans="no"]'); await W(1200); }
+			// 全部都允许：先确认（说清楚后果），取消就不动；确定才发
+			await page.click('.modal [data-ans="all"]'); await W(600);
+			const cf = await page.locator('.modal').last().textContent();
+			ok('点「全部都允许」：先问，写清楚以后什么都不问、拿到地址的人也一样' + T, /全部允许 AI 的操作/.test(cf) && /重启路由器/.test(cf) && /拿到连接器地址的人也一样/.test(cf), cf.slice(0, 120));
+			if (w === 390) await page.screenshot({ path: path.join(SHOT, `aiask-all${dark ? '-dark' : ''}.png`) });
+			await page.locator('.modal').last().locator('[data-v="false"]').click(); await W(500);
+			ok('取消：没发出去，确认卡还在' + T, !S.calls.some((c) => c.m === 'ai_answer' && c.p.all) && (await page.locator('.modal .aiask').count()) === 1);
+			await page.click('.modal [data-ans="all"]'); await W(600);
+			await page.locator('.modal').last().locator('[data-v="true"]').click(); await W(1400);
+			ok('确定：告诉路由器允许并全部放开，提示以后不再问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa4' && c.p.ok && c.p.all === true) && /已全部允许/.test(await page.textContent('#toast')), await page.textContent('#toast'));
 		}
 		// AI 连接器地址：选档位
 		await page.goto('http://localhost:8097/panel/?p=me'); await W(2200);
@@ -113,6 +122,15 @@ const SHOT = path.join(__dirname, 'shots');
 		await p2.goto('http://localhost:8097/panel/?p=home&ask=ai'); await W(3000);
 		ok('家人没有「完全控制」：不弹 Claude 的请求，也不去问' + T, (await p2.locator('.modal .aiask').count()) === 0 && !S.calls.some((c) => c.m === 'ai_asks'));
 		await c2.close();
+		// 家人有「完全控制」：能允许、能「这一类都允许」，没有「全部都允许」（那等于改成完全放开，只有主账号能点）
+		S.role = 'sub'; S.perms = ['net']; S.mode = 'ask'; fresh(); S.calls = [];
+		const c3 = await browser.newContext({ viewport: { width: w, height: h } }); const p3 = await c3.newPage();
+		p3.on('pageerror', (e) => problems.push('页面错误3' + T + '：' + e.message));
+		await p3.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); localStorage.setItem('rp_ai', '1'); localStorage.setItem('rp_role', JSON.stringify({ role: 'sub', perms: ['net'] })); });
+		await p3.goto('http://localhost:8097/panel/?p=home&ask=ai'); await W(3000);
+		await p3.click('.modal [data-ans="no"]'); await W(1400);
+		ok('家人有「完全控制」：有「这一类都允许」，没有「全部都允许」' + T, (await p3.locator('.modal [data-ans="always"]').count()) === 1 && (await p3.locator('.modal [data-ans="all"]').count()) === 0);
+		await c3.close();
 	}
 	await browser.close(); server.close();
 	console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + String(r[2]).slice(0, 300) + '）' : '')).join('\n'));

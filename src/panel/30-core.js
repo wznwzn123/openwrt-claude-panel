@@ -420,7 +420,8 @@ function fitTop() {
 	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
 	addEventListener('resize', fit);
 	// 点「● 在线」刷新（电脑上没有下拉，这是刷新的入口；手机上也能用）
-	const st = () => { toast('正在刷新…'); ptrRun(); };
+	// 只用下面那个转圈（用户 11/27：顶上的「正在刷新…」提示去掉，两个刷新重复了）
+	const st = () => { if (!ptrBusy) ptrRun(); };
 	$('statusPill').addEventListener('click', st);
 	$('statusPill').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st(); } });
 }
@@ -659,6 +660,9 @@ NAV_IC.xpage = ['<rect x="3" y="4" width="18" height="15" rx="2"/><path d="M3 9h
 NAV_IC.split = ['<path d="M6 3v6a6 6 0 0 0 6 6h0a6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', '#af52de'];
 NAV_IC.wg = ['<path d="M12 3 5 6v5c0 4.5 3 8.3 7 9.5 4-1.2 7-5 7-9.5V6z"/><path d="M9.5 12.5 11 14l3.5-3.5"/>', '#30b0c7'];
 NAV_IC.move = ['<rect x="2.5" y="7" width="7" height="10" rx="1.5"/><rect x="14.5" y="7" width="7" height="10" rx="1.5"/><path d="M10.5 10h3M12 8.5l1.5 1.5L12 11.5M13.5 14h-3M12 12.5 10.5 14l1.5 1.5"/>', '#5856d6'];
+// 应用管理（用户 11/27：菜单里没有图标，只有一个虚线框）：三个应用块 + 一个加号
+NAV_IC.apps = ['<rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><path d="M16.75 13.5v6.5M13.5 16.75h6.5"/>', '#5856d6'];
+NAV_IC.lfull = ['<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9h17M7 6.8h.01M9.5 6.8h.01M12 13h5M12 16h3M7 13h2v3H7z"/>', '#8e8e93'];
 NAV_IC.fwup = ['<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>', '#34c759'];
 NAV_IC.svcsw = ['<rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/><path d="M8 7h.01M8 17h.01"/>', '#8e8e93'];
 NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circle cx="12" cy="17" r="1"/><path d="M3 20h18"/>', '#5ac8fa'];
@@ -877,9 +881,12 @@ async function ptrRun() {
 	if (ptrBusy) return;
 	ptrBusy = true;
 	const el = $('ptr'); el.classList.add('run'); el.style.setProperty('--py', '1');
+	// 超过 4 秒还没好：转圈旁边写「内容较多请耐心等待」（用户 11/27）
+	const slow = setTimeout(() => el.classList.add('slow'), 4000);
 	S.state = null; S.schema = {};
 	try { await refresh(); } catch (e) {}
-	el.classList.remove('run', 'pull'); el.style.setProperty('--py', '0');
+	clearTimeout(slow);
+	el.classList.remove('run', 'pull', 'slow'); el.style.setProperty('--py', '0');
 	ptrBusy = false;
 }
 function ptrOk() {

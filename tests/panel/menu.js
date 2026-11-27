@@ -41,6 +41,25 @@ const server = http.createServer((req, res) => {
 	ok('空的菜单分类（VPN、Control）、iStore 首页、网络向导、硬盘工具不加进来', !/VPN|Control|首页|网络向导|S\.M\.A\.R\.T/.test(svc), svc);
 	ok('「服务」里所有项目都不显示图标（包括原来的 AdGuard、Docker 等）', (await page.locator('#sidenav [data-g="服务"] i').count()) === 0 && /AdGuard Home/.test(svc) && /Docker/.test(svc));
 	ok('其他分组的图标还在', (await page.locator('#sidenav [data-g="网络"] i.nic').count()) > 5);
+	// 用户 11/27：「应用管理」只有一个虚线框——面板自己的页面都要有画好的图标（服务组本来就不显示图标）
+	const noIc = await page.evaluate(() => [...document.querySelectorAll('#sidenav button[data-p]')].filter((b) => !b.dataset.p.startsWith('k:') && !b.closest('[data-g="服务"]') && b.querySelector('i') && !b.querySelector('i.nic svg')).map((b) => b.textContent.trim()));
+	ok('面板自己的页面都有画好的图标（含应用管理、完整原版后台）', !noIc.length && (await page.locator('#sidenav [data-p="apps"] i.nic svg').count()) === 1, noIc.join('、'));
+	// 点「● 在线」刷新（用户 11/27）：只转圈，顶上不再弹「正在刷新…」；超过 4 秒转圈旁写「内容较多请耐心等待」，好了就收起
+	let slowRpc = false;
+	await page.route('**/cgi-bin/mcp/**', async (r) => { if (slowRpc) await new Promise((z) => setTimeout(z, 5500)); try { await r.continue(); } catch (e) {} });
+	slowRpc = true;
+	await page.evaluate(() => document.getElementById('statusPill').click()); await page.waitForTimeout(600);
+	const p1 = await page.evaluate(() => ({ run: document.getElementById('ptr').classList.contains('run'), toast: !document.getElementById('toast').classList.contains('hidden') && /刷新/.test(document.getElementById('toast').textContent) }));
+	await page.waitForTimeout(4000);
+	const p2 = await page.evaluate(() => { const e = document.getElementById('ptr'), r = e.getBoundingClientRect(), W = document.documentElement.clientWidth; return { slow: e.classList.contains('slow'), t: e.textContent, l: r.left, r: r.right, W, mid: Math.abs((r.left + r.right) / 2 - W / 2) }; });
+	await page.screenshot({ path: require('path').join(__dirname, 'shots', 'ptr-slow.png') });
+	slowRpc = false;
+	await page.waitForTimeout(9000);
+	const p3 = await page.evaluate(() => { const e = document.getElementById('ptr'); return { run: e.classList.contains('run'), slow: e.classList.contains('slow') }; });
+	ok('点「在线」：只转圈，顶上不弹「正在刷新…」', p1.run && !p1.toast, JSON.stringify(p1));
+	ok('超过 4 秒：转圈旁写「内容较多请耐心等待」，居中、不出屏幕', p2.slow && /内容较多请耐心等待/.test(p2.t) && p2.l >= 0 && p2.r <= p2.W && p2.mid < 2, JSON.stringify(p2));
+	ok('刷新好了：转圈和文字都收起', !p3.run && !p3.slow, JSON.stringify(p3));
+	await page.unroute('**/cgi-bin/mcp/**');
 	ok('有子页面的插件可以展开', (await page.locator('#sidenav [data-g="服务/ZeroTier"] button[data-p="k:admin/vpn/zerotier/base"]').count()) === 1);
 	// 点「服务」里的 OpenClash：展开「代理 › OpenClash 原版」
 	await page.click('#menuBtn'); await page.waitForTimeout(500);

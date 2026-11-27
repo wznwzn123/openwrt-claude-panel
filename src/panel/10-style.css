@@ -908,6 +908,10 @@ html,body{overscroll-behavior-y:contain}
 .ptr i{width:16px;height:16px;border-radius:50%;border:2.2px solid var(--muted);border-top-color:transparent;transform:rotate(calc(var(--py,0) * 300deg))}
 .ptr.ready i,.ptr.run i{border-color:var(--brand);border-top-color:transparent}
 .ptr.run i{animation:spin .8s linear infinite}
+.ptr span{display:none;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap}
+.ptr.slow{width:auto;height:34px;margin-left:0;padding:0 14px 0 10px;border-radius:17px;grid-auto-flow:column;gap:8px}
+.ptr.run.slow{transform:translateX(-50%) translateY(10px)}
+.ptr.slow span{display:block}
 @media(prefers-reduced-motion:reduce){.ptr.run i{animation:spin 1.6s linear infinite!important}}
 /* 新手引导：挖空高亮 + 小卡片 */
 .tour{position:fixed;inset:0;z-index:90}

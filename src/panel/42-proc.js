@@ -361,7 +361,7 @@ function start() {
 		if (page === 'proc' && ++wdTick % 2 === 0) refresh(true);
 		if (page === 'traf' && ++wdTick % 15 === 0) refresh(true);
 		if (page === 'myfb' && ++wdTick % 15 === 0) refresh(true);
-		if (++aiTick % 3 === 0) aiCheck(false);
+		if (++aiTick % 2 === 0) aiCheck(false);
 		updMaybe();
 	}, 4000);
 	if (!$('about').textContent) setTimeout(() =>
@@ -376,6 +376,10 @@ function start() {
 	// 远程开关：跟上次不一样就重画菜单
 	P('remote_flags').then((r) => { const k = JSON.stringify((r && r.off) || []); if (k !== (store.get('rp_roff') || '[]')) { store.set('rp_roff', k); REMOTE_OFF = new Set(JSON.parse(k)); try { renderNav(); } catch (e) {} } }).catch(() => {});
 }
+// 安卓 App 里切回来不一定有 visibilitychange（WebView 不报）：窗口拿回焦点、页面从缓存恢复时也马上查 AI 等确认的请求（用户 11/27：要刷新才弹出来）
+const aiWake = () => { if (token && !LK.on) setTimeout(() => (AIQ.busy ? setTimeout(() => aiCheck(true), 1500) : aiCheck(true)), 300); };
+window.addEventListener('focus', aiWake);
+window.addEventListener('pageshow', (e) => { if (e.persisted) aiWake(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && token && !LK.on) { setTimeout(() => aiCheck(true), 800); refresh(true); loadMenu(); updMaybe(); if (Date.now() - fbAt > 20000) setTimeout(fbCheck, 1500); if (Date.now() - NT.at > 20000) setTimeout(ntCheck, 2500); } });
 
 // 返回键、侧滑返回、电脑后退键（6.0 第 68 项，记步骤的办法见 30-core 的 HS）：

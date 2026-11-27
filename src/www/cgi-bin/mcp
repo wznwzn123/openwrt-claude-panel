@@ -8085,6 +8085,11 @@ function main() {
 	let token = c.token ?? '', ckey = c.ckey ?? '';
 	let path = getenv('PATH_INFO') ?? '';
 
+	// 自检地址：接口能跑起来就回 200，不碰任何数据（6.0.0 的热补丁自检问的是 /x，新接口要认它，不然 6.0.0 永远装不上补丁）
+	if (path == '/hc' || path == '/x') {
+		reply('200 OK', { jsonrpc: '2.0', id: null, result: { ok: true } });
+		return;
+	}
 	if (c.ai !== false && length(ckey) >= 16 && path == '/' + ckey)
 		MODE = 'ai';
 	else if (path == '/open' && is_hosted())

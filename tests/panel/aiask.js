@@ -40,7 +40,7 @@ const SHOT = path.join(__dirname, 'shots');
 (async () => {
 	await new Promise((r) => server.listen(8097, r));
 	const browser = await chromium.launch();
-	for (const [w, h, dark] of [[320, 568, false], [390, 844, true], [430, 932, false], [1280, 800, true]]) {
+	for (const [w, h, dark] of (process.env.ONE ? [[390, 844, true]] : [[320, 568, false], [390, 844, true], [430, 932, false], [1280, 800, true]])) {
 		const T = `［${w}${dark ? ' 深色' : ''}］`;
 		S.mode = 'ask'; S.role = 'owner'; S.perms = []; fresh(); S.calls = [];
 		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900, hasTouch: w < 900, colorScheme: dark ? 'dark' : 'light' });
@@ -65,17 +65,27 @@ const SHOT = path.join(__dirname, 'shots');
 		ok('接着弹出下一个（重启路由器，写着会断网多久）' + T, /AI 想要：重启路由器/.test(t) && /1–3 分钟/.test(t) && !/后面还有/.test(t), t.slice(0, 80));
 		await page.click('.modal [data-ans="no"]'); await W(1400);
 		ok('点「拒绝」：告诉路由器拒绝了，弹窗关掉' + T, S.list[1].st === 'no' && (await page.locator('.modal .aiask').count()) === 0);
-		// 开着面板时有新请求：每 12 秒查一次
+		// 开着面板时有新请求：每 8 秒查一次
 		const t0 = now(); S.list.push({ id: 'aaaaaaaaa3', title: '修改路由器设置', detail: 'set wireless.default_radio0.ssid=MyWiFi\nset wireless.default_radio0.key=******', at: t0, exp: t0 + 300, st: 'wait', pt: '修改设置 wireless' });
-		await W(13500);
+		await W(9000);
 		t = await box();
-		ok('开着面板时来了新请求：十几秒内自己弹出来；密码打码' + T, /修改路由器设置/.test(t) && /key=\*\*\*\*\*\*/.test(t), t.slice(0, 80));
+		ok('开着面板时来了新请求：8 秒左右自己弹出来，不用刷新；密码打码' + T, /修改路由器设置/.test(t) && /key=\*\*\*\*\*\*/.test(t), t.slice(0, 80));
 		// 永久允许（用户 11/27）：按钮在「拒绝 / 允许」下面，一整行，不出界
 		const ab = await page.evaluate(() => { const b = document.querySelector('.modal [data-ans="always"]'), m = document.querySelector('.modal .aiask')?.closest('.modal') || document.querySelector('.modal'); if (!b) return null; const r = b.getBoundingClientRect(), y = document.querySelector('.modal [data-ans="ok"]').getBoundingClientRect(); return { t: b.textContent, below: r.top >= y.bottom - 1, inView: r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }; });
 		ok('确认卡上有「永久允许」，在允许下面、不出屏幕' + T, ab && ab.t === '永久允许' && ab.below && ab.inView, JSON.stringify(ab));
 		if (w === 390) await page.screenshot({ path: path.join(SHOT, `aiask-always${dark ? '-dark' : ''}.png`) });
 		await page.click('.modal [data-ans="always"]'); await W(1400);
 		ok('点「永久允许」：告诉路由器允许并且以后不问，提示以后什么不问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa3' && c.p.ok === true && c.p.always === true) && /以后修改设置 wireless不再问/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+		// 用户 11/27：App 切回来要刷新才弹出——窗口拿回焦点时马上查（不等 8 秒）
+		await W(3500);
+		{
+			const t1 = now(); S.list.push({ id: 'aaaaaaaaa4', title: '执行命令', detail: 'echo hi', at: t1, exp: t1 + 300, st: 'wait' });
+			const c0 = S.calls.filter((c) => c.m === 'ai_asks').length;
+			await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await W(1500);
+			const tt = await box();
+			ok('窗口拿回焦点（App 切回来）：一两秒内就弹出来' + T, /echo hi/.test(tt) && S.calls.filter((c) => c.m === 'ai_asks').length > c0, tt.slice(0, 60));
+			if (/echo hi/.test(tt)) { await page.click('.modal [data-ans="no"]'); await W(1200); }
+		}
 		// AI 连接器地址：选档位
 		await page.goto('http://localhost:8097/panel/?p=me'); await W(2200);
 		await page.click('#meBox [data-mp="kckey"]'); await W(1200);

@@ -2799,7 +2799,7 @@ function aiAllowBind(box) {
 	};
 }
 const AIQ = { on: true, at: 0, busy: false };
-// 查一下有没有 AI 在等确认的请求：打开面板、回到面板、点了推送时查；开着的时候「危险操作要确认」才每 12 秒查一次
+// 查一下有没有 AI 在等确认的请求：打开面板、回到面板（含窗口拿回焦点）、点了推送时查；开着的时候「危险操作要确认」才每 8 秒查一次
 async function aiCheck(force) {
 	if (!token || LK.on || AIQ.busy || store.get('rp_ai') !== '1' || !canPerm('net')) return;
 	if (!force && (!AIQ.on || document.hidden || document.querySelector('.modal'))) return;

@@ -26,7 +26,8 @@ okpath() {
 selfcheck() {
 	[ -n "$CMCP_HOT_CHECK" ] && { sh -c "$CMCP_HOT_CHECK"; return; }
 	[ "$(curl -s -m 8 -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/panel/manifest.json)" = 200 ] || return 1
-	curl -s -m 8 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"panel/whoami","params":{},"client":"panel"}' http://127.0.0.1:18765/cgi-bin/mcp/x | grep -q '"jsonrpc"'
+	# 用真的登录密钥和路由器自己的钥匙问一次 whoami，要拿到结果才算好（6.0.0 用的假地址 /x 只会得到 404，补丁永远装不上：11/27 线上）
+	curl -s -m 8 -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"panel/whoami\",\"params\":{},\"client\":\"panel\",\"dev\":\"local.$(cat "$D/local.key" 2>/dev/null)\"}" "http://127.0.0.1:18765/cgi-bin/mcp/$(jsonfilter -i "$D/config.json" -e '@.token' 2>/dev/null)" | grep -q '"result"'
 }
 fail() { log "热补丁 $N 没装上：$1"; c=$(sed -n "s/^$N=//p" "$D/hot_fail" 2>/dev/null); c=$(( ${c:-0} + 1 )); { grep -v "^$N=" "$D/hot_fail" 2>/dev/null; echo "$N=$c"; } > "$D/hot_fail.tmp" && mv -f "$D/hot_fail.tmp" "$D/hot_fail"; rm -rf "${W:?}"; exit 1; }
 

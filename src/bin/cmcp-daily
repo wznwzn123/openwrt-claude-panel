@@ -52,7 +52,8 @@ else if (g?.now) {
 } else add('warn', pa.name + ' 没在运行，测不了节点');
 
 // 4) 订阅流量 / 到期（用面板自己的接口拿）
-const tok = trim(readfile(L.D + '/token') ?? '');
+// 登录密钥在 config.json 里（以前读的 token 文件新装的路由器没有，换过登录密钥的也是旧的）
+let tok = ''; try { tok = '' + (json(readfile(L.D + '/config.json') ?? '{}')?.token ?? ''); } catch (e) {}
 const P = (m, a) => { let o = L.sh(sprintf("curl -s -m 40 -H 'Content-Type: application/json' -d %s http://127.0.0.1:18765/cgi-bin/mcp/%s", L.shq(sprintf('%J', { jsonrpc: '2.0', id: 1, method: 'panel/' + m, params: a ?? {}, client: 'panel', dev: 'local.' + L.local_key() })), tok)); try { return json(o).result; } catch (e) { return null; } };
 let stt = pa?.id == 'openclash' ? P('oc_state') : null;
 let act = filter(stt?.files ?? [], (f) => f.active)[0];

@@ -296,6 +296,11 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .ntev.new .ntb>b{font-weight:750}
 .ntb>p{margin:2px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted);white-space:pre-line;word-break:break-word;text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .ntev.open .ntb>p{display:block;color:var(--text)}
+/* 通知分类（用户 11/27）：等分四格，320 宽也一行放得下 */
+.ntcats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:14px 0 0;padding:3px;border-radius:13px;background:var(--fill)}
+.ntcats button{min-width:0;height:34px;border:0;border-radius:10px;background:none;color:var(--muted);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;-webkit-tap-highlight-color:transparent}
+.ntcats button.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ntcats small{font-size:11.5px;font-weight:600;color:var(--muted)}
 /* 从横幅点进来的那条：描一圈边再淡掉 */
 .ntev.ntfocus,.ntact.ntfocus{animation:ntFocus 1.6s ease-out}
 @keyframes ntFocus{0%,40%{outline:2px solid color-mix(in srgb,var(--brand) 55%,transparent);outline-offset:-2px}100%{outline:2px solid transparent;outline-offset:-2px}}
@@ -836,6 +841,10 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .muted,p,li,.notice,.empty,.sub{text-wrap:pretty}
 .card.list>div>.file:first-child,.card.list>.file:first-child{border-top:0}
 #stList .strow{padding-left:2px}
+/* 应用图标（用户 11/27）：按用途，跟设备图标一个画法 */
+.apic{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--c);background:var(--fill);background:color-mix(in srgb,var(--c) 15%,transparent)}.apic svg{width:20px;height:20px}
+.aprow,.strow{gap:12px}
+:root.dark .apic{color:color-mix(in srgb,var(--c) 70%,#fff);background:color-mix(in srgb,var(--c) 22%,transparent)}
 /* 选项：一颗颗浅灰胶囊，选中是黑（深色模式白）；
    真正「多选一」的几处（下面这些 id）做成分段开关：一条底，选项等分，选中的浮起来。
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */

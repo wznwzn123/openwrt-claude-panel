@@ -59,7 +59,7 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		await page.evaluate(() => { const e = [...document.querySelectorAll('#ntList .ntev')].find((x) => x.dataset.k === 'ab1'); if (e) e.click(); }); await W(200);
 		await page.evaluate(() => scrollTo(0, 120)); await W(200);
 		const y0 = await page.evaluate(() => scrollY);
-		await page.click('#annBar', { force: true }); await W(700);
+		await page.evaluate(() => document.getElementById('annBar').click()); await W(700); // 窄屏滚下去以后横幅在顶栏下面，直接点它本身
 		f1 = await fo();
 		ok('在通知页再点横幅：不像刷新（没回到顶上），那条又展开' + T, f1 && f1.open && f1.inView && (y0 === 0 || f1.y > 0), JSON.stringify({ y0, ...f1 }));
 		await ctx.close();

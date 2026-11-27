@@ -314,6 +314,11 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .ntev.new .ntb>b{font-weight:750}
 .ntb>p{margin:2px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted);white-space:pre-line;word-break:break-word;text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .ntev.open .ntb>p{display:block;color:var(--text)}
+/* 通知分类（用户 11/27）：等分四格，320 宽也一行放得下 */
+.ntcats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:14px 0 0;padding:3px;border-radius:13px;background:var(--fill)}
+.ntcats button{min-width:0;height:34px;border:0;border-radius:10px;background:none;color:var(--muted);font:inherit;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;-webkit-tap-highlight-color:transparent}
+.ntcats button.on{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ntcats small{font-size:11.5px;font-weight:600;color:var(--muted)}
 /* 从横幅点进来的那条：描一圈边再淡掉 */
 .ntev.ntfocus,.ntact.ntfocus{animation:ntFocus 1.6s ease-out}
 @keyframes ntFocus{0%,40%{outline:2px solid color-mix(in srgb,var(--brand) 55%,transparent);outline-offset:-2px}100%{outline:2px solid transparent;outline-offset:-2px}}
@@ -854,6 +859,10 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 .muted,p,li,.notice,.empty,.sub{text-wrap:pretty}
 .card.list>div>.file:first-child,.card.list>.file:first-child{border-top:0}
 #stList .strow{padding-left:2px}
+/* 应用图标（用户 11/27）：按用途，跟设备图标一个画法 */
+.apic{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--c);background:var(--fill);background:color-mix(in srgb,var(--c) 15%,transparent)}.apic svg{width:20px;height:20px}
+.aprow,.strow{gap:12px}
+:root.dark .apic{color:color-mix(in srgb,var(--c) 70%,#fff);background:color-mix(in srgb,var(--c) 22%,transparent)}
 /* 选项：一颗颗浅灰胶囊，选中是黑（深色模式白）；
    真正「多选一」的几处（下面这些 id）做成分段开关：一条底，选项等分，选中的浮起来。
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
@@ -1378,6 +1387,7 @@ html,body{overscroll-behavior-y:contain}
 			<button type="button" data-goto="myfb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M10 12l1.8 1.8L15 10.5"/></svg><span>我的反馈</span><em class="hidden" id="ntFbN"></em></button>
 		</div>
 	</div>
+	<div class="ntcats" id="ntCats" role="tablist" aria-label="通知分类"></div>
 	<div id="ntPin"></div>
 	<div id="ntList"><section class="card empty" style="margin-top:14px">读取中…</section></div>
 </section>
@@ -4314,6 +4324,47 @@ function renderLog() {
    不能卸的（系统组件、固件自带、面板要用、被别的包使用）点开说原因 */
 let apData = null, apView = 'plugin';
 const AP_CAT = { plugin: '插件', soft: '软件', dep: '依赖', rom: '系统' };
+/* 应用图标（用户 11/27 选「按用途画」）：按包名认用途，认不出用通用图标；跟设备图标一个画法，全在面板里不联网 */
+const AP_IC = {
+	proxy: ['#0a84ff', '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z"/>'],
+	ad: ['#34c759', '<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M9 12l2.2 2.2L15.5 10"/>'],
+	dl: ['#ff9500', '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19.5h14"/>'],
+	disk: ['#a2845e', '<rect x="4" y="5" width="16" height="6" rx="1.8"/><rect x="4" y="13" width="16" height="6" rx="1.8"/><path d="M7.5 8h.01M7.5 16h.01"/>'],
+	vpn: ['#00c7be', '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><path d="M12 14.5v2"/>'],
+	net: ['#5856d6', '<path d="M4 9.5a11.5 11.5 0 0 1 16 0M7 12.8a7 7 0 0 1 10 0M10 16a2.8 2.8 0 0 1 4 0"/><path d="M12 19h.01"/>'],
+	ctrl: ['#ff3b30', '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>'],
+	mon: ['#af52de', '<path d="M4 19.5h16"/><path d="M7 16v-4M11 16V7M15 16v-6M19 16V9"/>'],
+	media: ['#ff2d55', '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10.5 9.5v5l4.2-2.5z"/>'],
+	box: ['#30b0c7', '<path d="M12 3.5l8 4.2v8.6l-8 4.2-8-4.2V7.7z"/><path d="M4 7.7l8 4.3 8-4.3M12 12v8.5"/>'],
+	term: ['#636366', '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M7.5 10l2.5 2-2.5 2M12.5 14.5h4"/>'],
+	theme: ['#bf5af2', '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1 0 1.6-.7 1.6-1.5 0-.9-.8-1.3-.8-2.2 0-1 .8-1.6 1.8-1.6h1.8a4 4 0 0 0 4-4c0-4.3-3.8-7.7-8.4-7.7z"/><path d="M7.5 12h.01M9.5 8h.01M14.5 8h.01"/>'],
+	sys: ['#64748b', '<circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4L18 18M6 18l1.6-1.6M16.4 7.6L18 6"/>'],
+	lib: ['#8e8e93', '<path d="M5 6.5h14M5 12h14M5 17.5h14"/><path d="M8.5 4.5v4M15.5 10v4M10 15.5v4"/>'],
+	other: ['#8e8e93', '<rect x="4.5" y="4.5" width="15" height="15" rx="3.5"/><path d="M9 12h6M12 9v6"/>']
+};
+// 顺序有关系：先认具体的（广告过滤、下载、组网），再认大类
+const AP_IC_RE = [
+	['theme', /^luci-theme-|argon-config|design-config|theme-config/],
+	['ad', /adguard|adblock|dnsfilter|smartdns|mosdns|adbyby|koolproxy|unblock/],
+	['ctrl', /oaf|appfilter|accesscontrol|timecontrol|parentcontrol|eqos|arpbind|macfilter|banip|fwx/],
+	['dl', /aria2|transmission|qbittorrent|deluge|ariang|xunlei|thunder|pikpak|baidupcs|wget/],
+	['media', /minidlna|dlna|jellyfin|emby|plex|navidrome|airplay|shairport|kodi|udpxy|iptv|msd_lite/],
+	['vpn', /wireguard|wg-|zerotier|tailscale|frp|nps|openvpn|ipsec|softether|n2n|easytier|vnt|natmap|natter|cloudflared|ddnsto|lucky|strongswan|pptp|l2tp/],
+	['proxy', /openclash|passwall|ssr-?plus|vssr|bypass|homeproxy|nikki|mihomo|clash|shadowsocks|v2ray|xray|sing-?box|trojan|helloworld|momo|daed|fchomo|naive|hysteria|tuic|ssr$|chinadns|dns2socks|ipt2socks|microsocks/],
+	['disk', /samba|ksmbd|diskman|hd-?idle|alist|filebrowser|nfs|vsftpd|ftp|webdav|usb|syncthing|rclone|linkease|cifs|kodexplorer|nextcloud|quickstart|disk|mount|raid|unishare|istorepanel|block-mount|e2fsprogs|ntfs|exfat|f2fs/],
+	['mon', /statistics|nlbw|netdata|bandix|wrtbwmon|vnstat|collectd|speedtest|iperf|netspeed|traffic/],
+	['box', /docker|dockerman|lxc|podman|containerd/],
+	['term', /ttyd|terminal|shellinabox|openssh|dropbear|webshell/],
+	['net', /ddns|upnp|miniupnp|wol|etherwake|sqm|mwan|turboacc|qos|firewall|dnsmasq|odhcp|ppp|wireless|wifi|wpad|hostapd|relayd|wan|lan|vlan|ipv6|nat|route|dhcp/],
+	['sys', /autoreboot|reboot|cpufreq|cpu-?perf|ramfree|store|package|opkg|apk-|commands|wizard|attendedsysupgrade|upgrade|watchcat|uptime|poweroff|cron|log|acme|nginx|uhttpd|advanced|filetransfer|backup|fan|temp|led|vlmcsd|kms|ota|base-files|busybox|procd|ubus|uci|rpcd|luci$|luci-base|luci-mod|ucode|fstools/],
+	['lib', /^lib|^kmod-|^luci-lib-|^luci-i18n-|^perl|^python|^lua|^node|-libs?$/]
+];
+function apIc(n) {
+	const k = String(n || '').toLowerCase().replace(/^luci-app-|^app-meta-/, ''), raw = String(n || '').toLowerCase();
+	for (const [c, re] of AP_IC_RE) if (re.test(c === 'lib' || c === 'theme' ? raw : k)) return c;
+	return 'other';
+}
+const apIcHtml = (n) => { const [c, p] = AP_IC[apIc(n)]; return `<span class="apic" style="--c:${c}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg></span>`; };
 const apCat = (x) => (x.rom ? 'rom' : x.auto ? 'dep' : x.plugin ? 'plugin' : 'soft');
 async function loadApps() {
 	apData = await P('app_list', {}, 30000);
@@ -4339,7 +4390,7 @@ function renderApps() {
 	$('apFree').textContent = apData.free != null ? '剩 ' + apSize(apData.free * 1024) : apData.pm;
 	$('apCount').textContent = l.length;
 	const owner = ME_ROLE.role !== 'sub';
-	$('apList').innerHTML = l.length ? l.slice(0, 300).map((x) => `<div class="file aprow" data-n="${esc(x.name)}" role="button" tabindex="0"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.recent ? ' <span class="pill blue" style="font-size:11px">新装</span>' : ''}</b><span class="sub ell" style="display:block;font-size:12.5px">${esc([kw ? AP_CAT[apCat(x)] : '', apWhen(x.at), x.size ? apSize(x.size) : ''].filter(Boolean).join(' · '))}</span></div>
+	$('apList').innerHTML = l.length ? l.slice(0, 300).map((x) => `<div class="file aprow" data-n="${esc(x.name)}" role="button" tabindex="0">${apIcHtml(x.name)}<div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.recent ? ' <span class="pill blue" style="font-size:11px">新装</span>' : ''}</b><span class="sub ell" style="display:block;font-size:12.5px">${esc([kw ? AP_CAT[apCat(x)] : '', apWhen(x.at), x.size ? apSize(x.size) : ''].filter(Boolean).join(' · '))}</span></div>
 		${owner && !x.no && !x.users.length ? '<button class="btn sm" data-rm>卸载</button>' : ''}</div>`).join('') : `<div class="empty">${kw ? '没有符合的' : '没有'}</div>`;
 }
 $('apFilter').addEventListener('input', renderApps);
@@ -5617,7 +5668,7 @@ async function loadStore() {
 	else if (r.age == null && !stQ && !stAuto) { stAuto = true; stRefresh(); }
 }
 function stRow(x, owner, run, showSrc) {
-	return `<div class="file strow" data-n="${esc(x.name)}"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.installed && !x.upd ? ' <span class="pill" style="font-size:11px">已装</span>' : ''}${showSrc && x.src ? ` <span class="pill stsrc" style="font-size:11px">${esc(x.src)}</span>` : ''}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(x.name)} · ${esc(x.upd ? x.installed + ' → ' + x.ver : x.ver)}${x.size ? ' · ' + apSize(x.size) : ''}</span></div>
+	return `<div class="file strow" data-n="${esc(x.name)}">${apIcHtml(x.name)}<div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.installed && !x.upd ? ' <span class="pill" style="font-size:11px">已装</span>' : ''}${showSrc && x.src ? ` <span class="pill stsrc" style="font-size:11px">${esc(x.src)}</span>` : ''}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(x.name)} · ${esc(x.upd ? x.installed + ' → ' + x.ver : x.ver)}${x.size ? ' · ' + apSize(x.size) : ''}</span></div>
 		${owner && !run ? (!x.installed ? '<button class="btn sm" data-act="install">安装</button>' : x.upd ? '<button class="btn sm" data-act="upgrade">更新</button>' : '') : ''}</div>`;
 }
 function stDraw() {
@@ -7522,7 +7573,7 @@ function annBarDraw() {
 		bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's');
 	});
 	// 点横幅：去通知页展开这一条、滚到它（已经在通知页就不重新进这一页：原来会像刷新了一下）
-	bar.onclick = () => { if (!a.body) return; NT_FOCUS = 'a' + a.id; if (page === 'notice') ntFocus(); else go('notice'); };
+	bar.onclick = () => { if (!a.body) return; NT_FOCUS = 'a' + a.id; if (NT.f !== 'all' && NT.f !== 'ann') { NT.f = 'all'; if (page === 'notice') return ntRender(); } if (page === 'notice') ntFocus(); else go('notice'); };
 }
 let NT_FOCUS = '';
 function ntFocus() {
@@ -7617,6 +7668,8 @@ function ntSummary(probs, merged) {
 	return show.map(esc).join('<br>');
 }
 // 「待处理」：要你动手的事
+const NT_CATS = [['all', '全部'], ['ann', '公告'], ['sys', '路由器'], ['fb', '反馈']];
+const ntCatOf = (x) => (x.c === 'ann' || x.ic === 'ann' ? 'ann' : x.fb || x.c === 'fb' || x.ic === 'fb' || x.ic === 'chat' ? 'fb' : x.upd || x.ic === 'upd' || x.c === 'upd' ? 'upd' : 'sys');
 function ntPending(all, mg, seen) {
 	const d = NT.d || {}, ack = (d.seen && d.seen.ack) || [], out = [];
 	// 还没恢复的问题（一天以内、最新一条是出问题）
@@ -7638,7 +7691,8 @@ const ntFirst = (t) => String(t || '').split('\n').map((l) => l.replace(/^[\s•
 function ntRender() {
 	const box = $('ntList'); if (!box) return;
 	const all = ntItems(), seen = NT.view ?? ntSeenT(), d = NT.d || {};
-	const mg = ntMerge(all), wk = ntWeek(all), pend = ntPending(all, mg, seen), pk = new Set(pend.map((x) => x.k));
+	const mg = ntMerge(all), wk = ntWeek(all), pk0 = ntPending(all, mg, seen), pk = new Set(pk0.map((x) => x.k));
+	let pend = pk0;
 	const first = !box.dataset.drawn, prev = new Set((box._items || []).map((x) => x.k));
 	// 顶部
 	const bad = pend.find((x) => x.ic === 'sys');
@@ -7650,15 +7704,22 @@ function ntRender() {
 	$('ntFbN').textContent = fu; $('ntFbN').classList.toggle('hidden', !fu);
 	// 待处理
 	const pcol = { red: 'red', orange: 'orange', blue: 'blue', green: 'green' };
+	// 分类（用户 11/27：通知页要有分类、公告单独看）：全部 / 公告 / 路由器 / 反馈；版本更新只在「全部」
+	const F = NT_CATS.some((c) => c[0] === NT.f) ? NT.f : 'all';
+	const fOk = (x) => F === 'all' || ntCatOf(x) === F;
+	const cnt = {}, seenK = new Set();
+	for (const x of pend.concat(mg.list)) { if (seenK.has(x.k) || x.go === 'chat') continue; seenK.add(x.k); const c = ntCatOf(x); cnt[c] = (cnt[c] || 0) + 1; }
+	$('ntCats').innerHTML = NT_CATS.map(([c, t]) => { const n = c === 'all' ? 0 : cnt[c] || 0; return `<button type="button" role="tab" aria-selected="${c === F}" class="${c === F ? 'on' : ''}" data-ntc="${c}">${t}${n ? `<small>${n > 99 ? '99+' : n}</small>` : ''}</button>`; }).join('');
+	const pendAll = pend; pend = pend.filter(fOk);
 	$('ntPin').innerHTML = pend.length ? `<div class="ntsec"><b>待处理</b><span>${pend.length}</span></div>` + pend.map((x) => `<div class="card ntact${prev.size && !prev.has(x.k) && !first ? ' fresh' : ''}" data-k="${esc(x.k)}"><span class="ntic ${pcol[x.col]}">${ntSvg(x.ic)}</span><div class="ntab"><b>${x.tag ? `<span class="nttag ${x.col === 'red' ? 'red' : 'orange'}">${esc(x.tag)}</span>` : ''}${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}${x.ann && x.ann.files ? filesHtml(x.ann.files) : ''}<div class="ntbtns">${x.btns.map(([v, t, pri]) => `<button class="btn sm${pri ? ' primary' : ''}" data-pa="${v}">${t}</button>`).join('')}</div></div></div>`).join('') : '';
 	// 时间线（待处理里的不重复放）
-	const list = mg.list.filter((x) => !pk.has(x.k) && !x.upd && x.go !== 'chat'), lim = 60 + NT.more;
+	const list = mg.list.filter((x) => !pk.has(x.k) && !x.upd && x.go !== 'chat' && fOk(x)), lim = 60 + NT.more;
 	const opened = new Set([...box.querySelectorAll('.ntev.open')].map((x) => x.dataset.k));
 	const warn = [];
 	if (d.annFail) warn.push('暂时连不上官网，公告是上次取到的');
 	if (!noCloud() && cloudErr) warn.push('云端的记录读不到（' + cloudErr + '）');
 	let html = warn.length ? `<div class="notice w" style="margin-top:14px">${esc(warn.join('；'))}</div>` : '';
-	if (!list.length) html += pend.length ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg('bell')}<b>还没有通知</b></section>`;
+	if (!list.length) html += pend.length ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg(F === 'ann' ? 'ann' : 'bell')}<b>${{ all: '还没有通知', ann: '还没有公告', sys: '路由器没有消息', fb: '还没有反馈' }[F]}</b></section>`;
 	let cur = null, rows = [];
 	const tag = (x) => x.tag ? `<span class="nttag ${x.imp || x.c === 'ann' ? 'orange' : x.fb ? 'green' : 'gray'}">${esc(x.tag)}</span>` : '';
 	const flush = () => { if (rows.length) html += `<div class="ntday" data-day="${esc(cur)}">${esc(cur)}</div><section class="card ntl">${rows.join('')}</section>`; rows = []; };
@@ -7672,12 +7733,13 @@ function ntRender() {
 	if (list.length > lim) html += `<button class="btn" data-ntmore style="width:100%;margin-top:12px">再看 ${Math.min(60, list.length - lim)} 条（共 ${list.length} 条）</button>`;
 	box.innerHTML = html;
 	box._items = list.concat(pend);
-	box._pend = pend;
+	box._pend = pendAll;
 	// 打开这一页时：内容依次浮现一次（系统开了「减少动态效果」就不播）
 	if (first) { box.dataset.drawn = 1; const pg = $('p-notice'); pg.classList.remove('ntin'); void pg.offsetWidth; pg.classList.add('ntin'); }
 	ntFocus();
 }
 $('p-notice').querySelector('.ntqb').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
+$('ntCats').onclick = (e) => { const b = e.target.closest('[data-ntc]'); if (!b || b.classList.contains('on')) return; NT.f = b.dataset.ntc; NT.more = 0; ntRender(); };
 $('ntStrip').onclick = (e) => {
 	const b = e.target.closest('[data-day]'); if (!b) return;
 	const g = [...document.querySelectorAll('#ntList .ntday')].find((x) => x.dataset.day === b.dataset.day);

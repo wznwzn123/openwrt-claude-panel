@@ -64,6 +64,19 @@ const OUT = path.join(__dirname, 'shots');
 		ok('记下看到哪儿了（最新一条的时间）', SEENCALLS.some((x) => x.t >= T - 1800e3), JSON.stringify(SEENCALLS));
 		const txt = await p.textContent('#p-notice');
 		ok('都在：路由器的事件、云端监测、托管服务、公告、更新、反馈、App', ['OpenClash 停止 1 分', '路由器断电或死机 30 分', '托管服务已续期', '4.0 发布了', '今晚 2 点维护', '新版本 v4.0.0', '反馈 K7F2Q9AB 已修复', 'App 新版本 3.2.0'].every((s) => txt.includes(s)), txt.slice(0, 400));
+		// 分类（用户 11/27「通知页面怎么没有分类了」「没有单独的公告吗」）：全部 / 公告 / 路由器 / 反馈，等分一行
+		{
+			const cats = await p.evaluate(() => [...document.querySelectorAll('#ntCats button')].map((b) => { const r = b.getBoundingClientRect(); return { t: b.textContent, top: Math.round(r.top), w: Math.round(r.width), cut: b.scrollWidth > b.clientWidth + 1 }; }));
+			ok('通知分类：全部、公告、路由器、反馈，一行、等宽、不截断' + sfx, cats.length === 4 && /^全部/.test(cats[0].t) && /^公告/.test(cats[1].t) && /^路由器/.test(cats[2].t) && /^反馈/.test(cats[3].t) && new Set(cats.map((c) => c.top)).size === 1 && Math.max(...cats.map((c) => c.w)) - Math.min(...cats.map((c) => c.w)) <= 1 && !cats.some((c) => c.cut), JSON.stringify(cats));
+			await p.click('#ntCats [data-ntc="ann"]'); await p.waitForTimeout(500);
+			const at = await p.textContent('#ntPin') + await p.textContent('#ntList');
+			ok('点「公告」：只剩公告（重要的和普通的都在）' + sfx, /4\.0 发布了/.test(at) && /今晚 2 点维护/.test(at) && !/OpenClash 停止/.test(at) && !/新版本 v4\.0\.0/.test(at), at.slice(0, 200));
+			await p.click('#ntCats [data-ntc="sys"]'); await p.waitForTimeout(500);
+			const st = await p.textContent('#ntList');
+			ok('点「路由器」：只剩路由器和云端的消息' + sfx, /OpenClash 停止/.test(st) && !/4\.0 发布了/.test(st) && !/今晚 2 点维护/.test(st), st.slice(0, 200));
+			await p.click('#ntCats [data-ntc="all"]'); await p.waitForTimeout(500);
+			ok('点回「全部」：都在' + sfx, /4\.0 发布了/.test(await p.textContent('#p-notice')) && /OpenClash 停止/.test(await p.textContent('#p-notice')));
+		}
 		// 6.0 第 93 项：顶部写现在的状态和近 7 天具体出了什么事
 		ok('顶部：运行正常', (await p.textContent('#ntHead')) === '运行正常', await p.textContent('#ntHead'));
 		const sum = await p.textContent('#ntSum');

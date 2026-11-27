@@ -21,7 +21,7 @@ async function loadStore() {
 	else if (r.age == null && !stQ && !stAuto) { stAuto = true; stRefresh(); }
 }
 function stRow(x, owner, run, showSrc) {
-	return `<div class="file strow" data-n="${esc(x.name)}"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.installed && !x.upd ? ' <span class="pill" style="font-size:11px">已装</span>' : ''}${showSrc && x.src ? ` <span class="pill stsrc" style="font-size:11px">${esc(x.src)}</span>` : ''}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(x.name)} · ${esc(x.upd ? x.installed + ' → ' + x.ver : x.ver)}${x.size ? ' · ' + apSize(x.size) : ''}</span></div>
+	return `<div class="file strow" data-n="${esc(x.name)}">${apIcHtml(x.name)}<div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.title)}${x.installed && !x.upd ? ' <span class="pill" style="font-size:11px">已装</span>' : ''}${showSrc && x.src ? ` <span class="pill stsrc" style="font-size:11px">${esc(x.src)}</span>` : ''}</b><span class="muted ell" style="display:block;font-size:12.5px">${esc(x.name)} · ${esc(x.upd ? x.installed + ' → ' + x.ver : x.ver)}${x.size ? ' · ' + apSize(x.size) : ''}</span></div>
 		${owner && !run ? (!x.installed ? '<button class="btn sm" data-act="install">安装</button>' : x.upd ? '<button class="btn sm" data-act="upgrade">更新</button>' : '') : ''}</div>`;
 }
 function stDraw() {

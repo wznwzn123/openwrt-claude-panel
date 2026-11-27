@@ -1725,7 +1725,7 @@ function annBarDraw() {
 		bar.style.setProperty('--abx', -d + 'px'); bar.style.setProperty('--abd', Math.max(6, d / 40).toFixed(1) + 's');
 	});
 	// 点横幅：去通知页展开这一条、滚到它（已经在通知页就不重新进这一页：原来会像刷新了一下）
-	bar.onclick = () => { if (!a.body) return; NT_FOCUS = 'a' + a.id; if (page === 'notice') ntFocus(); else go('notice'); };
+	bar.onclick = () => { if (!a.body) return; NT_FOCUS = 'a' + a.id; if (NT.f !== 'all' && NT.f !== 'ann') { NT.f = 'all'; if (page === 'notice') return ntRender(); } if (page === 'notice') ntFocus(); else go('notice'); };
 }
 let NT_FOCUS = '';
 function ntFocus() {
@@ -1820,6 +1820,8 @@ function ntSummary(probs, merged) {
 	return show.map(esc).join('<br>');
 }
 // 「待处理」：要你动手的事
+const NT_CATS = [['all', '全部'], ['ann', '公告'], ['sys', '路由器'], ['fb', '反馈']];
+const ntCatOf = (x) => (x.c === 'ann' || x.ic === 'ann' ? 'ann' : x.fb || x.c === 'fb' || x.ic === 'fb' || x.ic === 'chat' ? 'fb' : x.upd || x.ic === 'upd' || x.c === 'upd' ? 'upd' : 'sys');
 function ntPending(all, mg, seen) {
 	const d = NT.d || {}, ack = (d.seen && d.seen.ack) || [], out = [];
 	// 还没恢复的问题（一天以内、最新一条是出问题）
@@ -1841,7 +1843,8 @@ const ntFirst = (t) => String(t || '').split('\n').map((l) => l.replace(/^[\s•
 function ntRender() {
 	const box = $('ntList'); if (!box) return;
 	const all = ntItems(), seen = NT.view ?? ntSeenT(), d = NT.d || {};
-	const mg = ntMerge(all), wk = ntWeek(all), pend = ntPending(all, mg, seen), pk = new Set(pend.map((x) => x.k));
+	const mg = ntMerge(all), wk = ntWeek(all), pk0 = ntPending(all, mg, seen), pk = new Set(pk0.map((x) => x.k));
+	let pend = pk0;
 	const first = !box.dataset.drawn, prev = new Set((box._items || []).map((x) => x.k));
 	// 顶部
 	const bad = pend.find((x) => x.ic === 'sys');
@@ -1853,15 +1856,22 @@ function ntRender() {
 	$('ntFbN').textContent = fu; $('ntFbN').classList.toggle('hidden', !fu);
 	// 待处理
 	const pcol = { red: 'red', orange: 'orange', blue: 'blue', green: 'green' };
+	// 分类（用户 11/27：通知页要有分类、公告单独看）：全部 / 公告 / 路由器 / 反馈；版本更新只在「全部」
+	const F = NT_CATS.some((c) => c[0] === NT.f) ? NT.f : 'all';
+	const fOk = (x) => F === 'all' || ntCatOf(x) === F;
+	const cnt = {}, seenK = new Set();
+	for (const x of pend.concat(mg.list)) { if (seenK.has(x.k) || x.go === 'chat') continue; seenK.add(x.k); const c = ntCatOf(x); cnt[c] = (cnt[c] || 0) + 1; }
+	$('ntCats').innerHTML = NT_CATS.map(([c, t]) => { const n = c === 'all' ? 0 : cnt[c] || 0; return `<button type="button" role="tab" aria-selected="${c === F}" class="${c === F ? 'on' : ''}" data-ntc="${c}">${t}${n ? `<small>${n > 99 ? '99+' : n}</small>` : ''}</button>`; }).join('');
+	const pendAll = pend; pend = pend.filter(fOk);
 	$('ntPin').innerHTML = pend.length ? `<div class="ntsec"><b>待处理</b><span>${pend.length}</span></div>` + pend.map((x) => `<div class="card ntact${prev.size && !prev.has(x.k) && !first ? ' fresh' : ''}" data-k="${esc(x.k)}"><span class="ntic ${pcol[x.col]}">${ntSvg(x.ic)}</span><div class="ntab"><b>${x.tag ? `<span class="nttag ${x.col === 'red' ? 'red' : 'orange'}">${esc(x.tag)}</span>` : ''}${esc(x.title)}</b>${x.body ? `<p>${esc(x.body)}</p>` : ''}${x.ann && x.ann.files ? filesHtml(x.ann.files) : ''}<div class="ntbtns">${x.btns.map(([v, t, pri]) => `<button class="btn sm${pri ? ' primary' : ''}" data-pa="${v}">${t}</button>`).join('')}</div></div></div>`).join('') : '';
 	// 时间线（待处理里的不重复放）
-	const list = mg.list.filter((x) => !pk.has(x.k) && !x.upd && x.go !== 'chat'), lim = 60 + NT.more;
+	const list = mg.list.filter((x) => !pk.has(x.k) && !x.upd && x.go !== 'chat' && fOk(x)), lim = 60 + NT.more;
 	const opened = new Set([...box.querySelectorAll('.ntev.open')].map((x) => x.dataset.k));
 	const warn = [];
 	if (d.annFail) warn.push('暂时连不上官网，公告是上次取到的');
 	if (!noCloud() && cloudErr) warn.push('云端的记录读不到（' + cloudErr + '）');
 	let html = warn.length ? `<div class="notice w" style="margin-top:14px">${esc(warn.join('；'))}</div>` : '';
-	if (!list.length) html += pend.length ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg('bell')}<b>还没有通知</b></section>`;
+	if (!list.length) html += pend.length ? '' : `<section class="card ntempty" style="margin-top:14px">${ntSvg(F === 'ann' ? 'ann' : 'bell')}<b>${{ all: '还没有通知', ann: '还没有公告', sys: '路由器没有消息', fb: '还没有反馈' }[F]}</b></section>`;
 	let cur = null, rows = [];
 	const tag = (x) => x.tag ? `<span class="nttag ${x.imp || x.c === 'ann' ? 'orange' : x.fb ? 'green' : 'gray'}">${esc(x.tag)}</span>` : '';
 	const flush = () => { if (rows.length) html += `<div class="ntday" data-day="${esc(cur)}">${esc(cur)}</div><section class="card ntl">${rows.join('')}</section>`; rows = []; };
@@ -1875,12 +1885,13 @@ function ntRender() {
 	if (list.length > lim) html += `<button class="btn" data-ntmore style="width:100%;margin-top:12px">再看 ${Math.min(60, list.length - lim)} 条（共 ${list.length} 条）</button>`;
 	box.innerHTML = html;
 	box._items = list.concat(pend);
-	box._pend = pend;
+	box._pend = pendAll;
 	// 打开这一页时：内容依次浮现一次（系统开了「减少动态效果」就不播）
 	if (first) { box.dataset.drawn = 1; const pg = $('p-notice'); pg.classList.remove('ntin'); void pg.offsetWidth; pg.classList.add('ntin'); }
 	ntFocus();
 }
 $('p-notice').querySelector('.ntqb').onclick = (e) => { const b = e.target.closest('[data-goto]'); if (b) go(b.dataset.goto); };
+$('ntCats').onclick = (e) => { const b = e.target.closest('[data-ntc]'); if (!b || b.classList.contains('on')) return; NT.f = b.dataset.ntc; NT.more = 0; ntRender(); };
 $('ntStrip').onclick = (e) => {
 	const b = e.target.closest('[data-day]'); if (!b) return;
 	const g = [...document.querySelectorAll('#ntList .ntday')].find((x) => x.dataset.day === b.dataset.day);

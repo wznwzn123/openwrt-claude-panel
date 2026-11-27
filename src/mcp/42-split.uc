@@ -33,7 +33,7 @@ const SP_APPS0 = [
 	['wechat', '微信', ['weixin.qq.com', 'wechat.com', 'qpic.cn', 'qlogo.cn']],
 	['taobao', '淘宝 / 支付宝', ['taobao.com', 'tmall.com', 'alicdn.com', 'alipay.com', 'alipayobjects.com']]];
 // 远程数据（热补丁带来的 /etc/claude-mcp/remote.json 里的 split_apps）有就用它：网址变了、加新软件不用发版本。格式不对就用上面写死的
-function sp_apps() {
+function sp_apps0() {
 	let r = cmcp_readj(ETC + '/remote.json', null)?.split_apps, out = [];
 	if (type(r) != 'array') return SP_APPS0;
 	for (let a in r) {
@@ -43,8 +43,51 @@ function sp_apps() {
 	}
 	return length(out) ? out : SP_APPS0;
 }
+// 再加上从官网「网址 → App」表里选过的软件（选的时候把网址存进 split.json 的 appd：表在内存盘里，重启没了也不影响已经设好的分流）
+function sp_apps(o) {
+	let l = slice(sp_apps0()), have = {};
+	for (let a in l) have[a[0]] = 1;
+	let ad = type(o?.appd) == 'object' ? o.appd : {};
+	for (let id in ad) if (!have[id] && type(ad[id]?.doms) == 'array' && length(ad[id].doms)) push(l, [id, '' + (ad[id].name ?? id), ad[id].doms, true]);
+	return l;
+}
+/* 官网公开的「网址 → App」表（用户 11/28 选「官网放公开表 路由器下载对照」）：GET 官网 /api/apps，放内存盘 /tmp/cmcp_apps.json，一天换一次；
+   只下载、不上传任何东西（访问记录不出路由器）。识别软件对照、软件页搜索都用它。下载不下来 10 分钟后再试。测试用 CMCP_SP_TBL（文件）、CMCP_SP_HUB（官网地址） */
+const SP_TBL = getenv('CMCP_SP_TBL') || '/tmp/cmcp_apps.json';
+const SP_DOM = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+function sp_tbl_clean(j) {
+	if (type(j) != 'object' || type(j.apps) != 'array' || !match('' + (j.v ?? ''), /^[a-f0-9]{6,40}$/)) return null;
+	let cats = {}, apps = [];
+	for (let k in (type(j.cats) == 'object' ? j.cats : {})) if (match(k, /^[a-z]{1,10}$/)) cats[k] = substr('' + j.cats[k], 0, 12);
+	for (let a in j.apps) {
+		if (length(apps) >= 1500) break;
+		if (type(a) != 'array' || !match('' + a[0], /^[a-z0-9_]{1,30}$/) || type(a[1]) != 'string' || !length(a[1]) || type(a[5]) != 'array' || !cats[a[3]]) continue;
+		let ds = filter(slice(a[5], 0, 800), (d) => type(d) == 'string' && length(d) <= 253 && match(d, SP_DOM));
+		if (length(ds)) push(apps, [a[0], substr(a[1], 0, 40), substr('' + (a[2] ?? ''), 0, 80), a[3], substr('' + (a[4] ?? ''), 0, 120), ds]);
+	}
+	return length(apps) ? { v: j.v, cats, apps } : null;
+}
+function sp_tbl(fetch) {
+	let st = stat(SP_TBL), o = st ? cmcp_readj(SP_TBL, null) : null, fl = SP_TBL + '.fail';
+	if (fetch && (!o || time() - st.mtime > 86400) && time() - (stat(fl)?.mtime ?? 0) > 600) {
+		let hub = getenv('CMCP_SP_HUB') || CL.ann_hub(), tmp = SP_TBL + '.dl';
+		sh(sprintf('curl -sf -m 15 -o %s %s', shq(tmp), shq(hub + '/api/apps')));
+		let n = sp_tbl_clean(cmcp_readj(tmp, null));
+		unlink(tmp);
+		if (n) { cmcp_writej(SP_TBL, n); writefile(SP_TBL + '.v', n.v); o = n; unlink(fl); }
+		else writefile(fl, '1');
+	}
+	return type(o) == 'object' && type(o.apps) == 'array' ? o : null;
+}
+// 给面板：整张表（面板按版本存在手机里，版本一样就只回「没变」）
+P.split_apps = function(a) {
+	let t = sp_tbl(true);
+	if (!t) return { err: '官网的软件表下载不下来，稍后再试' };
+	if (a?.v && a.v == t.v) return { v: t.v, same: true };
+	return t;
+};
 const SP_GEO = [['CN', '中国大陆'], ['HK', '香港'], ['TW', '台湾'], ['JP', '日本'], ['KR', '韩国'], ['SG', '新加坡'], ['US', '美国'], ['GB', '英国'], ['DE', '德国'], ['FR', '法国'], ['CA', '加拿大'], ['AU', '澳大利亚'], ['RU', '俄罗斯'], ['IN', '印度'], ['TH', '泰国'], ['MY', '马来西亚'], ['VN', '越南']];
-function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo', 'fam', 'site', 'capp']) if (type(o[k]) != 'object') o[k] = {}; return o; }
+function sp_read() { let o = cmcp_readj(SP_F, {}); if (type(o) != 'object') o = {}; for (let k in ['dev', 'app', 'geo', 'fam', 'site', 'capp', 'appd']) if (type(o[k]) != 'object') o[k] = {}; return o; }
 // 每一条分流的去向：[种类, 编号, 去向]（设备、软件、国家、自己加的网站和软件）
 function sp_each(o) { let l = []; for (let k in ['dev', 'app', 'geo', 'site', 'capp']) for (let id in o[k]) { let v = o[k][id]; push(l, [k, id, k == 'dev' || k == 'capp' ? v?.t : v]); } return l; }
 function sp_kind() {
@@ -175,7 +218,7 @@ function sp_rules(o, mg) {
 	}
 	for (let dm in o.site) if (o.site[dm]) add('a', o.site[dm], 'DOMAIN-SUFFIX,' + dm);
 	for (let id in o.capp) { let c = o.capp[id]; if (c?.t) for (let dm in (c.doms ?? [])) add('a', c.t, 'DOMAIN-SUFFIX,' + dm); }
-	for (let a in sp_apps()) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
+	for (let a in sp_apps(o)) if (o.app[a[0]]) for (let dm in a[2]) add('a', o.app[a[0]], 'DOMAIN-SUFFIX,' + dm);
 	for (let g in SP_GEO) if (o.geo[g[0]]) add('g', o.geo[g[0]], 'GEOIP,' + g[0]);
 	let grp = (kind, to) => { if (!to) return null; for (let x in out) if (x.kind == kind && x.to == to) return x; let g = { kind, to, lines: [] }; push(out, g); return g; };
 	for (let e in all) grp(e[0], sp_target(e[1], mg));
@@ -316,7 +359,7 @@ function sp_conflicts(o, own) {
 	};
 	for (let d in o.site) if (o.site[d]) chk('site:' + d, [d]);
 	for (let id in o.capp) if (o.capp[id]?.t) chk('capp:' + id, o.capp[id].doms ?? []);
-	for (let a in sp_apps()) if (o.app[a[0]]) chk('app:' + a[0], a[2]);
+	for (let a in sp_apps(o)) if (o.app[a[0]]) chk('app:' + a[0], a[2]);
 	for (let mac in o.dev) { let ip = o.dev[mac]?.ip; if (ip && ips[ip]) ov['dev:' + mac] = { t: ips[ip].t, v: ip, part: false }; }
 	return ov;
 }
@@ -376,7 +419,7 @@ P.split_get = function() {
 	return {
 		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [], nd: o.nd ?? {}, pv, swl: o.swl ?? [], own, ov: sp_conflicts(o, own),
 		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam, site: o.site, capp: o.capp, nodes,
-		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1], doms: a[2] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
+		apps: map(sp_apps(o), (a) => ({ id: a[0], name: a[1], doms: a[2], ...(a[3] ? { tbl: true } : {}) })), av: trim(readfile(SP_TBL + '.v') ?? '') || null, geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
 	};
 };
@@ -482,9 +525,17 @@ P.split_set = function(a) {
 			o.capp[id] = { name, doms: ok, t: ('t' in x) ? t : (o.capp[id]?.t ?? null) };
 		}
 	} else if (a.app) {
-		let ok = false; for (let p in sp_apps()) if (p[0] == x.id) ok = true;
+		let ok = false; for (let p in sp_apps0()) if (p[0] == x.id) ok = true;
+		// 官网表里的软件（用户 11/28）：选的时候把名字和网址存下来；改回跟随全局就删掉
+		if (!ok && t) {
+			let tb = sp_tbl(true), hit = null;
+			for (let p in (tb?.apps ?? [])) if (p[0] == x.id) hit = p;
+			if (hit && hit[3] != 'sys') { o.appd[x.id] = { name: hit[1], doms: slice(hit[5], 0, 600) }; ok = true; }
+			else if (o.appd[x.id]) ok = true;
+		}
+		if (!ok && !t && (o.app[x.id] || o.appd[x.id])) ok = true;
 		if (!ok) die('没有这个软件');
-		if (t) o.app[x.id] = t; else delete o.app[x.id];
+		if (t) o.app[x.id] = t; else { delete o.app[x.id]; delete o.appd[x.id]; }
 	} else {
 		let ok = false; for (let p in SP_GEO) if (p[0] == x.id) ok = true;
 		if (!ok) die('没有这个国家或地区');
@@ -503,21 +554,26 @@ P.split_learn = function(a) {
 	let act = '' + (a?.act ?? 'get');
 	if (act == 'start') {
 		if (!sp_kind()) die('分流只支持 OpenClash 和 Nikki');
-		let ip = trim('' + (a?.ip ?? ''));
-		if (!match(ip, /^\d+\.\d+\.\d+\.\d+$/)) die('这台设备现在没有 IP，等它连上网再识别');
+		let ip = trim('' + (a?.ip ?? '')), mac = lc(trim('' + (a?.mac ?? '')));
+		if (length(ip) && !match(ip, /^\d+\.\d+\.\d+\.\d+$/)) ip = '';
+		// 用户 11/28：按 MAC 认设备（IPv4、IPv6 都算）；老面板只带 IP，按 IP 找 MAC
+		if (!match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) { mac = ''; if (ip) { let m = sp_ipmap(); for (let k in m) if (m[k] == ip) mac = k; } }
+		if (!mac && !ip) die('这台设备现在没有 IP，等它连上网再识别');
 		// 每次识别一个编号：上一次还在跑的发现编号变了就自己停（不会跟这次的混在一起）
 		let rid = rand_str(10);
-		cmcp_writej(SP_LEARN, { rid, ip, name: substr('' + (a?.name ?? ''), 0, 40), at: time(), until: time() + SP_LEARN_SECS, hosts: {}, nohost: 0, run: true });
-		sp_run(sprintf('%s/cmcp-splearn %s %d %s', SBIN, shq(ip), SP_LEARN_SECS, shq(rid)));
+		cmcp_writej(SP_LEARN, { rid, ip, mac, name: substr('' + (a?.name ?? ''), 0, 40), at: time(), until: time() + SP_LEARN_SECS, hosts: {}, dips: {}, nohost: 0, run: true });
+		sp_run(mac ? sprintf('%s/cmcp-splearn %s %d %s %s', SBIN, shq(mac), SP_LEARN_SECS, shq(rid), shq(ip)) : sprintf('%s/cmcp-splearn %s %d %s', SBIN, shq(ip), SP_LEARN_SECS, shq(rid)));
 		return P.split_learn({ act: 'get' });
 	}
 	if (act == 'stop') { let o = cmcp_readj(SP_LEARN, null); if (type(o) == 'object') { o.run = false; o.until = time(); cmcp_writej(SP_LEARN, o); } }
 	let o = cmcp_readj(SP_LEARN, null);
 	if (type(o) != 'object') return { run: false };
-	let hl = [];
+	let hl = [], dl = [];
 	for (let h in (type(o.hosts) == 'object' ? o.hosts : {})) push(hl, [h, +o.hosts[h] || 0]);
-	hl = slice(sort(hl, (x, y) => y[1] - x[1]), 0, 300);
-	return { ip: o.ip, name: o.name ?? '', at: o.at, until: o.until, run: !!o.run && act != 'stop' && time() < (+o.until || 0) + 15, hosts: hl, nohost: +o.nohost || 0, err: o.err ?? null };
+	hl = slice(sort(hl, (x, y) => y[1] - x[1]), 0, 400);
+	for (let d in (type(o.dips) == 'object' ? o.dips : {})) push(dl, [d, +o.dips[d] || 0]);
+	dl = slice(sort(dl, (x, y) => y[1] - x[1]), 0, 100);
+	return { ip: o.ip, mac: o.mac ?? '', name: o.name ?? '', at: o.at, until: o.until, run: !!o.run && act != 'stop' && time() < (+o.until || 0) + 15, hosts: hl, dips: dl, nohost: +o.nohost || 0, err: o.err ?? null };
 };
 // 用户点「现在重启」
 // 局域网网段改了并保留（风险 8、43）：「不走代理」和按设备分流的规则按设备新的固定 IP 重写

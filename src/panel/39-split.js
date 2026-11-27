@@ -211,10 +211,40 @@ async function splCappEdit(id) {
 	if (r.t === (c.t || '')) return;
 	splSave({ capp: { id, t: r.t } }, `已设置：${c.name} → ${splName(r.t)}`);
 }
-/* 学习模式：选设备 → 路由器记 3 分钟它访问的网站 → 认得的写软件名，其他的按主域名合在一起，勾选后加成自己的软件 */
+/* 识别软件：选设备 → 路由器记 3 分钟它访问的网址（实时日志 + 连接列表，按 MAC 认 IPv4 和 IPv6）→ 按官网的「网址 → App」表认出软件，
+ * 认不出的按主域名合在一起，勾选后加成自己的软件；系统后台的网址、不经过代理的 IP 单独一组默认收起；每秒刷新，上面有搜索框（用户 11/28） */
 const SPL_2LD = /\.(com|net|org|gov|edu|co|ac|or|ne|go)\.(cn|hk|tw|jp|kr|uk|au|sg|my|th|in|nz|br)$/;
 function splBase(h) { const p = h.split('.'); return p.slice(SPL_2LD.test(h) ? -3 : -2).join('.'); }
-function splKnown(h) { for (const a of SPL.d.apps || []) for (const dm of a.doms || []) if (h === dm || h.endsWith('.' + dm)) return a; return null; }
+// 官网的「网址 → App」表：路由器下载在内存里，面板按版本存在手机里（版本一样就不再传）
+function splTbl() {
+	if (SPL.tbl && (!SPL.d?.av || SPL.tbl.v === SPL.d.av)) return Promise.resolve(SPL.tbl);
+	// 同时几处要表只问一次
+	return (SPL.tblP = SPL.tblP || splTblGet().finally(() => { SPL.tblP = null; }));
+}
+async function splTblGet() {
+	let c = null, t = null;
+	try { c = JSON.parse(localStorage.getItem('rp_apps') || 'null'); } catch (e) {}
+	try {
+		const r = await P('split_apps', { v: (c && c.v) || '' }, 30000);
+		if (r.same && c) t = c;
+		else if (r.apps) { t = { v: r.v, cats: r.cats || {}, apps: r.apps }; try { localStorage.setItem('rp_apps', JSON.stringify(t)); } catch (e) {} }
+		else t = c;
+	} catch (e) { t = c; }
+	if (!t || !Array.isArray(t.apps)) return null;
+	const idx = new Map();
+	for (const a of t.apps) for (const dm of a[5] || []) idx.set(dm, a);
+	SPL.tbl = { ...t, idx };
+	return SPL.tbl;
+}
+// 认网址：先看分流里已经有的软件（内置的、从表里选过的），再看官网的表。按最长的后缀认
+function splKnown(h) {
+	for (const a of SPL.d.apps || []) for (const dm of a.doms || []) if (h === dm || h.endsWith('.' + dm)) return { id: a.id, name: a.name, cat: '' };
+	const ix = SPL.tbl && SPL.tbl.idx;
+	if (!ix) return null;
+	const p = h.split('.');
+	for (let i = 0; i < p.length - 1; i++) { const a = ix.get(p.slice(i).join('.')); if (a) return { id: a[0], name: a[1], en: a[2], cat: a[3], py: a[4] }; }
+	return null;
+}
 async function splLearn() {
 	const d = SPL.d, devs = (d.devices || []).filter((x) => x.online && x.ip);
 	if (!devs.length) return toast('没有在线的设备', true);
@@ -222,41 +252,82 @@ async function splLearn() {
 		<div class="cscroll"><div class="mgrp"><div class="mlist">${devs.map((x) => `<button class="mact" type="button" data-v="d:${esc(x.mac)}"><span><b class="ell" style="display:block">${esc(x.name || x.mac)}</b><span class="muted" style="font-size:12.5px">${esc(x.ip)}</span></span></button>`).join('')}</div></div></div>`);
 	if (typeof v !== 'string' || !v.startsWith('d:')) return;
 	const dv = devs.find((x) => x.mac === v.slice(2)); if (!dv) return;
-	try { SPL.learn = await P('split_learn', { act: 'start', ip: dv.ip, name: dv.name || dv.mac }, 20000); } catch (e) { return toast(e.message, true); }
+	try { SPL.learn = await P('split_learn', { act: 'start', mac: dv.mac, ip: dv.ip, name: dv.name || dv.mac }, 20000); } catch (e) { return toast(e.message, true); }
+	splTbl(); // 先去拿官网的表（第一次要下载，不等它）
 	splLearnSheet();
 }
+// 识别出来的软件点一下：分流里有的照常选去向；官网表里的选了以后路由器把它的网址存下来
+async function splPickKnown(k) {
+	if ((SPL.d.apps || []).some((a) => a.id === k.id)) return splPick('app', k.id);
+	const r = await splChoose(k.name, '');
+	if (!r || r.x || !r.t) return;
+	splSave({ app: { id: k.id, t: r.t } }, `已设置：${k.name} → ${splName(r.t)}`);
+}
 function splLearnSheet() {
-	let timer = 0, pick = new Set();
+	let timer = 0;
+	const pick = new Set(), open = new Set(), q = { v: '' };
 	modal(`<div class="sheethead"><h3 class="ell" style="margin:0" data-lh>正在识别</h3><button class="btn sm" data-v="close">关闭</button></div>
-		<p class="muted" style="margin:0 0 10px;font-size:13px" data-ls></p>
+		<p class="muted" style="margin:0 0 8px;font-size:13px" data-ls></p>
+		<input class="input splq" data-lq type="search" placeholder="搜网址或软件" autocapitalize="off" autocomplete="off" spellcheck="false">
 		<div class="cscroll" data-lb></div>
 		<div class="cfoot"><div class="btngrid"><button class="btn" type="button" data-stop>停止</button><button class="btn primary" type="button" data-add disabled>加成软件</button></div></div>`,
 	(m, close) => {
+		const hit = (...xs) => !q.v || xs.some((x) => x && String(x).toLowerCase().includes(q.v));
+		const grp = (key, title, n, body, fold) => `<div class="mgrp${fold ? ' splfold' : ''}${fold && !open.has(key) && !q.v ? ' shut' : ''}" data-g="${key}"><div class="mgt">${fold ? `<button class="splgt" type="button" data-gt="${key}"><span>${title}</span><span class="muted">${n}</span></button>` : title}</div><div class="mlist">${body}</div></div>`;
 		const draw = () => {
 			const L = SPL.learn || {}, left = Math.max(0, Math.round((L.until || 0) - Date.now() / 1000));
 			m.querySelector('[data-lh]').textContent = (L.run ? '正在识别 ' : '识别完了 ') + (L.name || L.ip || '');
-			m.querySelector('[data-ls]').textContent = L.err ? L.err : L.run ? `在这台设备上打开要分流的 App 用一会儿 · 还剩 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : (L.hosts || []).length ? '勾选要加的网址' : '没看到这台设备访问网站：它的流量可能没经过 ' + SPL_PX(SPL.d);
-			// 认得的按软件合在一起；其他的按主域名合在一起
-			const known = {}, other = {};
-			for (const [h, n] of L.hosts || []) { const a = splKnown(h); if (a) known[a.id] = { a, n: (known[a.id]?.n || 0) + n }; else { const b = splBase(h); (other[b] = other[b] || { n: 0, hs: new Set() }).n += n; other[b].hs.add(h); } }
-			const ks = Object.values(known).sort((x, y) => y.n - x.n), os = Object.entries(other).sort((x, y) => y[1].n - x[1].n).slice(0, 80);
-			m.querySelector('[data-lb]').innerHTML = (ks.length ? `<div class="mgrp"><div class="mgt">认出来的软件</div><div class="mlist">${ks.map((x) => `<button class="mact" type="button" data-la="${esc(x.a.id)}"><span><b>${esc(x.a.name)}</b><span class="muted" style="font-size:12.5px"> · ${x.n} 次</span></span>${splPill(SPL.d.app[x.a.id])}</button>`).join('')}</div></div>` : '')
-				+ (os.length ? `<div class="mgrp"><div class="mgt">其他网址</div><div class="mlist">${os.map(([b, x]) => `<label class="mact splchk"><input type="checkbox" data-lo="${esc(b)}"${pick.has(b) ? ' checked' : ''}><span><b class="ell" style="display:block">${esc(b)}</b><span class="muted ell" style="display:block;font-size:12.5px">${x.n} 次${x.hs.size > 1 || !x.hs.has(b) ? ' · ' + esc([...x.hs].slice(0, 3).join('、')) : ''}</span></span></label>`).join('')}</div></div>` : '')
-				+ (L.nohost ? `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">还有 ${L.nohost} 个连接只有 IP、没有网址，认不出来</p>` : '');
+			const any = (L.hosts || []).length || (L.dips || []).length;
+			m.querySelector('[data-ls]').textContent = L.err ? L.err : L.run ? `在这台设备上打开要分流的 App 用一会儿 · 还剩 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : any ? '勾选要加的网址' : '没看到这台设备的连接';
+			// 认得的按软件合在一起（系统后台另放）；其他的按主域名合在一起
+			const known = {}, sys = {}, other = {};
+			for (const [h, n] of L.hosts || []) {
+				const a = splKnown(h);
+				if (a && a.cat === 'sys') { const x = (sys[a.id] = sys[a.id] || { a, n: 0, hs: [] }); x.n += n; x.hs.push(h); }
+				else if (a) { const x = (known[a.id] = known[a.id] || { a, n: 0, hs: [] }); x.n += n; x.hs.push(h); }
+				else { const b = splBase(h), x = (other[b] = other[b] || { n: 0, hs: new Set() }); x.n += n; x.hs.add(h); }
+			}
+			const ks = Object.values(known).filter((x) => hit(x.a.name, x.a.en, x.a.py, ...x.hs)).sort((x, y) => y.n - x.n);
+			const os = Object.entries(other).filter(([b, x]) => hit(b, ...x.hs)).sort((x, y) => y[1].n - x[1].n).slice(0, 100);
+			const ss = Object.values(sys).filter((x) => hit(x.a.name, ...x.hs)).sort((x, y) => y.n - x.n);
+			const ds = (L.dips || []).filter(([ip]) => hit(ip));
+			const sub = (t) => `<span class="muted ell" style="display:block;font-size:12.5px">${t}</span>`;
+			let h = '';
+			if (ks.length) h += grp('app', '认出来的软件', ks.length, ks.map((x) => `<button class="mact" type="button" data-la="${esc(x.a.id)}"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.a.name)}</b>${sub(x.n + ' 次 · ' + esc(x.hs.slice(0, 3).join('、')))}</span>${splPill(SPL.d.app[x.a.id])}</button>`).join(''));
+			if (os.length) h += grp('other', '其他网址', os.length, os.map(([b, x]) => `<label class="mact splchk"><input type="checkbox" data-lo="${esc(b)}"${pick.has(b) ? ' checked' : ''}><span><b class="ell" style="display:block">${esc(b)}</b>${sub(x.n + ' 次' + (x.hs.size > 1 || !x.hs.has(b) ? ' · ' + esc([...x.hs].slice(0, 3).join('、')) : ''))}</span></label>`).join(''));
+			if (ss.length) h += grp('sys', '系统后台', ss.length, ss.map((x) => `<div class="mact splro"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.a.name)}</b>${sub(x.n + ' 次 · ' + esc(x.hs.slice(0, 3).join('、')))}</span></div>`).join(''), true);
+			if (ds.length) h += grp('ip', '直连的 IP', ds.length, ds.map(([ip, n]) => `<div class="mact splro"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(ip)}</b>${sub(n + ' 次')}</span></div>`).join(''), true);
+			if (L.nohost && !q.v) h += `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">还有 ${L.nohost} 个连接只有 IP 没有网址</p>`;
+			if (!h && q.v) h = '<div class="empty">没有搜到</div>';
+			const lb = m.querySelector('[data-lb]'), st = lb.scrollTop;
+			lb.innerHTML = h;
+			lb.scrollTop = st;
 			m.querySelector('[data-stop]').textContent = L.run ? '停止' : '重新识别';
 			m.querySelector('[data-add]').disabled = !pick.size;
 		};
+		// 每秒刷新（用户 11/28）
 		const poll = async () => {
 			if (!m.isConnected) return;
 			try { SPL.learn = await P('split_learn', {}, 15000); } catch (e) {}
+			if (!m.isConnected) return;
 			draw();
-			if (SPL.learn && SPL.learn.run) timer = setTimeout(poll, 3000);
+			if (SPL.learn && SPL.learn.run) timer = setTimeout(poll, 1000);
 		};
-		draw(); timer = setTimeout(poll, 2000);
+		draw(); timer = setTimeout(poll, 1000);
+		// 官网的表来了再画一次（第一次要下载）
+		splTbl().then(() => { if (m.isConnected) draw(); });
+		m.querySelector('[data-lq]').addEventListener('input', (e) => { q.v = e.target.value.trim().toLowerCase(); draw(); });
 		m.addEventListener('change', (e) => { const c = e.target.closest('[data-lo]'); if (!c) return; if (c.checked) pick.add(c.dataset.lo); else pick.delete(c.dataset.lo); m.querySelector('[data-add]').disabled = !pick.size; });
 		m.addEventListener('click', async (e) => {
+			const gt = e.target.closest('[data-gt]');
+			if (gt) { const k = gt.dataset.gt; if (open.has(k)) open.delete(k); else open.add(k); return draw(); }
 			const a = e.target.closest('[data-la]');
-			if (a) { clearTimeout(timer); close(null); return splPick('app', a.dataset.la); }
+			if (a) {
+				let k = null;
+				for (const [h] of SPL.learn?.hosts || []) { const x = splKnown(h); if (x && x.id === a.dataset.la) { k = x; break; } }
+				clearTimeout(timer); close(null);
+				return k && splPickKnown(k);
+			}
 			if (e.target.closest('[data-stop]')) {
 				clearTimeout(timer);
 				if (SPL.learn && SPL.learn.run) { try { SPL.learn = await P('split_learn', { act: 'stop' }, 15000); } catch (er) {} return draw(); }

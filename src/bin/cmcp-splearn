@@ -1,16 +1,83 @@
 #!/usr/bin/ucode
-// 6.0 分流的学习模式（用户 11/27）：cmcp-splearn <设备 IP> <秒数> <这次识别的编号>
-// 每 2 秒看一次 OpenClash / Nikki 的连接，记下这台设备访问的网址（只记网址和次数），写到 /tmp/cmcp_sp_learn.json；
-// 结果文件里的编号变了（又开了一次识别）或者标成停了，就自己停。不上传、不存到闪存。测试用：CMCP_SPL_F（结果文件）、CMCP_SPL_CONNS（假的连接列表文件）
+// 6.0 分流的「识别软件」（用户 11/27 加；11/28 改）：cmcp-splearn <设备 MAC> <秒数> <这次识别的编号> [设备现在的 IPv4]
+// 老写法 cmcp-splearn <设备 IP> <秒数> <编号> 照样认（只认这一个 IP）。
+// 用户 11/28：打开软件总得有网址出来——以前每 2 秒看一次「正在连着的连接」，一闪而过的会漏；手机用 IPv6 连的也不算这台设备。现在：
+// 1. 实时日志：OpenClash / Nikki 的 /logs?level=info，每个新连接一行「[TCP] 来源:端口 --> 网址:端口 match …」，后台 curl 一直往临时文件里写，这里每秒读新的
+// 2. 连接列表：每 2 秒看一次 /connections（日志读不到时每秒），补上识别开始前就连着的
+// 3. 不经过代理的（OpenClash 开着「绕过中国大陆」，直连国内 IP 的）：每 3 秒看一次系统的连接跟踪，只记 IP 和次数（用户 11/28 选：列出 IP，不动 DNS）；
+//    走了代理但连接跟踪里看着像直连的（TPROXY、TUN 转过去的真实 IP）：日志、连接列表里出现过的目标 IP 不算
+// 设备按 MAC 认：IPv4、IPv6 地址都算（ip neigh + DHCP 记录，每 5 秒更新一次，手机的临时 IPv6 会变）。
+// 结果写 /tmp/cmcp_sp_learn.json（只有网址、IP 和次数）；结果文件里的编号变了（又开了一次识别）或者标成停了，就自己停。不上传、不存到闪存。
+// 测试用：CMCP_SPL_F（结果文件）、CMCP_SPL_CONNS（假的连接列表）、CMCP_SPL_LOG（日志临时文件）、CMCP_SPL_NOCURL=1（不起 curl，测试自己往日志文件里写）、
+//         CMCP_SPL_NEIGH（假的 ip neigh 输出）、CMCP_SPL_LEASES（假的 DHCP 记录）、CMCP_SPL_CT（假的连接跟踪文件）
 'use strict';
 import * as L from 'cmcp.lib';
-import { readfile } from 'fs';
+import { readfile, writefile, open, unlink, stat } from 'fs';
 
-const F = getenv('CMCP_SPL_F') || '/tmp/cmcp_sp_learn.json';
-const ip = '' + (ARGV[0] ?? ''), secs = +(ARGV[1] ?? 180) || 180, rid = '' + (ARGV[2] ?? '');
-if (!match(ip, /^\d+\.\d+\.\d+\.\d+$/)) { print('用法：cmcp-splearn <设备 IP> <秒数>\n'); exit(1); }
+const F = getenv('CMCP_SPL_F') || '/tmp/cmcp_sp_learn.json', LOG = getenv('CMCP_SPL_LOG') || '/tmp/cmcp_spl_log';
+const a0 = lc('' + (ARGV[0] ?? '')), secs = +(ARGV[1] ?? 180) || 180, rid = '' + (ARGV[2] ?? '');
+const legacy = !!match(a0, /^\d+\.\d+\.\d+\.\d+$/), mac = legacy ? null : a0, ip0 = legacy ? a0 : '' + (ARGV[3] ?? '');
+if (!legacy && !match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) { print('用法：cmcp-splearn <设备 MAC> <秒数> <编号> [设备 IPv4]\n'); exit(1); }
 const end = time() + secs;
-let seen = {}, hosts = {}, nohost = 0, err = null, ok = false;
+let seen = {}, hosts = {}, dips = {}, ctseen = {}, viaClash = {}, nohost = 0, err = null, ok = false, logok = false, ips = {}, ipsAt = 0;
+const nhost = () => length(keys(hosts));
+function add(h) {
+	h = lc('' + (h ?? ''));
+	if (length(h) && length(h) <= 253 && match(h, /^[a-z0-9_.-]+$/) && !match(h, /^[0-9.]+$/) && index(h, ':') < 0) { if (hosts[h] || nhost() < 2000) hosts[h] = (hosts[h] ?? 0) + 1; return true; }
+	nohost++;
+	return false;
+}
+// 这台设备现在的地址：IPv4、IPv6 都算
+function refresh_ips() {
+	let n = {};
+	if (match(ip0, /^\d+\.\d+\.\d+\.\d+$/)) n[ip0] = 1;
+	if (mac) {
+		let nf = getenv('CMCP_SPL_NEIGH'), out = nf ? (readfile(nf) ?? '') : L.sh('ip neigh show');
+		for (let l in split(out, '\n')) { let m = match(l, /^([0-9a-fA-F.:]+) .*lladdr ([0-9a-fA-F:]{17})/); if (m && lc(m[2]) == mac && !match(m[1], /^fe80:/i)) n[lc(m[1])] = 1; }
+		for (let l in split(readfile(getenv('CMCP_SPL_LEASES') || '/tmp/dhcp.leases') ?? '', '\n')) { let p = split(l, ' '); if (lc(p[1] ?? '') == mac && match(p[2] ?? '', /^\d+\.\d+\.\d+\.\d+$/)) n[p[2]] = 1; }
+	}
+	ips = n; ipsAt = time();
+}
+// 实时日志：后台 curl 一直往临时文件里追加，这里从上次读到的地方接着读
+let curlPid = null, off = 0, rest = '';
+function log_start() {
+	writefile(LOG, '');
+	if (getenv('CMCP_SPL_NOCURL')) return;
+	let c = L.clash_ctl();
+	if (!c) return;
+	let p = trim(L.sh(sprintf('curl -sN -m %d -H %s %s >> %s 2>/dev/null & echo $!', secs + 5, L.shq('Authorization: Bearer ' + c.secret), L.shq('http://127.0.0.1:' + c.port + '/logs?level=info'), L.shq(LOG))));
+	if (match(p, /^[0-9]+$/)) curlPid = p;
+}
+function log_stop() { if (curlPid) L.sh('kill ' + curlPid); if (!getenv('CMCP_SPL_NOCURL')) unlink(LOG); }
+// 「[TCP] 192.168.1.10:51234(进程) --> www.example.com:443 match … using …」；IPv6 的来源写成 [2408::1]:51234
+function log_read() {
+	let f = open(LOG, 'r');
+	if (!f) return;
+	f.seek(off);
+	let d = f.read(262144) ?? '';
+	f.close();
+	if (!length(d)) return;
+	off += length(d);
+	let ls = split(rest + d, '\n');
+	rest = pop(ls);
+	for (let l in ls) {
+		let j = null;
+		try { j = json(l); } catch (e) {}
+		let m = match('' + (j?.payload ?? ''), /^\[(TCP|UDP)\] (\[[0-9a-fA-F:.]+\]|[0-9.]+):([0-9]+)(\([^)]*\))? --> (\[[0-9a-fA-F:.]+\]|[^ :]+):[0-9]+/);
+		if (!m) continue;
+		logok = true;
+		let src = lc(replace(replace(m[2], /^\[/, ''), /\]$/, ''));
+		if (!ips[src]) continue;
+		ok = true;
+		// 同一个连接日志里有、连接列表里也有：按「来源地址 + 端口」只算一次
+		let k = src + '|' + m[3];
+		if (seen[k]) continue;
+		seen[k] = 1;
+		if (!add(m[5])) viaClash[lc(replace(replace(m[5], /^\[/, ''), /\]$/, ''))] = 1;
+	}
+	// 读完了就清空（curl 是追加写，清空后接着从头写），免得识别 3 分钟占太多内存盘
+	if (off > 524288 && !length(rest)) { writefile(LOG, ''); off = 0; }
+}
 function conns() {
 	let f = getenv('CMCP_SPL_CONNS');
 	if (f) { try { return json(readfile(f) ?? 'null')?.connections ?? []; } catch (e) { return []; } }
@@ -19,26 +86,62 @@ function conns() {
 	err = null;
 	return r.json?.connections ?? [];
 }
+function conn_read() {
+	let l = conns();
+	if (l == null) return;
+	for (let c in l) {
+		let m = c?.metadata;
+		if (type(m) != 'object' || !ips[lc('' + (m.sourceIP ?? ''))]) continue;
+		// 走了 OpenClash / Nikki 的目标 IP（TPROXY、TUN 转过去的，连接跟踪里看着也像直连）：连接跟踪那边不算
+		for (let x in [m.destinationIP, m.remoteDestination]) if (length('' + (x ?? ''))) viaClash[lc('' + x)] = 1;
+		ok = true;
+		let k = length('' + (m.sourcePort ?? '')) ? lc('' + m.sourceIP) + '|' + m.sourcePort : 'id|' + (c.id ?? ''), h = lc('' + (m.host || m.sniffHost || ''));
+		if (seen[k]) continue;
+		seen[k] = 1;
+		add(h);
+	}
+}
+// 不经过代理的连接：连接跟踪里来源是这台设备、回来的地址就是去的地址（经过代理的，回来的是路由器自己）
+function priv(a) {
+	return !!(match(a, /^(10|127)\./) || match(a, /^192\.168\./) || match(a, /^172\.(1[6-9]|2[0-9]|3[01])\./) || match(a, /^169\.254\./) || match(a, /^198\.1[89]\./) || match(a, /^(22[4-9]|2[3-5][0-9])\./)
+		|| match(a, /^(fe80|fc|fd|ff)/i) || a == '::1' || a == '0.0.0.0');
+}
+function ct_read() {
+	let list = keys(ips);
+	if (!length(list)) return;
+	let fct = getenv('CMCP_SPL_CT') || '/proc/net/nf_conntrack';
+	if (!stat(fct)) return;
+	let out = L.sh('grep -F ' + join(' ', map(list, (x) => '-e ' + L.shq('src=' + x + ' '))) + ' ' + L.shq(fct) + ' | head -n 3000');
+	for (let l in split(out, '\n')) {
+		let s = match(l, /src=([0-9a-fA-F.:]+) dst=([0-9a-fA-F.:]+) sport=([0-9]+) dport=([0-9]+).* src=([0-9a-fA-F.:]+) dst=/), pr = match(l, /^ipv[46] +[0-9]+ +([a-z]+)/);
+		if (!s || !ips[lc(s[1])] || lc(s[5]) != lc(s[2]) || priv(s[2]) || s[4] == '53' || s[4] == '123' || viaClash[lc(s[2])]) continue;
+		let k = (pr?.[1] ?? '') + ' ' + s[2] + ' ' + s[3] + ' ' + s[4];
+		if (ctseen[k]) continue;
+		ctseen[k] = 1;
+		ok = true;
+		let d = lc(s[2]);
+		if (dips[d] || length(keys(dips)) < 500) dips[d] = (dips[d] ?? 0) + 1;
+	}
+}
 function save(run) {
 	let o = L.readj(F, null);
 	if (type(o) != 'object' || o.rid != rid || (run && o.run === false)) return false; // 又开了一次识别，或者用户点了停止
-	o.hosts = hosts; o.nohost = nohost; o.run = run; o.err = err; o.seen = ok;
+	o.hosts = hosts; o.dips = dips; o.nohost = nohost; o.run = run; o.err = logok ? null : err; o.seen = ok; o.log = logok;
 	L.writej(F, o);
 	return true;
 }
+refresh_ips();
+log_start();
+let tick = 0;
 while (time() < end) {
-	let l = conns();
-	if (l != null) for (let c in l) {
-		let m = c?.metadata;
-		if (type(m) != 'object' || m.sourceIP != ip) continue;
-		ok = true;
-		let id = '' + (c.id ?? ''), h = lc('' + (m.host || m.sniffHost || ''));
-		if (seen[id]) continue;
-		seen[id] = 1;
-		if (length(h) && length(h) <= 253 && match(h, /^[a-z0-9.-]+$/)) { if (hosts[h] || length(keys(hosts)) < 2000) hosts[h] = (hosts[h] ?? 0) + 1; }
-		else nohost++;
-	}
-	if (!save(true)) exit(0);
-	L.sh('sleep 2');
+	if (time() - ipsAt >= 5) refresh_ips();
+	log_read();
+	if (!logok || tick % 2 == 0) conn_read();
+	if (tick % 3 == 0) ct_read();
+	if (!save(true)) { log_stop(); exit(0); }
+	tick++;
+	L.sh('sleep 1');
 }
+log_read(); conn_read(); ct_read();
 save(false);
+log_stop();

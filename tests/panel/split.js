@@ -11,7 +11,7 @@ let S;
 const fresh = (o = {}) => ({ calls: [], d: { kind: 'openclash', live: true, groups: ['节点选择', '🎬 流媒体（Netflix、Disney+、HBO 这些都走这里的超长名字）', '♻️ 自动选择'], main: '节点选择', pending: false, moved: [],
 	dev: { 'aa:aa:aa:aa:aa:09': { t: 'DIRECT', ip: '192.168.1.50', name: '旧电视' } }, app: { netflix: '🎬 流媒体（Netflix、Disney+、HBO 这些都走这里的超长名字）' }, geo: {},
 	apps: [{ id: 'chatgpt', name: 'ChatGPT', doms: ['openai.com', 'chatgpt.com'] }, { id: 'netflix', name: 'Netflix', doms: ['netflix.com'] }, { id: 'youtube', name: 'YouTube', doms: ['youtube.com', 'ytimg.com'] }, { id: 'meta', name: 'Facebook / Instagram / WhatsApp', doms: ['facebook.com'] }, { id: 'bilibili', name: '哔哩哔哩', doms: ['bilibili.com'] }],
-	site: {}, capp: {}, nodes: [{ n: '🇯🇵 日本 01', d: 80, reg: 'JP' }, { n: '🇯🇵 日本 02 一个名字很长很长的节点 IPLC 专线 3x', d: 0, reg: 'JP' }, { n: '🇭🇰 香港 02', d: 45, reg: 'HK' }, { n: '神秘节点', d: 120, reg: '?' }],
+	av: 'tv1', site: {}, capp: {}, nodes: [{ n: '🇯🇵 日本 01', d: 80, reg: 'JP' }, { n: '🇯🇵 日本 02 一个名字很长很长的节点 IPLC 专线 3x', d: 0, reg: 'JP' }, { n: '🇭🇰 香港 02', d: 45, reg: 'HK' }, { n: '神秘节点', d: 120, reg: '?' }],
 	geos: [{ id: 'CN', name: '中国大陆' }, { id: 'JP', name: '日本' }, { id: 'US', name: '美国' }],
 	devices: [{ mac: 'aa:aa:aa:aa:aa:01', name: '小米手机', ip: '192.168.1.10', online: true }, { mac: 'aa:aa:aa:aa:aa:02', name: '一台名字非常非常长的笔记本电脑设备', ip: '192.168.1.11', online: true }], ...o } });
 function handle(m, p) {
@@ -22,9 +22,10 @@ function handle(m, p) {
 	if (m === 'split_learn') {
 		if (p.act === 'start') S.learn = { ip: p.ip, name: p.name, at: Date.now() / 1000, until: Date.now() / 1000 + 180, run: true, hosts: [], nohost: 0 };
 		else if (p.act === 'stop') S.learn.run = false;
-		else if (S.learn) { S.learn.hosts = [['www.youtube.com', 5], ['i.ytimg.com', 3], ['api.game.example', 4], ['cdn.game.example', 2], ['login.othergame.co.jp', 1]]; S.learn.nohost = 2; }
+		else if (S.learn) { S.learn.hosts = [['www.youtube.com', 5], ['i.ytimg.com', 3], ['api.game.example', 4], ['cdn.game.example', 2], ['login.othergame.co.jp', 1], ['mmbiz.weixin.qq.com', 6], ['captive.apple.com', 2]]; S.learn.dips = [['14.116.242.216', 3], ['240e:e9:6002::1', 1]]; S.learn.nohost = 2; }
 		return S.learn || { run: false };
 	}
+	if (m === 'split_apps') { S.tblCalls = (S.tblCalls || 0) + 1; return p.v === 'tv1' ? { v: 'tv1', same: true } : { v: 'tv1', cats: { social: '社交', sys: '系统后台' }, apps: [['wechat', '微信', 'WeChat Weixin', 'social', 'weixin wx', ['weixin.qq.com', 'wechat.com']], ['sys_check', '联网检测', 'Connectivity', 'sys', '', ['captive.apple.com']]] }; }
 	if (m === 'split_set') {
 		const dom = (v) => String(v || '').toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#:].*$/, '').replace(/^www\./, '');
 		if (p.site) { if (p.site.old) delete d.site[dom(p.site.old)]; if (p.site.t) d.site[dom(p.site.d)] = p.site.t; else delete d.site[dom(p.site.d)]; d.pending = true; return { ...d, restart: true }; }
@@ -128,10 +129,25 @@ const lay = (page) => page.evaluate(() => {
 		await page.click('[data-sa="learn"]'); await W(300);
 		ok('识别软件：先选在线的设备' + T, /识别哪台设备/.test(await page.textContent('.modal')) && /小米手机/.test(await page.textContent('.modal')));
 		await page.click('.modal [data-v="d:aa:aa:aa:aa:aa:01"]'); await W(500);
-		ok('开始识别：告诉路由器这台的 IP；写着在这台设备上打开 App、还剩多久' + T, S.calls.some((c) => c.m === 'split_learn' && c.p.act === 'start' && c.p.ip === '192.168.1.10') && /在这台设备上打开要分流的 App/.test(await page.textContent('.modal')) && /还剩 [23]:/.test(await page.textContent('.modal')));
+		ok('开始识别：告诉路由器这台的 MAC 和 IP；写着在这台设备上打开 App、还剩多久' + T, S.calls.some((c) => c.m === 'split_learn' && c.p.act === 'start' && c.p.ip === '192.168.1.10' && c.p.mac === 'aa:aa:aa:aa:aa:01') && /在这台设备上打开要分流的 App/.test(await page.textContent('.modal')) && /还剩 [23]:/.test(await page.textContent('.modal')));
+		const n0 = S.calls.filter((c) => c.m === 'split_learn').length;
 		await W(2800);
+		ok('每秒刷新一次（用户 11/28）' + T, S.calls.filter((c) => c.m === 'split_learn').length - n0 >= 2, S.calls.filter((c) => c.m === 'split_learn').length - n0);
 		const lt = await page.textContent('.modal');
-		ok('认得的写软件名，其他的按主域名合在一起，只有 IP 的说清楚' + T, /认出来的软件/.test(lt) && /YouTube/.test(lt) && /game\.example/.test(lt) && /othergame\.co\.jp/.test(lt) && !/i\.ytimg\.com/.test(lt) && /2 个连接只有 IP/.test(lt), lt.slice(0, 300));
+		ok('认得的写软件名（官网表里的微信也认得），其他的按主域名合在一起，只有 IP 的说清楚' + T, /认出来的软件/.test(lt) && /YouTube/.test(lt) && /微信/.test(lt) && /game\.example/.test(lt) && /othergame\.co\.jp/.test(lt) && !/i\.ytimg\.com/.test(await page.textContent('.modal [data-g="other"]')) && /i\.ytimg\.com/.test(await page.textContent('.modal [data-g="app"]')) && /2 个连接只有 IP/.test(lt), lt.slice(0, 400));
+		ok('系统后台、直连的 IP 单独一组，默认收起，标数量' + T, /系统后台/.test(lt) && /直连的 IP/.test(lt) && !(await page.isVisible('.modal [data-g="sys"] .mlist')) && !(await page.isVisible('.modal [data-g="ip"] .mlist')));
+		await page.click('.modal [data-gt="ip"]'); await W(300);
+		ok('点开直连的 IP：列出 IP 和次数，刷新后照样开着' + T, /14\.116\.242\.216/.test(await page.textContent('.modal [data-g="ip"]')) && /3 次/.test(await page.textContent('.modal [data-g="ip"]')) && (await W(1300), await page.isVisible('.modal [data-g="ip"] .mlist')));
+		await page.screenshot({ path: path.join(SHOT, `split-learn-ip-${w}${dark ? '-dark' : ''}.png`) });
+		await page.fill('.modal [data-lq]', 'wx'); await W(300);
+		let lq = await page.textContent('.modal [data-lb]');
+		ok('搜索框：搜拼音首字母「wx」只剩微信' + T, /微信/.test(lq) && !/YouTube/.test(lq) && !/game\.example/.test(lq), lq.slice(0, 200));
+		await page.fill('.modal [data-lq]', 'captive'); await W(300);
+		ok('搜网址：收起的系统后台也搜得到（搜的时候展开）' + T, await page.isVisible('.modal [data-g="sys"] .mlist') && /联网检测/.test(await page.textContent('.modal [data-lb]')));
+		await page.screenshot({ path: path.join(SHOT, `split-learn-q-${w}${dark ? '-dark' : ''}.png`) });
+		await page.fill('.modal [data-lq]', 'zzzz'); await W(300);
+		ok('没搜到写「没有搜到」' + T, /没有搜到/.test(await page.textContent('.modal [data-lb]')));
+		await page.fill('.modal [data-lq]', ''); await W(300);
 		l = await lay(page); ok('识别结果不出界' + T, !l.length, l.join('；'));
 		await page.screenshot({ path: path.join(SHOT, `split-learn-${w}${dark ? '-dark' : ''}.png`) });
 		ok('没勾选时「加成软件」不能点' + T, await page.isDisabled('.modal [data-add]'));
@@ -141,6 +157,13 @@ const lay = (page) => page.evaluate(() => {
 		await page.fill('.modal [data-cn]', '另一个游戏'); await page.click('.modal [data-ok]'); await W(400);
 		await page.click('.modal [data-v="o:DIRECT"]'); await W(500);
 		ok('学到的网址加成了软件' + T, Object.values(S.d.capp).some((c) => c.name === '另一个游戏' && c.doms.join() === 'game.example' && c.t === 'DIRECT'));
+		// 官网表里认出来的软件（分流里还没有）：点了选去向，告诉路由器它的编号
+		await page.click('[data-sa="learn"]'); await W(300); await page.click('.modal [data-v="d:aa:aa:aa:aa:aa:01"]'); await W(2600);
+		ok('第二次打开：官网的表不再下载（版本没变）' + T, S.tblCalls === 1, S.tblCalls);
+		await page.click('.modal [data-la="wechat"]'); await W(500);
+		ok('点官网表里的微信：选去向（标题写名字）' + T, /微信/.test(await page.textContent('.modal .sheethead')));
+		await page.click('.modal [data-v="o:DIRECT"]'); await W(500);
+		ok('选了：告诉路由器编号 wechat' + T, S.calls.some((c) => c.m === 'split_set' && c.p.app && c.p.app.id === 'wechat' && c.p.app.t === 'DIRECT') && /已设置：微信 → 直连/.test(await page.textContent('#toast')));
 		// 国家栏、设备设置
 		await page.click('[data-st="geo"]'); await W(200);
 		await page.click('[data-sk="geo"][data-sid="JP"]'); await W(300); await page.click('.modal [data-v="o:♻️ 自动选择"]'); await W(400);

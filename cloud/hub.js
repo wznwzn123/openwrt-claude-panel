@@ -23,7 +23,9 @@ import { installMove, moveDev } from './move.js';
 import { installAppAuth, appStrict } from './appauth.js';
 import { installCompat, compatPublic, compatAdminApi, compatAccount, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled, ovAccount } from './oldver.js';
+import { APPS, APPS_V, APPS_CATS } from './apps-data.js';
 
+let APPS_JSON = null; // /api/apps 的回复（第一次用到才拼）
 export const SUB_RE = /^[a-z2-9]{8}$/;
 const ABC = 'abcdefghijkmnpqrstuvwxyz23456789'; // 32 个字符，去掉了容易看错的 l、o、0、1
 // 反馈现在的状态：已修复 / 无法修复 / 还没处理完
@@ -1713,6 +1715,13 @@ export async function hubFetch(req, env) {
 	// 官网「报告问题」表单（安全、隐私、滥用）：不用登录；website 是给机器人填的陷阱字段，填了就假装成功
 	// 公告（公开、只读；面板经路由器每 30 分钟来拿一次，缓存 5 分钟）
 	// 公告版本号（自建版每 5 分钟问一次；托管版跟着每分钟的心跳拿）：变了才去取整个公告列表
+	// 6.0「网址 → App」公开表（用户 11/28 选「官网放公开表 路由器下载对照」）：路由器一天来拿一次，放在内存里对照识别软件、给软件页搜索；
+	// 只是下载，路由器什么都不传上来（访问记录不出路由器）。网址来自社区列表 v2fly/domain-list-community（MIT），中文名是我们加的
+	if (p === '/api/apps' && (req.method === 'GET' || req.method === 'HEAD')) {
+		if (req.headers.get('if-none-match') === '"' + APPS_V + '"') return new Response(null, { status: 304, headers: { etag: '"' + APPS_V + '"' } });
+		APPS_JSON ??= JSON.stringify({ ok: true, v: APPS_V, src: 'https://github.com/v2fly/domain-list-community (MIT)', cats: APPS_CATS, apps: APPS });
+		return new Response(req.method === 'HEAD' ? null : APPS_JSON, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600', etag: '"' + APPS_V + '"', 'access-control-allow-origin': '*' } });
+	}
 	if (p === '/api/notices/v' && req.method === 'GET') {
 		let v = null; try { v = await annVer(env); } catch (e) {}
 		return v == null ? J({ ok: false }, 503) : new Response(JSON.stringify({ ok: true, v }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });

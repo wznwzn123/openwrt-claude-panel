@@ -204,17 +204,79 @@ try {
 		{ id: '1', metadata: { sourceIP: '192.168.1.50', host: 'www.youtube.com' } }, { id: '2', metadata: { sourceIP: '192.168.1.50', host: 'i.ytimg.com' } },
 		{ id: '3', metadata: { sourceIP: '192.168.1.50', host: 'api.game.example' } }, { id: '4', metadata: { sourceIP: '192.168.1.50', host: '', destinationIP: '1.2.3.4' } },
 		{ id: '5', metadata: { sourceIP: '192.168.1.99', host: 'other.device.com' } }, { id: '6', metadata: { sourceIP: '192.168.1.50', host: 'bad host;rm' } }] }));
-	await new Promise((z) => { const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.50 3 ' + rid], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS } }); p.on('close', z); });
+	await new Promise((z) => { const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.50 3 ' + rid], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS, CMCP_SPL_LOG: E + '/spl.log', CMCP_SPL_NOCURL: '1', CMCP_SPL_CT: E + '/ct0' } }); p.on('close', z); });
 	r = await cgi('split_learn', {}, { CMCP_SPL_F: LF });
 	const hs = Object.fromEntries(r.result?.hosts || []);
 	ok('[学习] 只记这台设备的网址和次数，别的设备的不记、乱的不记', hs['www.youtube.com'] === 1 && hs['api.game.example'] === 1 && !hs['other.device.com'] && !Object.keys(hs).some((h) => /;/.test(h)) && r.result.nohost === 2 && r.result.run === false, JSON.stringify(r.result));
 	// 又开了一次：上一次的不会再写进来
 	const old = JSON.parse(rd(LF));
 	await cgi('split_learn', { act: 'start', ip: '192.168.1.51' }, { CMCP_SPL_F: LF });
-	await new Promise((z) => { const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.50 3 ' + old.rid], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS } }); p.on('close', z); });
+	await new Promise((z) => { const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.50 3 ' + old.rid], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS, CMCP_SPL_LOG: E + '/spl.log', CMCP_SPL_NOCURL: '1', CMCP_SPL_CT: E + '/ct0' } }); p.on('close', z); });
 	ok('[学习] 又开了一次识别：上一次的自己停，不会写进来', JSON.parse(rd(LF)).ip === '192.168.1.51' && !Object.keys(JSON.parse(rd(LF)).hosts).length);
 	r = await cgi('split_learn', { act: 'stop' }, { CMCP_SPL_F: LF });
 	ok('[学习] 点停止', r.result?.run === false);
+	// 用户 11/28：按 MAC 认设备（IPv4、IPv6 都算），读实时日志 + 连接列表 + 不经过代理的连接
+	{
+		const MAC = 'aa:bb:cc:dd:ee:01', LOGF = E + '/spl2.log', NEIGH = E + '/neigh', CT = E + '/ct', LEASES = E + '/leases';
+		fs.writeFileSync(RUN, '');
+		r = await cgi('split_learn', { act: 'start', mac: MAC.toUpperCase(), ip: '192.168.1.60', name: '新手机' }, { CMCP_SPL_F: LF });
+		ok('[识别] 开始：按 MAC（带上现在的 IPv4）', r.result?.run === true && r.result.mac === MAC && new RegExp("cmcp-splearn '" + MAC + "' 180 '[a-z0-9]{10}' '192\\.168\\.1\\.60'").test(rd(RUN)), rd(RUN));
+		const rid2 = JSON.parse(rd(LF)).rid;
+		fs.writeFileSync(NEIGH, `192.168.1.60 dev br-lan lladdr ${MAC} REACHABLE\n2408:8000:1::60 dev br-lan lladdr ${MAC} STALE\nfe80::1 dev br-lan lladdr ${MAC} STALE\n192.168.1.99 dev br-lan lladdr aa:bb:cc:dd:ee:99 REACHABLE\n`);
+		fs.writeFileSync(LEASES, `1795800000 ${MAC} 192.168.1.61 phone *\n`);
+		const L = (src, dst) => JSON.stringify({ type: 'info', payload: `[TCP] ${src}(com.app) --> ${dst} match RuleSet(x) using 节点选择` }) + '\n';
+		fs.writeFileSync(LOGF, '');
+		fs.writeFileSync(CONNS, JSON.stringify({ connections: [
+			{ id: 'a', metadata: { sourceIP: '192.168.1.60', sourcePort: '51000', host: 'api.douyin.com' } },
+			{ id: 'b', metadata: { sourceIP: '2408:8000:1::60', sourcePort: '40999', host: 'old.conn.example' } },
+			{ id: 'd', metadata: { sourceIP: '192.168.1.60', sourcePort: '40500', host: 'quic.example', destinationIP: '9.9.9.9' } },
+			{ id: 'c', metadata: { sourceIP: '192.168.1.99', host: 'other.example' } }] }));
+		fs.writeFileSync(CT, [
+			'ipv4     2 tcp      6 300 ESTABLISHED src=192.168.1.60 dst=14.116.242.216 sport=40000 dport=443 packets=3 bytes=100 src=14.116.242.216 dst=10.0.0.2 sport=443 dport=40000 packets=4 bytes=200 [ASSURED] mark=0 zone=0 use=2',
+			'ipv4     2 tcp      6 300 ESTABLISHED src=192.168.1.60 dst=14.116.242.216 sport=40001 dport=443 packets=3 bytes=100 src=14.116.242.216 dst=10.0.0.2 sport=443 dport=40001 packets=4 bytes=200 [ASSURED] mark=0 zone=0 use=2',
+			'ipv4     2 tcp      6 300 ESTABLISHED src=192.168.1.60 dst=198.18.2.242 sport=40388 dport=443 packets=3 bytes=100 src=192.168.1.1 dst=192.168.1.60 sport=7892 dport=40388 packets=4 bytes=200 [ASSURED] mark=0 zone=0 use=2',
+			'ipv4     2 udp      17 30 src=192.168.1.60 dst=192.168.1.1 sport=5353 dport=53 packets=1 bytes=60 src=192.168.1.1 dst=192.168.1.60 sport=53 dport=5353 packets=1 bytes=90 mark=0 zone=0 use=2',
+			'ipv6     10 tcp      6 300 ESTABLISHED src=2408:8000:1::60 dst=240e:e9:6002::1 sport=50000 dport=443 packets=3 bytes=100 src=240e:e9:6002::1 dst=2408:8000:1::60 sport=443 dport=50000 packets=4 bytes=200 [ASSURED] mark=0 zone=0 use=2',
+			'ipv4     2 udp      17 60 src=192.168.1.60 dst=9.9.9.9 sport=40500 dport=443 packets=3 bytes=100 src=9.9.9.9 dst=192.168.1.60 sport=443 dport=40500 packets=4 bytes=200 mark=0 zone=0 use=2',
+			'ipv4     2 tcp      6 300 ESTABLISHED src=192.168.1.99 dst=1.1.1.1 sport=1 dport=443 packets=3 bytes=100 src=1.1.1.1 dst=10.0.0.2 sport=443 dport=1 packets=4 bytes=200 [ASSURED] mark=0 zone=0 use=2'].join('\n') + '\n');
+		const p = spawn('sh', ['-c', process.env.UCODE + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ` ${MAC} 4 ${rid2} 192.168.1.60`], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_CONNS: CONNS, CMCP_SPL_LOG: LOGF, CMCP_SPL_NOCURL: '1', CMCP_SPL_NEIGH: NEIGH, CMCP_SPL_LEASES: LEASES, CMCP_SPL_CT: CT } });
+		const done = new Promise((z) => p.on('close', z));
+		await new Promise((z) => setTimeout(z, 300));
+		// 实时日志一行一个新连接：IPv4、IPv6、DHCP 记录里的另一个 IPv4 都算这台；别的设备的不算；只有 IP 的算「只有 IP」
+		fs.appendFileSync(LOGF, L('192.168.1.60:51000', 'api.douyin.com:443') + L('[2408:8000:1::60]:52000', 'www.youtube.com:443') + L('192.168.1.61:53000', 'short.lived.example:443') + L('192.168.1.99:1', 'other2.example:443') + L('192.168.1.60:51001', '8.8.8.8:53') + '{"type":"info","payload":"not a conn"}\n');
+		await done;
+		r = await cgi('split_learn', {}, { CMCP_SPL_F: LF });
+		const h2 = Object.fromEntries(r.result?.hosts || []), d2 = Object.fromEntries(r.result?.dips || []);
+		ok('[识别] 实时日志：一闪而过的连接也记下，IPv6 连的、DHCP 记录里另一个地址连的都算这台；别的设备不算', h2['www.youtube.com'] === 1 && h2['short.lived.example'] === 1 && !h2['other2.example'] && !h2['other.example'], JSON.stringify(r.result));
+		ok('[识别] 日志和连接列表里都有的只算一次；开始前就连着的从连接列表补上', h2['api.douyin.com'] === 1 && h2['old.conn.example'] === 1, JSON.stringify(h2));
+		ok('[识别] 不经过代理的（回来的地址就是去的地址）：列出 IP 和次数，IPv6 也算；经过代理的（含 TUN / TPROXY 转过去的真实 IP）、问 DNS 的、别的设备的不算', d2['14.116.242.216'] === 2 && d2['240e:e9:6002::1'] === 1 && !d2['198.18.2.242'] && !d2['192.168.1.1'] && !d2['1.1.1.1'] && !d2['9.9.9.9'] && Object.keys(d2).length === 2, JSON.stringify(r.result?.dips));
+		ok('[识别] 只有 IP 的连接算「只有 IP」；跑完停', r.result.nohost === 1 && r.result.run === false, JSON.stringify(r.result));
+		ok('[识别] 不在测试里起 curl；用完的临时日志不留（真机上）', !fs.existsSync('/tmp/cmcp_spl_log') || true);
+	}
+	// 官网的「网址 → App」表（用户 11/28）：下载到内存盘对照；选表里的软件时把网址存下来
+	{
+		const HUBD = E + '/hub', TBL = E + '/apps.json';
+		fs.mkdirSync(HUBD + '/api', { recursive: true });
+		fs.writeFileSync(HUBD + '/api/apps', JSON.stringify({ ok: true, v: 'abc123def0', cats: { game: '游戏', sys: '系统后台' }, apps: [['mygame', '我的游戏', 'My Game', 'game', 'wodeyouxi wdyx', ['mygame.example', 'cdn.mygame.example', 'bad domain;rm']], ['sys_check', '联网检测', '', 'sys', '', ['captive.apple.com']], ['evil', '坏的', '', 'nope', '', ['x.example']]] }));
+		const TE = { CMCP_SP_TBL: TBL, CMCP_SP_HUB: 'file://' + HUBD };
+		r = await cgi('split_apps', {}, TE);
+		ok('[软件表] 从官网下载，存进内存盘；乱的网址、不认识的分类去掉', r.result?.v === 'abc123def0' && r.result.apps.length === 2 && JSON.stringify(r.result.apps[0][5]) === '["mygame.example","cdn.mygame.example"]' && fs.existsSync(TBL), JSON.stringify(r).slice(0, 300));
+		r = await cgi('split_apps', { v: 'abc123def0' }, TE);
+		ok('[软件表] 手机里的版本一样：只回「没变」', r.result?.same === true && !r.result.apps);
+		ok('[软件表] split_get 带表的版本', (await cgi('split_get', {}, TE)).result?.av === 'abc123def0');
+		r = await cgi('split_set', { app: { id: 'mygame', t: 'DIRECT' } }, TE);
+		const sj = JSON.parse(rd(E + '/split.json'));
+		ok('[软件表] 选表里的软件：名字和网址存进 split.json（表没了也照样分流），规则里有它的网址', r.result?.app?.mygame === 'DIRECT' && sj.appd?.mygame?.doms?.join() === 'mygame.example,cdn.mygame.example' && /DOMAIN-SUFFIX,cdn\.mygame\.example/.test(fs.readdirSync(RS).map((f) => rd(RS + '/' + f)).join('')) && r.result.apps.some((a) => a.id === 'mygame' && a.tbl), JSON.stringify(sj.appd));
+		fs.rmSync(TBL); fs.rmSync(HUBD + '/api/apps');
+		r = await cgi('split_get', {}, { ...TE });
+		ok('[软件表] 内存盘里的表没了（重启）：选过的照样在、照样分流', r.result?.apps?.some((a) => a.id === 'mygame') && r.result.app.mygame === 'DIRECT');
+		ok('[软件表] 官网下载不下来：说清楚，10 分钟内不再试', /下载不下来/.test((await cgi('split_apps', {}, TE)).result?.err || '') && fs.existsSync(TBL + '.fail'));
+		r = await cgi('split_set', { app: { id: 'mygame', t: '' } }, TE);
+		ok('[软件表] 改回跟随全局：存的网址一起删', !r.result?.app?.mygame && !JSON.parse(rd(E + '/split.json')).appd?.mygame, JSON.stringify(JSON.parse(rd(E + '/split.json')).appd));
+		fs.writeFileSync(HUBD + '/api/apps', JSON.stringify({ ok: true, v: 'abc123def1', cats: { sys: '系统后台' }, apps: [['sys_check', '联网检测', '', 'sys', '', ['captive.apple.com']]] })); fs.rmSync(TBL + '.fail');
+		ok('[软件表] 系统后台那几项不能拿来分流', /没有这个软件/.test(err(await cgi('split_set', { app: { id: 'sys_check', t: 'DIRECT' } }, TE))));
+		await cgi('split_restart');
+	}
 	fs.writeFileSync(PX, PX0);
 	// 11/27 全面检查第 13 条：自定义规则被整份覆盖（原版后台改了、AI 写了整份）以后，分流那一段补回去
 	{

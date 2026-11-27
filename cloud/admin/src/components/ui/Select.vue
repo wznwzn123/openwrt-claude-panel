@@ -24,6 +24,8 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   invalid?: boolean
   emptyText?: string
+  /** 读屏用的名字（组件有两个根节点，aria-label 不会自己传到按钮上） */
+  ariaLabel?: string
 }>(), {
   placeholder: '请选择',
   emptyText: '无匹配项',
@@ -139,6 +141,7 @@ onBeforeUnmount(() => hide())
     :class="['input-shell', 'select-trigger', invalid && 'is-invalid', disabled && 'is-disabled']"
     :disabled="disabled"
     role="combobox"
+    :aria-label="ariaLabel"
     aria-haspopup="listbox"
     :aria-expanded="open"
     :aria-controls="listId"

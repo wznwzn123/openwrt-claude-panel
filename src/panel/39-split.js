@@ -8,7 +8,14 @@ async function loadSplit() {
 	setStatus(true, '在线');
 	splRender();
 	// 一打开分流就去拿官网的「网址 → App」表（路由器没有就当场下载），到了再画一次（用户 11/28：不能点几次才出来）
-	if (SPL.d.kind) splTbl().then((t) => { if (t && page === 'split' && SPL.tab === 'app') splRender(); });
+	if (SPL.d.kind) splTbl().then((t) => {
+		if (!t || page !== 'split' || SPL.tab !== 'app') return;
+		// 只换列表和输入框的提示，正在打字的不打断
+		const l = $('splAL'), qi = $('splQ');
+		if (!l || !qi) return splRender();
+		qi.placeholder = '搜软件 共 ' + t.apps.filter((a) => a[3] !== 'sys').length + ' 个';
+		l.innerHTML = splAppList();
+	});
 }
 const SPL_PX = (d) => (d.kind === 'nikki' ? 'Nikki' : 'OpenClash');
 const SPL_REG = { HK: '香港', TW: '台湾', MO: '澳门', JP: '日本', SG: '新加坡', KR: '韩国', US: '美国', GB: '英国', DE: '德国', FR: '法国', NL: '荷兰', CA: '加拿大', AU: '澳大利亚', RU: '俄罗斯', IN: '印度', TR: '土耳其', MY: '马来西亚', TH: '泰国', VN: '越南', PH: '菲律宾', AE: '阿联酋', AR: '阿根廷', BR: '巴西' };
@@ -48,6 +55,33 @@ function splOwnWhy(x, d) {
 }
 // 撞车提示（分流自己的这一行下面）
 function splOvLine(o) { return o ? `<span class="splov">${o.part ? `部分网址按覆写的走「${esc(splName(o.t))}」` : `覆写里写了走「${esc(splName(o.t))}」 按覆写的走`}</span>` : ''; }
+/* 软件栏的搜索（用户 11/28：打字即出，内置软件扩到几百个，中文名、拼音、英文都能搜）：
+ * 没搜的时候列自己加的、覆写里的、分流里已有的（内置的 + 从官网表里选过的）；搜的时候再加上官网「网址 → App」表里的（系统后台的不列），按像不像排，最多 60 个 */
+function splScore(q, name, en, py, doms) {
+	const n = String(name || '').toLowerCase(), p = String(py || '').split(' '), e = String(en || '').toLowerCase();
+	if (n === q) return 100;
+	if (n.startsWith(q)) return 90;
+	if (n.includes(q)) return 80;
+	if (p[1] && p[1].startsWith(q)) return 75;
+	if (p[0] && p[0].startsWith(q)) return 70;
+	if (e.split(/\s+/).some((w) => w.startsWith(q))) return 65;
+	if (e.includes(q)) return 55;
+	if (p[0] && p[0].includes(q)) return 50;
+	if (q.length >= 3 && (doms || []).some((x) => x.includes(q))) return 40;
+	return 0;
+}
+function splAppList() {
+	const d = SPL.d, row = SPL.rowFn, ovOf = SPL.ovOf, q = String(SPL.q || '').trim().toLowerCase(), by = SPL.tbl ? SPL.tbl.byId : null, cats = (SPL.tbl && SPL.tbl.cats) || {};
+	if (!q) return SPL.mine + SPL.ow.map((g) => row('own', g.key, g.name, g.items.map((x) => x.v).join('、'), g.t, '覆写里的')).join('') + d.apps.map((a) => row('app', a.id, a.name, '', d.app[a.id], '', ovOf('app', a.id))).join('');
+	const hits = [];
+	for (const [id, c] of Object.entries(d.capp || {})) { const sc = splScore(q, c.name, '', '', c.doms); if (sc) hits.push([sc + 1, row('capp', id, c.name, (c.doms || []).join('、'), c.t, '自己加的', ovOf('capp', id))]); }
+	for (const g of SPL.ow) { const sc = splScore(q, g.name, '', '', g.items.map((x) => x.v)); if (sc) hits.push([sc + 1, row('own', g.key, g.name, g.items.map((x) => x.v).join('、'), g.t, '覆写里的')]); }
+	const have = new Set();
+	for (const a of d.apps) { have.add(a.id); const t = by && by.get(a.id), sc = splScore(q, a.name, t && t[2], t && t[4], a.doms); if (sc) hits.push([sc + 0.5, row('app', a.id, a.name, '', d.app[a.id], '', ovOf('app', a.id))]); }
+	if (SPL.tbl) for (const a of SPL.tbl.apps) { if (a[3] === 'sys' || have.has(a[0])) continue; const sc = splScore(q, a[1], a[2], a[4], a[5]); if (sc) hits.push([sc, row('tapp', a[0], a[1], cats[a[3]] || '', '', '', null)]); }
+	hits.sort((x, y) => y[0] - x[0]);
+	return hits.length ? hits.slice(0, 60).map((x) => x[1]).join('') : `<div class="empty">${SPL.tbl ? '没有搜到' : '没有搜到 软件表还在下载'}</div>`;
+}
 function splRows() {
 	const d = SPL.d, own = splOwn(), OWN = '覆写里的';
 	const row = (k, id, name, sub, t, tag, ov) => `<button class="file splrow" type="button" data-sk="${k}" data-sid="${esc(id)}"><div style="flex:1;min-width:0"><b class="splnm"><span class="ell">${esc(name)}</span>${tag ? `<span class="spltag${tag === OWN ? ' own' : ''}">${tag}</span>` : ''}</b>${sub ? `<span class="muted ell" style="display:block;font-size:12.5px">${esc(sub)}</span>` : ''}${splOvLine(ov)}</div>${splPill(t)}</button>`;
@@ -56,9 +90,11 @@ function splRows() {
 		const mine = Object.entries(d.capp || {}).map(([id, c]) => row('capp', id, c.name, (c.doms || []).join('、'), c.t, '自己加的', ovOf('capp', id))).join('');
 		const ow = own.app.map((g) => row('own', g.key, g.name, g.items.map((x) => x.v).join('、'), g.t, OWN)).join('');
 		// 识别软件能看到设备访问了哪些网站：只有主账号能用
-		const owner = ME_ROLE.role !== 'sub';
+		const owner = ME_ROLE.role !== 'sub', n = SPL.tbl ? SPL.tbl.apps.filter((a) => a[3] !== 'sys').length : 0;
+		SPL.rowFn = row; SPL.ovOf = ovOf; SPL.mine = mine; SPL.ow = own.app;
 		return `<div class="btngrid spltop${owner ? '' : ' one'}">${owner ? '<button class="btn sm" type="button" data-sa="learn">识别软件</button>' : ''}<button class="btn sm" type="button" data-sa="capp">添加软件</button></div>
-			<section class="card list" style="margin-top:12px">${mine}${ow}${d.apps.map((a) => row('app', a.id, a.name, '', d.app[a.id], '', ovOf('app', a.id))).join('')}</section>`;
+			<input class="input splq" id="splQ" type="search" placeholder="${n ? `搜软件 共 ${n} 个` : '搜软件'}" value="${esc(SPL.q || '')}" autocapitalize="off" autocomplete="off" spellcheck="false" aria-label="搜软件">
+			<section class="card list" id="splAL" style="margin-top:10px">${splAppList()}</section>`;
 	}
 	if (SPL.tab === 'site') {
 		const l = Object.entries(d.site || {});
@@ -233,9 +269,9 @@ async function splTblGet() {
 		else t = c;
 	} catch (e) { t = c; }
 	if (!t || !Array.isArray(t.apps)) return null;
-	const idx = new Map();
-	for (const a of t.apps) for (const dm of a[5] || []) idx.set(dm, a);
-	SPL.tbl = { ...t, idx };
+	const idx = new Map(), byId = new Map();
+	for (const a of t.apps) { byId.set(a[0], a); for (const dm of a[5] || []) idx.set(dm, a); }
+	SPL.tbl = { ...t, idx, byId };
 	return SPL.tbl;
 }
 // 认网址：先看分流里已经有的软件（内置的、从表里选过的），再看官网的表。按最长的后缀认
@@ -355,5 +391,13 @@ $('splBody').addEventListener('click', async (e) => {
 		return busy(e.target, async () => { try { await P('split_restart'); SPL.d.pending = false; splRender(); toast('正在重启 ' + SPL_PX(SPL.d)); } catch (er) { toast(er.message, true); } });
 	}
 	const r = e.target.closest('[data-sk]');
+	if (r && r.dataset.sk === 'tapp') { const a = SPL.tbl && SPL.tbl.byId.get(r.dataset.sid); return a && splPickKnown({ id: a[0], name: a[1] }); }
 	if (r) splPick(r.dataset.sk, r.dataset.sid);
+});
+// 软件栏搜索：打字即出，只换下面的列表（输入框不重画，不丢光标）
+$('splBody').addEventListener('input', (e) => {
+	if (e.target.id !== 'splQ') return;
+	SPL.q = e.target.value;
+	const l = $('splAL');
+	if (l) l.innerHTML = splAppList();
 });

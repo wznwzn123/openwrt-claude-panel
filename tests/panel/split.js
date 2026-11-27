@@ -25,14 +25,14 @@ function handle(m, p) {
 		else if (S.learn) { S.learn.hosts = [['www.youtube.com', 5], ['i.ytimg.com', 3], ['api.game.example', 4], ['cdn.game.example', 2], ['login.othergame.co.jp', 1], ['mmbiz.weixin.qq.com', 6], ['captive.apple.com', 2]]; S.learn.dips = [['14.116.242.216', 3], ['240e:e9:6002::1', 1]]; S.learn.nohost = 2; }
 		return S.learn || { run: false };
 	}
-	if (m === 'split_apps') { S.tblCalls = (S.tblCalls || 0) + 1; return p.v === 'tv1' ? { v: 'tv1', same: true } : { v: 'tv1', cats: { social: '社交', sys: '系统后台' }, apps: [['wechat', '微信', 'WeChat Weixin', 'social', 'weixin wx', ['weixin.qq.com', 'wechat.com']], ['sys_check', '联网检测', 'Connectivity', 'sys', '', ['captive.apple.com']]] }; }
+	if (m === 'split_apps') { S.tblCalls = (S.tblCalls || 0) + 1; return p.v === 'tv1' ? { v: 'tv1', same: true } : { v: 'tv1', cats: { social: '社交', video: '视频', game: '游戏', sys: '系统后台' }, apps: [['wechat', '微信', 'WeChat Weixin', 'social', 'weixin wx', ['weixin.qq.com', 'wechat.com']], ['iqiyi', '爱奇艺', 'iQIYI', 'video', 'aiqiyi aqy', ['iqiyi.com', 'qy.net']], ['tgame', '腾讯游戏', 'Tencent Games 王者荣耀', 'game', 'tengxunyouxi txyx', ['game.qq.com']], ['bilibili', '哔哩哔哩', 'Bilibili B站', 'video', 'bilibili blbl', ['bilibili.com']], ['sys_check', '联网检测', 'Connectivity', 'sys', '', ['captive.apple.com']]] }; }
 	if (m === 'split_set') {
 		const dom = (v) => String(v || '').toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#:].*$/, '').replace(/^www\./, '');
 		if (p.site) { if (p.site.old) delete d.site[dom(p.site.old)]; if (p.site.t) d.site[dom(p.site.d)] = p.site.t; else delete d.site[dom(p.site.d)]; d.pending = true; return { ...d, restart: true }; }
 		if (p.capp) { const x = p.capp, id = x.id || 'c' + Object.keys(d.capp).length; if (x.del) delete d.capp[id]; else d.capp[id] = { name: x.name ?? d.capp[id]?.name, doms: (x.doms ?? d.capp[id]?.doms).map(dom), t: 't' in x ? x.t || null : d.capp[id]?.t ?? null }; return { ...d, restart: true }; }
 		const k = p.dev ? 'dev' : p.app ? 'app' : 'geo', x = p[k];
 		if (k === 'dev') { if (x.t) d.dev[x.mac] = { t: x.t, ip: x.ip, name: x.name }; else delete d.dev[x.mac]; }
-		else if (x.t) d[k][x.id] = x.t; else delete d[k][x.id];
+		else if (x.t) { d[k][x.id] = x.t; if (k === 'app' && !d.apps.some((a) => a.id === x.id)) d.apps.push({ id: x.id, name: { wechat: '微信', iqiyi: '爱奇艺' }[x.id] || x.id, doms: [], tbl: true }); } else delete d[k][x.id];
 		d.pending = true;
 		return { ...d, restart: true };
 	}
@@ -84,6 +84,26 @@ const lay = (page) => page.evaluate(() => {
 		t = await page.textContent('#splBody');
 		ok('软件栏：Netflix 走「流媒体」组（长名字不撑出去）' + T, /Netflix/.test(t) && /流媒体/.test(t));
 		l = await lay(page); ok('软件栏不错位' + T, !l.length, l.join('；'));
+		// 软件栏搜索（用户 11/28：打字即出；中文名、拼音、英文、网址都能搜；官网表里几百个）
+		const qph = await page.getAttribute('#splQ', 'placeholder');
+		ok('软件栏有搜索框，写着一共多少个软件（系统后台的不算）' + T, qph === '搜软件 共 4 个', qph);
+		const qs = async (v) => { await page.fill('#splQ', v); await W(150); return page.textContent('#splAL'); };
+		let qt = await qs('aqy');
+		ok('搜拼音首字母「aqy」：出来爱奇艺（官网表里的，写分类），别的不出来；光标还在框里' + T, /爱奇艺/.test(qt) && /视频/.test(qt) && !/ChatGPT/.test(qt) && (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'splQ', qt);
+		qt = await qs('bili');
+		ok('搜「bili」：内置的哔哩哔哩只出一个（不跟官网表里的重复）' + T, (qt.match(/哔哩哔哩/g) || []).length === 1, qt);
+		ok('搜中文「微」出微信；搜英文「netf」出 Netflix；搜网址「qy.net」出爱奇艺' + T, /微信/.test(await qs('微')) && /Netflix/.test(await qs('netf')) && /爱奇艺/.test(await qs('qy.net')));
+		ok('搜不到写「没有搜到」' + T, /没有搜到/.test(await qs('zzzzz')));
+		qt = await qs('王者');
+		ok('搜别名「王者」出腾讯游戏' + T, /腾讯游戏/.test(qt), qt);
+		l = await lay(page); ok('搜索结果不错位' + T, !l.length, l.join('；'));
+		await page.screenshot({ path: path.join(SHOT, `split-search-${w}${dark ? '-dark' : ''}.png`) });
+		await qs('爱奇艺');
+		await page.click('[data-sk="tapp"][data-sid="iqiyi"]'); await W(400);
+		await page.click('.modal [data-v="o:DIRECT"]'); await W(500);
+		ok('点官网表里的爱奇艺：选去向，告诉路由器编号' + T, S.calls.some((c) => c.m === 'split_set' && c.p.app && c.p.app.id === 'iqiyi' && c.p.app.t === 'DIRECT') && /已设置：爱奇艺 → 直连/.test(await page.textContent('#toast')));
+		qt = await qs('');
+		ok('清空搜索：回到原来的列表，选过的爱奇艺也在里面' + T, /ChatGPT/.test(qt) && /爱奇艺/.test(qt) && /直连/.test(await page.textContent('[data-sk="app"][data-sid="iqiyi"]')), qt.slice(0, 200));
 		await page.click('[data-sk="app"][data-sid="chatgpt"]'); await W(300);
 		const opts = await page.$$eval('.modal .mact', (b) => b.map((x) => x.textContent.trim()));
 		ok('选去向：跟随全局、直连、代理（主策略组）、其他策略组、按地区分的节点；现在的打勾' + T, opts[0] === '跟随全局✓' && opts[1] === '直连' && opts[2] === '代理节点选择' && opts.length === 9 && opts.includes('🇯🇵 日本 0180 ms') && !opts.some((x) => x === '节点选择'), JSON.stringify(opts));

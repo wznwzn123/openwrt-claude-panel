@@ -25,6 +25,7 @@ function handle(m, p) {
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (x) => (b += x)); req.on('end', () => {
 	const u = new URL(req.url, 'http://x'), J = (o) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
 	if (u.pathname === '/fake-luci') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><html><head><script src="/panel/lfx.js"></script></head><body><h1>终端</h1><iframe id="tt" src="http://' + req.headers.host.split(':')[0] + ':7681/" style="width:100%;height:300px"></iframe><button id="oc" onclick="window.open(\'http://' + req.headers.host.split(':')[0] + ':9090/ui/?hostname=192.168.1.1\')">打开控制面板</button><a id="same" href="/cgi-bin/luci/admin">同一个地址的链接</a></body></html>'); }
+	if (u.pathname === '/cgi-bin/luci/admin/services/cmcp') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<!doctype html><html><head><script src="/panel/lfx.js"></script></head><body>正在打开路由器面板…</body></html>'); }
 	if (u.pathname === '/fake-x') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); return res.end('<title>远程页面</title>端口 ' + u.searchParams.get('port')); }
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'); const m = body.method.replace(/^panel\//, ''); return setTimeout(() => { try { J({ jsonrpc: '2.0', id: body.id, result: handle(m, body.params || {}) }); } catch (e) { J({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: e.message } }); } }, 60); }
 	if (u.pathname.startsWith('/cloud/')) return J({ error: 'x' });
@@ -159,6 +160,10 @@ const lay = (page) => page.evaluate(() => {
 		pop = await popP; await W(2200);
 		ok('概览「控制面板」：在外面按端口 + 控制面板名字打开', S.calls.some((c) => c.m === 'xp_open' && c.p.port > 0 && typeof c.p.ui === 'string' && c.p.ui.length > 0) && /fake-x/.test(pop.url()), JSON.stringify(S.calls.filter((c) => c.m === 'xp_open')));
 		await pop.close();
+		// 用户 11/27：完整原版后台里点「服务 → 路由器面板」：回到面板首页，不在框里再开一个
+		await page.goto('http://panel.test:8197/panel/?p=home'); await W(1200);
+		await page.evaluate(() => { const f = document.createElement('iframe'); f.src = '/cgi-bin/luci/admin/services/cmcp'; document.body.appendChild(f); }); await W(1200);
+		ok('完整后台里点「路由器面板」：回到面板首页，提示一句', /已回到路由器面板/.test(await page.textContent('#toast')) && await page.isVisible('#p-main'), await page.textContent('#toast'));
 		await ctx.close(); await b2.close();
 	}
 	// 在家（网址是路由器的 IP）：不拦

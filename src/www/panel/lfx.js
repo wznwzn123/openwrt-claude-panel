@@ -3,6 +3,8 @@
  * 在家里（网址是路由器的 IP 或 .lan 这类名字）直接能打开，不拦。由 luci-gate 插进 LuCI 页面的 <head>。 */
 (function () {
 	var h = location.hostname;
+	// 在面板的「完整原版后台」里点了「服务 → 路由器面板」：本来就在面板里，回到面板首页（不在框里再开一个面板；用户 11/27）
+	if (window.top !== window && /\/admin\/services\/cmcp\/?$/.test(location.pathname)) { try { window.top.postMessage({ cmcpx: 1, home: 1 }, location.origin); } catch (e) {} return; }
 	if (window.top === window || /^(\d+\.\d+\.\d+\.\d+|\[[0-9a-f:.]+\]|localhost|[a-z0-9-]+|.+\.(lan|local|home|internal|home\.arpa))$/i.test(h)) return;
 	function tgt(u) {
 		try { var x = new URL(u, location.href); if (x.hostname === h && x.port && x.port !== location.port) return { port: +x.port, https: x.protocol === 'https:', path: x.pathname + x.search + x.hash }; } catch (e) {}

@@ -9770,6 +9770,8 @@ async function xpGo(w, r) {
 // 完整原版后台里点到的「路由器:端口」页面（lfx.js 拦下来转给这里）：用远程页面的地址打开
 window.addEventListener('message', (e) => {
 	if (e.origin !== location.origin || !e.data || e.data.cmcpx !== 1) return;
+	// 完整原版后台里点了「服务 → 路由器面板」：回到面板首页（原版后台还登录着，再点「完整原版后台」接着用）
+	if (e.data.home) { go('main'); return toast('已回到路由器面板'); }
 	const d = e.data, q = { port: +d.port, https: !!d.https, path: String(d.path || '/').slice(0, 500) };
 	// 嵌着的页面：等官网切好，把地址交回去，在原处打开
 	if (d.inline) {

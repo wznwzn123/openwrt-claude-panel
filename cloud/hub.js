@@ -1959,7 +1959,17 @@ async function versionList(env, H) {
 			if (m) out.push({ v: m[1] + '.' + m[2], base: m[1], hot: +m[2], at });
 		}
 		if (out.length) { try { await H.setMeta('vlist', out); } catch (e) {} return out; }
-		try { return (await H.meta('vlist')) || null; } catch (e) { return null; }
+		try { const o = await H.meta('vlist'); if (o && o.length) return o; } catch (e) {}
+		// GitHub 接口被限流（Cloudflare 的出口 IP 大家共用，用户 11/28 截图：下拉里只有「不限」）：拼别处存下的——
+		// 更新日志存的正式版、尝鲜版（每小时记一次）、最新正式版（走不限流的跳转），补丁按编号顺着试下载地址
+		const fb = [], add = (x) => { if (!fb.some((y) => y.v === x.v)) fb.push(x); };
+		try { for (const x of ((await H.meta('clog')) || {}).list || []) add({ v: String(x.v).replace(/^v/, ''), pre: false, at: x.at || 0 }); } catch (e) {}
+		try { const p = await H.meta('prerel'); if (p && p.ver) add({ v: String(p.ver).replace(/^v/, ''), pre: true, at: Date.parse(p.at || '') || 0 }); } catch (e) {}
+		try { const x = await latestRelease(env); if (x && x.tag) add({ v: String(x.tag).replace(/^v/, ''), pre: false, at: x.at ? Date.parse(x.at) || 0 : 0 }); } catch (e) {}
+		for (const b of fb.slice().sort((a, c) => verCmp(c.v, a.v)).slice(0, 3)) {
+			try { const h = await hotBest(env, b.v); for (let n = 1; n <= (h.n || 0) && n <= 99; n++) add({ v: b.v + '.' + n, base: b.v, hot: n, at: 0 }); } catch (e) {}
+		}
+		return fb.length ? fb : null;
 	});
 	return (v || []).slice().sort((a, b) => verCmp(b.v, a.v, 4));
 }

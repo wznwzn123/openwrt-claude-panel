@@ -36,6 +36,13 @@ function handle(m, p) {
 		return { ...d, restart: true };
 	}
 	if (m === 'split_restart') { d.pending = false; return { ok: true }; }
+	if (m === 'split_own_move') {
+		const mv = (d.own || []).filter((x) => p.keys.includes(x.k));
+		d.own = d.own.filter((x) => !p.keys.includes(x.k));
+		for (const x of mv) { if (x.tag) { const c = Object.values(d.capp).find((y) => y.name === x.tag); if (c) c.doms.push(x.v); else d.capp['c' + Object.keys(d.capp).length] = { name: x.tag, doms: [x.v], t: x.t }; } else if (/^DOMAIN/.test(x.ty)) d.site[x.v] = x.t; else if (x.ty === 'SRC-IP-CIDR') { const dv = d.devices.find((y) => y.ip + '/32' === x.v); d.dev[dv.mac] = { t: x.t, ip: dv.ip, name: '' }; } }
+		d.ov = {}; d.pending = true;
+		return { ...d, restart: true, movedN: mv.length, skip: [] };
+	}
 	return mock.respond(m, p);
 }
 const server = http.createServer((req, res) => { let b = ''; req.on('data', (x) => (b += x)); req.on('end', () => {
@@ -172,6 +179,96 @@ const lay = (page) => page.evaluate(() => {
 		S.d = { kind: null };
 		await page.reload(); await W(1500);
 		ok('没装 OpenClash / Nikki：说只支持这两个', /分流只支持 OpenClash 和 Nikki/.test(await page.textContent('#splBody')));
+		await ctx.close();
+	}
+	// 覆写里你自己写的规则（用户 11/28：显示在分流里标「覆写里的」；撞了按你写的走；点「交给分流管」才搬过来）；订阅合集里的节点选不了
+	for (const [w, h, dark] of [[320, 640, false], [390, 844, true], [430, 932, false]]) {
+		const T = `（${w}${dark ? ' 深色' : ''}）`, HK = '🇭🇰 香港 02';
+		S = fresh({ own: [
+			{ k: 'f1:DOMAIN-SUFFIX,netflix.com,DIRECT', ty: 'DOMAIN-SUFFIX', v: 'netflix.com', t: 'DIRECT', tag: '', src: 'f1', pri: true },
+			{ k: 'f1:DOMAIN-SUFFIX,game.example.com,' + HK, ty: 'DOMAIN-SUFFIX', v: 'game.example.com', t: HK, tag: '我的游戏机（名字很长很长的一个游戏）', src: 'f1', pri: true },
+			{ k: 'f1:DOMAIN-SUFFIX,cdn.game-static-files.example.com,' + HK, ty: 'DOMAIN-SUFFIX', v: 'cdn.game-static-files.example.com', t: HK, tag: '我的游戏机（名字很长很长的一个游戏）', src: 'f1', pri: true },
+			{ k: 'f1:DOMAIN-SUFFIX,music.youtube.com,' + HK, ty: 'DOMAIN-SUFFIX', v: 'music.youtube.com', t: HK, tag: '', src: 'f1', pri: true },
+			{ k: 'f1:DOMAIN-KEYWORD,ads,REJECT', ty: 'DOMAIN-KEYWORD', v: 'ads', t: 'REJECT', tag: '', src: 'f1', pri: true },
+			{ k: 'f2:IP-CIDR,8.8.8.0/24,节点选择', ty: 'IP-CIDR', v: '8.8.8.0/24', t: '节点选择', tag: '', src: 'f2', pri: false },
+			{ k: 'f1:SRC-IP-CIDR,192.168.1.11/32,DIRECT', ty: 'SRC-IP-CIDR', v: '192.168.1.11/32', t: 'DIRECT', tag: '', src: 'f1', pri: true }],
+		ov: { 'app:netflix': { t: 'DIRECT', v: 'netflix.com', part: false }, 'app:youtube': { t: HK, v: 'youtube.com', part: true } }, app: { netflix: '🎬 流媒体（Netflix、Disney+、HBO 这些都走这里的超长名字）', youtube: '节点选择' } });
+		S.d.nodes = [...S.d.nodes, { n: '合集里的节点 01', d: 50, reg: 'JP', p: 1 }];
+		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' }); const page = await ctx.newPage();
+		page.on('pageerror', (e) => problems.push('页面错误（覆写）' + T + '：' + e.message));
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8195/panel/?p=split'); await W(1500);
+		// 设备栏：来源 IP 对上了笔记本，标「覆写里的」，排在前面
+		let t = await page.textContent('#splBody');
+		const devRow = page.locator('[data-sk="own"][data-sid="dev:aa:aa:aa:aa:aa:02"]');
+		ok('设备：覆写里写了这台（来源 IP 对上）标「覆写里的」、写去向、排在前面' + T, await devRow.count() === 1 && /覆写里的/.test(await devRow.textContent()) && /直连/.test(await devRow.textContent()) && (await page.$$eval('#splBody .splrow', (r) => r.map((x) => x.dataset.sid))).indexOf('dev:aa:aa:aa:aa:aa:02') < 2, t.slice(0, 200));
+		const tagSeen = () => page.evaluate(() => [...document.querySelectorAll('#splBody .splrow .spltag')].every((g) => { const r = g.getBoundingClientRect(), b = g.closest('b').getBoundingClientRect(), p = g.closest('.splrow').querySelector('.pill').getBoundingClientRect(); return r.width > 20 && r.left >= b.left - 1 && r.right <= b.right + 1 && r.right <= p.left; }));
+		ok('名字很长时「覆写里的」标签照样看得全（名字省略，标签不截）' + T, await tagSeen());
+		let l = await lay(page); ok('设备栏不错位' + T, !l.length, l.join('；'));
+		await page.screenshot({ path: path.join(SHOT, `split-own-dev-${w}${dark ? '-dark' : ''}.png`) });
+		// 软件栏：带名字的合成一行；撞了的写「按覆写的走」
+		await page.click('[data-st="app"]'); await W(200);
+		const own = page.locator('[data-sk="own"][data-sid^="app:"]');
+		ok('软件：带「# [名字]」的合成一行，标「覆写里的」，写网址和去向' + T, await own.count() === 1 && /我的游戏机/.test(await own.textContent()) && /game\.example\.com、cdn\.game-static-files\.example\.com/.test(await own.textContent()) && /香港 02/.test(await own.textContent()));
+		const nf = await page.textContent('[data-sk="app"][data-sid="netflix"]'), yt = await page.textContent('[data-sk="app"][data-sid="youtube"]');
+		ok('软件栏标签看得全' + T, await tagSeen());
+		ok('撞了：下面写「覆写里写了走「直连」 按覆写的走」；部分撞「部分网址按覆写的走」' + T, /覆写里写了走「直连」 按覆写的走/.test(nf) && /部分网址按覆写的走「🇭🇰 香港 02」/.test(yt), nf + ' | ' + yt);
+		l = await lay(page); ok('软件栏不错位（撞车提示不出界）' + T, !l.length && await page.evaluate(() => [...document.querySelectorAll('.splov')].every((e) => { const r = e.getBoundingClientRect(), p = e.closest('.splrow').querySelector('.pill').getBoundingClientRect(); return r.right <= p.left + 1; })), l.join('；'));
+		await page.screenshot({ path: path.join(SHOT, `split-own-app-${w}${dark ? '-dark' : ''}.png`) });
+		// 点撞了的那行：先问；「照样改」照常选
+		await page.click('[data-sk="app"][data-sid="netflix"]'); await W(400);
+		ok('点全撞了的：居中小卡片写按覆写的走，只有「取消」「交给分流管」（分流里改了也不生效）' + T, await page.isVisible('.modal.compact') && /覆写里写了走「直连」/.test(await page.textContent('.modal')) && !(await page.$('.modal [data-v="edit"]')) && /取消/.test(await page.textContent('.modal [data-v="close"]')) && await page.isVisible('.modal [data-v="move"]'));
+		l = await lay(page); ok('小卡片不出界' + T, !l.length, l.join('；'));
+		await page.screenshot({ path: path.join(SHOT, `split-own-ov-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-v="close"]'); await W(400);
+		ok('取消：不打开选去向' + T, !(await page.$('.modal')));
+		await page.click('[data-sk="app"][data-sid="youtube"]'); await W(400);
+		ok('点部分撞了的：「改没撞的网址」「交给分流管」' + T, /部分网址按覆写的走/.test(await page.textContent('.modal')) && /改没撞的网址/.test(await page.textContent('.modal [data-v="edit"]')) && await page.isEnabled('.modal [data-v="move"]'));
+		await page.screenshot({ path: path.join(SHOT, `split-own-ovp-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-v="edit"]'); await W(400);
+		const opts = await page.$$eval('.modal .mact', (b) => b.map((x) => ({ t: x.textContent.trim(), off: x.disabled })));
+		ok('改没撞的网址：照常选去向；订阅合集里的节点灰掉、写「订阅合集里的 选不了」' + T, opts.some((x) => x.t === '跟随全局') && opts.some((x) => /合集里的节点 01订阅合集里的 选不了/.test(x.t) && x.off), JSON.stringify(opts));
+		await page.locator('.modal .mact[disabled]').scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(SHOT, `split-own-prov-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal .mact[disabled]', { force: true }); await W(300);
+		ok('点灰掉的节点没反应' + T, await page.isVisible('.modal') && !S.calls.some((c) => c.m === 'split_set' && c.p.app?.t === '合集里的节点 01'));
+		await page.click('.modal [data-v="close"]'); await W(400);
+		// 交给分流管：确认（写清楚删哪、先备份、重启后生效）→ 告诉路由器撞了的那几条
+		await page.click('[data-sk="app"][data-sid="netflix"]'); await W(400);
+		await page.click('.modal [data-v="move"]'); await W(400);
+		const cf = await page.textContent('.modal:last-of-type');
+		ok('交给分流管：先确认，说从覆写里删掉、原文件先备份、重启后生效' + T, /交给分流管/.test(cf) && /从覆写里删掉这几行，改在分流里管。原文件先备份。重启后生效。/.test(cf), cf);
+		await page.screenshot({ path: path.join(SHOT, `split-own-confirm-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-v="true"]'); await W(500);
+		let mvc = S.calls.filter((c) => c.m === 'split_own_move').pop();
+		ok('搬的是撞了的那一条；提示搬了几条；顶上要重启' + T, mvc && JSON.stringify(mvc.p.keys) === '["f1:DOMAIN-SUFFIX,netflix.com,DIRECT"]' && /已交给分流管 1 条/.test(await page.textContent('#toast')) && await page.isVisible('#splRs') && !/按覆写的走/.test(await page.textContent('[data-sk="app"][data-sid="netflix"]')), JSON.stringify(mvc && mvc.p));
+		// 点「覆写里的」软件：写在哪、走哪、原文；交给分流管搬整组
+		await page.click('[data-sk="own"][data-sid^="app:"]'); await W(400);
+		const cd = await page.textContent('.modal');
+		ok('点覆写里的软件：写在「OpenClash 自定义规则 · 优先匹配」、走哪、原文，能交给分流管' + T, /OpenClash 自定义规则 · 优先匹配/.test(cd) && /走🇭🇰香港02/.test(cd.replace(/\s+/g, '')) && /DOMAIN-SUFFIX,game\.example\.com,/.test(cd) && await page.isVisible('.modal [data-v="move"]'), cd);
+		l = await lay(page); ok('详情卡不出界' + T, !l.length && await page.evaluate(() => { const b = document.querySelector('.modal .modalbox').getBoundingClientRect(); return [...document.querySelectorAll('.modal .modalbox *')].every((e) => { const r = e.getBoundingClientRect(); return !r.width || r.right <= b.right + 1; }); }), l.join('；'));
+		await page.screenshot({ path: path.join(SHOT, `split-own-card-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-v="move"]'); await W(400); await page.click('.modal [data-v="true"]'); await W(500);
+		mvc = S.calls.filter((c) => c.m === 'split_own_move').pop();
+		ok('搬整组：两条网址一起；合成自己加的软件' + T, mvc.p.keys.length === 2 && /已交给分流管 2 条/.test(await page.textContent('#toast')) && /自己加的/.test(await page.textContent('#splBody')) && !(await page.$('[data-sk="own"][data-sid^="app:"]')));
+		// 网站栏：关键词、IP 段这些也列出来，分流管不了的不给按钮
+		await page.click('[data-st="site"]'); await W(200);
+		t = await page.textContent('#splBody');
+		ok('网站：关键词、IP 段也列出来，标「覆写里的」，写写法和去向（拒绝）' + T, /ads/.test(t) && /关键词/.test(t) && /拒绝/.test(t) && /8\.8\.8\.0\/24/.test(t) && /IP 段/.test(t) && /覆写里的/.test(t), t.slice(0, 300));
+		l = await lay(page); ok('网站栏不错位' + T, !l.length, l.join('；'));
+		await page.screenshot({ path: path.join(SHOT, `split-own-site-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('[data-sk="own"][data-sid="site:f1:DOMAIN-KEYWORD,ads,REJECT"]'); await W(400);
+		ok('分流管不了的：写原因，没有「交给分流管」' + T, /去向「拒绝」分流里选不了/.test(await page.textContent('.modal')) && !(await page.$('.modal [data-v="move"]')));
+		await page.click('.modal [data-v="close"]'); await W(400);
+		await page.click('[data-sk="own"][data-sid="site:f2:IP-CIDR,8.8.8.0/24,节点选择"]'); await W(400);
+		ok('候补匹配里的：写在「候补匹配」；IP 段分流管不了' + T, /OpenClash 自定义规则 · 候补匹配/.test(await page.textContent('.modal')) && /IP 段 这种写法分流管不了/.test(await page.textContent('.modal')) && !(await page.$('.modal [data-v="move"]')));
+		await page.screenshot({ path: path.join(SHOT, `split-own-nomove-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-v="close"]'); await W(400);
+		// 设备栏：点覆写里的那台，交给分流管
+		await page.click('[data-st="dev"]'); await W(200);
+		await page.click('[data-sk="own"][data-sid="dev:aa:aa:aa:aa:aa:02"]'); await W(400);
+		await page.click('.modal [data-v="move"]'); await W(400); await page.click('.modal [data-v="true"]'); await W(500);
+		mvc = S.calls.filter((c) => c.m === 'split_own_move').pop();
+		ok('设备交给分流管：搬那一条来源 IP，变成分流自己的设置' + T, JSON.stringify(mvc.p.keys) === '["f1:SRC-IP-CIDR,192.168.1.11/32,DIRECT"]' && (await page.$('[data-sk="dev"][data-sid="aa:aa:aa:aa:aa:02"]')) !== null);
 		await ctx.close();
 	}
 	// 家人（有代理权限）：没有「识别软件」（能看到别人访问了哪些网站，只有主账号能用）

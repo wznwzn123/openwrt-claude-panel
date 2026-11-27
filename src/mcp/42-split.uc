@@ -537,14 +537,16 @@ P.split_restart = function() {
 	return { ok: true };
 };
 // 看门狗每分钟调一次：选的策略组没了（订阅更新后），改走主策略组、推送、重启插件
-// OpenClash：自定义规则里分流那一段没了（AI 整份覆盖、还原备份、原版后台里改了）：按现在的设置补回去。补了返回 true
+// OpenClash：自定义规则里分流那一段没了（AI 整份覆盖、还原备份、原版后台里改了）：按现在的设置补回去。
+// 返回 'gone'（整段都没了，补回）、'old'（还在，只是组数跟新版本的写法对不上：补丁加了事先占好的组。11/28 用户路由器装 V8 后被误报成「被改掉了」，现在悄悄补齐）、false（没动）
 function sp_keep() {
 	if (sp_kind() != 'openclash') return false;
 	let o = sp_read(), s = readfile(SP_CUSTOM);
 	if (s == null || !length(sp_each(o)) && !length(o.fam)) return false;
 	let rules = sp_rules(o, sp_main(sp_groups() ?? sp_cfg_groups('openclash')));
-	if (!length(rules) || length(filter(split(s, '\n'), (l) => match(l, /^- RULE-SET,cmcp_sp_/) && index(l, SP_MARK) >= 0)) == length(rules)) return false;
-	return sp_oc_write(rules);
+	let have = length(filter(split(s, '\n'), (l) => match(l, /^- RULE-SET,cmcp_sp_/) && index(l, SP_MARK) >= 0));
+	if (!length(rules) || have == length(rules)) return false;
+	return sp_oc_write(rules) ? (have ? 'old' : 'gone') : false;
 }
 // AI 整份覆盖 / 还原自定义规则时顺手补上（它本来就要重启 OpenClash，不用多重启一次）
 push(RULES_KEEP, (p) => p == SP_CUSTOM && sp_keep() ? '分流' : null);
@@ -603,7 +605,8 @@ function sp_node_watch(o, kind, want, names) {
 	if (!moved && !chg) return;
 	// OpenClash 只换规则集内容（同名节点的组事先占好了）；第一次用（还没占好）或者 Nikki 要重启插件，节点已经不通了，重启比一直不通好
 	let r = sp_apply(o, kind);
-	if (r.restart && moved) { sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart'); let z = sp_read(); delete z.pending; cmcp_writej(SP_F, z); }
+	// 之前写好了还没重启（pending：比如补丁换了写法、事先占好的组还没加载）也要重启，不然挪过去的条目在跑着的配置里没有对应的组
+	if ((r.restart || sp_read().pending) && moved) { sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart'); let z = sp_read(); delete z.pending; cmcp_writej(SP_F, z); }
 	let msg = (l, a, b) => { try { sh(sprintf('%s/cmcp-notify %s split %s %s split >/dev/null 2>&1', SBIN, a, shq(b), shq(l))); } catch (e) {} };
 	// 最近切换（最多 10 条，跟特色功能的「最近切换」一样）：换到同名节点、换回原节点
 	let z = sp_read();
@@ -624,7 +627,10 @@ P.split_check = function() {
 	if (kind == 'openclash') {
 		let fixed = [];
 		if (SP_CUSTOM == BL_CUSTOM && bl_keep()) push(fixed, '不走代理');
-		if (sp_keep()) push(fixed, '分流');
+		let k = sp_keep();
+		if (k == 'gone') push(fixed, '分流');
+		// 只是写法换新了：标「还没生效」，不推送「被改掉了」
+		if (k == 'old') { o = sp_read(); o.pending = true; cmcp_writej(SP_F, o); }
 		if (length(fixed)) {
 			o = sp_read(); o.pending = true; cmcp_writej(SP_F, o);
 			try { sh(sprintf('%s/cmcp-notify warn split %s %s split >/dev/null 2>&1', SBIN, shq('「' + join('」「', fixed) + '」的规则被改掉了，已补回'), shq('OpenClash 的自定义规则被整份改过，面板加的那几行没了。重启 OpenClash 后生效：在「分流」里点「现在重启」。'))); } catch (e) {}

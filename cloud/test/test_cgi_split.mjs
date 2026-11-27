@@ -229,6 +229,14 @@ try {
 		fs.rmSync(E + '/notified', { force: true });
 		await cgi('split_check');
 		ok('[补回] 已经补好了：不再改、不再推送', lines() === n0 && !fs.existsSync(E + '/notified'));
+		// 用户路由器 11/28 装 V8 后：新版本多占了一个组，分流那段还在、只是少一组，被误报成「被改掉了」——只是写法换新了：悄悄补齐、标「还没生效」，不推送
+		{
+			await cgi('split_restart'); fs.writeFileSync(RUN, '');
+			const cur = rd(CUS), last = (cur.match(/^- RULE-SET,(cmcp_sp_[dag][0-9]+),[^\n]*# \[cmcp-split\]$/gm) || []).pop(), nm = last && last.match(/cmcp_sp_[dag][0-9]+/)[0];
+			fs.writeFileSync(CUS, cur.split('\n').filter((l) => l !== last).join('\n'));
+			await cgi('split_check');
+			ok('[补回] 分流那段还在、只是少了一组（补丁换了写法）：补齐，不推送「被改掉了」，标「还没生效」，不自动重启', n0 >= 2 && nm && lines() === n0 && rd(CUS).includes('RULE-SET,' + nm + ',') && !fs.existsSync(E + '/notified') && (await cgi('split_get')).result.pending === true && rd(RUN) === '', rd(E + '/notified') + rd(CUS));
+		}
 		// AI（或面板的规则编辑）整份写自定义规则：写的时候就补上，不用多重启一次
 		const OC = E + '/oc'; fs.mkdirSync(OC, { recursive: true });
 		const CJ = JSON.parse(rd(E + '/config.json')); fs.writeFileSync(E + '/config.json', JSON.stringify({ ...CJ, custom_dir: OC }));

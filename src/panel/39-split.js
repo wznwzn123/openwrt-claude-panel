@@ -14,30 +14,66 @@ function splName(t) {
 	if (!t) return '跟随全局';
 	if (t === 'DIRECT') return '直连';
 	if (t === 'PROXY') return '代理';
+	if (t === 'REJECT' || t === 'REJECT-DROP') return '拒绝';
 	return t;
 }
 const splPill = (t) => `<span class="pill${t ? ' on' : ''}">${esc(splName(t))}</span>`;
+/* 覆写里你自己写的规则（用户 11/28：认出来显示在分流里，标「覆写里的」；跟分流撞了按你写的走；点「交给分流管」才搬过来）
+ * 路由器 split_get 给 own：[{ k, ty, v, t, tag, src: f1|f2|nk, pri }]、ov：{ '种类:编号': { t, v, part } }（分流的这一条跟你写的撞了）
+ * 带「# [名字]」的网址合成一个软件放软件栏；设备的固定 IP 对上了放设备栏；其他放网站栏 */
+const SPL_SRC = { f1: 'OpenClash 自定义规则 · 优先匹配', f2: 'OpenClash 自定义规则 · 候补匹配', nk: 'Nikki 规则' };
+const SPL_TY = { DOMAIN: '完整网址', 'DOMAIN-KEYWORD': '关键词', 'DOMAIN-REGEX': '正则', 'IP-CIDR': 'IP 段', 'IP-CIDR6': 'IP 段', 'SRC-IP-CIDR': '来源 IP', GEOIP: 'IP 归属地', GEOSITE: '网站分类', 'RULE-SET': '规则集', 'DST-PORT': '端口', 'PROCESS-NAME': '程序名' };
+const splIsDom = (x) => x.ty === 'DOMAIN-SUFFIX' || x.ty === 'DOMAIN';
+function splOwn() {
+	const d = SPL.d, g = { app: [], site: [], dev: {} }, by = {}, ipMac = {};
+	for (const x of d.devices || []) if (x.ip) ipMac[x.ip] = x.mac;
+	for (const [mac, v] of Object.entries(d.dev || {})) if (v && v.ip && !ipMac[v.ip]) ipMac[v.ip] = mac;
+	for (const x of d.own || []) {
+		const ip = x.ty === 'SRC-IP-CIDR' && /^\d+\.\d+\.\d+\.\d+\/32$/.test(x.v) ? x.v.replace(/\/32$/, '') : '', mac = ip && ipMac[ip];
+		if (mac) { const k = 'dev:' + mac; (by[k] = by[k] || { key: k, mac, name: x.v, t: x.t, items: [] }).items.push(x); g.dev[mac] = by[k]; continue; }
+		if (splIsDom(x) && x.tag) { const k = 'app:' + x.tag + '|' + x.t; if (!by[k]) g.app.push((by[k] = { key: k, name: x.tag, t: x.t, items: [] })); by[k].items.push(x); continue; }
+		const k = 'site:' + x.k;
+		g.site.push((by[k] = { key: k, name: x.v, sub: SPL_TY[x.ty] ?? (x.ty === 'DOMAIN-SUFFIX' ? '' : x.ty), t: x.t, items: [x] }));
+	}
+	SPL.own = by;
+	return g;
+}
+// 这条能不能交给分流管（跟路由器 split_own_move 一样的判断）：只有网址、能认出设备的来源 IP；去向要是直连、策略组或者不在订阅合集里的节点
+function splOwnWhy(x, d) {
+	if (!(x.t === 'DIRECT' || (d.groups || []).includes(x.t) || (d.nodes || []).some((n) => n.n === x.t && !n.p))) return `去向「${splName(x.t)}」分流里选不了`;
+	if (splIsDom(x) || x.ty === 'SRC-IP-CIDR') return '';
+	return (SPL_TY[x.ty] || x.ty) + ' 这种写法分流管不了';
+}
+// 撞车提示（分流自己的这一行下面）
+function splOvLine(o) { return o ? `<span class="splov">${o.part ? `部分网址按覆写的走「${esc(splName(o.t))}」` : `覆写里写了走「${esc(splName(o.t))}」 按覆写的走`}</span>` : ''; }
 function splRows() {
-	const d = SPL.d, row = (k, id, name, sub, t, tag) => `<button class="file splrow" type="button" data-sk="${k}" data-sid="${esc(id)}"><div style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(name)}${tag ? ` <span class="spltag">${tag}</span>` : ''}</b>${sub ? `<span class="muted ell" style="display:block;font-size:12.5px">${esc(sub)}</span>` : ''}</div>${splPill(t)}</button>`;
+	const d = SPL.d, own = splOwn(), OWN = '覆写里的';
+	const row = (k, id, name, sub, t, tag, ov) => `<button class="file splrow" type="button" data-sk="${k}" data-sid="${esc(id)}"><div style="flex:1;min-width:0"><b class="splnm"><span class="ell">${esc(name)}</span>${tag ? `<span class="spltag${tag === OWN ? ' own' : ''}">${tag}</span>` : ''}</b>${sub ? `<span class="muted ell" style="display:block;font-size:12.5px">${esc(sub)}</span>` : ''}${splOvLine(ov)}</div>${splPill(t)}</button>`;
+	const ovOf = (k, id) => (d.ov || {})[k + ':' + id];
 	if (SPL.tab === 'app') {
-		const mine = Object.entries(d.capp || {}).map(([id, c]) => row('capp', id, c.name, (c.doms || []).join('、'), c.t, '自己加的')).join('');
+		const mine = Object.entries(d.capp || {}).map(([id, c]) => row('capp', id, c.name, (c.doms || []).join('、'), c.t, '自己加的', ovOf('capp', id))).join('');
+		const ow = own.app.map((g) => row('own', g.key, g.name, g.items.map((x) => x.v).join('、'), g.t, OWN)).join('');
 		// 识别软件能看到设备访问了哪些网站：只有主账号能用
 		const owner = ME_ROLE.role !== 'sub';
 		return `<div class="btngrid spltop${owner ? '' : ' one'}">${owner ? '<button class="btn sm" type="button" data-sa="learn">识别软件</button>' : ''}<button class="btn sm" type="button" data-sa="capp">添加软件</button></div>
-			<section class="card list" style="margin-top:12px">${mine}${d.apps.map((a) => row('app', a.id, a.name, '', d.app[a.id])).join('')}</section>`;
+			<section class="card list" style="margin-top:12px">${mine}${ow}${d.apps.map((a) => row('app', a.id, a.name, '', d.app[a.id], '', ovOf('app', a.id))).join('')}</section>`;
 	}
 	if (SPL.tab === 'site') {
 		const l = Object.entries(d.site || {});
+		const ow = own.site.map((g) => row('own', g.key, g.name, g.sub, g.t, OWN)).join('');
 		return `<div class="btngrid spltop one"><button class="btn sm" type="button" data-sa="site">添加网站</button></div>
-			<section class="card list" style="margin-top:12px">${l.length ? l.map(([dm, t]) => row('site', dm, dm, '包括它的子域名', t)).join('') : '<div class="empty">还没有加网站</div>'}</section>`;
+			<section class="card list" style="margin-top:12px">${l.length || ow ? l.map(([dm, t]) => row('site', dm, dm, '包括它的子域名', t, '', ovOf('site', dm))).join('') + ow : '<div class="empty">还没有加网站</div>'}</section>`;
 	}
 	if (SPL.tab === 'geo') return `<section class="card list" style="margin-top:12px">${d.geos.map((g) => row('geo', g.id, g.name, '', d.geo[g.id])).join('')}</section>`;
 	// 设备：设了分流的在前，再按在线、名字
 	const seen = {}, list = [];
 	for (const x of d.devices) { seen[x.mac] = 1; list.push(x); }
 	for (const [mac, v] of Object.entries(d.dev)) if (!seen[mac]) list.push({ mac, name: v.name, ip: v.ip, online: false });
-	list.sort((a, b) => (!!d.dev[b.mac] - !!d.dev[a.mac]) || (b.online - a.online) || String(a.name || '').localeCompare(String(b.name || '')));
-	return `<section class="card list" style="margin-top:12px">${list.length ? list.map((x) => row('dev', x.mac, x.name || x.mac, (d.dev[x.mac]?.ip || x.ip || '') + (x.online ? '' : (x.ip || d.dev[x.mac]?.ip ? ' · ' : '') + '离线'), d.dev[x.mac]?.t)).join('') : '<div class="empty">还没有设备</div>'}</section>`;
+	// 覆写里写了这台设备（来源 IP 对上了）也排在前面；分流没设过的，这一行就是覆写里的那条
+	const set = (m) => !!(d.dev[m] || own.dev[m]);
+	list.sort((a, b) => (set(b.mac) - set(a.mac)) || (b.online - a.online) || String(a.name || '').localeCompare(String(b.name || '')));
+	const sub = (x) => (d.dev[x.mac]?.ip || x.ip || '') + (x.online ? '' : (x.ip || d.dev[x.mac]?.ip ? ' · ' : '') + '离线');
+	return `<section class="card list" style="margin-top:12px">${list.length ? list.map((x) => (!d.dev[x.mac] && own.dev[x.mac] ? row('own', own.dev[x.mac].key, x.name || x.mac, sub(x), own.dev[x.mac].t, OWN) : row('dev', x.mac, x.name || x.mac, sub(x), d.dev[x.mac]?.t, '', ovOf('dev', x.mac)))).join('') : '<div class="empty">还没有设备</div>'}</section>`;
 }
 function splRender() {
 	const d = SPL.d;
@@ -63,14 +99,15 @@ function splPvHtml(d) {
 }
 // 选去向：跟随全局 / 直连 / 代理 / 策略组 / 节点（按地区分组，带延迟）。extra：底下多几个按钮（改网址、删除）
 async function splChoose(title, cur, extra) {
-	const d = SPL.d, opt = (t, n, sub) => `<button class="mact" type="button" data-v="o:${esc(t)}"><span><b class="ell" style="display:block">${esc(n)}</b>${sub ? `<span class="muted" style="font-size:12.5px">${esc(sub)}</span>` : ''}</span>${t === cur ? '<span class="splck">✓</span>' : ''}</button>`;
+	// 订阅合集（proxy-providers）里的节点规则里不能直接写：灰掉（路由器 sp_nodes 标 p:1）
+	const d = SPL.d, opt = (t, n, sub, off) => `<button class="mact" type="button"${off ? ' disabled' : ` data-v="o:${esc(t)}"`}><span><b class="ell" style="display:block">${esc(n)}</b>${sub ? `<span class="muted" style="font-size:12.5px">${esc(sub)}</span>` : ''}</span>${t === cur ? '<span class="splck">✓</span>' : ''}</button>`;
 	const base = [opt('', '跟随全局'), opt('DIRECT', '直连'), ...(d.main ? [opt('PROXY', '代理', d.main)] : [])].join('');
 	const grp = d.groups.filter((g) => g !== d.main).map((g) => opt(g, g)).join('');
 	// 节点按地区分组：认不出地区的放最后
 	const by = {};
 	for (const n of d.nodes || []) (by[n.reg] = by[n.reg] || []).push(n);
 	const regs = Object.keys(by).sort((a, b) => (a === '?') - (b === '?') || by[b].length - by[a].length);
-	const nodes = regs.map((r) => `<div class="mgrp"><div class="mgt">节点 · ${esc(SPL_REG[r] || (r === '?' ? '其他' : r))}</div><div class="mlist">${by[r].map((n) => opt(n.n, n.n, n.d ? n.d + ' ms' : '')).join('')}</div></div>`).join('');
+	const nodes = regs.map((r) => `<div class="mgrp"><div class="mgt">节点 · ${esc(SPL_REG[r] || (r === '?' ? '其他' : r))}</div><div class="mlist">${by[r].map((n) => opt(n.n, n.n, n.p ? '订阅合集里的 选不了' : n.d ? n.d + ' ms' : '', n.p)).join('')}</div></div>`).join('');
 	const v = await modal(`<div class="sheethead"><h3 class="ell" style="margin:0">${esc(title)}</h3><button class="btn sm" data-v="close">关闭</button></div>
 		<div class="cscroll splopts"><div class="mgrp"><div class="mlist">${base}</div></div>${grp ? `<div class="mgrp"><div class="mgt">策略组</div><div class="mlist">${grp}</div></div>` : ''}${nodes}</div>
 		${extra ? `<div class="cfoot"><div class="btngrid">${extra.map(([k, t, danger]) => `<button class="btn${danger ? ' danger' : ''}" type="button" data-v="x:${k}">${t}</button>`).join('')}</div></div>` : ''}`);
@@ -83,8 +120,48 @@ async function splSave(body, ok) {
 	try { SPL.d = await P('split_set', body, 30000); splRender(); if (ok) toast(ok); return true; }
 	catch (e) { toast(e.message, true); return false; }
 }
+// 分流的这一条跟覆写里你写的撞了的那几条（跟路由器 sp_conflicts 一样：网址一样、你写的包住它、它包住你写的；设备看固定 IP）
+const splCov = (a, b) => a === b || a.endsWith('.' + b);
+function splOvKeys(k, id) {
+	const d = SPL.d, ip = k === 'dev' ? d.dev[id]?.ip : '';
+	const doms = k === 'site' ? [id] : k === 'capp' ? d.capp[id]?.doms || [] : k === 'app' ? d.apps.find((a) => a.id === id)?.doms || [] : [];
+	return (d.own || []).filter((x) => x.pri && (k === 'dev' ? ip && x.ty === 'SRC-IP-CIDR' && x.v === ip + '/32' : splIsDom(x) && doms.some((dm) => splCov(dm, x.v) || (x.ty === 'DOMAIN-SUFFIX' && splCov(x.v, dm))))).map((x) => x.k);
+}
+// 点「覆写里的」那一行：写在哪、走哪、原文；能搬的给「交给分流管」
+async function splOwnCard(key) {
+	const d = SPL.d, g = SPL.own && SPL.own[key];
+	if (!g) return;
+	const why = g.items.map((x) => splOwnWhy(x, d)), canN = why.filter((x) => !x).length;
+	const src = [...new Set(g.items.map((x) => SPL_SRC[x.src] || x.src))].join('\n');
+	const v = await modal(`<h3 class="ell" style="margin:0 0 10px">${esc(g.name)}</h3>
+		<div class="splown"><div><span class="muted">写在</span><span style="white-space:pre-line">${esc(src)}</span></div><div><span class="muted">走</span><span class="ell">${esc(splName(g.t))}</span></div></div>
+		<pre class="splraw">${esc(g.items.map((x) => x.ty + ',' + x.v + ',' + x.t).join('\n'))}</pre>
+		${canN ? '' : `<div class="notice" style="margin-top:10px">${esc(why[0])}</div>`}
+		<div class="btngrid${canN ? '' : ' one'}" style="margin:14px 0 0"><button class="btn" data-v="close">关闭</button>${canN ? '<button class="btn primary" data-v="move">交给分流管</button>' : ''}</div>`, null, { compact: true });
+	if (v === 'move') splOwnMove(g.items.filter((x, i) => !why[i]).map((x) => x.k));
+}
+async function splOwnMove(keys) {
+	if (!keys.length) return;
+	if (!(await confirmBox('交给分流管', '从覆写里删掉这几行，改在分流里管。原文件先备份。重启后生效。', '交给分流管', false, { compact: true }))) return;
+	try {
+		const r = await P('split_own_move', { keys }, 30000);
+		SPL.d = r; splRender();
+		const sk = r.skip || [];
+		toast(`已交给分流管 ${r.movedN || 0} 条` + (sk.length ? ` ${sk.length} 条搬不了：${sk[0]}` : ''));
+	} catch (e) { toast(e.message, true); }
+}
 async function splPick(k, id) {
 	const d = SPL.d;
+	if (k === 'own') return splOwnCard(id);
+	// 跟覆写里你写的撞了：先问要不要交给分流管（用户 11/28）。全撞了在分流里改不生效，只给「取消」；部分撞了能「改没撞的网址」（用户 11/28 02:3x 选）
+	const ov = (d.ov || {})[k + ':' + id];
+	if (ov) {
+		const keys = splOvKeys(k, id), nm = k === 'app' ? d.apps.find((a) => a.id === id)?.name : k === 'capp' ? d.capp[id]?.name : k === 'site' ? id : (d.devices.find((x) => x.mac === id)?.name || d.dev[id]?.name || id);
+		const v = await modal(`<h3 class="ell" style="margin:0 0 10px">${esc(nm || id)}</h3><div class="notice w">${ov.part ? `部分网址按覆写的走「${esc(splName(ov.t))}」` : `覆写里写了走「${esc(splName(ov.t))}」 按覆写的走`}</div>
+			<div class="btngrid" style="margin:14px 0 0">${ov.part ? '<button class="btn" data-v="edit">改没撞的网址</button>' : '<button class="btn" data-v="close">取消</button>'}<button class="btn primary" data-v="move"${keys.length ? '' : ' disabled'}>交给分流管</button></div>`, null, { compact: true });
+		if (v === 'move') return splOwnMove(keys);
+		if (v !== 'edit') return;
+	}
 	if (k === 'capp') return splCappEdit(id);
 	const name = k === 'app' ? d.apps.find((a) => a.id === id)?.name : k === 'geo' ? d.geos.find((g) => g.id === id)?.name : k === 'site' ? id : (d.devices.find((x) => x.mac === id)?.name || d.dev[id]?.name || id);
 	const cur = k === 'dev' ? d.dev[id]?.t || '' : d[k][id] || '';

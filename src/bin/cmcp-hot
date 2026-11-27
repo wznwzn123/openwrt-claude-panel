@@ -74,6 +74,6 @@ if ! selfcheck; then restore; fail "装完面板打不开，已退回原来的";
 # 记下现在是第几个补丁（面板据此发现自己该换新的）
 { grep -v '^HOT=' "$D/version"; echo "HOT=$N"; } > "$D/version.tmp" && mv -f "$D/version.tmp" "$D/version"
 esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新（v$VER 补丁 $N）" "$(esc "$NOTES")" >> "$D/events.log"
+printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新到 v$VER V$N" "$(esc "$NOTES")" >> "$D/events.log"
 log "热补丁 $N 装好了"
 cd / && rm -rf "${W:?}"

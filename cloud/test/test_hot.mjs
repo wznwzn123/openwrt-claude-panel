@@ -51,7 +51,7 @@ try {
 	ok('装好：面板、接口、新的小工具、远程数据都换上', rd('www-claude-mcp/panel/index.html') === 'NEW PANEL' && rd('www-claude-mcp/cgi-bin/mcp') === 'NEW CGI' && rd('usr/sbin/cmcp-weekly2') === 'NEW TOOL' && rd('etc/claude-mcp/remote.json') === '{"apps":[]}');
 	ok('接口和小工具可以执行', (fs.statSync(R + '/www-claude-mcp/cgi-bin/mcp').mode & 0o111) && (fs.statSync(R + '/usr/sbin/cmcp-weekly2').mode & 0o111));
 	ok('记下补丁号（版本号不变）', /^VER=6\.0\.0$/m.test(ver()) && /^HOT=1$/m.test(ver()), ver());
-	ok('通知里记一条（不推送）', /"kind":"hot".*面板已自动更新（v6\.0\.0 补丁 1）.*修了订阅页的显示问题/.test(rd('etc/claude-mcp/events.log') || ''));
+	ok('通知里记一条（不推送）', /"kind":"hot".*面板已自动更新到 v6\.0\.0 V1.*修了订阅页的显示问题/.test(rd('etc/claude-mcp/events.log') || ''));
 	ok('不留临时文件', !fs.readdirSync('/tmp').some((f) => /^cmcp_hot\.\d+$/.test(f)) && !fs.existsSync(R + '/www-claude-mcp/panel/index.html.hotnew'));
 	fs.writeFileSync(R + '/www-claude-mcp/panel/index.html', 'NEW PANEL keep');
 	run();

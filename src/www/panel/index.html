@@ -7446,7 +7446,7 @@ function panelVerCheck(cur) {
 	let tried = ''; try { tried = sessionStorage.getItem('rp_verfix') || ''; } catch (e) {}
 	if (tried === cur) return false;
 	try { sessionStorage.setItem('rp_verfix', cur); } catch (e) {}
-	toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' 补丁 $1') + '，正在换成新版…');
+	toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' V$1') + '，正在换成新版…');
 	refreshPanel();
 	return true;
 }
@@ -7469,8 +7469,8 @@ async function updCheck(force) {
 	if (r && typeof r === 'object' && panelVerCheck(r.pv || r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
-	// 热补丁装过的写上第几个（用户 11/27：能看出补丁到了没有）
-	const hv = UPD.hot ? '（修复补丁 ' + UPD.hot + '）' : '';
+	// 热补丁装过的在版本后面写「V编号」（用户 11/27：v6.0.0 V1，能看出补丁到了没有）
+	const hv = UPD.hot ? ' V' + UPD.hot : '';
 	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + hv + ' · 已经是最新版';
 	// 点了「检查更新」：路由器在后台马上查修复补丁，过 20 秒再看一次，装上了面板会自己换新
 	if (force && UPD.hotq && !UPD.newer) setTimeout(() => P('update_check', { nohot: 1 }, 25000).then((x) => { if (x && typeof x === 'object') panelVerCheck(x.pv || x.cur); }).catch(() => {}), 20000);

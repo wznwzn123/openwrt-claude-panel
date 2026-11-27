@@ -11,7 +11,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, '');
 		if (U.down > 0 && m !== 'update_start') { U.down--; req.socket.destroy(); return; }   // 面板服务在重启：连不上
 		let result;
-		if (m === 'update_check') result = { cur: U.cur, code: 'hosted-ai', latest: U.latest, notes: U.notes, newer: U.cur !== U.latest, force: U.force && U.cur !== U.latest, auto: U.auto, seen: U.seen };
+		if (m === 'update_check') result = { cur: U.cur, code: 'hosted-ai', latest: U.latest, notes: U.notes, newer: U.cur !== U.latest, hot: U.hot || 0, force: U.force && U.cur !== U.latest, auto: U.auto, seen: U.seen };
 		else if (m === 'notices_seen') { if (body.params && body.params.upd) U.seen = body.params.upd; result = { ok: true }; }
 		else if (m === 'autoupd_set') { U.auSets.push(body.params); U.auto = body.params.on !== false; result = { auto: U.auto }; }
 		else if (m === 'update_start') { U.started++; U.startArgs = body.params; result = { started: true }; }
@@ -83,6 +83,13 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 	await page.goto('http://localhost:8183/panel/?p=more'); await W(2500);
 	await page.click('[data-t="update"]'); await W(800);
 	ok('已经是最新版：检查更新说明是最新', /已经是最新(版|的正式版)/.test(await page.textContent('.modal')) && !(await page.isVisible('.modal [data-go]')));
+	// 用户 11/27：装过热补丁的在版本后面写「V编号」
+	{
+		U.hot = 1;
+		const p2 = await ctx.newPage(); await p2.goto(page.url()); await W(2500);
+		ok('装过热补丁：版本后面写「V1」', /^v[0-9.]+ V1 · 已经是最新版$/.test(await p2.textContent('#updState')), await p2.textContent('#updState'));
+		await p2.close(); U.hot = 0;
+	}
 	// 6.0 第 86 项：必须更新夜里自动装（默认开，关掉要确认）
 	ok('检查更新里有「必须更新自动装」开关，默认开', /必须更新自动装/.test(await page.textContent('.modal')) && await page.isChecked('.modal [data-au]'));
 	await page.screenshot({ path: path.join(__dirname, 'shots', 'update-05-auto.png') });

@@ -69,6 +69,8 @@ function wisp_ifname(id) {
 	for (let x in (wifi_ifnames()[id]?.interfaces ?? [])) if (x?.ifname && match(x.ifname, /^[A-Za-z0-9_.-]+$/)) return x.ifname;
 	return null;
 }
+// 宽带口（网线）现在能不能上网：能的话中继只当备用（网线优先）
+function wisp_cable() { let wi = wan_iface(); if (!wi || wi['.name'] == 'wwan' || wi.cmcp_wisp == '1') return false; let w = wan_status(wi['.name']); return !!(w?.up && w.gw); }
 P.wisp_get = function() {
 	let ws = wifi_state();
 	if (ws.none) return { none: ws.none == 'nocfg' ? '这台路由器没有无线配置' : '这台路由器没有无线网卡', pending: ng_pending() };
@@ -77,7 +79,7 @@ P.wisp_get = function() {
 	return {
 		radios: map(filter(ws.radios, (x) => x.band == '2g' || x.band == '5g'), (x) => ({ id: x.id, band: x.band, name: BAND_NAME[x.band], on: x.r.disabled != '1' && !!wisp_ifname(x.id), ch: length(x.r.channel ?? '') && x.r.channel != 'auto' ? +x.r.channel : 'auto' })),
 		on: !!s, mine: !!m, ssid: s?.ssid ?? null, radio: s?.device ?? null, status: st,
-		clash: !!(st?.ip && lan && cidr_has(lan.ip, lan.pl, st.ip)), lan: lan ? lan.ip : null,
+		clash: !!(st?.ip && lan && cidr_has(lan.ip, lan.pl, st.ip)), lan: lan ? lan.ip : null, cable: wisp_cable(),
 		can: wisp_supp(), pending: ng_pending()
 	};
 };
@@ -155,7 +157,10 @@ P.wisp_set = function(a) {
 			set('wireless.' + x.id + '.channel', '' + ch);
 			if (!length(m?.cmcp_ch ?? '')) set('wireless.' + WISP_IF + '.cmcp_ch', cur);
 		}
-		if (!net) { set('network.wwan', 'interface'); set('network.wwan.proto', 'dhcp'); set('network.wwan.cmcp_wisp', '1'); files.network = 1; }
+		// 网线优先（用户 11/28：插着网线又开中继，两条都通时走哪条说不准）：wwan 的默认路由跳数比宽带口大，网线断了才走中继
+		let wi = wan_iface(), wm = wi && wi['.name'] != 'wwan' ? +(wi.metric ?? 0) || 0 : 0, mt = '' + (wm + 20);
+		if (!net) { set('network.wwan', 'interface'); set('network.wwan.proto', 'dhcp'); set('network.wwan.cmcp_wisp', '1'); set('network.wwan.metric', mt); files.network = 1; }
+		else if (net.cmcp_wisp == '1' && +(net.metric ?? 0) <= wm) { set('network.wwan.metric', mt); files.network = 1; }
 		if (index(zl, 'wwan') < 0) { let nl = slice(zl); push(nl, 'wwan'); zset(nl); files.firewall = 1; }
 		what = '连「' + ssid + '」';
 	} else die('不支持的操作');

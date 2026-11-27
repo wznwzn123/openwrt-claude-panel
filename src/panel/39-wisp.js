@@ -23,6 +23,8 @@ function wsRender() {
 		const t = st?.up ? `已连上「${esc(d.ssid)}」` : st?.pending ? `正在连接「${esc(d.ssid)}」…` : `连不上「${esc(d.ssid)}」`;
 		const sub = [band, st?.up && st.ip ? st.ip : '', st?.up ? '连了 ' + wanDur(st.uptime) : '', d.mine ? '' : '原版后台里设的'].filter(Boolean).join(' · ');
 		h = `<div class="wshd"><div class="wanhd"><b class="${st?.up || st?.pending ? '' : 'ndbad'}">${t}</b>${sub ? `<span class="muted">${esc(sub)}</span>` : ''}</div>${d.mine ? '<button class="btn sm" id="wsOff" type="button">断开</button>' : ''}</div>`;
+		// 插着网线也能上网：网线优先，中继当备用（用户 11/28）
+		if (d.cable && d.mine) h += `<div class="notice" style="margin-top:10px">网线优先 网线断了才走这个 Wi-Fi</div>`;
 		if (d.clash) h += `<div class="notice w" style="margin-top:10px">上级 Wi-Fi 也是 ${esc(d.lan.replace(/\.\d+$/, '.x'))} 网段，跟家里冲突，上不了网</div><button class="btn sm" id="wsLan" type="button" style="margin-top:8px">改家里网段</button>`;
 	}
 	if (!d.can) h += `<div class="notice w" style="margin-top:10px">固件没有 wpa_supplicant，连不了别的 Wi-Fi</div>`;
@@ -58,7 +60,7 @@ async function wsConnect(x) {
 	await modal(`<h3>${manual ? '手动输入' : '连「' + esc(x.ssid) + '」'}</h3>
 		${manual ? '<div class="fld"><div class="lb"><b>Wi-Fi 名字</b></div><div class="ctl"><input class="input" data-w="ssid" maxlength="32" autocapitalize="off" autocomplete="off" spellcheck="false"></div></div>' : ''}
 		${lock ? `<div class="fld"><div class="lb"><b>密码${manual ? '（选填）' : ''}</b></div><div class="ctl wfpw"><input class="input" data-w="key" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false"${same ? ' placeholder="不改就不填"' : ''}><button class="btn sm" data-w="eye" type="button">显示</button></div></div>` : ''}
-		<p class="muted" style="font-size:13px;margin:10px 0 0">${chg ? `家里 ${esc(rd.name)} Wi-Fi 会断开几秒，信道改成 ${x.ch}。` : `家里 ${esc(rd.name || '')} Wi-Fi 会断开几秒。`}</p>
+		<p class="muted" style="font-size:13px;margin:10px 0 0">${chg ? `家里 ${esc(rd.name)} Wi-Fi 会断开几秒，信道改成 ${x.ch}。` : `家里 ${esc(rd.name || '')} Wi-Fi 会断开几秒。`}${WS.d.cable ? '<br>插着网线能上网 网线优先 网线断了才走这个 Wi-Fi。' : ''}</p>
 		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">取消</button><button class="btn primary" data-v="go">连接</button></div>`,
 	(m, close) => {
 		const k = m.querySelector('[data-w="key"]'), eye = m.querySelector('[data-w="eye"]');

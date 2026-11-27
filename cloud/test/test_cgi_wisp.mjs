@@ -32,6 +32,7 @@ fs.writeFileSync(BIN + '/ubus', `#!/bin/sh
 case "$2" in
 network.wireless) echo '{"radio0":{"interfaces":[{"ifname":"phy0-ap0"}]},"radio1":{"interfaces":[]}}' ;;
 iwinfo) [ -f ${D}/noiw ] && exit 4; echo '${enc(SCAN)}' ;;
+network.interface.wan) [ -f ${D}/wanup ] || exit 4; echo '{"up":true,"uptime":300,"ipv4-address":[{"address":"192.168.0.2","mask":24}],"route":[{"target":"0.0.0.0","mask":0,"nexthop":"192.168.0.1"}]}' ;;
 network.interface.wwan) echo '{"up":true,"uptime":120,"ipv4-address":[{"address":"'"$(cat ${D}/wwanip 2>/dev/null || echo 10.20.0.8)"'","mask":24}]}' ;;
 *) exit 4 ;;
 esac
@@ -147,12 +148,17 @@ X
 	ok('加客户端：频段、模式 sta、接到 wwan、名字、加密、密码；记下原来的信道', /device 'radio0'/.test(sta) && /mode 'sta'/.test(sta) && /network 'wwan'/.test(sta) && /ssid 'Neighbor-5G'/.test(sta) && /encryption 'psk2'/.test(sta) && /key 'upstream-pass'/.test(sta) && /cmcp_ch '1'/.test(sta), sta);
 	ok('固定信道改成上级的（家里 Wi-Fi 跟着上级）', /channel '6'/.test(sec('wireless', /wifi-device 'radio0'/)));
 	ok('加上网接口 wwan（DHCP，带标记）', /config interface 'wwan'\n\toption proto 'dhcp'\n\toption cmcp_wisp '1'/.test(R('network')), R('network'));
+	ok('网线优先：wwan 的跳数比宽带口大（用户 11/28：插着网线又开中继，两条都通时走哪条说不准）', /option metric '20'/.test(sec('network', /interface 'wwan'/)), R('network'));
 	ok('防火墙外网区域加上 wwan（老写法的字符串也认）', /list network 'wan'\n\tlist network 'wan6'\n\tlist network 'wwan'/.test(R('firewall')), R('firewall'));
 	ok('重新加载：网络、无线、防火墙', await waitFor(() => ['/etc/init.d/network reload', 'wifi reload', '/etc/init.d/firewall reload'].every((x) => runs().includes(x))), runs().join('|'));
 	ok('推送', /无线中继：连「Neighbor-5G」/.test(fs.readFileSync(NOTE, 'utf8')));
 	await cgi('net_confirm', { token: r.result.token });
 	g = (await cgi('wisp_get')).result || {};
 	ok('读：在中继、连的是谁、拿到的地址', g.on && g.mine && g.ssid === 'Neighbor-5G' && g.radio === 'radio0' && g.status?.up && g.status.ip === '10.20.0.8' && g.clash === false, JSON.stringify(g).slice(0, 300));
+	ok('网线没上网：不标网线优先', g.cable === false);
+	fs.writeFileSync(D + '/wanup', '1');
+	ok('网线能上网：标出来（面板写网线优先）', ((await cgi('wisp_get')).result || {}).cable === true);
+	fs.rmSync(D + '/wanup');
 	fs.writeFileSync(D + '/wwanip', '192.168.1.50');
 	g = (await cgi('wisp_get')).result || {};
 	ok('上级给的地址跟家里网段一样：标出冲突', g.clash === true && g.lan === '192.168.1.1');

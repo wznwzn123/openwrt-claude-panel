@@ -34,8 +34,11 @@ const ADM = { authorization: 'Bearer admin-key-1234567890' };
 const BIN = path.resolve('../src/bin/cmcp-compat');
 // 一台假路由器：自己的设置目录
 const mkRouter = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'cmcpcp-')); fs.writeFileSync(d + '/config.json', JSON.stringify({ token: 'tok' + 'q'.repeat(30) })); return d; };
+// 跟有的固件一样没有 od、hexdump 的 PATH（用户 11/27 的路由器 busybox 没带 od，随机编号生成不了，尝鲜申请报不上去）
+const NOOD = (() => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'nood-')); for (const dir of (process.env.PATH || '').split(':')) { try { for (const f of fs.readdirSync(dir)) if (!['od', 'hexdump', 'xxd'].includes(f) && !fs.existsSync(d + '/' + f)) fs.symlinkSync(dir + '/' + f, d + '/' + f); } catch (e) {} } return d; })();
+let cpEnv = {};
 const cp = (d, ...args) => new Promise((z) => {
-	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(BIN) + ' ' + args.map((a) => JSON.stringify(a)).join(' ')], { env: { ...process.env, CMCP_COMPAT_D: d, CMCP_COMPAT_HUB: HUB, no_proxy: 'localhost' } });
+	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(BIN) + ' ' + args.map((a) => JSON.stringify(a)).join(' ')], { env: { ...process.env, CMCP_COMPAT_D: d, CMCP_COMPAT_HUB: HUB, no_proxy: 'localhost', ...cpEnv } });
 	let out = ''; p.stdout.on('data', (x) => { out += x; }); p.stderr.on('data', (x) => { out += x; });
 	p.on('close', () => { let j = null; try { j = JSON.parse(out.trim().split('\n').pop()); } catch (e) {} z(j ?? { raw: out }); });
 });
@@ -262,6 +265,14 @@ ok('同一个编号一天最多报 8 次', lim === 2, String(lim));
 const big = await api('/api/compat', { id: 'bbcdefghijkmnpqr', model: 'x'.repeat(5000), fails: Array.from({ length: 50 }, (_, i) => ({ f: 'hack', why: '原因' + String.fromCharCode(97 + (i % 26)) + String.fromCharCode(97 + Math.floor(i / 26)) })) });
 const br = await H().ctx.storage.get('cp:bbcdefghijkmnpqr');
 ok('乱填的：太长的截断，功能名不认识的算「其他」，一次最多 10 条', big.ok && br.model.length === 80 && br.fails.length === 10 && br.fails.every((x) => x.f === 'other'));
+// 没有 od 的固件：编号照样能生成，上报照样成功（尝鲜申请靠它）
+{
+	cpEnv = { PATH: NOOD }; const N = mkRouter();
+	const rn = await cp(N, 'send', 'now'); cpEnv = {};
+	const nid = fs.existsSync(N + '/compat_id') ? fs.readFileSync(N + '/compat_id', 'utf8').trim() : '';
+	ok('没有 od、hexdump 的固件：随机编号照样生成，上报成功', rn && rn.ok === true && /^[a-z2-9]{16}$/.test(nid), JSON.stringify(rn).slice(0, 200));
+	ok('两台路由器的编号不一样', nid && nid !== id);
+}
 server.close();
 console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((r) => r[1]).length}/${results.length}`);

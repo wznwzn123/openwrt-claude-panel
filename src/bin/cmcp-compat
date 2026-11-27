@@ -26,10 +26,13 @@ function hub() {
 	h = match(readfile(L.D + '/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/)?.[2];
 	return h ?? 'https://yrlove520.com';
 }
+// 随机串：直接读 /dev/urandom（不用 od：有的固件的 busybox 没带 od，用户 11/27 的路由器就是，结果尝鲜申请报不上去）
 function rnd(n) {
 	const A = 'abcdefghijkmnpqrstuvwxyz23456789';
-	let r = trim(L.sh('head -c 64 /dev/urandom 2>/dev/null | od -An -tu1 2>/dev/null')), x = map(filter(split(r, /\s+/), (v) => length(v)), (v) => +v);
-	return length(x) < n ? null : join('', map(slice(x, 0, n), (v) => substr(A, v % 32, 1)));
+	let b = readfile('/dev/urandom', 64) ?? '', s = '';
+	for (let i = 0; i < length(b) && length(s) < n; i++) s += substr(A, ord(b, i) % 32, 1);
+	if (length(s) < n) s = substr(trim(L.sh("tr -dc 'a-km-np-z2-9' < /dev/urandom 2>/dev/null | head -c " + n) ?? ''), 0, n);
+	return length(s) == n ? s : null;
 }
 // 自建版的关联码：第一次用时生成，一直用同一个（官网那边关联一次就行）
 function mylk() {
@@ -42,11 +45,8 @@ function mylk() {
 function myid() {
 	let s = trim(readfile(ID) ?? '');
 	if (match(s, /^[a-z2-9]{16}$/)) return s;
-	const A = 'abcdefghijkmnpqrstuvwxyz23456789';
-	let r = trim(L.sh('head -c 64 /dev/urandom 2>/dev/null | od -An -tu1 2>/dev/null')), n = map(filter(split(r, /\s+/), (x) => length(x)), (x) => +x);
-	if (length(n) < 16) return null;
-	s = join('', map(slice(n, 0, 16), (x) => substr(A, x % 32, 1)));
-	writefile(ID, s);
+	s = rnd(16);
+	if (s) writefile(ID, s);
 	return s;
 }
 function ver() {

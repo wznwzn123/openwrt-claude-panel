@@ -119,6 +119,24 @@ function sp_main(groups) {
 	for (let n in (groups ?? [])) if (!p || p[n]?.type == 'Selector') return n;
 	return null;
 }
+// 同地区同名：名字去掉编号后一样（用户 11/28：「台湾03 专线 3x」只换「台湾01 专线 3x」「台湾02 专线 3x」）。
+// 倍率（3x、×2、2倍）不算编号，倍率不同不算同名；名字里只剩编号不一样的才算
+function sp_fam(n) {
+	// 倍率先换成字母（0→a … 9→j），后面把剩下的数字（编号）都换成 #
+	let r = replace('' + n, /([xX×][ ]*[0-9]+(\.[0-9]+)?|[0-9]+(\.[0-9]+)?[ ]*([xX×]|倍))/g, (m) => '<R' + replace('' + (+replace(m, /[^0-9.]/g, '')), /[0-9]/g, (c) => chr(97 + +c)) + '>');
+	return replace(r, /[0-9]+/g, '#');
+}
+// 候选（用户 11/28：先同名、再同地区，同地区都挂了不换）：{ s: 同名的, r: 同地区别的节点 }，各最多 8 个；names 里的策略组不算（认不出地区）
+function sp_sibs(n, names) {
+	let f = sp_fam(n), reg = CL.node_meta(n).reg, out = { s: [], r: [] };
+	for (let x in names) {
+		if (x == n) continue;
+		if (f != '' + n && sp_fam(x) == f) { if (length(out.s) < 8) push(out.s, x); }
+		else if (reg && reg != '?' && CL.node_meta(x).reg == reg && length(out.r) < 8) push(out.r, x);
+	}
+	return out;
+}
+const sp_sib_all = (sb) => type(sb) == 'object' ? [...(sb.s ?? []), ...(sb.r ?? [])] : (type(sb) == 'array' ? sb : []);
 function sp_target(t, mg) { return t == 'DIRECT' ? 'DIRECT' : t == 'PROXY' ? mg : t; }
 // MAC → IP：固定 IP 优先，然后是 DHCP 分配记录
 function sp_ipmap() {
@@ -130,7 +148,7 @@ function sp_ipmap() {
 // 按「设备 → 软件 → 国家」、每种按去向分好的规则
 function sp_rules(o, mg) {
 	let out = [], all = [];
-	// 先记下所有条目，再分组：节点连不上（o.nd）时它的条目改放进主策略组那一组，但分组和名字不变（只换规则集内容，不用重启 OpenClash）
+	// 先记下所有条目，再分组：节点连不上（o.nd）时它的条目改放进换到的同名节点那一组，分组和名字不变（只换规则集内容，不用重启 OpenClash）
 	let add = (kind, t, line) => push(all, [kind, t, line]);
 	// 设备现在的固定 IP 优先（改了局域网网段，固定 IP 跟着搬了），没有再用设的时候记下的
 	let ipm = length(o.dev ?? {}) ? sp_ipmap() : {};
@@ -148,9 +166,10 @@ function sp_rules(o, mg) {
 	for (let g in SP_GEO) if (o.geo[g[0]]) add('g', o.geo[g[0]], 'GEOIP,' + g[0]);
 	let grp = (kind, to) => { if (!to) return null; for (let x in out) if (x.kind == kind && x.to == to) return x; let g = { kind, to, lines: [] }; push(out, g); return g; };
 	for (let e in all) grp(e[0], sp_target(e[1], mg));
-	// 选了单个节点的那一类，先占好「主策略组」一组（可以是空的）：节点连不上时条目挪过去只换内容（11/27 全面检查第 14 条）
-	for (let e in all) if (index(o.nk ?? [], e[1]) >= 0) grp(e[0], mg);
-	for (let e in all) if (e[2]) { let g = grp(e[0], (o.nd ?? {})[e[1]] && mg ? mg : sp_target(e[1], mg)); if (g) push(g.lines, e[2]); }
+	// 选了单个节点的那一类，先占好同地区同名节点（去掉编号后一样）的组（可以是空的）：节点连不上时条目挪过去只换内容，不用重启 OpenClash（用户 11/28）
+	// 只给 OpenClash 占：它会跳过写了不存在节点的自定义规则（订阅里同名节点没了也起得来）；Nikki 换节点本来就要重启，不占
+	if (sp_kind() == 'openclash') for (let e in all) if (index(o.nk ?? [], e[1]) >= 0) for (let sb in sp_sib_all((o.sib ?? {})[e[1]])) grp(e[0], sb);
+	for (let e in all) if (e[2]) { let nd = (o.nd ?? {})[e[1]], g = grp(e[0], type(nd) == 'object' && nd.to ? nd.to : sp_target(e[1], mg)); if (g) push(g.lines, e[2]); }
 	let n = 0;
 	for (let g in out) g.name = sprintf('cmcp_sp_%s%d', g.kind, n++);
 	return out;
@@ -248,8 +267,21 @@ P.split_get = function() {
 	groups ??= sp_cfg_groups(kind) ?? [];
 	let devs = [];
 	try { devs = P.devices().devices ?? []; } catch (e) {}
+	// 选的单个节点：现在通不通、挂了会换到哪个（跟特色功能「节点挂了自动换」一样给个预告；用 OpenClash / Nikki 记的最近一次延迟，不另外测）
+	let pv = [], used = {};
+	for (let x in sp_each(o)) if (index(o.nk ?? [], x[2]) >= 0) used[x[2]] = 1;
+	if (live) {
+		let dm = {}, nm = map(nodes, (x) => x.n);
+		for (let x in nodes) dm[x.n] = x.d;
+		for (let n in keys(used)) {
+			let best = null;
+			let sb = sp_sibs(n, nm);
+			for (let tier in [sb.s, sb.r]) { for (let x in tier) if (dm[x] > 0 && (!best || dm[x] < dm[best])) best = x; if (best) break; }
+			push(pv, { n, d: dm[n] ?? 0, sibs: length(sb.s) + length(sb.r), to: best, td: best ? dm[best] : 0, same: !!best && index(sb.s, best) >= 0 });
+		}
+	}
 	return {
-		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [], nd: o.nd ?? {},
+		kind, live, groups, main: sp_main(groups), pending: !!o.pending, moved: o.moved ?? [], nd: o.nd ?? {}, pv, swl: o.swl ?? [],
 		dev: o.dev, app: o.app, geo: o.geo, fam: o.fam, site: o.site, capp: o.capp, nodes,
 		apps: map(sp_apps(), (a) => ({ id: a[0], name: a[1], doms: a[2] })), geos: map(SP_GEO, (g) => ({ id: g[0], name: g[1] })),
 		devices: map(filter(devs, (d) => d.mac), (d) => ({ mac: d.mac, name: d.name ?? d.hostname ?? '', ip: d.ip, online: !!d.online }))
@@ -377,33 +409,64 @@ function sp_delay(n) {
 	}
 	return 0;
 }
-// 分流里选的单个节点（11/27 全面检查第 14 条，用户 19:2x 定）：连续 3 分钟不通，用它的条目先改走主策略组并推送；
-// 恢复后连续正常 10 分钟换回去。记在 split.json 的 nd（节点 → 什么时候挪走的）；每分钟的计数放内存盘 /tmp/cmcp_spnode.json
+// 挑一个通的：同名的里有通的就挑延迟最低的，没有再看同地区的；excl 是刚试过不通的
+function sp_pick(sb, excl) {
+	for (let tier in [sb?.s ?? [], sb?.r ?? []]) {
+		let best = null, bd = 0;
+		for (let x in tier) { if (x == excl) continue; let d = sp_delay(x); if (d > 0 && (!best || d < bd)) { best = x; bd = d; } }
+		if (best) return best;
+	}
+	return null;
+}
+// 分流里选的单个节点（11/27 全面检查第 14 条；用户 11/28 改：先同名、再同地区，同地区都挂了不换）：连续 3 分钟不通，换到同名里通的那个，没有再换同地区的，并推送；
+// 换过去的那个也不通了再换一个；同地区的都不通就先不换，有通的再换过去。原节点恢复后连续正常 10 分钟换回去。
+// 记在 split.json 的 nd（节点 → { at: 什么时候挪走的, to: 换到哪个，null = 没有能换的 }）、sib（节点 → 同名节点）；每分钟的计数放内存盘 /tmp/cmcp_spnode.json
 const SP_NS = '/tmp/cmcp_spnode.json';
 function sp_node_watch(o, kind, want, names) {
 	let nodes = filter(want, (t) => index(o.nk ?? [], t) >= 0 && index(names, t) >= 0);
-	o.nd ??= {};
-	let st = cmcp_readj(getenv('CMCP_SP_NS') ?? SP_NS, {}), now = time(), down = [], back = [], keep = {};
-	for (let n in keys(o.nd)) if (index(nodes, n) < 0) delete o.nd[n];   // 不再选这个节点了（改了设置、节点没了）
-	if (!length(nodes) && !length(keys(st))) return;
+	o.nd ??= {}; o.sib ??= {};
+	let st = cmcp_readj(getenv('CMCP_SP_NS') ?? SP_NS, {}), now = time(), ev = [], keep = {}, chg = false;
+	for (let n in keys(o.nd)) if (index(nodes, n) < 0) { delete o.nd[n]; chg = true; }   // 不再选这个节点了（改了设置、节点没了）
+	for (let n in keys(o.nd)) if (type(o.nd[n]) != 'object') { o.nd[n] = { at: +o.nd[n] || now, to: null }; chg = true; } // 6.0 V8 以前记的是「改走主策略组」
+	// 同名节点跟着订阅变：变了要重写规则（OpenClash 先占好它们的组）
+	for (let n in keys(o.sib)) if (index(nodes, n) < 0) { delete o.sib[n]; chg = true; }
+	// 候选只要节点，不要策略组
+	let gs = sp_groups() ?? [], nm = filter(names, (x) => index(gs, x) < 0);
+	for (let n in nodes) { let sb = sp_sibs(n, nm); if (sprintf('%J', sb) != sprintf('%J', o.sib[n] ?? [])) { o.sib[n] = sb; chg = true; } }
+	if (!length(nodes) && !length(keys(st)) && !chg) return;
 	for (let n in nodes) {
-		let x = st[n] ?? { f: 0, ok: 0 }, d = sp_delay(n);
-		if (o.nd[n]) {
-			if (d > 0) { if (!x.ok) x.ok = now; if (now - x.ok >= 600) { delete o.nd[n]; push(back, n); x = { f: 0, ok: 0 }; } }
-			else x.ok = 0;
+		let x = st[n] ?? { f: 0, ok: 0 }, d = sp_delay(n), cur = o.nd[n];
+		if (cur) {
+			if (d > 0) { if (!x.ok) x.ok = now; if (now - x.ok >= 600) { let was = cur.to; delete o.nd[n]; push(ev, ['back', n, was]); x = { f: 0, ok: 0 }; } }
+			else {
+				x.ok = 0;
+				// 换过去的也不通了，或者之前没有能换的：再挑一个
+				if (!cur.to || sp_delay(cur.to) <= 0) { let pk = sp_pick(o.sib[n], cur.to); if (pk != cur.to) { let old = cur.to; cur.to = pk; push(ev, [pk ? 'to' : 'none', n, pk, old]); } }
+			}
 		} else if (d > 0) x.f = 0;
-		else if (++x.f >= 3) { o.nd[n] = now; push(down, n); x = { f: 0, ok: 0 }; }
+		else if (++x.f >= 3) { let pk = sp_pick(o.sib[n], null); o.nd[n] = { at: now, to: pk }; push(ev, [pk ? 'to' : 'none', n, pk, null]); x = { f: 0, ok: 0 }; }
 		keep[n] = x;
 	}
 	cmcp_writej(getenv('CMCP_SP_NS') ?? SP_NS, keep);
-	if (!length(down) && !length(back)) { cmcp_writej(SP_F, o); return; }
 	cmcp_writej(SP_F, o);
-	// OpenClash 只换规则集内容（主策略组那一组事先占好了）；第一次用（还没占好）或者 Nikki 要重启插件，节点已经不通了，重启比一直不通好
+	// 规则要变的：去向变了（换到同名节点、换回来、从「先不换」换到能用的），或者同名节点变了
+	let moved = length(filter(ev, (e) => e[0] != 'none' || e[3]));
+	if (!moved && !chg) return;
+	// OpenClash 只换规则集内容（同名节点的组事先占好了）；第一次用（还没占好）或者 Nikki 要重启插件，节点已经不通了，重启比一直不通好
 	let r = sp_apply(o, kind);
-	if (r.restart) { sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart'); let z = sp_read(); delete z.pending; cmcp_writej(SP_F, z); }
+	if (r.restart && moved) { sp_run(kind == 'nikki' ? '/etc/init.d/nikki restart' : '/etc/init.d/openclash restart'); let z = sp_read(); delete z.pending; cmcp_writej(SP_F, z); }
 	let msg = (l, a, b) => { try { sh(sprintf('%s/cmcp-notify %s split %s %s split >/dev/null 2>&1', SBIN, a, shq(b), shq(l))); } catch (e) {} };
-	if (length(down)) msg('选它的设备、网站和软件先改走主策略组，节点恢复 10 分钟后自动换回。', 'warn', '分流：节点「' + join('」「', down) + '」连不上');
-	if (length(back)) msg('选它的设备、网站和软件已经换回这个节点。', 'ok', '分流：节点「' + join('」「', back) + '」恢复了');
+	// 最近切换（最多 10 条，跟特色功能的「最近切换」一样）：换到同名节点、换回原节点
+	let z = sp_read();
+	z.swl ??= [];
+	for (let e in ev) if (e[0] == 'to') unshift(z.swl, { at: now, a: e[3] || e[1], b: e[2] }); else if (e[0] == 'back') unshift(z.swl, { at: now, a: e[2] || '', b: e[1] });
+	z.swl = slice(z.swl, 0, 10);
+	cmcp_writej(SP_F, z);
+	for (let e in ev) {
+		if (e[0] == 'to') msg('选「' + e[1] + '」的设备、网站和软件先走「' + e[2] + '」，「' + e[1] + '」恢复 10 分钟后自动换回。', 'warn', '分流：节点「' + e[1] + '」连不上，已换到「' + e[2] + '」');
+		else if (e[0] == 'none') msg(length(sp_sib_all(o.sib[e[1]])) ? '同地区的节点也都连不上，先不换。有能用的会自动换过去。' : '没有同地区的节点，先不换。', 'warn', '分流：节点「' + e[1] + '」连不上');
+		else if (e[0] == 'back') msg('选它的设备、网站和软件已经换回这个节点。', 'ok', '分流：节点「' + e[1] + '」恢复了');
+	}
 }
 P.split_check = function() {
 	let kind = sp_kind(), o = sp_read();

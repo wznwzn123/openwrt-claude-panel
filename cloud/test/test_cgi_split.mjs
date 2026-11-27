@@ -127,32 +127,48 @@ try {
 	ok('[节点] 节点没了：改走主策略组、推送写「节点」、重启', JSON.stringify(r.result?.moved) === '["🇯🇵 日本 01"]' && (await cgi('split_get')).result.app.youtube === 'PROXY' && /openclash restart/.test(rd(RUN)), JSON.stringify(r.result));
 	ok('[节点] 推送写清楚是节点', /分流：节点「🇯🇵 日本 01」没了/.test(rd(E + '/notified')), rd(E + '/notified'));
 	await cgi('split_set', { app: { id: 'youtube', t: '' } });
-	// ---- 11/27 全面检查第 14 条：选的单个节点连不上 → 连续 3 分钟不通改走主策略组，恢复 10 分钟换回（只换规则集内容，不重启） ----
+	// ---- 选的单个节点连不上（用户 11/28 改）：连续 3 分钟不通，换到同地区同名（去掉编号后一样、倍率要一样）里通的那个；
+	//      同名的都不通就不换；原节点恢复 10 分钟换回。OpenClash 事先占好同名节点的组，只换规则集内容不重启 ----
 	{
-		fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🇯🇵 日本 01'] }, '节点选择': { type: 'Selector', now: '🇯🇵 日本 01' }, '🇯🇵 日本 01': { type: 'Vmess' } } }));
-		const DL = E + '/delay.json', NS = E + '/spnode.json', setD = (d) => fs.writeFileSync(DL, JSON.stringify({ '🇯🇵 日本 01': d }));
-		setD(80); fs.rmSync(NS, { force: true });
-		await cgi('split_set', { app: { id: 'youtube', t: '🇯🇵 日本 01' } }); await cgi('split_restart');
+		const N1 = '🇹🇼台湾03 专线 3x', N2 = '🇹🇼台湾01 专线 3x', N3 = '🇹🇼台湾02 专线 3x', NX = '🇹🇼台湾04 专线 2x', NY = '🇭🇰香港03 专线 3x';
+		fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', N1, N2, N3, NX, NY] }, '节点选择': { type: 'Selector', now: N1 }, [N1]: { type: 'Vmess' }, [N2]: { type: 'Vmess' }, [N3]: { type: 'Vmess' }, [NX]: { type: 'Vmess' }, [NY]: { type: 'Vmess' } } }));
+		const DL = E + '/delay.json', NS = E + '/spnode.json', setD = (o) => fs.writeFileSync(DL, JSON.stringify({ [N1]: 80, [N2]: 120, [N3]: 90, [NX]: 50, [NY]: 40, ...o }));
+		setD({}); fs.rmSync(NS, { force: true });
+		await cgi('split_set', { app: { id: 'youtube', t: N1 } }); await cgi('split_check'); await cgi('split_restart');
 		const to = () => { const m = {}; for (const x of rd(CUS).matchAll(/^- RULE-SET,(cmcp_sp_a[0-9]+),(.+) # \[cmcp-split\]$/gm)) m[x[2]] = x[1]; return m; };
 		const ytIn = () => { const m = to(); for (const [t, n] of Object.entries(m)) if (/youtube\.com/.test(rd(RS + '/' + n + '.yaml'))) return t; return null; };
 		const cus0 = rd(CUS);
-		ok('[节点挂了] 选了单个节点：主策略组那一组事先占好（空的）', to()['节点选择'] && to()['🇯🇵 日本 01'] && ytIn() === '🇯🇵 日本 01' && !/youtube/.test(rd(RS + '/' + to()['节点选择'] + '.yaml')), cus0);
+		ok('[节点挂了] 候选的组事先占好（空的）：同名的台湾01、02 专线 3x，同地区的台湾04 专线 2x；别的地区不算', to()[N2] && to()[N3] && to()[NX] && !to()[NY] && !to()['节点选择'] && ytIn() === N1, cus0);
 		fs.writeFileSync(RUN, ''); fs.rmSync(E + '/notified', { force: true });
-		setD(0);
+		setD({ [N1]: 0 });
 		await cgi('split_check'); await cgi('split_check');
-		ok('[节点挂了] 不通 2 分钟：先不动', ytIn() === '🇯🇵 日本 01' && !Object.keys((await cgi('split_get')).result.nd || {}).length);
+		ok('[节点挂了] 不通 2 分钟：先不动', ytIn() === N1 && !Object.keys((await cgi('split_get')).result.nd || {}).length);
 		await cgi('split_check');
 		r = await cgi('split_get');
-		ok('[节点挂了] 不通 3 分钟：改走主策略组（自定义规则不变、不重启），推送', ytIn() === '节点选择' && rd(CUS) === cus0 && rd(RUN) === '' && r.result.nd['🇯🇵 日本 01'] > 0 && r.result.app.youtube === '🇯🇵 日本 01' && /节点「🇯🇵 日本 01」连不上/.test(rd(E + '/notified')), rd(RUN) + rd(E + '/notified'));
-		setD(80); await cgi('split_check');
-		ok('[节点挂了] 刚恢复：先不换回（开始计时）', ytIn() === '节点选择');
-		const ns = JSON.parse(rd(NS)); ns['🇯🇵 日本 01'].ok -= 700; fs.writeFileSync(NS, JSON.stringify(ns));
+		ok('[节点挂了] 不通 3 分钟：换到同名里延迟最低的（台湾02），自定义规则不变、不重启，推送', ytIn() === N3 && rd(CUS) === cus0 && rd(RUN) === '' && r.result.nd[N1]?.to === N3 && r.result.app.youtube === N1 && /连不上，已换到「🇹🇼台湾02 专线 3x」/.test(rd(E + '/notified')), JSON.stringify(r.result.nd) + rd(E + '/notified'));
+		setD({ [N1]: 0, [N3]: 0 }); await cgi('split_check');
+		ok('[节点挂了] 换过去的也不通：再换一个同名的（台湾01）', ytIn() === N2 && rd(RUN) === '');
+		setD({ [N1]: 0, [N2]: 0, [N3]: 0 }); await cgi('split_check');
+		ok('[节点挂了] 同名的都不通：换同地区的（台湾04 专线 2x），不去别的地区', ytIn() === NX);
+		fs.rmSync(E + '/notified', { force: true });
+		setD({ [N1]: 0, [N2]: 0, [N3]: 0, [NX]: 0 }); await cgi('split_check');
+		r = await cgi('split_get');
+		ok('[节点挂了] 同地区的都不通：不换（回到原节点，不去别的地区），推送说清楚', ytIn() === N1 && r.result.nd[N1] && r.result.nd[N1].to === null && /同地区的节点也都连不上，先不换/.test(rd(E + '/notified')), JSON.stringify(r.result.nd));
+		setD({ [N1]: 0, [N2]: 0, [NX]: 0 }); await cgi('split_check');
+		ok('[节点挂了] 同名的有一个恢复了：换过去', ytIn() === N3);
+		r = await cgi('split_get');
+		ok('[节点挂了] 最近切换有记录；预告挂了换到哪个', r.result.swl.length >= 3 && r.result.swl[0].b === N3 && Array.isArray(r.result.pv) && r.result.pv[0].n === N1, JSON.stringify([r.result.swl, r.result.pv]));
+		setD({}); await cgi('split_check');
+		ok('[节点挂了] 原节点刚恢复：先不换回（开始计时）', ytIn() === N3);
+		const ns = JSON.parse(rd(NS)); ns[N1].ok -= 700; fs.writeFileSync(NS, JSON.stringify(ns));
 		await cgi('split_check');
-		ok('[节点挂了] 连续正常 10 分钟：换回这个节点，推送', ytIn() === '🇯🇵 日本 01' && !Object.keys((await cgi('split_get')).result.nd || {}).length && rd(RUN) === '' && /恢复了/.test(rd(E + '/notified')), rd(E + '/notified'));
+		ok('[节点挂了] 连续正常 10 分钟：换回这个节点，推送', ytIn() === N1 && !Object.keys((await cgi('split_get')).result.nd || {}).length && rd(RUN) === '' && /恢复了/.test(rd(E + '/notified')), rd(E + '/notified'));
 		// 中间又不通：重新计时
-		setD(0); await cgi('split_check'); await cgi('split_check'); await cgi('split_check');
-		setD(80); await cgi('split_check'); setD(0); await cgi('split_check'); setD(80); await cgi('split_check');
-		ok('[节点挂了] 恢复中间又不通：重新计时，不换回', ytIn() === '节点选择' && JSON.parse(rd(NS))['🇯🇵 日本 01'].ok > Date.now() / 1000 - 30);
+		setD({ [N1]: 0 }); await cgi('split_check'); await cgi('split_check'); await cgi('split_check');
+		setD({}); await cgi('split_check'); setD({ [N1]: 0 }); await cgi('split_check'); setD({}); await cgi('split_check');
+		ok('[节点挂了] 恢复中间又不通：重新计时，不换回', ytIn() === N3 && JSON.parse(rd(NS))[N1].ok > Date.now() / 1000 - 30);
+		// V8 以前记的格式（时间戳 = 改走主策略组）：认得，换成新格式
+		{ const o = JSON.parse(rd(E + '/split.json')); o.nd = { [N1]: 1795000000 }; fs.writeFileSync(E + '/split.json', JSON.stringify(o)); setD({ [N1]: 0 }); await cgi('split_check'); r = await cgi('split_get'); ok('[节点挂了] 以前的记录格式：照样认，换成同名节点', r.result.nd[N1]?.to === N3 && ytIn() === N3, JSON.stringify(r.result.nd)); }
 		// 改了设置不再选这个节点：记录清掉
 		await cgi('split_set', { app: { id: 'youtube', t: '' } }); await cgi('split_check');
 		ok('[节点挂了] 不再选这个节点：挪走的记录清掉', !Object.keys((await cgi('split_get')).result.nd || {}).length);
@@ -249,7 +265,11 @@ try {
 		await cgi('split_set', { app: { id: 'chatgpt', t: '🇯🇵 日本 01' } }); await cgi('split_restart'); fs.writeFileSync(RUN, '');
 		fs.writeFileSync(E + '/delay.json', JSON.stringify({ '🇯🇵 日本 01': 0 }));
 		await cgi('split_check'); await cgi('split_check'); await cgi('split_check');
-		ok('Nikki：选的节点连不上 3 分钟：规则改走主策略组，重启 Nikki', /option node '节点选择'/.test(rd(CFG + '/nikki')) && !/option node '🇯🇵 日本 01'/.test(rd(CFG + '/nikki')) && /nikki restart/.test(rd(RUN)) && (await cgi('split_get')).result.pending === false, rd(RUN) + rd(CFG + '/nikki'));
+		ok('Nikki：选的节点连不上 3 分钟、没有同名的：不换，不重启', /option node '🇯🇵 日本 01'/.test(rd(CFG + '/nikki')) && !/nikki restart/.test(rd(RUN)), rd(RUN));
+		fs.writeFileSync(PX, JSON.stringify({ proxies: { GLOBAL: { type: 'Selector', all: ['节点选择', '🇯🇵 日本 01', '🇯🇵 日本 02'] }, '节点选择': { type: 'Selector', now: '🇯🇵 日本 01' }, '🇯🇵 日本 01': { type: 'Vmess' }, '🇯🇵 日本 02': { type: 'Vmess' } } }));
+		fs.writeFileSync(E + '/delay.json', JSON.stringify({ '🇯🇵 日本 01': 0, '🇯🇵 日本 02': 70 }));
+		await cgi('split_check');
+		ok('Nikki：有同名的（日本 02）：规则换过去，重启 Nikki；Nikki 不事先占同名的组', /option node '🇯🇵 日本 02'/.test(rd(CFG + '/nikki')) && !/option node '🇯🇵 日本 01'/.test(rd(CFG + '/nikki')) && /nikki restart/.test(rd(RUN)) && (await cgi('split_get')).result.pending === false, rd(RUN) + rd(CFG + '/nikki'));
 		await cgi('split_set', { app: { id: 'chatgpt', t: '' } }); fs.writeFileSync(PX, PX0);
 	}
 	// 不支持的插件

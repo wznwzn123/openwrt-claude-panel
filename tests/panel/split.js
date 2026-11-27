@@ -145,16 +145,29 @@ const lay = (page) => page.evaluate(() => {
 		ok('改回跟随全局：去掉' + T, !S.d.dev['aa:aa:aa:aa:aa:09']);
 		await ctx.close();
 	}
+	// 选的单个节点：挂了换哪个 + 最近切换（用户 11/28，跟特色功能「节点挂了自动换」一样）
+	for (const [w, h, dark] of [[320, 568, false], [390, 844, true], [430, 932, false]]) {
+		const now = Math.floor(Date.now() / 1000);
+		S = fresh({ pv: [{ n: '🇹🇼台湾03 专线 3x（一个很长很长的节点名字）', d: 49, sibs: 3, to: '🇹🇼台湾02 专线 3x', td: 61, same: true }, { n: '🇯🇵 日本 01', d: 0, sibs: 0, to: null, td: 0 }], swl: [{ at: now - 600, a: '🇹🇼台湾03 专线 3x', b: '🇹🇼台湾02 专线 3x' }, { at: now - 86400, a: '🇹🇼台湾02 专线 3x', b: '🇹🇼台湾03 专线 3x' }] });
+		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' }); const page = await ctx.newPage();
+		page.on('pageerror', (e) => problems.push('页面错误（节点预告）：' + e.message));
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8195/panel/?p=split'); await W(1500);
+		const r = await page.evaluate(() => { const c = document.querySelector('.splpvc'); if (!c) return null; const b = c.getBoundingClientRect(); return { t: c.textContent, inside: [...c.querySelectorAll('*')].every((e) => { const x = e.getBoundingClientRect(); return !x.width || (x.left >= b.left - 1 && x.right <= b.right + 1); }), sw: document.documentElement.scrollWidth <= innerWidth }; });
+		ok(`［${w}${dark ? ' 深色' : ''}］选的节点：写多少毫秒、挂了换哪个；没有同地区的写不换；最近切换；不超出卡片`, r && /49 ms/.test(r.t) && /挂了换「🇹🇼台湾02 专线 3x」 61 ms/.test(r.t) && /没有同地区的节点，挂了不换/.test(r.t) && /最近切换/.test(r.t) && /🇹🇼台湾03 专线 3x → 🇹🇼台湾02 专线 3x/.test(r.t) && r.inside && r.sw, JSON.stringify(r));
+		await page.locator('.splpvc').scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(SHOT, `split-pv-${w}${dark ? '-dark' : ''}.png`) });
+		await ctx.close();
+	}
 	// 策略组没了、插件没在跑、Nikki、不支持
 	{
-		S = fresh({ kind: 'nikki', live: false, moved: [{ g: '🎬 流媒体', at: Math.floor(Date.now() / 1000) - 3600 }], pending: true, nd: { '🇯🇵 日本 01': Math.floor(Date.now() / 1000) - 300 } });
+		S = fresh({ kind: 'nikki', live: false, moved: [{ g: '🎬 流媒体', at: Math.floor(Date.now() / 1000) - 3600 }], pending: true, nd: { '🇯🇵 日本 01': { at: Math.floor(Date.now() / 1000) - 300, to: '🇯🇵 日本 02' }, '🇹🇼台湾03 专线 3x': { at: Math.floor(Date.now() / 1000) - 60, to: null } } });
 		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
 		page.on('pageerror', (e) => problems.push('页面错误（Nikki）：' + e.message));
 		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
 		await page.goto('http://localhost:8195/panel/?p=split'); await W(1500);
 		const t = await page.textContent('#splBody');
 		ok('Nikki：「重启 Nikki 后生效」；没在运行说明；策略组没了的记录', /重启 Nikki 后生效/.test(t) && /Nikki 没在运行/.test(t) && /策略组「🎬 流媒体」没了，已改走代理（节点选择）/.test(t), t.slice(0, 200));
-		ok('选的节点连不上：写「暂时改走代理」（11/27 全面检查第 14 条）', /节点「🇯🇵 日本 01」连不上，暂时改走代理（节点选择）/.test(t), t.slice(0, 300));
+		ok('选的节点连不上：写换到哪个；同地区都连不上写「先不换」（用户 11/28）', /节点「🇯🇵 日本 01」连不上，暂时换到「🇯🇵 日本 02」/.test(t) && /节点「🇹🇼台湾03 专线 3x」连不上，同地区的节点也连不上，先不换/.test(t), t.slice(0, 300));
 		await page.screenshot({ path: path.join(SHOT, 'split-nikki.png') });
 		S.d = { kind: null };
 		await page.reload(); await W(1500);

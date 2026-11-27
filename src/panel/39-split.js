@@ -45,11 +45,21 @@ function splRender() {
 	if (!d.kind) { $('splBody').innerHTML = '<section class="card empty" style="margin-top:12px">分流只支持 OpenClash 和 Nikki</section>'; return; }
 	const mv = (d.moved || []).filter((x) => Date.now() / 1000 - x.at < 7 * 86400).map((x) => `<div class="notice w" style="margin-top:12px">${x.node ? '节点' : '策略组'}「${esc(x.g)}」没了，已改走代理（${esc(d.main || '主策略组')}）</div>`).join('');
 	// 选的节点连不上，暂时改走主策略组（11/27 全面检查第 14 条）
-	const nd = Object.keys(d.nd || {}).map((n) => `<div class="notice w" style="margin-top:12px">节点「${esc(n)}」连不上，暂时改走代理（${esc(d.main || '主策略组')}）</div>`).join('');
+	// 用户 11/28：只换同地区同名的（去掉编号后一样），都挂了不换
+	const nd = Object.entries(d.nd || {}).map(([n, x]) => `<div class="notice w" style="margin-top:12px">节点「${esc(n)}」连不上，${x && x.to ? `暂时换到「${esc(x.to)}」` : '同地区的节点也连不上，先不换'}</div>`).join('');
 	$('splBody').innerHTML = `${d.pending ? `<div class="notice w splpend" style="margin-top:12px"><span>重启 ${SPL_PX(d)} 后生效</span><button class="btn sm" id="splRs" type="button">现在重启</button></div>` : ''}
-		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${nd}${mv}
+		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${nd}${mv}${splPvHtml(d)}
 		<div class="spltabs" id="splTab" role="tablist">${[['dev', '设备'], ['app', '软件'], ['site', '网站'], ['geo', '国家地区']].map(([k, t]) => `<button type="button" role="tab" aria-selected="${SPL.tab === k}" class="${SPL.tab === k ? 'on' : ''}" data-st="${k}">${t}</button>`).join('')}</div>
 		${splRows()}`;
+}
+// 选的单个节点：现在多少毫秒、挂了换哪个（先同名、再同地区，都挂了不换）+ 最近切换（跟特色功能「节点挂了自动换」一样，用户 11/28）
+const splMD = (t) => { const x = new Date(t * 1000); return `${x.getMonth() + 1}/${x.getDate()} ${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}`; };
+function splPvHtml(d) {
+	const pv = d.pv || [], sw = (d.swl || []).slice(0, 5);
+	if (!pv.length && !sw.length) return '';
+	const row = (x) => `<div class="splpv"><b class="ell">${esc(x.n)}</b><span class="muted">${x.d ? x.d + ' ms' : '没测过'}</span></div><div class="splpvn muted">${x.to ? `挂了换「${esc(x.to)}」${x.td ? ' ' + x.td + ' ms' : ''}` : x.sibs ? '同地区的节点现在都没测通，挂了先不换' : '没有同地区的节点，挂了不换'}</div>`;
+	const log = sw.length ? `<div class="mgt" style="margin:12px 0 4px">最近切换</div>${sw.map((x) => `<div class="splsw"><span class="muted">${splMD(x.at)}</span><span class="ell">${esc(x.a)} → ${esc(x.b)}</span></div>`).join('')}` : '';
+	return `<section class="card splpvc" style="margin-top:12px">${pv.map(row).join('')}${log}</section>`;
 }
 // 选去向：跟随全局 / 直连 / 代理 / 策略组 / 节点（按地区分组，带延迟）。extra：底下多几个按钮（改网址、删除）
 async function splChoose(title, cur, extra) {

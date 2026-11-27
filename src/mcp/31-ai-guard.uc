@@ -94,7 +94,7 @@ function ai_detail(name, a) {
    「我的主页 → 敏感信息 → AI 连接器地址」里能看到、收回（要先确认本人，只有主账号）。「只读」照样全挡。
    「这一类」：执行命令 = 一模一样的这条命令；控制服务 = 这个服务的这个动作；装卸软件 = 装或卸这个包；改设置 = 改这几份配置；其他 = 这个动作 */
 // 「这一类都允许」（用户 11/27：原来只放过一模一样的那条，换条命令又要问）：按工具算一类，执行命令就是所有命令
-const AI_PT = { run_command: '执行命令（所有命令）', uci_set: '修改设置（所有配置）', oaf_uci: '改应用过滤设置', service_control: '启停服务（所有服务）', packages: '安装和卸载软件' };
+const AI_PT = { run_command: '执行任何命令', uci_set: '修改任何设置', oaf_uci: '改应用过滤设置', service_control: '启停任何服务', packages: '安装和卸载软件' };
 function ai_pkey(name, a) { return { k: name, t: AI_PT[name] ?? AI_NAMES[name] ?? name }; }
 // 以前点的「永久允许」是按具体那一条记的（某条命令、某个服务）：照样认
 function ai_pkey_one(name, a) {

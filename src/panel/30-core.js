@@ -697,6 +697,10 @@ NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circ
 NAV_IC.lanset = ['<path d="M4 11l8-7 8 7v9H4z"/><path d="M9 20v-4h6v4"/><path d="M12 4v3"/>', '#ff9500'];
 NAV_IC.wan = ['<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/>', '#34c759'];
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
+const NAV_FIND = [
+	{ t: 'AI 连接器地址', mp: 'kckey', kw: 'ai 连接器 claude chatgpt gpt deepseek 通义 cherry studio mcp' },
+	{ t: '添加新手机', mp: 'kphone', kw: '扫码 新手机 登录 换手机' },
+];
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
 	const lab = `<span>${esc(x.t)}${x.hint ? `<span class="path">${esc(x.hint)}</span>` : ''}</span>`;
@@ -718,6 +722,8 @@ function renderNav() {
 			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
+		// 只在搜索时出现的：「我的主页 → 敏感信息」里的几样（11/27 全面检查第 22 条：菜单搜「AI」「连接器」搜不到）。点了去我的主页，验证过的直接打开
+		for (const x of NAV_FIND) if ((x.t + ' ' + x.kw).toLowerCase().includes(q)) hits.push([x.t.toLowerCase().includes(q) ? 0 : 1, `<button data-p="me" data-mp="${x.mp}">${navIc('me', '✦')}<span>${esc(x.t)}<span class="path">我的主页 › 敏感信息</span></span></button>`]);
 		const hs = hits.sort((a, b) => a[0] - b[0]).map((h) => h[1]);
 		if ('首页 主页 home'.includes(q)) hs.unshift(navBtn(NAV_TOP, false, false));
 		nav.innerHTML = hs.length ? hs.join('') : '<div class="empty">没有找到这个功能</div>';
@@ -732,6 +738,8 @@ function renderNav() {
 			}).join('')}</div></div></div>`).join('');
 	}
 	navMark();
+	// 侧边栏重画以后，「实时联系开发者」上的红点要补回来（原来打开侧边栏时重画就没了）
+	try { ntBadge(); } catch (e) {}
 }
 function navMark() {
 	$$('#sidenav button[data-p]').forEach((b) => b.classList.toggle('on', b.dataset.p === page));
@@ -804,7 +812,13 @@ $('sidenav').addEventListener('click', (e) => {
 		return;
 	}
 	const b = e.target.closest('button[data-p]');
-	if (b) { if (b.dataset.p === page && page.startsWith('k:')) { sideOpen(false); return; } go(b.dataset.p); }
+	if (b) {
+		if (b.dataset.p === page && page.startsWith('k:')) { sideOpen(false); return; }
+		const mp = b.dataset.mp;
+		go(b.dataset.p);
+		// 搜出来的敏感信息：验证过的直接打开那一项；没验证的停在我的主页，滚到验证那里
+		if (mp) setTimeout(() => { const t = document.querySelector('#meBox [data-mp="' + mp + '"]') || document.querySelector('#meBox [data-pwf], #meBox .mp-lock'); if (t) { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); if (t.dataset.mp === mp) t.click(); } }, 900);
+	}
 });
 $('sideQ').addEventListener('input', renderNav);
 $('sideQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = $('sidenav').querySelector('button[data-p]'); if (b && $('sideQ').value.trim()) { $('sideQ').value = ''; go(b.dataset.p); renderNav(); } } });

@@ -7,6 +7,7 @@ import Tag from '@/components/ui/Tag.vue'
 import Field from '@/components/ui/Field.vue'
 import TextInput from '@/components/ui/TextInput.vue'
 import Segmented from '@/components/ui/Segmented.vue'
+import Select from '@/components/ui/Select.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import FileAttach from '@/components/hub/FileAttach.vue'
 import FileList from '@/components/hub/FileList.vue'
@@ -21,7 +22,9 @@ const loading = ref(true)
 const ed = ref('')
 const form = reactive({ title: '', body: '', level: 'normal' as 'normal' | 'important' | 'banner', days: '0', when: 'now' as 'now' | 'later', at: '', to: '' as '' | 'h' | 's', vmin: '', vmax: '' })
 // 发给谁（6.0）：to = 托管版 h / 自建版 s / 空 = 都发；vmin、vmax = 面板版本范围（含两头，可以只填一个）
-const who = (a: any) => { const v = a.vmin && a.vmax ? a.vmin + ' 到 ' + a.vmax : a.vmin ? a.vmin + ' 及以上' : a.vmax ? a.vmax + ' 及以下' : ''; return [a.ed === 'h' ? '只发托管版' : a.ed === 's' ? '只发自建版' : '', v].filter(Boolean).join(' · ') }
+// 版本写到第四段 = 修复补丁：「6.0.0.7」显示成「6.0.0 V7」（用户 11/28）
+const vName = (v: string) => { const p = String(v || '').split('.'); return p.length > 3 ? p.slice(0, 3).join('.') + ' V' + p[3] : String(v || '') }
+const who = (a: any) => { const v = a.vmin && a.vmax ? vName(a.vmin) + ' 到 ' + vName(a.vmax) : a.vmin ? vName(a.vmin) + ' 及以上' : a.vmax ? vName(a.vmax) + ' 及以下' : ''; return [a.ed === 'h' ? '只发托管版' : a.ed === 's' ? '只发自建版' : '', v].filter(Boolean).join(' · ') }
 // 收到、点开的路由器数（5.0）
 const stats = ref<Record<string, { got: number; seen: number }>>({})
 // 定时发布：datetime-local 用的本地时间字符串
@@ -34,6 +37,14 @@ const att = ref<InstanceType<typeof FileAttach> | null>(null)
 const canFile = ref(false)
 const err = ref('')
 const live = computed(() => list.value.filter(a => (!a.exp || a.exp > Date.now()) && (!a.start || a.start <= Date.now())).length)
+// 「面板版本」从列表里选：GitHub 上的全部版本（正式版、尝鲜版、修复补丁），新的在前（用户 11/28）
+const vers = ref<any[]>([])
+const vOpts = (cur: string) => {
+  const o = [{ label: '不限', value: '' }, ...vers.value.map((x: any) => ({ label: x.hot ? x.base + ' V' + x.hot : x.v + (x.pre ? ' 尝鲜' : ''), value: x.v, hint: x.at ? day(x.at) : '' }))]
+  if (cur && !o.some(x => x.value === cur)) o.splice(1, 0, { label: vName(cur), value: cur, hint: '' })
+  return o
+}
+async function loadVers() { try { vers.value = (await get('versions')).list || [] } catch (e) { vers.value = [] } }
 async function load() { try { const r = await get('ann'); list.value = r.list; canFile.value = !!r.files; get('ann-stats').then(r => { stats.value = r.stats }).catch(() => {}) } catch (e) { toastError(e, '公告读不出来') } finally { loading.value = false } }
 function edit(a: any | null) {
   ed.value = a ? a.id : ''
@@ -66,7 +77,7 @@ async function remove(a: any) {
   if (!(await confirm({ title: '删除公告', message: `删除「${a.title}」？大家的面板里也会消失。`, confirmText: '删除', danger: true }))) return
   try { await del('ann/' + a.id); pushToast('已删除'); if (ed.value === a.id) edit(null); load() } catch (e) { toastError(e, '没删掉') }
 }
-onMounted(load)
+onMounted(() => { load(); loadVers() })
 </script>
 
 <template>
@@ -87,7 +98,7 @@ onMounted(load)
           <Field label="显示几天（0 = 一直显示）"><TextInput v-model="form.days" type="number" placeholder="0" /></Field>
           <Field label="发给" class="span-2"><Segmented v-model="form.to" label="发给" :options="[{ label: '都发', value: '' }, { label: '托管版', value: 'h' }, { label: '自建版', value: 's' }]" /></Field>
           <Field label="什么时候发"><Segmented v-model="form.when" label="什么时候发" :options="[{ label: '马上', value: 'now' }, { label: '定时', value: 'later' }]" /></Field>
-          <Field label="面板版本（选填）" class="span-2"><div class="ann-ver"><TextInput v-model="form.vmin" :maxlength="12" placeholder="从 比如 6.0.0" aria-label="从哪个版本" /><span class="ann-to">到</span><TextInput v-model="form.vmax" :maxlength="12" placeholder="到 比如 5.9.9" aria-label="到哪个版本" /></div></Field>
+          <Field label="面板版本（选填）" class="span-2"><div class="ann-ver"><Select v-model="form.vmin" :options="vOpts(form.vmin)" filterable placeholder="从" empty-text="没有这个版本" aria-label="从哪个版本" /><span class="ann-to">到</span><Select v-model="form.vmax" :options="vOpts(form.vmax)" filterable placeholder="到" empty-text="没有这个版本" aria-label="到哪个版本" /></div></Field>
           <Field v-if="form.when === 'later'" label="发布时间（你这台设备的时间）" hint="到时间才出现在大家的面板里；「重要」的到时间才推送"><input v-model="form.at" class="ann-dt input-shell" type="datetime-local" :min="minAt"></Field>
           <div class="span-all ann-pv" aria-label="在面板里的样子">
             <template v-if="form.level === 'banner'">

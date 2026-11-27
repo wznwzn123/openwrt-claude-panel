@@ -1100,6 +1100,7 @@ html,body{overscroll-behavior-y:contain}
 #xpBody .xprow{gap:8px;align-items:center}#xpBody .xprow .muted,#xpBody .xprow b{white-space:nowrap}#xpBody>.sectitle:first-child{margin-top:4px}#xpBody .xprow .btn{flex:none}#xpBody .xpcur{display:flex;align-items:center;gap:10px}#xpBody .xpcur span{flex:1;min-width:0}
 /* 6.0 横幅公告 */
 /* 横幅公告（用户 11/27）：手持喇叭 + 一行滚动字幕，没底色的一行（用户选 C）；没有按钮，点整条看全文；内容一直滚（减少动态效果时不滚，最多两行） */.annbar{display:flex;align-items:center;gap:8px;margin:-10px 18px 12px;height:28px;padding:0 2px;font-size:13px;line-height:28px;color:var(--muted);background:none;cursor:default;-webkit-tap-highlight-color:transparent}.annbar.go{cursor:pointer}.annbar.hidden{display:none}.annbar .abi{flex:none;width:17px;height:17px;color:var(--brand)}.annbar .abv{flex:1;min-width:0;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,transparent,#000 6px,#000 calc(100% - 10px),transparent);mask-image:linear-gradient(90deg,transparent,#000 6px,#000 calc(100% - 10px),transparent)}.annbar .abt{display:inline-block;padding-left:2px}.annbar.roll .abt{animation:abRoll var(--abd,12s) linear infinite}.annbar.roll .abt>span+span{padding-left:48px}.annbar:not(.roll) .abt>span+span{display:none}@keyframes abRoll{from{transform:translateX(0)}to{transform:translateX(var(--abx,-50%))}}@media(prefers-reduced-motion:reduce){.annbar{height:auto;line-height:1.5;padding-top:4px;padding-bottom:4px}.annbar .abv{white-space:normal;-webkit-mask-image:none;mask-image:none}.annbar .abt>span+span{display:none}.annbar.roll .abt{animation:none}.annbar .abt>span:first-child{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
+/* 提示条右边带一个按钮（固件升级「用家里地址打开」，用户 11/28） */.notice.nbtn{display:flex;align-items:center;gap:10px;justify-content:space-between}.notice.nbtn span{flex:1;min-width:0;text-wrap:pretty}.notice.nbtn .btn{flex:none}
 </style></head><body>
 <div id="wall" aria-hidden="true"><i></i></div><div class="topfade" aria-hidden="true"></div><script>try{if(document.documentElement.getAttribute("data-wall")==="photo"){var W=localStorage.getItem("rp_wallimg");if(W)document.getElementById("wall").style.setProperty("--wimg",'url("'+W+'")')}}catch(e){}</script>
 
@@ -1649,17 +1650,17 @@ html,body{overscroll-behavior-y:contain}
 	</section>
 	<div class="sectitle"><b>管理</b></div>
 	<section class="card list">
-		<button class="file" data-t="update"><div><b>检查更新</b><span class="muted" id="updState">路由器面板的版本</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="compat"><div><b>帮助改进、尝鲜</b><span class="muted" id="compatState">匿名报告型号和哪些功能能用；先试新版本</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="services"><div><b>服务管理</b><span class="muted">启动、停止、重启路由器上的服务</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="update"><div><b>检查更新</b><span class="muted" id="updState">—</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="compat"><div><b>帮助改进、尝鲜</b><span class="muted" id="compatState"></span></div><span class="muted">›</span></button>
+		<button class="file" data-t="services"><div><b>服务管理</b></div><span class="muted">›</span></button>
 		<button class="file" data-t="look"><div><b>主题与背景</b><span class="muted" id="lookState">—</span></div><span class="muted">›</span></button>
 		<button class="file" data-t="theme"><div><b>夜间模式</b><span class="muted" id="themeState">—</span></div><span class="muted">›</span></button>
-		<button class="file hidden" data-t="addphone"><div><b>添加新手机</b><span class="muted">新手机扫码打开官网，登录自己的账号就能用</span></div><span class="muted">›</span></button>
+		<button class="file hidden" data-t="addphone"><div><b>添加新手机</b></div><span class="muted">›</span></button>
 		<button class="file hidden" data-t="widget"><div><b>桌面小组件</b></div><span class="muted">›</span></button>
 		<!-- 6.0：已登录的手机、AI 连接器地址、换登录密钥、自建版的添加新手机，都在「我的主页 → 敏感信息」里（验证后才能看） -->
 		<button class="file" data-t="lock"><div><b>面板锁</b><span class="muted" id="lockState">—</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="feedback"><div><b>问题反馈 / 建议</b><span class="muted">遇到问题、想要什么功能，直接告诉开发者</span></div><span class="muted">›</span></button>
-		<button class="file" data-t="logout"><div><b>退出登录</b><span class="muted">这台手机退出面板，下次要重新登录</span></div><span class="muted">›</span></button>
+		<button class="file" data-t="feedback"><div><b>问题反馈 / 建议</b></div><span class="muted">›</span></button>
+		<button class="file" data-t="logout"><div><b>退出登录</b></div><span class="muted">›</span></button>
 	</section>
 	<div class="dangerzone"><button class="btn danger" data-t="reboot" style="padding:12px 22px">重启路由器</button><button class="btn danger" id="pwOff" style="padding:12px 22px">关机</button></div>
 	<p class="muted" style="text-align:center;margin-top:16px" id="about"></p>
@@ -2381,6 +2382,10 @@ NAV_IC.wisp = ['<path d="M5 10a10 10 0 0 1 14 0M8 13.5a5.5 5.5 0 0 1 8 0"/><circ
 NAV_IC.lanset = ['<path d="M4 11l8-7 8 7v9H4z"/><path d="M9 20v-4h6v4"/><path d="M12 4v3"/>', '#ff9500'];
 NAV_IC.wan = ['<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z"/>', '#34c759'];
 const navIc = (key, ch) => { const x = NAV_IC[key]; return x ? `<i class="nic" style="background:${x[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${x[0]}</svg></i>` : `<i>${esc(ch || '·')}</i>`; };
+const NAV_FIND = [
+	{ t: 'AI 连接器地址', mp: 'kckey', kw: 'ai 连接器 claude chatgpt gpt deepseek 通义 cherry studio mcp' },
+	{ t: '添加新手机', mp: 'kphone', kw: '扫码 新手机 登录 换手机' },
+];
 function navBtn(x, kid, noic) {
 	if (Array.isArray(x)) return `<button data-p="k:${esc(x[0])}"${noic ? ' class="noic"' : ''}>${kid || noic ? '' : navIc(x[0], x[2])}<span>${esc(x[1])}</span></button>`;
 	const lab = `<span>${esc(x.t)}${x.hint ? `<span class="path">${esc(x.hint)}</span>` : ''}</span>`;
@@ -2402,6 +2407,8 @@ function renderNav() {
 			if (it.link || !pxShow(it)) continue;   // 「服务」里的快捷入口，原本那一项已经会被搜到；用不上的代理页面不显示
 			if (it.kids) it.kids.forEach((k) => one(k, [g.g, it.t])); else one(it, [g.g]);
 		}
+		// 只在搜索时出现的：「我的主页 → 敏感信息」里的几样（11/27 全面检查第 22 条：菜单搜「AI」「连接器」搜不到）。点了去我的主页，验证过的直接打开
+		for (const x of NAV_FIND) if ((x.t + ' ' + x.kw).toLowerCase().includes(q)) hits.push([x.t.toLowerCase().includes(q) ? 0 : 1, `<button data-p="me" data-mp="${x.mp}">${navIc('me', '✦')}<span>${esc(x.t)}<span class="path">我的主页 › 敏感信息</span></span></button>`]);
 		const hs = hits.sort((a, b) => a[0] - b[0]).map((h) => h[1]);
 		if ('首页 主页 home'.includes(q)) hs.unshift(navBtn(NAV_TOP, false, false));
 		nav.innerHTML = hs.length ? hs.join('') : '<div class="empty">没有找到这个功能</div>';
@@ -2416,6 +2423,8 @@ function renderNav() {
 			}).join('')}</div></div></div>`).join('');
 	}
 	navMark();
+	// 侧边栏重画以后，「实时联系开发者」上的红点要补回来（原来打开侧边栏时重画就没了）
+	try { ntBadge(); } catch (e) {}
 }
 function navMark() {
 	$$('#sidenav button[data-p]').forEach((b) => b.classList.toggle('on', b.dataset.p === page));
@@ -2488,7 +2497,13 @@ $('sidenav').addEventListener('click', (e) => {
 		return;
 	}
 	const b = e.target.closest('button[data-p]');
-	if (b) { if (b.dataset.p === page && page.startsWith('k:')) { sideOpen(false); return; } go(b.dataset.p); }
+	if (b) {
+		if (b.dataset.p === page && page.startsWith('k:')) { sideOpen(false); return; }
+		const mp = b.dataset.mp;
+		go(b.dataset.p);
+		// 搜出来的敏感信息：验证过的直接打开那一项；没验证的停在我的主页，滚到验证那里
+		if (mp) setTimeout(() => { const t = document.querySelector('#meBox [data-mp="' + mp + '"]') || document.querySelector('#meBox [data-pwf], #meBox .mp-lock'); if (t) { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); if (t.dataset.mp === mp) t.click(); } }, 900);
+	}
 });
 $('sideQ').addEventListener('input', renderNav);
 $('sideQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = $('sidenav').querySelector('button[data-p]'); if (b && $('sideQ').value.trim()) { $('sideQ').value = ''; go(b.dataset.p); renderNav(); } } });
@@ -4579,7 +4594,9 @@ function fwRender() {
 		${f.ok ? `<label class="fld row"><div class="lb"><b>保留设置</b></div><label class="sw"><input type="checkbox" id="fwKeep" checked${dis} aria-label="保留设置"><i></i></label></label>` : ''}
 		<div class="btngrid" style="margin-top:12px"><button class="btn" id="fwCancel" type="button"${dis}>换一个</button><button class="btn primary" id="fwGo" type="button"${f.ok ? dis : ' disabled'}>升级</button></div>`;
 	else up = `<label class="btn${away ? ' disabled' : ''}" style="display:flex;justify-content:center;position:relative"><input type="file" id="fwFile" accept=".bin,.img,.itb,.gz,.ubi,.trx,.chk" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"${dis}>选择固件文件</label>`;
-	$('fwBody').innerHTML = `${away ? '<div class="notice w" style="margin-top:12px">要连家里 Wi-Fi</div>' : ''}
+	// 认不出在家（手机连面板走了代理节点、没法确认是这台手机）：给「用家里地址打开」，一点跳到 http://路由器地址:906 免输密码（用户 11/28）
+	const awayN = !away ? '' : d.lan && d.owner ? '<div class="notice w nbtn" style="margin-top:12px"><span>没认出你连着家里 Wi-Fi</span><button class="btn sm" id="fwLan" type="button">用家里地址打开</button></div>' : '<div class="notice w" style="margin-top:12px">要连家里 Wi-Fi</div>';
+	$('fwBody').innerHTML = `${awayN}
 		<section class="card"><dl class="mp-kv">${kv}</dl></section>
 		<div class="sectitle"><b>固件升级</b></div><section class="card">${up}</section>
 		<div class="sectitle"><b>恢复出厂</b></div><section class="card">${d.reset ? `<button class="btn danger" id="fwReset" type="button" style="width:100%"${dis}>恢复出厂</button>` : '<div class="empty">固件不支持恢复出厂（没有 firstboot）</div>'}</section>`;
@@ -4670,6 +4687,11 @@ $('fwBody').addEventListener('click', async (e) => {
 	}
 	if (e.target.id === 'fwGo') return fwDo('flash');
 	if (e.target.id === 'fwReset') return fwDo('reset');
+	if (e.target.id === 'fwLan') {
+		e.target.disabled = true;
+		try { const r = await P('fw_lan'); location.href = r.url; } catch (er) { e.target.disabled = false; toast(er.message, true); }
+		return;
+	}
 });
 /* ---------- 6.0 第 25 项：局域网设置 ----------
  * 路由器地址、子网掩码（只有主账号能改）；DHCP 开关、地址范围、租期。改了底部出现「保存」，保存走 90 秒确认。
@@ -8460,7 +8482,7 @@ function mpKeysHtml() {
 	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
 	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b>${d ? `<span class="muted">${d}</span>` : ''}</div><span class="muted">›</span></button>`;
 	const lpw = store.get('rp_lpw') === '1';
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${store.get('rp_ppp') !== '0' ? row('kppp', '宽带账号和密码', '') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启' : '没开') : ''}${ai ? row('kckey', 'AI 连接器地址', '') : ''}${tab ? row('ktab', '平板（证人）网址', '') : ''}${store.get('rp_ppp') !== '0' ? row('kppp', '宽带账号和密码', '') : ''}${row('krot', '换登录密钥', '')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -8631,7 +8653,7 @@ function mpDraw() {
 		<div class="mp-sub">联系方式</div><section class="card"><dl class="mp-kv"><dt>登录邮箱</dt><dd>${esc(x.email)} <span class="${x.verified ? 'mp-ok' : 'mp-warn'}" style="font-size:12px">${x.verified ? '已验证' : '没验证'}</span></dd></dl></section>
 		${mpDevsHtml(dl, (ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开这个面板。') + '不认识的马上移除：移除后它要从官网重新打开才能进来。')}
 		<div class="mp-sub">登录记录 · 最近 30 天</div><section class="card"><ul class="mp-tl">${(x.logins || []).slice(0, 20).map((l) => `<li><div class="d"${l.ok ? '' : ' style="color:#ff3b30"'}>${l.ok ? '✓' : '✕'}</div><div><b>${esc(l.ok ? ({ reg: '注册账号', reset: '重设密码' }[l.k] || '登录成功') : (l.why || '登录失败'))}</b><span>${esc([ymdhm(l.t), l.place, l.ua].filter(Boolean).join(' · '))}</span></div></li>`).join('') || '<li style="display:block"><span>最近 30 天没有登录记录</span></li>'}</ul></section>
-		${hub ? `<div class="mp-sub">官网账号</div><section class="card list" style="padding:4px 12px"><a class="file" href="${esc(hub + '/app#settings')}" target="_blank" rel="noopener" style="background:none;margin:4px 0"><div><b>官网账号设置</b><span class="muted">修改密码、官网上登录着的 ${(x.sessions || []).length} 台设备、注销账号</span></div><span class="muted">›</span></a></section>` : ''}
+		${hub ? `<div class="mp-sub">官网账号</div><section class="card list" style="padding:4px 12px"><a class="file" href="${esc(hub + '/app#settings')}" target="_blank" rel="noopener" style="background:none;margin:4px 0"><div><b>官网账号设置</b><span class="muted">官网上登录着 ${(x.sessions || []).length} 台设备</span></div><span class="muted">›</span></a></section>` : ''}
 		${mpKeysHtml()}
 		<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>`;
 	}
@@ -8640,7 +8662,7 @@ function mpDraw() {
 	h += `<div class="sectitle"><b>操作记录</b><span class="muted" style="font-size:13px">这台路由器</span></div><section class="card"><ul class="mp-tl">${(MP.logAll ? L : L.slice(0, 6)).map((l) => `<li><div class="d">${esc(l.ic || '•')}</div><div><b>${esc(l.x)}</b><span>${esc(ymdhm(l.t))}</span></div></li>`).join('') || '<li style="display:block"><span>还没有记录</span></li>'}</ul>
 	${!MP.logAll && L.length > 6 ? '<button class="btn sm" data-mp="logall" style="width:100%;margin-top:8px">看更多</button>' : ''}</section>`;
 	// 我的反馈
-	if (canPage('myfb')) h += `<section class="card list" style="margin-top:14px;padding:4px 12px"><button class="file" data-mp="fb" style="background:none;margin:4px 0"><div><b>我的反馈</b><span class="muted">处理到哪一步、开发者的回复</span></div><span class="muted">›</span></button></section>`;
+	if (canPage('myfb')) h += `<section class="card list" style="margin-top:14px;padding:4px 12px"><button class="file" data-mp="fb" style="background:none;margin:4px 0"><div><b>我的反馈</b></div><span class="muted">›</span></button></section>`;
 	// 内容没变就不重画（比如从邮箱切回来时的自动刷新）：输到一半的验证码、键盘都保持原样
 	if (h !== MP.h || !box.firstElementChild) {
 		const ae = document.activeElement, foc = !!(ae && ae.matches && ae.matches('#meBox [data-code]')), sel = foc ? [ae.selectionStart, ae.selectionEnd] : null;
@@ -8926,9 +8948,9 @@ async function ckeySheet() {
 	try { r = await secP('ckey_info'); } catch (e) { return toast(e.message, true); }
 	if (!r.ai) return toast('这台路由器装的是纯面板版，没有 AI 连接器', true);
 	modal(`<div class="sheethead"><h3>AI 连接器地址</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 10px">在 AI 应用里添加连接器时填这个地址，就能在对话里管理路由器：Claude 在「设置 → 连接器 → 添加自定义连接器」；ChatGPT、Cherry Studio（接 DeepSeek、通义千问等）怎么加，看官网常见问题「能接哪些 AI」。它只给 AI 用，打不开面板。点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(r.url || '（还没有网址）')}<span>点一下显示</span></div>
-	<div class="notice w" style="margin-top:12px">⚠️ 拿到这个地址就能让 AI 控制你的路由器：不要发给别人。泄露了就点「换一个地址」，旧的马上作废。</div>
+	<button class="btn sm" type="button" data-howto style="width:100%;margin-top:10px">怎么添加到 Claude、ChatGPT 等 AI</button>
+	<div class="notice w" style="margin-top:12px">拿到这个地址就能控制你的路由器，不要发给别人。泄露了点「换一个地址」</div>
 	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
 	<div data-aiallow>${aiAllowHtml(r.allows)}</div>
@@ -8939,6 +8961,8 @@ async function ckeySheet() {
 	(m, close) => {
 		qrReveal(m);
 		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
+		// 11/27 全面检查第 23 条：ChatGPT 这些怎么接，原来只写「看官网常见问题」，没有链接
+		m.querySelector('[data-howto]').onclick = () => window.open((store.get('rp_hub') || 'https://yrlove520.com').replace(/\/$/, '') + '/help#ai-clients-6', '_blank', 'noopener');
 		aiModesBind(m.querySelector('[data-aimodes]'));
 		aiAllowBind(m.querySelector('[data-aiallow]'));
 		m.querySelector('[data-rot]').onclick = async () => {

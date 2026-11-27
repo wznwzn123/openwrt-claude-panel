@@ -56,6 +56,30 @@ try {
 	ok('IPv6：别的前缀不算', (await cgi('sysmnt_get', {}, { REMOTE_ADDR: '127.0.0.1', HTTP_CF_CONNECTING_IP: '2408:8207:1234:5700::9' })).result?.home === null);
 	ok('宽带口是内网地址（光猫拨号）：用外网看到的地址比', (await cgi('sysmnt_get', {}, { ...HOME4, CMCP_SM_WAN4: '192.168.1.5', CMCP_SM_PUB4: '36.1.2.3' })).result?.home === 'wan');
 	ok('局域网直接打开 → 在家', (await cgi('sysmnt_get', {}, { REMOTE_ADDR: '192.168.6.23', HTTP_HOST: '192.168.6.1:906', CONTENT_TYPE: 'application/json' })).result?.home === 'lan');
+	// 用户 11/28：手机连面板走了代理节点（官网看到的是节点地址）——代理插件里正在连面板网址的家里设备只有一台，或者归这个账号，就算在家
+	const CF = E + '/conns.json', DOM = 'panel.example', PX = { ...AWAY, CMCP_SM_DOM: DOM, CMCP_SM_CONNS: CF, CMCP_SM_NEIGH: JSON.stringify({ '192.168.6.23': 'aa:bb:cc:00:00:01', '192.168.6.40': 'aa:bb:cc:00:00:02' }) };
+	const conns = (l) => fs.writeFileSync(CF, JSON.stringify({ connections: l.map(([ip, h], i) => ({ id: 'c' + i, metadata: { sourceIP: ip, host: h } })) }));
+	conns([['192.168.6.23', 'r2m347vi.' + DOM], ['192.168.6.23', 'www.google.com']]);
+	r = await cgi('sysmnt_get', {}, PX);
+	ok('走代理连面板：家里只有一台设备在连面板网址 → 在家（proxy）；能用家里地址打开', r.result?.home === 'proxy', JSON.stringify(r).slice(0, 200));
+	conns([['192.168.6.23', 'r2m347vi.' + DOM], ['192.168.6.40', 'r2m347vi.' + DOM]]);
+	ok('两台设备同时开着面板、都不归这个账号：认不出 → 不算在家', (await cgi('sysmnt_get', {}, PX)).result?.home === null);
+	conns([['192.168.6.23', 'www.' + DOM + '.evil.com'], ['192.168.6.23', 'x' + DOM]]);
+	ok('网址只是长得像面板的：不算', (await cgi('sysmnt_get', {}, PX)).result?.home === null);
+	conns([]);
+	ok('代理插件里没人连面板（真的在外面）：不算', (await cgi('sysmnt_get', {}, PX)).result?.home === null);
+	ok('伪造的 Cloudflare 头 + 有人在连面板：照样不算（不是从本机隧道进来的）', await (async () => { conns([['192.168.6.23', 'a.' + DOM]]); return (await cgi('sysmnt_get', {}, { ...PX, REMOTE_ADDR: '203.0.113.9' })).result?.home === null; })());
+	// 「用家里地址打开」：一次性票，2 分钟、用一次，直接到固件升级页
+	ok('家里局域网入口关着（读不到路由器地址）：说清楚', /家里局域网打开面板已关闭/.test(err(await cgi('fw_lan', {}, AWAY))));
+	const C0 = fs.readFileSync(E + '/config.json', 'utf8');
+	fs.writeFileSync(BIN + '/fakeuci', '#!/bin/sh\n[ "$*" = "-q get network.lan.ipaddr" ] && { echo 192.168.6.1; exit 0; }\nexit 1\n', { mode: 0o755 });
+	fs.writeFileSync(E + '/config.json', JSON.stringify({ ...JSON.parse(C0), uci: BIN + '/fakeuci' }));
+	const LT = E + '/lt';
+	r = await cgi('fw_lan', {}, { ...AWAY, CMCP_LAN_T: LT });
+	const t = (/#lopen=([a-z2-9]{24})$/.exec(r.result?.url || '') || [])[1];
+	ok('用家里地址打开：给 http://路由器地址:906 的链接，带一次性票，直接到固件升级页', /^http:\/\/192\.168\.6\.1:906\/panel\/\?p=fwup#lopen=[a-z2-9]{24}$/.test(r.result?.url || '') && fs.existsSync(LT + '/' + t), JSON.stringify(r));
+	ok('sysmnt_get 带上「家里地址能用」', (await cgi('sysmnt_get', {}, AWAY)).result?.lan === true);
+	fs.writeFileSync(E + '/config.json', C0);
 	// 恢复出厂
 	ok('恢复出厂要确认', /需要确认/.test(err(await cgi('factory_reset', { pw: 'right-pw' }))));
 	ok('没备份不让恢复', /先备份一次/.test(err(await cgi('factory_reset', { confirm: 'RESET', pw: 'right-pw' }))));

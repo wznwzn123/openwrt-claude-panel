@@ -67,6 +67,11 @@ function handle(msg) {
 	if (conf().ai === false && msg.client != 'panel')
 		return is_notification ? null : rpc_error(id, -32001, '这台路由器装的是纯面板版，没有开启 AI 连接器');
 
+	// 后台「最后打开面板」（用户 11/28）：手机面板用着就记一下时间（1 分钟最多写一次，只在内存里），看门狗跟着心跳报给官网。
+	// 只算登录过的手机（DEV）；路由器自己的小工具、AI、桌面小组件不算
+	if (DEV && msg.client == 'panel' && (MODE == 'token' || MODE == 'pass' || MODE == 'lan')) {
+		try { let pf = getenv('CMCP_POPEN_F') || '/tmp/cmcp_popen', st = stat(pf); if (!st || time() - st.mtime >= 60) writefile(pf, '' + time()); } catch (e) {}
+	}
 	if (substr(msg.method, 0, 6) == 'panel/') {
 		let fn = P[substr(msg.method, 6)];
 		if (type(fn) != 'function') return rpc_error(id, -32601, '面板接口不存在：' + msg.method);

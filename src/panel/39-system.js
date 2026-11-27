@@ -2429,7 +2429,7 @@ function mpKeysHtml() {
 	const self = !isHosted(), ai = store.get('rp_ai') === '1', tab = !!(cinfo && cinfo.tablet);
 	const row = (k, t, d) => `<button class="file" data-mp="${k}" style="background:none;margin:4px 0"><div><b>${t}</b>${d ? `<span class="muted">${d}</span>` : ''}</div><span class="muted">›</span></button>`;
 	const lpw = store.get('rp_lpw') === '1';
-	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '另一台手机扫码直接打开这个面板') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启：新手机光有登录地址进不来' : '没开：拿到登录地址就能登录新手机') : ''}${ai ? row('kckey', 'AI 连接器地址', '在 Claude、ChatGPT 等 AI 里添加连接器，设置 AI 能做什么') : ''}${tab ? row('ktab', '平板（证人）网址', '平板每分钟访问这个网址报平安') : ''}${store.get('rp_ppp') !== '0' ? row('kppp', '宽带账号和密码', '') : ''}${row('krot', '换登录密钥', '旧的登录地址马上作废（截图泄露、手机丢了时用）')}</section>`;
+	return `<div class="mp-sub">这台路由器的钥匙</div><section class="card list mp-keys" style="padding:4px 12px">${self ? row('kphone', '添加新手机', '') : ''}${self ? row('kpw', '登录要输路由器后台密码', lpw ? '已开启' : '没开') : ''}${ai ? row('kckey', 'AI 连接器地址', '') : ''}${tab ? row('ktab', '平板（证人）网址', '') : ''}${store.get('rp_ppp') !== '0' ? row('kppp', '宽带账号和密码', '') : ''}${row('krot', '换登录密钥', '')}</section>`;
 }
 // 登录着的手机（托管版）：移除不认识的
 function mpDevsHtml(dl, note) {
@@ -2600,7 +2600,7 @@ function mpDraw() {
 		<div class="mp-sub">联系方式</div><section class="card"><dl class="mp-kv"><dt>登录邮箱</dt><dd>${esc(x.email)} <span class="${x.verified ? 'mp-ok' : 'mp-warn'}" style="font-size:12px">${x.verified ? '已验证' : '没验证'}</span></dd></dl></section>
 		${mpDevsHtml(dl, (ME_ROLE.role === 'sub' ? '你的账号登录着的手机。' : '这些手机能打开这个面板。') + '不认识的马上移除：移除后它要从官网重新打开才能进来。')}
 		<div class="mp-sub">登录记录 · 最近 30 天</div><section class="card"><ul class="mp-tl">${(x.logins || []).slice(0, 20).map((l) => `<li><div class="d"${l.ok ? '' : ' style="color:#ff3b30"'}>${l.ok ? '✓' : '✕'}</div><div><b>${esc(l.ok ? ({ reg: '注册账号', reset: '重设密码' }[l.k] || '登录成功') : (l.why || '登录失败'))}</b><span>${esc([ymdhm(l.t), l.place, l.ua].filter(Boolean).join(' · '))}</span></div></li>`).join('') || '<li style="display:block"><span>最近 30 天没有登录记录</span></li>'}</ul></section>
-		${hub ? `<div class="mp-sub">官网账号</div><section class="card list" style="padding:4px 12px"><a class="file" href="${esc(hub + '/app#settings')}" target="_blank" rel="noopener" style="background:none;margin:4px 0"><div><b>官网账号设置</b><span class="muted">修改密码、官网上登录着的 ${(x.sessions || []).length} 台设备、注销账号</span></div><span class="muted">›</span></a></section>` : ''}
+		${hub ? `<div class="mp-sub">官网账号</div><section class="card list" style="padding:4px 12px"><a class="file" href="${esc(hub + '/app#settings')}" target="_blank" rel="noopener" style="background:none;margin:4px 0"><div><b>官网账号设置</b><span class="muted">官网上登录着 ${(x.sessions || []).length} 台设备</span></div><span class="muted">›</span></a></section>` : ''}
 		${mpKeysHtml()}
 		<button class="btn" data-mp="lock" style="width:100%;margin-top:10px">现在锁上</button>`;
 	}
@@ -2609,7 +2609,7 @@ function mpDraw() {
 	h += `<div class="sectitle"><b>操作记录</b><span class="muted" style="font-size:13px">这台路由器</span></div><section class="card"><ul class="mp-tl">${(MP.logAll ? L : L.slice(0, 6)).map((l) => `<li><div class="d">${esc(l.ic || '•')}</div><div><b>${esc(l.x)}</b><span>${esc(ymdhm(l.t))}</span></div></li>`).join('') || '<li style="display:block"><span>还没有记录</span></li>'}</ul>
 	${!MP.logAll && L.length > 6 ? '<button class="btn sm" data-mp="logall" style="width:100%;margin-top:8px">看更多</button>' : ''}</section>`;
 	// 我的反馈
-	if (canPage('myfb')) h += `<section class="card list" style="margin-top:14px;padding:4px 12px"><button class="file" data-mp="fb" style="background:none;margin:4px 0"><div><b>我的反馈</b><span class="muted">处理到哪一步、开发者的回复</span></div><span class="muted">›</span></button></section>`;
+	if (canPage('myfb')) h += `<section class="card list" style="margin-top:14px;padding:4px 12px"><button class="file" data-mp="fb" style="background:none;margin:4px 0"><div><b>我的反馈</b></div><span class="muted">›</span></button></section>`;
 	// 内容没变就不重画（比如从邮箱切回来时的自动刷新）：输到一半的验证码、键盘都保持原样
 	if (h !== MP.h || !box.firstElementChild) {
 		const ae = document.activeElement, foc = !!(ae && ae.matches && ae.matches('#meBox [data-code]')), sel = foc ? [ae.selectionStart, ae.selectionEnd] : null;
@@ -2895,9 +2895,9 @@ async function ckeySheet() {
 	try { r = await secP('ckey_info'); } catch (e) { return toast(e.message, true); }
 	if (!r.ai) return toast('这台路由器装的是纯面板版，没有 AI 连接器', true);
 	modal(`<div class="sheethead"><h3>AI 连接器地址</h3><button class="btn sm" data-v="close">关闭</button></div>
-	<p class="muted" style="margin:0 0 10px">在 AI 应用里添加连接器时填这个地址，就能在对话里管理路由器：Claude 在「设置 → 连接器 → 添加自定义连接器」；ChatGPT、Cherry Studio（接 DeepSeek、通义千问等）怎么加，看官网常见问题「能接哪些 AI」。它只给 AI 用，打不开面板。点一下显示：</p>
 	<div class="qrbox blur keybox" style="word-break:break-all;font:13px/1.5 ui-monospace,monospace;padding:14px;text-align:left">${esc(r.url || '（还没有网址）')}<span>点一下显示</span></div>
-	<div class="notice w" style="margin-top:12px">⚠️ 拿到这个地址就能让 AI 控制你的路由器：不要发给别人。泄露了就点「换一个地址」，旧的马上作废。</div>
+	<button class="btn sm" type="button" data-howto style="width:100%;margin-top:10px">怎么添加到 Claude、ChatGPT 等 AI</button>
+	<div class="notice w" style="margin-top:12px">拿到这个地址就能控制你的路由器，不要发给别人。泄露了点「换一个地址」</div>
 	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
 	<div data-aiallow>${aiAllowHtml(r.allows)}</div>
@@ -2908,6 +2908,8 @@ async function ckeySheet() {
 	(m, close) => {
 		qrReveal(m);
 		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
+		// 11/27 全面检查第 23 条：ChatGPT 这些怎么接，原来只写「看官网常见问题」，没有链接
+		m.querySelector('[data-howto]').onclick = () => window.open((store.get('rp_hub') || 'https://yrlove520.com').replace(/\/$/, '') + '/help#ai-clients-6', '_blank', 'noopener');
 		aiModesBind(m.querySelector('[data-aimodes]'));
 		aiAllowBind(m.querySelector('[data-aiallow]'));
 		m.querySelector('[data-rot]').onclick = async () => {

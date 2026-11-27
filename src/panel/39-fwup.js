@@ -22,7 +22,9 @@ function fwRender() {
 		${f.ok ? `<label class="fld row"><div class="lb"><b>保留设置</b></div><label class="sw"><input type="checkbox" id="fwKeep" checked${dis} aria-label="保留设置"><i></i></label></label>` : ''}
 		<div class="btngrid" style="margin-top:12px"><button class="btn" id="fwCancel" type="button"${dis}>换一个</button><button class="btn primary" id="fwGo" type="button"${f.ok ? dis : ' disabled'}>升级</button></div>`;
 	else up = `<label class="btn${away ? ' disabled' : ''}" style="display:flex;justify-content:center;position:relative"><input type="file" id="fwFile" accept=".bin,.img,.itb,.gz,.ubi,.trx,.chk" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"${dis}>选择固件文件</label>`;
-	$('fwBody').innerHTML = `${away ? '<div class="notice w" style="margin-top:12px">要连家里 Wi-Fi</div>' : ''}
+	// 认不出在家（手机连面板走了代理节点、没法确认是这台手机）：给「用家里地址打开」，一点跳到 http://路由器地址:906 免输密码（用户 11/28）
+	const awayN = !away ? '' : d.lan && d.owner ? '<div class="notice w nbtn" style="margin-top:12px"><span>没认出你连着家里 Wi-Fi</span><button class="btn sm" id="fwLan" type="button">用家里地址打开</button></div>' : '<div class="notice w" style="margin-top:12px">要连家里 Wi-Fi</div>';
+	$('fwBody').innerHTML = `${awayN}
 		<section class="card"><dl class="mp-kv">${kv}</dl></section>
 		<div class="sectitle"><b>固件升级</b></div><section class="card">${up}</section>
 		<div class="sectitle"><b>恢复出厂</b></div><section class="card">${d.reset ? `<button class="btn danger" id="fwReset" type="button" style="width:100%"${dis}>恢复出厂</button>` : '<div class="empty">固件不支持恢复出厂（没有 firstboot）</div>'}</section>`;
@@ -113,4 +115,9 @@ $('fwBody').addEventListener('click', async (e) => {
 	}
 	if (e.target.id === 'fwGo') return fwDo('flash');
 	if (e.target.id === 'fwReset') return fwDo('reset');
+	if (e.target.id === 'fwLan') {
+		e.target.disabled = true;
+		try { const r = await P('fw_lan'); location.href = r.url; } catch (er) { e.target.disabled = false; toast(er.message, true); }
+		return;
+	}
 });

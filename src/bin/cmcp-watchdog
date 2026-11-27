@@ -295,8 +295,11 @@ cloud_beat() {
 	lip=$(uci -q get network.lan.ipaddr 2>/dev/null); lip=${lip%% *}; lip=${lip%%/*}
 	# 只有本地版报（官网「打开面板」要跳过去）；AI 版、自建版不报
 	[ "$ed" = local ] && [ -n "$lip" ] && [ ! -f "$D/lan_off" ] && lan="$lip:$lp"
-	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s","ver":"%s","ed":"%s","lan":"%s"}' \
-		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")" "$(sed -n 's/^VER=//p' $D/version 2>/dev/null | tr -dc '0-9a-z.')" "$ed" "$lan")
+	# po = 最后有人用手机面板的时间（后台「打开面板 x 前」，用户 11/28）；hot = 装到第几个修复补丁（后台显示 V 编号）
+	local po hot
+	po=$(cat "${WD_POPEN:-/tmp/cmcp_popen}" 2>/dev/null | tr -dc '0-9'); hot=$(sed -n 's/^HOT=//p' $D/version 2>/dev/null | tr -dc '0-9')
+	j=$(printf '{"wan":"%s","net":"%s","dns":"%s","tun":"%s","panel":"%s","clash":"%s","ready":%s,"up":%s,"mem":%s,"slab":%s,"tcause":"%s","ver":"%s","ed":"%s","lan":"%s","po":%s,"hot":%s}' \
+		"$WAN" "$NET" "$DNS" "$TUN" "$PANEL" "$CLASH" "${RDY:-0}" "$(cut -d. -f1 /proc/uptime)" "$(memavail)" "$(awk '/SUnreclaim/{print int($2/1024)}' /proc/meminfo)" "$(esc "$TCAUSE")" "$(sed -n 's/^VER=//p' $D/version 2>/dev/null | tr -dc '0-9a-z.')" "$ed" "$lan" "${po:-0}" "${hot:-0}")
 	# 官网让路由器换版本（主账号在官网「我的路由器」里点的）：心跳的回复里带着指令
 	( r=$(curl -s -m 25 -X POST -H 'Content-Type: application/json' -d "$j" "$URL/beat/r/$RKEY" 2>/dev/null)
 	  v=$(printf '%s' "$r" | jsonfilter -e '@.annv' 2>/dev/null); [ -n "$v" ] && { date +%s > "$ANNB"; ann_sync "$v"; }

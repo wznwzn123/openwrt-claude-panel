@@ -52,7 +52,10 @@ const J = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers
 const clean = (s, n) => String(s || '').replace(/[^\p{L}\p{N} ._()\-]/gu, '').slice(0, n);
 const DAY = 86400e3;
 // 比较版本号（6.0 > 5.2.3 > 5.2）：返回 -1 / 0 / 1
-function verCmp(a, b) { const x = String(a).split('.').map((n) => +n || 0), y = String(b).split('.').map((n) => +n || 0); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0) ? -1 : 1; } return 0; }
+function verCmp(a, b, n = 3) { const x = String(a).split('.').map((n) => +n || 0), y = String(b).split('.').map((n) => +n || 0); for (let i = 0; i < n; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0) ? -1 : 1; } return 0; }
+// 公告的版本范围可以细到修复补丁（用户 11/28：后台从列表里选，含尝鲜版和补丁）：「6.0.0.7」= 6.0.0 V7。
+// 范围写到第几段就比到第几段：写「6.0.0」时 6.0.0 的所有补丁都算 6.0.0
+const verIn = (q, lo, hi) => (!lo || verCmp(q, lo, Math.min(4, String(lo).split('.').length < 4 ? 3 : 4)) >= 0) && (!hi || verCmp(q, hi, String(hi).split('.').length < 4 ? 3 : 4) <= 0);
 const ymd = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10); // 按北京 / 台北时间显示日期
 export const LIMITS = { perIpHour: 5, allHour: 60, idleDays: 90, pendingMs: 3600e3 };
 export const TRASH_DAYS = 30;
@@ -577,7 +580,9 @@ export class Hub extends DurableObject {
 		for (const sub of subs) {
 			const d = await this.ctx.storage.get('d:' + sub);
 			rn[sub] = (d && d.name) || sub;
-			devs.push(d ? { sub, name: d.name || sub, model: d.model || '', role: d.owner === uid ? '主账号' : '家人', exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', seen: d.seen || 0, created: d.created || 0, ver: d.ver || '' } : { sub, name: sub, gone: true });
+			let b = null;
+			if (d && d.state === 'ok') { try { b = await this.watch(sub).brief(); } catch (e) {} }
+			devs.push(d ? { sub, name: d.name || sub, model: d.model || '', role: d.owner === uid ? '主账号' : '家人', exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', po: (b && b.po) || 0, last: (b && b.last) || 0, live: (b && b.state) || '', seen: d.seen || 0, created: d.created || 0, ver: d.ver || '' } : { sub, name: sub, gone: true });
 		}
 		const KL = { app: 'App 授权', login: '登录官网', reg: '注册', reset: '找回密码', code: '收邮箱验证码', totp: '两步验证', admin: '管理后台' };
 		for (const x of (await this.ctx.storage.get('ll')) || []) if (String(x.who || '').toLowerCase() === email)
@@ -666,7 +671,8 @@ export class Hub extends DurableObject {
 		// 主人点过「不再提醒」的
 		const ovo = new Set();
 		for (let i = 0; i < list.length; i += 100) for (const [k] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ovoff:' + d.sub))) ovo.add(k.slice(6));
-		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		// 用户 11/28：列表写「打开面板 x 前」（路由器跟着心跳报）+ 现在在不在线（看最后一次心跳，不再用 6 小时才记一次的 seen）
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], hot: (brs[i] && brs[i].hot) || 0, po: (brs[i] && brs[i].po) || 0, last: (brs[i] && brs[i].last) || 0, live: (brs[i] && brs[i].state) || '', ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
@@ -1473,10 +1479,10 @@ export class Hub extends DurableObject {
 		if (!title) return { st: 400, error: level === 'banner' ? '横幅内容不能是空的' : '标题不能是空的' };
 		const days = Math.max(0, Math.min(365, Math.round(+b.days || 0)));
 		// 6.0：只发给某些路由器：ed = h 托管版 / s 自建版 / 空 = 都发；vmin、vmax = 面板版本范围（含两头，可以只填一个）
-		const ed = b.ed === 'h' || b.ed === 's' ? b.ed : '', vok = (v) => v === '' || /^\d{1,3}(\.\d{1,3}){0,2}$/.test(v);
+		const ed = b.ed === 'h' || b.ed === 's' ? b.ed : '', vok = (v) => v === '' || /^\d{1,3}(\.\d{1,3}){0,2}(\.\d{1,4})?$/.test(v);
 		const vmin = String(b.vmin || '').trim(), vmax = String(b.vmax || '').trim();
 		if (!vok(vmin) || !vok(vmax)) return { st: 400, error: '版本写成 6.0 或 5.2.3 这样' };
-		if (vmin && vmax && verCmp(vmin, vmax) > 0) return { st: 400, error: '版本范围前面的要比后面的小' };
+		if (vmin && vmax && verCmp(vmin, vmax, vmax.split('.').length > 3 ? 4 : 3) > 0) return { st: 400, error: '版本范围前面的要比后面的小' };
 		// 定时发布（5.0）：到时间才出现在面板里；路由器按发布时间判断要不要推送到手机
 		let start = Math.round(+b.start || 0);
 		if (start && start <= Date.now() + 60e3) start = 0;
@@ -1713,15 +1719,19 @@ export async function hubFetch(req, env) {
 	}
 	if (p === '/api/notices' && req.method === 'GET') {
 		// 路由器带着自己的版本（v）和托管 / 自建（k = h / s）来拿：只给发给它的；老版本不带，当成最老的版本、托管自建都算
-		const qv = u.searchParams.get('v') || '0', qk = u.searchParams.get('k') || '';
-		const anns = (await H.anns(false)).filter((a) => (!a.ed || !qk || a.ed === qk) && (!a.vmin || verCmp(qv, a.vmin) >= 0) && (!a.vmax || verCmp(qv, a.vmax) <= 0));
+		// h = 装到第几个修复补丁（6.0.1 起带；没带就算 0）
+		// 不带版本的是 5.3.0 以前的老路由器（1.0 到 5.2.x 都有可能）：版本范围跟这一段有重叠就给（用户 11/28：选「1.0 到 5.3.1」时老路由器一台都没收到）
+		const qv0 = u.searchParams.get('v') || '', qh = Math.floor(+u.searchParams.get('h') || 0), qk = u.searchParams.get('k') || '';
+		const qv3 = qv0.split('.').slice(0, 3).join('.'), qv = qv3 + '.' + (qh > 0 && qh < 10000 ? qh : 0);
+		const oldOk = (a) => !a.vmin || verCmp(a.vmin, '5.3.0', 3) < 0;
+		const anns = (await H.anns(false)).filter((a) => (!a.ed || !qk || a.ed === qk) && (qv0 ? verIn(qv, a.vmin, a.vmax) : oldOk(a)));
 		// 路由器带着匿名编号来拿：记下「这台收到了」（公告统计用；编号是路由器随机生成的，跟账号、IP 都没关系）
 		const rid = u.searchParams.get('r') || '';
 		if (rid && anns.length) { try { await H.annGot(rid, anns.slice(0, 20).map((a) => a.id)); } catch (e) {} }
 		const list = await Promise.all(anns.slice(0, 20).map(async (a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0, ...(a.files && a.files.length ? { files: await signFiles(env, H, a.files, 30 * DAY) } : {}) })));
 		// 6.0：顺便说这个版本最新的热补丁是第几个（路由器每 30 分钟问一次公告，紧急补丁不用等 6 小时的定时检查）
 		let hot;
-		if (/^\d+\.\d+\.\d+$/.test(qv)) try { hot = (await hotBest(env, qv)).n; } catch (e) {}
+		if (/^\d+\.\d+\.\d+$/.test(qv3)) try { hot = (await hotBest(env, qv3)).n; } catch (e) {}
 		return new Response(JSON.stringify({ ok: true, list, ...(hot != null ? { hot } : {}) }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 	}
 	if (p.startsWith('/api/fb/') && req.method === 'GET') {
@@ -1781,6 +1791,8 @@ export async function hubFetch(req, env) {
 		// 管理后台传文件（公告附件、回复里的文件）：先领上传票
 		if (a[0] === 'up' && req.method === 'POST') { const b = await body(), r = await fileStartFor(env, H, 'admin', b.ctx === 'ann' ? 'ann' : 'chat', b); const { st, ...rest } = r; return J(rest, st); }
 		{ const cx = await compatAdminApi(req, a, H, body); if (cx) return cx; }
+		// 公告「面板版本」的下拉：GitHub 上全部版本（正式版、尝鲜版、修复补丁），新的在前（用户 11/28）
+		if (a[0] === 'versions' && req.method === 'GET') return J({ ok: true, list: await versionList(env, H) });
 		const ox = await opsAdmin(req, a, H, body, u, env);
 		if (ox) return ox;
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
@@ -1929,6 +1941,28 @@ function adminPage(html) {
 }
 /* ---------- 安卓 App：最新版本号和安装包（从 GitHub Release 转过来，走自己的域名，大陆也能下） ---------- */
 const repoOf = (env) => env.GITHUB_REPO || 'wznwzn123/openwrt-claude-panel';
+// 全部版本：正式版、尝鲜版（预发布）、修复补丁（hot-版本-编号）。GitHub 接口被限流时用上次存下的
+async function versionList(env, H) {
+	const v = await cached('vlist-1', 300, async () => {
+		const hd = { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' };
+		let raw = [];
+		for (let pg = 1; pg <= 3; pg++) {
+			try { const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100&page=' + pg, { headers: hd }); if (!r.ok) break; const b = await r.json(); if (!Array.isArray(b)) break; raw = raw.concat(b); if (b.length < 100) break; } catch (e) { break; }
+		}
+		const out = [];
+		for (const r of raw) {
+			if (!r || r.draft) continue;
+			const t = String(r.tag_name || ''), at = Date.parse(r.published_at || r.created_at || '') || 0;
+			let m = /^v(\d+\.\d+\.\d+)$/.exec(t);
+			if (m) { out.push({ v: m[1], pre: !!r.prerelease, at }); continue; }
+			m = /^hot-(\d+\.\d+\.\d+)-(\d{1,4})$/.exec(t);
+			if (m) out.push({ v: m[1] + '.' + m[2], base: m[1], hot: +m[2], at });
+		}
+		if (out.length) { try { await H.setMeta('vlist', out); } catch (e) {} return out; }
+		try { return (await H.meta('vlist')) || null; } catch (e) { return null; }
+	});
+	return (v || []).slice().sort((a, b) => verCmp(b.v, a.v, 4));
+}
 async function cached(key, ttl, make) {
 	const cache = typeof caches !== 'undefined' ? caches.default : null;
 	const k = new Request('https://cache.local/' + key);
@@ -2002,7 +2036,10 @@ async function changelogApi(env) {
 		const v = await cached('changelog-1', 300, async () => {
 			try {
 				const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
-				if (r.ok) { const list = changelogOf(await r.json()); if (list.length) { const o = { list, at: Date.now() }; try { await hubObj(env).setMeta('clog', o); } catch (e) {} return o; } }
+				// 热补丁也是发布记录，多了以后 100 条装不下：满 100 条再取第 2 页
+				let raw = r.ok ? await r.json() : null;
+				if (Array.isArray(raw) && raw.length >= 100) { try { const r2 = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100&page=2', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } }); if (r2.ok) { const b = await r2.json(); if (Array.isArray(b)) raw = raw.concat(b); } } catch (e) {} }
+				if (Array.isArray(raw)) { const list = changelogOf(raw); if (list.length) { const o = { list, at: Date.now() }; try { await hubObj(env).setMeta('clog', o); } catch (e) {} return o; } }
 			} catch (e) {}
 			let o = null;
 			try { o = await hubObj(env).meta('clog'); } catch (e) {}

@@ -147,7 +147,7 @@ ok('改严了：在等的请求作废', (await panel('ai_asks')).result.list.eve
 	let n0 = pushes().length;
 	r = await ai('run_command', { command: 'touch ' + M2 });
 	let w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
-	ok('[永久允许] 确认卡上写着会放过哪一类（执行命令是所有命令）', w && w.pt === '执行命令（所有命令）', JSON.stringify(w));
+	ok('[永久允许] 确认卡上写着会放过哪一类（执行命令是所有命令）', w && w.pt === '执行任何命令', JSON.stringify(w));
 	r = await panel('ai_answer', { id: w.id, ok: true, always: true });
 	let c2 = JSON.parse(fs.readFileSync(E + '/config.json', 'utf8'));
 	ok('[永久允许] 点了「这一类都允许」：按一类记进设置，推送告诉主人', r.result?.always === true && (c2.ai_allow || []).some((x) => x.k === 'run_command') && pushes().slice(n0).some((x) => /不再问你/.test(x)), JSON.stringify(r));
@@ -181,7 +181,7 @@ ok('改严了：在等的请求作废', (await panel('ai_asks')).result.list.eve
 		fs.rmSync(M2 + 'old', { force: true });
 		r = await ai('run_command', { command: 'touch ' + M2 + 'old2' });
 		ok('[永久允许] 以前按一条命令记的：别的命令还要问', isErr(r) && !fs.existsSync(M2 + 'old2') && /手机上确认/.test(txt(r)));
-		c.ai_allow = [{ k: 'run_command', t: '执行命令（所有命令）', at: 1 }];
+		c.ai_allow = [{ k: 'run_command', t: '执行任何命令', at: 1 }];
 		fs.writeFileSync(E + '/config.json', JSON.stringify(c));
 	}
 	// 只读照样挡

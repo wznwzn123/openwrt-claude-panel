@@ -16,6 +16,8 @@ globalThis.fetch = async (input, init = {}) => {
 	if (u.hostname === 'api.cloudflare.com') { const R = (result) => new Response(JSON.stringify({ success: true, result, errors: [] })); if (m === 'POST' && u.pathname.endsWith('/cfd_tunnel')) return R({ id: 'tun' + ++CFn, token: 'tok' }); if (m === 'POST' && u.pathname.endsWith('/dns_records')) return R({ id: 'dns' + ++CFn }); return R({}); }
 	if (url === 'https://api.resend.com/emails') { MAILS.push(JSON.parse(init.body)); return new Response('{"id":"m"}'); }
 	if (u.hostname === 'localhost') return realFetch(input, init);
+	// 后台公告「面板版本」下拉用的发布列表（正式版、尝鲜预发布、修复补丁）
+	if (u.hostname === 'api.github.com' && u.pathname.endsWith('/releases')) { const R = (t, pre, at) => ({ tag_name: t, prerelease: pre, draft: false, body: '## 这个版本的更新\n- x', published_at: at }); return new Response(JSON.stringify(u.searchParams.get('page') > 1 ? [] : [R('hot-6.0.0-7', true, '2026-11-27T09:48:00Z'), R('hot-6.0.0-6', true, '2026-11-27T09:31:00Z'), R('v6.0.0', true, '2026-11-27T03:15:00Z'), R('v5.3.1', false, '2026-11-27T03:00:00Z'), R('v5.3.0', false, '2026-11-27T02:27:00Z'), R('v5.2.3', false, '2026-11-20T00:00:00Z')])); }
 	if (u.hostname === 'api.github.com') return new Response(JSON.stringify({ tag_name: 'v4.0.0', assets: [{ name: 'router-panel.apk' }], body: '## 4.0\n- 通知', published_at: '2026-11-14T00:00:00Z' }));
 	return new Response('{}');
 };
@@ -55,6 +57,8 @@ for (const [p, ip] of [['/', '1.2.3.4'], ['/', '1.2.3.4'], ['/app', '5.6.7.8'], 
 await realFetch(B + '/api/account/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: B }, body: JSON.stringify({ email: 'x@x.com', password: 'wrong-pass' }) });
 await realFetch(B + '/api/admin/devices', { headers: { authorization: 'Bearer wrong-key-123456789' } });
 ok('[准备] 安装失败上报成功', !!RP.code, JSON.stringify(RP));
+// 用户 11/28：客厅那台在线、3 小时前打开过面板、装到补丁 V7；另一台还没连上过
+{ const w = env.W.get('dev:' + R1.sub); const b = await w.beat('r', { wan: 'ok', net: 'ok', dns: 'ok', tun: 'ok', panel: 'ok', clash: 'ok', ver: '6.0.0', po: Math.floor(Date.now() / 1000) - 3 * 3600, hot: 7 }); if (b && b.probe) await w.probeIn(b.at, 200); }
 await H.errLog('/api/test', 'TypeError: 模拟出错\n    at hub.js:1');
 await H.mailLog('ming@x.com', '我们收到了你上报的安装问题', true, '');
 /* ---------- 浏览器 ---------- */
@@ -166,18 +170,25 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		const tt = '尝鲜说明' + sfx;
 		await page.fill('.ann-form input', tt);
 		await page.click('.ann-form [role="radiogroup"][aria-label="发给"] button:has-text("自建版")');
-		await page.fill('.ann-form input[aria-label="从哪个版本"]', '6.0.0'); await page.fill('.ann-form input[aria-label="到哪个版本"]', '6.9');
+		// 用户 11/28：版本从列表里选（GitHub 上的全部版本：正式版、尝鲜版、修复补丁），不用手输
+		await page.click('.ann-form [aria-label="从哪个版本"]'); await W(400);
+		const opts = await page.$$eval('.select-menu [role="option"] .opt-label', (l) => l.map((x) => x.textContent.trim()));
+		ok('公告版本：下拉列出全部版本，新的在前（补丁 V7、V6、尝鲜 6.0.0、5.3.1…），第一项「不限」' + sfx, opts.join('|').startsWith('不限|6.0.0 V7|6.0.0 V6|6.0.0 尝鲜|5.3.1|5.3.0|5.2.3'), opts.join('|'));
+		await page.click('.select-menu [role="option"]:has-text("6.0.0 V6")'); await W(300);
+		await page.click('.ann-form [aria-label="到哪个版本"]'); await W(400);
+		await page.fill('.select-menu .select-search input', '尝鲜'); await W(300);
+		await page.click('.select-menu [role="option"]:has-text("6.0.0 尝鲜")'); await W(300);
 		// 用户 11/27 截图：手机上「到」和第二个框被挤到屏幕外
 		const vr = await page.evaluate(() => { const f = document.querySelector('.ann-form').getBoundingClientRect(), l = [...document.querySelectorAll('.ann-ver > *')].map((e) => e.getBoundingClientRect()); return { ok: l.length === 3 && l.every((r) => r.left >= f.left - 1 && r.right <= f.right + 1 && r.width > 10) && Math.abs(l[0].top - l[2].top) < 4, sw: document.documentElement.scrollWidth <= innerWidth + 1 }; });
 		ok('公告：「从…到…」两个版本框和「到」都在表单里、同一行，不横向滚动' + sfx, vr.ok && vr.sw, JSON.stringify(vr));
 		await page.click('.ann-form button:has-text("发布公告")'); await W(1000);
 		const has = async (q) => (await api('/api/notices' + q)).list.some((x) => x.title === tt);
-		ok('公告定向：自建版 6.0.0 收得到' + sfx, await has('?v=6.0.0&k=s'));
-		ok('公告定向：托管版、5.3.0、7.0 都收不到' + sfx, !(await has('?v=6.0.0&k=h')) && !(await has('?v=5.3.0&k=s')) && !(await has('?v=7.0&k=s')));
+		ok('公告定向：自建版 6.0.0 V6、V7 收得到' + sfx, await has('?v=6.0.0&h=6&k=s') && await has('?v=6.0.0&h=7&k=s'));
+		ok('公告定向：托管版、6.0.0 V5、5.3.0、6.0.1 都收不到' + sfx, !(await has('?v=6.0.0&h=7&k=h')) && !(await has('?v=6.0.0&h=5&k=s')) && !(await has('?v=5.3.0&k=s')) && !(await has('?v=6.0.1&k=s')));
 		const arow = page.locator(".hub-row", { hasText: tt });
-		ok('公告定向：列表写着发给谁' + sfx, /只发自建版 · 6\.0\.0 到 6\.9/.test(await arow.textContent()), await arow.textContent());
+		ok('公告定向：列表写着发给谁' + sfx, /只发自建版 · 6\.0\.0 V6 到 6\.0\.0/.test(await arow.textContent()), await arow.textContent());
 		await arow.locator('button:has-text("修改")').click(); await W(500);
-		ok('公告定向：修改时带出原来的版本' + sfx, (await page.inputValue('.ann-form input[aria-label="从哪个版本"]')) === '6.0.0' && (await page.getAttribute('.ann-form [aria-label="发给"] button:has-text("自建版")', 'aria-checked')) === 'true');
+		ok('公告定向：修改时带出原来的版本' + sfx, /6\.0\.0 V6/.test(await page.textContent('.ann-form [aria-label="从哪个版本"]')) && (await page.getAttribute('.ann-form [aria-label="发给"] button:has-text("自建版")', 'aria-checked')) === 'true');
 		await page.click('.ann-form button:has-text("不改了")'); await W(300);
 		// 横幅：选了横幅就没有标题，只填横幅内容（用户 11/27）
 		await page.click('.ann-form [role="radiogroup"][aria-label="级别"] button:has-text("横幅")'); await W(300);
@@ -197,6 +208,8 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		ok('横幅：发出去了，标题是内容第一行' + sfx, (await api('/api/notices')).list.some((x) => x.level === 'banner' && x.title === bt && x.body === bt + '\n第二行'));
 		// 路由器：备注
 		await page.goto(B + '/admin#/devices'); await W(1200);
+		{ const a = await page.locator('.hub-row', { hasText: '客厅 Kwrt' }).textContent(), b = await page.locator('.hub-row', { hasText: 'Xiaomi AX3000T' }).textContent();
+		ok('路由器：写最后打开面板的时间、在线、版本带补丁 V 编号；没连上过的写清楚（用户 11/28）' + sfx, /打开面板 3 小时前/.test(a) && /在线/.test(a) && /v6\.0\.0 V7/.test(a) && /还没连上/.test(b) && /打开面板 —/.test(b) && /现在在线 1 台/.test(await page.textContent('.content')), a.slice(0, 200) + ' | ' + b.slice(0, 160)); }
 		await page.locator('.hub-row', { hasText: '客厅 Kwrt' }).locator('button:has-text("备注")').click(); await W(500);
 		await page.fill('.ask-modal textarea', '阿明家，微信 ming'); await page.click('.modal-foot button:has-text("保存")'); await W(1000);
 		ok('路由器：备注保存了' + sfx, /阿明家/.test(await page.textContent('.hub-list')));

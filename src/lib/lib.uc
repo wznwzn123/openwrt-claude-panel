@@ -77,8 +77,9 @@ let ANN_HOT = null; // 官网说这个版本最新的热补丁是第几个（6.0
 function ann_get(url, tmo) {
 	let j = null;
 	// 6.0：带上面板版本和托管 / 自建，官网只给发给这台的公告
-	let v = match(readfile(D + '/version') ?? '', /(^|\n)VER=([0-9a-z.]+)/)?.[2] ?? '', k = length(trim(readfile(D + '/hub.conf') ?? '')) ? 'h' : 's';
-	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices?r=' + ann_rid() + '&v=' + v + '&k=' + k)))); } catch (e) {}
+	// h：装到第几个修复补丁（后台能按补丁发，用户 11/28）
+	let vf = readfile(D + '/version') ?? '', v = match(vf, /(^|\n)VER=([0-9a-z.]+)/)?.[2] ?? '', h = match(vf, /(^|\n)HOT=([0-9]+)/)?.[2] ?? '0', k = length(trim(readfile(D + '/hub.conf') ?? '')) ? 'h' : 's';
+	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices?r=' + ann_rid() + '&v=' + v + '&h=' + h + '&k=' + k)))); } catch (e) {}
 	ANN_HOT = type(j) == 'object' && type(j.hot) == 'int' && j.hot >= 0 ? j.hot : null;
 	return type(j) == 'object' && j.ok && type(j.list) == 'array' ? j.list : null;
 }

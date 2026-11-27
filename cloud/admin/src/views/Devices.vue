@@ -13,7 +13,7 @@ import { ask } from '@/composables/ask'
 import { askDays } from '@/composables/days'
 import { confirm } from '@/composables/confirm'
 import { pushToast, toastError } from '@/composables/toast'
-import { ago, day, vNewer } from '@/utils/fmt'
+import { ago, day, vNewer, isOn, onText } from '@/utils/fmt'
 
 /* 路由器：开通了托管服务的每一台。封禁、加天数、备注、保护、删除先进回收站（30 天内能恢复） */
 const devs = ref<any[]>([])
@@ -32,7 +32,8 @@ const FS: Record<string, { n: string; f: (d: any) => boolean }> = {
   forever: { n: '不限期', f: d => live(d) && !d.exp },
   soon: { n: '7 天内到期', f: d => live(d) && d.exp && !d.off && d.exp - Date.now() < 7 * 864e5 },
   off: { n: '已停用', f: d => live(d) && d.off },
-  idle: { n: '7 天没上线', f: d => live(d) && !d.off && Date.now() - (d.seen || d.created) > 7 * 864e5 },
+  // 用户 11/28：按最后打开面板算（6.0 V8 以前的路由器不报，用开通中心 6 小时记一次的时间）
+  idle: { n: '7 天没打开面板', f: d => live(d) && !d.off && Date.now() - (d.po || d.seen || d.created) > 7 * 864e5 },
   // 报不上版本的（心跳里没有版本号，v1.3.0 及更早）也算旧版本：它们最需要手动升级
   old: { n: '旧版本', f: d => live(d) && !!latest.value && (d.ver ? vNewer(latest.value, d.ver) : !!d.seen) },
   local: { n: '本地版', f: d => live(d) && d.ed === 'local' },
@@ -47,14 +48,14 @@ const fMore = computed(() => ['soon', 'old', 'idle', 'edfail', 'off', 'local', '
 const ED_NAME: Record<string, string> = { ai: 'AI 版', local: '本地版', noai: '纯面板版（旧）' }
 const ED_STEP: Record<string, string> = { hub: '官网开通隧道', space: '路由器空间不够', download: '下载隧道程序', tunnel: '连接隧道', write: '写入设置', busy: '正在更新', other: '其他' }
 const hit = (d: any) => { const k = q.value.trim().toLowerCase(); return !k || [d.sub, d.name, d.model, d.anote].join(' ').toLowerCase().includes(k) }
-const shown = computed(() => devs.value.filter(d => FS[f.value].f(d) && hit(d)).sort((a, b) => f.value === 'bin' ? (a.purgeAt || 0) - (b.purgeAt || 0) : (b.seen || 0) - (a.seen || 0)))
-const online = computed(() => devs.value.filter(d => live(d) && d.seen && Date.now() - d.seen < 6 * 3600e3 + 600e3).length)
+const shown = computed(() => devs.value.filter(d => FS[f.value].f(d) && hit(d)).sort((a, b) => f.value === 'bin' ? (a.purgeAt || 0) - (b.purgeAt || 0) : (b.po || b.seen || 0) - (a.po || a.seen || 0)))
+const online = computed(() => devs.value.filter(d => live(d) && isOn(d.live)).length)
 const vdist = computed(() => {
   const c: Record<string, number> = {}
   for (const d of devs.value.filter(live)) { const k = d.ver || '?'; c[k] = (c[k] || 0) + 1 }
   return Object.keys(c).sort((a, b) => (a === '?' ? 1 : b === '?' ? -1 : vNewer(a, b) ? -1 : 1)).map(k => ({ v: k, n: c[k], old: k !== '?' && !!latest.value && vNewer(latest.value, k) }))
 })
-const status = (d: any) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '已到期暂停' : '已封禁') : '最后上线 ' + ago(d.seen)
+const status = (d: any) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '已到期暂停' : '已封禁') : '打开面板 ' + ago(d.po)
 /* 6.0 第 46 项：托管名额上限（后台能调）、满了排队的人 */
 const waitList = ref<any[] | null>(null)
 async function setMax() {
@@ -124,7 +125,7 @@ onMounted(load)
 
 <template>
   <div class="page">
-    <PageHeader title="路由器" :desc="`开通了托管服务的路由器。已开通 ${st.count} / 名额 ${st.max} 台，6 小时内在线 ${online} 台。`">
+    <PageHeader title="路由器" :desc="`开通了托管服务的路由器。已开通 ${st.count} / 名额 ${st.max} 台，现在在线 ${online} 台。`">
       <Button @click="setMax">改名额上限</Button>
       <Button icon="trash" @click="cleanup">清理 90 天没上线的</Button>
     </PageHeader>
@@ -144,7 +145,8 @@ onMounted(load)
             <div class="hub-row-main">
               <div class="hub-row-title">{{ d.offWhy === 'deleted' ? '🗑 ' : '' }}{{ d.name || d.sub }} <code>{{ d.sub }}</code>
                 <Tag v-if="d.prot" tone="ok">受保护</Tag>
-                <Tag v-if="d.ver" :tone="latest && vNewer(latest, d.ver) ? 'danger' : 'neutral'">v{{ d.ver }}{{ latest && vNewer(latest, d.ver) ? ' · 旧版' : '' }}</Tag>
+                <Tag v-if="live(d) && !d.off" :tone="isOn(d.live) ? 'ok' : 'neutral'" dot>{{ onText(d.live, d.last) }}</Tag>
+                <Tag v-if="d.ver" :tone="latest && vNewer(latest, d.ver) ? 'danger' : 'neutral'">v{{ d.ver }}{{ d.hot ? ' V' + d.hot : '' }}{{ latest && vNewer(latest, d.ver) ? ' · 旧版' : '' }}</Tag>
                 <Tag v-else-if="live(d) && d.seen" tone="danger">版本未知 · 很旧</Tag>
                 <Tag v-if="d.off && d.offWhy !== 'deleted'" tone="danger" dot>{{ d.offWhy === 'exp' ? '到期暂停' : '已封禁' }}</Tag>
                 <Tag v-if="d.ed === 'local'" tone="info">本地版</Tag>

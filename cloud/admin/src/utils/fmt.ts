@@ -7,6 +7,14 @@ export function ago(t?: number | null) {
   const s = (Date.now() - t) / 1000
   return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'
 }
+// 路由器在不在线（看最后一次心跳，用户 11/28）：正常、有小问题、隧道断了、报告发不出来都算路由器开着
+export const isOn = (st?: string) => ['ok', 'partial', 'tunnel', 'noreport'].includes(String(st || ''))
+export function onText(st?: string, last?: number | null) {
+  if (isOn(st)) return '在线'
+  if (!last) return '还没连上'
+  const s = (Date.now() - last) / 1000
+  return '离线 ' + (s < 3600 ? Math.max(1, Math.round(s / 60)) + ' 分钟' : s < 86400 ? Math.round(s / 3600) + ' 小时' : Math.round(s / 86400) + ' 天')
+}
 export const vNewer = (a: string, b: string) => {
   const p = (x: string) => String(x).replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0)
   const x = p(a), y = p(b)

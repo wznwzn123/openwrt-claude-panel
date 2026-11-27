@@ -30,15 +30,28 @@ const L = changelogOf([
 ok('版本从新到旧；草稿、预览版、不是版本号的标签不要', L.map((x) => x.v).join() === 'v5.2.1,v5.2.0,v5.0.0,v1.0.0', L.map((x) => x.v).join());
 ok('必须更新只认「最低版本」写的就是这个版本；大版本、安全、首个版本、发布时间', L[0].must && L[0].sec && !L[0].major && L[1].must && !L[2].must && L[2].major && L[3].first && L[0].at === Date.parse('2026-11-16T04:49:28Z'));
 
+// 热补丁（11/27 全面检查第 26 条）：hot-<版本>-<编号> 挂到那个版本的「修复补丁」，新的在前，去掉「只给 vX 的路由器」那行；版本本身是预发布时不显示
+const H = changelogOf([
+	rel('v6.0.0', '## 这个版本的更新\n- 分流', '2026-11-27T02:00:00Z'),
+	rel('hot-6.0.0-1', '软件中心修好了\n\n只给 v6.0.0 的路由器，自动静默安装。', '2026-11-27T06:36:00Z', { prerelease: true }),
+	rel('hot-6.0.0-2', '- 热补丁自检\n- AI 确认弹窗马上出来\n\n只给 v6.0.0 的路由器，自动静默安装。', '2026-11-27T07:23:00Z', { prerelease: true }),
+	rel('hot-5.9.9-1', '没有这个版本', '2026-11-27T07:23:00Z', { prerelease: true }),
+	rel('hot-6.0.0-x', '乱的标签', '2026-11-27T07:23:00Z', { prerelease: true }),
+]);
+ok('热补丁：挂到版本下面，新的在前，说明去掉「只给」那行', H.length === 1 && H[0].hot.length === 2 && H[0].hot[0].n === 2 && H[0].hot[0].items.join('|') === '热补丁自检|AI 确认弹窗马上出来' && H[0].hot[1].items.join() === '软件中心修好了', JSON.stringify(H[0].hot));
+ok('热补丁：版本还是预发布（尝鲜）时不显示；没有补丁的版本不带 hot', changelogOf([rel('v6.0.0', '## 这个版本的更新\n- x', '2026-11-27T02:00:00Z', { prerelease: true }), rel('hot-6.0.0-1', 'y', '2026-11-27T06:36:00Z', { prerelease: true })]).length === 0 && !L[0].hot);
+
 // ---------- 接口 ----------
 const mod = await load();
 let gh = { mode: 'ok', calls: 0 };
 const REL = JSON.parse(fs.readFileSync(new URL('./fixtures/releases.json', import.meta.url), 'utf8'));
+// 热补丁也在发布列表里（预发布）：不算版本数，挂在 v5.2.1 下面
+const HOTREL = [rel('hot-5.2.1-1', '软件中心修好了\n\n只给 v5.2.1 的路由器，自动静默安装。', '2026-11-16T06:00:00Z', { prerelease: true }), rel('hot-5.2.1-2', '- 热补丁装完马上自检\n- AI 确认弹窗不用刷新就出来\n\n只给 v5.2.1 的路由器，自动静默安装。', '2026-11-16T08:00:00Z', { prerelease: true })];
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init = {}) => {
 	const url = typeof input === 'string' ? input : input.url, u = new URL(url);
 	if (u.hostname === 'localhost') return realFetch(input, init);
-	if (u.hostname === 'api.github.com') { gh.calls++; if (gh.mode !== 'ok') return new Response('{"message":"API rate limit exceeded"}', { status: 403 }); if (u.pathname.endsWith('/releases')) return new Response(JSON.stringify(REL)); return new Response(JSON.stringify(REL[0])); }
+	if (u.hostname === 'api.github.com') { gh.calls++; if (gh.mode !== 'ok') return new Response('{"message":"API rate limit exceeded"}', { status: 403 }); if (u.pathname.endsWith('/releases')) return new Response(JSON.stringify([...REL, ...HOTREL])); return new Response(JSON.stringify(REL[0])); }
 	if (u.hostname === 'github.com' && u.pathname.endsWith('/releases/latest')) return new Response(null, { status: 302, headers: { location: 'https://github.com/x/y/releases/tag/v5.3.0' } });
 	if (u.hostname === 'raw.githubusercontent.com') return new Response('最低版本：v5.2.1\n## 这个版本的更新\n- 限流时补上的最新一版\n\nv5.2.1 的更新：\n- 旧的');
 	if (u.hostname === 'github.com') return new Response('', { status: 404 });
@@ -84,6 +97,9 @@ for (const [w, h] of [[320, 640], [390, 844], [1280, 860]]) {
 	ok('页面：顶上的数字是真的（当前版本、版本数）' + T, (await p.textContent('#stV')) === 'v5.2.1' && (await p.textContent('#stN')) === String(REL.length));
 	ok('页面：实时同步提示' + T, /实时同步 · 最近一次发布/.test(await p.textContent('#clLive')));
 	ok('页面：发布说明原文（加粗显示成粗体）' + T, /一键更新会验证安装包的签名/.test(await p.textContent('#v5-2-1')) && (await p.locator('#v5-2-1 .cl-g li b').count()) >= 1);
+	const hot = await p.evaluate(() => { const e = document.querySelector('#v5-2-1 .cl-hot'); if (!e) return null; const r = e.getBoundingClientRect(), c = e.closest('.cl-card').getBoundingClientRect(); return { t: e.textContent, li: e.querySelectorAll('li').length, inside: r.left >= c.left - 1 && r.right <= c.right + 1, vis: r.height > 0 }; });
+	ok('页面：版本下面列出修复补丁（V 编号、日期、改了什么，新的在前），不超出卡片' + T, hot && hot.li === 2 && /修复补丁/.test(hot.t) && hot.t.indexOf('v5.2.1 V2') < hot.t.indexOf('v5.2.1 V1') && /AI 确认弹窗不用刷新就出来/.test(hot.t) && !/只给/.test(hot.t) && hot.inside && hot.vis && !(await p.locator('#v5-2-0 .cl-hot').count()), JSON.stringify(hot));
+	if (w !== 1280) { await p.locator('#v5-2-1 .cl-hot').scrollIntoViewIfNeeded(); await p.screenshot({ path: new URL('../../tests/panel/shots/changelog-hot-' + w + '.png', import.meta.url).pathname }); }
 	ok('页面：不横向滚动' + T, (await p.evaluate(() => document.documentElement.scrollWidth)) <= w, String(await p.evaluate(() => document.documentElement.scrollWidth)));
 	ok('页面：顶上的数字不折行、不超出' + T, await p.evaluate(() => [...document.querySelectorAll('.cl-stats dd, .cl-stats dt')].every((e) => e.scrollWidth <= e.clientWidth + 1 && e.getBoundingClientRect().height < 48)));
 	// 展开、筛选

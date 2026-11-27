@@ -14,6 +14,7 @@ function handle(m, p) {
 	S.calls.push({ m, p });
 	const d = S.d;
 	if (m === 'sysmnt_get') { if (S.bkAt && Date.now() > S.bkAt) d.bk_fresh = true; return d; }
+	if (m === 'fw_lan') return { url: 'http://localhost:8194/panel/?p=fwup&lan=1#lopen=abcdefghijkmnpqrstuvwxyz' };
 	if (m === 'bk_now') { S.bkAt = Date.now() + 1500; return { ok: true }; }
 	if (m === 'sys_lbk') return { url: 'dl/x/backup.tar.gz', name: 'backup.tar.gz', size: 1000 };
 	if (m === 'fw_up') {
@@ -91,6 +92,32 @@ const lay = (page) => page.evaluate(() => {
 		await page.goto('http://localhost:8194/panel/?p=fwup'); await W(1500);
 		ok('在外面：写「要连家里 Wi-Fi」，按钮灰掉', /要连家里 Wi-Fi/.test(await page.textContent('#fwBody')) && await page.isDisabled('#fwFile') && await page.isDisabled('#fwReset'));
 		await page.screenshot({ path: path.join(SHOT, 'fwup-away.png') });
+		await ctx.close();
+	}
+	// 在家但没认出来（手机连面板走了代理节点）：「用家里地址打开」，一点跳到局域网面板（用户 11/28）；320 / 390 深色 / 430
+	for (const [w, h, dark] of [[320, 568, false], [390, 844, true], [430, 932, false]]) {
+		S = fresh({ home: null, lan: true });
+		const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' }); const page = await ctx.newPage();
+		page.on('pageerror', (e) => problems.push('页面错误（家里地址）：' + e.message));
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8194/panel/?p=fwup'); await W(1500);
+		const n = await page.evaluate(() => { const e = document.querySelector('#fwBody .nbtn'), b = document.getElementById('fwLan'); if (!e || !b) return null; const r = e.getBoundingClientRect(), rb = b.getBoundingClientRect(), sp = e.querySelector('span'); return { t: e.textContent, inside: rb.right <= r.right + 1 && rb.left >= r.left - 1, lines: Math.round(sp.getBoundingClientRect().height / parseFloat(getComputedStyle(sp).lineHeight)), sw: document.documentElement.scrollWidth <= innerWidth }; });
+		ok(`［${w}${dark ? ' 深色' : ''}］没认出在家：写「没认出你连着家里 Wi-Fi」+「用家里地址打开」按钮，按钮在条里、不横向超出`, n && /没认出你连着家里 Wi-Fi/.test(n.t) && /用家里地址打开/.test(n.t) && n.inside && n.sw, JSON.stringify(n));
+		await page.screenshot({ path: path.join(SHOT, `fwup-lan-${w}${dark ? '-dark' : ''}.png`) });
+		if (w === 390) {
+			const navs = []; page.on('request', (q) => { if (q.isNavigationRequest()) navs.push(q.url()); });
+			await page.click('#fwLan'); await W(1200);
+			ok('点「用家里地址打开」：跳到路由器给的局域网面板地址', navs.some((u) => /\?p=fwup&lan=1/.test(u)) && S.calls.some((c) => c.m === 'fw_lan'), navs.join(' '));
+		}
+		await ctx.close();
+	}
+	// 不是主账号、或者家里地址关着：照旧只写「要连家里 Wi-Fi」，不给按钮
+	{
+		S = fresh({ home: null, lan: false });
+		const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const page = await ctx.newPage();
+		await page.addInitScript(() => { localStorage.setItem('rp_token', 'testtoken1234567890'); });
+		await page.goto('http://localhost:8194/panel/?p=fwup'); await W(1500);
+		ok('家里地址关着：只写「要连家里 Wi-Fi」，没有按钮', /要连家里 Wi-Fi/.test(await page.textContent('#fwBody')) && !(await page.locator('#fwLan').count()));
 		await ctx.close();
 	}
 	// 型号不对、没有云端、恢复出厂

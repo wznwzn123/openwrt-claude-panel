@@ -38,6 +38,7 @@ ok('[公告] 编号格式不对 → 不处理', (await adm('POST', '/ann/../x', 
 T += 2 * DAY;
 j = await (await api('GET', '/api/notices')).json();
 ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.list[0].id === a2);
+const has2 = async (id, q) => (await (await api('GET', '/api/notices' + q)).json()).list.some((x) => x.id === id);
 { // 6.0：只发给某些路由器（托管版 / 自建版、版本范围）
 	r = await adm('POST', '/ann', { body: '自建版 5.x 升级提醒', level: 'banner', ed: 's', vmin: '5.0', vmax: '5.2.3' }); j = await r.json();
 	ok('[公告定向] 存下发给谁：自建版、版本 5.0 到 5.2.3、横幅', j.ok && j.ann.ed === 's' && j.ann.vmin === '5.0' && j.ann.vmax === '5.2.3' && j.ann.level === 'banner', JSON.stringify(j));
@@ -45,13 +46,27 @@ ok('[公告] 过期的公开列表里不再显示', j.list.length === 1 && j.lis
 	ok('[公告定向] 自建版 5.1：收到', await has('?r=x&v=5.1.0&k=s'));
 	ok('[公告定向] 自建版 6.0：版本不在范围里，收不到', !(await has('?r=x&v=6.0.0&k=s')));
 	ok('[公告定向] 托管版 5.1：收不到', !(await has('?r=x&v=5.1.0&k=h')));
-	ok('[公告定向] 老版本不带版本和类型：当成最老的版本 托管自建都算（5.0 起的公告收不到）', !(await has('?r=x')));
+	// 用户 11/28：选「1.0 到 5.3.1」时 5.3.0 以前的老路由器（不带版本）一台都没收到——改成：范围包括 5.3.0 以前的版本就给
+	ok('[公告定向] 老版本不带版本和类型（5.3.0 以前）：范围是 5.0 到 5.2.3，收到', await has('?r=x'));
 	ok('[公告定向] 5.2.3 正好在范围里（含两头）', await has('?r=x&v=5.2.3&k=s'));
 	ok('[公告定向] 版本写错不收', /版本写成/.test((await (await adm('POST', '/ann', { title: 'x', vmin: '六点零' })).json()).error));
 	ok('[公告定向] 范围前大后小不收', /前面的要比后面的小/.test((await (await adm('POST', '/ann', { title: 'x', vmin: '6.0', vmax: '5.0' })).json()).error));
 	r = await adm('POST', '/ann/' + t1, { title: '改成都发', level: 'normal' }); j = await r.json();
 	ok('[公告定向] 改成都发：去掉发给谁', j.ok && !j.ann.ed && !j.ann.vmin && !j.ann.vmax && await has('?r=x&v=6.0.0&k=h'));
 	await adm('DELETE', '/ann/' + t1);
+	// 用户 11/28：版本能细到修复补丁（6.0.0.3 = 6.0.0 V3），路由器带 h=补丁编号；写到第三段时这个版本的补丁都算
+	r = await adm('POST', '/ann', { title: '补丁 V3 到 6.0.1 的', vmin: '6.0.0.3', vmax: '6.0.1' }); j = await r.json();
+	const t2 = j.ann && j.ann.id;
+	ok('[公告定向·补丁] 存下 6.0.0 V3 到 6.0.1', j.ok && j.ann.vmin === '6.0.0.3' && j.ann.vmax === '6.0.1', JSON.stringify(j));
+	ok('[公告定向·补丁] 6.0.0 V2：收不到；V3、V7：收到', !(await has2(t2, '?r=x&v=6.0.0&h=2&k=h')) && await has2(t2, '?r=x&v=6.0.0&h=3&k=h') && await has2(t2, '?r=x&v=6.0.0&h=7&k=h'));
+	ok('[公告定向·补丁] 6.0.1 带补丁 V5：也算 6.0.1（范围写到第三段）；6.0.2 收不到；没带补丁号的 6.0.0 当成 V0 收不到', await has2(t2, '?r=x&v=6.0.1&h=5&k=h') && !(await has2(t2, '?r=x&v=6.0.2&k=h')) && !(await has2(t2, '?r=x&v=6.0.0&k=h')));
+	await adm('DELETE', '/ann/' + t2);
+	for (const [lo, hi, want, why] of [['1.0', '5.3.1', true, '1.0 到 5.3.1'], ['', '5.2.3', true, '5.2.3 及以下'], ['5.3.0', '', false, '5.3.0 及以上'], ['6.0.0', '6.0.1', false, '6.0.0 到 6.0.1']]) {
+		const id = (await (await adm('POST', '/ann', { title: '老版本 ' + why, vmin: lo, vmax: hi })).json()).ann.id;
+		ok('[公告定向·老版本] 不带版本的老路由器：' + why + (want ? ' 收到' : ' 收不到'), (await has2(id, '?r=x')) === want);
+		await adm('DELETE', '/ann/' + id);
+	}
+	{ const r1 = await api('GET', '/api/notices?r=y&v=6.0.0&h=7&k=h'); ok('[公告·补丁号] 带 h 也照样返回（补丁号查法不受版本写法影响）', r1.status === 200); }
 }
 { // 用户 11/27：同时只能有一条横幅
 	// 横幅只有内容、没有标题（用户 11/27）：标题用内容第一行；没内容不收

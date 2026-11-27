@@ -92,6 +92,20 @@ obj.probeIn = pi;
 // 心跳钥匙不对时不探测（不能被人拿来刷路由器）
 const p1 = probes; C.clear(); T += 200e3; await call('/cloud/beat/r/WRONG', OK);
 ok('钥匙不对：不探测路由器', probes === p1);
+// 用户 11/28：后台「打开面板 x 前」+ 补丁号——心跳带的 po（秒）、hot 变了马上交过去；路由器重启后报 0 不覆盖；比现在晚太多的不认
+C.clear(); T += 200e3; await call('/cloud/beat/r/rk', OK);
+let wpo = wakes, po1 = Math.floor(T / 1000) - 120;
+T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: po1, hot: 7 });
+let b = await obj.brief();
+ok("打开面板时间、补丁号：变了马上交过去，后台读得到", wakes === wpo + 1 && b.po === po1 * 1000 && b.hot === 7, JSON.stringify(b));
+T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: 0, hot: 7 });
+b = await obj.brief();
+ok('路由器重启后报 0：还是上次的时间', b.po === po1 * 1000, JSON.stringify(b));
+T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: Math.floor(T / 1000) + 86400, hot: 7 });
+ok('比现在晚一天的（路由器时间不准）：不认', (await obj.brief()).po === po1 * 1000);
+T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: po1 - 600, hot: 99999 });
+b = await obj.brief();
+ok('更早的时间不往回改；补丁号乱的不认', b.po === po1 * 1000 && b.hot === 0, JSON.stringify(b));
 Date.now = realNow;
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] !== undefined && !x[1] ? '（' + String(x[2]).slice(0, 200) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

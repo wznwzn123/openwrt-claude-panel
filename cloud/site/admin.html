@@ -130,7 +130,7 @@ function renderDevs() {
 	const bin = FILTER === 'all' || FILTER === 'bin' ? DEVS.filter((d) => d.offWhy === 'deleted' && hit(d)).sort((a, b) => (a.purgeAt || 0) - (b.purgeAt || 0)) : [];
 	$('fchips').innerHTML = Object.entries(FS).map(([k, v]) => `<button class="btn sm ${FILTER === k ? 'on' : ''}" data-f="${k}">${v.n} ${DEVS.filter(v.f).length}</button>`).join('');
 	document.querySelectorAll('#stats [data-f]').forEach((c) => c.classList.toggle('on', c.dataset.f === FILTER && FILTER !== 'all'));
-	const status = (d) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '⏸ 已到期暂停' : '⛔ 已封禁') : '最后上线 ' + ago(d.seen);
+	const status = (d) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '⏸ 已到期暂停' : '⛔ 已封禁') : (['ok', 'partial', 'tunnel', 'noreport'].includes(d.live) ? '在线' : d.last ? '离线' : '还没连上') + ' · 打开面板 ' + (d.po ? ago(d.po) : '—');
 	const prot = (d) => d.prot ? ' <span class="pill" style="background:rgba(52,199,89,.16);color:var(--ok)">🛡 受保护</span>' : '';
 	$('devs').innerHTML = (live.length ? live.map((d) => `<div class="item" data-sub="${esc(d.sub)}"><div class="l"><b>${esc(d.name || d.sub)} <span>${esc(d.sub)}</span>${prot(d)}</b>
 		<span>${verTag(d)} ${status(d)}${d.exp ? ' · 到期 ' + day(d.exp) : ' · 不限期'}${d.renewed ? ' · 续过期' : d.exp ? ' · 试用' : ''} · ${esc(d.model || '未知型号')} · ${day(d.created)} 开通 · ${(d.users || []).length} 个账号 · 邀请码 ${esc(d.invite || '')}</span>${d.anote ? `<span class="anote">📝 ${esc(d.anote)}</span>` : ''}</div>
@@ -337,7 +337,7 @@ const FS = {
 	forever: { n: '不限期', f: (d) => live(d) && !d.exp },
 	soon: { n: '7 天内到期', f: (d) => live(d) && d.exp && !d.off && d.exp - Date.now() < 7 * 86400e3 },
 	off: { n: '已停用', f: (d) => live(d) && d.off },
-	idle: { n: '7 天没上线', f: (d) => live(d) && !d.off && Date.now() - (d.seen || d.created) > 7 * 86400e3 },
+	idle: { n: '7 天没打开面板', f: (d) => live(d) && !d.off && Date.now() - (d.po || d.seen || d.created) > 7 * 86400e3 },
 	old: { n: '旧版本', f: (d) => live(d) && !!d.ver && !!LATEST && vNewer(LATEST, d.ver) },
 	bin: { n: '回收站', f: (d) => d.offWhy === 'deleted' },
 };

@@ -82,6 +82,9 @@
 .cl-g li code { font: 13.5px/1 var(--font-mono); padding: 2px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
 .cl-g li.x, .cl-g.x { display: none; }
 .cl-card.open .cl-g li.x, .cl-card.open .cl-g.x { display: block; }
+.cl-hot { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hair); }
+.cl-hot .cl-hat { font-size: 13px; color: var(--muted); font-weight: 400; }
+.cl-hot .cl-hi { display: block; text-wrap: pretty; }
 .cl-note { margin: 14px 0 0; font-size: 13.5px; color: var(--muted); }
 .cl-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--hair); background: none; color: var(--ink); font: 500 14px/1 var(--font-text); cursor: pointer; }
 .cl-more:hover { border-color: color-mix(in oklab, var(--accent) 50%, var(--hair)); }
@@ -196,7 +199,12 @@
       + '<div class="cl-when"><h2 class="cl-v"><a href="#' + id + '">' + esc(r.v) + '</a></h2><div class="cl-meta">'
       + (r.at ? '<time datetime="' + new Date(r.at).toISOString() + '">' + md(r.at) + '</time><span class="cl-ago" data-t="' + r.at + '">' + ago(r.at) + '</span>' : '<span>最新</span>')
       + (tags.length ? '<span class="cl-tags">' + tags.join(' ') + '</span>' : '') + '</div></div>'
-      + '<div class="cl-card">' + gs + (r.note ? '<p class="cl-note">' + esc(r.note) + '</p>' : '') + more + '</div></li>';
+      + '<div class="cl-card">' + gs + (r.note ? '<p class="cl-note">' + esc(r.note) + '</p>' : '') + more + hotHtml(r) + '</div></li>';
+  }
+  // 修复补丁（热补丁）：版本号后面的 V 编号，新的在前，自动静默安装
+  function hotHtml(r) {
+    if (!r.hot || !r.hot.length) return '';
+    return '<section class="cl-g cl-hot"><h3>修复补丁</h3><ul>' + r.hot.map((h) => '<li><b>' + esc(r.v + ' V' + h.n) + '</b>' + (h.at ? ' <span class="cl-hat">' + md(h.at) + '</span>' : '') + (h.items.length ? '<span class="cl-hi">' + h.items.map(rich).join('<br>') + '</span>' : '') + '</li>').join('') + '</ul></section>';
   }
   const keep = (r) => filter === 'all' || !!r[filter];
   function applyFilter() {

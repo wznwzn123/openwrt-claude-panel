@@ -59,15 +59,51 @@ function sm_pfx6() {
 	for (let o in ['wan6', 'wan']) for (let p in (sm_ubus(o)?.['ipv6-prefix'] ?? [])) if (p.address) push(out, p.address + '/' + (p.mask ?? 64));
 	return out;
 }
-// 'lan'：家里局域网直接打开；'wan'：经过隧道，但手机就在家里；null：在外面
+// 手机连面板走了代理节点（用户 11/28：在家却显示「要连家里 Wi-Fi」，官网看到的是节点的地址）：
+// 问 OpenClash / Nikki 现在哪些家里设备在连这个面板网址。有一台归这个账号（设备归谁），或者只有一台、也没归别人，就算在家
+function sm_proxy_home() {
+	// 测试用：CMCP_SM_DOM（面板网址）、CMCP_SM_CONNS（假的连接列表文件）、CMCP_SM_NEIGH（IP → MAC 的 JSON）
+	let dom = getenv('CMCP_SM_DOM') ?? CL.panel_domain();
+	if (!dom) return false;
+	let d = null, cf = getenv('CMCP_SM_CONNS'), nb = null;
+	try { d = cf ? json(readfile(cf) ?? 'null') : CL.api('GET', '/connections', null, 4).json; } catch (e) {}
+	try { nb = getenv('CMCP_SM_NEIGH') ? json(getenv('CMCP_SM_NEIGH')) : null; } catch (e) {}
+	let ips = {};
+	for (let c in (d?.connections ?? [])) {
+		let h = lc(c.metadata?.host ?? ''), s = c.metadata?.sourceIP ?? '';
+		if (length(h) && (h == dom || substr(h, -length(dom) - 1) == '.' + dom) && length(s) && !match(s, /^(127\.|::1$)/)) ips[s] = 1;
+	}
+	let l = keys(ips);
+	if (!length(l)) return false;
+	let o = own_load(), uid = DEV?.uid ?? null, mine = 0, other = 0;
+	for (let ip in l) {
+		let mac = nb ? nb[ip] : own_ip_mac(ip), e = mac ? o[mac] : null;
+		if (e && uid && e.uid == uid && e.ok) mine++;
+		else if (e && e.ok) other++;
+	}
+	return mine > 0 || (length(l) == 1 && !other);
+}
+// 'lan'：家里局域网直接打开；'wan'：经过隧道，但手机就在家里；'proxy'：在家，手机连面板走了代理节点；null：在外面
 function home_where() {
 	if (lan_client()) return 'lan';
 	let ra = replace(getenv('REMOTE_ADDR') ?? '', /^::ffff:/, ''), ci = lc(trim(getenv('HTTP_CF_CONNECTING_IP') ?? ''));
 	if (!match(ra, /^(127\.[0-9.]+|::1)$/) || !length(ci)) return null;
-	if (match(ci, /^\d+\.\d+\.\d+\.\d+$/)) { for (let ip in sm_pub4()) if (ip == ci) return 'wan'; return null; }
-	for (let p in sm_pfx6()) if (v6_in(ci, p)) return 'wan';
-	return null;
+	if (match(ci, /^\d+\.\d+\.\d+\.\d+$/)) { for (let ip in sm_pub4()) if (ip == ci) return 'wan'; }
+	else for (let p in sm_pfx6()) if (v6_in(ci, p)) return 'wan';
+	return sm_proxy_home() ? 'proxy' : null;
 }
+// 认不出在家：给一张局域网面板的一次性票（2 分钟、用一次），按钮「用家里地址打开」直接跳过去，不用输密码；在外面打不开
+P.fw_lan = function() {
+	if (ROLE != 'owner') die('只有主账号能用');
+	let a = lan_addr();
+	if (!a) die('家里局域网打开面板已关闭');
+	let t = '', cs = 'abcdefghijkmnpqrstuvwxyz23456789', b = readfile('/dev/urandom', 48) ?? '';
+	for (let i = 0; i < length(b) && length(t) < 24; i++) t += substr(cs, ord(b, i) % 32, 1);
+	if (length(t) != 24) die('生成不了链接，再试一次');
+	sh('mkdir -p ' + shq(LAN_T) + ' && chmod 700 ' + shq(LAN_T));
+	writefile(LAN_T + '/' + t, '');
+	return { url: a.url + '?p=fwup#lopen=' + t };
+};
 function sm_guard() {
 	if (ROLE != 'owner') die('只有主账号能用');
 	if (!home_where()) die('要连家里 Wi-Fi');
@@ -93,7 +129,7 @@ function fw_meta() { let o = cmcp_readj(FW_META, null); return type(o) == 'objec
 P.sysmnt_get = function() {
 	let m = fw_meta(), st = stat(FW_F);
 	return {
-		owner: ROLE == 'owner', home: home_where(), fw: sm_fwinfo(), mem: sm_mem(),
+		owner: ROLE == 'owner', home: home_where(), lan: !!lan_addr(), fw: sm_fwinfo(), mem: sm_mem(),
 		reset: sm_has('firstboot') || sm_has('jffs2reset'), up: sm_has('sysupgrade') ? (sm_b64() ? true : '固件缺少解码工具（base64）') : '固件没有 sysupgrade',
 		cloud: sm_cloud(), bk_last: +trim(readfile(ETC + '/backup_last') ?? '0') || null, bk_fresh: sm_bk_fresh(), job: bk_job(),
 		file: st && m?.done ? { name: m.name, size: st.size, ok: m.ok, msg: m.msg ?? '' } : null

@@ -43,7 +43,14 @@ export function parseNotes(body) {
 
 // GitHub 发布列表（/releases 接口的结果）→ 更新日志（新的在前）
 export function changelogOf(list) {
-	const out = [];
+	const out = [], hot = {};
+	// 热补丁（预发布 hot-<版本>-<编号>）：挂到那个版本下面「修复补丁」，说明取发布说明里写的（去掉最后「只给 vX 的路由器」那行）
+	for (const r of Array.isArray(list) ? list : []) {
+		const m = r && !r.draft && /^hot-(\d+\.\d+\.\d+)-(\d{1,4})$/.exec(String(r.tag_name || ''));
+		if (!m) continue;
+		const items = String(r.body || '').replace(/\r/g, '').split('\n').map((x) => clean(x.replace(/^(?:[-*•]|\d+\.)\s+/, ''))).filter((x) => x && !/^只给 v\d/.test(x)).slice(0, 10).map((x) => x.slice(0, 300));
+		(hot['v' + m[1]] = hot['v' + m[1]] || []).push({ n: +m[2], at: Date.parse(r.published_at || r.created_at || '') || 0, items });
+	}
 	for (const r of Array.isArray(list) ? list : []) {
 		if (!r || r.draft || r.prerelease) continue;
 		const v = String(r.tag_name || '');
@@ -59,6 +66,7 @@ export function changelogOf(list) {
 			sec: groups.some((g) => /安全/.test(g.t)) || /安全更新/.test(all),
 			first: /^首个版本/.test(body.trim()),
 			groups, note,
+			...(hot[v] ? { hot: hot[v].sort((a, b) => b.n - a.n).slice(0, 30) } : {}),
 		});
 	}
 	const num = (v) => v.slice(1).split('.').map(Number);

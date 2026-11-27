@@ -181,11 +181,13 @@ export class Watch extends DurableObject {
 	async getCfg() { return (await this.ctx.storage.get('cfg')) || null; }
 	// 给官网「我的路由器」看的在线状态（只读，不启动定时器）
 	async brief() {
-		const m = await this.ctx.storage.get(['r', 's']); const r = m.get('r'), s = m.get('s'), rep = (r && r.rep) || {};
+		const m = await this.ctx.storage.get(['r', 's', 'po']); const r = m.get('r'), s = m.get('s'), rep = (r && r.rep) || {};
 		// 6.0 第 94 项：ed = 路由器报的版本（ai / local / noai），lan = 家里局域网的面板地址（本地版从官网打开要用）
 		// 只认家里局域网的地址（10.x、172.16–31.x、192.168.x），官网「打开面板」不会被带到外面的网址
 		const lan = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d{2,5}$/.test(String(rep.lan || '')) ? rep.lan : '';
-		return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String(rep.ver || '').slice(0, 20), ed: ['ai', 'local', 'noai'].includes(rep.ed) ? rep.ed : '', lan };
+		// po：最后有人用手机面板的时间（毫秒，后台「打开面板 x 前」）；hot：装到第几个修复补丁
+		const hot = Math.floor(+rep.hot) || 0;
+		return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String(rep.ver || '').slice(0, 20), ed: ['ai', 'local', 'noai'].includes(rep.ed) ? rep.ed : '', lan, po: (+m.get('po') || 0) * 1000, hot: hot > 0 && hot < 10000 ? hot : 0 };
 	}
 	// 6.0 第 94 项：换版本。探测地址（本地版没有隧道，不探测）；官网发给路由器的「换版本」指令（路由器下次心跳时带回去）
 	async setProbe(url) { const c = await this.getCfg(); if (!c) return; c.probe = url || ''; await this.ctx.storage.put('cfg', c); if (!url) await this.ctx.storage.delete('probe'); }
@@ -328,6 +330,9 @@ export class Watch extends DurableObject {
 		if (who === 'r') {
 			db.r = { last: now, rep: rep || (db.r && db.r.rep) || null };
 			await this.ctx.storage.put('r', db.r);
+			// 最后打开面板的时间：路由器重启后报 0，只往后记；不能比现在还晚（路由器时间不准时）
+			const po = Math.floor(+(rep && rep.po)) || 0;
+			if (po > 1.6e9 && po * 1000 <= now + 600e3) { const old = +(await this.ctx.storage.get('po')) || 0; if (po > old) await this.ctx.storage.put('po', po); }
 		} else {
 			db.t = { last: now, first: (db.t && db.t.first) || now };
 			await this.ctx.storage.put('t', db.t);
@@ -447,7 +452,8 @@ export class Watch extends DurableObject {
 // 心跳：一切正常、状态没变、离上次交给 Durable Object 不到 170 秒，就只在这里记一下（用 Cloudflare 的缓存），不叫醒它
 // 缓存只在同一个机房有效；换了机房、缓存被清掉，就照常交过去，不会漏
 // 只看会影响判断的字段（隧道连接数 ready 会在 2～4 之间跳，不算变化）
-const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver', 'ed', 'lan'];
+// po（最后有人用手机面板的时间）、hot（修复补丁编号）变了也要交过去：后台列表要用（用户 11/28）
+const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver', 'ed', 'lan', 'po', 'hot'];
 export const beatSig = (rep) => JSON.stringify(BEAT_KEYS.map((k) => (rep && rep[k] != null ? rep[k] : null)));
 async function beatRoute(req, env, u, who, key) {
 	if (who !== 'r' && who !== 't') return J({ error: 'not found' }, 404);

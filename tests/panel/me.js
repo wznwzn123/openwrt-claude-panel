@@ -132,7 +132,7 @@ const topLay = (page) => page.evaluate(() => { const bar = document.querySelecto
 		ok('输对了自动确认：只问一次（验证码 + 敏感信息一起回来），同时读手机列表，不再整页重读' + T, after.filter((x) => x.startsWith('fam')).join() === 'fam:sudo' && after.includes('device_list') && calls.slice(c2).find((c) => c.m === 'fam').p.want === 'secret', after.join());
 		ok('验证后：完整邮箱、登录记录（有一条失败）' + T, /xiaoming2026@qq\.com/.test(t2) && /密码错了/.test(t2), t2.slice(0, 300));
 		ok('验证后：能打开面板的 3 台手机（这台、最近使用、能移除）' + T, /登录着的设备 · 3 台/.test(t2) && /安卓手机 23127PN0CC · App/.test(t2) && /这台/.test(t2) && /最近使用：8 小时前/.test(t2) && (await page.locator('#meBox [data-mp="drm"]').count()) === 2);
-		ok('验证后：官网的设备不在这里列，改成「官网账号设置」入口（去官网）' + T, !/Windows 电脑 · Chrome/.test(t2) && /官网上登录着的 2 台设备/.test(t2) && (await page.getAttribute('#meBox a[href$="/app#settings"]', 'href')) === 'https://panel.example/app#settings');
+		ok('验证后：官网的设备不在这里列，改成「官网账号设置」入口（去官网）' + T, !/Windows 电脑 · Chrome/.test(t2) && /官网上登录着 2 台设备/.test(t2) && (await page.getAttribute('#meBox a[href$="/app#settings"]', 'href')) === 'https://panel.example/app#settings');
 		ok('显示多久后自动锁上' + T, /后自动锁上/.test(await page.textContent('#mpLeft')));
 		ok('验证后整页不横向滚动' + T, (await page.evaluate(() => document.documentElement.scrollWidth)) <= w);
 		await page.screenshot({ path: path.join(SHOT, `me-open-${w}.png`), fullPage: true });

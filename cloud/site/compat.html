@@ -2,12 +2,13 @@
 <html lang="zh-CN" data-type="software" data-radius="soft" data-buttons="pill" data-ground="sage" data-motion>
 <head>
 <meta charset="utf-8">
-<title>兼容性 · 路由器面板</title>
+<title>兼容情况 · 路由器面板</title>
 <meta name="description" content="路由器面板在哪些路由器型号、哪些系统版本上实际装过，哪些功能能用。数据来自路由器匿名上报，只写实测到的。">
 <!--KIT_HEAD-->
 <style>
 /* ---------- 兼容性表（6.0 第 56 项）：只写路由器实际报上来的；按型号一行，五个功能各一格 ---------- */
 .cp-hero { padding-bottom: clamp(24px, 4vw, 36px); }
+.cp-sum[hidden], [data-cpd][hidden] { display: none; }
 .cp-sum { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: clamp(18px, 3vw, 26px); font-size: 14px; color: var(--muted); }
 .cp-sum b { color: var(--ink); font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; margin-right: 4px; }
 .cp-body { padding: clamp(22px, 4vw, 36px) 0 clamp(56px, 8vw, 96px); }
@@ -39,9 +40,9 @@
   <div class="pg-hero cp-hero">
     <div class="pg-fx" data-fx="grid-pulse" data-fx-seed="31" aria-hidden="true"></div>
     <div class="wrap">
-      <h1>兼容性</h1>
+      <h1>兼容情况</h1>
       <p class="pg-sub">能装在哪些系统上，哪些路由器实际装过、哪些功能能用。实测数据来自 6.0 起路由器每天的匿名上报（型号、系统版本、功能能不能用），每小时更新。</p>
-      <div class="cp-sum" id="cpSum" aria-live="polite"><span>正在读取…</span></div>
+      <div class="cp-sum" id="cpSum" aria-live="polite" hidden></div>
     </div>
   </div>
   <div class="cp-body">
@@ -57,17 +58,17 @@
           <li class="cp-row"><div class="cp-top"><h3>真机实测</h3></div><p class="cp-sys">Kwrt 25.12（aarch64）<br>装着 OpenClash 和 PassWall<br>其他架构还没有真机实测</p></li>
         </ul>
       </section>
-      <section class="cp-sec" aria-labelledby="cpMH">
+      <section class="cp-sec" data-cpd hidden aria-labelledby="cpMH">
         <h2 class="cp-h" id="cpMH">按型号</h2>
         <div class="cp-find"><input id="cpQ" type="search" placeholder="搜型号，比如 AX3000T、R4S、x86" aria-label="搜型号" autocomplete="off"></div>
         <ul class="cp-list" id="cpModels"><li class="cp-row"><p class="cp-empty" style="margin:0">正在读取…</p></li></ul>
         <button type="button" class="btn cp-more" id="cpMore" hidden>显示更多型号</button>
       </section>
-      <section class="cp-sec" aria-labelledby="cpSH">
+      <section class="cp-sec" data-cpd hidden aria-labelledby="cpSH">
         <h2 class="cp-h" id="cpSH">按系统版本</h2>
         <ul class="cp-list" id="cpSys"></ul>
       </section>
-      <p class="cp-note">「能用」按报上来的路由器算：比如「暂停上网 9/10 台」是 10 台里有 9 台能用。没列出来的型号不代表不能装，只是还没有人报过；装不上的时候，安装程序会问你要不要把出错信息发给我们。每台路由器只报一个随机编号、型号、系统和功能，不报账号、IP 和任何设置，面板「系统操作 → 帮助改进、尝鲜」里能关。说明见 <a href="/privacy">隐私政策</a>，系统要求见 <a href="/help">常见问题</a>。</p>
+      <p class="cp-note" data-cpd hidden>「能用」按报上来的路由器算：比如「暂停上网 9/10 台」是 10 台里有 9 台能用。没列出来的型号不代表不能装，只是还没有人报过；装不上的时候，安装程序会问你要不要把出错信息发给我们。每台路由器只报一个随机编号、型号、系统和功能，不报账号、IP 和任何设置，面板「系统操作 → 帮助改进、尝鲜」里能关。说明见 <a href="/privacy">隐私政策</a>，系统要求见 <a href="/help">常见问题</a>。</p>
     </div>
   </div>
 </main>
@@ -98,9 +99,13 @@
     T = j; T.models = T.models || []; T.systems = T.systems || []; T.feats = T.feats || {};
     // 报上来的够多了：系统要求挪到实测表下面
     if ((T.routers || 0) >= 10) { const rq = $('cpReq'); rq.parentNode.insertBefore(rq, document.querySelector('.cp-note')); }
+    // 还没有路由器报上来：只留系统要求（用户 11/27）
+    if (!(T.routers || 0)) return;
+    document.querySelectorAll('[data-cpd]').forEach((e) => { e.hidden = false; });
+    $('cpSum').hidden = false;
     $('cpSum').innerHTML = '<span><b>' + (T.routers || 0) + '</b>台路由器报过</span><span><b>' + T.models.length + '</b>种型号</span><span><b>' + T.systems.length + '</b>种系统版本</span>';
     render();
-  }).catch(() => { $('cpSum').innerHTML = '<span>暂时读不出来，稍后刷新再看</span>'; $('cpModels').innerHTML = ''; });
+  }).catch(() => { $('cpSum').hidden = false; $('cpSum').innerHTML = '<span>实测数据暂时读不出来 稍后刷新再看</span>'; });
 })();
 </script>
 </body>

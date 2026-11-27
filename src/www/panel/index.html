@@ -789,6 +789,7 @@ section.page{display:none}section.page.on{display:block}
 .aiask h3{margin:0;font-size:18px;overflow-wrap:anywhere}
 .aiask-d{margin:12px 0 0;text-align:left;max-height:none}
 .aiask-t{margin:10px 0 0;font-size:13px}
+.aiask-always{width:100%;margin-top:8px}
 
 /* 打开面板时自己弹出来的弹窗（必须更新、重要公告、反馈有回复）：手机上也是居中的小卡片，不占满屏幕 */
 .modal.compact{place-items:center;padding:20px 16px}
@@ -8552,6 +8553,18 @@ function aiModesBind(box) {
 		busy(b, async () => { const r = await secP('ai_mode', { mode: k }); box.innerHTML = aiModesHtml(r.mode); toast('已改成「' + AI_MODES.find((x) => x[0] === r.mode)[1] + '」'); });
 	};
 }
+// 永久允许过的操作（用户 11/27）：AI 做这些不再问，点「收回」以后又要确认
+function aiAllowHtml(l) {
+	if (!l || !l.length) return '';
+	return `<div class="subhd">永久允许</div><div class="ailog">${l.slice().reverse().map((y) => `<div class="kv"><span>${esc(y.t)}<em class="muted"> · ${esc(ago(y.at * 1000))}${y.by ? ' · ' + esc(y.by) : ''}</em></span><button class="btn sm" data-aidel="${esc(y.k)}">收回</button></div>`).join('')}</div>`;
+}
+function aiAllowBind(box) {
+	if (!box) return;
+	box.onclick = (e) => {
+		const b = e.target.closest('[data-aidel]'); if (!b) return;
+		busy(b, async () => { const r = await secP('ai_allow_del', { k: b.dataset.aidel }); box.innerHTML = aiAllowHtml(r.allows); toast('已收回，以后要你确认'); });
+	};
+}
 const AIQ = { on: true, at: 0, busy: false };
 // 查一下有没有 AI 在等确认的请求：打开面板、回到面板、点了推送时查；开着的时候「危险操作要确认」才每 12 秒查一次
 async function aiCheck(force) {
@@ -8571,13 +8584,13 @@ function aiAskBox(x, n) {
 	<div class="cscroll">${x.detail ? `<pre class="out aiask-d">${esc(x.detail)}</pre>` : ''}
 	<p class="muted aiask-t" style="text-align:center"><span data-left>${mmss()}</span> 后过期${n > 1 ? ' · 后面还有 ' + (n - 1) + ' 个' : ''}</p>
 	<div class="notice" style="margin-top:10px;text-align:left">不是你让 AI 做的：点「拒绝」，再到「我的主页 → 敏感信息」换一下 AI 连接器地址。</div></div>
-	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div></div>`,
+	<div class="cfoot"><div class="btngrid"><button class="btn danger" data-ans="no">拒绝</button><button class="btn primary" data-ans="ok">允许</button></div>${x.pt ? `<button class="btn aiask-always" data-ans="always">永久允许</button>` : ''}</div>`,
 	(m, close) => {
 		m.dataset.lock = '1';
 		const t = setInterval(() => { const el = m.querySelector('[data-left]'); if (!el || !el.isConnected) return clearInterval(t); el.textContent = mmss(); if (!left()) { clearInterval(t); toast('这个请求过期了', true); close(null); } }, 1000);
 		m.querySelectorAll('[data-ans]').forEach((b) => (b.onclick = () => busy(b, async () => {
-			const ok = b.dataset.ans === 'ok';
-			try { await P('ai_answer', { id: x.id, ok }, 20000); toast(ok ? '已允许，AI 会接着做' : '已拒绝'); }
+			const ok = b.dataset.ans !== 'no', always = b.dataset.ans === 'always';
+			try { const r = await P('ai_answer', { id: x.id, ok, always }, 20000); toast(r && r.always ? '已永久允许：以后' + x.pt + '不再问' : ok ? '已允许，AI 会接着做' : '已拒绝'); }
 			catch (e) { toast(e.message, true); }
 			clearInterval(t); close(null);
 			setTimeout(() => aiCheck(true), 600);
@@ -8594,7 +8607,8 @@ async function ckeySheet() {
 	<div class="notice w" style="margin-top:12px">⚠️ 拿到这个地址就能让 AI 控制你的路由器：不要发给别人。泄露了就点「换一个地址」，旧的马上作废。</div>
 	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
-	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
+	<div data-aiallow>${aiAllowHtml(r.allows)}</div>
+	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' || x.st === 'auto' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了', auto: '永久允许' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
 	${r.url && /^http:/.test(r.url) ? '<div class="notice" style="margin-top:10px">本地版：只有连着家里 Wi-Fi 的电脑、手机能用这个地址。</div>' : ''}
 	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 AI 应用里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
 	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,
@@ -8602,6 +8616,7 @@ async function ckeySheet() {
 		qrReveal(m);
 		m.querySelector('[data-copy]').onclick = () => copyText(r.url);
 		aiModesBind(m.querySelector('[data-aimodes]'));
+		aiAllowBind(m.querySelector('[data-aiallow]'));
 		m.querySelector('[data-rot]').onclick = async () => {
 			if (!(await confirmBox('换一个连接器地址', '旧地址马上作废，AI 应用里要删掉旧连接器、用新地址重新添加。面板和登录不受影响。', '换新地址', true))) return;
 			try { await secP('ckey_rotate', { confirm: 'CKEY' }); toast('已换新地址'); close(null); ckeySheet(); } catch (e) { toast(e.message, true); }

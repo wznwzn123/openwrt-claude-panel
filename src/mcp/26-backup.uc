@@ -316,7 +316,7 @@ const FAM_GROUPS = {
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
-	net: ['wisp_get', 'wisp_scan', 'wisp_set', 'lanset_get', 'lanset_set', 'lan_host_set', 'wan_get', 'wan_set', 'pf_list', 'pf_set', 'guest_get', 'guest_set', 'wifi_key', 'wifi_set', 'net_confirm', 'net_revert', 'luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch', 'ai_asks', 'ai_answer', 'ai_mode'],
+	net: ['wisp_get', 'wisp_scan', 'wisp_set', 'lanset_get', 'lanset_set', 'lan_host_set', 'wan_get', 'wan_set', 'pf_list', 'pf_set', 'guest_get', 'guest_set', 'wifi_key', 'wifi_set', 'net_confirm', 'net_revert', 'luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch', 'ai_asks', 'ai_answer', 'ai_mode', 'ai_allow_del'],
 	sys: ['store_list', 'store_state', 'store_refresh', 'store_install', 'store_upgrade', 'app_list', 'app_remove', 'netdiag', 'netdiag_caps', 'compat_set', 'beta_set', 'update_start', 'auto', 'ban_del', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };

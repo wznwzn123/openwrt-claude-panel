@@ -2868,7 +2868,7 @@ const FAM_GROUPS = {
 		'tools:set_mode', 'tools:restart_openclash', 'tools:openclash_log', 'tools:get_logs'],
 	// 安全加固（第二轮）：「完全控制」——能在路由器上以 root 运行任何东西的都在这组：原版后台、恢复备份（会换掉内核和脚本）、下载覆写模块；
 	// 另外写 OpenClash 自定义脚本 / 覆写文件、改覆写模块的设置，也按这组算（见 fam_group）
-	net: ['wisp_get', 'wisp_scan', 'wisp_set', 'lanset_get', 'lanset_set', 'lan_host_set', 'wan_get', 'wan_set', 'pf_list', 'pf_set', 'guest_get', 'guest_set', 'wifi_key', 'wifi_set', 'net_confirm', 'net_revert', 'luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch', 'ai_asks', 'ai_answer', 'ai_mode'],
+	net: ['wisp_get', 'wisp_scan', 'wisp_set', 'lanset_get', 'lanset_set', 'lan_host_set', 'wan_get', 'wan_set', 'pf_list', 'pf_set', 'guest_get', 'guest_set', 'wifi_key', 'wifi_set', 'net_confirm', 'net_revert', 'luci_menu', 'luci_key', 'luci_full', 'restore', 'overwrite_fetch', 'ai_asks', 'ai_answer', 'ai_mode', 'ai_allow_del'],
 	sys: ['store_list', 'store_state', 'store_refresh', 'store_install', 'store_upgrade', 'app_list', 'app_remove', 'netdiag', 'netdiag_caps', 'compat_set', 'beta_set', 'update_start', 'auto', 'ban_del', 'slog', 'procs', 'kill', 'diag', 'wd_clear',
 		'tools:system_info', 'tools:network_info', 'tools:firewall_overview', 'tools:list_services', 'tools:system_log', 'tools:service_control', 'tools:reboot_router']
 };
@@ -4118,6 +4118,31 @@ function ai_detail(name, a) {
 	}
 	return '';
 }
+/* 永久允许（用户 11/27）：确认卡上点「永久允许」，以后这一类操作不再问。存在 config.json 的 ai_allow（最多 50 条），
+   「我的主页 → 敏感信息 → AI 连接器地址」里能看到、收回（要先确认本人，只有主账号）。「只读」照样全挡。
+   「这一类」：执行命令 = 一模一样的这条命令；控制服务 = 这个服务的这个动作；装卸软件 = 装或卸这个包；改设置 = 改这几份配置；其他 = 这个动作 */
+function ai_pkey(name, a) {
+	let cut = (s, n) => (length(s) > n ? substr(s, 0, n) + '…' : s);
+	switch (name) {
+	case 'run_command': { let c = trim('' + (a?.command ?? '')); return length(c) ? { k: 'run_command:' + c, t: '执行命令 ' + cut(c, 60) } : null; }
+	case 'service_control': return { k: 'service_control:' + (a?.name ?? '') + ' ' + (a?.action ?? ''), t: '对 ' + (a?.name ?? '') + ' ' + (a?.action ?? '') };
+	case 'packages': return { k: 'packages:' + (a?.action ?? '') + ' ' + (a?.name ?? ''), t: (a?.action == 'remove' ? '卸载 ' : '安装 ') + (a?.name ?? '') };
+	case 'uci_set': case 'oaf_uci': {
+		let cf = {};
+		for (let o in (type(a?.operations) == 'array' ? a.operations : [])) { let c = split(o?.op == 'add' ? '' + (o?.config ?? '') : '' + (o?.key ?? ''), '.')[0]; if (length(c)) cf[c] = 1; }
+		let l = sort(keys(cf));
+		return length(l) ? { k: name + ':' + join(',', l), t: (name == 'oaf_uci' ? '改应用过滤设置 ' : '修改设置 ') + join('、', l) } : null;
+	}
+	}
+	return { k: name, t: AI_NAMES[name] ?? name };
+}
+function ai_allows() { let l = conf().ai_allow; return type(l) == 'array' ? filter(l, (x) => type(x) == 'object' && type(x.k) == 'string') : []; }
+function ai_allows_save(l) {
+	let c = json(readfile(CONF_PATH) ?? '{}') ?? {};
+	c.ai_allow = slice(l, -50);
+	writefile(CONF_PATH + '.tmp', sprintf('%J', c)); sh('chmod 600 ' + shq(CONF_PATH + '.tmp') + ' && mv ' + shq(CONF_PATH + '.tmp') + ' ' + shq(CONF_PATH));
+	CONF = null;
+}
 function ai_read() {
 	let o = cmcp_readj(AI_ASK, null), now = time();
 	if (type(o) != 'object' || type(o.list) != 'array') o = { list: [] };
@@ -4136,13 +4161,17 @@ function ai_gate(name, a) {
 	if (mode == 'full' || cls == 'read') return;
 	if (mode == 'ro') ai_stop('AI 现在是「只读」：只能查看，不能修改' + (name == 'run_command' ? '（命令行只能跑只看的命令，比如 cat、ls、logread、uci show）' : '') + '。要改的话，请用户在手机面板「我的主页 → 敏感信息 → AI 连接器地址」里把「AI 能做什么」改成「危险操作要确认」。');
 	if (cls == 'light') return;
-	let args = sprintf('%J', a ?? {}), now = time(), o = ai_read(), x = null;
+	let args = sprintf('%J', a ?? {}), now = time(), o = ai_read(), x = null, pk = ai_pkey(name, a);
+	if (pk && length(filter(ai_allows(), (y) => y.k == pk.k))) {
+		push(o.list, { id: rand_str(10), name, title: AI_NAMES[name] ?? name, detail: ai_detail(name, a), args, at: now, exp: now, st: 'auto', done: now }); ai_write(o);
+		return;
+	}
 	// 同样的请求已经在等 / 已经批准：接着用这条（不会重复推送）
 	for (let y in o.list) if (y.name == name && y.args == args && (y.st == 'wait' || y.st == 'ok') && y.exp > now) x = y;
 	if (!x) {
 		let w = length(filter(o.list, (y) => y.st == 'wait'));
 		if (w >= 10) ai_stop('手机上已经有 10 个请求在等确认了，请用户先在手机面板里处理。');
-		x = { id: rand_str(10), name, title: AI_NAMES[name] ?? name, detail: ai_detail(name, a), args, at: now, exp: now + AI_TTL, st: 'wait' };
+		x = { id: rand_str(10), name, title: AI_NAMES[name] ?? name, detail: ai_detail(name, a), args, at: now, exp: now + AI_TTL, st: 'wait', ...(pk ? { pk: pk.k, pt: pk.t } : {}) };
 		push(o.list, x); ai_write(o);
 		try { sh(sprintf('CMCP_NOLOG=1 %s/cmcp-notify warn ai %s %s %s >/dev/null 2>&1 </dev/null &', SBIN, shq('AI 想要：' + x.title), shq('点开面板确认，点「允许」才会执行，5 分钟内有效。' + (length(x.detail) ? '\n' + substr(x.detail, 0, 120) : '')), shq('aiask-' + x.id))); } catch (e) {}
 	}
@@ -4164,7 +4193,7 @@ function ai_gate(name, a) {
 /* 面板：看在等确认的请求、允许 / 拒绝（主账号和有「完全控制」的家人才行，见 FAM_GROUPS 的 net） */
 P.ai_asks = function(a) {
 	let o = ai_read(), ai = conf().ai !== false;
-	return { ai, mode: ai_mode(), list: map(slice(o.list, -10), (x) => ({ id: x.id, title: x.title, detail: x.detail, at: x.at, exp: x.exp, st: x.st, by: x.by ?? null })) };
+	return { ai, mode: ai_mode(), list: map(slice(o.list, -10), (x) => ({ id: x.id, title: x.title, detail: x.detail, at: x.at, exp: x.exp, st: x.st, by: x.by ?? null, pt: x.pt ?? null })) };
 };
 P.ai_answer = function(a) {
 	let o = ai_read(), x = ai_find(o, '' + (a?.id ?? ''));
@@ -4172,7 +4201,15 @@ P.ai_answer = function(a) {
 	if (x.st != 'wait') die(x.st == 'exp' ? '这个请求已经过期了，让 AI 再发一次' : '这个请求已经处理过了');
 	x.st = a?.ok === true ? 'ok' : 'no'; x.by = substr('' + (DEV?.name ?? (DEV_ID ? '手机' : '面板')), 0, 40); x.ans = time();
 	ai_write(o);
-	return { ok: true, st: x.st };
+	// 永久允许：以后这一类不再问（推送告诉主账号，免得家人点了主账号不知道）
+	let always = false;
+	if (x.st == 'ok' && a?.always === true && x.pk) {
+		let l = filter(ai_allows(), (y) => y.k != x.pk);
+		push(l, { k: x.pk, t: x.pt ?? x.title, at: time(), by: x.by });
+		ai_allows_save(l); always = true;
+		try { sh(sprintf('%s/cmcp-notify info key %s %s key >/dev/null 2>&1', SBIN, shq('AI 以后' + (x.pt ?? x.title) + '不再问你'), shq(x.by + ' 点了「永久允许」。要收回：「我的主页 → 敏感信息 → AI 连接器地址」'))); } catch (e) {}
+	}
+	return { ok: true, st: x.st, always };
 };
 // 改「AI 能做什么」：要先确认本人，只有主账号
 P.ai_mode = function(a) {
@@ -4188,11 +4225,19 @@ P.ai_mode = function(a) {
 	try { sh(sprintf('%s/cmcp-notify info key %s %s key', SBIN, shq('AI 能做什么：改成了「' + AI_MODES[m] + '」'), shq(m == 'full' ? 'AI 连接器现在什么都能直接做。不是你改的话，马上在「我的主页 → 敏感信息」里改回来，并换一下 AI 连接器地址。' : '在「我的主页 → 敏感信息 → AI 连接器地址」里随时能改。'))); } catch (e) {}
 	return { ok: true, mode: m };
 };
+// 收回永久允许：要先确认本人，只有主账号
+P.ai_allow_del = function(a) {
+	need_sudo(a, true);
+	let k = '' + (a?.k ?? ''), l = ai_allows(), n = filter(l, (y) => k == '*' ? false : y.k != k);
+	if (length(n) == length(l)) die('没有这一条了');
+	ai_allows_save(n);
+	return { ok: true, allows: map(n, (y) => ({ k: y.k, t: y.t, at: y.at, by: y.by ?? null })) };
+};
 // 「AI 连接器地址」那一页顺便带上现在的档位和最近的请求
 const CKEY_INFO0 = P.ckey_info;
 P.ckey_info = function(a) {
 	let r = CKEY_INFO0(a);
-	if (r?.ai) { r.mode = ai_mode(); r.asks = P.ai_asks().list; }
+	if (r?.ai) { r.mode = ai_mode(); r.asks = P.ai_asks().list; r.allows = map(ai_allows(), (y) => ({ k: y.k, t: y.t, at: y.at, by: y.by ?? null })); }
 	return r;
 };
 /* 6.0 第 57、58、60 项：兼容情况上报（匿名，默认开，设置里能关）、尝鲜、修好了通知（实际干活的是 /usr/sbin/cmcp-compat） */

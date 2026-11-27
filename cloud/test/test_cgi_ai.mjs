@@ -140,6 +140,50 @@ r = await panel('ai_mode', { mode: 'ro', sudo: 's'.repeat(24) });
 const cf = JSON.parse(fs.readFileSync(E + '/config.json', 'utf8'));
 ok('确认本人后改成只读：写进设置，其他设置不动，推送告诉主人', r.result?.mode === 'ro' && cf.ai_mode === 'ro' && cf.token === TOKEN && cf.ckey === CKEY && pushes().some((x) => /只读/.test(x)));
 ok('改严了：在等的请求作废', (await panel('ai_asks')).result.list.every((x) => x.st !== 'wait'));
+// ---- 永久允许（用户 11/27）：这一类以后不再问；只读照样挡；主账号确认本人后能收回 ----
+{
+	const SU = 's'.repeat(24), M2 = E + '/did-it-2';
+	await panel('ai_mode', { mode: 'ask', sudo: SU });
+	let n0 = pushes().length;
+	r = await ai('run_command', { command: 'touch ' + M2 });
+	let w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
+	ok('[永久允许] 确认卡上写着会永久允许什么', w && /^执行命令 touch /.test(w.pt || ''), JSON.stringify(w));
+	r = await panel('ai_answer', { id: w.id, ok: true, always: true });
+	let c2 = JSON.parse(fs.readFileSync(E + '/config.json', 'utf8'));
+	ok('[永久允许] 点了：记进设置，推送告诉主人', r.result?.always === true && (c2.ai_allow || []).some((x) => x.k === 'run_command:touch ' + M2) && pushes().slice(n0).some((x) => /不再问你/.test(x)), JSON.stringify(r));
+	r = await ai('run_command', { command: 'touch ' + M2 }); fs.rmSync(M2, { force: true });
+	n0 = pushes().length;
+	r = await ai('run_command', { command: 'touch ' + M2 });
+	ok('[永久允许] 以后同一条命令：直接执行、不推送，记一条「永久允许」', !isErr(r) && fs.existsSync(M2) && pushes().length === n0 && (await panel('ai_asks')).result.list.some((x) => x.st === 'auto'), txt(r));
+	fs.rmSync(M2, { force: true });
+	r = await ai('run_command', { command: 'touch ' + M2 + 'x' });
+	ok('[永久允许] 别的命令照样要确认', isErr(r) && !fs.existsSync(M2 + 'x') && /手机上确认/.test(txt(r)));
+	// 重启 OpenClash 这类：同一个动作以后都不问
+	r = await ai('restart_openclash', {});
+	w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').find((x) => x.title === '重启 OpenClash');
+	ok('[永久允许] 重启 OpenClash：卡上写「重启 OpenClash」', w && w.pt === '重启 OpenClash', JSON.stringify(w));
+	// 没点永久允许的：不记
+	r = await panel('ai_answer', { id: w.id, ok: true });
+	ok('[永久允许] 只点「允许」：不记', !JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_allow.some((x) => x.k === 'restart_openclash'));
+	// 拒绝时带 always 也不记
+	r = await ai('run_command', { command: 'touch ' + M2 + 'y' });
+	w = (await panel('ai_asks')).result.list.filter((x) => x.st === 'wait').pop();
+	await panel('ai_answer', { id: w.id, ok: false, always: true });
+	ok('[永久允许] 拒绝的不会被记成永久允许', !JSON.parse(fs.readFileSync(E + '/config.json', 'utf8')).ai_allow.some((x) => /y$/.test(x.k)));
+	// 只读照样挡
+	await panel('ai_mode', { mode: 'ro', sudo: SU });
+	r = await ai('run_command', { command: 'touch ' + M2 });
+	ok('[永久允许] 改成只读：永久允许过的也挡', isErr(r) && !fs.existsSync(M2) && /只读/.test(txt(r)));
+	await panel('ai_mode', { mode: 'ask', sudo: SU });
+	// 收回
+	r = await panel('ai_allow_del', { k: 'run_command:touch ' + M2 });
+	ok('[永久允许] 收回：没确认本人不行', /确认是你本人/.test(r.error?.message || ''), JSON.stringify(r));
+	r = await panel('ai_allow_del', { k: 'run_command:touch ' + M2, sudo: SU });
+	ok('[永久允许] 确认本人后收回', r.result?.ok && !r.result.allows.some((x) => x.k === 'run_command:touch ' + M2), JSON.stringify(r));
+	r = await ai('run_command', { command: 'touch ' + M2 });
+	ok('[永久允许] 收回以后又要确认', isErr(r) && !fs.existsSync(M2) && /手机上确认/.test(txt(r)));
+	await panel('ai_mode', { mode: 'ro', sudo: SU });
+}
 ok('设置文件还是只有 root 能读', (fs.statSync(E + '/config.json').mode & 0o077) === 0);
 clean();
 console.log(results.map((r) => (r[1] ? '✓ ' : '✗ ') + r[0] + (r[2] && !r[1] ? '（' + r[2] + '）' : '')).join('\n'));

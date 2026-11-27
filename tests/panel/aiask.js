@@ -8,16 +8,17 @@ const ROOT = (process.env.PANEL_WWW ? path.join(process.env.PANEL_WWW, 'panel') 
 const results = [], problems = [];
 const ok = (name, cond, note) => { results.push([name, !!cond, note || '']); if (!cond) problems.push(name + (note ? '：' + note : '')); };
 const now = () => Math.floor(Date.now() / 1000);
-const S = { mode: 'ask', list: [], calls: [], role: 'owner', perms: [] };
+const S = { mode: 'ask', list: [], calls: [], role: 'owner', perms: [], allows: [] };
 const fresh = () => { const t = now(); S.list = [
 	{ id: 'aaaaaaaaa1', title: '执行命令', detail: 'opkg update && opkg install luci-app-ttyd && /etc/init.d/ttyd restart && echo "装好了，这是一串很长的命令，用来看看窄屏上会不会撑破弹窗：/usr/lib/lua/luci/controller/very/long/path/name.lua"', at: t - 5, exp: t + 295, st: 'wait' },
-	{ id: 'aaaaaaaaa2', title: '重启路由器', detail: '整个网络会断 1–3 分钟', at: t - 2, exp: t + 298, st: 'wait' }]; };
+	{ id: 'aaaaaaaaa2', title: '重启路由器', detail: '整个网络会断 1–3 分钟', at: t - 2, exp: t + 298, st: 'wait', pt: '重启路由器' }]; };
 function handle(m, p) {
 	S.calls.push({ m, p });
 	if (m === 'whoami') return { ...mock.respond('whoami', p), ai: true, role: S.role, perms: S.perms };
 	if (m === 'ai_asks') { if (S.role === 'sub' && !S.perms.includes('net')) throw Object.assign(new Error('主账号没有给你开「完全控制」权限'), { code: -32012 }); return { ai: true, mode: S.mode, list: S.list }; }
-	if (m === 'ai_answer') { const x = S.list.find((y) => y.id === p.id); if (!x || x.st !== 'wait') throw new Error('这个请求已经处理过了'); x.st = p.ok ? 'ok' : 'no'; return { ok: true, st: x.st }; }
-	if (m === 'ckey_info') { if (!p.sudo) throw new Error('要先确认是你本人'); return { ai: true, url: 'https://r.example/cgi-bin/mcp/' + 'c'.repeat(40), hosted: false, mode: S.mode, asks: [{ id: 'x1', title: '重启路由器', at: now() - 3600, st: 'no' }, { id: 'x2', title: '修改路由器设置', at: now() - 600, st: 'done' }, { id: 'x3', title: '执行命令', at: now() - 60, st: 'exp' }] }; }
+	if (m === 'ai_answer') { const x = S.list.find((y) => y.id === p.id); if (!x || x.st !== 'wait') throw new Error('这个请求已经处理过了'); x.st = p.ok ? 'ok' : 'no'; if (p.ok && p.always && x.pt) S.allows.push({ k: 'k' + x.id, t: x.pt, at: now(), by: '我的手机' }); return { ok: true, st: x.st, always: !!(p.ok && p.always && x.pt) }; }
+	if (m === 'ckey_info') { if (!p.sudo) throw new Error('要先确认是你本人'); return { ai: true, url: 'https://r.example/cgi-bin/mcp/' + 'c'.repeat(40), hosted: false, mode: S.mode, allows: S.allows, asks: [{ id: 'x1', title: '重启路由器', at: now() - 3600, st: 'no' }, { id: 'x2', title: '修改路由器设置', at: now() - 600, st: 'done' }, { id: 'x3', title: '执行命令', at: now() - 60, st: 'exp' }] }; }
+	if (m === 'ai_allow_del') { if (!p.sudo) throw new Error('要先确认是你本人'); S.allows = S.allows.filter((y) => y.k !== p.k); return { ok: true, allows: S.allows }; }
 	if (m === 'ai_mode') { if (!p.sudo) throw new Error('要先确认是你本人'); S.mode = p.mode; return { ok: true, mode: p.mode }; }
 	return mock.respond(m, p);
 }
@@ -56,27 +57,37 @@ const SHOT = path.join(__dirname, 'shots');
 		const ov = await page.evaluate(() => { const W = document.documentElement.clientWidth, b = document.querySelector('.modal .modalbox').getBoundingClientRect(); return { sw: document.documentElement.scrollWidth, W, l: b.left, r: b.right }; });
 		ok('弹窗不超出屏幕、不横向滚动' + T, ov.sw <= ov.W && ov.l >= 0 && ov.r <= ov.W + 0.5, JSON.stringify(ov));
 		await page.screenshot({ path: path.join(SHOT, `aiask-${w}${dark ? '-dark' : ''}.png`) });
+		ok('没有「永久允许」可选的请求：不显示这个按钮（第一个没有）' + T, (await page.locator('.modal [data-ans="always"]').count()) === 0);
 		await page.click('.modal [data-ans="ok"]'); await W(1600);
 		ok('点「允许」：告诉路由器允许了这一个' + T, S.list[0].st === 'ok' && S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa1' && c.p.ok === true));
 		t = await box();
+		ok('有「永久允许」的才显示这个按钮（第二个有）' + T, (await page.locator('.modal [data-ans="always"]').count()) === 1);
 		ok('接着弹出下一个（重启路由器，写着会断网多久）' + T, /AI 想要：重启路由器/.test(t) && /1–3 分钟/.test(t) && !/后面还有/.test(t), t.slice(0, 80));
 		await page.click('.modal [data-ans="no"]'); await W(1400);
 		ok('点「拒绝」：告诉路由器拒绝了，弹窗关掉' + T, S.list[1].st === 'no' && (await page.locator('.modal .aiask').count()) === 0);
 		// 开着面板时有新请求：每 12 秒查一次
-		const t0 = now(); S.list.push({ id: 'aaaaaaaaa3', title: '修改路由器设置', detail: 'set wireless.default_radio0.ssid=MyWiFi\nset wireless.default_radio0.key=******', at: t0, exp: t0 + 300, st: 'wait' });
+		const t0 = now(); S.list.push({ id: 'aaaaaaaaa3', title: '修改路由器设置', detail: 'set wireless.default_radio0.ssid=MyWiFi\nset wireless.default_radio0.key=******', at: t0, exp: t0 + 300, st: 'wait', pt: '修改设置 wireless' });
 		await W(13500);
 		t = await box();
 		ok('开着面板时来了新请求：十几秒内自己弹出来；密码打码' + T, /修改路由器设置/.test(t) && /key=\*\*\*\*\*\*/.test(t), t.slice(0, 80));
-		await page.click('.modal [data-ans="no"]'); await W(800);
+		// 永久允许（用户 11/27）：按钮在「拒绝 / 允许」下面，一整行，不出界
+		const ab = await page.evaluate(() => { const b = document.querySelector('.modal [data-ans="always"]'), m = document.querySelector('.modal .aiask')?.closest('.modal') || document.querySelector('.modal'); if (!b) return null; const r = b.getBoundingClientRect(), y = document.querySelector('.modal [data-ans="ok"]').getBoundingClientRect(); return { t: b.textContent, below: r.top >= y.bottom - 1, inView: r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }; });
+		ok('确认卡上有「永久允许」，在允许下面、不出屏幕' + T, ab && ab.t === '永久允许' && ab.below && ab.inView, JSON.stringify(ab));
+		if (w === 390) await page.screenshot({ path: path.join(SHOT, `aiask-always${dark ? '-dark' : ''}.png`) });
+		await page.click('.modal [data-ans="always"]'); await W(1400);
+		ok('点「永久允许」：告诉路由器允许并且以后不问，提示以后什么不问' + T, S.calls.some((c) => c.m === 'ai_answer' && c.p.id === 'aaaaaaaaa3' && c.p.ok === true && c.p.always === true) && /以后修改设置 wireless不再问/.test(await page.textContent('#toast')), await page.textContent('#toast'));
 		// AI 连接器地址：选档位
 		await page.goto('http://localhost:8097/panel/?p=me'); await W(2200);
 		await page.click('#meBox [data-mp="kckey"]'); await W(1200);
 		t = await page.textContent('.modal');
 		ok('「AI 连接器地址」里有「AI 能做什么」三档，现在是「危险操作要确认」（推荐）' + T, /AI 能做什么/.test(t) && /只读/.test(t) && /完全放开/.test(t) && (await page.getAttribute('.modal [data-aim="ask"]', 'aria-pressed')) === 'true' && /推荐/.test(t));
+		ok('「永久允许」列表：写着永久允许了什么、谁点的' + T, /永久允许/.test(t) && /修改设置 wireless/.test(t) && /我的手机/.test(t), t.slice(0, 300));
 		ok('最近的请求：已拒绝、已执行、过期了，时间写对' + T, /已拒绝/.test(t) && /已执行/.test(t) && /过期了/.test(t) && /1 小时前/.test(t) && !/天前/.test(t), t);
 		const ov2 = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, W: document.documentElement.clientWidth, bad: [...document.querySelectorAll('.modal .aimode, .modal .ailog .kv')].filter((e) => e.scrollWidth > e.clientWidth + 1).length }));
 		ok('档位和请求列表不超出、不截断' + T, ov2.sw <= ov2.W && !ov2.bad, JSON.stringify(ov2));
 		await page.screenshot({ path: path.join(SHOT, `aimode-${w}${dark ? '-dark' : ''}.png`), fullPage: true });
+		await page.click('.modal [data-aidel]'); await W(1000);
+		ok('点「收回」：带着确认本人的凭证去收回，列表里没了' + T, S.calls.some((c) => c.m === 'ai_allow_del' && c.p.sudo && c.p.k === 'kaaaaaaaaa3') && !/修改设置 wireless/.test(await page.textContent('.modal [data-aiallow]')));
 		await page.click('.modal [data-aim="ro"]'); await W(1000);
 		ok('点「只读」：改了（带着确认本人的凭证），按钮跟着变' + T, S.mode === 'ro' && S.calls.some((c) => c.m === 'ai_mode' && c.p.mode === 'ro' && c.p.sudo) && (await page.getAttribute('.modal [data-aim="ro"]', 'aria-pressed')) === 'true');
 		await page.click('.modal [data-aim="full"]'); await W(600);

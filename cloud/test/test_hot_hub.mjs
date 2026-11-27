@@ -2,13 +2,15 @@
 import { load, memStorage } from './load.mjs';
 const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
-const GH = [];
+const GH = []; let limited = false;
 globalThis.fetch = async (input, init = {}) => {
 	const url = typeof input === 'string' ? input : input.url; GH.push(url);
+	if (url.includes('api.github.com') && limited) return new Response('rate limited', { status: 403 });
 	if (url.includes('api.github.com') && url.includes('/releases?')) return new Response(JSON.stringify([
 		{ tag_name: 'v6.0.0', body: '正式版' }, { tag_name: 'hot-6.0.0-1', body: '修了订阅页\n细节' }, { tag_name: 'hot-6.0.0-3', body: '加了横幅公告\n…' },
 		{ tag_name: 'hot-6.0.0-4', body: '草稿', draft: true }, { tag_name: 'hot-5.2.3-9', body: '老版本的' }]));
 	if (url.includes('/releases/download/hot-6.0.0-3/hot.tar.gz')) return new Response('TGZ');
+	if (init.method === 'HEAD' && /\/releases\/download\/hot-(6\.0\.0-[1-5]|6\.0\.2-1)\/SHA256SUMS\.sig2$/.test(url)) return new Response(null, { status: 302, headers: { location: 'https://objects.example/x' } });
 	return new Response('nope', { status: 404 });
 };
 const env = { BASE_DOMAIN: 'panel.example', CF_API_TOKEN: 't', CF_ACCOUNT_ID: 'a', CF_ZONE_ID: 'z', ADMIN_KEY: 'k'.repeat(20), VAPID_PUB: '', VAPID_PRIV: '' };
@@ -30,6 +32,17 @@ ok('老版本不带版本号：不带 hot', j.ok && !('hot' in j), JSON.stringif
 r = await get('/dl/h/hot-6.0.0-3/hot.tar.gz');
 ok('下载中转：补丁文件', r.st === 200 && r.t === 'TGZ');
 ok('只转发补丁的三个文件', (await get('/dl/h/hot-6.0.0-3/install.sh')).st === 404 && (await get('/dl/h/v6.0.0/hot.tar.gz')).st === 404);
+// 11/27 线上：GitHub 接口被限流（403）时官网返回 502，路由器一直装不上补丁
+limited = true; GH.length = 0;
+j = JSON.parse((await get('/api/router/hot?v=6.0.0')).t);
+ok('GitHub 接口限流：用上次存的列表，再顺着编号试下载地址，找到第 5 个', j.ok && j.n === 5 && j.tag === 'hot-6.0.0-5', JSON.stringify(j));
+ok('限流时只从第 4 个往后试（存过的不再试）', !GH.some((u) => u.includes('hot-6.0.0-3/SHA256SUMS.sig2')) && GH.some((u) => u.includes('hot-6.0.0-6/')), GH.join(' '));
+j = JSON.parse((await get('/api/router/hot?v=6.0.2')).t);
+ok('限流时存的列表里没有的版本：也能试出来', j.ok && j.n === 1 && j.tag === 'hot-6.0.2-1', JSON.stringify(j));
+j = JSON.parse((await get('/api/router/hot?v=6.0.1')).t);
+ok('限流时没有补丁的版本：n = 0', j.ok && j.n === 0, JSON.stringify(j));
+j = JSON.parse((await get('/api/notices?v=6.0.0&k=h')).t);
+ok('限流时公告接口也带对补丁编号', j.ok && j.hot === 5, JSON.stringify(j));
 let fail = 0;
 for (const [n, c, note] of results) { console.log((c ? '✓ ' : '✗ ') + n + (c || !note ? '' : '  ← ' + String(note).slice(0, 300))); if (!c) fail++; }
 console.log(`\n${results.length - fail}/${results.length} 通过`);

@@ -2024,14 +2024,35 @@ export function routerVerInfo(env) {
 // 6.0 热补丁：GitHub 上的预发布「hot-版本-编号」（比如 hot-6.0.0-3），路由器问「我这个版本最新的补丁是第几个」。缓存 10 分钟
 export const HOT_TAG = /^hot-(\d+\.\d+\.\d+)-(\d+)$/;
 // 这个版本最新的热补丁（{ n, tag, notes }，没有 n = 0）；读不到 GitHub 抛错
+// GitHub 接口在 Cloudflare 上常被限流（出口 IP 大家共用，返回 403）：接口能用时把补丁列表存一份；
+// 不能用时拿存的那份，再顺着编号往后试下载地址（下载地址不限流）找新补丁
 async function hotBest(env, v) {
-	const l = await cached('hot-list', 600, async () => {
-			const r = await fetch('https://api.github.com/repos/' + repoOf(env) + '/releases?per_page=100', { headers: { 'user-agent': 'router-panel-hub', accept: 'application/vnd.github+json' } });
+	const repo = repoOf(env), H = { 'user-agent': 'router-panel-hub' };
+	let l = null;
+	try {
+		l = await cached('hot-list', 600, async () => {
+			const r = await fetch('https://api.github.com/repos/' + repo + '/releases?per_page=100', { headers: { ...H, accept: 'application/vnd.github+json' } });
 			if (!r.ok) throw new Error('GitHub ' + r.status);
-			return (await r.json()).map((x) => ({ tag: String(x.tag_name || ''), body: String(x.body || '').slice(0, 300), draft: !!x.draft })).filter((x) => !x.draft && HOT_TAG.test(x.tag));
+			const x = (await r.json()).map((x) => ({ tag: String(x.tag_name || ''), body: String(x.body || '').slice(0, 300), draft: !!x.draft })).filter((x) => !x.draft && HOT_TAG.test(x.tag));
+			try { await hubObj(env).setMeta('hotl', x); } catch (e) {}
+			return x;
 		});
+	} catch (e) {}
+	if (!l) l = await cached('hot-fb-' + v, 300, async () => {
+		let o = [];
+		try { o = (await hubObj(env).meta('hotl')) || []; } catch (e) {}
+		let n = 0;
+		for (const x of o) { const m = HOT_TAG.exec(x.tag); if (m && m[1] === v) n = Math.max(n, +m[2]); }
+		for (let i = 0; i < 20; i++) {
+			const tag = 'hot-' + v + '-' + (n + 1);
+			const r = await fetch('https://github.com/' + repo + '/releases/download/' + tag + '/SHA256SUMS.sig2', { method: 'HEAD', redirect: 'manual', headers: H });
+			if (r.status < 200 || r.status >= 400) { if (r.status === 404) break; throw new Error('GitHub ' + r.status); }
+			o = [...o, { tag, body: '' }]; n++;
+		}
+		return o;
+	});
 	let best = null;
-	for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
+	for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m && m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
 	return best || { n: 0 };
 }
 async function hotInfo(env, v) {

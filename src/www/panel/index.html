@@ -7481,6 +7481,22 @@ function updMarkSeen(hide = true) {
 let updAt = 0;
 // 面板一直开着（App 放后台再切回来、或者一直亮着）时，隔一会儿再查一次，这样发布了必须更新的版本也能弹出来
 const updMaybe = () => { if (token && !LK.on && Date.now() - updAt > 600e3) updCheck(false); };
+// 等路由器装好第 n 个修复补丁：每 4 秒问一次，最多 2 分钟；装上了换成新面板，没装上写清楚
+let hotWaitT = 0;
+function hotWait(n) {
+	clearTimeout(hotWaitT);
+	const t0 = Date.now(), kv = (t) => { const e = document.querySelector('[data-hotkv]'); if (e) e.textContent = t; };
+	const tick = async () => {
+		let x = null;
+		try { x = await P('update_check', { nohot: 1 }, 15000); } catch (e) {}
+		if (x && typeof x === 'object') {
+			if ((x.hot || 0) >= n) { if (UPD) { UPD.hot = x.hot; UPD.hn = 0; } kv('V' + x.hot); if (!panelVerCheck(x.pv || x.cur)) $('updState').textContent = 'v' + (x.cur || '?') + ' V' + x.hot + ' · 已经是最新版'; return; }
+		}
+		if (Date.now() - t0 > 120e3) { if (UPD) UPD.hn = 0; kv('V' + n + ' 没装上 · 稍后自动再试'); $('updState').textContent = 'V' + n + ' 没装上 · 稍后自动再试'; return; }
+		hotWaitT = setTimeout(tick, 4000);
+	};
+	hotWaitT = setTimeout(tick, 4000);
+}
 async function updCheck(force) {
 	updAt = Date.now();
 	let r;
@@ -7490,9 +7506,12 @@ async function updCheck(force) {
 	UPD = r;
 	// 热补丁装过的在版本后面写「V编号」（用户 11/27：v6.0.0 V1，能看出补丁到了没有）
 	const hv = UPD.hot ? ' V' + UPD.hot : '';
-	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : 'v' + (UPD.cur || '?') + hv + ' · 已经是最新版';
-	// 点了「检查更新」：路由器在后台马上查修复补丁，过 20 秒再看一次，装上了面板会自己换新
-	if (force && UPD.hotq && !UPD.newer) setTimeout(() => P('update_check', { nohot: 1 }, 25000).then((x) => { if (x && typeof x === 'object') panelVerCheck(x.pv || x.cur); }).catch(() => {}), 20000);
+	// 点了「检查更新」（用户 11/27：要马上查）：路由器当场问官网最新补丁是第几个；有新的就写「正在安装 Vn」，每 4 秒看一次，装好了面板自己换新
+	const hn = force && UPD.hotq && !UPD.newer && UPD.hotn > (UPD.hot || 0) ? UPD.hotn : 0;
+	$('updState').textContent = UPD.newer ? '有新版本 v' + UPD.latest + '（现在 ' + (UPD.cur ? 'v' + UPD.cur : '旧版') + '）' : hn ? 'v' + (UPD.cur || '?') + hv + ' · 正在安装 V' + hn + '…' : 'v' + (UPD.cur || '?') + hv + ' · 已经是最新版';
+	UPD.hn = hn;
+	if (hn) hotWait(hn);
+	else if (force && UPD.hotq && !UPD.newer && UPD.hotn == null) setTimeout(() => P('update_check', { nohot: 1 }, 25000).then((x) => { if (x && typeof x === 'object') panelVerCheck(x.pv || x.cur); }).catch(() => {}), 20000);
 	const later = updSeen();
 	$('rUpd').classList.toggle('hidden', !UPD.newer || (later && !UPD.force));
 	if (UPD.newer) {
@@ -7531,6 +7550,7 @@ async function updSheet(forced) {
 	modal(`<div class="sheethead"><h3>检查更新</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<div class="kv"><span>现在的版本</span><b>${esc(u.cur ? 'v' + u.cur : '旧版（没有记录版本号）')}${u.ahead ? ' <span class="pill">尝鲜版</span>' : ''}</b></div>
 	<div class="kv"><span>最新正式版</span><b>${esc('v' + u.latest)}</b></div>
+	${u.hot || u.hn ? `<div class="kv"><span>修复补丁</span><b data-hotkv>${u.hn ? '正在安装 V' + u.hn + '…' : 'V' + u.hot}</b></div>` : ''}
 	${'auto' in u ? `<div class="kv cpk" style="margin-top:12px"><div><b>必须更新自动装</b><span class="muted">安全修复不用等你打开面板：每天夜里检查一次，只自动装「必须更新」，装不好自动退回原来的版本，装好后推送告诉你。普通更新还是你自己点。</span></div><label class="sw"><input type="checkbox" data-au${u.auto ? ' checked' : ''}${ME_ROLE.role === 'sub' ? ' disabled' : ''} aria-label="必须更新自动装"><i></i></label></div>${ME_ROLE.role === 'sub' ? '<p class="muted" style="font-size:12.5px;margin:6px 0 0">只有主账号能改。</p>' : ''}` : ''}
 	${u.beta ? `<div class="notice" style="margin-top:12px;line-height:1.6">你是尝鲜用户：可以先装 <b>v${esc(u.beta.ver)}</b>（还没正式发布）。有问题随时能退回正式版。</div>` : ''}
 	${u.ahead ? '<p class="muted" style="font-size:13px;margin:12px 0 0;line-height:1.6">你用的是尝鲜版，比正式版新。不好用的话可以退回正式版，设置都保留。</p>' : '<p class="muted" style="margin:12px 0 0">已经是最新的正式版了。</p>'}

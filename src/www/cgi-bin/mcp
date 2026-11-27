@@ -3272,10 +3272,17 @@ P.update_check = function(a) {
 	}
 	let newer = !length(v.cur) || v.cur == 'dev' ? true : ver_newer(c.latest, v.cur);
 	// 用户自己点「检查更新」：顺便马上查一次热补丁（用户 11/27：紧急情况或者想快点更新，不用等 6 小时）。后台跑，装好了面板自己换新
-	let hotq = false;
-	if (a?.force && !a?.nohot && stat('/usr/sbin/cmcp-hot')) { sh('nohup /usr/sbin/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true; }
+	// 用户 11/27：点了要马上知道有没有新补丁——当场问一次官网最新是第几个（hotn），比现在装的大就后台马上装，面板等着换新
+	let hotq = false, hotn = null;
+	if (a?.force && !a?.nohot && stat(SBIN + '/cmcp-hot')) {
+		if (match(v.cur ?? '', /^[0-9]+\.[0-9]+\.[0-9]+$/)) {
+			let hub = match(readfile(ETC + '/hub.conf') ?? '', /(^|\n)HUB=(https?:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
+			try { let j = json(sh(sprintf('curl -s -m 10 %s', shq(hub + '/api/router/hot?v=' + v.cur))).out); if (type(j?.n) == 'int' && j.n >= 0) hotn = j.n; } catch (e) {}
+		}
+		sh('nohup ' + SBIN + '/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true;
+	}
 	// pv：面板网页该是哪一版（热补丁装过第 N 个就是「6.0.0-hN」），面板发现自己不一样就换成新的
-	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq };
+	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, hotn, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq };
 };
 P.update_start = function(a) {
 	if (a?.confirm != 'UPDATE') die('需要确认');

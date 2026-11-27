@@ -18,13 +18,13 @@ const ns = (Cls) => { const objs = new Map(); return { idFromName: (n) => n, get
 env.W = ns(mod.Watch); env.H = ns(mod.Hub);
 const get = async (p) => { const r = await mod.default.fetch(new Request('https://panel.example' + p), env); return { st: r.status, t: await r.text() }; };
 let r = await get('/api/router/hot?v=6.0.0'), j = JSON.parse(r.t);
-ok('6.0.0 最新的补丁是第 3 个（草稿不算、别的版本不算），说明取第一行', j.ok && j.n === 3 && j.tag === 'hot-6.0.0-3' && j.notes === '加了横幅公告', r.t);
+ok('6.0.0 最新的补丁是第 3 个（草稿不算、别的版本不算），说明取第一行；顺着试到第 5 个', j.ok && j.n === 5 && j.tag === 'hot-6.0.0-5', r.t);
 j = JSON.parse((await get('/api/router/hot?v=6.0.1')).t);
 ok('没有补丁的版本：n = 0', j.ok && j.n === 0);
 ok('版本号不对：拒绝', (await get('/api/router/hot?v=../x')).st === 400);
 // 用户 11/27：紧急补丁不用等 6 小时——路由器每 30 分钟问公告时，官网顺便说这个版本最新的热补丁是第几个
 j = JSON.parse((await get('/api/notices?v=6.0.0&k=h')).t);
-ok('公告接口顺便带上这个版本最新的热补丁编号', j.ok && j.hot === 3, JSON.stringify(j));
+ok('公告接口顺便带上这个版本最新的热补丁编号', j.ok && j.hot === 5, JSON.stringify(j));
 j = JSON.parse((await get('/api/notices?v=5.3.1&k=h')).t);
 ok('没有补丁的版本：hot = 0', j.ok && j.hot === 0, JSON.stringify(j));
 j = JSON.parse((await get('/api/notices')).t);
@@ -32,6 +32,13 @@ ok('老版本不带版本号：不带 hot', j.ok && !('hot' in j), JSON.stringif
 r = await get('/dl/h/hot-6.0.0-3/hot.tar.gz');
 ok('下载中转：补丁文件', r.st === 200 && r.t === 'TGZ');
 ok('只转发补丁的三个文件', (await get('/dl/h/hot-6.0.0-3/install.sh')).st === 404 && (await get('/dl/h/v6.0.0/hot.tar.gz')).st === 404);
+// 用户 11/27：刚发的补丁，列表还在缓存里（10 分钟）——顺着编号试下一个的下载地址，马上能查到
+{
+	const j4 = JSON.parse((await get('/api/router/hot?v=6.0.0')).t);
+	ok('列表里最新是第 3 个，但第 4、5 个已经能下载：马上查到第 5 个', j4.ok && j4.n === 5 && j4.tag === 'hot-6.0.0-5', JSON.stringify(j4));
+	const j5 = JSON.parse((await get('/api/router/hot?v=6.0.1')).t);
+	ok('没有补丁的版本：试一下第 1 个没有，还是 0', j5.ok && j5.n === 0, JSON.stringify(j5));
+}
 // 11/27 线上：GitHub 接口被限流（403）时官网返回 502，路由器一直装不上补丁
 limited = true; GH.length = 0;
 j = JSON.parse((await get('/api/router/hot?v=6.0.0')).t);

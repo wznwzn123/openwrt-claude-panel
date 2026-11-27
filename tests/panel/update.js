@@ -11,7 +11,7 @@ const server = http.createServer((req, res) => { let b = ''; req.on('data', (d) 
 	if (u.pathname.startsWith('/cgi-bin/mcp/')) { const body = JSON.parse(b || '{}'), m = body.method.replace(/^panel\//, '');
 		if (U.down > 0 && m !== 'update_start') { U.down--; req.socket.destroy(); return; }   // 面板服务在重启：连不上
 		let result;
-		if (m === 'update_check') result = { cur: U.cur, code: 'hosted-ai', latest: U.latest, notes: U.notes, newer: U.cur !== U.latest, hot: U.hot || 0, force: U.force && U.cur !== U.latest, auto: U.auto, seen: U.seen };
+		if (m === 'update_check') { const q = !!(body.params && body.params.force && !body.params.nohot); if (q) U.hotChecks = (U.hotChecks || 0) + 1; result = { cur: U.cur, code: 'hosted-ai', latest: U.latest, notes: U.notes, newer: U.cur !== U.latest, hot: U.hot || 0, force: U.force && U.cur !== U.latest, auto: U.auto, seen: U.seen, ...(q ? { hotq: true, hotn: U.hotn ?? (U.hot || 0) } : {}) }; }
 		else if (m === 'notices_seen') { if (body.params && body.params.upd) U.seen = body.params.upd; result = { ok: true }; }
 		else if (m === 'autoupd_set') { U.auSets.push(body.params); U.auto = body.params.on !== false; result = { auto: U.auto }; }
 		else if (m === 'update_start') { U.started++; U.startArgs = body.params; result = { started: true }; }
@@ -88,7 +88,25 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		U.hot = 1;
 		const p2 = await ctx.newPage(); await p2.goto(page.url()); await W(2500);
 		ok('装过热补丁：版本后面写「V1」', /^v[0-9.]+ V1 · 已经是最新版$/.test(await p2.textContent('#updState')), await p2.textContent('#updState'));
-		await p2.close(); U.hot = 0;
+		// 用户 11/27：点「检查更新」路由器马上查；官网有更新的补丁就写「正在安装 V2…」，装好了换成「V2 · 已经是最新版」
+		U.hotn = 2; U.hotChecks = 0;
+		await p2.goto('http://localhost:8183/panel/?p=more'); await W(2500);
+		await p2.click('[data-t="update"]'); await W(900);
+		const s1 = await p2.textContent('#updState');
+		ok('点「检查更新」：路由器当场去查（带 force），有新补丁写「正在安装 V2…」', U.hotChecks === 1 && /^v[0-9.]+ V1 · 正在安装 V2…$/.test(s1), s1);
+		ok('检查更新弹窗里也写「修复补丁 正在安装 V2…」', /修复补丁\s*正在安装 V2…/.test(await p2.textContent('.modal')), await p2.textContent('.modal'));
+		await p2.screenshot({ path: path.join(__dirname, 'shots', 'update-hot-installing.png') });
+		U.hot = 2; await W(5000);
+		const s2 = await p2.textContent('#updState');
+		ok('装好了：变成「V2 · 已经是最新版」（真实面板会自己换新）', /^v[0-9.]+ V2 · 已经是最新版$/.test(s2), s2);
+		ok('弹窗里的修复补丁也变成「V2」', /修复补丁\s*V2$/m.test((await p2.textContent('.modal [data-hotkv]').catch(() => '')).trim() ? '修复补丁 ' + (await p2.textContent('.modal [data-hotkv]')).trim() : ''), await p2.textContent('.modal'));
+		await p2.close();
+		// 官网最新就是现在这个：直接「已经是最新版」
+		U.hot = 2; U.hotn = 2;
+		const p3 = await ctx.newPage(); await p3.goto('http://localhost:8183/panel/?p=more'); await W(2500);
+		await p3.click('[data-t="update"]'); await W(900);
+		ok('没有更新的补丁：直接写「已经是最新版」', /^v[0-9.]+ V2 · 已经是最新版$/.test(await p3.textContent('#updState')), await p3.textContent('#updState'));
+		await p3.close(); U.hot = 0; U.hotn = undefined;
 	}
 	// 6.0 第 86 项：必须更新夜里自动装（默认开，关掉要确认）
 	ok('检查更新里有「必须更新自动装」开关，默认开', /必须更新自动装/.test(await page.textContent('.modal')) && await page.isChecked('.modal [data-au]'));

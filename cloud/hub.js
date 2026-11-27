@@ -2053,7 +2053,22 @@ async function hotBest(env, v) {
 	});
 	let best = null;
 	for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m && m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
-	return best || { n: 0 };
+	best = best || { n: 0 };
+	// 列表缓存 10 分钟：刚发的补丁要等缓存过期才看得到（用户 11/27：点「检查更新」刷不出来）。
+	// 顺着编号再试一下下一个的下载地址（不限流，结果缓存 1 分钟），新补丁一发出来马上能查到
+	try {
+		const nx = await cached('hot-nx-' + v + '-' + best.n, 60, async () => {
+			let n = best.n;
+			for (let i = 0; i < 10; i++) {
+				const r = await fetch('https://github.com/' + repoOf(env) + '/releases/download/hot-' + v + '-' + (n + 1) + '/SHA256SUMS.sig2', { method: 'HEAD', redirect: 'manual', headers: { 'user-agent': 'router-panel-hub' } });
+				if (r.status < 200 || r.status >= 400) break;
+				n++;
+			}
+			return { n };
+		});
+		if (nx && nx.n > best.n) best = { n: nx.n, tag: 'hot-' + v + '-' + nx.n, notes: '' };
+	} catch (e) {}
+	return best;
 }
 async function hotInfo(env, v) {
 	if (!/^\d+\.\d+\.\d+$/.test(v || '')) return J({ ok: false, error: '版本号不对' }, 400);

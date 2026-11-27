@@ -387,9 +387,17 @@ function handleErr(e) {
 	if (e instanceof AuthError) return logout('密钥已失效，请重新粘贴连接地址');
 	toast(e.message || String(e), true);
 }
-let loadN = 0, loadT = 0;
-function loadOn() { if (loadN++ === 0) loadT = setTimeout(() => $('tload').classList.add('on'), 120); }
-function loadOff() { if (--loadN <= 0) { loadN = 0; clearTimeout(loadT); $('tload').classList.remove('on'); } }
+// 加载中（用户 11/27）：不用最上面的加载线了，统一用刷新胶囊「正在刷新」，超过 4 秒后面加「内容较多请耐心等待」
+let loadN = 0, loadT = 0, loadSlow = 0;
+const ptrText = (t) => { const s = $('ptr').lastElementChild; if (s.textContent !== t) s.textContent = t; };
+function ldShow() {
+	const el = $('ptr'); el.classList.remove('ready'); el.classList.add('run'); el.style.setProperty('--py', '1'); ptrText('正在刷新');
+	clearTimeout(loadSlow); loadSlow = setTimeout(() => ptrText('正在刷新 内容较多请耐心等待'), 4000);
+}
+function ldHide() { clearTimeout(loadSlow); const el = $('ptr'); el.classList.remove('run', 'pull', 'ready'); el.style.setProperty('--py', '0'); }
+// now：用户自己点的刷新马上显示；页面加载等 0.12 秒（很快就好的不闪一下）
+function loadOn(now) { if (loadN++ === 0) { if (now) ldShow(); else loadT = setTimeout(ldShow, 120); } }
+function loadOff() { if (--loadN <= 0) { loadN = 0; clearTimeout(loadT); ldHide(); } }
 async function busy(btn, fn, label) {
 	const old = btn ? btn.innerHTML : '';
 	if (btn) { btn.disabled = true; if (label !== false) btn.innerHTML = '<span class="spin">↻</span>' + (label ? ' ' + esc(label) : ''); }
@@ -420,8 +428,8 @@ function fitTop() {
 	try { const mo = new MutationObserver(fit); ['pageTitle', 'topSub', 'statusText'].forEach((id) => $(id) && mo.observe($(id), { childList: true, characterData: true, subtree: true })); } catch (e) {}
 	addEventListener('resize', fit);
 	// 点「● 在线」刷新（电脑上没有下拉，这是刷新的入口；手机上也能用）
-	// 点「在线」：只弹「正在刷新…」（不显示下拉的转圈、最上面的加载线）；超过 4 秒后面加「内容较多请耐心等待」；好了就收起（用户 11/27）
-	const st = () => { if (!ptrBusy) ptrRun(true); };
+	// 点「在线」：跟下拉一样，显示刷新胶囊「正在刷新」（用户 11/27）
+	const st = () => { if (!ptrBusy) ptrRun(); };
 	$('statusPill').addEventListener('click', st);
 	$('statusPill').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); st(); } });
 }
@@ -810,9 +818,7 @@ async function refresh(quiet) {
 	if (loading && quiet && Date.now() - loadAt < 25000) return;
 	const my = ++loadSeq;
 	loading = true; loadAt = Date.now();
-	// 下拉 / 点「在线」刷新时有自己的提示：不再显示最上面那条加载线（用户 11/27）
-	const bar = !quiet && !ptrBusy;
-	if (!quiet) { $('refreshBtn').innerHTML = '<span class="spin">↻</span>'; if (bar) loadOn(); }
+	if (!quiet) { $('refreshBtn').innerHTML = '<span class="spin">↻</span>'; loadOn(); }
 	try { await load(quiet); }
 	catch (e) {
 		if (my !== loadSeq) return; // 已经有更新的一次加载了，这次的错误不用管
@@ -868,7 +874,7 @@ async function refresh(quiet) {
 		} else if (/连不上|超时/.test(e.message)) setStatus(false, '离线');
 		if (!quiet) toast(e.message, true);
 	} finally {
-		if (bar) loadOff();
+		if (!quiet) loadOff();
 		if (my === loadSeq) { loading = false; $('refreshBtn').textContent = '↻'; }
 	}
 }
@@ -879,19 +885,13 @@ $('refreshBtn').onclick = () => { S.state = null; S.schema = {}; refresh(); };
    浏览器自己的下拉重新加载整页关掉（overscroll-behavior），不然会跟这个打架。
    有弹窗、菜单开着、在聊天页（自己有滚动）或原版后台页时不管。 */
 
-// tip：点「在线」来的，用「正在刷新…」提示代替下拉的转圈
-async function ptrRun(tip) {
+async function ptrRun() {
 	if (ptrBusy) return;
 	ptrBusy = true;
-	const el = $('ptr');
-	if (tip) toast('正在刷新…'); else { el.classList.add('run'); el.style.setProperty('--py', '1'); }
-	// 超过 4 秒还没好：后面加「内容较多请耐心等待」（用户 11/27）
-	const slow = setTimeout(() => { if (tip) toast('正在刷新 内容较多请耐心等待…'); else el.classList.add('slow'); }, 4000);
+	loadOn(true);
 	S.state = null; S.schema = {};
 	try { await refresh(); } catch (e) {}
-	clearTimeout(slow);
-	if (tip && /^正在刷新/.test($('toast').textContent) && $('toast').classList.contains('busy')) toastHide();
-	el.classList.remove('run', 'pull', 'slow'); el.style.setProperty('--py', '0');
+	loadOff();
 	ptrBusy = false;
 }
 function ptrOk() {
@@ -907,7 +907,7 @@ function ptrOk() {
 		dy = e.touches[0].clientY - y0;
 		if (dy <= 0 || (window.scrollY || 0) > 0) { el.classList.remove('pull'); el.style.setProperty('--py', '0'); return; }
 		const p = Math.min(1, dy / (MAX * 1.6));
-		el.classList.add('pull'); el.classList.toggle('ready', dy * 0.6 >= MAX); el.style.setProperty('--py', p.toFixed(3));
+		el.classList.add('pull'); el.classList.toggle('ready', dy * 0.6 >= MAX); el.style.setProperty('--py', p.toFixed(3)); ptrText(dy * 0.6 >= MAX ? '松开刷新' : '下拉刷新');
 	}, { passive: true });
 	addEventListener('touchend', () => {
 		if (y0 == null) return;

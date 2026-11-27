@@ -44,23 +44,34 @@ const server = http.createServer((req, res) => {
 	// 用户 11/27：「应用管理」只有一个虚线框——面板自己的页面都要有画好的图标（服务组本来就不显示图标）
 	const noIc = await page.evaluate(() => [...document.querySelectorAll('#sidenav button[data-p]')].filter((b) => !b.dataset.p.startsWith('k:') && !b.closest('[data-g="服务"]') && b.querySelector('i') && !b.querySelector('i.nic svg')).map((b) => b.textContent.trim()));
 	ok('面板自己的页面都有画好的图标（含应用管理、完整原版后台）', !noIc.length && (await page.locator('#sidenav [data-p="apps"] i.nic svg').count()) === 1, noIc.join('、'));
-	// 点「● 在线」刷新（用户 11/27）：弹「正在刷新…」；超过 4 秒后面加「内容较多请耐心等待」；不显示下拉的转圈和最上面的加载线；好了就收起
+	// 刷新（用户 11/27）：转圈后面一定跟字「正在刷新」，超过 4 秒变成「正在刷新 内容较多请耐心等待」，好了就收起；最上面的加载线去掉了
 	let slowRpc = false;
 	await page.route('**/cgi-bin/mcp/**', async (r) => { if (slowRpc) await new Promise((z) => setTimeout(z, 5500)); try { await r.continue(); } catch (e) {} });
 	slowRpc = true;
-	const snap = () => page.evaluate(() => ({ toast: document.getElementById('toast').classList.contains('hidden') ? '' : document.getElementById('toast').textContent.trim(), ptr: document.getElementById('ptr').classList.contains('run'), bar: document.getElementById('tload').classList.contains('on') }));
-	await page.evaluate(() => document.getElementById('statusPill').click()); await page.waitForTimeout(600);
+	const snap = () => page.evaluate(() => { const e = document.getElementById('ptr'), r = e.getBoundingClientRect(), W = document.documentElement.clientWidth, sp = e.querySelector('i').getBoundingClientRect(); return { run: e.classList.contains('run'), t: e.textContent.trim(), op: getComputedStyle(e).opacity, l: r.left, r: r.right, W, mid: Math.abs((r.left + r.right) / 2 - W / 2), spin: getComputedStyle(e.querySelector('i')).animationName, tl: !!document.getElementById('tload'), toast: !document.getElementById('toast').classList.contains('hidden') && /刷新/.test(document.getElementById('toast').textContent) }; });
+	await page.evaluate(() => document.getElementById('statusPill').click()); await page.waitForTimeout(700);
 	const p1 = await snap();
+	await page.screenshot({ path: require('path').join(__dirname, 'shots', 'refresh-run.png') });
 	await page.waitForTimeout(4000);
 	const p2 = await snap();
-	const tb = await page.evaluate(() => { const r = document.getElementById('toast').getBoundingClientRect(); return { l: r.left, r: r.right, W: document.documentElement.clientWidth, h: r.height }; });
 	await page.screenshot({ path: require('path').join(__dirname, 'shots', 'refresh-slow.png') });
 	slowRpc = false;
 	await page.waitForTimeout(9000);
 	const p3 = await snap();
-	ok('点「在线」：弹「正在刷新…」，没有下拉的转圈、没有最上面的加载线', /^正在刷新…$/.test(p1.toast) && !p1.ptr && !p1.bar, JSON.stringify(p1));
-	ok('超过 4 秒：变成「正在刷新 内容较多请耐心等待…」，还是没有加载线，不出屏幕', /正在刷新 内容较多请耐心等待…/.test(p2.toast) && !p2.bar && !p2.ptr && tb.l >= 0 && tb.r <= tb.W, JSON.stringify(p2) + JSON.stringify(tb));
-	ok('刷新好了：提示收起（不再一直转）', !/正在刷新/.test(p3.toast) && !p3.ptr && !p3.bar, JSON.stringify(p3));
+	ok('点「在线」：转圈后面写「正在刷新」，居中，一直转；没有加载线、没有另一个提示', p1.run && p1.t === '正在刷新' && p1.op === '1' && p1.mid < 2 && p1.spin === 'spin' && !p1.tl && !p1.toast, JSON.stringify(p1));
+	ok('超过 4 秒：变成「正在刷新 内容较多请耐心等待」，不出屏幕', p2.run && p2.t === '正在刷新 内容较多请耐心等待' && p2.l >= 0 && p2.r <= p2.W && p2.mid < 2, JSON.stringify(p2));
+	ok('刷新好了：收起', !p3.run, JSON.stringify(p3));
+	// 下拉：拉的时候写「下拉刷新」，拉够了写「松开刷新」（转圈不跟着手指左右转）
+	await page.evaluate(() => { const el = document.getElementById('ptr'); window.__ptrT = []; new MutationObserver(() => window.__ptrT.push(el.textContent.trim())).observe(el, { childList: true, subtree: true, characterData: true }); });
+	await page.touchscreen.tap(195, 300).catch(() => {});
+	const cdp = await page.context().newCDPSession(page);
+	const tp = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: 195, y }] });
+	await tp('touchStart', 200); for (let y = 210; y <= 400; y += 10) { await tp('touchMove', y); await page.waitForTimeout(16); }
+	const pr = await page.evaluate(() => ({ t: document.getElementById('ptr').textContent.trim(), tr: getComputedStyle(document.getElementById('ptr').querySelector('i')).transform }));
+	await tp('touchEnd'); await page.waitForTimeout(400);
+	const seen = await page.evaluate(() => window.__ptrT);
+	ok('下拉：先写「下拉刷新」，拉够了「松开刷新」，松手「正在刷新」；拉的时候圈不转', seen.includes('下拉刷新') && pr.t === '松开刷新' && (pr.tr === 'none' || pr.tr === 'matrix(1, 0, 0, 1, 0, 0)') && seen.includes('正在刷新'), JSON.stringify({ pr, seen }));
+	await page.waitForTimeout(3000);
 	await page.unroute('**/cgi-bin/mcp/**');
 	ok('有子页面的插件可以展开', (await page.locator('#sidenav [data-g="服务/ZeroTier"] button[data-p="k:admin/vpn/zerotier/base"]').count()) === 1);
 	// 点「服务」里的 OpenClash：展开「代理 › OpenClash 原版」

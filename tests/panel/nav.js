@@ -162,7 +162,7 @@ body{margin:0;font:14px sans-serif;background:#eee}.main{display:flex;height:100
 	await page.click('#sidenav button[data-p="dev"]'); await page.waitForTimeout(700);
 	ok('回到面板页面：原版页面关掉', await page.evaluate(() => document.getElementById('lfr').getAttribute('src') === 'about:blank' && !document.getElementById('p-luci').classList.contains('on')));
 	ok('底部快捷栏回来了', await vis('#dock'));
-	ok('顶上进度条没卡住', !(await page.evaluate(() => document.getElementById('tload').classList.contains('on'))));
+	ok('刷新胶囊没卡住；最上面的加载线已经去掉', !(await page.evaluate(() => document.getElementById('ptr').classList.contains('run'))) && !(await page.evaluate(() => !!document.getElementById('tload'))));
 
 	/* ---------- 重开面板后停在原版页面 ---------- */
 	await menu();

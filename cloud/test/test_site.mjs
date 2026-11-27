@@ -570,6 +570,16 @@ ok('页面没有报错', !errs.length, errs.join(' | '));
 			ok('[' + t + '] 排版不超出' + T, (await lay2(page, '.nav__logo, .nav__actions > .btn, .nav__toggle, h1, .ds > h2, .doc-tabs a, .site-foot .legal > *')) === '', await lay2(page, '.nav__logo, .nav__actions > .btn, .nav__toggle, h1, .ds > h2, .doc-tabs a, .site-foot .legal > *'));
 			if (SHOTS && w === 390) await page.screenshot({ path: SHOTS + '/site' + u.replace('/', '-') + (dark ? '-dark' : '') + '.png' });
 		}
+		// 用户 11/27 截图：别的页面（常见问题等）往下滑以后点右上角展开，菜单被截在顶栏里、透明叠在页面上——要盖满整屏、不透明
+		if (w <= 1023) for (const u of ['/help', '/changelog', '/compat', '/notice']) {
+			await page.goto(B + u); await W(400);
+			await page.evaluate(() => scrollTo(0, 600)); await W(300);
+			await page.click('.nav__toggle'); await W(500);
+			const m = await page.evaluate(() => { const l = document.querySelector('.nav__links'), r = l.getBoundingClientRect(), bg = getComputedStyle(l).backgroundColor, nb = getComputedStyle(document.querySelector('.nav')).backdropFilter; return { top: Math.round(r.top), bottom: Math.round(r.bottom), H: innerHeight, bg, nb, a: /rgba?\(([^)]+)\)/.exec(bg)?.[1].split(',').map(Number)[3] }; });
+			ok('[顶栏] ' + u + ' 往下滑以后展开菜单：盖满屏幕、不透明' + T, m.top <= 60 && m.bottom >= m.H - 2 && (m.a === undefined || m.a >= 0.99) && (m.nb === 'none' || !m.nb), JSON.stringify(m));
+			if (SHOTS && w === 390 && u === '/help') await page.screenshot({ path: SHOTS + '/site-menu-help' + (dark ? '-dark' : '') + '.png' });
+			await page.click('.nav__toggle'); await W(300);
+		}
 		ok('[登录页] 页面没有报错' + T, !e6.length, e6.join('|'));
 		await ctx.close();
 	}

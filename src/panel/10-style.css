@@ -182,10 +182,6 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
 .dot.on{background:var(--ok)}.dot.off{background:var(--danger)}.dot.busy{background:var(--warn);animation:pulse 1s ease-in-out infinite}
 /* 顶部细进度条：点了按钮在等路由器回应时显示，让人知道点到了 */
-.tload{position:fixed;top:0;left:0;right:0;height:2.5px;z-index:120;overflow:hidden;pointer-events:none;opacity:0;transition:opacity .2s}
-.tload.on{opacity:1}
-.tload::before{content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;border-radius:2px;background:var(--brand);animation:tload 1s ease-in-out infinite}
-@keyframes tload{to{left:100%}}
 /* 开关 */
 .pxrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;min-width:0;max-width:100%;padding:12px 14px;margin:0 0 14px;border-radius:16px;background:var(--fill);cursor:pointer;transition:background-color .3s var(--ease)}
 .pxrow.on{background:var(--oksoft)}.pxrow.off{background:var(--dsoft)}
@@ -406,7 +402,7 @@ body.chatp .dock{display:none}body.chatp main.wrap{padding-bottom:0}
 .lock{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(var(--sat,env(safe-area-inset-top)) + 24px) 24px calc(env(safe-area-inset-bottom) + 76px);color:#fff;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overflow:hidden;isolation:isolate;background:#151a4a;animation:lkIn .35s var(--ease) both}
 .lock.hidden{display:none}
 @keyframes lkIn{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:none}}
-body.locked #app,body.locked .modal,body.locked .toast,body.locked .tload{visibility:hidden}
+body.locked #app,body.locked .modal,body.locked .toast,body.locked .ptr{visibility:hidden}
 .lkwall{position:absolute;inset:-30%;z-index:-2;filter:blur(50px) saturate(125%);background-color:#1a1f5c;
 	background-image:radial-gradient(40% 32% at 25% 18%,#3f7bff 0,rgba(63,123,255,0) 100%),radial-gradient(36% 30% at 80% 26%,#8a5cff 0,rgba(138,92,255,0) 100%),radial-gradient(44% 34% at 70% 70%,#4d3fd8 0,rgba(77,63,216,0) 100%),radial-gradient(46% 36% at 22% 78%,#1fa6d6 0,rgba(31,166,214,0) 100%),radial-gradient(30% 22% at 92% 96%,#d65bc4 0,rgba(214,91,196,0) 100%);
 	animation:lkDrift 30s ease-in-out infinite alternate}
@@ -902,16 +898,14 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 :root.glass .bell{background:var(--fill)}
 /* 下拉刷新的圆圈 */
 html,body{overscroll-behavior-y:contain}
-.ptr{position:fixed;left:50%;top:calc(var(--toph,64px) + 6px);z-index:40;width:34px;height:34px;margin-left:-17px;border-radius:50%;background:var(--card);box-shadow:0 0 0 1px var(--line),0 6px 18px -6px rgba(0,0,0,.25);display:grid;place-items:center;pointer-events:none;opacity:0;transform:translateY(calc(var(--py,0) * 40px - 30px)) scale(calc(.6 + var(--py,0) * .4));transition:opacity .2s,transform .25s var(--spring)}
+/* 刷新提示（用户 11/27）：一个胶囊，转圈后面一定跟字——下拉时「下拉刷新 / 松开刷新」，刷新时「正在刷新」，超过 4 秒「正在刷新 内容较多请耐心等待」；最上面那条加载线去掉了，页面加载也用它 */
+.ptr{position:fixed;left:50%;top:calc(var(--toph,64px) + 6px);z-index:40;height:34px;padding:0 14px 0 10px;border-radius:17px;background:var(--card);box-shadow:0 0 0 1px var(--line),0 6px 18px -6px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;white-space:nowrap;max-width:calc(100vw - 24px);pointer-events:none;opacity:0;transform:translateX(-50%) translateY(calc(var(--py,0) * 40px - 30px)) scale(calc(.6 + var(--py,0) * .4));transition:opacity .2s,transform .25s var(--spring)}
 .ptr.pull{transition:none;opacity:calc(var(--py,0) * 1.4)}
-.ptr.run{opacity:1;transform:translateY(10px) scale(1)}
-.ptr i{width:16px;height:16px;border-radius:50%;border:2.2px solid var(--muted);border-top-color:transparent;transform:rotate(calc(var(--py,0) * 300deg))}
+.ptr.run{opacity:1;transform:translateX(-50%) translateY(10px) scale(1)}
+.ptr i{flex:none;width:16px;height:16px;border-radius:50%;border:2.2px solid var(--muted);border-top-color:transparent}
 .ptr.ready i,.ptr.run i{border-color:var(--brand);border-top-color:transparent}
 .ptr.run i{animation:spin .8s linear infinite}
-.ptr span{display:none;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap}
-.ptr.slow{width:auto;height:34px;margin-left:0;padding:0 14px 0 10px;border-radius:17px;grid-auto-flow:column;gap:8px}
-.ptr.run.slow{transform:translateX(-50%) translateY(10px)}
-.ptr.slow span{display:block}
+.ptr span{font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis}
 @media(prefers-reduced-motion:reduce){.ptr.run i{animation:spin 1.6s linear infinite!important}}
 /* 新手引导：挖空高亮 + 小卡片 */
 .tour{position:fixed;inset:0;z-index:90}

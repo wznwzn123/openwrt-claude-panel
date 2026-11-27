@@ -47,6 +47,8 @@ a.inline:hover, .prose a:hover { text-decoration: underline; text-underline-offs
 code { font-family: var(--font-mono); font-size: .88em; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--ink) 7%, transparent); overflow-wrap: anywhere; }
 /* 顶栏：跟首页一样 48 高 半透明毛玻璃 13 号字 */
 .nav { background: var(--navbg); backdrop-filter: saturate(1.8) blur(20px); -webkit-backdrop-filter: saturate(1.8) blur(20px); border-bottom: 0; }
+/* 手机上展开菜单（用户 11/27 截图）：毛玻璃会把里面 fixed 的菜单关在 48px 高的导航栏里，菜单被截断、透明叠在页面上——展开时去掉毛玻璃 */
+.nav.is-open { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .nav__logo { font: 600 15px/1 var(--font-text); letter-spacing: -.01em; gap: 8px; }
 .nav__logo svg { width: 22px; height: 22px; }
 @media (prefers-color-scheme: dark) { .nav__logo svg { border-radius: 5px; box-shadow: 0 0 0 1px rgb(255 255 255 / .14); } }

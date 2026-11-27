@@ -52,7 +52,12 @@ try {
 	HUBUP = false;
 	r = await cgi('update_check', { force: true });
 	await W(600);
-	ok('官网连不上：不知道最新是第几个（hotn 为空），后台照样去查', r.result?.hotq === true && r.result?.hotn == null && fs.existsSync(MARK), JSON.stringify(r.result));
+	ok('官网出错：不知道最新是第几个（hotn 为空），后台照样去查', r.result?.hotq === true && r.result?.hotn == null && fs.existsSync(MARK), JSON.stringify(r.result));
+	// 官网根本连不上（11/27 全面检查第 6 条）：只等一次，不再试老地址和补丁，回「显示的是上次查到的」，几秒内回答（面板只等 25 秒）
+	fs.writeFileSync(E + '/hub.conf', 'HUB=http://127.0.0.1:1\n');
+	const t0 = Date.now();
+	r = await cgi('update_check', { force: true });
+	ok('官网连不上：马上回答（用上次查到的结果，标 stale），不卡到面板超时', r.result?.stale === true && r.result?.latest === '6.0.0' && Date.now() - t0 < 8000, (Date.now() - t0) + 'ms ' + JSON.stringify(r.result));
 } finally {
 	srv.close();
 	try { fs.rmSync(VF); } catch (e) {}

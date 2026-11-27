@@ -1,28 +1,30 @@
 P.update_check = function(a) {
-	let v = ver_info(), cf = '/tmp/cmcp_latest.json', c = null;
+	let v = ver_info(), cf = '/tmp/cmcp_latest.json', c = null, hubdown = false;
 	try { c = json(readfile(cf) ?? 'null'); } catch (e) {}
 	if (!c || a?.force || time() - (c.at ?? 0) > 3600) {
-		let hub = match(readfile('/etc/claude-mcp/hub.conf') ?? '', /(^|\n)HUB=(https:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
-		let j = null;
-		try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/router/version'))).out); } catch (e) {}
-		// 自己搭的开通中心如果还是旧版，没有这个地址：退回老地址（curl 去问时回答的是路由器版本）
-		if (type(j) != 'object' || !j.version) { try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/app/version'))).out); } catch (e) {} }
+		let hub = match(readfile(ETC + '/hub.conf') ?? '', /(^|\n)HUB=(https?:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
+		let j = null, o = sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/router/version'))).out;
+		try { j = json(o); } catch (e) {}
+		// 自己搭的开通中心如果还是旧版，没有这个地址：退回老地址（curl 去问时回答的是路由器版本）。
+		// 连都连不上（什么都没回）就不再试，免得面板等太久（11/27 全面检查第 6 条：原来最长 12+12+10 秒，超过面板的 25 秒）
+		if (length(trim(o ?? '')) && (type(j) != 'object' || !j.version)) { try { j = json(sh(sprintf('curl -s -m 12 %s', shq(hub + '/api/app/version'))).out); } catch (e) {} }
 		if (type(j) == 'object' && j.version) { c = { at: time(), latest: j.version, notes: j.notes ?? '', force: !!j.force, min: j.min ?? '', rel: j.at ?? '' }; writefile(cf, sprintf('%J', c)); }
 		else if (!c) die('查不到最新版本：连不上官网，稍后再试');
+		else hubdown = !!a?.force;
 	}
 	let newer = !length(v.cur) || v.cur == 'dev' ? true : ver_newer(c.latest, v.cur);
 	// 用户自己点「检查更新」：顺便马上查一次热补丁（用户 11/27：紧急情况或者想快点更新，不用等 6 小时）。后台跑，装好了面板自己换新
 	// 用户 11/27：点了要马上知道有没有新补丁——当场问一次官网最新是第几个（hotn），比现在装的大就后台马上装，面板等着换新
 	let hotq = false, hotn = null;
 	if (a?.force && !a?.nohot && stat(SBIN + '/cmcp-hot')) {
-		if (match(v.cur ?? '', /^[0-9]+\.[0-9]+\.[0-9]+$/)) {
+		if (!hubdown && match(v.cur ?? '', /^[0-9]+\.[0-9]+\.[0-9]+$/)) {
 			let hub = match(readfile(ETC + '/hub.conf') ?? '', /(^|\n)HUB=(https?:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
 			try { let j = json(sh(sprintf('curl -s -m 10 %s', shq(hub + '/api/router/hot?v=' + v.cur))).out); if (type(j?.n) == 'int' && j.n >= 0) hotn = j.n; } catch (e) {}
 		}
 		sh('nohup ' + SBIN + '/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true;
 	}
 	// pv：面板网页该是哪一版（热补丁装过第 N 个就是「6.0.0-hN」），面板发现自己不一样就换成新的
-	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, hotn, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq };
+	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, hotn, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq, stale: hubdown };
 };
 P.update_start = function(a) {
 	if (a?.confirm != 'UPDATE') die('需要确认');

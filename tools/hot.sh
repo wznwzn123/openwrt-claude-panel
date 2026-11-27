@@ -20,6 +20,8 @@ cp -r dist-hot/s/src/www/panel dist-hot/p/root/www-claude-mcp/panel
 cp dist-hot/s/src/www/cgi-bin/mcp dist-hot/p/root/www-claude-mcp/cgi-bin/mcp
 cp src/lib/lib.uc dist-hot/p/root/usr/share/ucode/cmcp/lib.uc
 for f in src/bin/cmcp-*; do cp "$f" dist-hot/p/root/usr/sbin/; done
+# 卸载脚本也带上（路由器上的 cmcp-uninstall 是安装时拷的，补丁加的新文件它不知道要删：11/27 全面检查第 5 条）
+cp uninstall.sh dist-hot/p/root/usr/sbin/cmcp-uninstall
 # 精简版没有云端备份：补丁里也不带（不给精简版加文件）
 rm -f dist-hot/p/root/usr/sbin/cmcp-backup dist-hot/p/root/usr/sbin/cmcp-bkcrypt
 [ -f src/etc/remote.json ] && cp src/etc/remote.json dist-hot/p/root/etc/claude-mcp/remote.json

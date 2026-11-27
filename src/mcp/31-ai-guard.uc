@@ -190,7 +190,7 @@ P.ai_answer = function(a) {
 		let l = filter(ai_allows(), (y) => y.k != x.pk);
 		push(l, { k: x.pk, t: x.pt ?? x.title, at: time(), by: x.by });
 		ai_allows_save(l); always = true;
-		try { sh(sprintf('%s/cmcp-notify info key %s %s key >/dev/null 2>&1', SBIN, shq('AI 以后' + (x.pt ?? x.title) + '不再问你'), shq(x.by + ' 点了「永久允许」。要收回：「我的主页 → 敏感信息 → AI 连接器地址」'))); } catch (e) {}
+		try { sh(sprintf('%s/cmcp-notify info key %s %s key >/dev/null 2>&1', SBIN, shq('AI 以后' + (x.pt ?? x.title) + '不再问你'), shq(x.by + ' 点了「这一类都允许」。要收回：「我的主页 → 敏感信息 → AI 连接器地址」'))); } catch (e) {}
 	}
 	// 全部都允许（用户 11/27）：等于把「AI 能做什么」改成「完全放开」，只有主账号能点
 	let all = false;

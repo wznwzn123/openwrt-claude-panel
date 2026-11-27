@@ -23,7 +23,7 @@ fs.writeFileSync(R + '/proc/loadavg', '0.30 0.20 0.10 1/80 1234\n');
 fs.writeFileSync(R + '/proc/cpuinfo', 'processor : 0\nprocessor : 1\n');
 fs.writeFileSync(R + '/sys/class/thermal/thermal_zone0/temp', '55000\n');
 fs.writeFileSync(R + '/tmp/dhcp.leases', '1999999999 aa:bb:cc:dd:ee:01 192.168.1.23 my-laptop *\n');
-const run = (...a) => spawnSync('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-guard')) + ' ' + a.map((x) => "'" + x + "'").join(' ')], { env: { ...process.env, CMCP_GUARD_ETC: E, CMCP_GUARD_TMP: T, CMCP_TEST_PATH: BIN, CMCP_GUARD_ROOT: R }, encoding: 'utf8' });
+const run = (...a) => spawnSync('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-guard')) + ' ' + a.map((x) => "'" + x + "'").join(' ')], { env: { ...process.env, CMCP_GUARD_ETC: E, CMCP_GUARD_TMP: T, CMCP_TEST_PATH: BIN, CMCP_GUARD_ROOT: R, CMCP_GUARD_SYSUP: T + '/no-sysupgrade.conf' }, encoding: 'utf8' });
 const notes = () => (fs.existsSync(NOTES) ? fs.readFileSync(NOTES, 'utf8') : '');
 const log = (...l) => fs.appendFileSync(LOG, l.map((x) => 'Sun Nov 22 09:00:00 2026 authpriv.info ' + x + '\n').join(''));
 let seq = 0;
@@ -143,7 +143,7 @@ ok('一天只推一次', (notes().match(/存储快满了/g) || []).length === 2)
 	fs.writeFileSync(INIT, `#!/bin/sh\necho "$1" >> ${MARK}\n`, { mode: 0o755 });
 	fs.mkdirSync(R + '/proc/4242', { recursive: true });
 	const old = new Date(Date.now() - 3600e3); fs.utimesSync(R + '/proc/4242', old, old);
-	const runW = (pid) => spawnSync('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-guard'))], { env: { ...process.env, CMCP_GUARD_ETC: E, CMCP_GUARD_TMP: T, CMCP_TEST_PATH: BIN, CMCP_GUARD_ROOT: R, CMCP_GUARD_WD: WDF, CMCP_GUARD_WDINIT: INIT, CMCP_GUARD_WDPID: pid } });
+	const runW = (pid) => spawnSync('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-guard'))], { env: { ...process.env, CMCP_GUARD_ETC: E, CMCP_GUARD_TMP: T, CMCP_TEST_PATH: BIN, CMCP_GUARD_ROOT: R, CMCP_GUARD_WD: WDF, CMCP_GUARD_WDINIT: INIT, CMCP_GUARD_WDPID: pid, CMCP_GUARD_SYSUP: T + '/no-sysupgrade.conf' } });
 	const marks = () => (fs.existsSync(MARK) ? fs.readFileSync(MARK, 'utf8').trim().split('\n').filter(Boolean) : []);
 	runW('4242'); spawnSync('sleep', ['3']);
 	ok('[看门狗] 文件比在跑的看门狗新（热补丁换过）：重启一次', marks().length === 1 && marks()[0] === 'restart', marks().join(','));
@@ -155,6 +155,20 @@ ok('一天只推一次', (notes().match(/存储快满了/g) || []).length === 2)
 	ok('[看门狗] 看门狗是装好以后才启动的（进程比文件新）：不动', marks().length === 0);
 	runW('99999'); spawnSync('sleep', ['3']);
 	ok('[看门狗] 找不到看门狗进程：不动', marks().length === 0);
+}
+{ // 热补丁加的新小工具：开机后补进「升级固件时保留」列表（11/27 全面检查第 5 条）
+	const SU = T + '/sysupgrade.conf', SB = T + '/sbin';
+	fs.mkdirSync(SB, { recursive: true });
+	for (const f of ['cmcp-watchdog', 'cmcp-guard', 'cmcp-splearn', 'cmcp-uninstall', 'cmcp-x.hotnew']) fs.writeFileSync(SB + '/' + f, '');
+	const runK = () => { spawnSync('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-guard'))], { env: { ...process.env, CMCP_GUARD_ETC: E, CMCP_GUARD_TMP: T, CMCP_TEST_PATH: BIN, CMCP_GUARD_ROOT: R, CMCP_GUARD_SYSUP: SU, CMCP_GUARD_SBIN: SB, CMCP_GUARD_WDPID: '1' } }); };
+	fs.writeFileSync(SU, '## This file contains files and directories that should\n/etc/claude-mcp/\n' + SB + '/cmcp-watchdog\n' + SB + '/cmcp-guard\n');
+	fs.rmSync(T + '/cmcp_keep_ok', { force: true }); runK();
+	const su = fs.readFileSync(SU, 'utf8');
+	ok('[保留列表] 补丁加的新小工具补进去，原来的不动、不重复，临时文件不加', su.includes(SB + '/cmcp-splearn\n') && su.includes(SB + '/cmcp-uninstall\n') && !su.includes('hotnew') && su.split(SB + '/cmcp-watchdog').length === 2 && su.startsWith('## This file'), su);
+	fs.writeFileSync(SB + '/cmcp-later', ''); runK();
+	ok('[保留列表] 一次开机只看一次', !fs.readFileSync(SU, 'utf8').includes('cmcp-later'));
+	fs.rmSync(T + '/cmcp_keep_ok', { force: true }); fs.writeFileSync(SU, '/etc/config/\n'); runK();
+	ok('[保留列表] 装面板时没写过这个列表的：不动', fs.readFileSync(SU, 'utf8') === '/etc/config/\n');
 }
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

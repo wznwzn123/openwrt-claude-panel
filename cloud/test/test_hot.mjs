@@ -97,9 +97,14 @@ try {
 	V('VER=6.0.0\nCODE=hosted-ai\nHOT=3\n');
 	run({ CMCP_HOT_CHECK: 'true', CMCP_ULOCK: UL, CMCP_HOT_SWAP: SW });
 	ok('一键更新的锁超过 15 分钟（没清掉的旧锁）：照常装，装完把「正在换」的记号清掉', rd('www-claude-mcp/panel/index.html') === 'NEW4' && /^HOT=4$/m.test(ver()) && !fs.existsSync(SW));
-	INFO = { n: 5, tag: 'evil;rm -rf /', notes: '' }; setInfo();
+	// 官网拿不到说明（限流时的备用查法）：用补丁包里 hot.json 的说明（11/27 全面检查第 4 条）
+	INFO = { n: 5, tag: 'hot-6.0.0-5', notes: '' }; setInfo();
+	mkhot('6.0.0', 5, { 'www-claude-mcp/panel/index.html': 'NEW5' });
+	run({ CMCP_HOT_CHECK: 'true', CMCP_ULOCK: UL, CMCP_HOT_SWAP: SW });
+	ok('官网没给说明：通知里用补丁包里的说明', /^HOT=5$/m.test(ver()) && /面板已自动更新到 v6\.0\.0 V5","detail":"修了订阅页的显示问题"/.test(rd('etc/claude-mcp/events.log') || ''), (rd('etc/claude-mcp/events.log') || '').split('\n').slice(-2).join(' '));
+	INFO = { n: 6, tag: 'evil;rm -rf /', notes: '' }; setInfo();
 	run({ CMCP_HOT_CHECK: 'true' });
-	ok('官网给的标签格式不对：不下载', /^HOT=4$/m.test(ver()));
+	ok('官网给的标签格式不对：不下载', /^HOT=5$/m.test(ver()));
 } finally {
 	srv.kill(); fs.rmSync(E, { recursive: true, force: true });
 }

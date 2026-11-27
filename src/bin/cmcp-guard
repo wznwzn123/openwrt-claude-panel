@@ -97,6 +97,18 @@ if (!length(ARGV)) {
 		sh('nohup sh -c ' + shq('sleep 2; ' + wi + ' restart') + ' >/dev/null 2>&1 </dev/null &');
 	}
 }
+// 热补丁加了新的小工具（比如 6.0.0 V5 加的 cmcp-splearn）：安装时写的「升级固件时保留」列表里没有它，升级固件后会丢（11/27 全面检查第 5 条）。
+// 开机后看一次（每次开机一次），/usr/sbin/cmcp-* 里列表没有的补上。只在装面板时写过这个列表的路由器上补。测试用：CMCP_GUARD_SYSUP、CMCP_GUARD_SBIN
+if (!length(ARGV)) {
+	let su = getenv('CMCP_GUARD_SYSUP') || '/etc/sysupgrade.conf', sb = getenv('CMCP_GUARD_SBIN') || '/usr/sbin', mk = T + '/cmcp_keep_ok';
+	let cur = stat(mk) ? null : readfile(su);
+	if (cur != null && index(cur, sb + '/cmcp-watchdog\n') >= 0) {
+		let add = '';
+		for (let f in (glob(sb + '/cmcp-*') ?? [])) if (!match(f, /\.(hotnew|tmp)$/) && index('\n' + cur, '\n' + f + '\n') < 0) add += f + '\n';
+		if (length(add)) writefile(su, cur + (substr(cur, -1) == '\n' ? '' : '\n') + add);
+	}
+	writefile(mk, '' + now);
+}
 if (ARGV[0] == 'list') { let b = bans(); print(sprintf('%J\n', { tool: ban_tool(), ips: b.ips })); exit(0); }
 if (ARGV[0] == 'unban') {
 	let ip = ARGV[1] ?? '', b = bans();

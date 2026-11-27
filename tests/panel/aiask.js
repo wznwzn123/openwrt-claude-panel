@@ -137,7 +137,7 @@ const SHOT = path.join(__dirname, 'shots');
 		await page.click('#meBox [data-mp="kckey"]'); await W(1200);
 		t = await page.textContent('.modal');
 		ok('「AI 连接器地址」里有「AI 能做什么」三档，现在是「危险操作要确认」（推荐）' + T, /AI 能做什么/.test(t) && /只读/.test(t) && /完全放开/.test(t) && (await page.getAttribute('.modal [data-aim="ask"]', 'aria-pressed')) === 'true' && /推荐/.test(t));
-		ok('「永久允许」列表：写着永久允许了什么、谁点的' + T, /永久允许/.test(t) && /修改设置 wireless/.test(t) && /我的手机/.test(t), t.slice(0, 300));
+		ok('「这一类都允许」列表：写着允许了哪一类、谁点的' + T, /这一类都允许/.test(t) && /修改设置 wireless/.test(t) && /我的手机/.test(t), t.slice(0, 300));
 		ok('最近的请求：已拒绝、已执行、过期了，时间写对' + T, /已拒绝/.test(t) && /已执行/.test(t) && /过期了/.test(t) && /1 小时前/.test(t) && !/天前/.test(t), t);
 		const ov2 = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, W: document.documentElement.clientWidth, bad: [...document.querySelectorAll('.modal .aimode, .modal .ailog .kv')].filter((e) => e.scrollWidth > e.clientWidth + 1).length }));
 		ok('档位和请求列表不超出、不截断' + T, ov2.sw <= ov2.W && !ov2.bad, JSON.stringify(ov2));

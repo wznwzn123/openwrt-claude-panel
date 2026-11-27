@@ -80,7 +80,7 @@ onMounted(load)
           <Field v-if="form.level !== 'banner'" label="标题" class="span-all" :error="err"><TextInput v-model="form.title" :maxlength="80" placeholder="比如：4.0 发布了" /></Field>
           <Field :label="form.level === 'banner' ? '横幅内容' : '内容（选填）'" class="span-all" :error="form.level === 'banner' ? err : ''"><TextInput v-model="form.body" multiline :rows="4" :maxlength="2000" :placeholder="form.level === 'banner' ? '在面板顶上一直滚动 点一下看全文' : '写清楚要大家做什么'" /></Field>
           <div v-if="canFile" class="span-all ann-files">
-            <div class="ann-files-top"><span>附件（可以不加）：图片、视频、文件，最多 5 个，每个最大 200MB</span><Button size="sm" icon="clip" @click="att?.pick()">加文件</Button></div>
+            <div class="ann-files-top"><span>附件（选填）：图片、视频、文件，最多 5 个，每个最大 200MB</span><Button size="sm" icon="clip" @click="att?.pick()">加文件</Button></div>
             <FileAttach ref="att" ctx="ann" />
           </div>
           <Field label="级别" class="span-2"><Segmented v-model="form.level" label="级别" :options="[{ label: '普通', value: 'normal' }, { label: '重要（推送）', value: 'important' }, { label: '横幅', value: 'banner' }]" /></Field>

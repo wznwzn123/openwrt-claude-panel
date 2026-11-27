@@ -114,6 +114,11 @@ const SID = sidm && sidm[1];
 const sess = SID ? JSON.parse(fs.readFileSync(E + '/sess/' + SID, 'utf8')) : {};
 ok('会话 30 分钟没操作就过期，标着是完整后台登录的、哪台手机', sess.timeout === 1800 && sess.values?.cmcp_full === 1 && sess.values.cmcp_dev === D1.split('.')[0]);
 ok('登录成功推送提醒，写明是哪台手机', /info\|有人登录了完整原版后台\|从「我的手机」/.test(fs.readFileSync(NOTES, 'utf8')));
+{ // 同一台手机 1 分钟内又登录一次（登录表单交了两次）：只推一条（11/27 全面检查第 25 条）
+	const n1 = (fs.readFileSync(NOTES, 'utf8').match(/有人登录了完整原版后台/g) || []).length;
+	const o2 = await login('Str0ng 路由器+"%\'!Pass');
+	ok('同一台手机马上又登录一次：能登录，但不再推第二条', /sysauth_https=/.test(o2) && (fs.readFileSync(NOTES, 'utf8').match(/有人登录了完整原版后台/g) || []).length === n1, String(n1));
+}
 ok('会话记下来了（换门禁钥匙时一起退出）', fs.readFileSync(SIDF, 'utf8').includes(SID));
 o = await gate(C + '; sysauth_https=' + SID);
 ok('登录以后：原样打开原版后台', /LUCI cookie=\[.*sysauth_https=/.test(o), o.slice(0, 200));

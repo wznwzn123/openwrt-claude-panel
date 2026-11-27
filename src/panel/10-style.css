@@ -105,7 +105,7 @@ h1,h2,h3{letter-spacing:-.02em}
 .mp-lanbtn{background:none;border:0;padding:0;color:var(--brand);font:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .linkbtn{background:none;border:0;padding:6px 0 0;color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
 .updsteps{margin:10px 0 4px;padding:0;list-style:none}.updsteps li{padding:7px 0;color:var(--muted);font-size:14px}.updsteps li.on{color:var(--text);font-weight:600}.updsteps li.ok{color:var(--okt)}.updsteps li.ok::before{content:'✓ '}.updsteps li.on::before{content:'⏳ '}
-.sidenav .ng.flash>button{background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
+.sidenav .ng.flash>button{background:var(--fill);background:color-mix(in srgb,var(--brand) 16%,transparent);transition:background .3s}
 .sidenav button .path{display:block;font-size:11.5px;font-weight:500;color:var(--muted);margin-top:1px}
 .sidenav button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 内嵌的 Kwrt 原版页面 */
@@ -250,7 +250,7 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .fsteps>div.on::before{background:var(--ok)}.fsteps>div.bad::before{background:var(--danger)}
 .fsteps i{width:23px;height:23px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:700;background:var(--fill);color:var(--muted)}
 .fsteps .on i{background:var(--ok);color:#fff}.fsteps .bad i{background:var(--danger);color:#fff}
-.fsteps .cur i{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent)}.fsteps .bad.cur i{box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 22%,transparent)}
+.fsteps .cur i{box-shadow:0 0 0 4px rgba(127,127,127,.25);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 22%,transparent)}.fsteps .bad.cur i{box-shadow:0 0 0 4px rgba(127,127,127,.25);box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 22%,transparent)}
 .fsteps b{display:block;font-size:12.5px;font-weight:600;margin-top:7px;line-height:1.3;word-break:keep-all}
 .fsteps .off b{color:var(--muted);font-weight:500}.fsteps .bad b{color:var(--dangert)}
 /* 我的反馈 */
@@ -301,7 +301,7 @@ input[type=checkbox]{accent-color:var(--brand);width:18px;height:18px;vertical-a
 .ntcats small{font-size:11.5px;font-weight:600;color:var(--muted)}
 /* 从横幅点进来的那条：描一圈边再淡掉 */
 .ntev.ntfocus,.ntact.ntfocus{animation:ntFocus 1.6s ease-out}
-@keyframes ntFocus{0%,40%{outline:2px solid color-mix(in srgb,var(--brand) 55%,transparent);outline-offset:-2px}100%{outline:2px solid transparent;outline-offset:-2px}}
+@keyframes ntFocus{0%,40%{outline:2px solid var(--brand);outline:2px solid color-mix(in srgb,var(--brand) 55%,transparent);outline-offset:-2px}100%{outline:2px solid transparent;outline-offset:-2px}}
 @media (prefers-reduced-motion:reduce){.ntev.ntfocus,.ntact.ntfocus{animation:none}}
 .ntmg{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}.ntmg span{white-space:nowrap;font-size:12.5px;padding:3px 9px;border-radius:10px}
 .ntmg .red{background:var(--dsoft);color:var(--dangert)}.ntmg .green{background:var(--oksoft);color:var(--okt)}
@@ -852,7 +852,7 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 /* 应用图标（用户 11/27）：按用途，跟设备图标一个画法 */
 .apic{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--c);background:var(--fill);background:color-mix(in srgb,var(--c) 15%,transparent)}.apic svg{width:20px;height:20px}
 .aprow,.strow{gap:12px}
-:root.dark .apic{color:color-mix(in srgb,var(--c) 70%,#fff);background:color-mix(in srgb,var(--c) 22%,transparent)}
+:root.dark .apic{color:var(--c);color:color-mix(in srgb,var(--c) 70%,#fff);background:var(--fill);background:color-mix(in srgb,var(--c) 22%,transparent)}
 /* 选项：一颗颗浅灰胶囊，选中是黑（深色模式白）；
    真正「多选一」的几处（下面这些 id）做成分段开关：一条底，选项等分，选中的浮起来。
    能横向滚的标签栏（插件设置、覆写设置）、终端快捷命令、文件操作、聊天建议、表单快捷值、最近查过的，都不是分段开关（评审 11/26） */
@@ -875,8 +875,8 @@ select.input.wfch{width:auto;min-width:96px;flex:none}
 /* 代理开关那一行：不再整块绿色，开着时名字前一个绿点 */
 .pxrow,.pxrow.on,.pxrow.off{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 .pxrow.on b{color:var(--text)}
-.pxrow.on b::before,.pxrow.off b::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
-.pxrow.off b::before{background:var(--danger);box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 20%,transparent)}
+.pxrow.on b::before,.pxrow.off b::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:1px;box-shadow:0 0 0 4px rgba(127,127,127,.25);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 20%,transparent)}
+.pxrow.off b::before{background:var(--danger);box-shadow:0 0 0 4px rgba(127,127,127,.25);box-shadow:0 0 0 4px color-mix(in srgb,var(--danger) 20%,transparent)}
 .tag.ok{background:transparent;padding-left:0}
 /* 顶栏（用户 11/26：优化）：贴着屏幕顶，不再浮成一块；底色跟页面一样，往下滑才出现细线；
    图标按钮不要灰圆底，状态只留一个点和字 */
@@ -1001,13 +1001,14 @@ html,body{overscroll-behavior-y:contain}
 .stchev{transition:transform .3s var(--in)}
 /* 状态点：在线的点慢慢呼吸一下；连接中闪 */
 #statusDot.on{animation:dotBreath 3.2s var(--ease) infinite}
-@keyframes dotBreath{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 45%,transparent)}50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 0%,transparent)}}
+@keyframes dotBreath{0%,100%{box-shadow:0 0 0 0 rgba(127,127,127,.25);box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 45%,transparent)}50%{box-shadow:0 0 0 4px transparent;box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 0%,transparent)}}
 /* 数字变化：轻轻往上换 */
 .tick{animation:tick .36s var(--in)}
 @keyframes tick{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
 /* 输入框聚焦：边框和光晕渐变出来 */
 .input,input.input,select,textarea{transition:box-shadow .2s var(--ease),background-color .2s var(--ease)}
-.input:focus,input.input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 45%,transparent)}
+/* 老浏览器（Chrome 111 以前）不认 color-mix：每处先写一个能认的颜色（11/27 全面检查第 30 条：原来输入框选中时没有高亮框） */
+.input:focus,input.input:focus,textarea:focus,select:focus{outline:none;box-shadow:0 0 0 2px var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 45%,transparent)}
 /* 下拉刷新转完：圆圈收回去 */
 .ptr{transition:opacity .22s var(--ease),transform .34s var(--in)}
 /* 电脑上（有鼠标）：能点的东西鼠标移上去就有回应（参考 taste-skill：每个按钮、能点的卡片都要回应指针，不歪斜） */

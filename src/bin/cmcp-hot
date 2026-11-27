@@ -63,6 +63,8 @@ grep ' hot\.tar\.gz$' SHA256SUMS > one.sum && sha256sum -c one.sum >/dev/null 2>
 mkdir x && tar xzf hot.tar.gz -C x 2>>"$LOG" || fail "解压失败"
 # 补丁说明：给哪个版本、第几个（防止拿别的版本的补丁来装、或者拿旧补丁回滚）
 [ "$(jsonfilter -i x/hot.json -e '@.base' 2>/dev/null)" = "$VER" ] && [ "$(jsonfilter -i x/hot.json -e '@.n' 2>/dev/null)" = "$N" ] || fail "补丁跟这个版本对不上"
+# 说明以补丁包里的为准（官网限流时用的备用查法拿不到说明，通知里原来只写「已更新到 Vn」：11/27 全面检查第 4 条）
+PN=$(jsonfilter -i x/hot.json -e '@.notes' 2>/dev/null); [ -n "$PN" ] && NOTES=$PN
 FILES=$(cd x/root 2>/dev/null && find . -type f | sed 's|^\./||')
 [ -n "$FILES" ] || fail "补丁是空的"
 for f in $FILES; do okpath "$f" || fail "补丁里有不允许换的文件：$f"; done

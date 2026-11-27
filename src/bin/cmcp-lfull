@@ -110,7 +110,9 @@ if (getenv('REQUEST_METHOD') == 'POST' && len > 0 && len < 8192 && match(getenv(
 		for (let k in keys(S.act)) if (now - S.act[k] > 86400) delete S.act[k];
 		save(S);
 		unlink('/tmp/cmcp_lf.' + PID + '.body');
-		notify('info', '有人登录了完整原版后台', sprintf('从「%s」用路由器密码登录。不是你自己的话，马上在面板「我的主页 → 敏感信息」移除这台手机，并改路由器密码。', T.name ?? '手机'));
+		// 同一台手机 1 分钟内又登录一次（登录页的表单交了两次）：只推一条（11/27 全面检查第 25 条：用户收到两条一样的）
+		if (!(S.ln?.dev == (T.dev ?? '') && now - (S.ln?.at ?? 0) < 60)) notify('info', '有人登录了完整原版后台', sprintf('从「%s」用路由器密码登录。不是你自己的话，马上在面板「我的主页 → 敏感信息」移除这台手机，并改路由器密码。', T.name ?? '手机'));
+		S.ln = { dev: T.dev ?? '', at: now }; save(S);
 		// 22.03 起 LuCI 认 sysauth_https；21.02 及更早只认 sysauth：两个都发
 		print(sprintf('Status: 302 Found\r\nSet-Cookie: sysauth_https=%s; path=/cgi-bin/luci/; SameSite=Strict; HttpOnly; secure\r\nSet-Cookie: sysauth=%s; path=/cgi-bin/luci/; SameSite=Strict; HttpOnly; secure\r\nLocation: %s\r\nCache-Control: no-store\r\n\r\n', nsid, nsid, replace(getenv('REQUEST_URI') ?? '/cgi-bin/luci/', /[\r\n]/g, '')));
 		exit(0);

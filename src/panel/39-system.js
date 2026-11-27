@@ -1517,6 +1517,8 @@ async function updCheck(force) {
 	if (r && typeof r === 'object' && panelVerCheck(r.pv || r.cur)) return null;
 	if (!r || typeof r !== 'object' || !r.latest) return null;
 	UPD = r;
+	// 点了「检查更新」但连不上官网：下面显示的是上次查到的，说一声（11/27 全面检查第 6 条）
+	if (force && r.stale) toast('连不上官网，显示的是上次查到的', true);
 	// 热补丁装过的在版本后面写「V编号」（用户 11/27：v6.0.0 V1，能看出补丁到了没有）
 	const hv = UPD.hot ? ' V' + UPD.hot : '';
 	// 点了「检查更新」（用户 11/27：要马上查）：路由器当场问官网最新补丁是第几个；有新的就写「正在安装 Vn」，每 4 秒看一次，装好了面板自己换新
@@ -2821,7 +2823,7 @@ function aiModesBind(box) {
 // 永久允许过的操作（用户 11/27）：AI 做这些不再问，点「收回」以后又要确认
 function aiAllowHtml(l) {
 	if (!l || !l.length) return '';
-	return `<div class="subhd">永久允许</div><div class="ailog">${l.slice().reverse().map((y) => `<div class="kv"><span>${esc(y.t)}<em class="muted"> · ${esc(ago(y.at * 1000))}${y.by ? ' · ' + esc(y.by) : ''}</em></span><button class="btn sm" data-aidel="${esc(y.k)}">收回</button></div>`).join('')}</div>`;
+	return `<div class="subhd">这一类都允许</div><div class="ailog">${l.slice().reverse().map((y) => `<div class="kv"><span>${esc(y.t)}<em class="muted"> · ${esc(ago(y.at * 1000))}${y.by ? ' · ' + esc(y.by) : ''}</em></span><button class="btn sm" data-aidel="${esc(y.k)}">收回</button></div>`).join('')}</div>`;
 }
 function aiAllowBind(box) {
 	if (!box) return;
@@ -2899,7 +2901,7 @@ async function ckeySheet() {
 	<div class="subhd">AI 能做什么</div>
 	<div class="aimodes" data-aimodes>${aiModesHtml(r.mode || 'ask')}</div>
 	<div data-aiallow>${aiAllowHtml(r.allows)}</div>
-	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' || x.st === 'auto' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了', auto: '永久允许' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
+	${r.asks && r.asks.length ? `<div class="subhd">最近的请求</div><div class="ailog">${r.asks.slice().reverse().slice(0, 6).map((x) => `<div class="kv"><span>${esc(x.title)}<em class="muted"> · ${esc(ago(x.at * 1000))}</em></span><b class="${x.st === 'done' || x.st === 'ok' || x.st === 'auto' ? 'ok' : x.st === 'no' ? 'bad' : ''}">${{ wait: '等你确认', ok: '已允许', done: '已执行', no: '已拒绝', exp: '过期了', auto: '这一类都允许' }[x.st] || ''}</b></div>`).join('')}</div>` : ''}
 	${r.url && /^http:/.test(r.url) ? '<div class="notice" style="margin-top:10px">本地版：只有连着家里 Wi-Fi 的电脑、手机能用这个地址。</div>' : ''}
 	${r.hosted ? '<div class="notice" style="margin-top:10px">以前在 AI 应用里用「登录地址」加过连接器的：托管版现在不能用了，把它删掉，用这个地址重新添加。</div>' : ''}
 	<div class="btngrid three" style="margin:12px 0 0"><button class="btn danger" data-rot>换一个地址</button><button class="btn" data-copy>复制</button><button class="btn primary" data-v="close">完成</button></div>`,

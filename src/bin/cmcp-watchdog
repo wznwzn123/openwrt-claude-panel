@@ -438,8 +438,8 @@ check() {
 	if [ $(( t - ASW_T )) -ge 55 ] && [ "$DRYRUN" != 1 ]; then
 		ASW_T=$t
 		[ "$NET" = ok ] && [ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-autosw ] && ( /usr/sbin/cmcp-autosw >/dev/null 2>&1 & )
-		# 每台设备的流量统计 + 新设备连上时提醒
-		[ "$CLASH" = ok ] && [ -x /usr/sbin/cmcp-traffic ] && ( /usr/sbin/cmcp-traffic >/dev/null 2>&1 & )
+		# 每台设备的流量统计 + 新设备连上时提醒：代理插件停了也跑（流量那部分问不到连接自己跳过；原来插件一停新设备提醒也停了，11/27 全面检查第 20 条）
+		[ -x /usr/sbin/cmcp-traffic ] && ( /usr/sbin/cmcp-traffic >/dev/null 2>&1 & )
 		# 安全和状态提醒、自动拉黑（6.0 第 3、4 项）：跟代理插件无关，一直跑
 		[ -x /usr/sbin/cmcp-guard ] && ( /usr/sbin/cmcp-guard >/dev/null 2>&1 & )
 		# 访客 Wi-Fi 到点自动关（6.0 第 15 项）

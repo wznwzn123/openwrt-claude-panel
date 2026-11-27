@@ -184,7 +184,7 @@ function wifi_macs() {
 	return m;
 }
 P.home_stats = function() {
-	// 今日流量（cmcp-traffic 每分钟统计一次，按设备分开；要 OpenClash 在运行才统计得到）
+	// 今日流量（cmcp-traffic 每分钟统计一次，按设备分开；要 OpenClash 或 Nikki 在运行才统计得到）
 	let tr = null;
 	try { tr = P.traffic(); } catch (e) {}
 	let day = tr?.today, td = (day && tr.days?.[day]) ?? {}, dl = 0, ul = 0, list = [];

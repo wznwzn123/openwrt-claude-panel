@@ -46,6 +46,8 @@ fi
 rm -f /tmp/cmcp_ban.json /tmp/cmcp_guard.json /tmp/cmcp_ban.nft
 sed -i '/\/usr\/sbin\/cmcp-/d' /etc/crontabs/root 2>/dev/null; /etc/init.d/cron restart >/dev/null 2>&1
 rm -f /usr/sbin/cmcp-ann /usr/sbin/cmcp-autosw /usr/sbin/cmcp-splearn /usr/sbin/cmcp-backup /usr/sbin/cmcp-bkcrypt /usr/sbin/cmcp-compat /usr/sbin/cmcp-lfull /usr/sbin/cmcp-guard /usr/sbin/cmcp-guest /usr/sbin/cmcp-daily /usr/sbin/cmcp-weekly /usr/sbin/cmcp-hot /usr/sbin/cmcp-logincode /usr/sbin/cmcp-netguard /usr/sbin/cmcp-notify /usr/sbin/cmcp-pair /usr/sbin/cmcp-pause /usr/sbin/cmcp-ratelimit /usr/sbin/cmcp-sched /usr/sbin/cmcp-proxy /usr/sbin/cmcp-route /usr/sbin/cmcp-traffic /usr/sbin/cmcp-tunbypass /usr/sbin/cmcp-update /usr/sbin/cmcp-watchdog /usr/sbin/cmcp-cfd /usr/sbin/cmcp-gz /usr/sbin/cmcp-edition
+# 热补丁后来加的小工具（上面那份列表里可能没有）：/usr/sbin/cmcp-* 除了卸载脚本自己都删
+for f in /usr/sbin/cmcp-*; do [ "$f" = /usr/sbin/cmcp-uninstall ] || rm -f "$f"; done
 # 小闪存模式下载到内存里的 cloudflared
 rm -rf /tmp/cmcp-cfd
 rm -rf /usr/share/ucode/cmcp /www-claude-mcp

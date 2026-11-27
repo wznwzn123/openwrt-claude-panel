@@ -185,6 +185,13 @@ for (const [dn, dv] of Object.entries(DEV)) for (const dark of [false, true]) {
 		const bt = '横幅测试' + sfx.replace(/\W/g, '');
 		await page.fill('.ann-form textarea', bt + '\n第二行'); await W(200);
 		ok('横幅：预览显示成顶上一行' + sfx, (await page.textContent('.ann-pv-ban')).includes(bt + '　第二行'));
+		// 横幅内容很长（用户 11/27 截图：修改横幅时整个表单被撑到一千多像素宽，输入框跑到屏幕外）
+		await page.fill('.ann-form textarea', bt + '\n- 分流：「代理 → 分流」按设备 软件或国家选直连 代理或策略组。支持 OpenClash 和 Nikki\n- 远程页面：在外面打开 OpenClash 控制面板 AdGuard Home 等。NAS 和摄像头要主账号在这里一台台添加\n第二行'); await W(300);
+		await page.setViewportSize({ width: 390, height: 844 }); await W(500);
+		const wide = await page.evaluate(() => { const f = document.querySelector('.ann-form'), R = f.getBoundingClientRect(); return [...f.querySelectorAll('input, textarea, button, .ann-pv, .field')].filter((e) => { const b = e.getBoundingClientRect(); return b.width && b.right > R.right + 1; }).map((e) => e.tagName + '.' + e.className).slice(0, 4); });
+		ok('横幅内容很长（手机 390 宽）：表单不被撑宽，输入框和预览都在卡片里' + sfx, !wide.length, wide.join(' | '));
+		await page.setViewportSize(dv.viewport); await W(400);
+		await page.fill('.ann-form textarea', bt + '\n第二行'); await W(200);
 		await page.click('.ann-form button:has-text("发布公告")'); await W(600);
 		if (await page.isVisible('.modal-foot button:has-text("换掉")')) { await page.click('.modal-foot button:has-text("换掉")'); await W(1000); }
 		ok('横幅：发出去了，标题是内容第一行' + sfx, (await api('/api/notices')).list.some((x) => x.level === 'banner' && x.title === bt && x.body === bt + '\n第二行'));

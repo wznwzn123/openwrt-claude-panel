@@ -51,7 +51,8 @@ function sp_apps(o) {
 	for (let id in ad) if (!have[id] && type(ad[id]?.doms) == 'array' && length(ad[id].doms)) push(l, [id, '' + (ad[id].name ?? id), ad[id].doms, true]);
 	return l;
 }
-/* 官网公开的「网址 → App」表（用户 11/28 选「官网放公开表 路由器下载对照」）：GET 官网 /api/apps，放内存盘 /tmp/cmcp_apps.json，一天换一次；
+/* 官网公开的「网址 → App」表（用户 11/28 选「官网放公开表 路由器下载对照」）：GET 官网 /api/apps，放内存盘 /tmp/cmcp_apps.json（约 230 KB，只有一份），
+   面板一打开分流就来要，没有或者超过一天就当场下载；7 天没人用看门狗删掉；
    只下载、不上传任何东西（访问记录不出路由器）。识别软件对照、软件页搜索都用它。下载不下来 10 分钟后再试。测试用 CMCP_SP_TBL（文件）、CMCP_SP_HUB（官网地址） */
 const SP_TBL = getenv('CMCP_SP_TBL') || '/tmp/cmcp_apps.json';
 const SP_DOM = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
@@ -67,9 +68,11 @@ function sp_tbl_clean(j) {
 	}
 	return length(apps) ? { v: j.v, cats, apps } : null;
 }
-function sp_tbl(fetch) {
+// fetch：没有或者超过一天就下载；now：面板打开分流时要的，不管上次失败没有，马上下载（用户 11/28：打开分流就要马上读到，不能点几次才出来）
+// 用过就记一下（.used），看门狗 7 天没人用就删掉（用户 11/28：不要一直占着内存）
+function sp_tbl(fetch, now) {
 	let st = stat(SP_TBL), o = st ? cmcp_readj(SP_TBL, null) : null, fl = SP_TBL + '.fail';
-	if (fetch && (!o || time() - st.mtime > 86400) && time() - (stat(fl)?.mtime ?? 0) > 600) {
+	if (fetch && (!o || time() - st.mtime > 86400) && (now || time() - (stat(fl)?.mtime ?? 0) > 600)) {
 		let hub = getenv('CMCP_SP_HUB') || CL.ann_hub(), tmp = SP_TBL + '.dl';
 		sh(sprintf('curl -sf -m 15 -o %s %s', shq(tmp), shq(hub + '/api/apps')));
 		let n = sp_tbl_clean(cmcp_readj(tmp, null));
@@ -77,11 +80,13 @@ function sp_tbl(fetch) {
 		if (n) { cmcp_writej(SP_TBL, n); writefile(SP_TBL + '.v', n.v); o = n; unlink(fl); }
 		else writefile(fl, '1');
 	}
-	return type(o) == 'object' && type(o.apps) == 'array' ? o : null;
+	if (type(o) != 'object' || type(o.apps) != 'array') return null;
+	if (fetch) writefile(SP_TBL + '.used', '');
+	return o;
 }
 // 给面板：整张表（面板按版本存在手机里，版本一样就只回「没变」）
 P.split_apps = function(a) {
-	let t = sp_tbl(true);
+	let t = sp_tbl(true, true);
 	if (!t) return { err: '官网的软件表下载不下来，稍后再试' };
 	if (a?.v && a.v == t.v) return { v: t.v, same: true };
 	return t;

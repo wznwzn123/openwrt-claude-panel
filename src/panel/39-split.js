@@ -7,6 +7,8 @@ async function loadSplit() {
 	SPL.d = await P('split_get', {}, 20000);
 	setStatus(true, '在线');
 	splRender();
+	// 一打开分流就去拿官网的「网址 → App」表（路由器没有就当场下载），到了再画一次（用户 11/28：不能点几次才出来）
+	if (SPL.d.kind) splTbl().then((t) => { if (t && page === 'split' && SPL.tab === 'app') splRender(); });
 }
 const SPL_PX = (d) => (d.kind === 'nikki' ? 'Nikki' : 'OpenClash');
 const SPL_REG = { HK: '香港', TW: '台湾', MO: '澳门', JP: '日本', SG: '新加坡', KR: '韩国', US: '美国', GB: '英国', DE: '德国', FR: '法国', NL: '荷兰', CA: '加拿大', AU: '澳大利亚', RU: '俄罗斯', IN: '印度', TR: '土耳其', MY: '马来西亚', TH: '泰国', VN: '越南', PH: '菲律宾', AE: '阿联酋', AR: '阿根廷', BR: '巴西' };
@@ -310,6 +312,8 @@ function splLearnSheet() {
 			if (!m.isConnected) return;
 			try { SPL.learn = await P('split_learn', {}, 15000); } catch (e) {}
 			if (!m.isConnected) return;
+			// 官网的表还没拿到（刚才下载失败）：每 10 秒再要一次，到了马上认
+			if (!SPL.tbl && Date.now() - (SPL.tblAt || 0) > 10000) { SPL.tblAt = Date.now(); splTbl().then(() => { if (m.isConnected) draw(); }); }
 			draw();
 			if (SPL.learn && SPL.learn.run) timer = setTimeout(poll, 1000);
 		};

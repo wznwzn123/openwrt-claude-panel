@@ -12,7 +12,7 @@
 // 测试用环境变量：CMCP_GUARD_ETC（代替 /etc/claude-mcp）、CMCP_GUARD_TMP（代替 /tmp）、CMCP_TEST_PATH（放在 PATH 最前面的假命令目录）、
 //                 CMCP_GUARD_ROOT（读 /proc、/sys、DHCP 租约时加在前面的目录）
 'use strict';
-import { readfile, writefile, popen, rename, stat, glob, mkdir } from 'fs';
+import { readfile, writefile, popen, rename, stat, glob, mkdir, unlink } from 'fs';
 
 const E = getenv('CMCP_GUARD_ETC') || '/etc/claude-mcp', T = getenv('CMCP_GUARD_TMP') || '/tmp';
 const TP = getenv('CMCP_TEST_PATH'), R = getenv('CMCP_GUARD_ROOT') || '';
@@ -227,6 +227,12 @@ if (on('diskfull') && (now - (S.last.diskchk ?? 0) >= 600)) {
 			notify('warn', 'diskfull', '存储快满了：' + full, mp == '/overlay' ? '闪存满了会装不了插件、设置保存失败。在面板「文件管理」或「系统 → 软件包」里删掉不用的东西。' : '硬盘满了下载、备份会失败。清理一下不用的文件。', 'disk-' + mp);
 		}
 	}
+}
+
+// ---------- 5. 分流的「网址 → App」表（用户 11/28）：放在内存盘里，7 天没人用就删掉，下次打开分流再下载 ----------
+{
+	let tf = T + '/cmcp_apps.json', ts = stat(tf);
+	if (ts && now - (stat(tf + '.used')?.mtime ?? ts.mtime) > 7 * 86400) for (let x in ['', '.used', '.v']) unlink(tf + x);
 }
 
 writej(ST, S);

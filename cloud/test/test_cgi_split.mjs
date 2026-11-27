@@ -261,6 +261,7 @@ try {
 		const TE = { CMCP_SP_TBL: TBL, CMCP_SP_HUB: 'file://' + HUBD };
 		r = await cgi('split_apps', {}, TE);
 		ok('[软件表] 从官网下载，存进内存盘；乱的网址、不认识的分类去掉', r.result?.v === 'abc123def0' && r.result.apps.length === 2 && JSON.stringify(r.result.apps[0][5]) === '["mygame.example","cdn.mygame.example"]' && fs.existsSync(TBL), JSON.stringify(r).slice(0, 300));
+		ok('[软件表] 用过记一下（看门狗 7 天没人用就删）', fs.existsSync(TBL + '.used'));
 		r = await cgi('split_apps', { v: 'abc123def0' }, TE);
 		ok('[软件表] 手机里的版本一样：只回「没变」', r.result?.same === true && !r.result.apps);
 		ok('[软件表] split_get 带表的版本', (await cgi('split_get', {}, TE)).result?.av === 'abc123def0');
@@ -270,10 +271,14 @@ try {
 		fs.rmSync(TBL); fs.rmSync(HUBD + '/api/apps');
 		r = await cgi('split_get', {}, { ...TE });
 		ok('[软件表] 内存盘里的表没了（重启）：选过的照样在、照样分流', r.result?.apps?.some((a) => a.id === 'mygame') && r.result.app.mygame === 'DIRECT');
-		ok('[软件表] 官网下载不下来：说清楚，10 分钟内不再试', /下载不下来/.test((await cgi('split_apps', {}, TE)).result?.err || '') && fs.existsSync(TBL + '.fail'));
+		ok('[软件表] 官网下载不下来：说清楚', /下载不下来/.test((await cgi('split_apps', {}, TE)).result?.err || '') && fs.existsSync(TBL + '.fail'));
+		fs.writeFileSync(HUBD + '/api/apps', JSON.stringify({ ok: true, v: 'abc123def0', cats: { game: '游戏' }, apps: [['mygame', '我的游戏', '', 'game', '', ['mygame.example']]] }));
+		r = await cgi('split_apps', {}, TE);
+		ok('[软件表] 面板打开分流时要：上次失败了也马上再下载（用户 11/28：打开分流就要马上读到）', r.result?.v === 'abc123def0', JSON.stringify(r).slice(0, 200));
+		fs.rmSync(TBL); fs.rmSync(HUBD + '/api/apps');
 		r = await cgi('split_set', { app: { id: 'mygame', t: '' } }, TE);
 		ok('[软件表] 改回跟随全局：存的网址一起删', !r.result?.app?.mygame && !JSON.parse(rd(E + '/split.json')).appd?.mygame, JSON.stringify(JSON.parse(rd(E + '/split.json')).appd));
-		fs.writeFileSync(HUBD + '/api/apps', JSON.stringify({ ok: true, v: 'abc123def1', cats: { sys: '系统后台' }, apps: [['sys_check', '联网检测', '', 'sys', '', ['captive.apple.com']]] })); fs.rmSync(TBL + '.fail');
+		fs.writeFileSync(HUBD + '/api/apps', JSON.stringify({ ok: true, v: 'abc123def1', cats: { sys: '系统后台' }, apps: [['sys_check', '联网检测', '', 'sys', '', ['captive.apple.com']]] })); fs.rmSync(TBL + '.fail', { force: true });
 		ok('[软件表] 系统后台那几项不能拿来分流', /没有这个软件/.test(err(await cgi('split_set', { app: { id: 'sys_check', t: 'DIRECT' } }, TE))));
 		await cgi('split_restart');
 	}

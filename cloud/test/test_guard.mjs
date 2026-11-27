@@ -170,6 +170,16 @@ ok('一天只推一次', (notes().match(/存储快满了/g) || []).length === 2)
 	fs.rmSync(T + '/cmcp_keep_ok', { force: true }); fs.writeFileSync(SU, '/etc/config/\n'); runK();
 	ok('[保留列表] 装面板时没写过这个列表的：不动', fs.readFileSync(SU, 'utf8') === '/etc/config/\n');
 }
+// 分流的「网址 → App」表（用户 11/28）：放内存盘，7 天没人用就删，有人用就留着
+{
+	const TF = T + '/cmcp_apps.json', old = (Date.now() - 8 * 86400e3) / 1000;
+	for (const x of ['', '.used', '.v']) fs.writeFileSync(TF + x, '{}');
+	run();
+	ok('[软件表] 最近用过：留着', fs.existsSync(TF));
+	fs.utimesSync(TF + '.used', old, old); fs.utimesSync(TF, old, old);
+	run();
+	ok('[软件表] 7 天没人用：删掉（下次打开分流再下载）', !fs.existsSync(TF) && !fs.existsSync(TF + '.used') && !fs.existsSync(TF + '.v'));
+}
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] && !x[1] ? '（' + String(x[2]).slice(0, 300) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);
 process.exit(results.every((x) => x[1]) ? 0 : 1);

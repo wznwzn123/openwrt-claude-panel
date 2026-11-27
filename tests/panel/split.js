@@ -76,6 +76,7 @@ const lay = (page) => page.evaluate(() => {
 		let t = await page.textContent('#splBody');
 		ok('四栏：设备、软件、网站、国家地区，等宽一行放下、不截断' + T, (await page.locator('#splTab button').count()) === 4 && await page.evaluate(() => { const b = [...document.querySelectorAll('#splTab button')], r = b.map((c) => c.getBoundingClientRect()); return b.map((x) => x.textContent).join() === '设备,软件,网站,国家地区' && new Set(r.map((x) => Math.round(x.top))).size === 1 && Math.max(...r.map((x) => x.width)) - Math.min(...r.map((x) => x.width)) <= 1 && !b.some((x) => x.scrollWidth > x.clientWidth + 1); }));
 		ok('设备：设了分流的在前（离线的也列出），写去向' + T, /^旧电视/.test((await page.textContent('#splBody .splrow')).trim()) && /离线/.test(t) && /直连/.test(t) && /跟随全局/.test(t), t.slice(0, 160));
+		ok('一打开分流就去拿官网的「网址 → App」表（用户 11/28：不能点几次才出来）' + T, S.tblCalls === 1);
 		let l = await lay(page); ok('不错位、不出界' + T, !l.length, l.join('；'));
 		await page.screenshot({ path: path.join(SHOT, `split-${w}${dark ? '-dark' : ''}.png`) });
 		// 软件栏

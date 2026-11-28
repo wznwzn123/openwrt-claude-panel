@@ -109,7 +109,7 @@ function gu_state() {
 		for (let y in (ws.radios ?? [])) if (y.id == g.device) x = y;
 		let up = null;
 		if (type(st[g.device]) == 'object') { up = false; for (let i in (st[g.device].interfaces ?? [])) if (i?.section == g['.name'] && i?.ifname) up = true; }
-		push(bands, { id: g.device, name: x ? (BAND_NAME[x.band] ?? x.band) : g.device, up });
+		push(bands, { id: g.device, name: x ? x.nm : g.device, up });
 	}
 	// 刚打开 40 秒内 Wi-Fi 还在启动，不算「没开起来」
 	if (time() - (stat(GU_UNTIL)?.mtime ?? 0) < 40) for (let b in bands) if (b.up === false) b.up = null;

@@ -158,6 +158,22 @@ try {
 	reset(WL.replace("option encryption 'psk2'", "option encryption 'wpa2'"));
 	r = await cgi('wifi_set', { radios: [{ id: 'radio0', key: 'Another-Key-55' }] });
 	ok('企业认证的密码让去原版后台改', /企业认证/.test(r.error?.message || ''));
+	// ---- QSDK 固件（QWRT 等，11/28 用户转来的反馈「5G 和 5G」）：hwmode 11axg / 11axa、信道自动 ----
+	const qs = (a, b, c3) => `config wifi-device 'wifi0'\n\toption type 'qcawificfg80211'\n\toption hwmode '${a}'\n\toption channel 'auto'\n\toption htmode 'HE20'\n\nconfig wifi-device 'wifi1'\n\toption type 'qcawificfg80211'\n\toption hwmode '${b}'\n\toption channel 'auto'\n\toption htmode 'HE80'\n` + (c3 ? `\nconfig wifi-device 'wifi2'\n\toption type 'qcawificfg80211'\n\toption hwmode '${c3}'\n\toption channel 'auto'\n\toption htmode 'HE80'\n` : '') + `\nconfig wifi-iface 'a0'\n\toption device 'wifi0'\n\toption network 'lan'\n\toption mode 'ap'\n\toption ssid 'Q'\n\toption encryption 'psk2'\n\toption key '${KEY}'\n\nconfig wifi-iface 'a1'\n\toption device 'wifi1'\n\toption network 'lan'\n\toption mode 'ap'\n\toption ssid 'Q'\n\toption encryption 'psk2'\n\toption key '${KEY}'\n`;
+	reset(qs('11axg', '11axa'));
+	r = await cgi('wifi_get');
+	let QR = r.result?.radios || [];
+	ok('QSDK 固件：11axg 认成 2.4G、11axa 认成 5G', QR.length === 2 && QR[0].name === '2.4G' && QR[1].name === '5G', JSON.stringify(QR.map((x) => x.name)));
+	ok('QSDK 固件：2.4G 只给 1–13 的信道', (QR[0]?.chans || []).length > 0 && QR[0].chans.every((c) => c <= 13), JSON.stringify(QR[0]?.chans));
+	reset(qs('11axg', '11axa', '11axa'));
+	r = await cgi('wifi_get');
+	QR = r.result?.radios || [];
+	ok('三频（两个 5G）：名字写 5G-1、5G-2，不写「5G 和 5G」', QR.map((x) => x.name).join(',') === '2.4G,5G-1,5G-2', JSON.stringify(QR.map((x) => x.name)));
+	reset(qs('11ax', '11ax'));
+	r = await cgi('wifi_get');
+	QR = r.result?.radios || [];
+	ok('只写 11ax、信道自动：HE80 认成 5G、HE20 认不出按 2.4G', QR.length === 2 && QR[0].name === '2.4G' && QR[1].name === '5G', JSON.stringify(QR.map((x) => x.name)));
+	reset();
 	// ---- 没有无线 ----
 	fs.rmSync(CFG + '/wireless');
 	r = await cgi('wifi_get');

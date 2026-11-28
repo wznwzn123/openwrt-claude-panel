@@ -77,7 +77,7 @@ P.wisp_get = function() {
 	let m = wisp_mine(), o = m ? null : wisp_other(), s = m ?? o;
 	let st = s ? wisp_ifstatus(as_list(s.network)[0] ?? 'wwan') : null, lan = pf_lan();
 	return {
-		radios: map(filter(ws.radios, (x) => x.band == '2g' || x.band == '5g'), (x) => ({ id: x.id, band: x.band, name: BAND_NAME[x.band], on: x.r.disabled != '1' && !!wisp_ifname(x.id), ch: length(x.r.channel ?? '') && x.r.channel != 'auto' ? +x.r.channel : 'auto' })),
+		radios: map(filter(ws.radios, (x) => x.band == '2g' || x.band == '5g'), (x) => ({ id: x.id, band: x.band, name: x.nm, on: x.r.disabled != '1' && !!wisp_ifname(x.id), ch: length(x.r.channel ?? '') && x.r.channel != 'auto' ? +x.r.channel : 'auto' })),
 		on: !!s, mine: !!m, ssid: s?.ssid ?? null, radio: s?.device ?? null, status: st,
 		clash: !!(st?.ip && lan && cidr_has(lan.ip, lan.pl, st.ip)), lan: lan ? lan.ip : null, cable: wisp_cable(),
 		can: wisp_supp(), pending: ng_pending()
@@ -90,7 +90,7 @@ P.wisp_scan = function(a) {
 	for (let r in ws.radios) if (r.id == a?.radio) x = r;
 	if (!x) die('没有这个频段');
 	let dev = wisp_ifname(x.id);
-	if (!dev) die((BAND_NAME[x.band] ?? x.band) + ' 关着，先在 Wi-Fi 页打开');
+	if (!dev) die(x.nm + ' 关着，先在 Wi-Fi 页打开');
 	let o = null;
 	try { o = json(sh(sprintf("ubus -t 20 call iwinfo scan '{\"device\":\"%s\"}' 2>/dev/null", dev)).out); } catch (e) {}
 	if (type(o?.results) != 'array') o = wisp_scan_cli(dev); // 没装 rpcd-mod-iwinfo 的：用 iwinfo 命令

@@ -35,14 +35,6 @@ function uci_load(cfg) {
 }
 function as_list(v) { return type(v) == 'array' ? v : (v == null ? [] : split(trim('' + v), /[ \t]+/)); }
 
-function wifi_band(r) {
-	let b = lc('' + (r.band ?? '')), hw = lc('' + (r.hwmode ?? '')), ch = +r.channel;
-	if (b == '2g' || b == '5g' || b == '6g' || b == '60g') return b;
-	if (match(hw, /^11(a|na|ac|ax5)/)) return '5g';
-	if (match(hw, /^11(b|g|ng|n)/)) return '2g';
-	if (ch > 14) return '5g';
-	return '2g';
-}
 const BAND_NAME = { '2g': '2.4G', '5g': '5G', '6g': '6G', '60g': '60G' };
 function enc_kind(e) {
 	e = lc('' + (e ?? 'none'));
@@ -82,6 +74,26 @@ function wifi_chans(id, band, country, cur) {
 	for (let x in list) if (index(u, x) < 0) push(u, x);
 	return sort(u, (a, b) => a - b);
 }
+// 这个频段是 2.4G 还是 5G：先看 band，再看写死的信道，再看 hwmode 的最后一个字母，再看 htmode，还认不出就问驱动能用的频率
+// （11/28 用户转来的反馈：QWRT 这类 QSDK 固件 2.4G 写 hwmode 11axg、5G 写 11axa，以前按「11a 开头」都认成了 5G，页面上写「5G 和 5G」、2.4G 给了 5G 的信道）
+function wifi_freq_band(id) {
+	let ifs = wifi_ifnames()[id]?.interfaces ?? [], dev = null, o = null, lo = 0, hi = 0;
+	for (let x in ifs) if (x?.ifname) { dev = x.ifname; break; }
+	if (!dev || !match(dev, /^[A-Za-z0-9_.-]+$/)) return null;
+	try { o = json(sh(sprintf("ubus call iwinfo freqlist '{\"device\":\"%s\"}' 2>/dev/null", dev)).out); } catch (e) {}
+	for (let f in (o?.results ?? [])) { let m = +f?.mhz; if (m > 0 && m < 3000) lo++; else if (m >= 5000) hi++; }
+	return lo ? '2g' : hi ? '5g' : null;
+}
+function wifi_band(r) {
+	let b = lc('' + (r.band ?? '')), hw = lc('' + (r.hwmode ?? '')), ht = uc('' + (r.htmode ?? '')), ch = +r.channel;
+	if (b == '2g' || b == '5g' || b == '6g' || b == '60g') return b;
+	if (ch >= 1 && ch <= 14) return '2g';
+	if (ch > 14) return '5g';
+	if (match(hw, /^11(b|g|ng|axg|ax2|beg)$/)) return '2g';
+	if (match(hw, /^11(a|na|ac|axa|ax5|bea)$/)) return '5g';
+	if (match(ht, /^VHT/) || match(ht, /^(HE|EHT)(80|160|320)/)) return '5g';
+	return wifi_freq_band(r['.name']) ?? '2g';
+}
 function wifi_bin() { return conf().wifi_bin || '/sbin/wifi'; }
 
 // 现在的 Wi-Fi：每个频段一项；main = 这个频段上家里网络（lan）的 Wi-Fi（访客的有 cmcp_guest 标记，不算）
@@ -104,12 +116,16 @@ function wifi_state() {
 		push(radios, { id, band, r, main: mn, sta, other });
 	}
 	if (!length(radios)) return { none: 'noradio' };
+	// 两个频段一样（三频路由器两个 5G）：名字后面加 -1 -2，免得写成「5G 和 5G」
+	let cnt = {}, k = {};
+	for (let x in radios) cnt[x.band] = (cnt[x.band] ?? 0) + 1;
+	for (let x in radios) { let nm = BAND_NAME[x.band] ?? uc(x.band); if (cnt[x.band] > 1) { k[x.band] = (k[x.band] ?? 0) + 1; nm += '-' + k[x.band]; } x.nm = nm; }
 	return { radios };
 }
 function wifi_pub(x) {
 	let r = x.r, m = x.main, off = r.disabled == '1';
 	return {
-		id: x.id, band: x.band, name: BAND_NAME[x.band] ?? uc(x.band),
+		id: x.id, band: x.band, name: x.nm,
 		on: !off && !!m && m.disabled != '1',
 		channel: length(r.channel ?? '') && r.channel != 'auto' ? +r.channel || 'auto' : 'auto',
 		chans: x.band == '2g' || x.band == '5g' ? wifi_chans(x.id, x.band, r.country, r.channel) : [],
@@ -180,7 +196,7 @@ P.wifi_set = function(a) {
 		let x = null;
 		for (let y in s.radios) if (y.id == q?.id) x = y;
 		if (!x) die('没有这个频段：' + q?.id);
-		let r = x.r, m = x.main, id = x.id, nm = BAND_NAME[x.band] ?? x.band;
+		let r = x.r, m = x.main, id = x.id, nm = x.nm;
 		if (exists(q, 'on')) {
 			if (!m) die(nm + ' 上没有家里网络的 Wi-Fi，在原版后台里加');
 			if (q.on) { if (r.disabled == '1') set(id + '.disabled', '0'); if (m.disabled == '1') set(m['.name'] + '.disabled', '0'); }

@@ -14,7 +14,7 @@ import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser, permsOf } from './fam.js';
 import { installInst, instAccount, instAdmin } from './inst.js';
 import { installFiles, filesRoute, filesScheduled, fileStartFor, signFiles } from './files.js';
-import { changelogOf } from './changelog.js';
+import { changelogOf, hotItems, tarFind } from './changelog.js';
 import { installHelp, helpPublic, helpAdmin, statusScheduled } from './help.js';
 import { installTotp } from './totp.js';
 import { installEdition, edDev, edAccount, ED_NAME } from './edition.js';
@@ -2090,11 +2090,49 @@ async function changelogApi(env) {
 			return o && o.list && o.list.length ? o : null;
 		});
 		if (!v) return J({ ok: false, error: '暂时读不到更新日志' }, 502);
+		let all = v.list;
+		try { const w = await cached('clog-hot-1-' + (v.at || 0) + '-' + v.list.length, 120, () => clogHot(env, v.list)); if (w && w.list) all = w.list; } catch (e) {}
 		// 全部退回了的补丁不再列出来（用户 11/28：补丁能退回）
 		let bs = null; try { bs = await hubObj(env).hotBackSet(); } catch (e) {}
-		const list = bs && bs.size ? v.list.map((x) => (x.hot ? { ...x, hot: x.hot.filter((h) => !bs.has(x.v.slice(1) + '-' + h.n)) } : x)) : v.list;
+		const list = bs && bs.size ? all.map((x) => (x.hot ? { ...x, hot: x.hot.filter((h) => !bs.has(x.v.slice(1) + '-' + h.n)) } : x)) : all;
 		return J({ ok: true, list, at: v.at });
 	} catch (e) { return J({ ok: false, error: '暂时读不到更新日志' }, 502); }
+}
+// 更新日志补上修复补丁（用户 11/28 16:50「官网更新记录怎么没看到补丁」）：GitHub 接口从官网服务器上常被限流，
+// 读不到发布列表时用的是存下的旧日志 + 最新正式版，补丁一个都没有。最新的 3 个版本按补丁列表（存的 + 顺着下载地址探测，不限流）补上；
+// 说明和时间读不到就从补丁包里的 hot.json 读
+async function clogHot(env, list) {
+	const out = [];
+	for (let i = 0; i < list.length; i++) {
+		const x = list[i];
+		if (i >= 3) { out.push(x); continue; }
+		let hl = [];
+		try { hl = (await hotList(env, x.v.slice(1))).filter((h) => h.n > 0); } catch (e) {}
+		const have = new Map((x.hot || []).map((h) => [h.n, h]));
+		for (const h of hl) {
+			const cur = have.get(h.n);
+			if (cur && cur.items && cur.items.length && cur.at) continue;
+			let notes = h.notes || '', at = h.at || 0;
+			if (!notes || !at) { const p = await hotPack(env, h.tag).catch(() => null); if (p) { notes = notes || p.notes || ''; at = at || p.at || 0; } }
+			const items = hotItems(notes);
+			have.set(h.n, { n: h.n, at: at || (cur && cur.at) || 0, items: items.length ? items : (cur && cur.items) || [] });
+		}
+		out.push(have.size ? { ...x, hot: [...have.values()].sort((a, b) => b.n - a.n).slice(0, 30) } : x);
+	}
+	return { list: out };
+}
+// 补丁包里的 hot.json（说明）和它的打包时间：下载地址不走 GitHub 接口、不限流；包发了就不变，读到一次永久存着（m:hn:<标签>）
+async function hotPack(env, tag) {
+	const k = 'hn:' + tag;
+	try { const o = await hubObj(env).meta(k); if (o) return o; } catch (e) {}
+	const r = await fetch('https://github.com/' + repoOf(env) + '/releases/download/' + tag + '/hot.tar.gz', { redirect: 'follow', headers: { 'user-agent': 'router-panel-hub' } });
+	if (!r.ok || !r.body) return null;
+	const o = await tarFind(r.body.pipeThrough(new DecompressionStream('gzip')), 'hot.json', 64 * 1024, 40 << 20);
+	if (!o) return null;
+	let j = null; try { j = JSON.parse(new TextDecoder().decode(o.data)); } catch (e) { return null; }
+	const v = { notes: String((j && j.notes) || '').slice(0, 2000), at: o.mtime * 1000 || 0 };
+	try { await hubObj(env).setMeta(k, v); } catch (e) {}
+	return v;
 }
 // 这一版本身是不是「必须更新」：
 // 「最低版本：x.y.z【必须更新】」这一行说的是「比 x.y.z 旧的必须更新」——x.y.z 就是这一版时这一版强制，是更早的版本时这一版不强制

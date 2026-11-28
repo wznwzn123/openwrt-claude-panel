@@ -41,6 +41,10 @@ export function parseNotes(body) {
 	return { groups: groups.filter((g) => g.items.length).map((g) => ({ t: g.t, items: g.items.slice(0, 40).map((x) => x.slice(0, 600)) })), note: note.slice(0, 200) };
 }
 
+// 补丁说明 → 一行一条（去掉最后「只给 vX 的路由器」那行）
+export function hotItems(body) {
+	return String(body || '').replace(/\r/g, '').split('\n').map((x) => clean(x.replace(/^(?:[-*•]|\d+\.)\s+/, ''))).filter((x) => x && !/^只给 v\d/.test(x)).slice(0, 10).map((x) => x.slice(0, 300));
+}
 // GitHub 发布列表（/releases 接口的结果）→ 更新日志（新的在前）
 export function changelogOf(list) {
 	const out = [], hot = {};
@@ -48,8 +52,7 @@ export function changelogOf(list) {
 	for (const r of Array.isArray(list) ? list : []) {
 		const m = r && !r.draft && /^hot-(\d+\.\d+\.\d+)-(\d{1,4})$/.exec(String(r.tag_name || ''));
 		if (!m || +m[2] === 0) continue; // V0 = 正式版原样（只用来退回），不列
-		const items = String(r.body || '').replace(/\r/g, '').split('\n').map((x) => clean(x.replace(/^(?:[-*•]|\d+\.)\s+/, ''))).filter((x) => x && !/^只给 v\d/.test(x)).slice(0, 10).map((x) => x.slice(0, 300));
-		(hot['v' + m[1]] = hot['v' + m[1]] || []).push({ n: +m[2], at: Date.parse(r.published_at || r.created_at || '') || 0, items });
+		(hot['v' + m[1]] = hot['v' + m[1]] || []).push({ n: +m[2], at: Date.parse(r.published_at || r.created_at || '') || 0, items: hotItems(r.body) });
 	}
 	for (const r of Array.isArray(list) ? list : []) {
 		if (!r || r.draft || r.prerelease) continue;
@@ -72,4 +75,29 @@ export function changelogOf(list) {
 	const num = (v) => v.slice(1).split('.').map(Number);
 	out.sort((a, b) => { const x = num(a.v), y = num(b.v); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] - x[i]; return 0; });
 	return out;
+}
+// 在 tar 流里找一个文件（只认名字，忽略开头的 ./）：{ data, mtime }；文件太大、读超过 limit 字节、没找到都回 null
+export async function tarFind(stream, want, maxSize, limit) {
+	const rd = stream.getReader(), chunks = [];
+	let have = 0, read = 0;
+	const fill = async (n) => { while (have < n) { const { value, done } = await rd.read(); if (done) return false; read += value.length; if (read > limit) return false; chunks.push(value); have += value.length; } return true; };
+	const take = (n) => { const out = new Uint8Array(n); let p = 0; while (p < n) { const c = chunks[0], m = Math.min(c.length, n - p); out.set(c.subarray(0, m), p); p += m; if (m === c.length) chunks.shift(); else chunks[0] = c.subarray(m); } have -= n; return out; };
+	const skip = async (n) => { while (n > 0) { if (!have && !(await fill(1))) return false; const c = chunks[0], m = Math.min(c.length, n); n -= m; have -= m; if (m === c.length) chunks.shift(); else chunks[0] = c.subarray(m); } return true; };
+	const str = (b) => new TextDecoder().decode(b).replace(/\0[\s\S]*$/, '');
+	try {
+		for (;;) {
+			if (!(await fill(512))) return null;
+			const h = take(512);
+			if (h.every((b) => b === 0)) return null;
+			const name = (str(h.subarray(345, 500)) ? str(h.subarray(345, 500)) + '/' : '') + str(h.subarray(0, 100));
+			const size = parseInt(str(h.subarray(124, 136)).trim() || '0', 8) || 0, mtime = parseInt(str(h.subarray(136, 148)).trim() || '0', 8) || 0;
+			const pad = Math.ceil(size / 512) * 512;
+			if (name.replace(/^\.\//, '') === want && (h[156] === 48 || h[156] === 0)) {
+				if (size > maxSize || !(await fill(pad))) return null;
+				const data = take(size);
+				return { data, mtime };
+			}
+			if (!(await skip(pad))) return null;
+		}
+	} finally { try { await rd.cancel(); } catch (e) {} }
 }

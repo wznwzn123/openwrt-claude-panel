@@ -15,7 +15,7 @@ import { blobUrl, del, get, post, type ChatMsg, type ChatThread } from '@/api'
 import { badges, refreshBadges } from '@/composables/auth'
 import { confirm } from '@/composables/confirm'
 import { pushToast, toastError } from '@/composables/toast'
-import { ago, full, onText } from '@/utils/fmt'
+import { ago, full, onText, poText, pxText } from '@/utils/fmt'
 import { shrinkImage, viewImage } from '@/utils/img'
 
 /* 实时对话：左边是对话列表（有新消息的在前、带未读数），右边是聊天。开着时每几秒自动拿新消息 */
@@ -267,9 +267,10 @@ onBeforeUnmount(() => { clearInterval(t1); clearInterval(t2); clearInterval(t3);
           <dl class="ci-kv">
             <dt>名字 / 型号</dt><dd>{{ info.router.name }}<span v-if="info.router.model"> · {{ info.router.model }}</span></dd>
             <dt>编号</dt><dd>{{ info.router.sub }}</dd>
-            <dt>状态</dt><dd>{{ info.router.off ? (info.router.offWhy === 'exp' ? '已到期暂停' : '已停用') : '正常' }} · {{ onText(info.router.online, info.router.last) }} · 打开面板 {{ ago(info.router.po) }}</dd>
+            <dt>状态</dt><dd>{{ info.router.off ? (info.router.offWhy === 'exp' ? '已到期暂停' : '已停用') : '正常' }} · {{ onText(info.router.online, info.router.last) }} · 打开面板 {{ poText(info.router.po, info.router.ver) }}</dd>
             <dt>到期</dt><dd>{{ info.router.exp ? ymdhm(info.router.exp) : '不限期' }}</dd>
-            <dt>面板版本</dt><dd>{{ info.router.ver || '—' }}</dd>
+            <dt>面板版本</dt><dd>{{ info.router.ver ? info.router.ver + (info.router.hot ? ' V' + info.router.hot : '') : '—' }}</dd>
+            <dt>代理插件</dt><dd>{{ pxText(info.router.px) }}</dd>
             <dt>开通时间</dt><dd>{{ ymdhm(info.router.created) }}</dd>
           </dl>
         </section>

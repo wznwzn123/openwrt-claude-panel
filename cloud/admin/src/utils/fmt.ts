@@ -7,6 +7,19 @@ export function ago(t?: number | null) {
   const s = (Date.now() - t) / 1000
   return s < 60 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'
 }
+// 打开面板的时间：5.x 的路由器不报（用户 11/28 18:09 选「5.x 不报」）；6.0 起没有记录就是没打开过
+export function poText(po?: number | null, ver?: string | null) {
+  if (po) return ago(po)
+  const v = String(ver || '').replace(/^v/, '')
+  return !v ? '—' : /^[0-5]\./.test(v) ? '5.x 不报' : '没打开过'
+}
+// 装着的代理插件（6.0.2 起路由器心跳报，用户 11/28 18:12：排查用）
+const PXN: Record<string, string> = { openclash: 'OpenClash', nikki: 'Nikki', passwall: 'PassWall', passwall2: 'PassWall 2', homeproxy: 'HomeProxy', shadowsocksr: 'SSR Plus+' }
+export function pxText(px?: { id: string, en: boolean, run: boolean }[] | null) {
+  if (px == null) return '6.0.2 起才报'
+  if (!px.length) return '没装'
+  return px.map(x => (PXN[x.id] || x.id) + (x.run ? ' 在跑' : x.en ? ' 开着没在跑' : ' 关着')).join('、')
+}
 // 路由器在不在线（看最后一次心跳，用户 11/28）：正常、有小问题、隧道断了、报告发不出来都算路由器开着
 export const isOn = (st?: string) => ['ok', 'partial', 'tunnel', 'noreport'].includes(String(st || ''))
 export function onText(st?: string, last?: number | null) {

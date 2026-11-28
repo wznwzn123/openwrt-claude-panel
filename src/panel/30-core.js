@@ -217,10 +217,25 @@ async function rpcPost(path, bodyObj, timeoutMs, read) {
 	// 502 有两种情况：路由器刚断电/断网（Cloudflare 还没发现隧道没了），或面板服务卡住；从手机这边分不清
 	if (r.status === 502 || r.status === 503) throw new OfflineError('路由器没有回应：可能刚断电或断网（Cloudflare 要过一两分钟才会发现，之后会显示「隧道断开」），也可能是面板服务卡住了（看门狗会自动重启它）', '无响应');
 	if (r.status === 504 || r.status === 524) throw new OfflineError('路由器处理超时，可能正忙或卡住了', '超时');
+	// 托管版换成本地版以后，专属网址指向一个空地址，Cloudflare 回 522（用户 11/28 17:49 截图「路由器返回 522」）
+	if (r.status === 522 && isHosted()) throw new OfflineError('路由器现在是本地版：只能连着家里 Wi-Fi 打开', '本地版');
 	if (!r.ok) throw new Error('路由器返回 ' + r.status);
 	return r.json();
 }
 const P = (m, a, t) => rpc('panel/' + m, a, t);
+// 在外面打开本地版的专属网址：说一次怎么办，能直接去官网换成 AI 版（用户 11/28 17:49）
+let localOutShown = false;
+function localOut() {
+	if (localOutShown || document.querySelector('.modal')) return;
+	localOutShown = true;
+	const hub = (store.get('rp_hub') || 'https://yrlove520.com').replace(/\/$/, ''), sub = (/^([a-z2-9]{8})\./.exec(location.hostname) || [])[1] || 'local';
+	modal(`<h3>路由器现在是本地版</h3><p class="muted" style="margin:6px 0 0;line-height:1.6;text-wrap:pretty">只能连着家里 Wi-Fi，用家里的地址打开。在外面用要换成 AI 版。</p>
+		<div class="btngrid" style="margin:14px 0 0"><button class="btn" data-v="close">知道了</button><button class="btn primary" data-v="go">换成 AI 版</button></div>`, null, { compact: true }).then((v) => {
+		if (v !== 'go') return;
+		const u = hub + '/app?ed=' + sub;
+		if (IN_APP) location.href = u; else window.open(u, '_blank', 'noopener');
+	});
+}
 // 面板脚本出错（5.0）：经路由器转给开发者（只带错误本身、手机型号和屏幕大小）；同一条只报一次，一次打开最多报 3 条
 const errSent = new Set();
 function reportErr(msg, stack, where) {
@@ -879,6 +894,13 @@ async function refresh(quiet) {
 			if (page === 'main') mOff('');   // 首页上面的「托管服务已到期」卡片已经写清楚了
 			svcRender();
 			if (!quiet) toast('托管服务已到期，专属网址暂停了', true);
+		} else if (e instanceof OfflineError && e.short === '本地版') {
+			setStatus(false, '本地版');
+			if ($('topSub').textContent === '正在连接…') $('topSub').textContent = '本地版：在外面打不开';
+			pxRender(PX.running, PX.mode, false);
+			if (page === 'home') { $('hHead').textContent = '路由器现在是本地版'; $('hDesc').textContent = '只能连着家里 Wi-Fi 打开。下面是上次的数据。'; }
+			if (page === 'main') mOff('路由器现在是本地版，只能连着家里 Wi-Fi 打开。下面是上次的数据。');
+			localOut();
 		} else if (e instanceof OfflineError) {
 			setStatus(false, e.short);
 			if ($('topSub').textContent === '正在连接…') $('topSub').textContent = '连不上路由器';

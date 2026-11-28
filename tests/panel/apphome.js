@@ -88,6 +88,12 @@ const ONE = [{ url: 'https://abcd2345.panel.example/panel/', name: '家里', at:
 		if (w !== 430) await page.screenshot({ path: path.join(SHOT, `apphome-lanfail-${w}${dark ? '-dark' : ''}.png`) });
 		await page.click('#dlg [data-y]'); await W(300);
 		ok('点「换成 AI 版」：去官网账号页、卡片收起' + T, (await page.evaluate(() => window.__opened.slice(-1)[0])) === 'https://panel.example/app?ed=local' && !(await page.isVisible('#dlg')));
+		// 托管网址回 522（换成了本地版）：App 也调 lanFail，按钮带这台的编号
+		await page.evaluate(() => window.lanFail('https://abcd2345.panel.example/panel/')); await W(300);
+		const lh = await page.textContent('#dlg');
+		ok('托管网址打不开：说路由器现在是本地版' + T, /打不开「家里」/.test(lh) && /路由器现在是本地版/.test(lh), lh);
+		await page.click('#dlg [data-y]'); await W(300);
+		ok('点「换成 AI 版」：带这台的编号' + T, (await page.evaluate(() => window.__opened.slice(-1)[0])) === 'https://panel.example/app?ed=abcd2345');
 		await page.click('[data-m="0"]'); await W(450);
 		await page.click('#sheet [data-x=ren]'); await W(450);
 		await page.fill('#renIn', '公司'); await page.click('#renForm button'); await W(400);

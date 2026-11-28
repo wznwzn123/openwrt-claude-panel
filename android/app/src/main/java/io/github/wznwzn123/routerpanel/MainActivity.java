@@ -352,6 +352,14 @@ public class MainActivity extends AppCompatActivity {
                 showHome();
                 js(home, "window.lanFail && lanFail(" + JSONObject.quote(u.getScheme() + "://" + u.getAuthority() + "/panel/") + ")");
             }
+            // 托管版换成本地版以后，专属网址回 Cloudflare 522（面板没缓存时就是一张报错页）：同样回首页说清楚
+            @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) {
+                Uri u = r.getUrl();
+                if (!r.isForMainFrame() || e.getStatusCode() != 522 || !"https".equals(u.getScheme()) || !allowed(u.getHost())) return;
+                v.stopLoading();
+                showHome();
+                js(home, "window.lanFail && lanFail(" + JSONObject.quote("https://" + u.getAuthority() + "/panel/") + ")");
+            }
             @Override public void onPageFinished(WebView v, String url) { remember(url); pollBar(); }
             @Override public void onPageStarted(WebView v, String url, Bitmap fav) { if (edge) { edge = false; barColor = 0; layoutBars(); } }
         });

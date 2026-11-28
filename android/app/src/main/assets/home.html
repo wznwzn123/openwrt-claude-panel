@@ -242,11 +242,13 @@ function edOf(url) {
 }
 const edGo = (e) => { closeSheet(); closeDlg(); A.open(HUB + '/app?ed=' + e); };
 // 打开家里的地址失败（App 调）：多半是人在外面
+// 托管网址回 522（路由器换成了本地版）也走这里（用户 11/28 17:49「不会弹打不开」）
 window.lanFail = (url) => {
-	const r = list.find((x) => x.url === url), n = r ? r.name : hostOf(url);
-	openDlg(`<h3>打不开「${esc(n)}」</h3><p class="msg">这是家里的地址，要连着家里 Wi-Fi 才能打开。${HUB ? '<br>托管版想在外面用：换成 AI 版。' : ''}</p><div class="two">${HUB ? '<button class="btn" data-n>知道了</button><button class="btn pri" data-y>换成 AI 版</button>' : '<button class="btn pri" data-n>知道了</button>'}</div>`, (b) => {
+	const r = list.find((x) => x.url === url), n = r ? r.name : hostOf(url), ed = edOf(url), lan = ed === 'local' || !ed;
+	const msg = lan ? `这是家里的地址，要连着家里 Wi-Fi 才能打开。${HUB ? '<br>托管版想在外面用：换成 AI 版。' : ''}` : '路由器现在是本地版，只能连着家里 Wi-Fi 用家里的地址打开。在外面用要换成 AI 版。';
+	openDlg(`<h3>打不开「${esc(n)}」</h3><p class="msg">${msg}</p><div class="two">${ed ? '<button class="btn" data-n>知道了</button><button class="btn pri" data-y>换成 AI 版</button>' : '<button class="btn pri" data-n>知道了</button>'}</div>`, (b) => {
 		b.querySelector('[data-n]').onclick = closeDlg;
-		const y = b.querySelector('[data-y]'); if (y) y.onclick = () => edGo('local');
+		const y = b.querySelector('[data-y]'); if (y) y.onclick = () => edGo(ed);
 	});
 };
 function routerSheet(i) {

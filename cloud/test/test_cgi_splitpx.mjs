@@ -188,6 +188,37 @@ try {
 		ok('DNS 模式：只记这台设备查的网址（别的设备、乱的不记），结束后 dnsmasq 设置放回去', hs['www.youtube.com'] >= 1 && hs['api.game.example'] >= 1 && !hs['other.device.com'] && !Object.keys(hs).some((h) => /;/.test(h)) && L2.run === false
 			&& !fs.existsSync(DON) && !/logqueries|logfacility/.test(rd(CFG + '/dhcp')), JSON.stringify(L2).slice(0, 300) + rd(CFG + '/dhcp'));
 	}
+	// 用户 11/28 22:39：Kwrt 的 /etc/dnsmasq.conf 里写了 log-facility=/dev/null，识别时再从 uci 加一个，dnsmasq 起不来、全家断网 3 分钟
+	{
+		const LF = E + '/learnk.json', DL = E + '/dnsk.log', DON = E + '/dnsonk.json', CT = E + '/ctk', CONF = E + '/dnsmasq.conf', U = 'python3 ' + path.resolve('test/fake/uci.py') + ' -c ' + CFG, RSLOG = E + '/rs.log';
+		fs.writeFileSync(CT, ''); fs.writeFileSync(RSLOG, '');
+		const run1 = (mode, conf, okCmd, rs) => {
+			fs.writeFileSync(CONF, conf);
+			fs.writeFileSync(LF, JSON.stringify({ rid: 'rk', ip: '192.168.1.20', mac: '', at: Date.now() / 1000, until: Date.now() / 1000 + 3, hosts: {}, dips: {}, nohost: 0, run: true, mode }));
+			return new Promise((z) => { const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.20 3 rk'], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_DNSON: DON, CMCP_SPL_DLOG: DL, CMCP_SPL_UCI: U, CMCP_SPL_CONFS: CONF,
+				CMCP_SPL_DNSRS: rs || 'echo rs >> ' + RSLOG, CMCP_SPL_DNSOK: okCmd, CMCP_SPL_NOCURL: '1', CMCP_SPL_CONNS: E + '/none.json', CMCP_SPL_CT: CT, CMCP_SPL_LOG: E + '/splk.log', CMCP_SPL_NEIGH: E + '/neigh', CMCP_SPL_LEASES: E + '/leases' } }); p.on('close', z); });
+		};
+		await run1('dns', '# Kwrt\nlog-facility=/dev/null\n', 'echo 1');
+		let Lk = JSON.parse(rd(LF) || '{}');
+		ok('配置文件里写了 log-facility=/dev/null：不改 dnsmasq、不重启，PassWall 这类说清楚识别不了', !/logqueries|logfacility/.test(rd(CFG + '/dhcp')) && rd(RSLOG) === '' && /不记查询/.test(Lk.err || '') && !fs.existsSync(DON), JSON.stringify(Lk).slice(0, 300) + rd(RSLOG));
+		await run1('clash+dns', 'log-facility=/dev/null\n', 'echo 1');
+		Lk = JSON.parse(rd(LF) || '{}');
+		ok('OpenClash（clash+dns）碰到 /dev/null：不动 dnsmasq，照样读 Clash 的记录、不报错', !/logqueries|logfacility/.test(rd(CFG + '/dhcp')) && rd(RSLOG) === '' && !/不记查询/.test(Lk.err || ''), JSON.stringify(Lk).slice(0, 300));
+		fs.writeFileSync(RSLOG, '');
+		await run1('dns', 'log-facility=' + E + '/own.log\n', 'echo 1', 'cat ' + CFG + '/dhcp >> ' + RSLOG + '; echo === >> ' + RSLOG);
+		const snap = rd(RSLOG).split('===')[0];
+		ok('配置文件里写了日志文件：只加 log-queries，不再加 log-facility（不会重复），结束放回', /logqueries/.test(snap) && !/logfacility/.test(snap) && !/logqueries|logfacility/.test(rd(CFG + '/dhcp')), snap);
+		fs.writeFileSync(RSLOG, '');
+		await run1('dns', '', 'echo 1');
+		ok('没写过日志设置：照旧加上，结束放回', rd(RSLOG).split('\n').filter(Boolean).length === 2 && !/logqueries|logfacility/.test(rd(CFG + '/dhcp')) && !fs.existsSync(DON), rd(RSLOG) + rd(CFG + '/dhcp'));
+		fs.writeFileSync(RSLOG, '');
+		const t0 = Date.now();
+		await run1('dns', '', 'true');
+		Lk = JSON.parse(rd(LF) || '{}');
+		ok('重启后 dnsmasq 没起来：马上放回原设置再重启（两次重启），报「没起来 已经恢复」', rd(RSLOG).split('\n').filter(Boolean).length === 2 && !/logqueries|logfacility/.test(rd(CFG + '/dhcp')) && /没起来/.test(Lk.err || '') && !fs.existsSync(DON), rd(RSLOG) + JSON.stringify(Lk).slice(0, 200) + ' ' + (Date.now() - t0) + 'ms');
+		const src = fs.readFileSync(path.resolve('../src/bin/cmcp-splearn'), 'utf8');
+		ok('判断 dnsmasq 起没起来：两次进程号一样 + 本机 53 端口有回应（不只看有没有进程）', /p1=\$\(pidof dnsmasq\); sleep 1; p2=\$\(pidof dnsmasq\)/.test(src) && /nslookup cmcp-check\.lan 127\.0\.0\.1/.test(src));
+	}
 	// 用户 11/28 13:1x：OpenClash 开着「绕过中国大陆」时直连的国内软件只看到 IP → OpenClash 也记 DNS 查询（clash+dns）
 	{
 		KIND = 'openclash';

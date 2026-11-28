@@ -23,7 +23,26 @@ import { readfile, writefile, open, unlink, stat } from 'fs';
 const F = getenv('CMCP_SPL_F') || '/tmp/cmcp_sp_learn.json', LOG = getenv('CMCP_SPL_LOG') || '/tmp/cmcp_spl_log';
 const DNSON = getenv('CMCP_SPL_DNSON') || L.D + '/spl_dns.json', DLOG = getenv('CMCP_SPL_DLOG') || '/tmp/cmcp_spl_dns.log', U = getenv('CMCP_SPL_UCI') || 'uci', DQ = 'dhcp.@dnsmasq[0].';
 function dns_rs() { L.sh(getenv('CMCP_SPL_DNSRS') || '/etc/init.d/dnsmasq restart >/dev/null 2>&1'); }
-function dns_up() { return length(trim(L.sh(getenv('CMCP_SPL_DNSOK') || 'pidof dnsmasq'))) > 0; }
+// dnsmasq 真的起来了：两次看到的进程号一样（起不来的会被 procd 一直重启，进程号一直变），而且本机 53 端口有回应
+// （用户 11/28 22:39：只看 pidof 时，正在崩溃重启的那个进程也算「在跑」，没发现 dnsmasq 起不来，全家断网 3 分钟）
+const DNS_OK_CMD = 'p1=$(pidof dnsmasq); sleep 1; p2=$(pidof dnsmasq); [ -n "$p1" ] && [ "$p1" = "$p2" ] && ! nslookup cmcp-check.lan 127.0.0.1 2>&1 | grep -qiE "timed out|no servers|refused|connect" && echo 1';
+function dns_up() { return length(trim(L.sh(getenv('CMCP_SPL_DNSOK') || DNS_OK_CMD))) > 0; }
+// dnsmasq 自己的配置文件里已经写了的日志设置。Kwrt 这类固件在 /etc/dnsmasq.conf 里写了 log-facility=/dev/null：
+// 我们再从 uci 加一遍，dnsmasq 认为同一个设置写了两次，直接起不来（用户 11/28 22:39）。读到了就不从 uci 加
+function conf_logs() {
+	let fl = getenv('CMCP_SPL_CONFS');
+	fl = fl != null ? split(fl, ' ') : split(trim(L.sh('ls -d /etc/dnsmasq.conf /etc/dnsmasq.d/* /tmp/dnsmasq*.d/* 2>/dev/null')), '\n');
+	let o = { lf: null, lq: false };
+	for (let f in fl) {
+		if (!length(f)) continue;
+		for (let l in split(readfile(f) ?? '', '\n')) {
+			let m = match(l, /^[ \t]*(log-facility|log-queries)([ \t]*=[ \t]*([^ \t#]*))?/);
+			if (!m) continue;
+			if (m[1] == 'log-queries') o.lq = true; else o.lf = m[3] ?? '';
+		}
+	}
+	return o;
+}
 function ug(k) { return trim(L.sh(U + ' -q get ' + L.shq(DQ + k))); }
 // 放回原来的 logqueries / logfacility，重启 dnsmasq
 function dns_off() {
@@ -104,20 +123,25 @@ function log_read() {
 }
 /* 记 DNS 查询（没有 Clash 时）。dnsmasq 每个查询一行「query[A] www.example.com from 192.168.1.10」，回答一行「reply www.example.com is 1.2.3.4」；
    查过网址的 IP 不再列进「只有 IP」那一组 */
-let dlog = null, doff = 0, drest = '', dpid = null, resolved = {}, dnsok = false;
+let dlog = null, doff = 0, drest = '', dpid = null, resolved = {}, dnsok = false, nodns = false;
 function dns_start() {
 	if (type(L.readj(DNSON, null)) == 'object') dns_off(); // 上次没放回去的先放回
-	let lq = ug('logqueries'), lf = ug('logfacility'), follow = false;
+	let lq = ug('logqueries'), lf = ug('logfacility'), follow = false, cf = conf_logs();
+	// 配置文件里把日志扔掉了（/dev/null）：记不到查询，也不能再加一个（会起不来）→ 不动 dnsmasq
+	if (cf.lf == '/dev/null' || (cf.lf != null && !length(cf.lf))) { nodns = true; if (DNS) err = '这台路由器的 dnsmasq 设了不记查询（/etc/dnsmasq.conf 里的 log-facility=/dev/null），识别不了 在「网站」里手动加网址'; return; }
 	L.writej(DNSON, { logqueries: lq, logfacility: lf, at: time() });
-	let c = [U + ' set ' + L.shq(DQ + 'logqueries=1')];
-	// 原来没设日志文件：记到内存盘的单独文件；设了文件：读那个文件新写的；记到系统日志的：跟着系统日志读
+	let c = [];
+	if (!cf.lq) push(c, U + ' set ' + L.shq(DQ + 'logqueries=1'));
+	// 日志记到哪：配置文件里写了的照它（不从 uci 再加）；原来没设：记到内存盘的单独文件；设了文件：读那个文件新写的；记到系统日志的：跟着系统日志读
+	if (cf.lf != null) lf = cf.lf;
 	if (!length(lf)) { writefile(DLOG, ''); push(c, U + ' set ' + L.shq(DQ + 'logfacility=' + DLOG)); dlog = DLOG; }
 	else if (match(lf, /^\//)) { dlog = lf; doff = stat(lf)?.size ?? 0; }
 	else { dlog = DLOG; writefile(DLOG, ''); follow = true; }
+	if (!length(c)) { dnsok = true; if (follow) { let p = trim(L.sh(sprintf('logread -f -e dnsmasq >> %s 2>/dev/null & echo $!', L.shq(DLOG)))); if (match(p, /^[0-9]+$/)) dpid = p; } unlink(DNSON); return; }
 	if (index(L.sh(join(' && ', c) + ' && ' + U + ' commit dhcp && echo ok'), 'ok') < 0) { unlink(DNSON); err = '改不了 dnsmasq 的设置'; return; }
 	dns_rs();
 	let up = false;
-	for (let i = 0; i < 6 && !up; i++) { L.sh('sleep 1'); up = dns_up(); }
+	for (let i = 0; i < 8 && !up; i++) { L.sh('sleep 1'); up = dns_up(); }
 	// 起不来就马上放回去，免得家里没有 DNS
 	if (!up) { dns_off(); err = '打开 DNS 记录后 dnsmasq 没起来 已经恢复'; return; }
 	if (follow) { let p = trim(L.sh(sprintf('logread -f -e dnsmasq >> %s 2>/dev/null & echo $!', L.shq(DLOG)))); if (match(p, /^[0-9]+$/)) dpid = p; }

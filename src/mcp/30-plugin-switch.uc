@@ -3,8 +3,10 @@ const PX_EN = { openclash: 'openclash.config.enable', nikki: 'nikki.config.enabl
 P.px_switch = function(a) {
 	px_check(a?.id);
 	let id = a.id, j = px_detect(true), cmds = [];
-	if (id == 'passwall' || id == 'passwall2') { let v = uci_get(id + '.@global[0].' + (id == 'passwall' ? 'tcp_node' : 'node')); if (!v || v == 'nil') die(px_name(id) + ' 还没选节点：先在它的原版页面里添加并选好节点，再来切换'); }
-	if (id == 'homeproxy') { let v = uci_get('homeproxy.config.main_node'); if (!v || v == 'nil') die('HomeProxy 还没选节点：先在它的原版页面里选一个主节点，再来切换'); }
+	// 新版 PassWall 的主节点叫 node，老版叫 tcp_node
+	if (id == 'passwall' || id == 'passwall2') { let v = uci_get(id + '.@global[0].node') ?? (id == 'passwall' ? uci_get('passwall.@global[0].tcp_node') : null); if (!v || v == 'nil') die(px_name(id) + ' 还没选节点：先在它的原版页面里添加并选好节点，再来切换'); }
+	// HomeProxy 用「自定义路由」时按路由节点走，主节点是空的
+	if (id == 'homeproxy') { let cm = uci_get('homeproxy.config.routing_mode') == 'custom', v = uci_get(cm ? 'homeproxy.routing.default_outbound' : 'homeproxy.config.main_node'); if (!v || v == 'nil') die(cm ? 'HomeProxy 还没设默认出站：先在它的原版页面里设好，再来切换' : 'HomeProxy 还没选节点：先在它的原版页面里选一个主节点，再来切换'); }
 	if (id == 'shadowsocksr') { let v = uci_get('shadowsocksr.@global[0].global_server'); if (!v || v == 'nil') die('SSR Plus+ 还没选节点：先在它的原版页面里选一个服务器，再来切换'); }
 	for (let x in j.list ?? []) {
 		if (x.id == id || !(x.running || x.enabled)) continue;

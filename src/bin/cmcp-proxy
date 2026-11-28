@@ -6,6 +6,7 @@
 #       cmcp-proxy name [id]       中文显示名
 #       cmcp-proxy restart|start|stop [id]   默认对正在用的那个
 #       cmcp-proxy kind [id]       clash（OpenClash / Nikki，有 Clash 控制接口）或 other
+#       cmcp-proxy running [id]    在跑就退出码 0
 # 测试用：FAKE_PX="openclash:111 nikki:100"（id:装了开着在跑），DRYRUN=1 不真的重启
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 IDS="openclash nikki passwall passwall2 homeproxy shadowsocksr"
@@ -73,6 +74,8 @@ case "$1" in
 	active) active ;;
 	name) name "${2:-$(active)}" ;;
 	kind) kind "${2:-$(active)}" ;;
+	# 在不在跑（只看退出码）：分流改完重启插件后用它看起没起来
+	running) running "${2:-$(active)}" ;;
 	restart|start|stop) svc "$1" "$2" ;;
-	*) echo "用法：$0 list | json | active | name [id] | kind [id] | restart|start|stop [id]"; exit 1 ;;
+	*) echo "用法：$0 list | json | active | name [id] | kind [id] | running [id] | restart|start|stop [id]"; exit 1 ;;
 esac

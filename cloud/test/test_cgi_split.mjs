@@ -427,7 +427,7 @@ try {
 	}
 	// 不支持的插件
 	KIND = 'none';
-	ok('没装 OpenClash / Nikki：说不支持', (await cgi('split_get')).result?.kind === null && /只支持 OpenClash 和 Nikki/.test(err(await cgi('split_set', { app: { id: 'chatgpt', t: 'DIRECT' } }))));
+	ok('没装 OpenClash / Nikki：说不支持', (await cgi('split_get')).result?.kind === null && /没有在用的代理插件/.test(err(await cgi('split_set', { app: { id: 'chatgpt', t: 'DIRECT' } }))));
 } finally {
 	fs.rmSync(E, { recursive: true, force: true });
 }

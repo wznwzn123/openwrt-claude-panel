@@ -460,7 +460,8 @@ check() {
 	# 6.0 第 20 项：限速跟着设备的 IP 走；防火墙重载冲掉了就补上
 	[ "$DRYRUN" != 1 ] && [ -f "$D/ratelimit.json" ] && [ -x /usr/sbin/cmcp-ratelimit ] && /usr/sbin/cmcp-ratelimit check >/dev/null 2>&1
 	# 下面两项要问面板接口：登录密钥在 config.json（11/27：原来读的 token 文件新装的没有，换过登录密钥的是旧的）
-	SPC=; { [ -f "$D/split.grp" ] || grep -qE '"(mac|ip)"' "$D/blacklist.json" 2>/dev/null; } && SPC=1
+	# 识别软件改过 dnsmasq 的设置还没放回（spl_dns.json）也要问：split_check 会放回去
+	SPC=; { [ -f "$D/split.grp" ] || [ -f "$D/spl_dns.json" ] || grep -qE '"(mac|ip)"' "$D/blacklist.json" 2>/dev/null; } && SPC=1
 	TOK=; { [ -n "$SPC" ] || [ -f "$D/wg.json" ]; } && TOK=$(jsonfilter -i "$D/config.json" -e '@.token' 2>/dev/null)
 	# 6.0 第 69 项：分流里选的策略组，订阅更新后没了就改走主策略组；自定义规则被整份改掉了，「不走代理」「分流」那几行补回去
 	# （设了分流或者有「不走代理」的设备才查：11/27 全面检查第 13 条）

@@ -147,11 +147,19 @@ function px_sec(c, cfg, s) {
 	c.foreach(cfg, m[1], (x) => { if (i++ == +m[2]) { out = x['.name']; return false; } });
 	return out;
 }
+// 「当前节点」存在哪个选项：新版 PassWall 叫 node，老版叫 tcp_node（11/28 查出来：新版切换节点写进 tcp_node 不生效）
+function px_curopt(c, d, cs) {
+	if (d.cfg != 'passwall' || !cs) return d.cur[1];
+	return c.get('passwall', cs, 'node') != null || c.get('passwall', cs, 'tcp_node') == null ? 'node' : 'tcp_node';
+}
+// HomeProxy 用「自定义路由」时不看主节点（按路由节点走），这里换主节点没用
+function px_hp_custom(c) { c.load('homeproxy'); return c.get('homeproxy', 'config', 'routing_mode') == 'custom'; }
 function px_nodes(id) {
 	let d = PXN[id];
 	if (!d?.type) return null;
 	let c = require('uci').cursor(); c.load(d.cfg);
-	let cs = px_sec(c, d.cfg, d.cur[0]), cur = cs ? c.get(d.cfg, cs, d.cur[1]) : null, list = [];
+	if (id == 'homeproxy' && px_hp_custom(c)) return null;
+	let cs = px_sec(c, d.cfg, d.cur[0]), cur = cs ? c.get(d.cfg, cs, px_curopt(c, d, cs)) : null, list = [];
 	c.foreach(d.cfg, d.type, (x) => {
 		let p = x.protocol ?? '';
 		push(list, { id: x['.name'], name: x[d.name] || x['.name'], kind: x.type ?? '', proto: p, addr: x[d.addr] ?? '', port: x[d.port] ?? '',
@@ -172,7 +180,7 @@ P.px = function() {
 	}
 	return j;
 };
-P.px_nodes = function(a) { px_check(a?.id); let n = px_nodes(a.id); if (!n) die(px_name(a.id) + ' 的节点在它自己的控制面板里管理'); return n; };
+P.px_nodes = function(a) { px_check(a?.id); let n = px_nodes(a.id); if (!n) die(a.id == 'homeproxy' && px_hp_custom(require('uci').cursor()) ? 'HomeProxy 用的是自定义路由：节点在它的原版页面里换' : px_name(a.id) + ' 的节点在它自己的控制面板里管理'); return n; };
 // 切换节点：改设置、重启插件（后台重启，马上返回；断网十几秒）
 P.px_set = function(a) {
 	px_check(a?.id);
@@ -183,7 +191,7 @@ P.px_set = function(a) {
 	let c = require('uci').cursor(); c.load(d.cfg);
 	let cs = px_sec(c, d.cfg, d.cur[0]);
 	if (!cs) die('读不到 ' + px_name(a.id) + ' 的设置');
-	c.set(d.cfg, cs, d.cur[1], a.node); c.commit(d.cfg);
+	c.set(d.cfg, cs, px_curopt(c, d, cs), a.node); c.commit(d.cfg);
 	sh('( sleep 1; /etc/init.d/' + a.id + ' restart ) >/dev/null 2>&1 </dev/null &');
 	return { ok: true };
 };

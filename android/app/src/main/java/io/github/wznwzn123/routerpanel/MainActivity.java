@@ -475,15 +475,26 @@ public class MainActivity extends AppCompatActivity {
         int have = m.getAppWidgetIds(new ComponentName(this, SpeedWidget.class)).length;
         if (have > 0) { toast("桌面小组件已更新"); return; }
         if (Build.VERSION.SDK_INT >= 26 && m.isRequestPinAppWidgetSupported()) {
-            // 小米 HyperOS 等：没开「桌面快捷方式」权限时系统直接不理这个请求，也不报错。添加框弹出来会抢走窗口焦点；1.5 秒内没抢走、桌面上也没有小组件，就告诉用户怎么办
+            // 小米 HyperOS 等：没开「桌面快捷方式」权限时系统直接不理这个请求，也不报错。添加框弹出来会抢走窗口焦点；0.8 秒内没抢走、桌面上也没有小组件，就告诉用户怎么办
+            // 小米能直接查到「桌面快捷方式」没开：马上告诉用户，不用等（用户 11/28 16:38「弹出太慢了」）
+            if (xiaomi() && miShortcutDenied()) { widgetHelp(); return; }
             pinShown = false;
             try { m.requestPinAppWidget(new ComponentName(this, SpeedWidget.class), null, null); } catch (Exception e) { widgetHelp(); return; }
-            ui.postDelayed(() -> { if (!pinShown && m.getAppWidgetIds(new ComponentName(this, SpeedWidget.class)).length == 0) widgetHelp(); }, 1500);
+            ui.postDelayed(() -> { if (!pinShown && m.getAppWidgetIds(new ComponentName(this, SpeedWidget.class)).length == 0) widgetHelp(); }, 800);
         } else widgetHelp();
     }
     private boolean pinShown = true;
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (!f) pinShown = true; }
     private boolean xiaomi() { return "xiaomi".equalsIgnoreCase(Build.MANUFACTURER) || "redmi".equalsIgnoreCase(Build.BRAND) || "poco".equalsIgnoreCase(Build.BRAND); }
+    /* 小米的「桌面快捷方式」权限是自己加的 AppOps（10017），官方接口查不到，只能反射问；查不到就当没关，走上面等 0.8 秒的办法 */
+    private boolean miShortcutDenied() {
+        try {
+            android.app.AppOpsManager o = (android.app.AppOpsManager) getSystemService(APP_OPS_SERVICE);
+            java.lang.reflect.Method c = android.app.AppOpsManager.class.getMethod("checkOpNoThrow", int.class, int.class, String.class);
+            int r = (Integer) c.invoke(o, 10017, android.os.Process.myUid(), getPackageName());
+            return r == android.app.AppOpsManager.MODE_IGNORED || r == android.app.AppOpsManager.MODE_ERRORED;
+        } catch (Throwable e) { return false; }
+    }
     private void widgetHelp() {
         if (isFinishing()) return;
         String m = xiaomi() ? "要先打开「桌面快捷方式」权限，再回面板点「添加」。\n或者长按桌面空白处 →「小部件」→「路由器面板」。"

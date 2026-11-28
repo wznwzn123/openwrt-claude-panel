@@ -2812,12 +2812,16 @@ function moreBtns() { const a = document.querySelector('#p-more [data-t="addphon
 /* 6.0 第 38 项：安卓桌面小组件（只在 App 6.0 里有）：路由器发一把只能看网速和在线设备数的钥匙，交给 App 存起来
    （面板网页碰不到手机功能，只能跳一个 routerpanel://widget 地址，App 只认面板自己的网址跳过来的） */
 const IN_APP6 = /RouterPanelApp\/([6-9]|\d\d)\./.test(navigator.userAgent);
+let widgetBusy = false;
 async function widgetAdd() {
-	if (!(await confirmBox('添加桌面小组件', '桌面上显示网速和在线设备数。', '添加'))) return;
+	if (widgetBusy || !(await confirmBox('添加桌面小组件', '桌面上显示网速和在线设备数。', '添加'))) return;
+	// 托管版要绕一趟官网，点完马上给个「正在添加…」，免得以为没点上又点一次（用户 11/28 16:38）
+	widgetBusy = true; toast('正在添加…');
 	try {
 		const r = await P('widget_new');
 		location.href = 'routerpanel://widget?k=' + encodeURIComponent(r.k) + '&n=' + encodeURIComponent(r.name);
-	} catch (e) { toast(e.message, true); }
+		toastHide();
+	} catch (e) { toast(e.message, true); } finally { widgetBusy = false; }
 }
 const agoS = (t) => { if (!t) return '—'; const s = Date.now() / 1000 - t; return s < 120 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
 // 平板（证人）网址：带着平板的钥匙，只在「我的主页 → 敏感信息」验证后给

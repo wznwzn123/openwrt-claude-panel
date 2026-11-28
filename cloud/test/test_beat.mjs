@@ -106,6 +106,13 @@ ok('比现在晚一天的（路由器时间不准）：不认', (await obj.brief
 T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: po1 - 600, hot: 99999 });
 b = await obj.brief();
 ok('更早的时间不往回改；补丁号乱的不认', b.po === po1 * 1000 && b.hot === 0, JSON.stringify(b));
+// 用户 11/28 18:09：路由器时钟快了（po 比现在晚），刚打开面板后台却写「3 天前」——6.0.2 起带 pa（几秒前打开的），用官网的钟算
+T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: Math.floor(T / 1000) + 3600, pa: 30, hot: 7 });
+b = await obj.brief();
+ok('时钟快 1 小时的路由器：按 pa 算成 30 秒前', b.po === (Math.floor(T / 1000) - 30) * 1000, JSON.stringify(b));
+const po2 = b.po;
+T += 60e3; await call('/cloud/beat/r/rk', { ...OK, po: Math.floor(T / 1000) + 3600, pa: -1, hot: 7 });
+ok('pa = -1（没打开过）：不改', (await obj.brief()).po === po2);
 Date.now = realNow;
 console.log(results.map((x) => (x[1] ? '✓ ' : '✗ ') + x[0] + (x[2] !== undefined && !x[1] ? '（' + String(x[2]).slice(0, 200) + '）' : '')).join('\n'));
 console.log(`\n通过 ${results.filter((x) => x[1]).length}/${results.length}`);

@@ -585,7 +585,7 @@ export class Hub extends DurableObject {
 			rn[sub] = (d && d.name) || sub;
 			let b = null;
 			if (d && d.state === 'ok') { try { b = await this.watch(sub).brief(); } catch (e) {} }
-			devs.push(d ? { sub, name: d.name || sub, model: d.model || '', role: d.owner === uid ? '主账号' : '家人', exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', po: (b && b.po) || 0, last: (b && b.last) || 0, live: (b && b.state) || '', seen: d.seen || 0, created: d.created || 0, ver: d.ver || '' } : { sub, name: sub, gone: true });
+			devs.push(d ? { sub, name: d.name || sub, model: d.model || '', role: d.owner === uid ? '主账号' : '家人', exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', po: (b && b.po) || 0, px: (b && b.px) || null, last: (b && b.last) || 0, live: (b && b.state) || '', seen: d.seen || 0, created: d.created || 0, ver: (b && b.ver) || d.ver || '' } : { sub, name: sub, gone: true });
 		}
 		const KL = { app: 'App 授权', login: '登录官网', reg: '注册', reset: '找回密码', code: '收邮箱验证码', totp: '两步验证', admin: '管理后台' };
 		for (const x of (await this.ctx.storage.get('ll')) || []) if (String(x.who || '').toLowerCase() === email)
@@ -676,7 +676,7 @@ export class Hub extends DurableObject {
 		for (let i = 0; i < list.length; i += 100) for (const [k] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ovoff:' + d.sub))) ovo.add(k.slice(6));
 		// 用户 11/28：列表写「打开面板 x 前」（路由器跟着心跳报）+ 现在在不在线（看最后一次心跳，不再用 6 小时才记一次的 seen）
 		const pins = await this.hotPins();
-		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], hot: (brs[i] && brs[i].hot) || 0, hotPin: pins[d.sub] || null, po: (brs[i] && brs[i].po) || 0, last: (brs[i] && brs[i].last) || 0, live: (brs[i] && brs[i].state) || '', ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], hot: (brs[i] && brs[i].hot) || 0, hotPin: pins[d.sub] || null, po: (brs[i] && brs[i].po) || 0, px: (brs[i] && brs[i].px) || null, last: (brs[i] && brs[i].last) || 0, live: (brs[i] && brs[i].state) || '', ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）

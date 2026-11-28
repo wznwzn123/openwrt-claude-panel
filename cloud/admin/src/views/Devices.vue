@@ -13,7 +13,7 @@ import { ask } from '@/composables/ask'
 import { askDays } from '@/composables/days'
 import { confirm } from '@/composables/confirm'
 import { pushToast, toastError } from '@/composables/toast'
-import { ago, day, vNewer, isOn, onText } from '@/utils/fmt'
+import { ago, day, vNewer, isOn, onText, poText } from '@/utils/fmt'
 
 /* 路由器：开通了托管服务的每一台。封禁、加天数、备注、保护、删除先进回收站（30 天内能恢复） */
 const devs = ref<any[]>([])
@@ -55,7 +55,7 @@ const vdist = computed(() => {
   for (const d of devs.value.filter(live)) { const k = d.ver || '?'; c[k] = (c[k] || 0) + 1 }
   return Object.keys(c).sort((a, b) => (a === '?' ? 1 : b === '?' ? -1 : vNewer(a, b) ? -1 : 1)).map(k => ({ v: k, n: c[k], old: k !== '?' && !!latest.value && vNewer(latest.value, k) }))
 })
-const status = (d: any) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '已到期暂停' : '已封禁') : '打开面板 ' + ago(d.po)
+const status = (d: any) => d.state !== 'ok' ? '开通中' : d.off ? (d.offWhy === 'exp' ? '已到期暂停' : '已封禁') : '打开面板 ' + poText(d.po, d.ver)
 /* 6.0 第 46 项：托管名额上限（后台能调）、满了排队的人 */
 const waitList = ref<any[] | null>(null)
 async function setMax() {

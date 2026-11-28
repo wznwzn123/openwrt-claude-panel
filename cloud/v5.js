@@ -103,7 +103,7 @@ export function installV5(Hub) {
 				const d = await this.ctx.storage.get('d:' + t.sub);
 				if (d) {
 					let b = {}; try { b = await this.watch(t.sub).brief(); } catch (e) {}
-					out.router = { sub: t.sub, name: d.name || '', model: d.model || '', state: d.state, created: d.at || d.created || 0, exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', invite: d.invite || '', last: b.last || 0, ver: b.ver || '', hot: b.hot || 0, po: b.po || 0, online: b.state || '' };
+					out.router = { sub: t.sub, name: d.name || '', model: d.model || '', state: d.state, created: d.at || d.created || 0, exp: d.exp || 0, off: !!d.off, offWhy: d.offWhy || '', invite: d.invite || '', last: b.last || 0, ver: b.ver || '', hot: b.hot || 0, po: b.po || 0, px: b.px || null, online: b.state || '' };
 					for (const uid of d.users || []) {
 						const u = await this.ctx.storage.get('u:' + uid);
 						if (!u) continue;

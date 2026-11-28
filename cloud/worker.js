@@ -187,7 +187,9 @@ export class Watch extends DurableObject {
 		const lan = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d{2,5}$/.test(String(rep.lan || '')) ? rep.lan : '';
 		// po：最后有人用手机面板的时间（毫秒，后台「打开面板 x 前」）；hot：装到第几个修复补丁
 		const hot = Math.floor(+rep.hot) || 0;
-		return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String(rep.ver || '').slice(0, 20), ed: ['ai', 'local', 'noai'].includes(rep.ed) ? rep.ed : '', lan, po: (+m.get('po') || 0) * 1000, hot: hot > 0 && hot < 10000 ? hot : 0 };
+		// px：装着的代理插件（6.0.2 起报「编号:开着:在跑」，逗号隔开）；没报的是 null（老版本）
+		const px = typeof rep.px === 'string' && /^[a-z0-9:,]{0,200}$/.test(rep.px) ? rep.px.split(',').filter(Boolean).map((x) => { const [id, en, run] = x.split(':'); return { id, en: en === '1', run: run === '1' }; }).slice(0, 8) : null;
+		return { last: (r && r.last) || 0, state: (s && s.state) || 'wait', ver: String(rep.ver || '').slice(0, 20), ed: ['ai', 'local', 'noai'].includes(rep.ed) ? rep.ed : '', lan, po: (+m.get('po') || 0) * 1000, hot: hot > 0 && hot < 10000 ? hot : 0, px };
 	}
 	// 6.0 第 94 项：换版本。探测地址（本地版没有隧道，不探测）；官网发给路由器的「换版本」指令（路由器下次心跳时带回去）
 	async setProbe(url) { const c = await this.getCfg(); if (!c) return; c.probe = url || ''; await this.ctx.storage.put('cfg', c); if (!url) await this.ctx.storage.delete('probe'); }
@@ -333,7 +335,10 @@ export class Watch extends DurableObject {
 			db.r = { last: now, rep: rep || (db.r && db.r.rep) || null };
 			await this.ctx.storage.put('r', db.r);
 			// 最后打开面板的时间：路由器重启后报 0，只往后记；不能比现在还晚（路由器时间不准时）
-			const po = Math.floor(+(rep && rep.po)) || 0;
+			// 6.0.2 起路由器还报 pa（几秒前打开的）：用官网的钟算，路由器时钟快了慢了都对（用户 11/28 18:09：刚发完消息后台写「3 天前」）
+			const pa = rep && rep.pa != null && rep.pa !== '' ? Math.floor(+rep.pa) : NaN;
+			let po = Math.floor(+(rep && rep.po)) || 0;
+			if (po > 1.6e9 && pa >= 0 && pa < 400 * 86400) po = Math.floor(now / 1000) - pa;
 			if (po > 1.6e9 && po * 1000 <= now + 600e3) { const old = +(await this.ctx.storage.get('po')) || 0; if (po > old) await this.ctx.storage.put('po', po); }
 		} else {
 			db.t = { last: now, first: (db.t && db.t.first) || now };
@@ -457,7 +462,8 @@ export class Watch extends DurableObject {
 // 缓存只在同一个机房有效；换了机房、缓存被清掉，就照常交过去，不会漏
 // 只看会影响判断的字段（隧道连接数 ready 会在 2～4 之间跳，不算变化）
 // po（最后有人用手机面板的时间）、hot（修复补丁编号）变了也要交过去：后台列表要用（用户 11/28）
-const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver', 'ed', 'lan', 'po', 'hot'];
+// px（装着的代理插件，6.0.2 起报）变了也交过去（后台排查用，用户 11/28 18:12）
+const BEAT_KEYS = ['wan', 'net', 'dns', 'tun', 'panel', 'clash', 'tcause', 'ver', 'ed', 'lan', 'po', 'hot', 'px'];
 export const beatSig = (rep) => JSON.stringify(BEAT_KEYS.map((k) => (rep && rep[k] != null ? rep[k] : null)));
 async function beatRoute(req, env, u, who, key) {
 	if (who !== 'r' && who !== 't') return J({ error: 'not found' }, 404);

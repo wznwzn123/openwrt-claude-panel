@@ -12,7 +12,7 @@ import Pagination from '@/components/ui/Pagination.vue'
 import { get } from '@/api'
 import { usePaged } from '@/composables/paged'
 import { toastError } from '@/composables/toast'
-import { ago, day, full, onText } from '@/utils/fmt'
+import { ago, day, full, onText, poText, pxText } from '@/utils/fmt'
 
 /* 6.0 第 91 项：一个人的全部记录（只算官网账号上的）：资料、路由器、安装码，下面是按时间排的全部记录，能按种类筛、能搜 */
 const route = useRoute()
@@ -68,7 +68,7 @@ const go = (x: any) => {
           <div v-for="x in d.devs" :key="x.sub" class="hub-row">
             <div class="hub-row-main">
               <div class="hub-row-title">{{ x.name }}<Tag v-if="x.gone" tone="neutral">已删除</Tag><template v-else><Tag :tone="x.role === '主账号' ? 'ok' : 'neutral'">{{ x.role }}</Tag><Tag v-if="x.off" tone="danger">{{ x.offWhy === 'exp' ? '已到期' : x.offWhy === 'deleted' ? '回收站' : '停用' }}</Tag></template></div>
-              <div v-if="!x.gone" class="hub-row-meta"><span class="mono">{{ x.sub }}</span> · {{ x.model || '型号未知' }} · 开通 {{ day(x.created) }} · 打开面板 {{ ago(x.po) }} · {{ onText(x.live, x.last) }}{{ x.exp ? ' · 到期 ' + day(x.exp) : ' · 不限期' }}</div>
+              <div v-if="!x.gone" class="hub-row-meta"><span class="mono">{{ x.sub }}</span> · {{ x.model || '型号未知' }} · 开通 {{ day(x.created) }} · 打开面板 {{ poText(x.po, x.ver) }} · 代理 {{ pxText(x.px) }} · {{ onText(x.live, x.last) }}{{ x.exp ? ' · 到期 ' + day(x.exp) : ' · 不限期' }}</div>
             </div>
           </div>
           <EmptyState v-if="!d.devs.length" title="没有路由器" icon="router" />

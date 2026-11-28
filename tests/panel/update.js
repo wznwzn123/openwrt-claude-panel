@@ -45,7 +45,9 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 		await c2.close(); }
 	await page.goto('http://localhost:8183/panel/?p=more'); await W(5500);
 	ok('「系统操作 → 检查更新」写着有新版本', /有新版本 v1\.3\.1/.test(await page.textContent('#updState')));
+	await page.evaluate(() => { window.__tl = []; new MutationObserver(() => window.__tl.push(document.querySelector('#toast').textContent)).observe(document.querySelector('#toast'), { childList: true, subtree: true, characterData: true }); });
 	await page.click('[data-t="update"]'); await W(800);
+	ok('点「检查更新」先弹「正在检查更新 请耐心等待」（用户 11/28），查完收起', (await page.evaluate(() => window.__tl)).some((x) => /正在检查更新 请耐心等待/.test(x)) && (await page.evaluate(() => document.querySelector('#toast').classList.contains('hidden') || document.querySelector('#toast').classList.contains('out') || !/正在检查更新/.test(document.querySelector('#toast').textContent))), JSON.stringify(await page.evaluate(() => window.__tl)));
 	ok('检查更新：显示现在的版本、最新版本、更新内容', /v1\.3\.0/.test(await page.textContent('.modal')) && /v1\.3\.1/.test(await page.textContent('.modal')) && /一键更新/.test(await page.textContent('.modal')) && /不会断网/.test(await page.textContent('.modal')));
 	// 一键更新：下载 → 安装 → 面板服务重启（连不上两次）→ 完成
 	U.seq = [{ state: 'downloading', msg: '正在下载新版安装包' }, { state: 'installing', msg: '正在安装 v1.3.1' }, { down: 2 }, { state: 'done', msg: '已更新到 v1.3.1', to: '1.3.1' }];

@@ -228,7 +228,7 @@ const lay = (page) => page.evaluate(() => {
 		await page.screenshot({ path: path.join(SHOT, 'split-nikki.png') });
 		S.d = { kind: null };
 		await page.reload(); await W(1500);
-		ok('没装 OpenClash / Nikki：说只支持这两个', /分流只支持 OpenClash 和 Nikki/.test(await page.textContent('#splBody')));
+		ok('没有在用的代理插件：说清楚（11/28 起 PassWall 等也能分流）', /没有在用的代理插件/.test(await page.textContent('#splBody')));
 		await ctx.close();
 	}
 	// 覆写里你自己写的规则（用户 11/28：显示在分流里标「覆写里的」；撞了按你写的走；点「交给分流管」才搬过来）；订阅合集里的节点选不了

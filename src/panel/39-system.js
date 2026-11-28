@@ -1555,7 +1555,14 @@ $('rUpdGo').onclick = () => updStart();
 $('rUpdMore').onclick = () => updSheet(true);
 $('rUpdLater').onclick = () => updMarkSeen();
 async function updSheet(forced) {
-	if (!forced) { const r = await updCheck(true); if (!r) return; }
+	// 点「检查更新」：先弹「正在检查更新 请耐心等待…」（用户 11/28 12:12；路由器要当场问官网和补丁，最长要十几秒），查完收起
+	if (!forced) {
+		const T0 = '正在检查更新 请耐心等待…';
+		toast(T0);
+		const r = await updCheck(true);
+		if ($('toast').firstElementChild.textContent === T0) toastHide();
+		if (!r) return;
+	}
 	const u = UPD;
 	// 有新版本（尤其是必须更新、打开面板就弹出来的）：居中的小卡片，更新内容在卡片里上下滑，按钮一直看得到
 	if (u.newer) {

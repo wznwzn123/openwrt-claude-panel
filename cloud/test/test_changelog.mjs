@@ -43,7 +43,7 @@ ok('热补丁：版本还是预发布（尝鲜）时不显示；没有补丁的�
 
 // ---------- 接口 ----------
 const mod = await load();
-let gh = { mode: 'ok', calls: 0 };
+let gh = { mode: 'ok', calls: 0, pkg: 0 }, HOTPKG = null;
 const REL = JSON.parse(fs.readFileSync(new URL('./fixtures/releases.json', import.meta.url), 'utf8'));
 // 热补丁也在发布列表里（预发布）：不算版本数，挂在 v5.2.1 下面
 const HOTREL = [rel('hot-5.2.1-1', '软件中心修好了\n\n只给 v5.2.1 的路由器，自动静默安装。', '2026-11-16T06:00:00Z', { prerelease: true }), rel('hot-5.2.1-2', '- 热补丁装完马上自检\n- AI 确认弹窗不用刷新就出来\n\n只给 v5.2.1 的路由器，自动静默安装。', '2026-11-16T08:00:00Z', { prerelease: true })];
@@ -54,6 +54,9 @@ globalThis.fetch = async (input, init = {}) => {
 	if (u.hostname === 'api.github.com') { gh.calls++; if (gh.mode !== 'ok') return new Response('{"message":"API rate limit exceeded"}', { status: 403 }); if (u.pathname.endsWith('/releases')) return new Response(JSON.stringify([...REL, ...HOTREL])); return new Response(JSON.stringify(REL[0])); }
 	if (u.hostname === 'github.com' && u.pathname.endsWith('/releases/latest')) return new Response(null, { status: 302, headers: { location: 'https://github.com/x/y/releases/tag/v5.3.0' } });
 	if (u.hostname === 'raw.githubusercontent.com') return new Response('最低版本：v5.2.1\n## 这个版本的更新\n- 限流时补上的最新一版\n\nv5.2.1 的更新：\n- 旧的');
+	// 补丁包（GitHub 接口被限流时，官网顺着下载地址找补丁、从包里读说明：用户 11/28 16:50）
+	if (u.hostname === 'github.com' && HOTPKG && u.pathname.endsWith('/releases/download/hot-5.3.0-1/SHA256SUMS.sig2')) return new Response('', { status: 200 });
+	if (u.hostname === 'github.com' && HOTPKG && u.pathname.endsWith('/releases/download/hot-5.3.0-1/hot.tar.gz')) { gh.pkg++; return new Response(HOTPKG); }
 	if (u.hostname === 'github.com') return new Response('', { status: 404 });
 	return new Response('{}');
 };
@@ -70,6 +73,25 @@ ok('接口：GitHub 接口被限流（403）：用上次存下的，再把最新
 // 后台公告的版本下拉（用户 11/28 截图：线上只有「不限」）：GitHub 接口被限流时拼存下的更新日志 + 最新一版
 { const r = await mod.default.fetch(new Request('https://panel.example/api/admin/versions', { headers: { authorization: 'Bearer admin-key-1234567890' } }), env); const j = await r.json(); const vs = (j.list || []).map((x) => x.v);
   ok('后台版本列表：GitHub 接口被限流时照样有（最新一版 + 更新日志里的版本，新的在前）', r.status === 200 && vs[0] === '5.3.0' && vs.includes('5.2.1') && vs.includes('1.0.0'), JSON.stringify(j).slice(0, 300)); }
+// 被限流时补丁也要列出来（用户 11/28 16:50「官网更新记录怎么没看到补丁」）：顺着下载地址找到 hot-5.3.0-1，说明和时间从包里的 hot.json 读，读到一次存着
+{
+	const { execSync } = await import('child_process'), os = await import('os'), path = await import('path');
+	const d = fs.mkdtempSync(path.join(os.tmpdir(), 'hotpkg-'));
+	fs.mkdirSync(d + '/root/www/panel', { recursive: true }); fs.writeFileSync(d + '/root/www/panel/index.html', 'x'.repeat(5000));
+	fs.writeFileSync(d + '/hot.json', JSON.stringify({ base: '5.3.0', n: 1, notes: '桌面小组件：同一台手机再点「添加」会换掉原来的' }));
+	execSync('touch -d @1795855600 hot.json && tar czf pkg.tgz ./root ./hot.json', { cwd: d });
+	HOTPKG = fs.readFileSync(d + '/pkg.tgz'); fs.rmSync(d, { recursive: true, force: true });
+	a = await get('/api/changelog');
+	const h = a.j.list[0].hot || [];
+	ok('接口：被限流时补丁照样列出来，说明和时间从补丁包里读', a.j.list[0].v === 'v5.3.0' && h.length === 1 && h[0].n === 1 && h[0].items.join() === '桌面小组件：同一台手机再点「添加」会换掉原来的' && h[0].at === 1795855600000, JSON.stringify(a.j.list[0]).slice(0, 400));
+	ok('接口：被限流时存下的旧版本补丁还在', (a.j.list.find((x) => x.v === 'v5.2.1').hot || []).length === 2);
+	const n0 = gh.pkg; await get('/api/changelog');
+	ok('补丁包只下一次（读到的说明存着）', n0 === 1 && gh.pkg === 1, n0 + ' ' + gh.pkg);
+	const { tarFind } = await import('../changelog.js');
+	const big = await tarFind(new Blob([HOTPKG]).stream().pipeThrough(new DecompressionStream('gzip')), 'hot.json', 64 * 1024, 2000);
+	ok('读包：超过上限就不读了', big === null);
+	HOTPKG = null;
+}
 // 一次都没成功过、又被限流：只有最新一版
 env.H = ns(mod.Hub);
 a = await get('/api/changelog');

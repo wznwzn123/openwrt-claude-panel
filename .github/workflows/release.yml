@@ -1,6 +1,6 @@
 # 发布新版本：在 GitHub 网页的 Actions → 「发布新版本」→ Run workflow，填版本号（例如 v1.0.0）
 # 会自动打安装包（自建版、托管版的通用包和各个具体版本的包）并签名、打安卓 App，创建 Release 并上传
-# App 的代码这次没改的话，app-version.json 里写的是 App 上次改动的版本，App 不会弹更新；改了才提示（必须更新）
+# App 的代码这次没改的话，app-version.json 里写的是 App 上次改动的版本，App 不会弹更新；改了才提示。强不强制看更新说明（tools/app-version.sh，规则跟路由器一样：「最低版本：x.y.z【必须更新】」的 x.y.z 是这一版才强制）
 name: 发布新版本
 on:
   workflow_dispatch:

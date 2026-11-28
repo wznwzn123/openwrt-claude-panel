@@ -16,8 +16,8 @@ if (!LK0) { fs.mkdirSync('/etc/claude-mcp', { recursive: true }); fs.writeFileSy
 const LK = fs.readFileSync(LKF, 'utf8').trim();
 const SUDO = 's'.repeat(24), SUDOF = '/tmp/cmcp_sudo.json', SUDO0 = fs.existsSync(SUDOF) ? fs.readFileSync(SUDOF) : null;
 fs.writeFileSync(SUDOF, JSON.stringify({ [SUDO]: { exp: Math.floor(Date.now() / 1000) + 600, dev: '', kind: 'local' } }));
-const cgi = (method, params, pi) => new Promise((z) => {
-	const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'panel/' + method, params: params || {}, client: 'panel', dev: 'local.' + LK });
+const cgi = (method, params, pi, dev) => new Promise((z) => {
+	const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'panel/' + method, params: params || {}, client: 'panel', dev: dev || 'local.' + LK });
 	const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/www/cgi-bin/mcp'))], { env: { ...process.env, CLAUDE_MCP_CONF: E + '/config.json', PATH_INFO: pi || '/tok' + 'd'.repeat(30), REQUEST_METHOD: 'POST', CONTENT_LENGTH: String(Buffer.byteLength(body)) } });
 	let out = ''; p.stdout.on('data', (x) => (out += x)); p.on('close', () => { const i = out.indexOf('\r\n\r\n'); let j = null; try { j = JSON.parse(out.slice(i + 4)); } catch (e) {} z(j || { raw: out }); });
 	p.stdin.end(body);
@@ -44,6 +44,18 @@ try {
 	ok('让其他手机都退出：小组件一起失效', /失效了/.test(err(await cgi('widget', { k: k2 }, '/widget'))));
 	for (let i = 0; i < 5; i++) await cgi('widget_new');
 	ok('最多 5 个', /最多加 5 个/.test(err(await cgi('widget_new'))));
+	// 登录着的手机（有设备编号）：一台只留一把，再点就换掉（用户 11/28 16:38 小米没弹添加框，点满 5 次）
+	fs.writeFileSync(E + '/widget.json', '{}');
+	const PH = 'phone001', PS = 'p'.repeat(32);
+	fs.writeFileSync(E + '/devices.json', JSON.stringify({ [PH]: { s: PS, name: '小米 14', at: 1 } }));
+	fs.writeFileSync(E + '/login_pw', '1'); // 开了登录密码才认手机（dev）
+	const ks = [];
+	for (let i = 0; i < 6; i++) ks.push((await cgi('widget_new', {}, null, PH + '.' + PS)).result?.k);
+	const wl = Object.values(JSON.parse(fs.readFileSync(E + '/widget.json', 'utf8')));
+	ok('同一台手机点 6 次只留 1 把，没有「最多 5 个」', ks.every(Boolean) && wl.length === 1 && wl[0].dev === PH, JSON.stringify([ks, wl]));
+	ok('换掉的旧钥匙失效，最新的能用', /失效了/.test(err(await cgi('widget', { k: ks[0] }, '/widget'))) && (await cgi('widget', { k: ks[5] }, '/widget')).result?.name != null);
+	const wsrc = fs.readFileSync('../src/mcp/47-widget.uc', 'utf8');
+	ok('别的手机加起来还是最多 5 个', /mine >= 5/.test(wsrc));
 	const fam = fs.readFileSync('../src/mcp/26-backup.uc', 'utf8');
 	ok('家人也能加（在「看」的权限里）', /view: \[[^\]]*'widget_new'/.test(fam));
 } finally {

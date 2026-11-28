@@ -8845,6 +8845,8 @@ function wd_read() { let o = cmcp_readj(WD_F, {}); return type(o) == 'object' ? 
 function wd_name() { return trim(readfile('/proc/sys/kernel/hostname') ?? '') || '路由器'; }
 P.widget_new = function(a) {
 	let d = wd_read(), mine = 0;
+	// 一台手机只留一把：App 只存最新的那把，再点「添加」就换掉这台手机原来的（用户 11/28 16:38：小米没弹添加框，点了 5 次就满了）
+	if (DEV_ID) for (let k in keys(d)) if (d[k].dev == DEV_ID) delete d[k];
 	for (let k in d) if ((d[k].uid ?? '') == (DEV?.uid ?? '')) mine++;
 	if (mine >= 5) die('最多加 5 个小组件：先在「登录着的设备」里移除不用的');
 	let id = rand_str(8), s = rand_str(32);

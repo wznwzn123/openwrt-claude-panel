@@ -602,6 +602,18 @@ const blCode = (new URLSearchParams(location.search).get('bl') || '').toLowerCas
 // 升级提醒邮件里的「不再提醒这台路由器」：/app?ovoff=专属网址编号，主账号登录后确认（用户 11/27）
 const ovOff = (new URLSearchParams(location.search).get('ovoff') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
 const joinCode = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
+// App 里「换版本」、在外面打不开家里的地址点「换成 AI 版」：/app?ed=专属网址编号 或 ?ed=local（主账号的本地版那台），登录后直接弹换版本（用户 11/28 17:32）
+const edAsk = (new URLSearchParams(location.search).get('ed') || '').toLowerCase().replace(/[^a-z2-9]/g, '').slice(0, 8);
+function edAskGo(me) {
+	if (!edAsk || sessionStorage.getItem('edask:' + edAsk)) return;
+	sessionStorage.setItem('edask:' + edAsk, '1');
+	const mine = (me.devs || []).filter((d) => d.role === 'main' && d.ed && !d.off);
+	const L = edAsk === 'local' ? mine.filter((d) => d.ed === 'local') : mine.filter((d) => d.sub === edAsk);
+	if (L.length === 1) return edBox(L[0], edAsk === 'local' ? 'ai' : '');
+	if (L.length > 1) return toast('点要换的那台路由器的「换版本」');
+	if ((me.devs || []).some((d) => d.role !== 'main' && (edAsk === 'local' ? d.ed === 'local' : d.sub === edAsk))) return toast('只有主账号能换版本：让他在官网「我的路由器」里换', true);
+	if (edAsk === 'local' && mine.length) return toast('你的路由器都是 AI 版，在外面也能打开');
+}
 let mailOn = false, regFull = false;
 function show(v) { document.body.classList.toggle('authmode', v === 'auth'); setTimeout(setSync, 0); if (v === 'dash' && /^#(login|reg|reset)$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} } $('vAuth').classList.toggle('hidden', v !== 'auth'); $('vDash').classList.toggle('hidden', v !== 'dash'); $('who').classList.toggle('hidden', v !== 'dash'); $('outBtn').classList.toggle('hidden', v !== 'dash'); }
 function tab(t) {
@@ -862,7 +874,7 @@ function edPoll(me) {
 	}, 8000);
 }
 // 换版本：说清楚两个版本差在哪、换了以后会怎样
-function edBox(d) {
+function edBox(d, pre) {
 	if (edWait(d)) return toast('正在换成' + edN(d.edJob.to) + '：等路由器做完再换（3 分钟内）');
 	const m = document.createElement('div'); m.className = 'mask';
 	const cur = d.ed || 'ai';
@@ -882,6 +894,7 @@ function edBox(d) {
 	const go = async () => { const to = m.querySelector('input[name=edto]:checked').value; await api('edition', { sub: d.sub, to }); m.remove(); toast('已发给路由器：3 分钟内换好，完成后会推送通知你'); await load(); };
 	ok.onclick = async () => { ok.disabled = true; er.textContent = ''; try { await go(); } catch (x) { if (x.data && x.data.sudo) { m.remove(); sudoBox(() => go().catch((e) => toast(e.message, true))); } else er.textContent = x.message; } finally { ok.disabled = false; } };
 	document.body.appendChild(m);
+	if (pre && pre !== cur) { const r = m.querySelector('input[value=' + pre + ']'); if (r) { r.checked = true; r.onchange(); } }
 }
 // 本地版第一次从官网打开：先说一句要连着家里的 Wi-Fi
 function localHint(go) {
@@ -1299,7 +1312,7 @@ function report(where, e) {
 function showLogin() {
 	show('auth');
 	if (APP6) return appAuth();
-	lgView(((pair || joinCode || okCode || blCode || ovOff || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
+	lgView(((pair || joinCode || okCode || blCode || ovOff || edAsk || location.hash === '#settings') && !LGV[location.hash.slice(1)]) ? 'login' : location.hash.slice(1));
 	if (ovOff) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">用路由器主账号登录后关掉升级提醒。</div>'); }
 	if (blCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">登录后关联尝鲜申请。</div>'); }
 	if (okCode) { const n = $('vAuth').querySelector('.card'); if (!n.querySelector('.notice[data-why]')) n.insertAdjacentHTML('afterbegin', '<div class="notice" data-why style="margin-bottom:6px">登录后确认 App 登录。</div>'); }
@@ -1351,6 +1364,7 @@ async function load(after) {
 	if (okCode && /^[a-z2-9]{8}$/.test(okCode) && !document.querySelector('.mask')) appOkBox(okCode);
 	if (blCode && !document.querySelector('.mask')) blBox(blCode);
 	if (ovOff && !blCode && !document.querySelector('.mask')) ovOffBox(ovOff);
+	if (edAsk && !document.querySelector('.mask')) edAskGo(me);
 	return me;
 }
 // App 里：要授权码，「登录或注册」在弹出的页面里确认（App 6.0.2 起是 App 里弹出的 Chrome 页，以前是手机浏览器）（或者另一台登录着的手机扫码），App 每 2 秒问一次

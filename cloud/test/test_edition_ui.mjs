@@ -66,6 +66,13 @@ for (const [w, h] of [[320, 700], [390, 844], [1280, 860]]) {
 	await page.locator(`[data-sub="${R.sub}"] [data-open]`).click(); await W(1500);
 	jumped = page.url();
 	ok('第二次打开：不再提示，直接跳' + T, /^http:\/\/192\.168\.6\.1:906\/panel\/#open=/.test(jumped), jumped);
+	// App 里「换成 AI 版」打开 /app?ed=local：登录后直接弹换版本，选好 AI 版（用户 11/28 17:32）
+	await page.goto(B + '/app?ed=local'); await W(1800);
+	const ab = page.locator('.mask .card');
+	ok('?ed=local：直接弹换版本，选好 AI 版' + T, (await ab.count()) === 1 && /本地版（现在）/.test(await ab.textContent()) && await ab.locator('input[value=ai]').isChecked() && (await ab.locator('[data-ok]').textContent()) === '换成 AI 版' && !(await ab.locator('[data-ok]').isDisabled()));
+	if (SHOTS) await page.screenshot({ path: `${SHOTS}/ed-ask-${w}.png` });
+	await page.reload(); await W(1500);
+	ok('同一次只弹一回（刷新不再弹）' + T, (await page.locator('.mask').count()) === 0);
 	await page.goto(B + '/app'); await W(1500);
 	// 换版本
 	await page.locator(`[data-sub="${R.sub}"] [data-ed]`).click(); await W(400);

@@ -70,13 +70,33 @@ const ONE = [{ url: 'https://abcd2345.panel.example/panel/', name: '家里', at:
 		// ⋯：改名、移除
 		await page.click('[data-m="0"]'); await W(450);
 		ok('「⋯」：打开、改名、移除' + T, /打开[\s\S]*改名[\s\S]*移除/.test(await page.textContent('#sheet')));
+		// 托管版换版本（用户 11/28 17:32）：托管网址带编号去官网账号页
+		ok('「⋯」托管的有「换版本」' + T, /打开[\s\S]*换版本[\s\S]*改名/.test(await page.textContent('#sheet')));
+		if (w === 390 && dark) await page.screenshot({ path: path.join(SHOT, 'apphome-edrow.png') });
+		await page.click('#sheet [data-x=ed]'); await W(400);
+		ok('「换版本」：打开官网账号页这台的换版本' + T, (await page.evaluate(() => window.__opened.slice(-1)[0])) === 'https://panel.example/app?ed=abcd2345');
+		await page.click('[data-m="1"]'); await W(450);
+		ok('家里的地址也有「换版本」（本地版）' + T, /换版本/.test(await page.textContent('#sheet')));
+		await page.click('#sheet [data-x=ed]'); await W(400);
+		ok('家里的地址「换版本」：ed=local' + T, (await page.evaluate(() => window.__opened.slice(-1)[0])) === 'https://panel.example/app?ed=local');
+		// 在外面打开家里的地址失败（App 调 lanFail）
+		await page.evaluate(() => window.lanFail('http://192.168.6.1:906/panel/')); await W(300);
+		const lf = await page.textContent('#dlg');
+		ok('打不开家里的地址：说要连家里 Wi-Fi、托管版换成 AI 版' + T, /打不开「192\.168\.6\.1」/.test(lf) && /连着家里 Wi-Fi/.test(lf) && /换成 AI 版/.test(lf), lf);
+		const dlb = await page.evaluate(() => { const c = document.querySelector('#dlgBox').getBoundingClientRect(); return [...document.querySelectorAll('#dlg .two .btn')].every((b) => { const r = b.getBoundingClientRect(); return r.left >= c.left - 1 && r.right <= c.right + 1; }); });
+		ok('提示卡片不出界' + T, dlb);
+		if (w !== 430) await page.screenshot({ path: path.join(SHOT, `apphome-lanfail-${w}${dark ? '-dark' : ''}.png`) });
+		await page.click('#dlg [data-y]'); await W(300);
+		ok('点「换成 AI 版」：去官网账号页、卡片收起' + T, (await page.evaluate(() => window.__opened.slice(-1)[0])) === 'https://panel.example/app?ed=local' && !(await page.isVisible('#dlg')));
+		await page.click('[data-m="0"]'); await W(450);
 		await page.click('#sheet [data-x=ren]'); await W(450);
 		await page.fill('#renIn', '公司'); await page.click('#renForm button'); await W(400);
 		ok('改名：存下来、列表跟着变' + T, (await page.evaluate(() => window.__saved && window.__saved.find((r) => r.url === 'https://abcd2345.panel.example/panel/').name)) === '公司' && /公司/.test(await page.textContent('#main')));
 		await page.click('[data-m="1"]'); await W(450);
 		await page.click('#sheet [data-x=del]'); await W(450);
 		ok('移除先确认：标题写对象，正文写后果' + T, /移除「192\.168\.6\.1」/.test(await page.textContent('#dlg')) && /路由器本身不受影响/.test(await page.textContent('#dlg')));
-		if (w === 390 && !dark) await page.screenshot({ path: path.join(SHOT, 'apphome-del.png') });
+		await page.screenshot({ path: path.join(SHOT, `apphome-del-${w}.png`) });
+		ok('移除确认的两个按钮都在卡片里' + T, await page.evaluate(() => { const c = document.querySelector('#dlgBox').getBoundingClientRect(); return [...document.querySelectorAll('#dlg .two .btn')].every((b) => { const r = b.getBoundingClientRect(); return r.left >= c.left - 1 && r.right <= c.right + 1; }); }));
 		ok('确认卡片按返回键能关' + T, (await page.evaluate(() => window.appBack())) === true && !(await page.isVisible('#dlg')));
 		await page.click('[data-m="1"]'); await W(450); await page.click('#sheet [data-x=del]'); await W(450); await page.click('#dlg [data-y]'); await W(300);
 		ok('移除：存下来，只剩一台' + T, (await page.evaluate(() => window.__saved.length)) === 1 && !/192\.168\.6\.1:906/.test(await page.textContent('#main')));

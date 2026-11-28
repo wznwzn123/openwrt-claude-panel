@@ -79,6 +79,7 @@ button.row:active,.row.tap:active{background:var(--fill)}
 .dlg .must{margin:10px 0 0;font-size:13.5px;color:var(--danger);font-weight:600;text-align:center}
 .dlg p.msg{margin:8px 0 0;font-size:14.5px;color:var(--muted);text-align:center;line-height:1.55}
 .dlg .btn{margin-top:12px;flex:none}
+.dlg .two .btn{flex:1 1 0;min-width:0;margin-top:0} /* 两个按钮并排：各占一半（以前 flex:none 加 width:100% 第二个挤出卡片） */
 /* 有新版本（「以后再说」以后） */
 .upd{display:flex;align-items:center;padding:12px 12px 12px 16px;margin-bottom:18px}
 .upd .tx b{font-size:15px}
@@ -109,6 +110,7 @@ const HUB = (A.hub() || '').replace(/\/$/, '');
 $('ver').textContent = A.version();
 // 线条图标（24 格，跟面板一个画法）
 const I = {
+	swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
 	router: '<rect x="3.5" y="12.5" width="17" height="7" rx="2"/><path d="M7.5 16h.01M10.5 16h.01M14 16h3"/><path d="M8.5 9.2a5 5 0 0 1 7 0M6 6.6a8.6 8.6 0 0 1 12 0"/>',
 	user: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>',
 	scan: '<path d="M4 8.5V6a2 2 0 0 1 2-2h2.5M15.5 4H18a2 2 0 0 1 2 2v2.5M20 15.5V18a2 2 0 0 1-2 2h-2.5M8.5 20H6a2 2 0 0 1-2-2v-2.5M4 12h16"/>',
@@ -229,10 +231,30 @@ function render() {
 	$('main').querySelectorAll('[data-a]').forEach((b) => (b.onclick = () => (b.dataset.a === 'add' ? addSheet() : ACTS[b.dataset.a]())));
 }
 // 单台路由器：打开 / 改名 / 移除
+// 托管版换版本（AI 版 / 本地版）在官网账号页做：家里的地址（本地版）带 ed=local，托管网址带它的编号（用户 11/28 17:32）
+const HUBH = (() => { try { return new URL(HUB).host; } catch (e) { return ''; } })();
+function edOf(url) {
+	if (!HUB) return '';
+	const m = /^(https?):\/\/([^/:]+)(:\d+)?\//.exec(url || ''); if (!m) return '';
+	if (m[1] === 'http' && /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(m[2])) return 'local';
+	const sm = HUBH && m[1] === 'https' && m[2].endsWith('.' + HUBH) ? /^([a-z2-9]{8})\./.exec(m[2]) : null;
+	return sm ? sm[1] : '';
+}
+const edGo = (e) => { closeSheet(); closeDlg(); A.open(HUB + '/app?ed=' + e); };
+// 打开家里的地址失败（App 调）：多半是人在外面
+window.lanFail = (url) => {
+	const r = list.find((x) => x.url === url), n = r ? r.name : hostOf(url);
+	openDlg(`<h3>打不开「${esc(n)}」</h3><p class="msg">这是家里的地址，要连着家里 Wi-Fi 才能打开。${HUB ? '<br>托管版想在外面用：换成 AI 版。' : ''}</p><div class="two">${HUB ? '<button class="btn" data-n>知道了</button><button class="btn pri" data-y>换成 AI 版</button>' : '<button class="btn pri" data-n>知道了</button>'}</div>`, (b) => {
+		b.querySelector('[data-n]').onclick = closeDlg;
+		const y = b.querySelector('[data-y]'); if (y) y.onclick = () => edGo('local');
+	});
+};
 function routerSheet(i) {
 	const r = list[i]; if (!r) return;
-	openSheet(`<h3>${esc(r.name)}</h3><div class="card mini"><button class="row" data-x="open"><span class="ic">${ic('open')}</span><span class="tx"><b>打开</b></span></button><button class="row" data-x="ren"><span class="ic">${ic('pen')}</span><span class="tx"><b>改名</b></span></button><button class="row" data-x="del"><span class="ic" style="color:var(--danger)">${ic('trash')}</span><span class="tx"><b style="color:var(--danger)">移除</b></span></button></div>`, (s) => {
+	const ed = edOf(r.url);
+	openSheet(`<h3>${esc(r.name)}</h3><div class="card mini"><button class="row" data-x="open"><span class="ic">${ic('open')}</span><span class="tx"><b>打开</b></span></button>${ed ? `<button class="row" data-x="ed"><span class="ic">${ic('swap')}</span><span class="tx"><b>换版本</b></span></button>` : ''}<button class="row" data-x="ren"><span class="ic">${ic('pen')}</span><span class="tx"><b>改名</b></span></button><button class="row" data-x="del"><span class="ic" style="color:var(--danger)">${ic('trash')}</span><span class="tx"><b style="color:var(--danger)">移除</b></span></button></div>`, (s) => {
 		s.querySelector('[data-x=open]').onclick = () => { closeSheet(); A.open(r.url); };
+		if (ed) s.querySelector('[data-x=ed]').onclick = () => edGo(ed);
 		s.querySelector('[data-x=ren]').onclick = () => renSheet(i);
 		s.querySelector('[data-x=del]').onclick = () => { closeSheet(); delDlg(i); };
 	});

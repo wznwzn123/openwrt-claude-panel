@@ -344,6 +344,14 @@ public class MainActivity extends AppCompatActivity {
                 if ("http".equals(u.getScheme()) && !SpeedWidget.lanHost(u.getHost())) return new WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", null, new ByteArrayInputStream(new byte[0]));
                 return null;
             }
+            // 家里的地址（本地版、局域网）在外面打不开：不显示系统的报错页，回首页说清楚怎么办（用户 11/28 17:32：用 App 的人不知道怎么换成 AI 版）
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, android.webkit.WebResourceError e) {
+                Uri u = r.getUrl();
+                if (!r.isForMainFrame() || !"http".equals(u.getScheme()) || !SpeedWidget.lanHost(u.getHost())) return;
+                v.stopLoading();
+                showHome();
+                js(home, "window.lanFail && lanFail(" + JSONObject.quote(u.getScheme() + "://" + u.getAuthority() + "/panel/") + ")");
+            }
             @Override public void onPageFinished(WebView v, String url) { remember(url); pollBar(); }
             @Override public void onPageStarted(WebView v, String url, Bitmap fav) { if (edge) { edge = false; barColor = 0; layoutBars(); } }
         });

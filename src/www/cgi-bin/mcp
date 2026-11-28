@@ -1181,7 +1181,7 @@ P.home_stats = function() {
 	let lm = lease_map();
 	for (let ip in lm) if (lm[ip]?.mac) all[lm[ip].mac] = 1;
 	let n = length(keys(on));
-	return { today: { day, dl, ul, top, counting: !!tr?.at && time() - tr.at < 600 }, devices: { online: n, wifi, wired: n - wifi, total: length(keys(all)) } };
+	return { today: { day, dl, ul, top, counting: !!tr?.at && time() - tr.at < 600, acct: tr?.acct ?? null }, devices: { online: n, wifi, wired: n - wifi, total: length(keys(all)) } };
 };
 
 // 6.0 第 87 项：从列表里删掉的离线设备记在这里（MAC 或 ip:地址 → 删的时间）；设备再连上就自动重新出现
@@ -2411,16 +2411,17 @@ P.pause_set = function(a) {
 
 /* ---------- 流量统计 ---------- */
 P.traffic = function() {
-	let days = {}, names = {};
+	let days = {}, names = {}, nx = {};
 	for (let f in split(trim(sh('ls /etc/claude-mcp/traffic/*.json 2>/dev/null').out), '\n')) {
 		if (!length(f)) continue;
 		let m = cmcp_readj(f, null);
 		if (!m) continue;
 		for (let d in m.days ?? {}) days[d] = m.days[d];
+		for (let d in m.nx ?? {}) nx[d] = 1;
 		for (let k in m.names ?? {}) names[k] = m.names[k];
 	}
 	let st = cmcp_readj('/tmp/cmcp_traf.json', null);
-	if (st?.day) { days[st.day] = st.today; for (let k in st.names ?? {}) names[k] = st.names[k]; }
+	if (st?.day) { days[st.day] = st.today; for (let k in st.names ?? {}) names[k] = st.names[k]; if (st.nx) nx[st.day] = 1; }
 	// 名字：认识的设备 → 现在的 DHCP 名字 → 静态分配起的名字（后面的优先）
 	let kn = cmcp_readj('/etc/claude-mcp/known_devices.json', {});
 	for (let m in kn) if (kn[m].name && !names[m]) names[m] = kn[m].name;
@@ -2435,7 +2436,9 @@ P.traffic = function() {
 	// 解开被转码的名字；面板里改过名字的优先
 	for (let k in names) names[k] = CL.name_clean(names[k]) ?? names[k];
 	for (let m, x in CL.dev_aliases()) if (type(x) == 'object' && x.name) names[m] = x.name;
-	return { days, names, today: st?.day ?? null, at: st?.at ?? null };
+	// acct：怎么数的（nft / ipt / ct = 防火墙计数，none = 只靠 OpenClash / Nikki）；warn：开着绕过内核的加速、卸载数不全；
+	// nx：这些天用的是 PassWall 等插件，分不出走代理还是直连（6.0 第五阶段，用户 11/28）
+	return { days, names, nx, acct: st?.acct ?? null, warn: st?.warn ?? null, today: st?.day ?? null, at: st?.at ?? null };
 };
 
 /* ---------- Kwrt 后台菜单（侧边栏自动加入新装的插件） ---------- */
@@ -3290,11 +3293,11 @@ P.update_check = function(a) {
 	// 用户 11/27：点了要马上知道有没有新补丁——当场问一次官网最新是第几个（hotn），比现在装的大就后台马上装，面板等着换新
 	let hotq = false, hotn = null;
 	if (a?.force && !a?.nohot && stat(SBIN + '/cmcp-hot')) {
+		// 问法交给 cmcp-hot（带上第几个补丁、分批用的编号，f=1 = 点了「检查更新」直接装最新的；分批推送和退回，用户 11/28）
 		if (!hubdown && match(v.cur ?? '', /^[0-9]+\.[0-9]+\.[0-9]+$/)) {
-			let hub = match(readfile(ETC + '/hub.conf') ?? '', /(^|\n)HUB=(https?:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
-			try { let j = json(sh(sprintf('curl -s -m 10 %s', shq(hub + '/api/router/hot?v=' + v.cur))).out); if (type(j?.n) == 'int' && j.n >= 0) hotn = j.n; } catch (e) {}
+			try { let j = json(sh(SBIN + '/cmcp-hot ask force').out); if (type(j?.n) == 'int' && j.n >= 0) hotn = j.n; } catch (e) {}
 		}
-		sh('nohup ' + SBIN + '/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true;
+		sh('nohup ' + SBIN + '/cmcp-hot check force >/dev/null 2>&1 </dev/null &'); hotq = true;
 	}
 	// pv：面板网页该是哪一版（热补丁装过第 N 个就是「6.0.0-hN」），面板发现自己不一样就换成新的
 	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, hotn, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq, stale: hubdown };

@@ -193,6 +193,8 @@ export class Watch extends DurableObject {
 	async setProbe(url) { const c = await this.getCfg(); if (!c) return; c.probe = url || ''; await this.ctx.storage.put('cfg', c); if (!url) await this.ctx.storage.delete('probe'); }
 	async setX(port) { const c = await this.getCfg(); if (!c) return; if (port) c.x = port; else delete c.x; await this.ctx.storage.put('cfg', c); }
 	async setCmd(cmd) { const c = await this.getCfg(); if (!c) return; if (cmd) c.cmd = cmd; else delete c.cmd; await this.ctx.storage.put('cfg', c); }
+	// 后台把这台路由器固定在某个补丁（按台退回）：下一次心跳回复里带上 hotc，路由器马上问一次补丁（用户 11/28）
+	async setHotc() { const c = await this.getCfg(); if (!c) return; c.hotc = Date.now(); await this.ctx.storage.put('cfg', c); }
 	async setOff(off) { const c = await this.getCfg(); if (!c) return; c.off = !!off; await this.ctx.storage.put('cfg', c); }
 	async wipe() { await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll(); }
 	async load() {
@@ -359,6 +361,8 @@ export class Watch extends DurableObject {
 			}
 			// 官网让路由器换版本：每次心跳都带上，直到路由器报回结果（一天没执行就作废）
 			if (c && c.cmd) { if (now - (c.cmd.at || 0) > 86400e3) await this.setCmd(null); else out = { ...(out || {}), cmd: { id: c.cmd.id, to: c.cmd.to } }; }
+			// 按台退回补丁：只带一次（路由器没收到的话，6 小时一次的定时检查也会装）
+			if (c && c.hotc) { delete c.hotc; await this.ctx.storage.put('cfg', c); out = { ...(out || {}), hotc: 1 }; }
 		}
 		return out;
 	}
@@ -479,11 +483,11 @@ async function beatRoute(req, env, u, who, key) {
 	}
 	const r = await w.beatIn(who, key, rep);
 	if (r === 'off') return J({ error: 'not found' }, 404);
-	if (r !== 'ok' && !(r && (r.probe || r.cmd))) return J({ error: 'bad key' }, 403);
+	if (r !== 'ok' && !(r && (r.probe || r.cmd || r.hotc))) return J({ error: 'bad key' }, 403);
 	// 钥匙核对过了、轮到探测隧道：在这里（Durable Object 外面）探，结果交回去判断
 	if (r.probe) { const code = await probeFetch(r.probe, r.at); try { await w.probeIn(r.at, code); } catch (e) {} }
 	if (cache) { try { await cache.put(ck, new Response(JSON.stringify({ at: Date.now(), sig, kh }), { headers: { 'content-type': 'application/json', 'cache-control': 'max-age=600' } })); } catch (e) { why += ',puterr:' + String(e && e.message || e).slice(0, 80); } }
-	return J({ ok: true, m: 0, why, ...(r && r.cmd ? { cmd: r.cmd } : {}), ...(await annv(env)) });
+	return J({ ok: true, m: 0, why, ...(r && r.cmd ? { cmd: r.cmd } : {}), ...(r && r.hotc ? { hotc: 1 } : {}), ...(await annv(env)) });
 }
 // 心跳回复里带上公告版本号（用户 11/27：后台发出、修改公告，所有路由器 1–2 分钟内收到）；读不到就不带
 async function annv(env) { try { const v = await annVer(env); return v == null ? {} : { annv: v }; } catch (e) { return {}; } }

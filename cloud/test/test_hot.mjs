@@ -15,7 +15,7 @@ const a = process.argv.slice(2); let f = null, e = '';
 for (let i = 0; i < a.length; i++) { if (a[i] === '-i') f = a[++i]; else if (a[i] === '-e') e = a[++i]; }
 const s = f ? require('fs').readFileSync(f, 'utf8') : require('fs').readFileSync(0, 'utf8');
 let o; try { o = JSON.parse(s); } catch (x) { process.exit(1); }
-const v = o[e.replace(/^@\\./, '')]; if (v === undefined || v === null) process.exit(1); console.log(v);
+const v = e.replace(/^@\\./, '').split('.').reduce((x, k) => (x == null ? x : x[k]), o); if (v === undefined || v === null) process.exit(1); console.log(v);
 `, { mode: 0o755 });
 fs.writeFileSync(BIN + '/verify', '#!/bin/sh\n[ "$VERIFY_OK" = 1 ]\n', { mode: 0o755 });
 const V = (s) => fs.writeFileSync(R + '/etc/claude-mcp/version', s);
@@ -36,9 +36,10 @@ let INFO = { n: 1, tag: 'hot-6.0.0-1', notes: '修了订阅页的显示问题' }
 // 假的官网放在另一个进程里（下面用 spawnSync 跑脚本时，这个进程不会回应请求）；补丁信息写在 SRV/info.json
 const setInfo = () => fs.writeFileSync(SRV + '/info.json', JSON.stringify(INFO));
 setInfo();
-const srv = spawn(process.execPath, ['-e', `const http=require('http'),fs=require('fs'),path=require('path');http.createServer((q,s)=>{const u=new URL(q.url,'http://x');const f=${JSON.stringify(SRV)}+'/'+(u.pathname==='/hot'?'info.json':path.basename(u.pathname));if(fs.existsSync(f))return s.end(fs.readFileSync(f));s.statusCode=404;s.end();}).listen(8763,'127.0.0.1',()=>console.log('up'));`]);
+// 问补丁的网址记在 SRV/ask.log，报结果（POST /rep）记在 SRV/rep.log
+const srv = spawn(process.execPath, ['-e', `const http=require('http'),fs=require('fs'),path=require('path');const D=${JSON.stringify(SRV)};http.createServer((q,s)=>{const u=new URL(q.url,'http://x');if(u.pathname==='/rep'){let b='';q.on('data',(x)=>b+=x);q.on('end',()=>{fs.appendFileSync(D+'/rep.log',b+'\\n');s.end('{"ok":true}');});return;}if(u.pathname==='/hot')fs.appendFileSync(D+'/ask.log',q.url+'\\n');const f=D+'/'+(u.pathname==='/hot'?'info.json':path.basename(u.pathname));if(fs.existsSync(f))return s.end(fs.readFileSync(f));s.statusCode=404;s.end();}).listen(8763,'127.0.0.1',()=>console.log('up'));`]);
 await new Promise((z) => srv.stdout.once('data', z));
-const run = (env = {}) => spawnSync('sh', [path.resolve('../src/bin/cmcp-hot'), 'check'], { encoding: 'utf8', env: { ...process.env, PATH: BIN + ':' + process.env.PATH, CMCP_ROOT: R, CMCP_HOT_URL: 'http://127.0.0.1:8763/hot', CMCP_HOT_DL: 'http://127.0.0.1:8763/dl', CMCP_VERIFY: BIN + '/verify', CMCP_HOT_CHECK: 'grep -q NEW ' + R + '/www-claude-mcp/panel/index.html', VERIFY_OK: '1', NO_PROXY: '*', ...env } });
+const run = (env = {}, args = ['check']) => spawnSync('sh', [path.resolve('../src/bin/cmcp-hot'), ...args], { encoding: 'utf8', env: { ...process.env, PATH: BIN + ':' + process.env.PATH, CMCP_ROOT: R, CMCP_HOT_URL: 'http://127.0.0.1:8763/hot', CMCP_HOT_DL: 'http://127.0.0.1:8763/dl', CMCP_HOT_REP: 'http://127.0.0.1:8763/rep', CMCP_POPEN: E + '/popen', CMCP_VERIFY: BIN + '/verify', CMCP_HOT_CHECK: 'grep -q NEW ' + R + '/www-claude-mcp/panel/index.html', VERIFY_OK: '1', NO_PROXY: '*', ...env } });
 const rd = (p) => (fs.existsSync(R + '/' + p) ? fs.readFileSync(R + '/' + p, 'utf8') : null);
 const ver = () => rd('etc/claude-mcp/version');
 fs.rmSync('/tmp/cmcp_hot.lock', { recursive: true, force: true });
@@ -105,6 +106,45 @@ try {
 	INFO = { n: 6, tag: 'evil;rm -rf /', notes: '' }; setInfo();
 	run({ CMCP_HOT_CHECK: 'true' });
 	ok('官网给的标签格式不对：不下载', /^HOT=5$/m.test(ver()));
+	// 分批推送和退回（用户 11/28）
+	const rl = (f) => (fs.existsSync(SRV + '/' + f) ? fs.readFileSync(SRV + '/' + f, 'utf8').trim().split('\n').filter(Boolean) : []);
+	const reps = () => rl('rep.log').map((x) => JSON.parse(x));
+	const last = (f) => rl(f).slice(-1)[0] || '';
+	ok('问补丁时带上现在第几个（h）；没有兼容上报编号、不是托管版：不带 k / id（最后一批）', /\?v=6\.0\.0&h=5$/.test(last('ask.log')), last('ask.log'));
+	ok('装好了报一次成功', reps().some((x) => x.n === 5 && x.ok === 1 && x.v === '6.0.0' && !x.s && !x.id), rl('rep.log').join(' | '));
+	ok('装失败报原因（固定的话）', reps().some((x) => x.n === 2 && x.ok === 0 && /装完面板打不开/.test(x.err)), rl('rep.log').join(' | '));
+	ok('签名不对也报', reps().some((x) => x.ok === 0 && x.err === '签名不对'));
+	// 托管版：k = s:专属网址编号，报结果带路由器钥匙；兼容上报的编号 id 也带上（认尝鲜）
+	fs.writeFileSync(R + '/etc/claude-mcp/hub.conf', 'HUB=http://127.0.0.1:8763\nSUB=abcd2345\n');
+	fs.writeFileSync(R + '/etc/claude-mcp/cloud.conf', 'RKEY=' + 'R'.repeat(32) + '\n');
+	fs.writeFileSync(R + '/etc/claude-mcp/compat_id', 'b2b2b2b2b2b2b2b2\n');
+	fs.writeFileSync(R + '/etc/claude-mcp/compat_res.json', JSON.stringify({ beta: { ok: true } }));
+	fs.writeFileSync(E + '/popen', '1795800000');
+	run({ CMCP_HOT_CHECK: 'true' }, ['check', 'force']);
+	ok('托管版：带 k=s:编号、兼容上报的 id；尝鲜通过的带打开面板时间 po；点了「检查更新」带 f=1', /\?v=6\.0\.0&h=5&k=s:abcd2345&id=b2b2b2b2b2b2b2b2&po=1795800000&f=1$/.test(last('ask.log')), last('ask.log'));
+	fs.writeFileSync(R + '/etc/claude-mcp/compat_off', '');
+	run({ CMCP_HOT_CHECK: 'true' });
+	ok('关了兼容上报：不带 id（托管版照样按专属网址编号分批）', /\?v=6\.0\.0&h=5&k=s:abcd2345$/.test(last('ask.log')), last('ask.log'));
+	fs.rmSync(R + '/etc/claude-mcp/compat_off');
+	// 往回装：官网明说 back 时才装比现在旧的
+	INFO = { n: 4, tag: 'hot-6.0.0-4', notes: '' }; setInfo();
+	mkhot('6.0.0', 4, { 'www-claude-mcp/panel/index.html': 'NEW4 again' });
+	run({ CMCP_HOT_CHECK: 'true' });
+	ok('官网给的编号比现在小、没说 back：不装', /^HOT=5$/m.test(ver()) && rd('www-claude-mcp/panel/index.html') === 'NEW5');
+	INFO = { n: 4, tag: 'hot-6.0.0-4', notes: '', back: true }; setInfo();
+	run({ CMCP_HOT_CHECK: 'true' });
+	ok('back：往回装 V4', /^HOT=4$/m.test(ver()) && rd('www-claude-mcp/panel/index.html') === 'NEW4 again', ver());
+	ok('通知里写「已退回」', /面板已退回到 v6\.0\.0 V4/.test(rd('etc/claude-mcp/events.log') || ''));
+	ok('退回装好也报一次（带 back，托管版带钥匙）', reps().some((x) => x.n === 4 && x.ok === 1 && x.back === true && x.s === 'abcd2345' && x.rk === 'R'.repeat(32) && x.id === 'b2b2b2b2b2b2b2b2'), rl('rep.log').slice(-1)[0]);
+	// V0：正式版原样
+	INFO = { n: 0, tag: 'hot-6.0.0-0', notes: '', back: true }; setInfo();
+	mkhot('6.0.0', 0, { 'www-claude-mcp/panel/index.html': 'RELEASE' });
+	run({ CMCP_HOT_CHECK: 'true' });
+	ok('退回 V0（正式版原样）：补丁号记 0，通知写「正式版原样」', /^HOT=0$/m.test(ver()) && rd('www-claude-mcp/panel/index.html') === 'RELEASE' && /面板已退回到 v6\.0\.0 正式版原样/.test(rd('etc/claude-mcp/events.log') || ''), ver());
+	// 只问不装（面板「检查更新」显示「正在安装 Vn…」用）
+	INFO = { n: 6, tag: 'hot-6.0.0-6', notes: '' }; setInfo();
+	const a = run({}, ['ask', 'force']);
+	ok('cmcp-hot ask：打印官网的回复，不装', /"n":6/.test(a.stdout) && /^HOT=0$/m.test(ver()) && /&f=1$/.test(last('ask.log')), a.stdout + ' ' + last('ask.log'));
 } finally {
 	srv.kill(); fs.rmSync(E, { recursive: true, force: true });
 }

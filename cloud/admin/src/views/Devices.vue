@@ -78,6 +78,20 @@ async function ovToggle(d: any) {
   const name = d.name || d.sub, on = !!d.ovOff
   try { await post(`devices/${d.sub}/${on ? 'ovon' : 'ovoff'}`, {}); pushToast((on ? '已打开' : '已关掉') + '「' + name + '」的升级提醒'); load() } catch (e) { toastError(e, '没改成') }
 }
+// 按台退回补丁（用户 11/28）：把这台固定在某个补丁，后面的补丁这台都不装，直到取消固定；跟着心跳几分钟内生效
+async function hotPin(d: any) {
+  const name = d.name || d.sub, key = 's:' + d.sub
+  if (d.hotPin) {
+    if (!(await confirm({ title: '取消固定补丁：' + name, message: '照常接着装新补丁。', confirmText: '取消固定' }))) return
+    try { await post('hotpin', { key, base: d.hotPin.base, n: null }); pushToast('已取消固定'); load() } catch (e) { toastError(e, '没成功') }
+    return
+  }
+  const chips = [] as Array<{ label: string; value: string }>
+  for (let n = (d.hot || 0) - 1; n >= 0 && chips.length < 5; n--) chips.push({ label: n ? 'V' + n : 'V0 正式版原样', value: String(n) })
+  const v = await ask({ title: '退回补丁：' + name, message: `现在 v${d.ver} V${d.hot}。固定在这个补丁 后面的补丁这台都不装 直到取消固定。`, input: { label: '补丁编号', value: chips[0]?.value ?? '', numeric: true, required: '要填编号' }, chips, confirmText: '退回', danger: true })
+  if (!v) return
+  try { await post('hotpin', { key, base: d.ver, n: +v.value }); pushToast('「' + name + '」几分钟内退回 V' + v.value); load() } catch (e) { toastError(e, '没成功') }
+}
 async function op(d: any, o: string) {
   const sub = d.sub, name = d.name || sub
   let body: any
@@ -149,6 +163,7 @@ onMounted(load)
                 <Tag v-if="d.ver" :tone="latest && vNewer(latest, d.ver) ? 'danger' : 'neutral'">v{{ d.ver }}{{ d.hot ? ' V' + d.hot : '' }}{{ latest && vNewer(latest, d.ver) ? ' · 旧版' : '' }}</Tag>
                 <Tag v-else-if="live(d) && d.seen" tone="danger">版本未知 · 很旧</Tag>
                 <Tag v-if="d.off && d.offWhy !== 'deleted'" tone="danger" dot>{{ d.offWhy === 'exp' ? '到期暂停' : '已封禁' }}</Tag>
+                <Tag v-if="d.hotPin" tone="danger">固定在 {{ d.hotPin.n ? 'V' + d.hotPin.n : 'V0' }}</Tag>
                 <Tag v-if="d.ed === 'local'" tone="info">本地版</Tag>
                 <Tag v-else-if="d.ed === 'noai'" tone="neutral">纯面板版（旧）</Tag>
                 <Tag v-if="d.edFail && Date.now() - d.edFail.at < 7 * 864e5" tone="danger">换版本失败</Tag>
@@ -166,6 +181,7 @@ onMounted(load)
                 <Button size="sm" @click="op(d, 'note')">备注</Button>
                 <Button size="sm" @click="op(d, d.off ? 'on' : 'off')">{{ d.off ? '解封' : '封禁' }}</Button>
                 <Button size="sm" @click="op(d, d.protect ? 'unprotect' : 'protect')">{{ d.protect ? '取消保护' : '保护' }}</Button>
+                <Button v-if="d.state === 'ok' && (d.hot || d.hotPin)" size="sm" @click="hotPin(d)">{{ d.hotPin ? '取消固定补丁' : '退回补丁' }}</Button>
                 <Button v-if="d.state === 'ok'" size="sm" @click="ovToggle(d)">{{ d.ovOff ? '打开升级提醒' : '关掉升级提醒' }}</Button>
                 <Button v-if="!d.prot" size="sm" variant="ghost" @click="op(d, 'delete')">删除</Button>
               </template>

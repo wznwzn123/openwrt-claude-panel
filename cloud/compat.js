@@ -176,6 +176,7 @@ export function installCompat(Hub) {
 		},
 		// 管理后台处理尝鲜申请：ok 同意、no 拒绝、rev 撤销这台、revp 撤销这个申请人的全部设备（撤销 / 拒绝后要重新申请）
 		async compatBeta(id, act) {
+			this._hrb = null; // 热补丁分批里「尝鲜的有哪些」要重新算（hotro.js）
 			if (act === true) act = 'ok'; else if (act === false) act = 'rev'; // 老的后台页面
 			if (!ID_RE.test(String(id || ''))) return { st: 400, error: '编号不对' };
 			if (!['ok', 'no', 'rev', 'revp'].includes(act)) return { st: 400, error: '操作不对' };

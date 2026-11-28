@@ -29,7 +29,8 @@ await new Promise((z) => srv.listen(8771, '127.0.0.1', z));
 fs.writeFileSync(E + '/hub.conf', 'HUB=http://127.0.0.1:8771\n');
 fs.writeFileSync(E + '/config.json', JSON.stringify({ token: 'tok' + 'u'.repeat(30), uci: 'python3 ' + path.resolve('test/fake/uci.py') + ' -c ' + CFG, uci_dir: CFG }));
 const MARK = E + '/hot-ran';
-fs.writeFileSync(SB + '/cmcp-hot', `#!/bin/sh\necho "$1" >> ${MARK}\n`, { mode: 0o755 });
+// 假的 cmcp-hot：ask = 问官网（带上第几个补丁、f=1），check = 记一下被叫过
+fs.writeFileSync(SB + '/cmcp-hot', `#!/bin/sh\nif [ "$1" = ask ]; then curl -fsS -m 10 "$(sed -n 's/^HUB=//p' ${E}/hub.conf)/api/router/hot?v=6.0.0&h=1&f=1"; exit 0; fi\necho "$1 $2" >> ${MARK}\n`, { mode: 0o755 });
 const LKF = '/etc/claude-mcp/local.key', LK0 = fs.existsSync(LKF);
 if (!LK0) fs.writeFileSync(LKF, 'k'.repeat(40) + '\n');
 const LK = fs.readFileSync(LKF, 'utf8').trim();
@@ -43,8 +44,8 @@ const W = (ms) => new Promise((r) => setTimeout(r, ms));
 try {
 	let r = await cgi('update_check', { force: true });
 	await W(600);
-	ok('点「检查更新」：当场问官网这个版本最新的补丁（第 3 个），告诉面板', r.result?.hotq === true && r.result?.hotn === 3 && r.result?.hot === 1 && ASK.some((u) => u === '/api/router/hot?v=6.0.0'), JSON.stringify(r.result));
-	ok('同时在后台马上跑一次补丁检查（cmcp-hot check）', fs.existsSync(MARK) && fs.readFileSync(MARK, 'utf8').trim() === 'check');
+	ok('点「检查更新」：当场问官网这个版本最新的补丁（第 3 个），告诉面板', r.result?.hotq === true && r.result?.hotn === 3 && r.result?.hot === 1 && ASK.some((u) => u.startsWith('/api/router/hot?v=6.0.0&h=1&f=1')), JSON.stringify(r.result) + ' ' + ASK.join(' '));
+	ok('同时在后台马上跑一次补丁检查（cmcp-hot check force：点了「检查更新」的直接装最新的）', fs.existsSync(MARK) && fs.readFileSync(MARK, 'utf8').trim() === 'check force');
 	fs.rmSync(MARK, { force: true }); ASK.length = 0;
 	r = await cgi('update_check', { nohot: 1 });
 	await W(600);

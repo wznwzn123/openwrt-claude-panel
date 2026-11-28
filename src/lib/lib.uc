@@ -74,6 +74,7 @@ function ann_rid() {
 	return r;
 }
 let ANN_HOT = null; // 官网说这个版本最新的热补丁是第几个（6.0）
+let ANN_HOTW = null; // 后台全部退回过的最小补丁号：装着它或更新的要马上问一次（分批推送和退回，用户 11/28）
 function ann_get(url, tmo) {
 	let j = null;
 	// 6.0：带上面板版本和托管 / 自建，官网只给发给这台的公告
@@ -81,6 +82,7 @@ function ann_get(url, tmo) {
 	let vf = readfile(D + '/version') ?? '', v = match(vf, /(^|\n)VER=([0-9a-z.]+)/)?.[2] ?? '', h = match(vf, /(^|\n)HOT=([0-9]+)/)?.[2] ?? '0', k = length(trim(readfile(D + '/hub.conf') ?? '')) ? 'h' : 's';
 	try { j = json(sh(sprintf('curl -s -m %d %s', tmo ?? 12, shq(url + '/api/notices?r=' + ann_rid() + '&v=' + v + '&h=' + h + '&k=' + k)))); } catch (e) {}
 	ANN_HOT = type(j) == 'object' && type(j.hot) == 'int' && j.hot >= 0 ? j.hot : null;
+	ANN_HOTW = type(j) == 'object' && type(j.hotw) == 'int' && j.hotw > 0 ? j.hotw : null;
 	return type(j) == 'object' && j.ok && type(j.list) == 'array' ? j.list : null;
 }
 function ann_fetch(tmo) {
@@ -106,7 +108,7 @@ function ann_fetch(tmo) {
 		push(out, it);
 		if (length(out) >= 20) break;
 	}
-	let c = { at: now(), list: out, ...(ANN_HOT != null ? { hot: ANN_HOT } : {}) };
+	let c = { at: now(), list: out, ...(ANN_HOT != null ? { hot: ANN_HOT } : {}), ...(ANN_HOTW != null ? { hotw: ANN_HOTW } : {}) };
 	writej(ANN_CACHE, c);
 	return c;
 }

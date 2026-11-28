@@ -1390,7 +1390,7 @@ html,body{overscroll-behavior-y:contain}
 <section class="page" id="p-traf">
 	<div class="hero">
 		<div class="herohead"><h1>流量统计</h1><span class="pill" id="tfPill">—</span></div>
-		<p class="muted" style="margin:6px 0 0">每台设备用了多少流量，分「走代理」和「直连」。每分钟更新，保留最近 3 个月。</p>
+		<p class="muted" style="margin:6px 0 0">每台设备用了多少流量。每分钟更新，保留最近 3 个月。</p>
 		<div class="chips tfseg" id="tfRange"><button class="chip on" data-r="today">今天</button><button class="chip" data-r="yday">昨天</button><button class="chip" data-r="7">7 天</button><button class="chip" data-r="month">本月</button><button class="chip" data-r="last">上月</button></div>
 	</div>
 	<div id="tfBody"><section class="card empty">读取中…</section></div>
@@ -6738,6 +6738,12 @@ function tfDays(r, today) {
 	const pre = r === 'month' ? today.slice(0, 7) : dshift(today.slice(0, 8) + '01', -1).slice(0, 7);
 	return Object.keys(TF.d.days || {}).filter((d) => d.startsWith(pre));
 }
+// 统计有哪些限制（6.0 第五阶段：防火墙计数以后，没装代理插件、用 PassWall 等的也有数）
+function tfNote(d, nx) {
+	if (!d.acct || d.acct === 'none') return 'OpenClash 或 Nikki 没运行时的流量算不到';
+	if (nx) return '用 PassWall、HomeProxy、SSR Plus+ 的日子分不出走代理和直连 只有总数';
+	return '';
+}
 function renderTraf() {
 	const box = $('tfBody'), d = TF.d;
 	if (!box || !d) return;
@@ -6750,11 +6756,13 @@ function renderTraf() {
 	const per = {};
 	for (const day of days) for (const [k, a] of Object.entries(all[day] || {})) per[k] = tfSum([per[k] || [0, 0, 0, 0], a]);
 	const tot = tfSum(Object.values(per)), T = tfTot(tot), px = tot[0] + tot[1], dr = tot[2] + tot[3];
+	// 用 PassWall、HomeProxy、SSR Plus+ 的日子（没有 Clash 接口）：只有防火墙数的总数，分不出走代理还是直连
+	const nxd = d.nx || {}, nx = days.some((x) => nxd[x]);
 	const pct = (x) => (T ? Math.round((x * 100) / T) : 0);
 	// 最近 14 天（选中设备时只看它）
 	const sel = TF.sel && per[TF.sel] !== undefined ? TF.sel : TF.sel;
-	const col = [...Array(14)].map((_, i) => { const day = dshift(today, i - 13), a = sel ? ((all[day] || {})[sel] || [0, 0, 0, 0]) : tfSum(Object.values(all[day] || {})); return { day, p: a[0] + a[1], d: a[2] + a[3] }; });
-	const mx = Math.max(1, ...col.map((c) => c.p + c.d));
+	const col = [...Array(14)].map((_, i) => { const day = dshift(today, i - 13), a = sel ? ((all[day] || {})[sel] || [0, 0, 0, 0]) : tfSum(Object.values(all[day] || {})); return nxd[day] ? { day, p: 0, d: 0, n: tfTot(a) } : { day, p: a[0] + a[1], d: a[2] + a[3], n: 0 }; });
+	const mx = Math.max(1, ...col.map((c) => c.p + c.d + c.n));
 	const inR = new Set(days);
 	const rows = Object.entries(per).filter(([, a]) => tfTot(a) > 0).sort((a, b) => tfTot(b[1]) - tfTot(a[1]));
 	const top = rows.length ? tfTot(rows[0][1]) : 1;
@@ -6764,18 +6772,19 @@ function renderTraf() {
 		<div class="muted" style="font-size:13px">${label}一共</div>
 		<div class="tfbig">${B(T)}</div>
 		<div class="muted" style="font-size:13px">↓ 下载 ${B(tot[1] + tot[3])} · ↑ 上传 ${B(tot[0] + tot[2])}</div>
-		<div class="tfsplit"><i style="width:${pct(px)}%;background:var(--brand)"></i><i style="width:${T ? 100 - pct(px) : 0}%;background:var(--ok)"></i></div>
-		<div class="tfleg"><span><i style="background:var(--brand)"></i>走代理 ${B(px)}（${pct(px)}%）</span><span><i style="background:var(--ok)"></i>直连 ${B(dr)}（${T ? 100 - pct(px) : 0}%）</span></div>
+		${nx ? '' : `<div class="tfsplit"><i style="width:${pct(px)}%;background:var(--brand)"></i><i style="width:${T ? 100 - pct(px) : 0}%;background:var(--ok)"></i></div>
+		<div class="tfleg"><span><i style="background:var(--brand)"></i>走代理 ${B(px)}（${pct(px)}%）</span><span><i style="background:var(--ok)"></i>直连 ${B(dr)}（${T ? 100 - pct(px) : 0}%）</span></div>`}
 	</section>
 	<div class="sectitle"><b>${sel ? '「' + esc(tfName(sel)) + '」' : ''}最近 14 天</b>${sel ? '<button class="btn sm" data-tfall>看全部</button>' : `<span class="pill">最高 ${B(mx)}</span>`}</div>
-	<section class="card"><div class="tfchart">${col.map((c) => `<div class="tfcol ${inR.has(c.day) ? 'in' : ''}" title="${c.day} ${B(c.p + c.d)}"><i style="height:${((c.p * 100) / mx).toFixed(1)}%;background:var(--brand)"></i><i style="height:${((c.d * 100) / mx).toFixed(1)}%;background:var(--ok)"></i></div>`).join('')}</div>
+	<section class="card"><div class="tfchart">${col.map((c) => `<div class="tfcol ${inR.has(c.day) ? 'in' : ''}" title="${c.day} ${B(c.p + c.d + c.n)}">${c.n ? `<i style="height:${((c.n * 100) / mx).toFixed(1)}%;background:var(--muted)"></i>` : `<i style="height:${((c.p * 100) / mx).toFixed(1)}%;background:var(--brand)"></i><i style="height:${((c.d * 100) / mx).toFixed(1)}%;background:var(--ok)"></i>`}</div>`).join('')}</div>
 		<div class="tfx">${col.map((c) => `<span class="${c.day === today ? 'now' : ''}">${+c.day.slice(8)}</span>`).join('')}</div></section>
 	<div class="sectitle"><b>按设备</b><span class="pill">${rows.length} 台</span></div>
 	<section class="card list">${rows.length ? rows.map(([k, a]) => `<button class="tfrow ${k === TF.sel ? 'on' : ''}" data-tfk="${esc(k)}">
 		<span class="tfn"><b class="ell">${esc(tfName(k))}</b><b>${B(tfTot(a))}</b></span>
-		<span class="tfbar"><i style="width:${((a[0] + a[1]) * 100 / top).toFixed(1)}%;background:var(--brand)"></i><i style="width:${((a[2] + a[3]) * 100 / top).toFixed(1)}%;background:var(--ok)"></i></span>
-		<span class="muted tfsub">代理 ${B(a[0] + a[1])} · 直连 ${B(a[2] + a[3])} · ↓ ${B(a[1] + a[3])} ↑ ${B(a[0] + a[2])}</span></button>`).join('') : '<div class="empty">这段时间没有流量</div>'}</section>
-	<p class="muted" style="font-size:12.5px;margin:8px 4px 0;line-height:1.6">点设备看它最近 14 天的用量。统计从 OpenClash 的连接算出来，OpenClash 没运行时的流量算不到。</p>`;
+		<span class="tfbar">${nx ? `<i style="width:${(tfTot(a) * 100 / top).toFixed(1)}%;background:var(--brand)"></i>` : `<i style="width:${((a[0] + a[1]) * 100 / top).toFixed(1)}%;background:var(--brand)"></i><i style="width:${((a[2] + a[3]) * 100 / top).toFixed(1)}%;background:var(--ok)"></i>`}</span>
+		<span class="muted tfsub">${nx ? '' : `代理 ${B(a[0] + a[1])} · 直连 ${B(a[2] + a[3])} · `}↓ ${B(a[1] + a[3])} ↑ ${B(a[0] + a[2])}</span></button>`).join('') : '<div class="empty">这段时间没有流量</div>'}</section>
+	${d.warn ? `<div class="notice w" style="margin-top:8px">${esc(d.warn)}</div>` : ''}
+	${tfNote(d, nx) ? `<p class="muted" style="font-size:12.5px;margin:8px 4px 0;line-height:1.6">${tfNote(d, nx)}</p>` : ''}`;
 }
 $('tfRange').addEventListener('click', (e) => {
 	const b = e.target.closest('[data-r]'); if (!b) return;
@@ -10562,7 +10571,7 @@ function mStatsRender(r) {
 	const t = r.today || {}, d = r.devices || {};
 	$('mDl').textContent = '↓ ' + B(t.dl || 0); $('mUl').textContent = '↑ ' + B(t.ul || 0);
 	const top = t.top || [];
-	$('mTopT').textContent = top.length ? '今天用得最多（下行 + 上行合计）' : (t.counting ? '今天还没有设备用流量' : 'OpenClash 或 Nikki 在运行时才统计每台设备的流量');
+	$('mTopT').textContent = top.length ? '今天用得最多（下行 + 上行合计）' : (t.counting ? '今天还没有设备用流量' : t.acct && t.acct !== 'none' ? '统计刚开始 过一两分钟再看' : 'OpenClash 或 Nikki 在运行时才统计每台设备的流量');
 	// 同一台手机连 2.4G 和 5G 时可能各用一个随机地址，名字一样：后面的标上「另一个地址」，免得看成两台
 	const seen = {};
 	$('mTop').innerHTML = top.map((x) => { const n = x.name || x.id, dup = seen[n]; seen[n] = 1;

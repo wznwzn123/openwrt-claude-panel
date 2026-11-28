@@ -3,8 +3,13 @@
 # 定时任务每 6 小时跑一次 check：问官网这个版本（VER）有没有更新的热补丁（编号 n 比现在的 HOT 大）→ 下载 → 验签（跟一键升级同一把公钥）
 # → 只认白名单里的文件 → 备份 → 一个个原子替换 → 自检（面板网页和接口都能打开）→ 不行就全部退回；同一个补丁失败 3 次不再试。
 # 装好了在「通知」里记一条（不推送到手机），面板发现版本号变了自己换成新的。
+# 分批推送和退回（用户 11/28）：问的时候带上现在第几个补丁（h）、分批用的编号（k：托管版是专属网址编号，自建版是兼容上报的随机编号，
+# 关了兼容上报的不带 = 最后一批）、尝鲜通过的带上最后打开面板的时间（po）；点了「检查更新」带 f=1（直接装最新的）。
+# 官网回 back=true 时往回装（后台「全部退回」「按台退回」），装完成没成都报一次（/api/router/hotrep，失败原因只有下面这几句固定的话）
+# 用法：cmcp-hot check [force]   装（force = 点了「检查更新」）
+#       cmcp-hot ask [force]     只问官网、打印回复（面板「检查更新」显示「正在安装 Vn…」用）
 # 测试用环境变量：CMCP_ROOT（假根目录）、CMCP_HOT_URL（问哪里）、CMCP_HOT_DL（下载地址前缀）、CMCP_HOT_CHECK（自检命令）、CMCP_VERIFY（验签命令）、
-# CMCP_ULOCK（一键更新的锁）、CMCP_HOT_SWAP（「正在换文件」的记号）
+# CMCP_ULOCK（一键更新的锁）、CMCP_HOT_SWAP（「正在换文件」的记号）、CMCP_HOT_REP（报结果的地址）、CMCP_POPEN（打开面板时间的文件）
 R=${CMCP_ROOT:-}
 D=$R/etc/claude-mcp
 W=/tmp/cmcp_hot.$$
@@ -30,13 +35,31 @@ selfcheck() {
 	# 用真的登录密钥和路由器自己的钥匙问一次 whoami，要拿到结果才算好（6.0.0 用的假地址 /x 只会得到 404，补丁永远装不上：11/27 线上）
 	curl -s -m 8 -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"panel/whoami\",\"params\":{},\"client\":\"panel\",\"dev\":\"local.$(cat "$D/local.key" 2>/dev/null)\"}" "http://127.0.0.1:18765/cgi-bin/mcp/$(jsonfilter -i "$D/config.json" -e '@.token' 2>/dev/null)" | grep -q '"result"'
 }
-fail() { log "热补丁 $N 没装上：$1"; c=$(sed -n "s/^$N=//p" "$D/hot_fail" 2>/dev/null); c=$(( ${c:-0} + 1 )); { grep -v "^$N=" "$D/hot_fail" 2>/dev/null; echo "$N=$c"; } > "$D/hot_fail.tmp" && mv -f "$D/hot_fail.tmp" "$D/hot_fail"; rm -rf "${W:?}"; exit 1; }
+esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+# 这台是谁（只用来分批、认尝鲜、报结果）：托管版 = 专属网址编号（报结果时带路由器钥匙，官网核对）；自建版 = 兼容上报的随机编号
+SUB=$(sed -n 's/^SUB=//p' "$D/hub.conf" 2>/dev/null | tr -cd 'a-z0-9')
+RK=$(sed -n 's/^RKEY=//p' "$D/cloud.conf" 2>/dev/null | tr -cd 'A-Za-z0-9')
+ID=""; { [ ! -f "$D/compat_off" ] || [ -f "$D/beta_want" ]; } && ID=$(tr -cd 'a-z0-9' < "$D/compat_id" 2>/dev/null)
+case "$ID" in ????????????????) ;; *) ID="" ;; esac
+K=""; [ -n "$SUB" ] && K="s:$SUB"; [ -z "$K" ] && [ -n "$ID" ] && K="i:$ID"
+PO=""; [ -n "$ID" ] && [ "$(jsonfilter -i "$D/compat_res.json" -e '@.beta.ok' 2>/dev/null)" = true ] && PO=$(tr -cd '0-9' < "${CMCP_POPEN:-/tmp/cmcp_popen}" 2>/dev/null)
+FORCE=""; [ "$2" = force ] && FORCE=1
+QS="v=$VER&h=$HOT${K:+&k=$K}${ID:+&id=$ID}${PO:+&po=$PO}${FORCE:+&f=1}"
+BACK=""
+# 报结果：成了 / 没成和原因（固定的几句话，里面没有网址、钥匙）
+rep() {
+	local b
+	b=$(printf '{"v":"%s","n":%s,"ok":%s,"err":"%s"%s%s%s}' "$VER" "${N:-0}" "$1" "$(esc "$2")" "${BACK:+,\"back\":true}" "${SUB:+,\"s\":\"$SUB\",\"rk\":\"$RK\"}" "${ID:+,\"id\":\"$ID\"}")
+	curl -s -m 10 -X POST -H 'Content-Type: application/json' -d "$b" "${CMCP_HOT_REP:-$HUB/api/router/hotrep}" >/dev/null 2>&1
+}
+fail() { log "热补丁 $N 没装上：$1"; c=$(sed -n "s/^$N=//p" "$D/hot_fail" 2>/dev/null); c=$(( ${c:-0} + 1 )); { grep -v "^$N=" "$D/hot_fail" 2>/dev/null; echo "$N=$c"; } > "$D/hot_fail.tmp" && mv -f "$D/hot_fail.tmp" "$D/hot_fail"; rep 0 "$1"; rm -rf "${W:?}"; exit 1; }
 
 case "$1" in
-check) ;;
-*) echo "用法：$0 check"; exit 1 ;;
+check|ask) ;;
+*) echo "用法：$0 check [force] | ask [force]"; exit 1 ;;
 esac
 [ -n "$VER" ] || exit 0
+if [ "$1" = ask ]; then curl -fsS -m 10 "${CMCP_HOT_URL:-$HUB/api/router/hot}?$QS" 2>/dev/null; exit 0; fi
 # 跟一键更新不能同时动文件（11/27 全面检查第 1 条：更新到新版本时正好在装旧版本的补丁，会把新文件换回旧的、补丁号也记到新版本上）。
 # 一键更新在跑（锁不到 15 分钟）就不装；换文件之前先立「正在换」的记号再看一次更新锁，一键更新拿到锁以后也会等这个记号消失
 ULOCK=${CMCP_ULOCK:-/tmp/cmcp_update.lock}; SWAP=${CMCP_HOT_SWAP:-/tmp/cmcp_hot.swap}
@@ -44,10 +67,11 @@ ubusy() { [ -d "$ULOCK" ] && [ $(( $(date +%s) - $(stat -c %Y "$ULOCK" 2>/dev/nu
 ubusy && exit 0
 mkdir /tmp/cmcp_hot.lock 2>/dev/null || { [ $(( $(date +%s) - $(stat -c %Y /tmp/cmcp_hot.lock 2>/dev/null || echo 0) )) -lt 1800 ] && exit 0; }
 trap 'rmdir /tmp/cmcp_hot.lock "$SWAP" 2>/dev/null' EXIT
-J=$(curl -fsS -m 20 "${CMCP_HOT_URL:-$HUB/api/router/hot}?v=$VER" 2>/dev/null)
+J=$(curl -fsS -m 20 "${CMCP_HOT_URL:-$HUB/api/router/hot}?$QS" 2>/dev/null)
 N=$(jget n); TAG=$(jget tag); NOTES=$(jget notes)
 case "$N" in ''|*[!0-9]*) exit 0 ;; esac
-[ "$N" -gt "$HOT" ] || exit 0
+# 往回装：只在官网明说（后台全部退回、按台退回）时，平常只装比现在新的
+if [ "$(jget back)" = true ] && [ "$N" -lt "$HOT" ]; then BACK=1; else [ "$N" -gt "$HOT" ] || exit 0; fi
 case "$TAG" in hot-[0-9]*.[0-9]*.[0-9]*-[0-9]*) ;; *) log "官网给的补丁标签不对：$TAG"; exit 1 ;; esac
 [ "$(sed -n "s/^$N=//p" "$D/hot_fail" 2>/dev/null || echo 0)" -ge 3 ] 2>/dev/null && exit 0
 mkdir -p "$W" && cd "$W" || exit 1
@@ -86,9 +110,15 @@ if ! selfcheck; then restore; fail "装完面板打不开，已退回原来的";
 # 记下现在是第几个补丁（面板据此发现自己该换新的）
 { grep -v '^HOT=' "$D/version"; echo "HOT=$N"; } > "$D/version.tmp" && mv -f "$D/version.tmp" "$D/version"
 rmdir "$SWAP" 2>/dev/null
-esc() { printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新到 v$VER V$N" "$(esc "$NOTES")" >> "$D/events.log"
-log "热补丁 $N 装好了"
+if [ -n "$BACK" ]; then
+	VN="V$N"; [ "$N" = 0 ] && VN="正式版原样"
+	printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已退回到 v$VER $VN" "开发者撤回了后面的修复补丁" >> "$D/events.log"
+	log "退回到补丁 $N 了"
+else
+	printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新到 v$VER V$N" "$(esc "$NOTES")" >> "$D/events.log"
+	log "热补丁 $N 装好了"
+fi
+rep 1 ""
 # 换了看门狗（一直在跑的程序）：重启一下才用上新的（不碰网络）
 case " $(echo $FILES) " in *" usr/sbin/cmcp-watchdog "*) [ -z "$R" ] && [ -x /etc/init.d/cmcp-watchdog ] && ( /etc/init.d/cmcp-watchdog restart >/dev/null 2>&1 & ) ;; esac
 cd / && rm -rf "${W:?}"

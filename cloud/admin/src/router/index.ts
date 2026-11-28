@@ -17,6 +17,7 @@ const PAGES: Record<string, () => Promise<any>> = {
   devices: () => import('@/views/Devices.vue'),
   users: () => import('@/views/Users.vue'),
   compat: () => import('@/views/Compat.vue'),
+  hot: () => import('@/views/Hot.vue'),
   applications: () => import('@/views/Applications.vue'),
   invites: () => import('@/views/Invites.vue'),
   renewals: () => import('@/views/Renewals.vue'),

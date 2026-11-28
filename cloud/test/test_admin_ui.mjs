@@ -62,7 +62,7 @@ ok('[准备] 安装失败上报成功', !!RP.code, JSON.stringify(RP));
 await H.errLog('/api/test', 'TypeError: 模拟出错\n    at hub.js:1');
 await H.mailLog('ming@x.com', '我们收到了你上报的安装问题', true, '');
 /* ---------- 浏览器 ---------- */
-const PAGES = ['dashboard', 'chat', 'feedback', 'ann', 'devices', 'users', 'applications', 'invites', 'renewals', 'visits', 'logins', 'oplog', 'mails', 'errors', 'settings'];
+const PAGES = ['dashboard', 'chat', 'feedback', 'ann', 'devices', 'users', 'hot', 'applications', 'invites', 'renewals', 'visits', 'logins', 'oplog', 'mails', 'errors', 'settings'];
 const DEV = {
 	android: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: 'Mozilla/5.0 (Linux; Android 14; 23127PN0CC) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36' },
 	iphone: { viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' },

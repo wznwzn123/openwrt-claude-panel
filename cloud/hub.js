@@ -23,6 +23,7 @@ import { installMove, moveDev } from './move.js';
 import { installAppAuth, appStrict } from './appauth.js';
 import { installCompat, compatPublic, compatAdminApi, compatAccount, prereleaseRefresh } from './compat.js';
 import { installOldVer, ovScheduled, ovAccount } from './oldver.js';
+import { installHotRo, HR_KEY } from './hotro.js';
 import { APPS, APPS_V, APPS_CATS } from './apps-data.js';
 
 let APPS_JSON = null; // /api/apps 的回复（第一次用到才拼）
@@ -674,7 +675,8 @@ export class Hub extends DurableObject {
 		const ovo = new Set();
 		for (let i = 0; i < list.length; i += 100) for (const [k] of await this.ctx.storage.get(list.slice(i, i + 100).map((d) => 'ovoff:' + d.sub))) ovo.add(k.slice(6));
 		// 用户 11/28：列表写「打开面板 x 前」（路由器跟着心跳报）+ 现在在不在线（看最后一次心跳，不再用 6 小时才记一次的 seen）
-		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], hot: (brs[i] && brs[i].hot) || 0, po: (brs[i] && brs[i].po) || 0, last: (brs[i] && brs[i].last) || 0, live: (brs[i] && brs[i].state) || '', ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
+		const pins = await this.hotPins();
+		for (const [i, d] of list.entries()) out.push({ ...d, ver: vers[i], hot: (brs[i] && brs[i].hot) || 0, hotPin: pins[d.sub] || null, po: (brs[i] && brs[i].po) || 0, last: (brs[i] && brs[i].last) || 0, live: (brs[i] && brs[i].state) || '', ed: d.state === 'ok' ? this.edOf(d, brs[i]) : '', ov: ovm.get(d.sub) || null, ovOff: ovo.has(d.sub), prot: await this.isProtected(d), renewed: !!d.grants || rs.has(d.sub), purgeAt: d.offWhy === 'deleted' && d.delAt ? d.delAt + TRASH_DAYS * DAY : 0 });
 		return out;
 	}
 	// 发邮件给绑定了这台路由器的账号：停用（可恢复）/ 恢复了 / 彻底删除（附重新开通的方法）
@@ -1739,9 +1741,11 @@ export async function hubFetch(req, env) {
 		if (rid && anns.length) { try { await H.annGot(rid, anns.slice(0, 20).map((a) => a.id)); } catch (e) {} }
 		const list = await Promise.all(anns.slice(0, 20).map(async (a) => ({ id: a.id, title: a.title, body: a.body, level: a.level, at: a.at, upd: a.upd || a.at, exp: a.exp || 0, ...(a.files && a.files.length ? { files: await signFiles(env, H, a.files, 30 * DAY) } : {}) })));
 		// 6.0：顺便说这个版本最新的热补丁是第几个（路由器每 30 分钟问一次公告，紧急补丁不用等 6 小时的定时检查）
-		let hot;
-		if (/^\d+\.\d+\.\d+$/.test(qv3)) try { hot = (await hotBest(env, qv3)).n; } catch (e) {}
-		return new Response(JSON.stringify({ ok: true, list, ...(hot != null ? { hot } : {}) }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
+		// 分批推送（用户 11/28）：hot = 正在推的最新补丁（没轮到这台的，问 /api/router/hot 时官网会说先不装）；
+		// hotw = 退回过的最小编号：装着它或更新的马上问一次，好退回去
+		let hot, hotw;
+		if (/^\d+\.\d+\.\d+$/.test(qv3)) try { const t = await H.hotTop(qv3, await hotList(env, qv3)); hot = t.hot; hotw = t.hotw; } catch (e) {}
+		return new Response(JSON.stringify({ ok: true, list, ...(hot != null ? { hot } : {}), ...(hotw ? { hotw } : {}) }), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 	}
 	if (p.startsWith('/api/fb/') && req.method === 'GET') {
 		const { st, ...rest } = await H.fbStatus(p.slice(8), req.headers.get('cf-connecting-ip') || '');
@@ -1802,6 +1806,20 @@ export async function hubFetch(req, env) {
 		{ const cx = await compatAdminApi(req, a, H, body); if (cx) return cx; }
 		// 公告「面板版本」的下拉：GitHub 上全部版本（正式版、尝鲜版、修复补丁），新的在前（用户 11/28）
 		if (a[0] === 'versions' && req.method === 'GET') return J({ ok: true, list: await versionList(env, H) });
+		// 热补丁分批推送和退回（用户 11/28）：列表、推下一批 / 暂停 / 继续 / 全部退回 / 重新推送、按台固定
+		if (a[0] === 'hot' && !a[1] && req.method === 'GET') return J({ ok: true, ...(await H.hotAdmin(await hotGroups(env))) });
+		if (a[0] === 'hot' && /^\d+\.\d+\.\d+-\d{1,4}$/.test(a[1] || '') && a[2] && req.method === 'POST') {
+			const i = a[1].lastIndexOf('-'), base = a[1].slice(0, i), n = +a[1].slice(i + 1);
+			const r = await H.hotAct(base, n, a[2], await hotList(env, base));
+			if (r.st === 200) await H.alog('hot_' + a[2], a[1], { next: '推下一批', pause: '暂停', resume: '继续', back: '全部退回到 V' + r.to, redo: '重新推送' }[a[2]] || a[2]);
+			const { st, ...rest } = r; return J(rest, st);
+		}
+		if (a[0] === 'hotpin' && req.method === 'POST') {
+			const b = await body(), key = String(b.key || ''), base = String(b.base || '');
+			const r = await H.hotPin(key, base, b.n == null ? null : b.n, /^\d+\.\d+\.\d+$/.test(base) ? await hotList(env, base) : []);
+			if (r.st === 200) await H.alog('hot_pin', key, b.n == null ? '取消固定补丁' : '固定在 v' + base + ' V' + b.n);
+			const { st, ...rest } = r; return J(rest, st);
+		}
 		const ox = await opsAdmin(req, a, H, body, u, env);
 		if (ox) return ox;
 		if (a[0] === 'devices' && !a[1] && req.method === 'GET') return J({ ok: true, list: await H.adminDevices(), trashDays: TRASH_DAYS, ...(await H.stats()) });
@@ -1871,7 +1889,9 @@ export async function hubFetch(req, env) {
 	// 路由器面板查新版本用 /api/router/version。v2.0.2–v2.0.4 的路由器问的还是 /api/app/version（用 curl），
 	// 那时它返回的是路由器的版本；后来 App 有了自己的版本号，这些路由器就再也看不到更新了。所以 curl 来问的照旧回答路由器的版本
 	if (p === '/api/router/version') return routerVersion(env);
-	if (p === '/api/router/hot') return hotInfo(env, new URL(req.url).searchParams.get('v'));
+	if (p === '/api/router/hot') return hotInfo(env, H, new URL(req.url).searchParams);
+	// 路由器装完补丁报一次（成没成、失败原因）：有一台装失败就暂停分批推送（用户 11/28）
+	if (p === '/api/router/hotrep' && req.method === 'POST') { const { st, ...rest } = await H.hotRep(await body(), req.headers.get('cf-connecting-ip') || ''); return J(rest, st); }
 	if (p.startsWith('/dl/h/') && (req.method === 'GET' || req.method === 'HEAD')) { const m = /^\/dl\/h\/([^/]+)\/([^/]+)$/.exec(p); return m ? hotDl(env, m[1], m[2]) : J({ error: '没有这个文件' }, 404); }
 	if (p === '/api/changelog' && req.method === 'GET') return changelogApi(env);
 	if (p === '/api/app/version') return /^curl\//i.test(req.headers.get('user-agent') || '') ? routerVersion(env) : appVersion(env);
@@ -1965,7 +1985,7 @@ async function versionList(env, H) {
 			let m = /^v(\d+\.\d+\.\d+)$/.exec(t);
 			if (m) { out.push({ v: m[1], pre: !!r.prerelease, at }); continue; }
 			m = /^hot-(\d+\.\d+\.\d+)-(\d{1,4})$/.exec(t);
-			if (m) out.push({ v: m[1] + '.' + m[2], base: m[1], hot: +m[2], at });
+			if (m && +m[2] > 0) out.push({ v: m[1] + '.' + m[2], base: m[1], hot: +m[2], at });
 		}
 		if (out.length) { try { await H.setMeta('vlist', out); } catch (e) {} return out; }
 		try { const o = await H.meta('vlist'); if (o && o.length) return o; } catch (e) {}
@@ -2069,7 +2089,11 @@ async function changelogApi(env) {
 			}
 			return o && o.list && o.list.length ? o : null;
 		});
-		return v ? J({ ok: true, list: v.list, at: v.at }) : J({ ok: false, error: '暂时读不到更新日志' }, 502);
+		if (!v) return J({ ok: false, error: '暂时读不到更新日志' }, 502);
+		// 全部退回了的补丁不再列出来（用户 11/28：补丁能退回）
+		let bs = null; try { bs = await hubObj(env).hotBackSet(); } catch (e) {}
+		const list = bs && bs.size ? v.list.map((x) => (x.hot ? { ...x, hot: x.hot.filter((h) => !bs.has(x.v.slice(1) + '-' + h.n)) } : x)) : v.list;
+		return J({ ok: true, list, at: v.at });
 	} catch (e) { return J({ ok: false, error: '暂时读不到更新日志' }, 502); }
 }
 // 这一版本身是不是「必须更新」：
@@ -2107,18 +2131,23 @@ export async function annVer(env) {
 	return m.rev + '.' + (m.t || []).filter((x) => x <= now).length;
 }
 async function annVerDrop() { try { if (typeof caches !== 'undefined') await caches.default.delete(new Request('https://cache.local/ann-meta')); } catch (e) {} }
-async function hotBest(env, v) {
+// 全部补丁（所有版本）：[{ tag, body, at }]。接口能用时存一份（m:hotl）；被限流时拿存的
+async function hotAll(env) {
 	const repo = repoOf(env), H = { 'user-agent': 'router-panel-hub' };
-	let l = null;
 	try {
-		l = await cached('hot-list', 600, async () => {
+		return await cached('hot-list', 600, async () => {
 			const r = await fetch('https://api.github.com/repos/' + repo + '/releases?per_page=100', { headers: { ...H, accept: 'application/vnd.github+json' } });
 			if (!r.ok) throw new Error('GitHub ' + r.status);
-			const x = (await r.json()).map((x) => ({ tag: String(x.tag_name || ''), body: String(x.body || '').slice(0, 300), draft: !!x.draft })).filter((x) => !x.draft && HOT_TAG.test(x.tag));
+			const x = (await r.json()).map((x) => ({ tag: String(x.tag_name || ''), body: String(x.body || '').slice(0, 300), draft: !!x.draft, at: Date.parse(x.published_at || x.created_at || '') || 0 })).filter((x) => !x.draft && HOT_TAG.test(x.tag));
 			try { await hubObj(env).setMeta('hotl', x); } catch (e) {}
 			return x;
 		});
-	} catch (e) {}
+	} catch (e) { return null; }
+}
+// 这个版本发了的补丁（包括 V0），按编号从小到大：[{ n, tag, notes, at }]；读不到 GitHub 抛错
+async function hotList(env, v) {
+	const repo = repoOf(env), H = { 'user-agent': 'router-panel-hub' };
+	let l = await hotAll(env);
 	if (!l) l = await cached('hot-fb-' + v, 300, async () => {
 		let o = [];
 		try { o = (await hubObj(env).meta('hotl')) || []; } catch (e) {}
@@ -2132,29 +2161,47 @@ async function hotBest(env, v) {
 		}
 		return o;
 	});
-	let best = null;
-	for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m && m[1] === v && (!best || +m[2] > best.n)) best = { n: +m[2], tag: x.tag, notes: x.body.split('\n')[0].trim() }; }
-	best = best || { n: 0 };
+	const out = new Map();
+	for (const x of l) { const m = HOT_TAG.exec(x.tag); if (m && m[1] === v) out.set(+m[2], { n: +m[2], tag: x.tag, notes: String(x.body || '').split('\n')[0].trim(), at: x.at || 0 }); }
+	let top = Math.max(0, ...out.keys());
 	// 列表缓存 10 分钟：刚发的补丁要等缓存过期才看得到（用户 11/27：点「检查更新」刷不出来）。
 	// 顺着编号再试一下下一个的下载地址（不限流，结果缓存 1 分钟），新补丁一发出来马上能查到
 	try {
-		const nx = await cached('hot-nx-' + v + '-' + best.n, 60, async () => {
-			let n = best.n;
+		const nx = await cached('hot-nx-' + v + '-' + top, 60, async () => {
+			let n = top;
 			for (let i = 0; i < 10; i++) {
-				const r = await fetch('https://github.com/' + repoOf(env) + '/releases/download/hot-' + v + '-' + (n + 1) + '/SHA256SUMS.sig2', { method: 'HEAD', redirect: 'manual', headers: { 'user-agent': 'router-panel-hub' } });
+				const r = await fetch('https://github.com/' + repo + '/releases/download/hot-' + v + '-' + (n + 1) + '/SHA256SUMS.sig2', { method: 'HEAD', redirect: 'manual', headers: H });
 				if (r.status < 200 || r.status >= 400) break;
 				n++;
 			}
 			return { n };
 		});
-		if (nx && nx.n > best.n) best = { n: nx.n, tag: 'hot-' + v + '-' + nx.n, notes: '' };
+		if (nx) for (let n = top + 1; n <= nx.n; n++) out.set(n, { n, tag: 'hot-' + v + '-' + n, notes: '', at: 0 });
 	} catch (e) {}
-	return best;
+	return [...out.values()].sort((a, b) => a.n - b.n);
 }
-async function hotInfo(env, v) {
-	if (!/^\d+\.\d+\.\d+$/.test(v || '')) return J({ ok: false, error: '版本号不对' }, 400);
-	try { return J({ ok: true, ...(await hotBest(env, v)) }); }
-	catch (e) { return J({ ok: false, error: '查不到热补丁' }, 502); }
+// 这个版本最新的补丁（{ n, tag, notes }，没有 = { n: 0 }）：更新日志、版本下拉用（不管分批）
+async function hotBest(env, v) {
+	const l = (await hotList(env, v)).filter((x) => x.n > 0), t = l[l.length - 1];
+	return t ? { n: t.n, tag: t.tag, notes: t.notes } : { n: 0 };
+}
+// 后台「补丁」页、每小时推下一批：最近的 3 个基础版本，每个版本的补丁
+async function hotGroups(env) {
+	const all = (await hotAll(env)) || (await hubObj(env).meta('hotl').catch(() => null)) || [];
+	const bases = [...new Set(all.map((x) => (HOT_TAG.exec(x.tag) || [])[1]).filter(Boolean))].sort((a, b) => verCmp(b, a, 3)).slice(0, 3);
+	const out = [];
+	for (const base of bases) { try { out.push({ base, list: await hotList(env, base) }); } catch (e) {} }
+	return out;
+}
+// 路由器问「我该装第几个补丁」：v 版本；新的 cmcp-hot 还带 h（现在第几个）、k（分批用的编号）、id（兼容上报的随机编号，认尝鲜）、
+// po（尝鲜的带：最后打开面板的时间）、f=1（点了「检查更新」）。老的（V9 及以前）只带 v：只给推到「全部」的
+async function hotInfo(env, H, q) {
+	const v = q.get('v') || '';
+	if (!/^\d+\.\d+\.\d+$/.test(v)) return J({ ok: false, error: '版本号不对' }, 400);
+	let list;
+	try { list = await hotList(env, v); } catch (e) { return J({ ok: false, error: '查不到热补丁' }, 502); }
+	const h = q.get('h');
+	return J({ ok: true, ...(await H.hotAsk(v, list, { h: h == null || !/^\d{1,4}$/.test(h) ? null : +h, key: q.get('k') || '', id: q.get('id') || '', po: q.get('po') || 0, f: q.get('f') === '1' })) });
 }
 const HOT_FILES = ['hot.tar.gz', 'SHA256SUMS', 'SHA256SUMS.sig2'];
 async function hotDl(env, tag, name) {
@@ -2318,11 +2365,12 @@ async function accountApi0(req, env, H, p, body) {
 	return J({ error: 'not found' }, 404);
 }
 export { dayKey } from './ops.js';
-export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { const t = await H.meta('prerelAt'); if (!t || Date.now() - t > 3600e3) { await H.setMeta('prerelAt', Date.now()); await prereleaseRefresh(env, H, repoOf(env)); } } catch (e) {} try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); try { await ovScheduled(H, await routerVerInfo(env)); } catch (e) {} }
+export async function hubScheduled(env) { const H = hubObj(env); await H.cleanup(); try { const t = await H.meta('prerelAt'); if (!t || Date.now() - t > 3600e3) { await H.setMeta('prerelAt', Date.now()); await prereleaseRefresh(env, H, repoOf(env)); } } catch (e) {} try { await H.instSweep(); } catch (e) {} try { await filesScheduled(env, H); } catch (e) {} await H.gcRate(Date.now()); try { await H.opsGc(); } catch (e) {} await v5Scheduled(H); await statusScheduled(H); try { await ovScheduled(H, await routerVerInfo(env)); } catch (e) {} try { await H.hotTick(await hotGroups(env)); } catch (e) {} }
 installOps(Hub);
 installTotp(Hub);
 installCompat(Hub);
 installOldVer(Hub);
+installHotRo(Hub);
 installV5(Hub);
 installFam(Hub);
 installInst(Hub);

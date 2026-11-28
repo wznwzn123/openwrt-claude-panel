@@ -41,7 +41,8 @@ if (changed) L.writej(ST, st);
 // 6.0：官网说这个版本有更新的热补丁，马上在后台装（不等 6 小时的定时检查；紧急修复 30 分钟内到）。cmcp-hot 自己会验签、自检、失败退回
 {
 	let cur = +(match(readfile(L.D + '/version') ?? '', /(^|\n)HOT=([0-9]+)/)?.[2] ?? 0);
-	if (type(c.hot) == 'int' && c.hot > cur) L.sh('[ -x /usr/sbin/cmcp-hot ] && nohup /usr/sbin/cmcp-hot check >/dev/null 2>&1 </dev/null &');
+	// hotw：后台全部退回过的补丁，装着它或更新的马上问一次（官网会让它往回装，用户 11/28）
+	if ((type(c.hot) == 'int' && c.hot > cur) || (type(c.hotw) == 'int' && c.hotw > 0 && cur >= c.hotw)) L.sh('[ -x /usr/sbin/cmcp-hot ] && nohup /usr/sbin/cmcp-hot check >/dev/null 2>&1 </dev/null &');
 }
 // 看门狗收到新的公告版本号时调用 cmcp-ann now：取不到就返回 1，下次心跳再试
 exit(c.fail ? 1 : 0);

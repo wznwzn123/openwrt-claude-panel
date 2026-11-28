@@ -306,7 +306,9 @@ cloud_beat() {
 	  case "$r" in *'"cmd"'*)
 		id=$(printf '%s' "$r" | jsonfilter -e '@.cmd.id' 2>/dev/null | tr -cd 'a-z0-9'); to=$(printf '%s' "$r" | jsonfilter -e '@.cmd.to' 2>/dev/null)
 		[ -n "$id" ] && [ -x /usr/sbin/cmcp-edition ] && /usr/sbin/cmcp-edition remote "$id" "$to" ;;
-	  esac ) >/dev/null 2>&1 &
+	  esac
+	  # 后台把这台固定在某个补丁（按台退回，用户 11/28）：马上问一次
+	  case "$r" in *'"hotc"'*) [ -x "${WD_HOT:-/usr/sbin/cmcp-hot}" ] && "${WD_HOT:-/usr/sbin/cmcp-hot}" check ;; esac ) >/dev/null 2>&1 &
 }
 
 # 一键更新正在装（15 分钟内的更新锁）：装的时候会重启面板服务和隧道，看门狗这时不去「修」，免得两边一起重启

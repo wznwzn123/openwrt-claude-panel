@@ -15,7 +15,7 @@ const nav = ref<HTMLElement | null>(null)
 const thumb = ref<HTMLElement | null>(null)
 
 // 提醒数字：对话没看的、反馈没处理的、续期申请没处理的
-const badgeOf = (k: string) => { const b = badges.value; const n = k === 'chat' ? b.chat : k === 'feedback' ? b.fb : k === 'applications' ? b.aps : 0; return n > 99 ? '99+' : n ? String(n) : '' }
+const badgeOf = (k: string) => { const b = badges.value; const n = k === 'chat' ? b.chat : k === 'feedback' ? b.fb : k === 'applications' ? b.aps : k === 'hot' ? b.hot || 0 : 0; return n > 99 ? '99+' : n ? String(n) : '' }
 const activeKey = computed(() => String(route.name ?? ''))
 const hasActive = computed(() => navGroups.value.some(g => g.items.some(i => i.key === activeKey.value)))
 

@@ -290,7 +290,7 @@ export async function opsAdmin(req, a, H, body, u, env = {}) {
 	if (a[0] === 'logins' && m === 'GET') return J({ ok: true, list: await H.loginList() });
 	if (a[0] === 'errors' && m === 'GET') return J({ ok: true, list: await H.errList() });
 	if (a[0] === 'mails' && m === 'GET') return J({ ok: true, list: await H.mailList(), quota: await H.mailQuota() });
-	if (a[0] === 'badge' && m === 'GET') { const th = await H.chatThreads(), fb = await H.feedbacks(); return J({ ok: true, chat: th.reduce((x, t) => x + (t.ua || 0), 0), chatWaiting: th.filter((t) => t.ua > 0).length, fb: fb.filter((x) => !x.done && !x.nofix).length, last: th[0] ? th[0].last : 0 }); }
+	if (a[0] === 'badge' && m === 'GET') { const th = await H.chatThreads(), fb = await H.feedbacks(); return J({ ok: true, chat: th.reduce((x, t) => x + (t.ua || 0), 0), chatWaiting: th.filter((t) => t.ua > 0).length, fb: fb.filter((x) => !x.done && !x.nofix).length, hot: await H.hotPausedN(), last: th[0] ? th[0].last : 0 }); }
 	if (a[0] === 'chat') {
 		if (!a[1] && m === 'GET') return J({ ok: true, list: await H.chatThreads() });
 		const tid = a[1] || '';

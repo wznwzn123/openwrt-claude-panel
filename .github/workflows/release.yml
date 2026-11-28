@@ -76,6 +76,19 @@ jobs:
             $([ "$PRE" = true ] && echo --prerelease) \
             --title "$VERSION：托管版 + 自建版 + 安卓 App" \
             --notes-file tools/release-notes.md
+      # 6.0.1 起每个版本带一个 V0（正式版原样的热补丁，预发布 hot-版本-0）：后台「全部退回」「按台退回」能一直退回原样（用户 11/28）
+      - name: 发 V0（正式版原样，退回补丁用）
+        continue-on-error: true   # 没发成也不挡安卓 App 和正式版（以后手动用「发热补丁」补发编号 0）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_SIGN_KEY_V6: ${{ secrets.RELEASE_SIGN_KEY_V6 }}
+        run: |
+          B="${VERSION#v}"
+          sh tools/hot.sh "$B" 0 "正式版原样"
+          node tools/sign.mjs dist-hot/SHA256SUMS
+          printf '正式版原样\n\n只给 v%s 的路由器，后台退回补丁时用。\n' "$B" > dist-hot/notes.md
+          gh release create "hot-$B-0" dist-hot/hot.tar.gz dist-hot/SHA256SUMS dist-hot/SHA256SUMS.sig2 --target "$GITHUB_SHA" --prerelease --title "热补丁 hot-$B-0（正式版原样）" --notes-file dist-hot/notes.md
       # 依赖清单（SBOM）：列出用到的所有第三方组件，跟安装包一起放进 Release；出错也不影响发布
       - name: 生成依赖清单（SBOM）
         continue-on-error: true

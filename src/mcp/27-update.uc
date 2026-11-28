@@ -17,11 +17,11 @@ P.update_check = function(a) {
 	// 用户 11/27：点了要马上知道有没有新补丁——当场问一次官网最新是第几个（hotn），比现在装的大就后台马上装，面板等着换新
 	let hotq = false, hotn = null;
 	if (a?.force && !a?.nohot && stat(SBIN + '/cmcp-hot')) {
+		// 问法交给 cmcp-hot（带上第几个补丁、分批用的编号，f=1 = 点了「检查更新」直接装最新的；分批推送和退回，用户 11/28）
 		if (!hubdown && match(v.cur ?? '', /^[0-9]+\.[0-9]+\.[0-9]+$/)) {
-			let hub = match(readfile(ETC + '/hub.conf') ?? '', /(^|\n)HUB=(https?:\/\/[^\n]+)/)?.[2] ?? 'https://yrlove520.com';
-			try { let j = json(sh(sprintf('curl -s -m 10 %s', shq(hub + '/api/router/hot?v=' + v.cur))).out); if (type(j?.n) == 'int' && j.n >= 0) hotn = j.n; } catch (e) {}
+			try { let j = json(sh(SBIN + '/cmcp-hot ask force').out); if (type(j?.n) == 'int' && j.n >= 0) hotn = j.n; } catch (e) {}
 		}
-		sh('nohup ' + SBIN + '/cmcp-hot check >/dev/null 2>&1 </dev/null &'); hotq = true;
+		sh('nohup ' + SBIN + '/cmcp-hot check force >/dev/null 2>&1 </dev/null &'); hotq = true;
 	}
 	// pv：面板网页该是哪一版（热补丁装过第 N 个就是「6.0.0-hN」），面板发现自己不一样就换成新的
 	return { cur: v.cur || null, pv: v.cur ? v.cur + (v.hot ? '-h' + v.hot : '') : null, hot: v.hot, hotn, code: v.code || null, latest: c.latest, notes: c.notes, rel: c.rel ?? '', newer, force: newer && (c.force || (length(c.min) > 0 && length(v.cur) > 0 && ver_newer(c.min, v.cur))), hotq, stale: hubdown };

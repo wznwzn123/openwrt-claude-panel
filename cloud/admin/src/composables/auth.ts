@@ -21,6 +21,7 @@ export const navGroups = ref<NavGroup[]>([
     { key: 'devices', label: '路由器', icon: 'router', path: '/devices' },
     { key: 'users', label: '账号', icon: 'users', path: '/users' },
     { key: 'compat', label: '兼容性', icon: 'layers', path: '/compat' },
+    { key: 'hot', label: '补丁', icon: 'refresh', path: '/hot' },
   ] },
   { key: 'g-svc', label: '开通与续期', icon: 'ticket', items: [
     { key: 'applications', label: '续期申请', icon: 'mail', path: '/applications' },
@@ -37,8 +38,8 @@ export const navGroups = ref<NavGroup[]>([
   { key: 'g-set', label: '设置', icon: 'gear', items: [{ key: 'settings', label: '设置与工具', icon: 'gear', path: '/settings' }] },
 ])
 
-/* 侧边栏和顶栏上的提醒数字：对话没看的、反馈没处理的、续期申请没处理的。后台开着时每 15 秒问一次 */
-export const badges = ref({ chat: 0, chatWaiting: 0, fb: 0, aps: 0, last: 0 })
+/* 侧边栏和顶栏上的提醒数字：对话没看的、反馈没处理的、续期申请没处理的、暂停着的热补丁。后台开着时每 15 秒问一次 */
+export const badges = ref({ chat: 0, chatWaiting: 0, fb: 0, aps: 0, hot: 0, last: 0 })
 let timer = 0
 let lastChat = -1
 export async function refreshBadges() {

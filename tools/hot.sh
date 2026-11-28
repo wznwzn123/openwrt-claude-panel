@@ -3,6 +3,7 @@
 # 包里：hot.json（给哪个版本、第几个、说明）+ root/（要换的文件，路径跟路由器上一样）。路由器上的 cmcp-hot 只认白名单里的文件：
 #   面板网页（www-claude-mcp/panel/）、接口（www-claude-mcp/cgi-bin/mcp）、共用库（usr/share/ucode/cmcp/lib.uc）、小工具（usr/sbin/cmcp-*）、远程数据（etc/claude-mcp/remote.json）
 # 面板版本号写成「基础版本-h编号」（6.0.0-h3），手机上的面板发现跟路由器不一样就自己换新的
+# 编号 0 = V0：正式版原样（release.yml 发版时自动打，后台退回用；面板版本号跟正式版一样写「6.0.1」）
 set -e
 cd "$(dirname "$0")/.."
 B=$1; N=$2; NOTES=$3
@@ -13,7 +14,8 @@ node tools/build-src.mjs --check
 rm -rf dist-hot && mkdir -p dist-hot/p/root/www-claude-mcp/cgi-bin dist-hot/p/root/usr/share/ucode/cmcp dist-hot/p/root/usr/sbin dist-hot/p/root/etc/claude-mcp dist-hot/s
 # 跟正式包一样精简面板
 cp -r src dist-hot/s/src
-sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"$B-h$N\">/" dist-hot/s/src/www/panel/index.html
+PV="$B-h$N"; [ "$N" = 0 ] && PV="$B"
+sed -i "s/<meta name=\"panel-ver\" content=\"dev\">/<meta name=\"panel-ver\" content=\"$PV\">/" dist-hot/s/src/www/panel/index.html
 if [ -d tools/minify/node_modules/esbuild ]; then node tools/minify/minify-panel.mjs dist-hot/s/src/www/panel; elif [ -n "$CI" ]; then echo "没装 tools/minify 的依赖" >&2; exit 1; fi
 gzip -9 -n -c dist-hot/s/src/www/panel/index.html > dist-hot/s/src/www/panel/index.zh
 cp -r dist-hot/s/src/www/panel dist-hot/p/root/www-claude-mcp/panel

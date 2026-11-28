@@ -18,10 +18,12 @@ const v = o[e.replace(/^@\./, '')]; if (v == null) process.exit(1); console.log(
 EOF
 # 假的 cmcp-ann：记一笔；FAIL 文件存在时表示取不到
 printf '#!/bin/sh\necho "$1" >> %s/ann.calls\n[ -f %s/ann.fail ] && exit 1\nexit 0\n' "$W" "$W" > "$W/bin/cmcp-ann"
-chmod 755 "$W/bin/jsonfilter" "$W/bin/cmcp-ann"
+# 假的 cmcp-hot：记一笔（后台按台退回补丁时，心跳回复带 hotc，用户 11/28）
+printf '#!/bin/sh\necho "$1" >> %s/hot.calls\n' "$W" > "$W/bin/cmcp-hot"
+chmod 755 "$W/bin/jsonfilter" "$W/bin/cmcp-ann" "$W/bin/cmcp-hot"
 run() { # $1 = 场景目录
 	mkdir -p "$W/$1"
-	PATH="$W/bin:$PATH" WD_DIR="$W/$1" WD_STATE="$W/$1/state" DRYRUN=1 WD_ANNTEST=1 WD_ANN="$W/bin/cmcp-ann" WD_ANNV="$W/ann.v" WD_ANNB="$W/annb" \
+	PATH="$W/bin:$PATH" WD_DIR="$W/$1" WD_STATE="$W/$1/state" DRYRUN=1 WD_ANNTEST=1 WD_ANN="$W/bin/cmcp-ann" WD_HOT="$W/bin/cmcp-hot" WD_ANNV="$W/ann.v" WD_ANNB="$W/annb" \
 		WD_ANNURL="file://$W/v.json" FAKE_WAN=1 FAKE_GW=1 FAKE_NET=1 FAKE_DNS=1 FAKE_TPID=123 FAKE_READY=4 FAKE_CLASH=1 FAKE_PANEL=1 FAKE_OOM=0 FAKE_KERR=0 \
 		sh "$WD" once >/dev/null 2>&1
 	rmdir /tmp/cmcp_wd.lock 2>/dev/null
@@ -58,5 +60,10 @@ ok '心跳 5 分钟内带过版本号：不再自己去问版本号接口' '[ "$
 echo '{"ok":true,"m":1}' > "$W/srv/beat/r/rk"; echo $(( $(date +%s) - 400 )) > "$W/annb"
 run host
 ok '老官网的心跳不带版本号（超过 5 分钟）：自己问版本号接口' '[ "$(calls)" = 2 ] && [ "$(cat "$W/ann.v")" = 0.0 ]'
+ok '心跳回复没带 hotc：不问补丁' '[ ! -f "$W/hot.calls" ]'
+echo '{"ok":true,"m":0,"hotc":1}' > "$W/srv/beat/r/rk"
+mkdir -p "$W/host2"; cp "$W/host/cloud.conf" "$W/host2/"
+run host2
+ok '心跳回复带 hotc（后台把这台固定在某个补丁）：马上跑一次 cmcp-hot check' '[ -f "$W/hot.calls" ] && grep -qx check "$W/hot.calls"'
 echo; echo "通过 $pass/$((pass+fail))"
 [ $fail = 0 ]

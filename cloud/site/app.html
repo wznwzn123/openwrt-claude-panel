@@ -840,8 +840,30 @@ function edLine(d) {
 	if (j.state === 'fail' && Date.now() - j.at < 86400e3) return `<div class="expline bad">换成${esc(edN(j.to))}没成功${ED_STEP[j.step] ? '（' + esc(ED_STEP[j.step]) + '）' : ''}${j.why ? '：' + esc(j.why) : ''}。已退回原来的版本，路由器照常能用</div>`;
 	return '';
 }
+// 等路由器换版本时（官网发的指令，路由器下次心跳才执行），每 8 秒看一次，换好了自动刷新这一块并提示
+// （用户 11/28 17:14：在外面换成 AI 版以后页面还写着本地版，「本地版」点不了，换不回去）
+let edPollT = 0;
+const edWait = (d) => !!(d && d.edJob && d.edJob.state === 'wait' && Date.now() - d.edJob.at < 30 * 60e3);
+function edPoll(me) {
+	clearTimeout(edPollT);
+	const w = ((me && me.devs) || []).filter(edWait);
+	if (!w.length) return;
+	edPollT = setTimeout(async () => {
+		// 页面在后台、弹着框：先不刷新，过一会儿再看
+		if (document.hidden || document.querySelector('.mask')) return edPoll(me);
+		let m2; try { m2 = await api('me'); } catch (e) { return edPoll(me); }
+		for (const d of w) {
+			const n = (m2.devs || []).find((x) => x.sub === d.sub), j = n && n.edJob;
+			if (!j || j.id !== d.edJob.id || j.state === 'wait') continue;
+			toast(j.state === 'ok' ? '「' + n.name + '」已换成' + edN(j.to) : '「' + n.name + '」换成' + edN(j.to) + '没成功，已退回原来的版本', j.state !== 'ok');
+		}
+		if (document.querySelector('.mask')) return edPoll(me);
+		render(m2);
+	}, 8000);
+}
 // 换版本：说清楚两个版本差在哪、换了以后会怎样
 function edBox(d) {
+	if (edWait(d)) return toast('正在换成' + edN(d.edJob.to) + '：等路由器做完再换（3 分钟内）');
 	const m = document.createElement('div'); m.className = 'mask';
 	const cur = d.ed || 'ai';
 	const opt = (to, t, x) => `<label class="pku edo"><input type="radio" name="edto" value="${to}"${cur === to ? ' disabled' : ''}><span class="t"><b>${t}${cur === to ? '（现在）' : ''}</b><small>${x}</small></span></label>`;
@@ -974,6 +996,7 @@ function render(me) {
 	$('devs').querySelectorAll('[data-ed]').forEach((b) => (b.onclick = () => edBox(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub))));
 	$('devs').querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => openPanel(me.devs.find((x) => x.sub === b.closest('[data-sub]').dataset.sub), b)));
 	$('devs').querySelectorAll('[data-leave]').forEach((b) => (b.onclick = async () => { const sub = b.closest('[data-sub]').dataset.sub, d = me.devs.find((x) => x.sub === sub); if (!confirm('退出「' + d.name + '」？退出以后你的手机就打不开这台路由器的面板了，要主账号重新发加入码才能回来。')) return; try { await api('fam/leave', { sub }); toast('已退出'); await load(); } catch (x) { toast(x.message, true); } }));
+	edPoll(me);
 }
 
 // ===== 个人主页：头像、名字、注册时间；点头像换头像，「编辑资料」改名字 =====

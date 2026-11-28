@@ -244,6 +244,8 @@ export function installHotRo(Hub) {
 		}); },
 		async hotPins() { const m = {}; for (const [k, p] of await this.ctx.storage.list({ prefix: 'hp:s:' })) m[k.slice(5)] = p; return m; },
 		// 退回过的补丁（更新日志里不再显示）
+		// 有推送记录的基础版本（GitHub 接口被限流、存的列表里没有新版本时，后台「补丁」页照样列出来）
+		async hotBases() { const s = new Set(); for (const [, r] of await this.ctx.storage.list({ prefix: 'hr:' })) if (r && r.base) s.add(r.base); return [...s]; },
 		async hotBackSet() { const s = new Set(); for (const [k, r] of await this.ctx.storage.list({ prefix: 'hr:' })) if (r && r.stage === 'back') s.add(k.slice(3)); return s; },
 	});
 }

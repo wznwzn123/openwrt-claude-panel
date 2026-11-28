@@ -73,12 +73,22 @@ try {
 	r = run('v6.2.0');
 	ok('「App 最低版本」写的是旧版本：不强制', r.force === false);
 
-	// 跟仓库里现在的更新说明对一遍：下一版（比如 6.0.2）照抄现在这份，不强制
-	put('tools/release-notes.md', fs.readFileSync(path.join(ROOT, 'tools', 'release-notes.md'), 'utf8'));
+	// 跟仓库里现在的更新说明对一遍：写了「App 最低版本：x.y.z」的就是 x.y.z 这一版 App 强制（6.0.2 这一次，用户 11/28 16:17）；
+	// 下一版照抄这份不改那行：App 不强制（用户 14:35「后面不强制」）
+	const cur = fs.readFileSync(path.join(ROOT, 'tools', 'release-notes.md'), 'utf8');
+	const am = (/App 最低版本[:：]\s*v?(\d+\.\d+\.\d+)/.exec(cur) || [])[1];
+	put('tools/release-notes.md', cur);
 	put('android/app/a.txt', '4');
-	commit('6.0.2');
-	r = run('v6.0.2');
-	ok('现在的 release-notes.md 照抄到下一版：App 不强制', r.version === '6.0.2' && r.force === false, JSON.stringify({ v: r.version, f: r.force }));
+	commit('cur');
+	if (am) {
+		r = run('v' + am);
+		ok('现在的 release-notes.md：App ' + am + ' 这一版强制', r.version === am && r.force === true, JSON.stringify({ v: r.version, f: r.force }));
+		const mu = (body, ver) => { ver = String(ver).replace(/^v/, ''); const re = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})\s*【必须更新】/, m = re.exec(body); return !!((m && m[1] === ver) || body.replace(re, '').includes('【必须更新】')); };
+		ok('现在的 release-notes.md：路由器不强制（最低版本那行还是 v6.0.1）', mu(cur, 'v' + am) === false && mu(cur, 'v6.0.1') === true);
+	}
+	const nx = (am || '6.0.2').replace(/\d+$/, (d) => String(+d + 1));
+	r = run('v' + nx);
+	ok('现在的 release-notes.md 照抄到下一版（' + nx + '）：App 不强制', r.version === nx && r.force === false, JSON.stringify({ v: r.version, f: r.force }));
 } finally {
 	fs.rmSync(dir, { recursive: true, force: true });
 }

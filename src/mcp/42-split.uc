@@ -520,7 +520,11 @@ function sp_bak_files(kind) {
 	return l;
 }
 // 改插件设置前备份。还没重启的改动只备份一次：起不来时放回去的是最后一次能用的设置
+// 同一次请求里只备份一次（split_prep 先改主节点再写规则：第二次备份会把改过的当成原来的）
+let SP_BAKD = {};
 function sp_bak(kind) {
+	if (SP_BAKD[kind]) return;
+	SP_BAKD[kind] = true;
 	let b = SP_BAK + '/' + kind, sj = SP_SJ0 ?? readfile(SP_F), pend = false;
 	try { pend = !!json(sj ?? '{}')?.pending; } catch (e) {}
 	if (pend && stat(b + '/.ok')) return;
@@ -574,6 +578,8 @@ function sp_pw_write(kind, rules) {
 	for (let s in st.secs) if (s['.type'] == 'shunt_rules') { if (match(s['.name'], /^cmcp_sp_/)) { push(mine, s['.name']); if (other) front = false; } else other = true; }
 	let opts = filter(keys(st.main ?? {}), (k) => match(k, /^cmcp_sp_/));
 	// 跟上次写的一样、段都在、排在最前面、分流节点里的去向对得上：不用改
+	// 什么都没设过、也没有以前写的：不用动（也不用备份、不用重启）
+	if (!length(want) && !length(mine) && !length(opts)) return false;
 	let same = pxs[kind]?.sig == sig && front && join(',', mine) == join(',', map(want, (w) => w.n)) && length(opts) == length(want);
 	for (let w in want) if (st.main?.[w.n] != w.to) same = false;
 	if (same) return false;
@@ -627,6 +633,7 @@ function sp_hp_write(rules) {
 	let pxs = sp_pxs(), sig = sprintf('%J', [want, rn]), mine = [], myrn = [], front = true, other = false;
 	for (let s in h.rules) { if (match(s['.name'], /^cmcp_sp_/)) { push(mine, s['.name']); if (other) front = false; } else other = true; }
 	for (let r in h.rns) if (match(r['.name'], /^cmcp_rn_/)) push(myrn, r['.name']);
+	if (!length(want) && !length(mine) && !length(myrn)) return false;
 	if (pxs.homeproxy?.sig == sig && front && join(',', mine) == join(',', map(want, (w) => w.n)) && join(',', sort(myrn)) == join(',', sort(keys(rn)))) return false;
 	sp_bak('homeproxy');
 	sp_uci(map([...mine, ...myrn], (n) => 'delete ' + shq('homeproxy.' + n)), 'homeproxy');

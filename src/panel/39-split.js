@@ -1,5 +1,5 @@
 /* ---------- 6.0 第 69 项：分流——按设备、按软件、按网站、按国家和地区选直连 / 代理 / 某个策略组 / 某个节点 ----------
- * 只支持 OpenClash 和 Nikki；要重启插件才生效的改动，顶上一直提示「现在重启」，用户点了才重启（用户 11/26 定）。
+ * OpenClash、Nikki 什么都能选；PassWall 2 / PassWall / HomeProxy / SSR Plus+ 按路由器给的 cap 显示（用户 11/28，总表 #97）；要重启插件才生效的改动，顶上一直提示「现在重启」，用户点了才重启（用户 11/26 定）。
  * 订阅更新后选的策略组或节点没了：路由器自动改走主策略组并推送，这里列出来。
  * 用户 11/27 加：能选单个节点（按地区分组、带延迟）；自己加网站和软件；学习模式（识别一台设备几分钟里访问的网站，帮你认出软件用的网址）。 */
 const SPL = { d: null, tab: 'dev', learn: null, lt: 0 };
@@ -17,7 +17,8 @@ async function loadSplit() {
 		l.innerHTML = splAppList();
 	});
 }
-const SPL_PX = (d) => (d.kind === 'nikki' ? 'Nikki' : 'OpenClash');
+const SPL_PX = (d) => d.pxn || (d.kind === 'nikki' ? 'Nikki' : 'OpenClash');
+const splClash = (d) => d.kind === 'openclash' || d.kind === 'nikki';
 const SPL_REG = { HK: '香港', TW: '台湾', MO: '澳门', JP: '日本', SG: '新加坡', KR: '韩国', US: '美国', GB: '英国', DE: '德国', FR: '法国', NL: '荷兰', CA: '加拿大', AU: '澳大利亚', RU: '俄罗斯', IN: '印度', TR: '土耳其', MY: '马来西亚', TH: '泰国', VN: '越南', PH: '菲律宾', AE: '阿联酋', AR: '阿根廷', BR: '巴西' };
 function splName(t) {
 	if (!t) return '跟随全局';
@@ -117,7 +118,13 @@ function splRows() {
 function splRender() {
 	const d = SPL.d;
 	if (!d) return;
-	if (!d.kind) { $('splBody').innerHTML = '<section class="card empty" style="margin-top:12px">分流只支持 OpenClash 和 Nikki</section>'; return; }
+	if (!d.kind) { $('splBody').innerHTML = '<section class="card empty" style="margin-top:12px">没有在用的代理插件</section>'; return; }
+	const cap = d.cap || {};
+	// PassWall 主节点不是分流类型：先问一次，点了新建分流节点（默认走原来的节点），原设置备份（用户 11/28）
+	if (cap.need === 'shunt') {
+		$('splBody').innerHTML = `<section class="card" style="margin-top:12px"><b style="display:block;margin-bottom:6px">${esc(SPL_PX(d))} 的主节点要换成分流节点</b><p class="muted" style="margin:0 0 12px">现在用的「${esc(cap.cur || '没选')}」</p><button class="btn primary" id="splPrep" type="button" style="width:100%">换成分流节点</button></section>`;
+		return;
+	}
 	const mv = (d.moved || []).filter((x) => Date.now() / 1000 - x.at < 7 * 86400).map((x) => `<div class="notice w" style="margin-top:12px">${x.node ? '节点' : '策略组'}「${esc(x.g)}」没了，已改走代理（${esc(d.main || '主策略组')}）</div>`).join('');
 	// 选的节点连不上，暂时改走主策略组（11/27 全面检查第 14 条）
 	// 用户 11/28：只换同地区同名的（去掉编号后一样），都挂了不换
@@ -126,7 +133,8 @@ function splRender() {
 	const geo = Object.values(d.geo || {}).some(Boolean);
 	if (!geo && SPL.tab === 'geo') SPL.tab = 'dev';
 	$('splBody').innerHTML = `${d.pending ? `<div class="notice w splpend" style="margin-top:12px"><span>重启 ${SPL_PX(d)} 后生效</span><button class="btn sm" id="splRs" type="button">现在重启</button></div>` : ''}
-		${d.live ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${nd}${mv}${splPvHtml(d)}
+		${d.live || !splClash(d) ? '' : `<div class="notice" style="margin-top:12px">${SPL_PX(d)} 没在运行，策略组是从配置文件里读的，现在选不了节点</div>`}${nd}${mv}${splPvHtml(d)}
+		${cap.dev === false && SPL.tab === 'dev' ? `<div class="notice" style="margin-top:12px">这个版本的 ${esc(SPL_PX(d))} 不能按设备分流 升级后再设</div>` : ''}
 		<div class="spltabs${geo ? '' : ' three'}" id="splTab" role="tablist">${[['dev', '设备'], ['app', '软件'], ['site', '网站'], ...(geo ? [['geo', '国家地区']] : [])].map(([k, t]) => `<button type="button" role="tab" aria-selected="${SPL.tab === k}" class="${SPL.tab === k ? 'on' : ''}" data-st="${k}">${t}</button>`).join('')}</div>
 		${splRows()}`;
 }
@@ -151,7 +159,7 @@ async function splChoose(title, cur, extra) {
 	const regs = Object.keys(by).sort((a, b) => (a === '?') - (b === '?') || by[b].length - by[a].length);
 	const nodes = regs.map((r) => `<div class="mgrp"><div class="mgt">节点 · ${esc(SPL_REG[r] || (r === '?' ? '其他' : r))}</div><div class="mlist">${by[r].map((n) => opt(n.n, n.n, n.p ? '订阅合集里的 选不了' : n.d ? n.d + ' ms' : '', n.p)).join('')}</div></div>`).join('');
 	const v = await modal(`<div class="sheethead"><h3 class="ell" style="margin:0">${esc(title)}</h3><button class="btn sm" data-v="close">关闭</button></div>
-		<div class="cscroll splopts"><div class="mgrp"><div class="mlist">${base}</div></div>${grp ? `<div class="mgrp"><div class="mgt">策略组</div><div class="mlist">${grp}</div></div>` : ''}${nodes}</div>
+		${d.cap && d.cap.lim ? `<p class="muted splim">${esc(d.cap.lim).replace(/\n/g, '<br>')}</p>` : ''}<div class="cscroll splopts"><div class="mgrp"><div class="mlist">${base}</div></div>${grp ? `<div class="mgrp"><div class="mgt">策略组</div><div class="mlist">${grp}</div></div>` : ''}${nodes}</div>
 		${extra ? `<div class="cfoot"><div class="btngrid">${extra.map(([k, t, danger]) => `<button class="btn${danger ? ' danger' : ''}" type="button" data-v="x:${k}">${t}</button>`).join('')}</div></div>` : ''}`);
 	if (typeof v !== 'string') return null;
 	if (v.startsWith('x:')) return { x: v.slice(2) };
@@ -338,8 +346,8 @@ function splLearnSheet() {
 			if (ks.length) h += grp('app', '认出来的软件', ks.length, ks.map((x) => `<button class="mact" type="button" data-la="${esc(x.a.id)}"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.a.name)}</b>${sub(x.n + ' 次 · ' + esc(x.hs.slice(0, 3).join('、')))}</span>${splPill(SPL.d.app[x.a.id])}</button>`).join(''));
 			if (os.length) h += grp('other', '其他网址', os.length, os.map(([b, x]) => `<label class="mact splchk"><input type="checkbox" data-lo="${esc(b)}"${pick.has(b) ? ' checked' : ''}><span><b class="ell" style="display:block">${esc(b)}</b>${sub(x.n + ' 次' + (x.hs.size > 1 || !x.hs.has(b) ? ' · ' + esc([...x.hs].slice(0, 3).join('、')) : ''))}</span></label>`).join(''));
 			if (ss.length) h += grp('sys', '系统后台', ss.length, ss.map((x) => `<div class="mact splro"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(x.a.name)}</b>${sub(x.n + ' 次 · ' + esc(x.hs.slice(0, 3).join('、')))}</span></div>`).join(''), true);
-			if (ds.length) h += grp('ip', '直连的 IP', ds.length, ds.map(([ip, n]) => `<div class="mact splro"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(ip)}</b>${sub(n + ' 次')}</span></div>`).join(''), true);
-			if (L.nohost && !q.v) h += `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">还有 ${L.nohost} 个连接只有 IP 没有网址</p>`;
+			if (ds.length) h += grp('ip', L.mode === 'dns' ? '只有 IP 的连接' : '直连的 IP', ds.length, ds.map(([ip, n]) => `<div class="mact splro"><span style="flex:1;min-width:0"><b class="ell" style="display:block">${esc(ip)}</b>${sub(n + ' 次')}</span></div>`).join(''), true);
+			if (L.nohost && !q.v && L.mode !== 'dns') h += `<p class="muted" style="font-size:12.5px;margin:8px 2px 0">还有 ${L.nohost} 个连接只有 IP 没有网址</p>`;
 			if (!h && q.v) h = '<div class="empty">没有搜到</div>';
 			const lb = m.querySelector('[data-lb]'), st = lb.scrollTop;
 			lb.innerHTML = h;
@@ -389,6 +397,11 @@ $('splBody').addEventListener('click', async (e) => {
 		if (sa.dataset.sa === 'learn') return splLearn();
 		if (sa.dataset.sa === 'capp') return splCappAdd();
 		if (sa.dataset.sa === 'site') return splSiteAdd();
+	}
+	if (e.target.id === 'splPrep') {
+		const c = SPL.d.cap || {};
+		if (!(await confirmBox('换成分流节点', `新建一个分流节点 默认走「${c.cur || '现在的节点'}」。原来的设置先备份。`, '换成分流节点'))) return;
+		return busy(e.target, async () => { try { SPL.d = await P('split_prep', {}, 30000); splRender(); toast('已换成分流节点 重启 ' + SPL_PX(SPL.d) + ' 后生效'); } catch (er) { toast(er.message, true); } });
 	}
 	if (e.target.id === 'splRs') {
 		if (!(await confirmBox('重启 ' + SPL_PX(SPL.d), '断网十几秒。', '重启'))) return;

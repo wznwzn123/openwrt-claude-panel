@@ -16,8 +16,13 @@ def load(cfg):
     p = os.path.join(d, cfg)
     if not os.path.isfile(p): die('Entry not found')
     secs = []; n = 0
+    buf = ''
     for ln in open(p, encoding='utf-8', errors='surrogateescape'):
-        t = shlex.split(ln, comments=True)
+        # 多行的值（PassWall 的 domain_list）：引号没配上就接着读下一行（真 uci 也是这样存的）
+        buf += ln
+        try: t = shlex.split(buf, comments=True)
+        except ValueError: continue
+        buf = ''
         if not t: continue
         if t[0] == 'config':
             n += 1

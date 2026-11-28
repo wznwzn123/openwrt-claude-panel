@@ -39,6 +39,8 @@ function pxShow(it) {
 	if (it.px === 'nk') return nk;
 	if (it.px === 'ocnk') return nk || has('openclash');
 	if (it.px === 'clash') return !!a && a.kind === 'clash';
+	// 分流：OpenClash、Nikki 之外 PassWall 2 / PassWall / HomeProxy / SSR Plus+ 也能用（用户 11/28，总表 #97）
+	if (it.px === 'split') return !!a && ['openclash', 'nikki', 'passwall', 'passwall2', 'homeproxy', 'shadowsocksr'].includes(a.id);
 	return true;
 }
 // 正在用 Nikki（两个都装了按正在用的那个）：订阅、配置文件、规则页换成 Nikki 的
@@ -520,7 +522,7 @@ const NAV = [
 	] },
 	{ g: '代理', items: [
 		{ p: 'proxy', i: '⇢', t: '节点', px: 'clash' },
-		{ p: 'split', i: '⑂', t: '分流', px: 'clash', kw: '分流 按设备 按软件 按网站 直连 代理 策略组 netflix youtube chatgpt 走代理 识别软件' },
+		{ p: 'split', i: '⑂', t: '分流', px: 'split', kw: '分流 按设备 按软件 按网站 直连 代理 策略组 netflix youtube chatgpt 走代理 识别软件' },
 		{ p: 'subs', i: '⇣', t: '订阅', px: 'oc' },
 		{ p: 'nksub', i: '⇣', t: '订阅', px: 'nk', kw: 'nikki 订阅 机场' },
 		{ p: 'cfg', i: '▤', t: '配置文件', px: 'oc' },

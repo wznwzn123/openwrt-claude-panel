@@ -753,7 +753,7 @@ const AU_GO = [
 		{ v: 'wifi', t: 'Wi-Fi 设置', ic: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/>', ok: () => canPage('wifi') },
 		{ v: 'guest', t: '访客 Wi-Fi', ic: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 3.6-5.5 7-5.5s6 2 7 5.5"/>', ok: () => canPage('wifi') },
 		{ v: 'dev', t: '上网计划、暂停上网', ic: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/>', ok: () => canPerm('parent') },
-		{ v: 'split', t: '分流', ic: '<path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', ok: () => canPerm('proxy') && pxShow({ p: 'split', px: 'clash' }) },
+		{ v: 'split', t: '分流', ic: '<path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 1 6 6M18 3v4M6 21v-2"/><circle cx="18" cy="9" r="2"/>', ok: () => canPerm('proxy') && pxShow({ p: 'split', px: 'split' }) },
 		{ v: 'black', t: '不走代理', ic: '<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>', ok: () => canPerm('parent') && pxShow({ p: 'black', px: 'oc' }) }] },
 	{ g: '家里网络', items: [
 		{ v: 'traf', t: '流量统计', ic: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', ok: () => true },
@@ -2683,12 +2683,12 @@ async function mpJoin() {
 }
 async function mpSub(uid) {
 	const x = ((MP.mem && MP.mem.subs) || []).find((y) => y.uid === uid); if (!x) return;
-	// 6.0 第 69 项（用户 11/25）：一键让他名下所有设备不走代理（以后认领的也跟着）；只有 OpenClash / Nikki 能做
+	// 6.0 第 69 项（用户 11/25）：一键让他名下所有设备不走代理（以后认领的也跟着）；能按设备分流的插件都能做（11/28 加了 PassWall 等）
 	let sp = null;
-	if (pxAct()?.kind === 'clash') { try { sp = await P('split_get'); } catch (e) {} }
+	if (pxShow({ px: 'split' })) { try { sp = await P('split_get'); } catch (e) {} }
 	const v = await modal(`<div class="sheethead"><h3>${esc(meName(x))}</h3><button class="btn sm" data-v="close">关闭</button></div>
 	<p class="muted" style="margin:0 0 10px">${esc(x.email || '')} · ${esc(ymd(x.at))} 加入${x.off ? ' · <b>已停用</b>' : ''}</p>
-	${sp && sp.kind ? `<label class="fld row" style="margin-bottom:8px"><div class="lb"><b>他的设备都不走代理</b></div><label class="sw"><input type="checkbox" data-fmbl${sp.fam && sp.fam[uid] ? ' checked' : ''} aria-label="他的设备都不走代理"><i></i></label></label>` : ''}
+	${sp && sp.kind && !(sp.cap && (sp.cap.need || sp.cap.dev === false)) ? `<label class="fld row" style="margin-bottom:8px"><div class="lb"><b>他的设备都不走代理</b></div><label class="sw"><input type="checkbox" data-fmbl${sp.fam && sp.fam[uid] ? ' checked' : ''} aria-label="他的设备都不走代理"><i></i></label></label>` : ''}
 	${mpPermForm(x.perms || [], x.exp)}
 	<button class="btn primary" data-ok style="width:100%;margin-top:14px">保存</button>
 	<div class="btngrid three" style="margin:10px 0 0"><button class="btn" data-v="${x.off ? 'on' : 'off'}">${x.off ? '恢复' : '停用'}</button><button class="btn" data-v="owner">设为主账号</button><button class="btn danger" data-v="rm">移除</button></div>`, (m, close) => {
@@ -2700,7 +2700,7 @@ async function mpSub(uid) {
 			try {
 				const r = await P('split_set', { fam: { uid, on } }, 30000);
 				toast(on ? '已设置：' + meName(x) + '的设备都不走代理' : '已恢复：' + meName(x) + '的设备跟随全局');
-				const px = r.kind === 'nikki' ? 'Nikki' : 'OpenClash';
+				const px = r.pxn || (r.kind === 'nikki' ? 'Nikki' : 'OpenClash');
 				if (r.restart && (await confirmBox('重启 ' + px, '重启后生效，断网十几秒。', '现在重启'))) { await P('split_restart'); toast('正在重启 ' + px); }
 			} catch (e) { bl.checked = !on; toast(e.message, true); }
 			bl.disabled = false;

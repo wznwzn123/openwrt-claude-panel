@@ -7988,7 +7988,8 @@ function panelVerCheck(cur) {
 	clearTimeout(verWaitT);
 	if (reloadBusy()) { verWaitT = setTimeout(() => panelVerCheck(cur), 5000); return false; }
 	try { sessionStorage.setItem('rp_verfix', cur); } catch (e) {}
-	toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' V$1') + '，正在换成新版…');
+	// 只是装了补丁（版本号前面一样）：不提示，直接换（用户 11/28 18:55「更新补丁不用通知用户」）
+	if (cur.replace(/-h\d+$/, '') !== PANEL_VER.replace(/-h\d+$/, '')) toast('路由器面板已更新到 v' + cur.replace(/-h(\d+)$/, ' V$1') + '，正在换成新版…');
 	refreshPanel();
 	return true;
 }

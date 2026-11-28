@@ -52,7 +52,7 @@ try {
 	ok('装好：面板、接口、新的小工具、远程数据都换上', rd('www-claude-mcp/panel/index.html') === 'NEW PANEL' && rd('www-claude-mcp/cgi-bin/mcp') === 'NEW CGI' && rd('usr/sbin/cmcp-weekly2') === 'NEW TOOL' && rd('etc/claude-mcp/remote.json') === '{"apps":[]}');
 	ok('接口和小工具可以执行', (fs.statSync(R + '/www-claude-mcp/cgi-bin/mcp').mode & 0o111) && (fs.statSync(R + '/usr/sbin/cmcp-weekly2').mode & 0o111));
 	ok('记下补丁号（版本号不变）', /^VER=6\.0\.0$/m.test(ver()) && /^HOT=1$/m.test(ver()), ver());
-	ok('通知里记一条（不推送）', /"kind":"hot".*面板已自动更新到 v6\.0\.0 V1.*修了订阅页的显示问题/.test(rd('etc/claude-mcp/events.log') || ''));
+	ok('通知里不记（用户 11/28 18:55：补丁不用通知用户），补丁日志里记着说明', !/"kind":"hot"/.test(rd('etc/claude-mcp/events.log') || '') && /热补丁 1 装好了：修了订阅页的显示问题/.test(fs.readFileSync('/tmp/cmcp_hot.log', 'utf8')));
 	ok('不留临时文件', !fs.readdirSync('/tmp').some((f) => /^cmcp_hot\.\d+$/.test(f)) && !fs.existsSync(R + '/www-claude-mcp/panel/index.html.hotnew'));
 	fs.writeFileSync(R + '/www-claude-mcp/panel/index.html', 'NEW PANEL keep');
 	run();
@@ -102,7 +102,7 @@ try {
 	INFO = { n: 5, tag: 'hot-6.0.0-5', notes: '' }; setInfo();
 	mkhot('6.0.0', 5, { 'www-claude-mcp/panel/index.html': 'NEW5' });
 	run({ CMCP_HOT_CHECK: 'true', CMCP_ULOCK: UL, CMCP_HOT_SWAP: SW });
-	ok('官网没给说明：通知里用补丁包里的说明', /^HOT=5$/m.test(ver()) && /面板已自动更新到 v6\.0\.0 V5","detail":"修了订阅页的显示问题"/.test(rd('etc/claude-mcp/events.log') || ''), (rd('etc/claude-mcp/events.log') || '').split('\n').slice(-2).join(' '));
+	ok('官网没给说明：补丁日志里用补丁包里的说明', /^HOT=5$/m.test(ver()) && /热补丁 5 装好了：修了订阅页的显示问题/.test(fs.readFileSync('/tmp/cmcp_hot.log', 'utf8')) && !/"kind":"hot"/.test(rd('etc/claude-mcp/events.log') || ''));
 	INFO = { n: 6, tag: 'evil;rm -rf /', notes: '' }; setInfo();
 	run({ CMCP_HOT_CHECK: 'true' });
 	ok('官网给的标签格式不对：不下载', /^HOT=5$/m.test(ver()));
@@ -134,13 +134,13 @@ try {
 	INFO = { n: 4, tag: 'hot-6.0.0-4', notes: '', back: true }; setInfo();
 	run({ CMCP_HOT_CHECK: 'true' });
 	ok('back：往回装 V4', /^HOT=4$/m.test(ver()) && rd('www-claude-mcp/panel/index.html') === 'NEW4 again', ver());
-	ok('通知里写「已退回」', /面板已退回到 v6\.0\.0 V4/.test(rd('etc/claude-mcp/events.log') || ''));
+	ok('退回：通知里不记，补丁日志里记', !/"kind":"hot"/.test(rd('etc/claude-mcp/events.log') || '') && /退回到补丁 4 了/.test(fs.readFileSync('/tmp/cmcp_hot.log', 'utf8')));
 	ok('退回装好也报一次（带 back，托管版带钥匙）', reps().some((x) => x.n === 4 && x.ok === 1 && x.back === true && x.s === 'abcd2345' && x.rk === 'R'.repeat(32) && x.id === 'b2b2b2b2b2b2b2b2'), rl('rep.log').slice(-1)[0]);
 	// V0：正式版原样
 	INFO = { n: 0, tag: 'hot-6.0.0-0', notes: '', back: true }; setInfo();
 	mkhot('6.0.0', 0, { 'www-claude-mcp/panel/index.html': 'RELEASE' });
 	run({ CMCP_HOT_CHECK: 'true' });
-	ok('退回 V0（正式版原样）：补丁号记 0，通知写「正式版原样」', /^HOT=0$/m.test(ver()) && rd('www-claude-mcp/panel/index.html') === 'RELEASE' && /面板已退回到 v6\.0\.0 正式版原样/.test(rd('etc/claude-mcp/events.log') || ''), ver());
+	ok('退回 V0（正式版原样）：补丁号记 0', /^HOT=0$/m.test(ver()) && rd('www-claude-mcp/panel/index.html') === 'RELEASE' && /退回到补丁 0 了/.test(fs.readFileSync('/tmp/cmcp_hot.log', 'utf8')), ver());
 	// 只问不装（面板「检查更新」显示「正在安装 Vn…」用）
 	INFO = { n: 6, tag: 'hot-6.0.0-6', notes: '' }; setInfo();
 	const a = run({}, ['ask', 'force']);

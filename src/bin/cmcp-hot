@@ -2,7 +2,7 @@
 # 热补丁（6.0，用户 11/26：全程静默，不问）：不重装、不重启、不断网，换掉面板网页 / 接口文件 / 小工具脚本 / 远程数据。
 # 定时任务每 6 小时跑一次 check：问官网这个版本（VER）有没有更新的热补丁（编号 n 比现在的 HOT 大）→ 下载 → 验签（跟一键升级同一把公钥）
 # → 只认白名单里的文件 → 备份 → 一个个原子替换 → 自检（面板网页和接口都能打开）→ 不行就全部退回；同一个补丁失败 3 次不再试。
-# 装好了在「通知」里记一条（不推送到手机），面板发现版本号变了自己换成新的。
+# 装好了不在「通知」里记（用户 11/28 18:55），面板发现版本号变了自己换成新的。
 # 分批推送和退回（用户 11/28）：问的时候带上现在第几个补丁（h）、分批用的编号（k：托管版是专属网址编号，自建版是兼容上报的随机编号，
 # 关了兼容上报的不带 = 最后一批）、尝鲜通过的带上最后打开面板的时间（po）；点了「检查更新」带 f=1（直接装最新的）。
 # 官网回 back=true 时往回装（后台「全部退回」「按台退回」），装完成没成都报一次（/api/router/hotrep，失败原因只有下面这几句固定的话）
@@ -110,14 +110,8 @@ if ! selfcheck; then restore; fail "装完面板打不开，已退回原来的";
 # 记下现在是第几个补丁（面板据此发现自己该换新的）
 { grep -v '^HOT=' "$D/version"; echo "HOT=$N"; } > "$D/version.tmp" && mv -f "$D/version.tmp" "$D/version"
 rmdir "$SWAP" 2>/dev/null
-if [ -n "$BACK" ]; then
-	VN="V$N"; [ "$N" = 0 ] && VN="正式版原样"
-	printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已退回到 v$VER $VN" "开发者撤回了后面的修复补丁" >> "$D/events.log"
-	log "退回到补丁 $N 了"
-else
-	printf '{"t":%s,"lvl":"info","kind":"hot","msg":"%s","detail":"%s","from":0,"to":0}\n' "$(date +%s)" "面板已自动更新到 v$VER V$N" "$(esc "$NOTES")" >> "$D/events.log"
-	log "热补丁 $N 装好了"
-fi
+# 装好、退回都不在「通知」里记（用户 11/28 18:55「从现在开始更新补丁不用通知用户」），只记在补丁日志里
+if [ -n "$BACK" ]; then log "退回到补丁 $N 了"; else log "热补丁 $N 装好了：$NOTES"; fi
 rep 1 ""
 # 换了看门狗（一直在跑的程序）：重启一下才用上新的（不碰网络）
 case " $(echo $FILES) " in *" usr/sbin/cmcp-watchdog "*) [ -z "$R" ] && [ -x /etc/init.d/cmcp-watchdog ] && ( /etc/init.d/cmcp-watchdog restart >/dev/null 2>&1 & ) ;; esac

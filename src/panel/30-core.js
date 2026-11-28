@@ -798,6 +798,7 @@ async function go(p, how) {
 function sideOpen(on) {
 	const was = $('side').classList.contains('open');
 	$('side').classList.toggle('open', on); $('scrim').classList.toggle('open', on); if (on && token) loadMenu();
+	if (on && window.sideSwShow) sideSwShow();
 	if (on && !was && HS.ready && innerWidth < 900 && !hsS().side && !hsAdopt({ p: page, side: 1 }) && hsAct()) hsSet({ p: page, side: 1 }, true);
 	if (!on && was) hsGone('side', 1);
 }

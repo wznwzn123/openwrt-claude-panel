@@ -355,13 +355,18 @@ public class MainActivity extends AppCompatActivity {
             // 托管版换成本地版以后，专属网址回 Cloudflare 522（面板没缓存时就是一张报错页）：同样回首页说清楚
             @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) {
                 Uri u = r.getUrl();
-                if (!r.isForMainFrame() || e.getStatusCode() != 522 || !"https".equals(u.getScheme()) || !allowed(u.getHost())) return;
+                // 面板有缓存时页面本身能打开，是接口回 522（用户 11/28 18:31「还是这样」）：也算，一次加载只提示一次
+                if (e.getStatusCode() != 522 || !"https".equals(u.getScheme()) || !allowed(u.getHost())) return;
+                Uri cur = v.getUrl() == null ? null : Uri.parse(v.getUrl());
+                if (!r.isForMainFrame() && (cur == null || !u.getHost().equals(cur.getHost()))) return;
+                if (local522) return;
+                local522 = true;
                 v.stopLoading();
                 showHome();
                 js(home, "window.lanFail && lanFail(" + JSONObject.quote("https://" + u.getAuthority() + "/panel/") + ")");
             }
             @Override public void onPageFinished(WebView v, String url) { remember(url); pollBar(); }
-            @Override public void onPageStarted(WebView v, String url, Bitmap fav) { if (edge) { edge = false; barColor = 0; layoutBars(); } }
+            @Override public void onPageStarted(WebView v, String url, Bitmap fav) { local522 = false; if (edge) { edge = false; barColor = 0; layoutBars(); } }
         });
         site.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
@@ -500,6 +505,7 @@ public class MainActivity extends AppCompatActivity {
         } else widgetHelp();
     }
     private boolean pinShown = true;
+    private boolean local522 = false; // 这次打开的面板已经因为 522（本地版）回过首页了
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (!f) pinShown = true; }
     private boolean xiaomi() { return "xiaomi".equalsIgnoreCase(Build.MANUFACTURER) || "redmi".equalsIgnoreCase(Build.BRAND) || "poco".equalsIgnoreCase(Build.BRAND); }
     /* 小米的「桌面快捷方式」权限是自己加的 AppOps（10017），官方接口查不到，只能反射问；查不到就当没关，走上面等 0.8 秒的办法 */

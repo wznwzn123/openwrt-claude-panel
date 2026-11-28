@@ -2,100 +2,130 @@
 <title>路由器面板</title>
 <script>window.setDark=function(d){document.documentElement.classList.toggle('dark',!!d)};try{setDark(window.App&&App.dark?App.dark():matchMedia('(prefers-color-scheme: dark)').matches)}catch(e){}</script>
 <style>
-:root{--bg:#eef1f8;--card:rgba(255,255,255,.66);--text:#0b0b0f;--muted:#6e6e73;--line:rgba(60,60,67,.14);--fill:rgba(118,118,128,.14);--brand:#007aff;--ok:#34c759;--danger:#ff3b30;--shadow:inset 0 0 0 .5px rgba(255,255,255,.65),0 8px 28px rgba(31,38,80,.08)}
-/* 深色：由 App 告诉页面（老版本系统 WebView 不认系统深色设置），浏览器预览时看系统 */
-:root.dark{--bg:#0b1024;--card:rgba(28,28,32,.58);--text:#f5f5f7;--muted:#98989f;--line:rgba(255,255,255,.1);--fill:rgba(118,118,128,.26);--brand:#0a84ff;--shadow:inset 0 0 0 .5px rgba(255,255,255,.09),0 8px 28px rgba(0,0,0,.28)}
+/* 6.0.2 起跟面板一样用「石墨」（用户 11/28 14:51 定）：冷灰底、白卡片细边框、主按钮黑色（深色白色）、线条图标。
+   安卓 7 的老网页组件：不用 flex 的 gap、inset、:is、color-mix */
+:root{--bg:#eceef2;--card:#fff;--text:#11151c;--muted:#6b7280;--line:rgba(17,21,28,.08);--fill:rgba(17,21,28,.06);--fill2:rgba(17,21,28,.1);--brand:#2f5bea;--danger:#d70015;--ok:#1f9d55;--shadow:0 0 0 1px rgba(17,21,28,.08),0 1px 2px rgba(17,21,28,.04),0 12px 32px -12px rgba(17,21,28,.12);--pri:#11151c;--prit:#fff}
+:root.dark{--bg:#0b0c0f;--card:#15171c;--text:#eef0f4;--muted:#8b93a1;--line:rgba(255,255,255,.07);--fill:rgba(255,255,255,.07);--fill2:rgba(255,255,255,.11);--brand:#5b82ff;--danger:#ff6961;--ok:#30d158;--shadow:0 0 0 1px rgba(255,255,255,.07),inset 0 1px 0 rgba(255,255,255,.04),0 16px 40px -16px rgba(0,0,0,.8);--pri:#eef0f4;--prit:#0b0c0f}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;min-height:100vh;color:var(--text);font:15px/1.55 -apple-system,"PingFang SC","Noto Sans SC",system-ui,sans-serif;background:var(--bg);-webkit-user-select:none;user-select:none}
-body::before{content:"";position:fixed;inset:-40px;z-index:-1;filter:blur(20px);background:radial-gradient(60% 50% at 12% 8%,#c3d2ff 0,transparent 70%),radial-gradient(55% 45% at 92% 18%,#f6cdf0 0,transparent 70%),radial-gradient(70% 55% at 30% 95%,#b8ecff 0,transparent 70%),var(--bg)}
-:root.dark body::before{background:radial-gradient(55% 45% at 15% 10%,#3a2c8f 0,transparent 70%),radial-gradient(50% 45% at 90% 25%,#13527a 0,transparent 70%),radial-gradient(70% 55% at 40% 100%,#4b1e6b 0,transparent 70%),#0b1024}
-.wrap{padding:18px 16px 40px;max-width:640px;margin:auto}
-.head{display:flex;align-items:center;margin:8px 4px 18px}
-.head i{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#6a7bff,#1fb5e6);color:#fff;font-style:normal;font-size:22px}
-.head b{font-size:22px;letter-spacing:-.02em}
-.head .logo{width:44px;height:44px;flex:none;filter:drop-shadow(0 4px 10px rgba(16,28,64,.3))}
-.card{background:var(--card);border-radius:22px;padding:16px;box-shadow:var(--shadow)}
-.card+.card{margin-top:12px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border:0;border-radius:99px;background:var(--fill);color:var(--text);font:inherit;font-weight:650;cursor:pointer}
-.btn:active{transform:scale(.96)}.btn.primary{background:var(--brand);color:#fff}.btn.danger{color:var(--danger)}.btn.sm{padding:7px 13px;font-size:13.5px}
-.btn:disabled{opacity:.5}
-.acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:16px 0 12px}
-.acts .btn{padding:14px 8px;border-radius:18px;flex-direction:column;gap:4px}
-.acts .btn span{font-size:24px}
-.acts .full{grid-column:1/-1;flex-direction:row}
-h2{font-size:18px;margin:22px 4px 10px;letter-spacing:-.02em}
-.r{display:flex;align-items:center}
-.r .ic{width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#6a4dff,#2f6bff 55%,#00c2d8);color:#fff;--card-solid:#2f6bff}
-.r .t{flex:1;min-width:0}.r .t b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.r .t span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
-.r .more{display:flex;margin-top:10px}
-.muted{color:var(--muted)}
-.tip{font-size:13.5px;color:var(--muted);line-height:1.7;margin:0}
-.upd{border:1.5px solid var(--brand)}
-.upd p{margin:6px 0 10px;font-size:13.5px;color:var(--muted);white-space:pre-line;max-height:120px;overflow:auto}
-.modal{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.42);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-.modal .box{width:100%;max-width:420px;background:var(--bg);border-radius:24px;padding:22px 20px 18px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.modal h3{margin:0 0 4px;font-size:19px}.modal .v{color:var(--muted);font-size:13px}
-.modal .notes{margin:12px 0 16px;font-size:14px;line-height:1.65;white-space:pre-line;max-height:40vh;overflow:auto;color:var(--text)}
-.modal .must{margin:-6px 0 14px;font-size:13px;color:var(--danger);font-weight:600}
-.modal .btn{width:100%}.modal .later{margin-top:8px;background:none;color:var(--muted)}
-.foot{text-align:center;font-size:12.5px;color:var(--muted);margin-top:26px}
-.foot a{color:var(--brand);font-weight:600;text-decoration:none}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,"PingFang SC","Noto Sans SC",system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-.01em;-webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+svg{display:block}
 .hidden{display:none!important}
-/* 老版本安卓的网页组件不认 flex 的 gap，用外边距 */
-.head>*+*,.r>*+*{margin-left:12px}
-.r .more>*+*{margin-left:6px}.add>*+*{margin-left:8px}
-.add{display:flex;margin-top:10px}
-.add input{flex:1;min-width:0;padding:11px 14px;border-radius:14px;border:0;background:var(--fill);color:var(--text);font:inherit;font-size:14px;outline:none;-webkit-user-select:text;user-select:text}
-.add input:focus{box-shadow:0 0 0 2px var(--brand)}
-.aerr{color:var(--danger);font-size:13px;margin:8px 2px 0}
-.aerr:empty{display:none}
+.wrap{max-width:560px;margin:auto;padding:6px 16px 32px}
+/* 顶栏 */
+.head{display:flex;align-items:center;padding:12px 4px 18px}
+.logo{width:36px;height:36px;border-radius:10px;flex:none;overflow:hidden;box-shadow:0 3px 10px rgba(16,28,64,.3)}
+.head b{flex:1;min-width:0;margin-left:12px;font-size:22px;font-weight:700;letter-spacing:-.02em}
+.ibtn{width:38px;height:38px;border-radius:50%;background:var(--fill);display:flex;align-items:center;justify-content:center;flex:none}
+.ibtn:active{background:var(--fill2)}
+.ibtn svg{width:20px;height:20px}
+/* 分组 */
+.lbl{font-size:13px;font-weight:600;color:var(--muted);margin:22px 6px 8px}
+.lbl:first-child{margin-top:4px}
+.card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;align-items:center;width:100%;min-height:64px;padding:12px 14px 12px 16px;text-align:left;position:relative}
+.row+.row::before{content:"";position:absolute;top:0;right:0;left:68px;height:1px;background:var(--line)}
+button.row:active,.row.tap:active{background:var(--fill)}
+.ic{width:40px;height:40px;border-radius:12px;background:var(--fill);display:flex;align-items:center;justify-content:center;flex:none;color:var(--text)}
+.ic svg{width:22px;height:22px}
+.ic.lan{position:relative}
+.ic.lan::after{content:"";position:absolute;right:-2px;top:-2px;width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--card)}
+.tx{flex:1;min-width:0;margin-left:12px}
+.tx b{display:block;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx>span{display:block;font-size:13px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chev{width:8px;height:14px;color:var(--muted);opacity:.6;flex:none;margin-left:8px}
+.more{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin:-4px -6px -4px 6px}
+.more:active{background:var(--fill)}
+.more svg{width:20px;height:20px}
+.mini .row{min-height:52px}
+.mini .ic{width:32px;height:32px;border-radius:9px}.mini .ic svg{width:19px;height:19px}
+.mini .row+.row::before{left:60px}
+.mini .tx b{font-size:15.5px;font-weight:500}
+/* 按钮 */
+.btn{display:flex;align-items:center;justify-content:center;width:100%;height:50px;border-radius:14px;background:var(--fill);color:var(--text);font-size:16px;font-weight:600}
+.btn:active{opacity:.85;transform:scale(.985)}
+.btn.pri{background:var(--pri);color:var(--prit)}
+.btn.red{color:var(--danger)}
+.btn svg{width:20px;height:20px;margin-right:8px}
+.btn:disabled{opacity:.45}
+.sbtn{height:34px;padding:0 16px;border-radius:99px;background:var(--pri);color:var(--prit);font-size:14px;font-weight:600;flex:none;margin-left:8px}
+.sbtn.soft{background:var(--fill);color:var(--text)}
+/* 没有路由器时 */
+.hero{text-align:center;padding:48px 0 18px}
+.hero .logo{width:72px;height:72px;border-radius:18px;margin:0 auto 16px;box-shadow:0 10px 30px -8px rgba(16,28,64,.45)}
+.hero h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.03em}
+.hero p{margin:6px 0 0;font-size:15px;color:var(--muted)}
+/* 输入 */
+.inp{display:block;width:100%;height:48px;padding:0 14px;border-radius:12px;border:0;background:var(--fill);color:var(--text);font:inherit;font-size:15px;outline:none;-webkit-user-select:text;user-select:text}
+.inp:focus{box-shadow:0 0 0 2px var(--brand)}
+.err{color:var(--danger);font-size:13px;margin:8px 2px 0;line-height:1.5}
+.err:empty{display:none}
+/* 底部弹出的面板 */
+.scrim{position:fixed;top:0;right:0;bottom:0;left:0;z-index:40;background:rgba(0,0,0,.36);opacity:0;transition:opacity .22s}
+.scrim.on{opacity:1}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;max-width:560px;margin:auto;background:var(--bg);border-radius:22px 22px 0 0;padding:8px 16px 20px;padding-bottom:calc(20px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .3s cubic-bezier(.2,.9,.25,1);max-height:86vh;overflow:auto}
+.sheet.on{transform:none}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--fill2);margin:0 auto 12px}
+.sheet h3{margin:0 4px 14px;font-size:19px;font-weight:700;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet .btn{margin-top:10px}
+.two{display:flex;margin-top:14px}.two .btn{margin-top:0}.two .btn+.btn{margin-left:10px}
+/* 居中的小卡片：更新、确认 */
+.dlg{position:fixed;top:0;right:0;bottom:0;left:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.42)}
+.dlg .box{width:100%;max-width:380px;max-height:70vh;display:flex;flex-direction:column;background:var(--card);border-radius:22px;padding:22px 18px 16px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.dlg h3{margin:0;font-size:19px;font-weight:700;text-align:center}
+.dlg .v{color:var(--muted);font-size:13.5px;text-align:center;margin-top:4px}
+.dlg .notes{margin:14px 0 4px;font-size:14px;line-height:1.65;white-space:pre-line;overflow:auto;min-height:0;flex:1 1 auto;color:var(--text)}
+.dlg .must{margin:10px 0 0;font-size:13.5px;color:var(--danger);font-weight:600;text-align:center}
+.dlg p.msg{margin:8px 0 0;font-size:14.5px;color:var(--muted);text-align:center;line-height:1.55}
+.dlg .btn{margin-top:12px;flex:none}
+/* 有新版本（「以后再说」以后） */
+.upd{display:flex;align-items:center;padding:12px 12px 12px 16px;margin-bottom:18px}
+.upd .tx b{font-size:15px}
+/* 提示 */
+.toast{position:fixed;left:50%;bottom:28px;z-index:60;max-width:calc(100% - 40px);transform:translate(-50%,20px);opacity:0;transition:opacity .2s,transform .2s;background:var(--pri);color:var(--prit);padding:11px 18px;border-radius:14px;font-size:14px;line-height:1.5;text-align:center;pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.foot{text-align:center;font-size:13px;color:var(--muted);margin-top:28px}
+.foot button{color:var(--brand);font-weight:600;font-size:13px;margin-left:4px}
 </style></head><body><div class="wrap">
-<div class="head"><svg class="logo" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22.5" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg><div><b>路由器面板</b><div class="muted" style="font-size:13px">管理家里的 OpenWrt 路由器</div></div></div>
+<div class="head" id="head"><svg class="logo" aria-hidden="true" viewBox="0 0 100 100"><rect width="100" height="100" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg><b>路由器面板</b><button class="ibtn hidden" id="addTop" aria-label="添加路由器"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
 
-<div class="card upd hidden" id="upd"><b>发现新版本 <span id="updV"></span></b><p id="updN"></p><button class="btn primary" id="updBtn" style="width:100%">更新</button></div>
+<div class="card upd hidden" id="upd"><div class="tx" style="margin-left:0"><b>新版本 <span id="updV"></span></b></div><button class="sbtn" id="updBtn">更新</button></div>
 
-<div class="acts">
-	<button class="btn" id="scanBtn"><span>📷</span>扫码</button>
-	<button class="btn" id="albumBtn"><span>🖼️</span>相册识别</button>
-	<button class="btn" id="pasteBtn"><span>📋</span>粘贴</button>
-	<button class="btn full hidden" id="hubBtn">👤 官网账号（我的路由器）</button>
+<div id="main"></div>
+
+<div class="foot">版本 <span id="ver"></span><button id="chk">检查更新</button></div>
 </div>
 
-<div class="card"><b style="font-size:15px">手动添加</b><div class="muted" style="font-size:13px;margin-top:2px">粘贴或输入登录地址（安装完成时终端里显示的那个）</div>
-	<form class="add" id="addForm" autocomplete="off"><input id="addr" type="url" inputmode="url" placeholder="https://…/cgi-bin/mcp/…" autocapitalize="off" spellcheck="false"><button class="btn primary" id="addBtn">添加</button></form>
-	<div class="aerr" id="aerr"></div>
-</div>
-
-<div id="found"></div>
-<h2>我的路由器</h2>
-<div id="list"></div>
-
-<h2>怎么添加</h2>
-<div class="card"><p class="tip">
-	<b>在家里</b>：连着家里 Wi-Fi 时，这里会自动找到路由器，点「打开」登录。<br>
-	<b>托管版</b>：点上面的「官网账号（我的路由器）」，登录你的官网账号，在路由器下面点「打开面板」就行，不用输任何码。家里人用主账号发的加入码加入后，也这样打开。<br>
-	<b>扫码</b>：在已经能用的手机上打开面板，「系统操作 → 添加新手机」，用这里的「扫码」扫一下。<br>
-	<b>相册识别</b>：二维码在截图里（比如别人发给你的），点「相册识别」选那张图。<br>
-	<b>粘贴 / 手动添加</b>：复制安装时显示的登录地址（<code>https://…/cgi-bin/mcp/…</code>），点「粘贴」，或者填到上面的框里点「添加」。<br>
-	登录密钥只保存在这台手机上，不会上传到任何地方。
-</p></div>
-
-<div class="modal hidden" id="updModal" role="dialog" aria-modal="true"><div class="box">
-	<h3>发现新版本</h3><div class="v" id="umV"></div>
-	<div class="notes" id="umN"></div>
-	<div class="must hidden" id="umMust">这个版本必须更新，更新后才能继续使用。</div>
-	<button class="btn primary" id="umGo">立即更新</button>
-	<button class="btn later" id="umLater">以后再说</button>
-</div></div>
-
-<div class="foot">版本 <span id="ver"></span> · <a href="#" id="chk">检查更新</a></div>
-</div>
+<div class="scrim hidden" id="scrim"></div>
+<div class="sheet hidden" id="sheet" role="dialog" aria-modal="true"></div>
+<div class="dlg hidden" id="dlg" role="dialog" aria-modal="true"><div class="box" id="dlgBox"></div></div>
+<div class="toast" id="toast" role="status"></div>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const A = window.App || { version: () => 'dev', hub: () => '', routers: () => '[]', saveRouters() {}, open: (u) => (location.href = u), external: (u) => window.open(u), scan: () => alert('只有 App 里能扫码'), pickQr: () => alert('只有 App 里能从相册识别'), clipboard: () => '', update() {} };
+const A = window.App || { version: () => 'dev', hub: () => '', routers: () => '[]', saveRouters() {}, open: (u) => (location.href = u), external: (u) => window.open(u), scan() {}, pickQr() {}, clipboard: () => '', update() {} };
 const HUB = (A.hub() || '').replace(/\/$/, '');
 $('ver').textContent = A.version();
+// 线条图标（24 格，跟面板一个画法）
+const I = {
+	router: '<rect x="3.5" y="12.5" width="17" height="7" rx="2"/><path d="M7.5 16h.01M10.5 16h.01M14 16h3"/><path d="M8.5 9.2a5 5 0 0 1 7 0M6 6.6a8.6 8.6 0 0 1 12 0"/>',
+	user: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>',
+	scan: '<path d="M4 8.5V6a2 2 0 0 1 2-2h2.5M15.5 4H18a2 2 0 0 1 2 2v2.5M20 15.5V18a2 2 0 0 1-2 2h-2.5M8.5 20H6a2 2 0 0 1-2-2v-2.5M4 12h16"/>',
+	img: '<rect x="4" y="5" width="16" height="14" rx="2.5"/><circle cx="9.2" cy="10" r="1.6"/><path d="M5 17.5l4.6-4.6 3.4 3.4 2.4-2.4 3.6 3.6"/>',
+	paste: '<rect x="6" y="4.5" width="12" height="16" rx="2.5"/><path d="M9.5 4.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v.5M9.5 10h5M9.5 13.5h5M9.5 17h3"/>',
+	key: '<path d="M5 7.5h14v9H5z" stroke-linejoin="round"/><path d="M8 12h.01M11 12h.01M14 12h.01M8 14.8h8"/>',
+	plus: '<path d="M12 5v14M5 12h14"/>',
+	dots: '<circle cx="5.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
+	open: '<path d="M14 5h5v5M19 5l-8 8M18 14v3.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 5 17.5v-10A1.5 1.5 0 0 1 6.5 6H10"/>',
+	pen: '<path d="M14.5 5.5l4 4L9 19H5v-4z" stroke-linejoin="round"/>',
+	trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
+};
+const ic = (k, sw) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw || 1.8}" stroke-linecap="round">${I[k]}</svg>`;
+const CHEV = '<svg class="chev" viewBox="0 0 8 14" aria-hidden="true"><path d="M1.5 1.5 6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+let tt = 0;
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => e.classList.remove('on'), 2600); }
+
 // 认出扫到或粘贴的内容：登录地址 / 面板 + #login / 官网配对链接
 function parse(t) {
 	t = String(t || '').trim();
@@ -108,99 +138,173 @@ function parse(t) {
 	if (HUB && (t === HUB + '/app' || t === HUB + '/app/' || /^[^\s]+\/app\?join=[A-Za-z2-9]{6,12}$/.test(t)) && t.startsWith(HUB + '/app')) return t;
 	return null;
 }
-function onScan(t) { const u = parse(t); if (u) A.open(u); else alert('这个二维码不是路由器面板的。请扫面板里「添加新手机」的二维码，或者主账号发的加入码二维码。'); }
-$('scanBtn').onclick = () => A.scan();
-$('albumBtn').onclick = () => A.pickQr();
-// 手动添加：认得出来就直接打开，认不出来就在框下面说明原因（不弹窗）
-const BADADDR = '这不是登录地址。登录地址像这样：https://xxx/cgi-bin/mcp/一串字母数字（安装完成时终端里显示的那个）';
-function tryAdd(t) {
+function onScan(t) { const u = parse(t); if (u) { closeSheet(); A.open(u); } else toast('不是路由器面板的二维码'); }
+
+/* ---------- 底部面板（添加、单台路由器的操作）和居中小卡片（更新、确认） ---------- */
+let sheetOn = false;
+function openSheet(html, bind) {
+	const s = $('sheet'), c = $('scrim');
+	s.innerHTML = '<div class="grab"></div>' + html;
+	s.classList.remove('hidden'); c.classList.remove('hidden');
+	void s.offsetWidth; s.classList.add('on'); c.classList.add('on');
+	sheetOn = true;
+	if (bind) bind(s);
+}
+function closeSheet() {
+	if (!sheetOn) return; sheetOn = false;
+	const s = $('sheet'), c = $('scrim');
+	s.classList.remove('on'); c.classList.remove('on');
+	setTimeout(() => { if (!sheetOn) { s.classList.add('hidden'); c.classList.add('hidden'); s.innerHTML = ''; } }, 260);
+}
+$('scrim').onclick = closeSheet;
+let dlgLock = false;
+function openDlg(html, bind, lock) { $('dlgBox').innerHTML = html; $('dlg').classList.remove('hidden'); dlgLock = !!lock; if (bind) bind($('dlgBox')); }
+function closeDlg() { $('dlg').classList.add('hidden'); $('dlgBox').innerHTML = ''; dlgLock = false; }
+$('dlg').onclick = (e) => { if (e.target === $('dlg') && !dlgLock) closeDlg(); };
+
+/* ---------- 添加路由器 ---------- */
+const BADADDR = '不是登录地址。登录地址像这样：https://…/cgi-bin/mcp/…';
+function tryAdd(t, errEl) {
 	const u = parse(t);
-	$('aerr').textContent = u || !t ? '' : BADADDR;
-	if (u) { $('addr').value = ''; A.open(u); }
+	if (errEl) errEl.textContent = u || !t ? '' : BADADDR;
+	if (u) { closeSheet(); A.open(u); }
 	return !!u;
 }
-// 返回键（6.0 第 68 项，App 调）：开着能关的更新提示就先关；手动添加框里有没添加的地址，先提醒一次；返回 true 表示这次不退出
-let backWarned = false;
-window.appBack = () => {
-	const m = $('updModal');
-	if (m && !m.classList.contains('hidden')) { if ($('umLater').classList.contains('hidden')) return false; m.classList.add('hidden'); return true; }
-	if ($('addr').value.trim() && !backWarned) { backWarned = true; $('aerr').textContent = '地址还没添加。再按一次返回键退出'; return true; }
-	return false;
-};
-$('addr').addEventListener('input', () => { backWarned = false; });
-$('addForm').onsubmit = (e) => { e.preventDefault(); const t = $('addr').value.trim(); if (!t) { $('aerr').textContent = '先粘贴或输入登录地址'; $('addr').focus(); return; } tryAdd(t); };
-$('addr').oninput = () => ($('aerr').textContent = '');
-// 粘贴：用手机系统的剪贴板（网页自己读剪贴板在 App 里常被拦）；剪贴板里不是登录地址，就放进框里给你看
-$('pasteBtn').onclick = async () => {
+async function readClip() {
 	let t = '';
 	try { t = (A.clipboard && A.clipboard()) || ''; } catch (e) {}
 	if (!t) { try { t = await Promise.race([navigator.clipboard.readText(), new Promise((r) => setTimeout(() => r(''), 1500))]); } catch (e) {} }
-	t = String(t || '').trim();
-	if (!t) { $('aerr').textContent = '剪贴板是空的。先去复制登录地址，再回来点「粘贴」；或者直接填到上面的框里。'; $('addr').focus(); return; }
-	if (!tryAdd(t)) $('addr').value = t.slice(0, 300);
-};
-if (HUB) { $('hubBtn').classList.remove('hidden'); $('hubBtn').onclick = () => A.open(HUB + '/app'); }
-const ago = (t) => { if (!t) return ''; const s = (Date.now() - t) / 1000; return s < 3600 ? '刚刚打开过' : s < 86400 ? Math.round(s / 3600) + ' 小时前打开' : Math.round(s / 86400) + ' 天前打开'; };
-function refresh() {
-	findLan();
-	let list = [];
-	try { list = JSON.parse(A.routers()); } catch (e) {}
-	list.sort((a, b) => (b.at || 0) - (a.at || 0));
-	$('list').innerHTML = list.length ? list.map((r, i) => `<div class="card" data-i="${i}"><div class="r"><div class="ic"><svg viewBox="6 7 20 18" width="24" height="24" aria-hidden="true"><path d="M11.2 12.6a6.8 6.8 0 0 1 9.6 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M8.4 9.8a10.8 10.8 0 0 1 15.2 0" stroke="currentColor" stroke-opacity=".5" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="7.5" y="16" width="17" height="7.5" rx="2.4" fill="currentColor"/><circle cx="11.4" cy="19.75" r="1.1" fill="var(--card-solid)"/><circle cx="14.6" cy="19.75" r="1.1" fill="var(--card-solid)"/><path d="M18 19.75h3.4" stroke="var(--card-solid)" stroke-width="1.6" stroke-linecap="round"/></svg></div><div class="t"><b>${esc(r.name)}</b><span>${esc(r.url.replace(/^https?:\/\//, '').replace(/\/panel\/$/, ''))} · ${ago(r.at)}</span></div><button class="btn primary sm" data-open>打开</button></div>
-		<div class="more"><button class="btn sm" data-ren>改名</button><button class="btn sm danger" data-del>移除</button></div></div>`).join('')
-		: '<div class="card"><p class="tip" style="text-align:center">还没有路由器。托管版点上面的「官网账号（我的路由器）」打开；自建版点「扫码」或「粘贴」登录地址。</p></div>';
-	$('list').querySelectorAll('[data-i]').forEach((el) => {
-		const r = list[+el.dataset.i];
-		el.querySelector('[data-open]').onclick = () => A.open(r.url);
-		el.querySelector('[data-ren]').onclick = () => { const n = prompt('给这台路由器起个名字：', r.name); if (n && n.trim()) { r.name = n.trim().slice(0, 30); A.saveRouters(JSON.stringify(list)); refresh(); } };
-		el.querySelector('[data-del]').onclick = () => { if (!confirm('从列表里移除「' + r.name + '」？路由器本身不受影响，以后可以重新扫码添加。')) return; list.splice(+el.dataset.i, 1); A.saveRouters(JSON.stringify(list)); refresh(); };
+	return String(t || '').trim();
+}
+// 粘贴：用手机系统的剪贴板；不是登录地址就打开「输入登录地址」放进框里给你看
+async function doPaste() {
+	const t = await readClip();
+	if (!t) return toast('剪贴板是空的');
+	if (!tryAdd(t)) typeAddr(t.slice(0, 300), BADADDR);
+}
+function typeAddr(val, err) {
+	openSheet(`<h3>输入登录地址</h3><form id="addForm" autocomplete="off" novalidate><input class="inp" id="addr" type="text" inputmode="url" placeholder="https://…/cgi-bin/mcp/…" autocapitalize="off" spellcheck="false"><div class="err" id="aerr"></div><button class="btn pri" id="addBtn">添加</button></form>`, (s) => {
+		const inp = s.querySelector('#addr'), er = s.querySelector('#aerr');
+		inp.value = val || ''; er.textContent = err || '';
+		inp.oninput = () => { er.textContent = ''; backWarned = false; };
+		s.querySelector('#addForm').onsubmit = (e) => { e.preventDefault(); const t = inp.value.trim(); if (!t) { er.textContent = '先粘贴或输入登录地址'; inp.focus(); return; } tryAdd(t, er); };
+		if (!val) setTimeout(() => inp.focus(), 320);
 	});
 }
-// 6.0 第 40 项：在家里 Wi-Fi 下找路由器面板（App 问网关的 906 端口）。只发现，不自动登录；已经在列表里的不重复列
+const ADD_ROWS = () => (HUB ? `<button class="row" data-a="hub"><span class="ic">${ic('user')}</span><span class="tx"><b>登录官网账号</b></span>${CHEV}</button>` : '')
+	+ `<button class="row" data-a="scan"><span class="ic">${ic('scan')}</span><span class="tx"><b>扫码</b></span>${CHEV}</button>`
+	+ `<button class="row" data-a="album"><span class="ic">${ic('img')}</span><span class="tx"><b>从相册识别二维码</b></span>${CHEV}</button>`
+	+ `<button class="row" data-a="paste"><span class="ic">${ic('paste')}</span><span class="tx"><b>粘贴登录地址</b></span>${CHEV}</button>`
+	+ `<button class="row" data-a="type"><span class="ic">${ic('key')}</span><span class="tx"><b>输入登录地址</b></span>${CHEV}</button>`;
+const ACTS = { hub: () => { closeSheet(); A.open(HUB + '/app'); }, scan: () => A.scan(), album: () => A.pickQr(), paste: doPaste, type: () => typeAddr('') };
+function bindActs(el) { el.querySelectorAll('[data-a]').forEach((b) => (b.onclick = () => ACTS[b.dataset.a]())); }
+function addSheet() { openSheet(`<h3>添加路由器</h3><div class="card mini">${ADD_ROWS()}</div>`, bindActs); }
+$('addTop').onclick = addSheet;
+
+/* ---------- 列表 ---------- */
+const ago = (t) => { if (!t) return ''; const s = (Date.now() - t) / 1000; return s < 3600 ? '刚刚打开' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
+const hostOf = (u) => u.replace(/^https?:\/\//, '').replace(/\/panel\/$/, '');
+let list = [], found = [];
+function load() { try { list = JSON.parse(A.routers()); } catch (e) { list = []; } list.sort((a, b) => (b.at || 0) - (a.at || 0)); }
+function render() {
+	const have = list.map((r) => r.url), fd = found.filter((x) => !have.includes(x.url));
+	const lan = fd.length ? `<div class="lbl">在家里找到</div><div class="card">${fd.map((x, i) => `<div class="row"><span class="ic lan">${ic('router')}</span><span class="tx"><b>${esc(x.ip)}</b><span>家里 Wi-Fi</span></span><button class="sbtn" data-fo="${i}">打开</button></div>`).join('')}</div>` : '';
+	let h;
+	if (list.length) {
+		h = `<div class="lbl">我的路由器</div><div class="card">${list.map((r, i) => {
+			const host = hostOf(r.url), sub = (r.name !== host && host.split(':')[0] !== r.name ? host + ' · ' : '') + ago(r.at);  // 名字就是地址（没改过名）时不再写一遍
+			return `<div class="row tap" data-i="${i}"><span class="ic">${ic('router')}</span><span class="tx"><b>${esc(r.name)}</b><span>${esc(sub)}</span></span><button class="more" data-m="${i}" aria-label="更多">${ic('dots')}</button></div>`;
+		}).join('')}</div>${lan}<div class="lbl"></div><div class="card mini"><button class="row" data-a="add"><span class="ic">${ic('plus', 2)}</span><span class="tx"><b>添加路由器</b></span>${CHEV}</button>${HUB ? `<button class="row" data-a="hub"><span class="ic">${ic('user')}</span><span class="tx"><b>官网账号</b></span>${CHEV}</button>` : ''}</div>`;
+	} else {
+		h = `<div class="hero"><svg class="logo" aria-hidden="true" viewBox="0 0 100 100"><rect width="100" height="100" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg><h1>路由器面板</h1><p>管理家里的 OpenWrt 路由器</p></div>${lan}`
+			+ (HUB ? `<div class="lbl">${fd.length ? '托管版' : '托管版、家人加入'}</div><button class="btn pri" data-a="hub">${ic('user', 2)}登录官网账号</button>` : '')
+			+ `<div class="lbl">自建版</div><div class="card mini">${ADD_ROWS().replace(/^<button class="row" data-a="hub">[\s\S]*?<\/button>/, '')}</div>`;
+	}
+	$('main').innerHTML = h;
+	$('addTop').classList.toggle('hidden', !list.length);
+	$('head').classList.toggle('hidden', !list.length);  // 没有路由器时顶上就是大图标，不再重复一个小的
+	$('main').querySelectorAll('[data-i]').forEach((el) => { el.onclick = (e) => { if (e.target.closest('[data-m]')) return; A.open(list[+el.dataset.i].url); }; });
+	$('main').querySelectorAll('[data-m]').forEach((b) => (b.onclick = () => routerSheet(+b.dataset.m)));
+	$('main').querySelectorAll('[data-fo]').forEach((b) => (b.onclick = () => A.open(fd[+b.dataset.fo].url)));
+	$('main').querySelectorAll('[data-a]').forEach((b) => (b.onclick = () => (b.dataset.a === 'add' ? addSheet() : ACTS[b.dataset.a]())));
+}
+// 单台路由器：打开 / 改名 / 移除
+function routerSheet(i) {
+	const r = list[i]; if (!r) return;
+	openSheet(`<h3>${esc(r.name)}</h3><div class="card mini"><button class="row" data-x="open"><span class="ic">${ic('open')}</span><span class="tx"><b>打开</b></span></button><button class="row" data-x="ren"><span class="ic">${ic('pen')}</span><span class="tx"><b>改名</b></span></button><button class="row" data-x="del"><span class="ic" style="color:var(--danger)">${ic('trash')}</span><span class="tx"><b style="color:var(--danger)">移除</b></span></button></div>`, (s) => {
+		s.querySelector('[data-x=open]').onclick = () => { closeSheet(); A.open(r.url); };
+		s.querySelector('[data-x=ren]').onclick = () => renSheet(i);
+		s.querySelector('[data-x=del]').onclick = () => { closeSheet(); delDlg(i); };
+	});
+}
+function renSheet(i) {
+	const r = list[i];
+	openSheet(`<h3>改名</h3><form id="renForm" autocomplete="off" novalidate><input class="inp" id="renIn" maxlength="30" placeholder="比如：家里、公司"><button class="btn pri">保存</button></form>`, (s) => {
+		const inp = s.querySelector('#renIn'); inp.value = r.name; setTimeout(() => { inp.focus(); inp.select(); }, 320);
+		s.querySelector('#renForm').onsubmit = (e) => { e.preventDefault(); const n = inp.value.trim(); if (!n) return inp.focus(); r.name = n.slice(0, 30); A.saveRouters(JSON.stringify(list)); closeSheet(); render(); };
+	});
+}
+function delDlg(i) {
+	const r = list[i];
+	openDlg(`<h3>移除「${esc(r.name)}」</h3><p class="msg">路由器本身不受影响，以后可以重新添加。</p><div class="two"><button class="btn" data-n>取消</button><button class="btn red" data-y>移除</button></div>`, (b) => {
+		b.querySelector('[data-n]').onclick = closeDlg;
+		b.querySelector('[data-y]').onclick = () => { list.splice(i, 1); A.saveRouters(JSON.stringify(list)); closeDlg(); render(); toast('已移除'); };
+	});
+}
+function refresh() { findLan(); load(); render(); }
+// 在家里 Wi-Fi 下找路由器面板（App 问网关的 906 端口）。只发现，不自动登录；已经在列表里的不重复列
 let findAt = 0;
 function findLan() { if (!A.discover || Date.now() - findAt < 30000) return; findAt = Date.now(); A.discover(); }
-window.onFound = (l) => {
-	let have = [];
-	try { have = JSON.parse(A.routers()).map((r) => r.url); } catch (e) {}
-	l = (Array.isArray(l) ? l : []).filter((x) => x && /^http:\/\/[0-9.]+:\d+\/panel\/$/.test(x.url) && !have.includes(x.url));
-	$('found').innerHTML = l.length ? '<h2>在家里找到</h2>' + l.map((x, i) => `<div class="card"><div class="r"><div class="t"><b>${esc(x.ip)}</b><span>家里 Wi-Fi</span></div><button class="btn primary sm" data-fo="${i}">打开</button></div></div>`).join('') : '';
-	$('found').querySelectorAll('[data-fo]').forEach((b) => (b.onclick = () => A.open(l[+b.dataset.fo].url)));
+window.onFound = (l) => { found = (Array.isArray(l) ? l : []).filter((x) => x && /^http:\/\/[0-9.]+:\d+\/panel\/$/.test(x.url)); render(); };
+
+// 返回键（App 调）：先关弹出的面板和卡片；必须更新的卡片关不掉（返回 false 退出）；输入框里有没添加的地址先提醒一次
+let backWarned = false;
+window.appBack = () => {
+	if (!$('dlg').classList.contains('hidden')) { if (dlgLock) return false; closeDlg(); return true; }
+	if (sheetOn) { const a = $('addr'); if (a && a.value.trim() && !backWarned) { backWarned = true; $('aerr').textContent = '地址还没添加。再按一次返回'; return true; } closeSheet(); return true; }
+	return false;
 };
-// 检查更新：问托管服务最新版本号，比现在的新就提示
+
+/* ---------- 检查更新：问官网最新版本号，比现在的新就提示 ---------- */
 const vnum = (v) => String(v || '').replace(/^v/, '').split('.').map((x) => parseInt(x, 10) || 0);
 const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
-// 有新版本：一打开 App 就弹窗；「以后再说」当天这个版本不再弹（首页的更新卡片还在）
-// 必须更新（发布说明里写了【必须更新】，或者现在的版本低于「最低版本」）：弹窗关不掉
+// 有新版本：一打开 App 就弹；「以后再说」当天这个版本不再弹（顶上的更新条还在）
+// 必须更新（官网说 force，或者现在的版本低于「最低版本」）：卡片关不掉
+let updJ = null;
 function startUpdate(j) {
 	const url = HUB + (j.apk || '/app/router-panel.apk');
-	for (const b of [$('updBtn'), $('umGo')]) { b.disabled = true; b.textContent = '正在下载…'; }
+	document.querySelectorAll('[data-upgo]').forEach((b) => { b.disabled = true; b.textContent = '正在下载…'; });
 	A.update(url);
 }
 function showUpdate(j, force) {
-	$('umV').textContent = '现在 ' + A.version() + ' → 新版 ' + j.version;
-	$('umN').textContent = j.notes || '修复了一些问题，体验更好。';
-	$('umMust').classList.toggle('hidden', !force);
-	$('umLater').classList.toggle('hidden', force);
-	$('umGo').onclick = () => startUpdate(j);
-	$('umLater').onclick = () => { try { localStorage.setItem('upd_later', j.version + '@' + new Date().toDateString()); } catch (e) {} $('updModal').classList.add('hidden'); };
-	$('updModal').classList.remove('hidden');
+	openDlg(`<h3>发现新版本</h3><div class="v">${esc(A.version())} → ${esc(j.version)}</div><div class="notes">${esc(j.notes || '')}</div>${force ? '<div class="must">这个版本必须更新，更新后才能继续使用。</div>' : ''}<button class="btn pri" data-upgo>立即更新</button>${force ? '' : '<button class="btn" data-later style="background:none;color:var(--muted);margin-top:2px">以后再说</button>'}`, (b) => {
+		b.querySelector('[data-upgo]').onclick = () => startUpdate(j);
+		const l = b.querySelector('[data-later]');
+		if (l) l.onclick = () => { try { localStorage.setItem('upd_later', j.version + '@' + new Date().toDateString()); } catch (e) {} closeDlg(); };
+	}, force);
 }
 async function checkUpdate(manual) {
-	if (!HUB) { if (manual) alert('这个版本没有设置更新地址'); return; }
+	if (!HUB) { if (manual) toast('这个版本没有设置更新地址'); return; }
 	try {
 		const j = await (await fetch(HUB + '/api/app/version', { cache: 'no-store' })).json();
 		if (j.version && newer(j.version, A.version())) {
-			$('updV').textContent = j.version; $('updN').textContent = j.notes || '';
-			$('upd').classList.remove('hidden');
-			$('updBtn').onclick = () => startUpdate(j);
+			updJ = j;
+			$('updV').textContent = j.version; $('upd').classList.remove('hidden');
+			$('updBtn').setAttribute('data-upgo', ''); $('updBtn').onclick = () => startUpdate(j);
 			const force = !!j.force || (!!j.min && newer(j.min, A.version()));
 			let later = ''; try { later = localStorage.getItem('upd_later') || ''; } catch (e) {}
 			if (manual || force || later !== j.version + '@' + new Date().toDateString()) showUpdate(j, force);
-		} else if (manual) alert('已经是最新版（' + A.version() + '）');
-	} catch (e) { if (manual) alert('检查更新失败，稍后再试'); }
+		} else if (manual) toast('已经是最新版');
+	} catch (e) { if (manual) toast('检查更新失败，稍后再试'); }
 }
-function onUpdateFail() { $('updBtn').disabled = false; $('updBtn').textContent = '更新'; $('umGo').disabled = false; $('umGo').textContent = '立即更新'; }
-$('chk').onclick = (e) => { e.preventDefault(); checkUpdate(true); };
-refresh();
-checkUpdate(false);
+function onUpdateFail() { document.querySelectorAll('[data-upgo]').forEach((b) => { b.disabled = false; b.textContent = b.id === 'updBtn' ? '更新' : '立即更新'; }); }
+$('chk').onclick = () => checkUpdate(true);
+
+load();
+render();
+findLan();
+// 打开 App：只有一台路由器时直接进它的面板（用户 11/28 定）。App 带着网址打开（官网登录回来、调试）时不进；
+// 先等检查更新最多 1.5 秒：必须更新的卡片出来了就不进（普通的新版本提示留在首页，返回时看得到）
+const auto = list.length === 1 && (!A.plainLaunch || A.plainLaunch());
+Promise.race([checkUpdate(false), new Promise((r) => setTimeout(r, 1500))]).then(() => { if (auto && !dlgLock) A.open(list[0].url); });
 </script></body></html>

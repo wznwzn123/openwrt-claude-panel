@@ -45,7 +45,7 @@ adb shell input keyevent KEYCODE_BACK
 sleep 1
 # 手动添加：填登录地址点「添加」→ 打开面板
 adb shell am force-stop $PKG
-adb shell "am start -n $PKG/.MainActivity --es homejs 'document.getElementById(\"addr\").value=\"https://example.com/cgi-bin/mcp/abcdefghijklmnop1234\";document.getElementById(\"addBtn\").click()'"
+adb shell "am start -n $PKG/.MainActivity --es homejs 'typeAddr(\"https://example.com/cgi-bin/mcp/abcdefghijklmnop1234\");setTimeout(function(){document.getElementById(\"addBtn\").click()},800)'"
 sleep 10
 adb exec-out screencap -p > $OUT/8-manual-add.png
 # 相册识别：识别一张二维码图片（内容是 https://example.com/panel/）→ 打开面板
@@ -60,11 +60,21 @@ sleep 8
 adb exec-out screencap -p > $OUT/11-album-picker.png
 adb shell input keyevent KEYCODE_BACK
 sleep 1
-# 首页（新布局和图标）
+# 6.0.2：列表里只有一台（上面手动添加记下的 example.com）→ 从桌面图标打开直接进它的面板
 adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity
+sleep 8
+adb exec-out screencap -p > $OUT/10-auto-open.png
+# 首页（石墨）：带调试参数打开就不自动进面板；再弹出「添加路由器」
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es homejs 'addSheet()'"
 sleep 6
 adb exec-out screencap -p > $OUT/10-home-new.png
+# 面板侧边栏「切换路由器」跳 routerpanel://home：回到 App 首页
+adb shell am force-stop $PKG
+adb shell "am start -n $PKG/.MainActivity --es open https://example.com/panel/ --es sitejs 'location.href=\"routerpanel://home\"'"
+sleep 12
+adb exec-out screencap -p > $OUT/10-switch-home.png
 # 状态栏：面板这种铺到顶上的页面（深色渐变背景）→ 状态栏透明、背景铺到时间后面、白色图标；顶栏让开状态栏
 adb shell am force-stop $PKG
 adb shell "am start -n $PKG/.MainActivity --es open https://example.com/panel/ --es sitejs 'var m=document.createElement(\"meta\");m.name=\"theme-color\";m.content=\"#20406a\";document.head.appendChild(m);window.RP_EDGE=1;document.body.innerHTML=\"<div style=position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(160deg,#20406a,#1f6b6b,#3a2c8f)></div><div id=t style=position:fixed;left:10px;right:10px;top:var(--sat,0px);margin-top:8px;height:56px;border-radius:22px;background:rgba(255,255,255,.18);color:#fff;font-size:20px;line-height:56px;font-weight:600;padding-left:18px>顶栏（应该在状态栏下面）</div>\"'"
@@ -85,7 +95,7 @@ if grep -E "FATAL EXCEPTION" $OUT/logcat.txt; then echo "::error::App 崩溃了"
 echo "::notice::App 启动正常，没有崩溃"
 # 6.0 第 68 项：首页开着更新提示时按返回键 → 先关提示，App 不退出（截图里应是首页、没有提示）
 adb shell am force-stop $PKG
-adb shell "am start -n $PKG/.MainActivity --es homejs 'document.getElementById(\"umLater\").classList.remove(\"hidden\");document.getElementById(\"updModal\").classList.remove(\"hidden\")'"
+adb shell "am start -n $PKG/.MainActivity --es homejs 'showUpdate({version:\"9.9.9\",notes:\"测试\"},false)'"
 sleep 8
 adb exec-out screencap -p > $OUT/14-upd-modal.png
 adb shell input keyevent KEYCODE_BACK
@@ -94,7 +104,7 @@ adb exec-out screencap -p > $OUT/15-back-closes-modal.png
 echo "第 68 项：关提示后 App 还在前台：$(adb shell dumpsys activity activities | grep -c "mResumedActivity.*$PKG")"
 # 手动添加框里有没添加的地址：第一次按返回只提醒，第二次才退出
 adb shell am force-stop $PKG
-adb shell "am start -n $PKG/.MainActivity --es homejs 'document.getElementById(\"addr\").value=\"https://example\"'"
+adb shell "am start -n $PKG/.MainActivity --es homejs 'typeAddr(\"https://example\")'"
 sleep 6
 adb shell input keyevent KEYCODE_BACK
 sleep 2

@@ -1,4 +1,4 @@
-// 6.0 第 71 项（官网账号页，真浏览器）：App 6.0 里只显示「用官网登录」「用登录着的手机扫码」（没有密码框）；
+// 6.0 第 71 项（官网账号页，真浏览器）：App 6.0 里只显示「登录或注册」「用登录着的手机扫码」（没有密码框；6.0.2 起叫「登录或注册」，在 App 里弹出的页面确认）；
 // 浏览器打开 /app?ok=编号：没登录先登录，登录后弹「允许 App 登录」，看清设备，允许 / 拒绝；App 那边自动登录进去
 // 需要 Playwright：node test/test_appauth_ui.mjs [--shots 目录]
 import http from 'http';
@@ -37,9 +37,10 @@ for (const [w, h, dark] of [[320, 640, false], [390, 844, true], [430, 932, fals
 	const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true, userAgent: APPUA, colorScheme: dark ? 'dark' : 'light' });
 	const ap = await ctx.newPage(); const errs = []; ap.on('pageerror', (x) => errs.push(x.message));
 	await ap.goto(B + '/app'); await W(1200);
-	ok('App 里：只有「用官网登录」和扫码，没有密码框' + T, (await ap.isVisible('#lgApp')) && (await ap.isVisible('#apGo')) && (await ap.isVisible('#apQrBtn')) && !(await ap.isVisible('#fLogin [name=password]')) && !(await ap.isVisible('#lgWelcome')));
+	ok('App 里：「登录或注册」写对了，没有「在浏览器里打开…注册」那行' + T, /登录或注册/.test(await ap.textContent('#apGo')) && !/还没有账号/.test(await ap.textContent('#lgApp')) && /在弹出的页面里点「允许」/.test(await ap.textContent('#apMsg')));
+	ok('App 里：只有「登录或注册」和扫码，没有密码框' + T, (await ap.isVisible('#lgApp')) && (await ap.isVisible('#apGo')) && (await ap.isVisible('#apQrBtn')) && !(await ap.isVisible('#fLogin [name=password]')) && !(await ap.isVisible('#lgWelcome')));
 	const href = await ap.getAttribute('#apGo', 'href');
-	ok('「用官网登录」是 /app?ok=编号' + T, /\/app\?ok=[a-z2-9]{8}$/.test(href), href);
+	ok('「登录或注册」是 /app?ok=编号' + T, /\/app\?ok=[a-z2-9]{8}$/.test(href), href);
 	const lay = await ap.evaluate(() => { const bad = []; if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('横向滚动'); document.querySelectorAll('#lgApp .lgbig, #lgApp h1, #lgApp p').forEach((e) => { const r = e.getBoundingClientRect(); if (r.width && (r.right > innerWidth - 8 || r.left < 8)) bad.push('出界：' + e.textContent.slice(0, 10)); if (e.scrollWidth > e.clientWidth + 1) bad.push('截断：' + e.textContent.slice(0, 10)); }); return bad; });
 	ok('不错位、不出界' + T, !lay.length, lay.join('；'));
 	if (SHOTS) await ap.screenshot({ path: `${SHOTS}/appauth-${w}${dark ? '-dark' : ''}.png` });
@@ -60,9 +61,12 @@ for (const [w, h, dark] of [[320, 640, false], [390, 844, true], [430, 932, fals
 		ok('App 那边写「已拒绝」，再要一个新码' + T, !(await ap.isVisible('#vDash')));
 		await wp.click('.mask [data-x]').catch(() => {});
 	} else {
-		await wp.click('.mask [data-ok]'); await W(600);
+		const cdp = await web.newCDPSession(wp); await cdp.send('Page.enable'); const navs = []; cdp.on('Page.frameRequestedNavigation', (e) => navs.push(e.url));
+		await wp.click('.mask [data-ok]'); await W(900);
 		const dt = await wp.textContent('.mask');
 		ok('允许：安卓上给「回到 App」' + T, /已允许/.test(dt) && (await wp.getAttribute('.mask a.btn', 'href')) === 'routerpanel://auth', dt);
+		ok('允许：安卓上自动跳 routerpanel://auth 回 App（App 里弹出的确认页随之关掉）' + T, navs.includes('routerpanel://auth'), JSON.stringify(navs));
+		await cdp.detach();
 		await wp.evaluate(() => document.querySelector('.mask')?.remove());
 		await W(3000);
 		ok('App 自动登录进去' + T, await ap.isVisible('#vDash'), await ap.textContent('body').then((x) => x.slice(0, 120)));

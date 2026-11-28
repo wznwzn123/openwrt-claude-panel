@@ -2319,7 +2319,7 @@ async function accountApi0(req, env, H, p, body) {
 	if (a === 'code') return out(await H.mailCode({ email: s(b.email), kind: s(b.kind), ip }));
 	const dev = { ua: uaLabel(req.headers.get('user-agent')), place: placeOf(req.cf) };
 	// 6.0 第 71 项：App 里不输密码，只能授权（在浏览器里确认，或者用登录着的手机扫码）
-	if (appStrict(req.headers.get('user-agent')) && ['register', 'login', 'login2', 'reset'].includes(a)) return J({ error: 'App 里不能输密码：点「用官网登录」，在浏览器里确认', app: true }, 403);
+	if (appStrict(req.headers.get('user-agent')) && ['register', 'login', 'login2', 'reset'].includes(a)) return J({ error: 'App 里不能输密码：点「登录或注册」，在弹出的页面里确认', app: true }, 403);
 	if (a === 'app_start') return out(await H.appStart({ ip, dev }));
 	if (a === 'app_poll') return out(await H.appPoll({ code: s(b.code), key: s(b.key), dev }));
 	if (a === 'register') return out(await H.userRegister({ email: s(b.email), password: s(b.password), code: s(b.code), ip, dev, did }));

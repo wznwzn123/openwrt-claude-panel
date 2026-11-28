@@ -55,6 +55,8 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.browser.customtabs.CustomTabColorSchemeParams;
+import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -99,6 +101,8 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private ValueCallback<Uri[]> fileCb;
     private long apkId = -1;
+    // 从桌面图标正常打开（不是带着网址、调试参数打开的）：首页只有一台路由器时直接进它的面板（用户 11/28 定）
+    private boolean plain = false;
 
     private final ActivityResultLauncher<ScanOptions> scanner = registerForActivityResult(new ScanContract(), r -> {
         if (r.getContents() != null) js(home, "onScan(" + JSONObject.quote(r.getContents()) + ")");
@@ -141,6 +145,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs = getSharedPreferences("app", MODE_PRIVATE);
+        Intent li = getIntent();
+        plain = saved == null && li != null && Intent.ACTION_MAIN.equals(li.getAction()) && li.getData() == null
+                && !li.hasExtra("open") && !li.hasExtra("homejs") && !li.hasExtra("sitejs") && !li.hasExtra("scan") && !li.hasExtra("qrtest");
         root = new FrameLayout(this);
         home = new WebView(this);
         site = new WebView(this);
@@ -193,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isDark() { return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES; }
     private void applyBars() {
         boolean d = isDark();
-        int c = d ? Color.parseColor("#0B1024") : Color.parseColor("#EEF1F8");
+        int c = d ? Color.parseColor("#0B0C0F") : Color.parseColor("#ECEEF2");
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(c);
         getWindow().getDecorView().setBackgroundColor(c);
@@ -210,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
     private void layoutBars() {
         if (root == null || home == null || site == null) return;
         boolean onSite = site.getVisibility() == View.VISIBLE;
-        int def = isDark() ? Color.parseColor("#0B1024") : Color.parseColor("#EEF1F8");
+        int def = isDark() ? Color.parseColor("#0B0C0F") : Color.parseColor("#ECEEF2");
         int c = onSite && barColor != 0 ? barColor : def;
         root.setBackgroundColor(c);
         setTop(home, sbh);
@@ -320,11 +327,11 @@ public class MainActivity extends AppCompatActivity {
         site.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
-                // 面板「桌面小组件」：只认面板自己的网址跳过来的
-                if ("routerpanel".equals(u.getScheme())) { if ("widget".equals(u.getHost())) addWidget(u); return true; }
-                // 确认 App 登录要在浏览器里（那里登录着官网账号）
+                // 面板「桌面小组件」：只认面板自己的网址跳过来的；面板侧边栏「切换路由器」（App 6.0.2 起）：回 App 首页
+                if ("routerpanel".equals(u.getScheme())) { if ("widget".equals(u.getHost())) addWidget(u); else if ("home".equals(u.getHost())) showHome(); return true; }
+                // 确认 App 登录：在 App 里弹出的浏览器页（Custom Tabs，用手机 Chrome 的官网登录状态），点「允许」后跳 routerpanel://auth 回来
                 String hub = hubHost();
-                if (hub != null && hub.equals(u.getHost()) && "/app".equals(u.getPath()) && u.getQueryParameter("ok") != null) { external(u.toString()); return true; }
+                if (hub != null && hub.equals(u.getHost()) && "/app".equals(u.getPath()) && u.getQueryParameter("ok") != null) { authTab(u.toString()); return true; }
                 if ("https".equals(u.getScheme()) && allowed(u.getHost())) return false;
                 // 本地版：家里局域网的面板（http://路由器地址:906）
                 if ("http".equals(u.getScheme()) && SpeedWidget.lanHost(u.getHost())) return false;
@@ -402,6 +409,18 @@ public class MainActivity extends AppCompatActivity {
             showSite();
             site.loadUrl(url);
         } else external(url);
+    }
+    // 6.0.2：官网确认页在 App 里弹出（Custom Tabs）。顶部颜色跟首页一样；手机上没有支持的浏览器时交给系统浏览器
+    private void authTab(String url) {
+        try {
+            CustomTabsIntent t = new CustomTabsIntent.Builder()
+                    .setShowTitle(true)
+                    .setColorScheme(CustomTabsIntent.COLOR_SCHEME_SYSTEM)
+                    .setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_LIGHT, new CustomTabColorSchemeParams.Builder().setToolbarColor(Color.parseColor("#ECEEF2")).setNavigationBarColor(Color.parseColor("#ECEEF2")).build())
+                    .setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_DARK, new CustomTabColorSchemeParams.Builder().setToolbarColor(Color.parseColor("#0B0C0F")).setNavigationBarColor(Color.parseColor("#0B0C0F")).build())
+                    .build();
+            t.launchUrl(this, Uri.parse(url));
+        } catch (Exception e) { external(url); }
     }
     private void external(String url) {
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception e) { toast("没有可以打开这个链接的应用"); }
@@ -502,6 +521,8 @@ public class MainActivity extends AppCompatActivity {
     private class Bridge {
         @JavascriptInterface public String version() { return BuildConfig.VERSION_NAME; }
         @JavascriptInterface public boolean dark() { return isDark(); }
+        // 首页问：这次是不是从桌面图标正常打开的（只问一次，问完就不算了：返回首页再刷新不会又自动进面板）
+        @JavascriptInterface public boolean plainLaunch() { boolean p = plain; plain = false; return p; }
         @JavascriptInterface public String hub() { return BuildConfig.HUB_URL; }
         @JavascriptInterface public String routers() { return MainActivity.this.routers().toString(); }
         @JavascriptInterface public void saveRouters(String json) { try { save(new JSONArray(json)); } catch (Exception e) {} }

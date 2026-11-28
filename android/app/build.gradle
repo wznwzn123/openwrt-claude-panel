@@ -40,6 +40,7 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.browser:browser:1.8.0'   // 官网登录确认页在 App 里弹出（Custom Tabs），不跳出 App
     implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
     implementation 'com.google.zxing:core:3.4.1'   // 从相册图片里识别二维码
 }

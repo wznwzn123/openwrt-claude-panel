@@ -25,7 +25,7 @@ export function installAppAuth(Hub, { rnd, safeEq }) {
 		// 浏览器（已登录）：看要授权的是哪台设备
 		async appInfo(uid, code) {
 			const m = await this.appGet(code);
-			if (!m) return { st: 404, error: '授权码过期了：在 App 里重新点一次「用官网登录」' };
+			if (!m) return { st: 404, error: '授权码过期了：在 App 里重新点一次「登录或注册」' };
 			if (m.st !== 'wait') return { st: 409, error: '这个授权码已经用过了' };
 			return { st: 200, ua: m.ua, place: m.place, at: m.at };
 		},
@@ -33,7 +33,7 @@ export function installAppAuth(Hub, { rnd, safeEq }) {
 		appOk(uid, code, ok, email) { return this.lock(() => this._appOk(uid, code, ok, email)); },
 		async _appOk(uid, code, ok, email) {
 			const m = await this.appGet(code);
-			if (!m) return { st: 404, error: '授权码过期了：在 App 里重新点一次「用官网登录」' };
+			if (!m) return { st: 404, error: '授权码过期了：在 App 里重新点一次「登录或注册」' };
 			if (m.st !== 'wait') return { st: 409, error: '这个授权码已经用过了' };
 			m.st = ok ? 'ok' : 'no'; m.uid = uid;
 			await this.ctx.storage.put('aa:' + code, m);
@@ -44,7 +44,7 @@ export function installAppAuth(Hub, { rnd, safeEq }) {
 		appPoll(a) { return this.lock(() => this._appPoll(a)); },
 		async _appPoll({ code, key, dev }) {
 			const m = await this.appGet(code);
-			if (!m) return { st: 404, error: '授权码过期了：重新点一次「用官网登录」', expired: true };
+			if (!m) return { st: 404, error: '授权码过期了：重新点一次「登录或注册」', expired: true };
 			if (!KEY_RE.test(key || '') || !safeEq(key, m.key)) return { st: 403, error: '授权码不对' };
 			if (m.st === 'wait') return { st: 200, wait: true };
 			await this.ctx.storage.delete('aa:' + code);

@@ -76,6 +76,8 @@ h1,h2,h3{letter-spacing:-.02em}
 .kv.fbmail{margin-top:8px;font-size:13px;align-items:baseline;gap:10px}.kv.fbmail>span:first-child{color:var(--muted);flex:none}.kv.fbmail>span:last-child{text-align:right;min-width:0;overflow-wrap:anywhere}.kv.fbmail i{display:block;font-style:normal;font-size:11.5px;color:var(--muted)}
 .pxpick{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 12px;padding:10px 12px;border-radius:14px;border:0;background:var(--fill);font:inherit;font-size:13.5px;color:var(--text);text-align:left}.pxpick>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pxpk{color:var(--blue,#0a84ff);font-weight:600;flex:none}
 .mfb{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin-top:12px;padding:14px 16px;font:inherit;color:var(--text)}.mfb>span:nth-child(2){flex:1;min-width:0}.mfb b{display:block;font-size:15px}.mfb .muted{font-size:13px}.mfbic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--soft);color:var(--blue,#0a84ff);flex:none}.mfbic svg{width:19px;height:19px}
+/* 侧边栏「切换路由器」（用户 11/28）：App 6.0.2 起回 App 首页；托管版打开官网「我的路由器」 */
+.sidesw{display:flex;align-items:center;gap:12px;margin:0 10px 6px;padding:10px 12px;border-radius:12px;background:var(--fill);color:var(--text);font-size:15px;font-weight:600;text-align:left}.sidesw:active{background:var(--fill2)}.sidesw>span{flex:1;min-width:0}.sidesw i{width:24px;height:24px;display:grid;place-items:center;color:var(--muted);flex:none}.sidesw i svg{width:20px;height:20px}.sidesw .chev{width:7px;height:12px;color:var(--muted);opacity:.7;flex:none}
 .sidefoot{display:flex;gap:6px;margin:0 10px max(12px,env(safe-area-inset-bottom));padding-top:6px;border-top:.5px solid var(--line)}.sidefoot>button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 10px;border-radius:14px;background:transparent;font-size:15px;font-weight:600}.sidefoot svg{width:20px;height:20px;flex:none}.sidefb{color:var(--blue,#0a84ff)}.sidefb:active{background:var(--fill)}
 .sideout{color:var(--dangert)}.sideout:active{background:var(--fill)}
 .sidegrp{font-size:12px;font-weight:600;color:var(--muted);padding:14px 10px 6px;letter-spacing:.02em}
@@ -1184,6 +1186,7 @@ html,body{overscroll-behavior-y:contain}
 	<input class="sideq" id="sideQ" type="search" placeholder="搜索功能，如 DHCP、端口转发" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="搜索功能">
 	<nav class="sidenav" id="sidenav">
 	</nav>
+	<button class="sidesw hidden" id="sideSw"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="12.5" width="17" height="7" rx="2"/><path d="M7.5 16h.01M10.5 16h.01M14 16h3"/><path d="M8.5 9.2a5 5 0 0 1 7 0M6 6.6a8.6 8.6 0 0 1 12 0"/></svg></i><span>切换路由器</span><svg class="chev" viewBox="0 0 8 14" aria-hidden="true"><path d="M1.5 1.5 6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 	<div class="sidefoot"><button class="sidefb" id="sideFb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 18.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8.5z"/><path d="M9 9h6M9 12h4"/></svg>问题反馈</button><button class="sideout" id="sideOut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>退出登录</button></div>
 </aside>
 
@@ -2489,6 +2492,7 @@ async function go(p, how) {
 function sideOpen(on) {
 	const was = $('side').classList.contains('open');
 	$('side').classList.toggle('open', on); $('scrim').classList.toggle('open', on); if (on && token) loadMenu();
+	if (on && window.sideSwShow) sideSwShow();
 	if (on && !was && HS.ready && innerWidth < 900 && !hsS().side && !hsAdopt({ p: page, side: 1 }) && hsAct()) hsSet({ p: page, side: 1 }, true);
 	if (!on && was) hsGone('side', 1);
 }
@@ -7786,6 +7790,16 @@ async function signOut() {
 }
 $('sideOut').onclick = () => signOut();
 $('sideFb').onclick = () => { sideOpen(false); feedbackSheet(); };
+// 切换路由器（用户 11/28 15:0x）：App 6.0.2 起跳 routerpanel://home 回 App 首页（那里列着这台手机的所有路由器）；
+// 浏览器和老 App 里，托管版打开官网「我的路由器」；自建版在浏览器里没有路由器列表，不显示
+const appHome = () => IN_APP && !verNewer('6.0.2', APP_VER);
+window.sideSwShow = () => $('sideSw').classList.toggle('hidden', !(appHome() || isHosted()));
+$('sideSw').onclick = () => {
+	sideOpen(false);
+	if (appHome()) { location.href = 'routerpanel://home'; return; }
+	const u = (store.get('rp_hub') || 'https://yrlove520.com').replace(/\/$/, '') + '/app';
+	if (IN_APP) location.href = u; else window.open(u, '_blank', 'noopener');
+};
 $('mFb').onclick = () => feedbackSheet();
 function themeLabel() { $('themeState').textContent = document.documentElement.classList.contains('dark') ? '已开启' : '已关闭'; lookLabel(); }
 

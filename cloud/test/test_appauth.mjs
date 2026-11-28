@@ -24,7 +24,7 @@ await call(A, '/api/account/register', { email: 'alice@x.com', password: 'pass-a
 ok('浏览器里注册、登录照常', !!A.sid);
 // App 6.0 不能输密码
 let r = await call({}, '/api/account/login', { email: 'alice@x.com', password: 'pass-alic-123' }, APP6);
-ok('App 6.0：不能输密码登录', r.st === 403 && r.j.app === true && /用官网登录/.test(r.j.error), JSON.stringify(r.j));
+ok('App 6.0：不能输密码登录', r.st === 403 && r.j.app === true && /登录或注册/.test(r.j.error), JSON.stringify(r.j));
 ok('App 6.0：不能注册、找回密码', (await call({}, '/api/account/register', { email: 'x@x.com', password: 'pass-xxxx-123' }, APP6)).st === 403 && (await call({}, '/api/account/reset', { email: 'alice@x.com' }, APP6)).st === 403);
 const old = {};
 r = await call(old, '/api/account/login', { email: 'alice@x.com', password: 'pass-alic-123' }, APP5);

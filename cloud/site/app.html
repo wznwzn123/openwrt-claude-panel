@@ -91,6 +91,9 @@ body:not(.authmode) .nav__actions > .btn--primary { display: none; }
 .lgor { display: flex; align-items: center; gap: 12px; width: 100%; margin: 16px 0; color: var(--muted); font-size: 13px; }
 .lgor::before, .lgor::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
 .lgreg { margin-top: 26px; font-size: 14.5px; color: var(--muted); }
+/* App 里的登录页跟 App 首页一样用「石墨」黑色主按钮（用户 11/28 14:51 定 App 改成石墨） */
+#lgApp .lgbig.dark { background: #11151c; color: #fff; background-image: none; box-shadow: 0 12px 28px -14px rgb(17 21 28 / .55); animation: none; }
+@media (prefers-color-scheme: dark) { #lgApp .lgbig.dark { background: #eef0f4; color: #0b0c0f; box-shadow: none; } }
 .lglink { border: 0; background: none; padding: 6px 2px; color: var(--accent); font: 600 14.5px var(--font-text); cursor: pointer; white-space: nowrap; }
 .lgcard { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: auto 0; padding: 22px 22px 20px; border-radius: 28px; background: color-mix(in oklab, var(--p-surface) 74%, transparent); border: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); backdrop-filter: blur(26px) saturate(1.4); -webkit-backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 40px 80px -30px rgb(0 0 0 / .9), 0 0 0 1px rgb(255 255 255 / .02) inset; animation: lgPop .6s cubic-bezier(.22,1,.36,1) both; }
 .lgcardtop { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
@@ -379,12 +382,11 @@ body.lay-edit .lay-tools { position: absolute; top: 8px; left: 10px; right: 10px
 	<div class="lgwelcome hidden" id="lgApp">
 		<div class="lgbiglogo" role="img" aria-label="路由器面板"><svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></div>
 		<h1>登录官网账号</h1>
-		<p id="apMsg">在浏览器里确认后回到这里</p>
-		<a class="lgbig dark" id="apGo" href="#" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>用官网登录</span></a>
+		<p id="apMsg">在弹出的页面里点「允许」</p>
+		<a class="lgbig dark" id="apGo" href="#" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>登录或注册</span></a>
 		<div class="lgor"><span>或</span></div>
 		<button type="button" class="lgbig light" id="apQrBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg><span>用登录着的手机扫码</span></button>
 		<div class="apqr hidden" id="apQr"></div>
-		<div class="lgreg">还没有账号？在浏览器里打开 <b id="apHost"></b> 注册</div>
 	</div>
 	<div class="lgcard hidden" id="lgCard">
 		<div class="lgcardtop"><button type="button" class="lgback" id="lgBack" aria-label="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="lgbrand"><i><svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" fill="#101C40"/><path d="M41.91 24.45A29 29 0 1 0 75.55 58.09A24 24 0 0 1 41.91 24.45Z" fill="#F4F1EA"/><path d="M62.6 21.4A17 17 0 0 1 78.6 37.4" stroke="#FFB547" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="63" cy="37" r="7" fill="#FFB547"/></svg></i>路由器面板</div></div>
@@ -1328,17 +1330,16 @@ async function load(after) {
 	if (ovOff && !blCode && !document.querySelector('.mask')) ovOffBox(ovOff);
 	return me;
 }
-// App 里：要授权码，「用官网登录」到浏览器里确认（或者另一台登录着的手机扫码），App 每 2 秒问一次
+// App 里：要授权码，「登录或注册」在弹出的页面里确认（App 6.0.2 起是 App 里弹出的 Chrome 页，以前是手机浏览器）（或者另一台登录着的手机扫码），App 每 2 秒问一次
 const AP = { code: '', key: '', exp: 0, t: 0 };
 async function appAuth() {
 	$('lgWelcome').classList.add('hidden'); $('lgCard').classList.add('hidden'); $('lgApp').classList.remove('hidden');
-	$('apHost').textContent = location.host;
 	clearTimeout(AP.t);
 	try { const r = await api('app_start', {}); Object.assign(AP, r); }
 	catch (e) { $('apMsg').textContent = e.message; return; }
 	const url = location.origin + '/app?ok=' + AP.code;
 	$('apGo').href = url;
-	$('apMsg').textContent = '在浏览器里确认后回到这里';
+	$('apMsg').textContent = '在弹出的页面里点「允许」';
 	$('apQr').classList.add('hidden'); $('apQr').innerHTML = '';
 	$('apQrBtn').onclick = async () => { try { await tfLoadQr(); const q = window.qrcode(0, 'M'); q.addData(url); q.make(); $('apQr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); $('apQr').classList.remove('hidden'); $('apMsg').textContent = '用登录着官网的手机扫码确认'; } catch (e) { toast(e.message, true); } };
 	const poll = async () => {
@@ -1363,7 +1364,8 @@ async function appOkBox(code) {
 		<p class="muted" style="margin:8px 0 0;font-size:14.5px;line-height:1.7">${esc(r.ua || '路由器面板 App')}${r.place ? ' · ' + esc(r.place) : ''} · ${ag ? ag + ' 分钟前' : '刚刚'}</p>
 		<p class="muted" style="margin:6px 0 0;font-size:13.5px">不是你自己点的，就拒绝。</p>
 		<div class="err" data-err></div><div class="acts"><button type="button" class="btn" data-no>拒绝</button><button type="button" class="btn primary" data-ok>允许</button></div></div>`;
-	const done = (t) => { history.replaceState(null, '', '/app'); m.querySelector('.card').innerHTML = `<h3>${t}</h3><div class="acts">${/Android/.test(navigator.userAgent) && t === '已允许' ? '<a class="btn primary" href="routerpanel://auth">回到 App</a>' : '<button type="button" class="btn primary" data-x>好的</button>'}</div>`; m.querySelector('[data-x]')?.addEventListener('click', () => m.remove()); };
+	// 安卓：允许以后自动回到 App（App 里弹出的确认页随之关掉）；跳不回去时还有「回到 App」按钮
+	const done = (t) => { history.replaceState(null, '', '/app'); const back = /Android/.test(navigator.userAgent) && t === '已允许'; m.querySelector('.card').innerHTML = `<h3>${t}</h3><div class="acts">${back ? '<a class="btn primary" href="routerpanel://auth">回到 App</a>' : '<button type="button" class="btn primary" data-x>好的</button>'}</div>`; m.querySelector('[data-x]')?.addEventListener('click', () => m.remove()); if (back) setTimeout(() => { location.href = 'routerpanel://auth'; }, 300); };
 	const go = async (ok, b) => { b.disabled = true; try { await api('app_ok', { code, ok }); done(ok ? '已允许' : '已拒绝'); } catch (e) { b.disabled = false; m.querySelector('[data-err]').textContent = e.message; } };
 	m.querySelector('[data-ok]').onclick = (e) => go(true, e.currentTarget);
 	m.querySelector('[data-no]').onclick = (e) => go(false, e.currentTarget);

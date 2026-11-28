@@ -1321,6 +1321,16 @@ async function signOut() {
 }
 $('sideOut').onclick = () => signOut();
 $('sideFb').onclick = () => { sideOpen(false); feedbackSheet(); };
+// 切换路由器（用户 11/28 15:0x）：App 6.0.2 起跳 routerpanel://home 回 App 首页（那里列着这台手机的所有路由器）；
+// 浏览器和老 App 里，托管版打开官网「我的路由器」；自建版在浏览器里没有路由器列表，不显示
+const appHome = () => IN_APP && !verNewer('6.0.2', APP_VER);
+window.sideSwShow = () => $('sideSw').classList.toggle('hidden', !(appHome() || isHosted()));
+$('sideSw').onclick = () => {
+	sideOpen(false);
+	if (appHome()) { location.href = 'routerpanel://home'; return; }
+	const u = (store.get('rp_hub') || 'https://yrlove520.com').replace(/\/$/, '') + '/app';
+	if (IN_APP) location.href = u; else window.open(u, '_blank', 'noopener');
+};
 $('mFb').onclick = () => feedbackSheet();
 function themeLabel() { $('themeState').textContent = document.documentElement.classList.contains('dark') ? '已开启' : '已关闭'; lookLabel(); }
 

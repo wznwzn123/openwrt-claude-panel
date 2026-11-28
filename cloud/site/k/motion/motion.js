@@ -225,7 +225,7 @@ function pauseButton(loop) {
   btn.className = 'loop-pause m-own';
   const show = paused => {
     btn.innerHTML = paused ? ICON_PLAY : ICON_PAUSE;
-    btn.setAttribute('aria-label', paused ? '播放动画' : '暂停动画');
+    btn.setAttribute('aria-label', paused ? (document.documentElement.lang === 'en' ? 'Play animation' : '播放动画') : (document.documentElement.lang === 'en' ? 'Pause animation' : '暂停动画'));
     btn.title = btn.getAttribute('aria-label');
     btn.classList.toggle('is-paused', paused);
   };

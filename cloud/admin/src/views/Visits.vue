@@ -16,7 +16,9 @@ import { toastError } from '@/composables/toast'
 import { CC } from '@/utils/fmt'
 
 /* 访问统计：官网每一页每天打开多少次、多少个不同的访客（按 IP 算，不算机器人）、来自哪里；每天的访客 IP（留 30 天） */
-const PG: Record<string, string> = { home: '首页', app: '账号页', reply: '查进度', privacy: '隐私说明', security: '安全说明', notice: '用户须知', terms: '用户使用协议', changelog: '更新日志', status: '服务状态', help: '常见问题' }
+const PG: Record<string, string> = { home: '首页', app: '账号页', reply: '查进度', privacy: '隐私说明', security: '安全说明', notice: '用户须知', terms: '用户使用协议', changelog: '更新日志', status: '服务状态', help: '常见问题', compat: '兼容情况' }
+// 英文页（#102）：en-首页 这样写成「英文 首页」
+const pgName = (k: string) => k.startsWith('en-') ? '英文 ' + (PG[k.slice(3)] || k.slice(3)) : (PG[k] || k)
 const N: Record<string, string> = { pv: '页面打开（含机器人）', bot: '机器人', login_ok: '登录成功', login_fail: '登录失败', reg: '注册', reset: '找回密码', adm_ok: '管理后台登录', adm_fail: '管理后台密钥错', dev_reg: '开通路由器', fb: '面板反馈', report: '官网报告', install_fail: '安装失败上报', chat_in: '收到对话消息', chat_out: '回复对话', mail_ok: '发出邮件', mail_fail: '邮件失败', err: '出错', uv_over: '访客太多没记 IP' }
 const range = ref<7 | 30 | 90>(30)
 const days = ref<DayStat[]>([])
@@ -62,7 +64,7 @@ onMounted(async () => { await load(); loadVisitors() })
       <div class="bento-grid reveal">
         <section class="bento bento-half">
           <div class="bento-head"><span class="section-label">各页面</span></div>
-          <ul v-if="pages.length" class="share-list"><li v-for="([k, v], i) in pages" :key="k" :class="`cat-${(i % 5) + 1}`"><span class="share-label">{{ PG[k] || k }}</span><span class="share-track"><i :style="{ width: `${(v / pages[0][1]) * 100}%` }" /></span><span class="share-value tnum">{{ v }}</span></li></ul>
+          <ul v-if="pages.length" class="share-list"><li v-for="([k, v], i) in pages" :key="k" :class="`cat-${(i % 5) + 1}`"><span class="share-label">{{ pgName(k) }}</span><span class="share-track"><i :style="{ width: `${(v / pages[0][1]) * 100}%` }" /></span><span class="share-value tnum">{{ v }}</span></li></ul>
           <EmptyState v-else title="还没有数据" icon="globe" />
         </section>
         <section class="bento bento-half">

@@ -8,7 +8,7 @@
 // - 网址（子域名）由这里随机分配，用户不能指定；删除、封禁只能由路由器自己（凭 RKEY）或管理员来做
 // - Cloudflare API 令牌只存在 Worker 的密钥里，不发给任何路由器
 import { DurableObject } from 'cloudflare:workers';
-import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, COMPAT, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES, CSP_SCRIPTS } from './site.js';
+import { HOME, APP, ADMIN, PRIVACY, SECURITY, REPLY, NOTICE, TERMS, CHANGELOG, STATUS, HELP, COMPAT, HOME_EN, HELP_EN, COMPAT_EN, PRIVACY_EN, TERMS_EN, SECURITY_EN, STATUS_EN, CHANGELOG_EN, NOTICE_EN, ADMIN_APP, ADMIN_FILES, FONT_GEIST, KIT_FILES, IMG_FILES, CSP_SCRIPTS } from './site.js';
 import { installOps, chatApi, opsAdmin, isBot } from './ops.js';
 import { installV5, v5Public, v5Admin, v5Scheduled } from './v5.js';
 import { installFam, famAccount, famDev, famAdmin, famAdminUser, permsOf } from './fam.js';
@@ -1696,7 +1696,7 @@ async function captchaGate(env, H, kind, ip, tok) {
 	} catch (e) {}
 	return ok ? null : ask('人机验证没通过，再试一次');
 }
-const PGK = new Map([[HOME, 'HOME'], [APP, 'APP'], [ADMIN, 'ADMIN'], [PRIVACY, 'PRIVACY'], [SECURITY, 'SECURITY'], [REPLY, 'REPLY'], [NOTICE, 'NOTICE'], [TERMS, 'TERMS'], [CHANGELOG, 'CHANGELOG'], [STATUS, 'STATUS'], [HELP, 'HELP'], [COMPAT, 'COMPAT']]);
+const PGK = new Map([[HOME, 'HOME'], [APP, 'APP'], [ADMIN, 'ADMIN'], [PRIVACY, 'PRIVACY'], [SECURITY, 'SECURITY'], [REPLY, 'REPLY'], [NOTICE, 'NOTICE'], [TERMS, 'TERMS'], [CHANGELOG, 'CHANGELOG'], [STATUS, 'STATUS'], [HELP, 'HELP'], [COMPAT, 'COMPAT'], [HOME_EN, 'HOME_EN'], [HELP_EN, 'HELP_EN'], [COMPAT_EN, 'COMPAT_EN'], [PRIVACY_EN, 'PRIVACY_EN'], [TERMS_EN, 'TERMS_EN'], [SECURITY_EN, 'SECURITY_EN'], [STATUS_EN, 'STATUS_EN'], [CHANGELOG_EN, 'CHANGELOG_EN'], [NOTICE_EN, 'NOTICE_EN']]);
 export async function hubFetch(req, env) {
 	const u = new URL(req.url), p = u.pathname;
 	// www 开头的地址：跳到不带 www 的主域名（登录状态、收藏的网址都统一在主域名上）
@@ -1931,10 +1931,21 @@ export async function hubFetch(req, env) {
 		if (+(req.headers.get('content-length') || 0) <= 8192) { const b = await body(), r = (b && (b['csp-report'] || (Array.isArray(b) && b[0] && b[0].body))) || {}; try { await H.cspLog(String(r['document-uri'] || r.documentURL || ''), String(r['violated-directive'] || r.effectiveDirective || ''), String(r['blocked-uri'] || r.blockedURL || '')); } catch (e) {} }
 		return new Response(null, { status: 204 });
 	}
-	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog', '/status': 'status', '/help': 'help', '/compat': 'compat' };
+	const PGN = { '/': 'home', '/index.html': 'home', '/app': 'app', '/privacy': 'privacy', '/security': 'security', '/notice': 'notice', '/terms': 'terms', '/changelog': 'changelog', '/status': 'status', '/help': 'help', '/compat': 'compat',
+		'/en/': 'en-home', '/en/privacy': 'en-privacy', '/en/security': 'en-security', '/en/notice': 'en-notice', '/en/terms': 'en-terms', '/en/changelog': 'en-changelog', '/en/status': 'en-status', '/en/help': 'en-help', '/en/compat': 'en-compat' };
+	// #102 英文页（用户 11/28 21:47）：/en 补斜杠；没翻的页面（账号页这类）跳回中文的
+	if (p === '/en' || p === '/en/index.html') return new Response(null, { status: 301, headers: { location: '/en/' + u.search } });
+	if (p.startsWith('/en/') && !PGN[p] && (req.method === 'GET' || req.method === 'HEAD')) return new Response(null, { status: 302, headers: { location: p.slice(3) + u.search } });
+	// 第一次打开首页：没选过语言（Cookie lang）、浏览器语言不是中文（* 这种不算语言）、不是爬虫 → 英文首页；选过的照选的
+	if (p === '/' && req.method === 'GET') {
+		const lc = (/(?:^|;\s*)lang=(zh|en)\b/.exec(req.headers.get('cookie') || '') || [])[1];
+		const al = (req.headers.get('accept-language') || '').trim().toLowerCase();
+		if (lc === 'en' || (!lc && /^[a-z]{2,3}\b/.test(al) && !/^zh\b/.test(al) && !isBot(req.headers.get('user-agent') || ''))) return new Response(null, { status: 302, headers: { location: '/en/' + u.search, vary: 'accept-language, cookie', 'cache-control': 'no-store' } });
+	}
 	// 安全加固：旧版管理页默认下线（新版在 /admin/），只在设了 OLD_ADMIN=1 时打开（测试用）；下线后打开它跳到新版
 	if (p === '/admin/old' && env.OLD_ADMIN !== '1') return new Response(null, { status: 301, headers: { location: '/admin/' } });
-	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG, '/status': STATUS, '/help': HELP, '/compat': COMPAT }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
+	const pg = { '/': HOME, '/index.html': HOME, '/app': APP, '/admin/old': ADMIN, '/privacy': PRIVACY, '/security': SECURITY, '/notice': NOTICE, '/terms': TERMS, '/changelog': CHANGELOG, '/status': STATUS, '/help': HELP, '/compat': COMPAT,
+		'/en/': HOME_EN, '/en/privacy': PRIVACY_EN, '/en/security': SECURITY_EN, '/en/notice': NOTICE_EN, '/en/terms': TERMS_EN, '/en/changelog': CHANGELOG_EN, '/en/status': STATUS_EN, '/en/help': HELP_EN, '/en/compat': COMPAT_EN }[p] || (/^\/r(\/|\/[A-Za-z2-9]{8})?$/.test(p) ? REPLY : null);
 	// 网页：HEAD（只探一下，比如聊天软件生成链接预览）跟 GET 一样回应，只是不带内容。
 	// 官网各页放行 Cloudflare 网页统计（不用 Cookie、不记 IP，只统计访问量）；管理页不放行
 	if (pg && (req.method === 'GET' || req.method === 'HEAD')) {

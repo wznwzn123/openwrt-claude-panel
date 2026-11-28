@@ -200,7 +200,7 @@ export function pausable(box, ctl) {
     btn.className = 'ui-pause loop-pause';
     p = { btn, ctls: new Set(), paused: false, off: () => {} };
     const show = () => {
-      const label = p.paused ? '播放动画' : '暂停动画';
+      const label = p.paused ? (document.documentElement.lang === 'en' ? 'Play animation' : '播放动画') : (document.documentElement.lang === 'en' ? 'Pause animation' : '暂停动画');
       btn.innerHTML = p.paused ? ICON_PLAY : ICON_PAUSE;
       btn.setAttribute('aria-label', label);
       btn.title = label;

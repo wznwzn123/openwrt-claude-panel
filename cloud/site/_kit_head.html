@@ -64,6 +64,39 @@ code { font-family: var(--font-mono); font-size: .88em; padding: 1px 6px; border
 .nav__gh { display: inline-flex; align-items: center; gap: 6px; }
 @media (min-width: 1024px) and (max-width: 1179px) { .nav__gh { font-size: 0; gap: 0; } }
 .btn { border-radius: 980px; }
+/* 语言展开栏（#102，用户 11/29 00:09 定：地球图标 + 当前语言 ▾；手机上顶栏只留图标） */
+.lang-dd { position: relative; flex: none; }
+.lang-btn { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: inherit; font-family: inherit; cursor: pointer; }
+.lang-btn .lang-ic { width: 17px; height: 17px; flex: none; }
+.lang-btn .lang-chev { width: 13px; height: 13px; flex: none; opacity: .6; transition: transform .2s; }
+.lang-btn[aria-expanded="true"] .lang-chev { transform: rotate(180deg); }
+.lang-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; min-width: 168px; padding: 6px; border-radius: 14px; background: var(--bg); box-shadow: 0 0 0 1px var(--hair), 0 12px 32px rgb(0 0 0 / .14); }
+.lang-menu[hidden] { display: none; }
+.lang-menu a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding: 0 12px; border-radius: 9px; color: var(--ink); text-decoration: none; font-size: 15px; }
+.lang-menu a:hover, .lang-menu a:focus-visible { background: rgb(128 128 128 / .14); outline: none; }
+.lang-menu a svg { width: 16px; height: 16px; visibility: hidden; color: var(--accent); }
+.lang-menu a[aria-checked="true"] { font-weight: 600; }
+.lang-menu a[aria-checked="true"] svg { visibility: visible; }
+@media (min-width: 1024px) and (max-width: 1179px) { html[lang="en"] .lang-btn .lang-cur { display: none; } }
+@media (prefers-color-scheme: dark) { .lang-menu { background: #1c1c1e; box-shadow: 0 0 0 1px var(--hair), 0 12px 32px rgb(0 0 0 / .5); } }
+.lang-btn::before, .lang-btn::after { display: none !important; }
+@media (max-width: 1023px) {
+  .lang-dd { margin-left: auto; }
+  .lang-dd ~ .nav__actions, .lang-dd ~ .nav__toggle { margin-left: 0 !important; }
+  .lang-btn { width: 44px; height: 44px; justify-content: center; padding: 0; }
+  .lang-btn .lang-cur, .lang-btn .lang-chev { display: none; }
+  .lang-btn .lang-ic { width: 20px; height: 20px; }
+}
+/* 英文页（#102）：英文比中文长，手机顶栏的「Free 7-day trial」缩小一点；再窄（不到 460，英文按钮加语言按钮放不下）就收进菜单，免得把菜单按钮挤出屏幕 */
+@media (max-width: 1023px) { html[lang="en"] .nav:not(.is-open) .nav__actions .btn--primary { height: 36px; padding-inline: 14px; font-size: 14px; } }
+html[lang="en"] .nav__link { white-space: nowrap; }
+/* 英文顶栏比中文宽：电脑上 GitHub 只留图标 */
+@media (min-width: 1024px) { html[lang="en"] .nav__gh { font-size: 0; gap: 0; } html[lang="en"] .nav__links .nav__link { padding-inline: 6px; } }
+@media (min-width: 1024px) and (max-width: 1279px) { html[lang="en"] .lang-btn .lang-cur { display: none; } }
+@media (min-width: 1024px) and (max-width: 1179px) { html[lang="en"] #navLogin:not(.nav__me) { display: none; } html[lang="en"] .nav__bar { gap: 10px; } html[lang="en"] .nav__links .nav__link { padding-inline: 4px; } }
+@media (max-width: 459px) { html[lang="en"] .nav:not(.is-open) .nav__actions .btn--primary { display: none; } }
+/* 顶栏多了语言按钮：不到 375 宽（中文）顶栏放不下「免费试用 7 天」，收进菜单 */
+@media (max-width: 374px) { .nav:not(.is-open) .nav__actions .btn--primary { display: none; } }
 .btn--primary:hover { background: #0077ed; }
 .btn:disabled { opacity: .55; cursor: default; }
 
@@ -114,6 +147,10 @@ textarea.input { min-height: 140px; resize: vertical; line-height: 1.65; }
 .site-foot ul a { font-size: 12px; color: var(--muted); text-decoration: none; }
 .site-foot ul a:hover { color: var(--ink); text-decoration: underline; }
 .site-foot .legal { padding-top: 16px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+/* 语言切换（#102）：顶栏和页脚各一个；点了记住选择（Cookie lang） */
+.foot-lang { color: inherit; text-decoration: none; }
+.foot-lang:hover { text-decoration: underline; }
+.nav__lang { font-weight: 600; }
 @media (min-width: 1024px) { .site-foot .c-brand { grid-column: 1 / span 4; } .site-foot .c-col { grid-column: auto / span 2; } }
 @media (min-width: 640px) and (max-width: 1023px) { .site-foot .c-brand { grid-column: 1 / -1; } .site-foot .c-col { grid-column: auto / span 3; } }
 @media (max-width: 639px) { .site-foot .c-col { grid-column: auto / span 6; } }

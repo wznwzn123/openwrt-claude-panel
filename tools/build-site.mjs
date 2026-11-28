@@ -3,6 +3,7 @@
 import fs from 'fs';
 import { createHash } from 'crypto';
 import { applyLegacy, applyLegacyHtml, hasScan, styleBlocks } from './css-legacy.mjs';
+import { translate, checkDict } from './i18n.mjs';
 const dir = new URL('../cloud/site/', import.meta.url);
 const css = fs.readFileSync(new URL('common.css', dir), 'utf8');
 // 旧内核浏览器用的备用颜色（见 tools/css-legacy.mjs）
@@ -22,17 +23,48 @@ const imgUrl = (n) => { const b = fs.readFileSync(new URL('img/' + n + '.webp', 
 // 6.0 第 8 项：官网的内容安全策略不再放行「随便哪段内联脚本」，只放行打包时算好摘要的这些（页面里自己写的 <script>）
 const CSP_SCRIPTS = {};
 const scriptHashes = (html) => [...html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)].filter((m) => !/\ssrc\s*=/i.test(m[1] || '')).map((m) => "'sha256-" + createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
-for (const [k, f] of Object.entries(pages)) {
+// #102 官网英文页（用户 11/28 21:47：介绍类页面，网址带 /en/）：按 cloud/site/i18n/en.json 整段换成英文，表里缺的打包失败
+const EN = { HOME: '/', HELP: '/help', COMPAT: '/compat', PRIVACY: '/privacy', TERMS: '/terms', SECURITY: '/security', STATUS: '/status', CHANGELOG: '/changelog', NOTICE: '/notice' };
+const enDict = JSON.parse(fs.readFileSync(new URL('i18n/en.json', dir), 'utf8')), enMiss = [];
+{ const bad = checkDict(enDict); if (bad.length) throw new Error('i18n/en.json 里这些英文有 \' " ` 或者还有中文：\n  ' + bad.slice(0, 20).join('\n  ')); }
+const enPath = (p) => p === '/' ? '/en/' : '/en' + p;
+// 英文页里指向已翻译页面的站内链接换成 /en/ 开头的（/app 账号页这类没翻的不动）
+const enLinks = (html) => html.replace(/(\shref=")(\/(?:help|compat|privacy|terms|security|status|changelog|notice)?)(?=[#?"])/g, (m, a, p) => a + enPath(p || '/'));
+const langSw = (html, k, lang) => {
+	const zhP = EN[k] || '/', enP = EN[k] ? enPath(EN[k]) : '/en/';
+	const to = lang === 'en' ? { href: zhP, hl: 'zh-CN', to: 'zh', txt: '中文', txt2: '中文' } : { href: enP, hl: 'en', to: 'en', txt: 'EN', txt2: 'English' };
+	// 顶栏语言展开栏（用户 11/29 00:09）：两种语言都列，当前的打勾；语言名在这里填，不走对照表；没有英文的页面（账号页这些）「简体中文」指向本页
+	html = html.replaceAll('/*LANG_CUR*/', lang === 'en' ? 'English' : '中文').replaceAll('/*LANG_ZHNAME*/', '简体中文').replaceAll('/*LANG_ZHON*/', String(lang !== 'en')).replaceAll('/*LANG_ENON*/', String(lang === 'en'))
+		.replaceAll('/*LANG_ZH*/', EN[k] || '').replaceAll('/*LANG_EN*/', enP);
+	html = html.replaceAll('/*LANG_HREF*/', to.href).replaceAll('/*LANG_HL*/', to.hl).replaceAll('/*LANG_TO*/', to.to).replaceAll('/*LANG_TXT*/', to.txt).replaceAll('/*LANG_TXT2*/', to.txt2);
+	// 搜索引擎：两种语言的页面互相指着
+	if (EN[k]) html = html.replace('</head>', `<link rel="alternate" hreflang="zh-CN" href="${zhP}"><link rel="alternate" hreflang="en" href="${enP}"><link rel="alternate" hreflang="x-default" href="${zhP}">\n</head>`);
+	return html;
+};
+const build = (k, f, lang) => {
 	// 页面里的截图：写成 /*IMG:名字*/，打包时换成 /img/名字-摘要.webp（cloud/site/img/名字.webp，见上面的 imgUrl）
 	// 新设计的页面共用的顶栏、页脚、样式和脚本：写成 <!--KIT_HEAD--> 这样，打包时换成 cloud/site/_kit_*.html 的内容
 	let html = fs.readFileSync(new URL(f, dir), 'utf8');
 	html = expand(html);
 	if (/<!--KIT_/.test(html)) throw new Error(f + ' 里有不认识的 <!--KIT_...-->');
+	if (lang === 'en') html = enLinks(translate(html, enDict, enMiss, f)).replace(/<html lang="zh-CN"/, '<html lang="en"');
+	html = langSw(html, k, lang);
 	if (f !== 'admin.html') html = applyLegacyHtml(html, LEG, legMiss, HAS).replace('/*HAS_ARGS*/[]', () => JSON.stringify(HAS.list));
 	html = html.replace('/*COMMON_CSS*/', css)
 		.replace(/\/\*IMG:([a-z0-9_-]+)\*\//g, (m, n) => imgUrl(n));
-	out += `export const ${k} = ${JSON.stringify(html)};\n`;
-	CSP_SCRIPTS[k] = [...new Set(scriptHashes(html))].join(' ');
+	const kk = lang === 'en' ? k + '_EN' : k;
+	out += `export const ${kk} = ${JSON.stringify(html)};\n`;
+	CSP_SCRIPTS[kk] = [...new Set(scriptHashes(html))].join(' ');
+};
+for (const [k, f] of Object.entries(pages)) build(k, f, 'zh');
+for (const k of Object.keys(EN)) build(k, pages[k], 'en');
+if (enMiss.length) {
+	const mm = {};
+	for (const x of enMiss) { const i = x.indexOf('：'); (mm[x.slice(i + 1)] ||= []).includes(x.slice(0, i)) || mm[x.slice(i + 1)].push(x.slice(0, i)); }
+	fs.writeFileSync(new URL('i18n/en-missing.json', dir), JSON.stringify(mm, null, 1));
+	// 翻译做到一半时本地看效果：I18N_ALLOW_MISSING=1 只提醒不失败（部署用的 Actions 不设，缺了就失败）
+	if (process.env.I18N_ALLOW_MISSING === '1') console.warn('英文页还有 ' + Object.keys(mm).length + ' 段没翻（I18N_ALLOW_MISSING=1，先照中文留着）');
+	else throw new Error('英文页还有 ' + Object.keys(mm).length + ' 段没翻（i18n/en.json 里没有），列在 cloud/site/i18n/en-missing.json（不进仓库）：\n  ' + Object.keys(mm).slice(0, 12).join('\n  '));
 }
 out += `export const CSP_SCRIPTS = ${JSON.stringify(CSP_SCRIPTS)};\n`;
 // 官网字体 Geist（SIL OFL 1.1，见 cloud/site/img/geist-OFL.txt）：从本站 /fonts/geist.woff2 发，页面不从外部加载东西

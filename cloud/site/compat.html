@@ -77,21 +77,26 @@
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  // 英文页（#102）：打包时把中文换成英文，单复数这类要分开写的看 EN
+  const EN = document.documentElement.lang === 'en';
+  const cnt = (n) => (EN ? n + (n === 1 ? ' router' : ' routers') : n + ' 台');
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let T = null, shown = 40;
   const chip = (name, f) => {
     if (!f || !f.n) return '';
     const cls = f.ok === f.n ? 'cp-ok' : f.ok === 0 ? 'cp-no' : 'cp-part';
-    return '<span class="cp-f ' + cls + '">' + esc(name) + ' ' + (f.ok === f.n ? (f.n > 1 ? f.n + ' 台都能用' : '能用') : f.ok === 0 ? '用不了' : f.ok + '/' + f.n + ' 台') + '</span>';
+    return '<span class="cp-f ' + cls + '">' + esc(name) + ' ' + (f.ok === f.n ? (f.n > 1 ? (EN ? f.n + '/' + f.n : f.n + ' 台都能用') : '能用') : f.ok === 0 ? '用不了' : f.ok + '/' + f.n + ' 台') + '</span>';
   };
-  const feats = (x) => Object.entries(T.feats).map(([k, name]) => chip(name, x.feats[k])).join('');
+  // 功能名是官网接口给的中文：英文页按编号换（没有的照中文）
+  const FEAT_EN = { tunnel: 'Remote access', update: 'One-tap update', pause: 'Pause internet', backup: 'Cloud backup', lfull: 'Full admin page' };
+  const feats = (x) => Object.entries(T.feats).map(([k, name]) => chip(EN && FEAT_EN[k] ? FEAT_EN[k] : name, x.feats[k])).join('');
   function render() {
     const q = $('cpQ').value.trim().toLowerCase();
     const list = T.models.filter((m) => !q || m.model.toLowerCase().includes(q) || (m.plat || '').toLowerCase().includes(q));
-    $('cpModels').innerHTML = list.length ? list.slice(0, shown).map((m) => '<li class="cp-row"><div class="cp-top"><h3>' + esc(m.model) + '</h3><span>' + m.n + ' 台</span></div><p class="cp-sys">' + esc([m.plat, (m.sys || []).join('、')].filter(Boolean).join(' · ')) + '</p><div class="cp-feats">' + feats(m) + '</div></li>').join('')
+    $('cpModels').innerHTML = list.length ? list.slice(0, shown).map((m) => '<li class="cp-row"><div class="cp-top"><h3>' + esc(m.model) + '</h3><span>' + cnt(m.n) + '</span></div><p class="cp-sys">' + esc([m.plat, (m.sys || []).join('、')].filter(Boolean).join(' · ')) + '</p><div class="cp-feats">' + feats(m) + '</div></li>').join('')
       : '<li class="cp-row"><p class="cp-empty" style="margin:0">' + (T.models.length ? '没找到「' + esc(q) + '」：还没有人报过这个型号，不代表不能装。' : '还没有路由器报上来。') + '</p></li>';
     $('cpMore').hidden = list.length <= shown;
-    $('cpSys').innerHTML = T.systems.length ? T.systems.map((s) => '<li class="cp-row"><div class="cp-top"><h3>' + esc(s.sys) + '</h3><span>' + s.n + ' 台</span></div><div class="cp-feats">' + feats(s) + '</div></li>').join('') : '<li class="cp-row"><p class="cp-empty" style="margin:0">还没有数据。</p></li>';
+    $('cpSys').innerHTML = T.systems.length ? T.systems.map((s) => '<li class="cp-row"><div class="cp-top"><h3>' + esc(s.sys) + '</h3><span>' + cnt(s.n) + '</span></div><div class="cp-feats">' + feats(s) + '</div></li>').join('') : '<li class="cp-row"><p class="cp-empty" style="margin:0">还没有数据。</p></li>';
   }
   $('cpQ').addEventListener('input', () => { shown = 40; render(); });
   $('cpMore').onclick = () => { shown += 60; render(); };
@@ -103,7 +108,7 @@
     if (!(T.routers || 0)) return;
     document.querySelectorAll('[data-cpd]').forEach((e) => { e.hidden = false; });
     $('cpSum').hidden = false;
-    $('cpSum').innerHTML = '<span><b>' + (T.routers || 0) + '</b>台路由器报过</span><span><b>' + T.models.length + '</b>种型号</span><span><b>' + T.systems.length + '</b>种系统版本</span>';
+    $('cpSum').innerHTML = '<span><b>' + (T.routers || 0) + '</b>' + (EN && T.routers === 1 ? 'router reported' : '台路由器报过') + '</span><span><b>' + T.models.length + '</b>' + (EN && T.models.length === 1 ? 'model' : '种型号') + '</span><span><b>' + T.systems.length + '</b>' + (EN && T.systems.length === 1 ? 'system version' : '种系统版本') + '</span>';
     render();
   }).catch(() => { $('cpSum').hidden = false; $('cpSum').innerHTML = '<span>实测数据暂时读不出来 稍后刷新再看</span>'; });
 })();

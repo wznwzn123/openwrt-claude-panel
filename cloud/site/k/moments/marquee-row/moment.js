@@ -28,7 +28,7 @@ export default function (root, opts, lib) {
   pause.type = 'button';
   pause.className = 'loop-pause mo-mq__pause';
   const icon = on => `<svg viewBox="0 0 14 14" aria-hidden="true">${on ? '<path d="M3 2h3v10H3zM8 2h3v10H8z"/>' : '<path d="M4 2l8 5-8 5z"/>'}</svg>`;
-  const setPaused = p => { root.classList.toggle('is-paused', p); pause.setAttribute('aria-label', p ? '继续滚动' : '暂停滚动'); pause.innerHTML = icon(!p); };
+  const setPaused = p => { root.classList.toggle('is-paused', p); pause.setAttribute('aria-label', p ? (document.documentElement.lang === 'en' ? 'Resume scrolling' : '继续滚动') : (document.documentElement.lang === 'en' ? 'Pause scrolling' : '暂停滚动')); pause.innerHTML = icon(!p); };
   setPaused(false);
   pause.addEventListener('click', () => setPaused(!root.classList.contains('is-paused')));
   root.append(pause);

@@ -1576,7 +1576,7 @@ class Diagram {
     }
     const paused = this.userPaused;
     b.setAttribute('aria-pressed', paused ? 'true' : 'false');
-    b.setAttribute('aria-label', paused ? '播放动画' : '暂停动画');
+    b.setAttribute('aria-label', paused ? (document.documentElement.lang === 'en' ? 'Play animation' : '播放动画') : (document.documentElement.lang === 'en' ? 'Pause animation' : '暂停动画'));
     b.classList.toggle('is-paused', paused);
     const icon = paused ? '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M4 2.5v9l7.5-4.5z"/></svg>' : '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 2.5h2.5v9H3.5zM8 2.5h2.5v9H8z"/></svg>';
     if (b.dataset.state !== String(paused)) { b.innerHTML = icon; b.dataset.state = String(paused); }

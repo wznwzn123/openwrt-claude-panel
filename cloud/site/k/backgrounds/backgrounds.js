@@ -82,7 +82,7 @@
     if (el.hasAttribute('data-no-pause') || matchMedia('(prefers-reduced-motion: reduce)').matches || el.querySelector(':scope > .loop-pause')) return;
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'loop-pause';
-    const show = () => { const held = el.classList.contains('is-held'), label = held ? '播放动画' : '暂停动画'; b.innerHTML = held ? ICON_PLAY : ICON_PAUSE; b.setAttribute('aria-label', label); b.title = label; };
+    const show = () => { const held = el.classList.contains('is-held'), label = held ? (document.documentElement.lang === 'en' ? 'Play animation' : '播放动画') : (document.documentElement.lang === 'en' ? 'Pause animation' : '暂停动画'); b.innerHTML = held ? ICON_PLAY : ICON_PAUSE; b.setAttribute('aria-label', label); b.title = label; };
     b.addEventListener('click', () => { el.classList.toggle('is-held'); show(); });
     show(); el.append(b);
   };

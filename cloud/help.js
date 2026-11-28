@@ -3,6 +3,7 @@
 //   专属网址这一项按「路由器本身在线、但隧道断了」的比例算（路由器断电、断网是用户家里的事，不算），只给百分比，不给路由器数量
 // · 常见问题：默认内容在 faq-default.js；管理后台改过以后存在这里；用户搜不到答案时，把搜的词记下来（不记 IP、不记账号）
 import { FAQ_CATS, FAQ_DEFAULT } from './faq-default.js';
+import { FAQ_CATS_EN, FAQ_EN } from './faq-en.js';
 
 const DAY = 86400e3, KEEP_DAYS = 92;
 const J = (o, st = 200, h = {}) => new Response(JSON.stringify(o), { status: st, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...h } });
@@ -22,6 +23,18 @@ export const COMPS = [
 	{ k: 'dl', t: '安装和更新', d: '安装包下载、一键更新' },
 ];
 const COMP_KEYS = COMPS.map((c) => c.k);
+// 英文页（#102）：服务名和说明
+const COMPS_EN = {
+	web: { t: 'Website and accounts', d: 'Website, sign up and sign in, opening the panel' },
+	tunnel: { t: 'Router address', d: 'Opening your router panel when you are away from home' },
+	push: { t: 'Push notifications', d: 'Alerts for outages, updates and family sign-ins' },
+	mail: { t: 'Email', d: 'Verification codes and request status updates' },
+	files: { t: 'File sending', d: 'Images and files in developer chat and feedback' },
+	dl: { t: 'Install and update', d: 'Package downloads and one-tap updates' },
+};
+// 常见问题的英文：只给跟默认内容一样的条目（后台改过、新加的照样给中文，免得英文跟中文对不上）
+const FAQ_D = new Map(FAQ_DEFAULT.map((x) => [x.id, x]));
+const faqEn = (x) => { const d = FAQ_D.get(x.id), e = FAQ_EN[x.id]; return d && e && d.q === x.q && d.a === x.a ? { ...x, q: e.q, a: e.a, kw: e.kw || '', lang: 'en' } : { ...x, lang: 'zh' }; };
 const RANK = { ok: 0, part: 1, down: 2 };
 // 一天的情况：有 2 个小时以上出故障算「故障」，有问题但没到这个程度算「部分有问题」
 function dayLevel(hours, k) {
@@ -184,8 +197,16 @@ export function installHelp(Hub) {
 
 /* ---------- 公开接口 ---------- */
 export async function helpPublic(req, H, body, p) {
-	if (p === '/api/status' && req.method === 'GET') return J(await H.statusView(), 200, { 'cache-control': 'public, max-age=60' });
-	if (p === '/api/help' && req.method === 'GET') { const f = await H.faqAll(); return J({ ok: true, cats: FAQ_CATS, items: f.items.map(({ id, cat, q, a, kw }) => ({ id, cat, q, a, kw })), at: f.at || 0 }, 200, { 'cache-control': 'public, max-age=60' }); }
+	const en = new URL(req.url).searchParams.get('lang') === 'en';
+	if (p === '/api/status' && req.method === 'GET') {
+		let v = await H.statusView();
+		if (en && v && Array.isArray(v.comps)) v = { ...v, comps: v.comps.map((c) => (COMPS_EN[c.k] ? { ...c, ...COMPS_EN[c.k] } : c)) };
+		return J(v, 200, { 'cache-control': 'public, max-age=60' });
+	}
+	if (p === '/api/help' && req.method === 'GET') {
+		const f = await H.faqAll(), items = f.items.map(({ id, cat, q, a, kw }) => ({ id, cat, q, a, kw }));
+		return J({ ok: true, cats: en ? FAQ_CATS.map((c) => ({ ...c, t: FAQ_CATS_EN[c.k] || c.t })) : FAQ_CATS, items: en ? items.map(faqEn) : items, at: f.at || 0 }, 200, { 'cache-control': 'public, max-age=60' });
+	}
 	if (p === '/api/help/miss' && req.method === 'POST') { const b = await body(); await H.faqMiss(String(b.q || ''), req.headers.get('cf-connecting-ip') || ''); return J({ ok: true }); }
 	return null;
 }

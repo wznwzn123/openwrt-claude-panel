@@ -63,3 +63,19 @@
   });
 })();
 </script>
+<script>
+// 语言切换（#102）：点顶栏或页脚的「EN / 中文」记住选择一年（Cookie lang），以后打开首页不再按浏览器语言自动跳
+document.addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('[data-lang]'); if (a) document.cookie = 'lang=' + a.getAttribute('data-lang') + '; path=/; max-age=31536000; samesite=lax'; });
+</script>
+<script>
+// 语言展开栏：点地球打开、点外面或按 Esc 关掉；选了哪种语言记在 Cookie（上面那段）
+(() => {
+  const dd = document.querySelector('.lang-dd'); if (!dd) return;
+  const b = dd.querySelector('.lang-btn'), m = dd.querySelector('.lang-menu');
+  const set = (o) => { m.hidden = !o; b.setAttribute('aria-expanded', String(o)); };
+  b.addEventListener('click', (e) => { e.stopPropagation(); set(m.hidden); if (!m.hidden) (m.querySelector('[aria-checked="true"]') || m.querySelector('a')).focus(); });
+  document.addEventListener('click', (e) => { if (!m.hidden && !dd.contains(e.target)) set(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !m.hidden) { set(false); b.focus(); } });
+  m.addEventListener('keydown', (e) => { if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return; e.preventDefault(); const a = [...m.querySelectorAll('a')], i = a.indexOf(document.activeElement); a[(i + (e.key === 'ArrowDown' ? 1 : a.length - 1)) % a.length].focus(); });
+})();
+</script>

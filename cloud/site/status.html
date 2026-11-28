@@ -39,6 +39,9 @@
 .st-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .st-top h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .st-top p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+/* 英文页（#102）：「Operational · 93.3% uptime」比中文长，手机上放不下时标签换到标题下面，标题不再被挤成一个词一行 */
+html[lang="en"] .st-top { flex-wrap: wrap; }
+html[lang="en"] .st-top > div { flex: 1 1 11em; min-width: 0; }
 .st-tag { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 26px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--c); background: color-mix(in oklab, var(--c) 13%, transparent); white-space: nowrap; }
 .st-tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
 .st-bars { position: relative; display: grid; grid-template-columns: repeat(90, minmax(0, 1fr)); gap: 2px; height: 34px; margin-top: 14px; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: pan-y; }
@@ -95,8 +98,10 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const DAY = 864e5;
   const LV = { ok: '正常', part: '部分有问题', down: '故障', none: '没有记录' };
-  const md = (d) => { const [, m, dd] = String(d).split('-'); return +m + ' 月 ' + +dd + ' 日'; };
-  const mdT = (t) => { const d = new Date(t); return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日'; };
+  // 英文页（#102）：日期写成 Nov 28
+  const EN = document.documentElement.lang === 'en', MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const md = (d) => { const [, m, dd] = String(d).split('-'); return EN ? MON[+m - 1] + ' ' + +dd : +m + ' 月 ' + +dd + ' 日'; };
+  const mdT = (t) => { const d = new Date(t); return EN ? MON[d.getMonth()] + ' ' + d.getDate() : (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日'; };
   const hm = (t) => { const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? '刚刚' : s < 3600 ? Math.round(s / 60) + ' 分钟前' : s < 86400 ? Math.round(s / 3600) + ' 小时前' : Math.round(s / 86400) + ' 天前'; };
   const dur = (a, b) => { const m = Math.max(1, Math.round((b - a) / 60e3)); return m < 60 ? m + ' 分钟' : m < 1440 ? Math.round(m / 60 * 10) / 10 + ' 小时' : Math.round(m / 1440 * 10) / 10 + ' 天'; };
@@ -164,7 +169,7 @@
 
   async function load() {
     try {
-      const r = await fetch('/api/status', { cache: 'no-store' }); if (!r.ok) throw new Error();
+      const r = await fetch('/api/status' + (EN ? '?lang=en' : ''), { cache: 'no-store' }); if (!r.ok) throw new Error();
       S = await r.json(); S.inc = S.inc || []; S.days = S.days || []; S.comps = S.comps || [];
       if (!tip) render(); else nowLine();
     } catch (e) {

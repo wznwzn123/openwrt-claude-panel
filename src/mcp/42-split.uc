@@ -905,6 +905,13 @@ P.split_set = function(a) {
 /* 学习模式（用户 11/27）：选一台设备，3 分钟里它访问了哪些网站（从 OpenClash / Nikki 的连接里看），帮你认出软件用的网址。
    只有主账号能用（能看到别人访问了哪些网站，不放进任何家人权限）；记录只在内存里（/tmp），不上传 */
 const SP_LEARN = getenv('CMCP_SPL_F') || '/tmp/cmcp_sp_learn.json', SP_LEARN_SECS = 180;
+// 识别软件读哪些：Clash 日志（clash）、DNS 记录（dns）、两个都读（clash+dns：OpenClash 的 DNS 经过 dnsmasq 转给它，直连国内的软件也能看到网址，用户 11/28 13:1x）。
+// OpenClash 用防火墙转发 DNS（enable_redirect_dns=2）、Nikki（默认防火墙劫持 53 端口）时 dnsmasq 看不到查询，不动它
+function sp_learn_mode(k) {
+	if (!sp_clash(k)) return 'dns';
+	let e = getenv('CMCP_SP_REDIR');
+	return k == 'openclash' && (e != null ? e : uci_get('openclash.config.enable_redirect_dns')) != '2' ? 'clash+dns' : 'clash';
+}
 P.split_learn = function(a) {
 	let act = '' + (a?.act ?? 'get');
 	if (act == 'start') {
@@ -917,7 +924,7 @@ P.split_learn = function(a) {
 		// 每次识别一个编号：上一次还在跑的发现编号变了就自己停（不会跟这次的混在一起）
 		let rid = rand_str(10);
 		// 用 OpenClash / Nikki 的读它们的日志；别的插件让 dnsmasq 记这几分钟的 DNS 查询（用户 11/28：开始和结束各重启一次 dnsmasq）
-		cmcp_writej(SP_LEARN, { rid, ip, mac, name: substr('' + (a?.name ?? ''), 0, 40), at: time(), until: time() + SP_LEARN_SECS, hosts: {}, dips: {}, nohost: 0, run: true, mode: sp_clash(sp_kind()) ? 'clash' : 'dns' });
+		cmcp_writej(SP_LEARN, { rid, ip, mac, name: substr('' + (a?.name ?? ''), 0, 40), at: time(), until: time() + SP_LEARN_SECS, hosts: {}, dips: {}, nohost: 0, run: true, mode: sp_learn_mode(sp_kind()) });
 		sp_run(mac ? sprintf('%s/cmcp-splearn %s %d %s %s', SBIN, shq(mac), SP_LEARN_SECS, shq(rid), shq(ip)) : sprintf('%s/cmcp-splearn %s %d %s', SBIN, shq(ip), SP_LEARN_SECS, shq(rid)));
 		return P.split_learn({ act: 'get' });
 	}

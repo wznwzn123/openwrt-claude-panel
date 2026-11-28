@@ -4,7 +4,9 @@
 // 用户 11/28：打开软件总得有网址出来——以前每 2 秒看一次「正在连着的连接」，一闪而过的会漏；手机用 IPv6 连的也不算这台设备。现在：
 // 1. 实时日志：OpenClash / Nikki 的 /logs?level=info，每个新连接一行「[TCP] 来源:端口 --> 网址:端口 match …」，后台 curl 一直往临时文件里写，这里每秒读新的
 // 2. 连接列表：每 2 秒看一次 /connections（日志读不到时每秒），补上识别开始前就连着的
-// 3. 不经过代理的（OpenClash 开着「绕过中国大陆」，直连国内 IP 的）：每 3 秒看一次系统的连接跟踪，只记 IP 和次数（用户 11/28 选：列出 IP，不动 DNS）；
+// 3. 不经过代理的（OpenClash 开着「绕过中国大陆」，直连国内 IP 的）：每 3 秒看一次系统的连接跟踪，记 IP 和次数；
+//    用户 11/28 13:1x 改：OpenClash（DNS 经过 dnsmasq 转给它的）也像下面第 4 条一样记这几分钟的 DNS 查询，直连的国内软件也能看到网址（以前只列 IP）。
+//    Clash 日志里有的网址照旧按日志算，DNS 只补日志里没有的；查过网址的 IP 不再列进「直连的 IP」
 //    走了代理但连接跟踪里看着像直连的（TPROXY、TUN 转过去的真实 IP）：日志、连接列表里出现过的目标 IP 不算
 // 4. 没有 Clash（PassWall、PassWall 2、HomeProxy、SSR Plus+，用户 11/28 定）：让 dnsmasq 记这几分钟的 DNS 查询，按设备的地址读它查了哪些网址；
 //    开始和结束各重启一次 dnsmasq（家里 DNS 停不到 1 秒）。改的是 dhcp 里的 logqueries / logfacility（新版 OpenWrt 的 dnsmasq 跑在隔离环境里，只有这里设的日志文件进得去），
@@ -39,7 +41,8 @@ const legacy = !!match(a0, /^\d+\.\d+\.\d+\.\d+$/), mac = legacy ? null : a0, ip
 if (!legacy && !match(mac, /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/)) { print('用法：cmcp-splearn <设备 MAC> <秒数> <编号> [设备 IPv4]\n'); exit(1); }
 const end = time() + secs;
 let seen = {}, hosts = {}, dips = {}, ctseen = {}, viaClash = {}, nohost = 0, err = null, ok = false, logok = false, ips = {}, ipsAt = 0;
-const DNS = L.readj(F, null)?.mode == 'dns';
+const MODE = L.readj(F, null)?.mode, DNS = MODE == 'dns', CDNS = MODE == 'clash+dns';
+let dhosts = {}; // Clash 模式下从 DNS 记录补的网址（日志里没有的才算进结果）
 const nhost = () => length(keys(hosts));
 function add(h) {
 	h = lc('' + (h ?? ''));
@@ -134,7 +137,11 @@ function dns_read() {
 	drest = pop(ls);
 	for (let l in ls) {
 		let m = match(l, /query\[(A|AAAA|HTTPS)\] ([^ ]+) from ([0-9a-fA-F.:]+)/);
-		if (m) { logok = true; if (ips[lc(m[3])]) { ok = true; add(m[2]); } continue; }
+		if (m) {
+			if (DNS) { logok = true; if (ips[lc(m[3])]) { ok = true; add(m[2]); } }
+			else if (ips[lc(m[3])]) { let h = lc(m[2]); if (length(h) <= 253 && match(h, /^[a-z0-9_.-]+$/) && !match(h, /^[0-9.]+$/) && (dhosts[h] || length(keys(dhosts)) < 2000)) dhosts[h] = (dhosts[h] ?? 0) + 1; }
+			continue;
+		}
 		m = match(l, /(reply|cached) [^ ]+ is ([0-9a-fA-F.:]+)$/);
 		if (m) resolved[lc(m[2])] = 1;
 	}
@@ -189,25 +196,31 @@ function ct_read() {
 function save(run) {
 	let o = L.readj(F, null);
 	if (type(o) != 'object' || o.rid != rid || (run && o.run === false)) return false; // 又开了一次识别，或者用户点了停止
-	o.hosts = hosts; o.dips = dips; o.nohost = nohost; o.run = run; o.err = logok ? null : err; o.seen = ok; o.log = logok;
+	// Clash 模式：日志里没有的网址用 DNS 记录补上（同一个网址日志和 DNS 都有的按日志的次数）
+	let hs = hosts;
+	if (CDNS && length(dhosts)) { hs = { ...hosts }; for (let h in dhosts) if (!hs[h] && length(keys(hs)) < 2000) hs[h] = dhosts[h]; }
+	o.hosts = hs; o.dips = dips; o.nohost = nohost; o.run = run; o.err = logok ? null : err; o.seen = ok; o.log = logok;
 	// 查过网址的 IP 不算「只有 IP」：先看到连接、后看到回答的，这里补着去掉
 	for (let d in keys(dips)) if (resolved[d]) delete dips[d];
 	L.writej(F, o);
 	return true;
 }
 refresh_ips();
-if (DNS) dns_start(); else log_start();
+if (DNS || CDNS) dns_start();
+if (!DNS) log_start();
 let tick = 0;
 while (time() < end) {
 	if (time() - ipsAt >= 5) refresh_ips();
-	if (DNS) dns_read();
-	else { log_read(); if (!logok || tick % 2 == 0) conn_read(); }
+	if (DNS || CDNS) dns_read();
+	if (!DNS) { log_read(); if (!logok || tick % 2 == 0) conn_read(); }
 	if (tick % 3 == 0) ct_read();
-	if (!save(true)) { if (DNS) dns_stop(); else log_stop(); exit(0); }
+	if (!save(true)) { if (DNS || CDNS) dns_stop(); if (!DNS) log_stop(); exit(0); }
 	tick++;
 	L.sh('sleep 1');
 }
-if (DNS) dns_read(); else { log_read(); conn_read(); }
+if (DNS || CDNS) dns_read();
+if (!DNS) { log_read(); conn_read(); }
 ct_read();
 save(false);
-if (DNS) dns_stop(); else log_stop();
+if (DNS || CDNS) dns_stop();
+if (!DNS) log_stop();

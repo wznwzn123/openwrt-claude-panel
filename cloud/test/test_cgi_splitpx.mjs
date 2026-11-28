@@ -188,6 +188,30 @@ try {
 		ok('DNS 模式：只记这台设备查的网址（别的设备、乱的不记），结束后 dnsmasq 设置放回去', hs['www.youtube.com'] >= 1 && hs['api.game.example'] >= 1 && !hs['other.device.com'] && !Object.keys(hs).some((h) => /;/.test(h)) && L2.run === false
 			&& !fs.existsSync(DON) && !/logqueries|logfacility/.test(rd(CFG + '/dhcp')), JSON.stringify(L2).slice(0, 300) + rd(CFG + '/dhcp'));
 	}
+	// 用户 11/28 13:1x：OpenClash 开着「绕过中国大陆」时直连的国内软件只看到 IP → OpenClash 也记 DNS 查询（clash+dns）
+	{
+		KIND = 'openclash';
+		r = await cgi('split_learn', { act: 'start', mac: 'aa:aa:aa:aa:aa:02', ip: '192.168.1.20', name: 'TV' }, { CMCP_SP_REDIR: '1' });
+		ok('OpenClash（DNS 经过 dnsmasq 转给它）：识别时 Clash 日志和 DNS 记录都读（mode = clash+dns）', JSON.parse(rd(E + '/split_learn.json') || '{}').mode === 'clash+dns' || (await cgi('split_learn', {})).result?.mode === 'clash+dns', rd(E + '/split_learn.json'));
+		await cgi('split_learn', { act: 'stop' });
+		await cgi('split_learn', { act: 'start', mac: 'aa:aa:aa:aa:aa:02', ip: '192.168.1.20' }, { CMCP_SP_REDIR: '2' });
+		ok('OpenClash 用防火墙转发 DNS（dnsmasq 看不到查询）：只读 Clash 日志，不动 dnsmasq', (await cgi('split_learn', {})).result?.mode === 'clash');
+		await cgi('split_learn', { act: 'stop' });
+		KIND = 'nikki';
+		await cgi('split_learn', { act: 'start', mac: 'aa:aa:aa:aa:aa:02', ip: '192.168.1.20' });
+		ok('Nikki（默认防火墙劫持 DNS）：只读 Clash 日志', (await cgi('split_learn', {})).result?.mode === 'clash');
+		await cgi('split_learn', { act: 'stop' });
+		const LF = E + '/learn2.json', DL = E + '/dns2.log', DON = E + '/dnson2.json', CT = E + '/ct2', CONNS = E + '/conns2.json', U = 'python3 ' + path.resolve('test/fake/uci.py') + ' -c ' + CFG;
+		fs.writeFileSync(CT, 'ipv4     2 tcp      6 300 ESTABLISHED src=192.168.1.20 dst=1.2.3.4 sport=50000 dport=443 src=1.2.3.4 dst=192.168.1.20 sport=443 dport=50000 [ASSURED] mark=0 use=1\n'
+			+ 'ipv4     2 tcp      6 300 ESTABLISHED src=192.168.1.20 dst=5.6.7.8 sport=50001 dport=443 src=5.6.7.8 dst=192.168.1.20 sport=443 dport=50001 [ASSURED] mark=0 use=1\n');
+		fs.writeFileSync(CONNS, JSON.stringify({ connections: [{ id: '1', metadata: { sourceIP: '192.168.1.20', sourcePort: '40000', host: 'www.youtube.com', destinationIP: '198.18.0.5' } }] }));
+		fs.writeFileSync(LF, JSON.stringify({ rid: 'r2', ip: '192.168.1.20', mac: '', at: Date.now() / 1000, until: Date.now() / 1000 + 5, hosts: {}, dips: {}, nohost: 0, run: true, mode: 'clash+dns' }));
+		const lines = ['query[A] www.youtube.com from 192.168.1.20', 'reply www.youtube.com is 198.18.0.5', 'query[A] api.douyin.com from 192.168.1.20', 'reply api.douyin.com is 1.2.3.4', 'query[A] other.cn from 192.168.1.99'].map((l) => 'Sat Nov 28 13:20:00 2026 dnsmasq[1]: ' + l).join('\n');
+		await new Promise((z) => { const p = spawn('sh', ['-c', UC + ' ' + JSON.stringify(path.resolve('../src/bin/cmcp-splearn')) + ' 192.168.1.20 5 r2'], { env: { ...process.env, CMCP_SPL_F: LF, CMCP_SPL_DNSON: DON, CMCP_SPL_DLOG: DL, CMCP_SPL_UCI: U,
+			CMCP_SPL_DNSRS: `( sleep 1; [ -f ${DON} ] && printf '${lines}\n' >> ${DL} ) >/dev/null 2>&1 &`, CMCP_SPL_DNSOK: 'echo 1', CMCP_SPL_NOCURL: '1', CMCP_SPL_CONNS: CONNS, CMCP_SPL_CT: CT, CMCP_SPL_LOG: E + '/spl2.log', CMCP_SPL_NEIGH: E + '/neigh', CMCP_SPL_LEASES: E + '/leases' } }); p.on('close', z); });
+		const L3 = JSON.parse(rd(LF) || '{}'), hs = L3.hosts || {}, dp = L3.dips || {};
+		ok('clash+dns：走代理的按 Clash 算（不重复算 DNS 那次）、直连国内的从 DNS 补上网址；查过网址的 IP 不再列进「直连的 IP」，没查过的（HTTPDNS 这类）照旧列', hs['www.youtube.com'] === 1 && hs['api.douyin.com'] >= 1 && !hs['other.cn'] && !dp['1.2.3.4'] && dp['5.6.7.8'] >= 1 && !fs.existsSync(DON) && !/logqueries|logfacility/.test(rd(CFG + '/dhcp')), JSON.stringify(L3).slice(0, 400));
+	}
 } finally {
 	fs.rmSync(E, { recursive: true, force: true });
 }

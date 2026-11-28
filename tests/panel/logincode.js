@@ -98,7 +98,7 @@ const vis = (page, sel) => page.isVisible(sel);
 	ok('移除别的手机（带着凭证）', !DEVS.old00001 && (await page.$$('#meBox [data-mp="drm"]')).length === 0 && calls.some((c) => c.m === 'device_remove' && c.p && c.p.sudo));
 	await page.click('#meBox [data-mp="kckey"]'); await W(800);
 	t = await page.textContent('.modal');
-	ok('AI 连接器地址：先打码，说明打不开面板，提醒旧连接器要换', (await page.getAttribute('.modal .keybox', 'class')).includes('blur') && /打不开面板/.test(t) && /重新添加/.test(t) && t.includes('c'.repeat(40)));
+	ok('AI 连接器地址：先打码，提醒旧连接器要换（「打不开面板」那句说明 11/28 第四阶段按文案规矩去掉了）', (await page.getAttribute('.modal .keybox', 'class')).includes('blur') && /重新添加/.test(t) && t.includes('c'.repeat(40)));
 	await page.click('.modal button:has-text("完成")'); await W(400);
 	await page.goto('http://localhost:8143/panel/?p=more'); await W(1500);
 	const addBtn = await page.$('[data-t="addphone"], #addPhoneBtn, button:has-text("添加新手机")');

@@ -8,3 +8,6 @@ useDefault = true
 [allowlist]
 description = "历史提交里测试用的假令牌（不是真的密钥）"
 regexes = ['''^tok1234567890abcdefgh$''', '''^AGE-SECRET-KEY-1ABCDEF$''']
+# cloud/apps-data.js：分流识别软件用的「网址 → App」表，由 tools/gen-apps.mjs 从 v2fly/domain-list-community 生成，只有网址
+# （里面的 xn-- 开头的国际化域名会被 generic-api-key 当成密钥，用户 11/28 选放过这个文件）
+paths = ['''^cloud/apps-data\.js$''']

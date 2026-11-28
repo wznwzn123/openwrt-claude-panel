@@ -58,6 +58,20 @@ try {
 	put('tools/release-notes.md', '说明\n\n最低版本:6.2.0 【必须更新】\n');
 	r = run('v6.2.0');
 	ok('半角冒号、不带 v、中间有空格也认得', r.force === true);
+	// 只让 App 强制（用户 11/28 16:17：App 6.0.2 强制，路由器不强制）：「App 最低版本：v6.2.0」
+	put('tools/release-notes.md', '说明\n\n最低版本：v6.0.1【必须更新】\n\nApp 最低版本：v6.2.0\n');
+	r = run('v6.2.0');
+	ok('「App 最低版本」写的就是这一版：App 强制', r.version === '6.2.0' && r.force === true);
+	{
+		// 跟 cloud/hub.js 的 mustUpdate 同一段（hub.js 要 Workers 环境才加载得了），先核对源码里还是这么写的
+		const src = fs.readFileSync(path.join(ROOT, 'cloud', 'hub.js'), 'utf8');
+		ok('hub.js 的 mustUpdate 没变', src.includes("const re = /最低版本[:：]\\s*v?(\\d+(?:\\.\\d+){0,2})\\s*【必须更新】/, m = re.exec(body);"));
+		const mustUpdate = (body, ver) => { ver = String(ver).replace(/^v/, ''); const re = /最低版本[:：]\s*v?(\d+(?:\.\d+){0,2})\s*【必须更新】/, m = re.exec(body); return !!((m && m[1] === ver) || body.replace(re, '').includes('【必须更新】')); };
+		ok('同一份说明路由器不强制（mustUpdate 不认「App 最低版本」那行）', mustUpdate(r.body, 'v6.2.0') === false && mustUpdate(r.body, 'v6.0.0') === false);
+	}
+	put('tools/release-notes.md', '说明\n\n最低版本：v6.0.1【必须更新】\n\nApp 最低版本：v6.1.0\n');
+	r = run('v6.2.0');
+	ok('「App 最低版本」写的是旧版本：不强制', r.force === false);
 
 	// 跟仓库里现在的更新说明对一遍：下一版（比如 6.0.2）照抄现在这份，不强制
 	put('tools/release-notes.md', fs.readFileSync(path.join(ROOT, 'tools', 'release-notes.md'), 'utf8'));

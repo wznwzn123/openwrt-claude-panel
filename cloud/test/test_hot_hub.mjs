@@ -2,7 +2,16 @@
 import { load, memStorage } from './load.mjs';
 const mod = await load();
 const results = []; const ok = (n, c, note) => results.push([n, !!c, note]);
-const GH = []; let limited = false;
+const GH = []; let limited = false, PKG = null, PKGN = 0;
+// 补丁包（限流时说明从包里的 hot.json 读：用户 11/28 17:04）
+{
+	const fs = await import('fs'), os = await import('os'), path = await import('path'), { execSync } = await import('child_process');
+	const d = fs.mkdtempSync(path.join(os.tmpdir(), 'hotpk-'));
+	fs.mkdirSync(d + '/root/www', { recursive: true }); fs.writeFileSync(d + '/root/www/x', 'x');
+	fs.writeFileSync(d + '/hot.json', JSON.stringify({ base: '6.0.2', n: 1, notes: '修好了小组件\n第二行' }));
+	execSync('touch -d @' + (Math.floor(Date.now() / 1000) + 60) + ' hot.json && tar czf p.tgz ./root ./hot.json', { cwd: d }); // 包是分批上线以后打的
+	PKG = fs.readFileSync(d + '/p.tgz'); fs.rmSync(d, { recursive: true, force: true });
+}
 globalThis.fetch = async (input, init = {}) => {
 	const url = typeof input === 'string' ? input : input.url; GH.push(url);
 	if (url.includes('api.github.com') && limited) return new Response('rate limited', { status: 403 });
@@ -10,6 +19,8 @@ globalThis.fetch = async (input, init = {}) => {
 		{ tag_name: 'v6.0.0', body: '正式版' }, { tag_name: 'hot-6.0.0-1', body: '修了订阅页\n细节' }, { tag_name: 'hot-6.0.0-3', body: '加了横幅公告\n…' },
 		{ tag_name: 'hot-6.0.0-4', body: '草稿', draft: true }, { tag_name: 'hot-5.2.3-9', body: '老版本的' }]));
 	if (url.includes('/releases/download/hot-6.0.0-3/hot.tar.gz')) return new Response('TGZ');
+	if (url.includes('/releases/download/hot-6.0.2-1/hot.tar.gz') && PKG) { PKGN++; return new Response(PKG); }
+	if (url.includes('/releases/download/hot-6.0.0-5/hot.tar.gz') && PKG) return new Response(PKG);
 	if (init.method === 'HEAD' && /\/releases\/download\/hot-(6\.0\.0-[1-5]|6\.0\.2-1)\/SHA256SUMS\.sig2$/.test(url)) return new Response(null, { status: 302, headers: { location: 'https://objects.example/x' } });
 	return new Response('nope', { status: 404 });
 };
@@ -46,6 +57,11 @@ ok('GitHub 接口限流：用上次存的列表，再顺着编号试下载地址
 ok('限流时只从第 4 个往后试（存过的不再试）', !GH.some((u) => u.includes('hot-6.0.0-3/SHA256SUMS.sig2')) && GH.some((u) => u.includes('hot-6.0.0-6/')), GH.join(' '));
 j = JSON.parse((await get('/api/router/hot?v=6.0.2&h=0&k=i:aaaaaaaaaaaaaaaa&f=1')).t);
 ok('限流时存的列表里没有的版本：也能试出来（点了「检查更新」的直接拿到）', j.ok && j.n === 1 && j.tag === 'hot-6.0.2-1', JSON.stringify(j));
+ok('限流时探测出来的补丁：说明从补丁包里读（第一行）', j.notes === '修好了小组件', JSON.stringify(j));
+{ const n0 = PKGN; await get('/api/router/hot?v=6.0.2&h=0&k=i:aaaaaaaaaaaaaaaa&f=1'); ok('补丁包只下一次', n0 === 1 && PKGN === 1, n0 + ' ' + PKGN); }
+{ const a = await mod.default.fetch(new Request('https://panel.example/api/admin/hot', { headers: { authorization: 'Bearer ' + 'k'.repeat(20) } }), env); const t = await a.text();
+  ok('后台「补丁」页：限流时探测出来的补丁也有说明', a.status === 200 && t.includes('修好了小组件'), t.slice(0, 300));
+  ok('后台「补丁」页：存的列表里没有的新版本（6.0.2）也列出来', JSON.parse(t).list.some((x) => x.base === '6.0.2' && x.n === 1 && x.notes === '修好了小组件'), t.slice(0, 300)); }
 j = JSON.parse((await get('/api/router/hot?v=6.0.2')).t);
 ok('刚发的补丁还在分批：老的 cmcp-hot（不带参数）先不给', j.ok && j.n === 0, JSON.stringify(j));
 j = JSON.parse((await get('/api/router/hot?v=6.0.1')).t);

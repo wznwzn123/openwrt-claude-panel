@@ -89,6 +89,25 @@ for (const [w, h] of [[320, 700], [390, 844], [1280, 860]]) {
 	const ct3 = await page.locator(`[data-sub="${R.sub}"]`).textContent();
 	ok('失败：卡片上说「没成功（路由器空间不够）」和原因、已退回' + T, /换成 AI 版没成功（路由器空间不够）/.test(ct3) && /闪存只剩 5 MB/.test(ct3) && /已退回原来的版本/.test(ct3), ct3.slice(0, 300));
 	if (SHOTS) await page.screenshot({ path: `${SHOTS}/ed-fail-${w}.png`, fullPage: w < 900 });
+	// 用户 11/28 17:14：在外面换成 AI 版以后页面还写着本地版，「本地版」点不了，换不回去
+	// 等路由器执行时：再点「换版本」直接说在等；路由器换好以后页面自己刷新（不用手动刷新），能换回本地版
+	await page.locator(`[data-sub="${R.sub}"] [data-ed]`).click(); await W(400);
+	await page.locator('.mask .card label:has(input[value=ai])').click(); await page.locator('.mask .card [data-ok]').click(); await W(1500);
+	const cmd2 = (await env.W.get('dev:' + R.sub).getCfg()).cmd;
+	await page.locator(`[data-sub="${R.sub}"] [data-ed]`).click(); await W(400);
+	const tw = await page.locator('#toast').textContent().catch(() => '');
+	ok('等路由器执行时再点「换版本」：说正在换、不弹框' + T, cmd2 && cmd2.id !== cmd.id && /正在换成 AI 版：等路由器做完再换/.test(tw) && !(await page.locator('.mask').count()), tw);
+	await api('/api/dev/edition', { sub: R.sub, rkey: R.rkey, to: 'ai' });
+	await api('/api/dev/edres', { sub: R.sub, rkey: R.rkey, id: cmd2.id, to: 'ai', ok: true });
+	await env.W.get('dev:' + R.sub).ctx.storage.put('r', { last: Date.now(), rep: { ver: '6.0.0', ed: 'ai' } });
+	await W(9500);
+	const tok = await page.locator('#toast').textContent().catch(() => '');
+	const ct4 = await page.locator(`[data-sub="${R.sub}"]`).textContent();
+	ok('路由器换好：不用刷新，提示「已换成 AI 版」，卡片上没有「正在换」' + T, /已换成 AI 版/.test(tok) && !/正在换成/.test(ct4), tok + ' | ' + ct4.slice(0, 200));
+	await page.locator(`[data-sub="${R.sub}"] [data-ed]`).click(); await W(400);
+	const box2 = page.locator('.mask .card');
+	ok('换好以后能换回本地版' + T, /AI 版（现在）/.test(await box2.textContent()) && !(await box2.locator('input[value=local]').isDisabled()) && await box2.locator('input[value=ai]').isDisabled());
+	if (SHOTS) await page.screenshot({ path: `${SHOTS}/ed-back-${w}.png` });
 	ok('没有页面错误' + T, !errs.length, errs.join(' | '));
 	await ctx.close();
 }

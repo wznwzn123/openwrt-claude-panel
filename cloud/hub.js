@@ -2216,7 +2216,21 @@ async function hotList(env, v) {
 		});
 		if (nx) for (let n = top + 1; n <= nx.n; n++) out.set(n, { n, tag: 'hot-' + v + '-' + n, notes: '', at: 0 });
 	} catch (e) {}
-	return [...out.values()].sort((a, b) => a.n - b.n);
+	const res = [...out.values()].sort((a, b) => a.n - b.n);
+	// 接口被限流时探测出来的补丁没有说明和时间（面板「检查更新」、后台「补丁」页、更新日志就是空的：用户 11/28 17:04「全都要修」）：
+	// 从补丁包里的 hot.json 读（hotPack 读到一次永久存着；这里再按缺的编号缓存 10 分钟，公告接口每次都走这里，不能每次都去读）
+	const miss = res.filter((x) => x.n > 0 && (!x.notes || !x.at)).slice(-5);
+	if (miss.length) {
+		try {
+			const f = await cached('hot-pk-' + v + '-' + miss.map((x) => x.n).join('.'), 600, async () => {
+				const o = {};
+				for (const x of miss) { const p = await hotPack(env, x.tag).catch(() => null); if (p) o[x.n] = p; }
+				return o;
+			});
+			if (f) for (const x of res) { const p = f[x.n]; if (!p) continue; if (!x.notes) x.notes = String(p.notes || '').split('\n')[0].trim(); if (!x.at) x.at = p.at || 0; }
+		} catch (e) {}
+	}
+	return res;
 }
 // 这个版本最新的补丁（{ n, tag, notes }，没有 = { n: 0 }）：更新日志、版本下拉用（不管分批）
 async function hotBest(env, v) {
@@ -2226,7 +2240,8 @@ async function hotBest(env, v) {
 // 后台「补丁」页、每小时推下一批：最近的 3 个基础版本，每个版本的补丁
 async function hotGroups(env) {
 	const all = (await hotAll(env)) || (await hubObj(env).meta('hotl').catch(() => null)) || [];
-	const bases = [...new Set(all.map((x) => (HOT_TAG.exec(x.tag) || [])[1]).filter(Boolean))].sort((a, b) => verCmp(b, a, 3)).slice(0, 3);
+	let hb = []; try { hb = await hubObj(env).hotBases(); } catch (e) {}
+	const bases = [...new Set([...all.map((x) => (HOT_TAG.exec(x.tag) || [])[1]), ...hb].filter(Boolean))].sort((a, b) => verCmp(b, a, 3)).slice(0, 3);
 	const out = [];
 	for (const base of bases) { try { out.push({ base, list: await hotList(env, base) }); } catch (e) {} }
 	return out;

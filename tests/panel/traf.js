@@ -33,7 +33,13 @@ const server = http.createServer((req, res) => {
 		const T = dark ? '【深色】' : '';
 		const body = () => page.textContent('#tfBody');
 		ok(T + '打开流量统计页', (await page.textContent('#pageTitle')) === '流量统计');
-		if (dark) { await page.screenshot({ path: path.join(__dirname, 'shots', 'traf-01-dark.png') }); await ctx.close(); continue; }
+		if (dark) {
+			await page.screenshot({ path: path.join(__dirname, 'shots', 'traf-01-dark.png') });
+			const keep3 = TFD.d; TFD.d = { ...keep3, acct: 'nft', nx: { [keep3.today]: 1 }, warn: '开着「NSS 硬件加速」：被加速的流量数不到，每台设备的用量会偏少' };
+			await page.click('#statusPill'); await page.waitForTimeout(1200);
+			await page.screenshot({ path: path.join(__dirname, 'shots', 'traf-03-nx-390-dark.png'), fullPage: true });
+			TFD.d = keep3; await ctx.close(); continue;
+		}
 		// 今天：iPhone 3.61G + TV 1.3G + 路由器 0.02G + 断开的 0.01G + 未知 0.001G ≈ 4.94 GB
 		ok('今天总量、上下行、代理/直连比例', /今天一共/.test(await body()) && /4\.9\d? GB/.test(await body()) && /走代理/.test(await body()) && /直连/.test(await body()), (await body()).slice(0, 200));
 		ok('顶部显示今天用量', /^今天 4\.9\d? GB$/.test(await page.textContent('#tfPill')), await page.textContent('#tfPill'));
@@ -59,6 +65,22 @@ const server = http.createServer((req, res) => {
 		await page.screenshot({ path: path.join(__dirname, 'shots', 'traf-02-dev.png'), fullPage: true });
 		await page.click('[data-tfall]'); await page.waitForTimeout(300);
 		ok('「看全部」回到所有设备', !/「TV」/.test(await body()) && (await page.locator('.tfrow.on').count()) === 0);
+		// 6.0 第五阶段（用户 11/28）：防火墙计数。没装代理插件、用 PassWall 等的也有数；用 PassWall 等的日子分不出走代理和直连
+		{
+			const keep2 = TFD.d, td = keep2.today;
+			const reload = async () => { await page.click('#statusPill'); await page.waitForTimeout(1200); };
+			TFD.d = { ...keep2, acct: 'nft', warn: null, nx: {} }; await reload();
+			ok('防火墙计数：分开显示走代理和直连，不再写「没运行时算不到」', /走代理/.test(await body()) && !/算不到/.test(await body()));
+			TFD.d = { ...keep2, acct: 'nft', nx: { [td]: 1 }, warn: '开着「Turbo ACC（快速转发）」：被加速的流量数不到，每台设备的用量会偏少' }; await reload();
+			const b2 = await body();
+			ok('用 PassWall 等的日子：只显示总数，不分走代理和直连', (await page.locator('#tfBody .tfleg, #tfBody .tfsplit').count()) === 0 && !/代理 [0-9]/.test(b2) && /分不出走代理和直连/.test(b2) && /↓ /.test(b2), b2.slice(0, 300));
+			ok('开着绕过内核的加速：提示数不全', /Turbo ACC/.test(b2));
+			for (const [w, h] of [[320, 700], [430, 932]]) { await page.setViewportSize({ width: w, height: h }); await page.waitForTimeout(300); await page.screenshot({ path: path.join(__dirname, 'shots', 'traf-03-nx-' + w + '.png'), fullPage: true }); ok('「只有总数」' + w + ' 宽不横向滚动', (await page.evaluate(() => document.documentElement.scrollWidth)) <= w + 1); }
+			await page.setViewportSize({ width: 390, height: 844 });
+			TFD.d = { ...keep2, acct: 'none' }; await reload();
+			ok('没有防火墙计数（老固件什么都没有）：写「OpenClash 或 Nikki 没运行时的流量算不到」', /没运行时的流量算不到/.test(await body()));
+			TFD.d = keep2;
+		}
 		// 侧边栏里有入口
 		ok('侧边栏「状态」里有流量统计', (await page.locator('#sidenav [data-p="traf"]').count()) === 1);
 		// 没有数据时

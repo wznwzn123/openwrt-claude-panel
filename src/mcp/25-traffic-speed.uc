@@ -1,15 +1,16 @@
 /* ---------- 流量统计 ---------- */
 P.traffic = function() {
-	let days = {}, names = {};
+	let days = {}, names = {}, nx = {};
 	for (let f in split(trim(sh('ls /etc/claude-mcp/traffic/*.json 2>/dev/null').out), '\n')) {
 		if (!length(f)) continue;
 		let m = cmcp_readj(f, null);
 		if (!m) continue;
 		for (let d in m.days ?? {}) days[d] = m.days[d];
+		for (let d in m.nx ?? {}) nx[d] = 1;
 		for (let k in m.names ?? {}) names[k] = m.names[k];
 	}
 	let st = cmcp_readj('/tmp/cmcp_traf.json', null);
-	if (st?.day) { days[st.day] = st.today; for (let k in st.names ?? {}) names[k] = st.names[k]; }
+	if (st?.day) { days[st.day] = st.today; for (let k in st.names ?? {}) names[k] = st.names[k]; if (st.nx) nx[st.day] = 1; }
 	// 名字：认识的设备 → 现在的 DHCP 名字 → 静态分配起的名字（后面的优先）
 	let kn = cmcp_readj('/etc/claude-mcp/known_devices.json', {});
 	for (let m in kn) if (kn[m].name && !names[m]) names[m] = kn[m].name;
@@ -24,7 +25,9 @@ P.traffic = function() {
 	// 解开被转码的名字；面板里改过名字的优先
 	for (let k in names) names[k] = CL.name_clean(names[k]) ?? names[k];
 	for (let m, x in CL.dev_aliases()) if (type(x) == 'object' && x.name) names[m] = x.name;
-	return { days, names, today: st?.day ?? null, at: st?.at ?? null };
+	// acct：怎么数的（nft / ipt / ct = 防火墙计数，none = 只靠 OpenClash / Nikki）；warn：开着绕过内核的加速、卸载数不全；
+	// nx：这些天用的是 PassWall 等插件，分不出走代理还是直连（6.0 第五阶段，用户 11/28）
+	return { days, names, nx, acct: st?.acct ?? null, warn: st?.warn ?? null, today: st?.day ?? null, at: st?.at ?? null };
 };
 
 /* ---------- Kwrt 后台菜单（侧边栏自动加入新装的插件） ---------- */

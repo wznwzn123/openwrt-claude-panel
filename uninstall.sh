@@ -27,6 +27,8 @@ for t in iptables ip6tables; do
 done
 # 限速（6.0）：nft 表、iptables 链、fw4 里的「不走流量卸载」都删掉
 [ -x /usr/sbin/cmcp-ratelimit ] && /usr/sbin/cmcp-ratelimit off
+# 流量统计的防火墙计数（nft 表 / iptables 链），连接跟踪计数是面板打开的就改回去
+[ -x /usr/sbin/cmcp-traffic ] && /usr/sbin/cmcp-traffic off
 # 访客 Wi-Fi（6.0）：面板加的访客 Wi-Fi、访客网络、防火墙区域、DHCP 设置一起删掉
 [ -x /usr/sbin/cmcp-guest ] && /usr/sbin/cmcp-guest remove
 # 设备暂停（6.0 起只有 nftables 的固件用 nft 表）

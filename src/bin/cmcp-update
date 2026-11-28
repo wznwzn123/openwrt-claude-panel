@@ -96,6 +96,7 @@ old_clean() {
 	sed -i '/\/usr\/sbin\/cmcp-/d' "$R/etc/crontabs/root" 2>/dev/null
 	if [ "$CMCP_NOSVC" != 1 ]; then
 		[ -x /usr/sbin/cmcp-ratelimit ] && /usr/sbin/cmcp-ratelimit off >>"$LOG" 2>&1
+		[ -x /usr/sbin/cmcp-traffic ] && /usr/sbin/cmcp-traffic off >>"$LOG" 2>&1
 		if command -v nft >/dev/null 2>&1; then nft delete table inet cmcp_pause 2>/dev/null; nft delete table inet cmcp_ban 2>/dev/null; fi
 		# 设备暂停和上网计划：清空规则（被暂停的设备恢复上网；老版本启动后按它自己的规则重新暂停）
 		for t in iptables ip6tables; do command -v $t >/dev/null 2>&1 && $t -t mangle -F CMCP_PAUSE 2>/dev/null; done

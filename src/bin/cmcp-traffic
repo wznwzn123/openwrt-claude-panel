@@ -1,16 +1,224 @@
 #!/usr/bin/ucode
 // 每分钟运行一次（看门狗调用）：
-// 1. 统计每台设备的流量：从 OpenClash 的连接列表算出这一分钟每条连接新增了多少，按设备、按「走代理 / 直连」累计
+// 1. 统计每台设备的流量，按设备、按「走代理 / 直连」累计
+//    6.0 第五阶段（用户 11/28 定）：总数用防火墙计数，没装代理插件、用 PassWall 等的也有数；走代理多少还是看 OpenClash / Nikki 的连接列表，
+//    两边对不上以防火墙为准。防火墙计数三种做法（跟限速 cmcp-ratelimit 同样判断）：
+//      fw4 / 有 nft：自己一张表 inet cmcp_acct，prerouting 按 MAC 数上传（-299：排在暂停上网 cmcp_pause 的 -300 后面，被暂停丢掉的包不算）、
+//        postrouting 按设备的 IP（IPv4 + IPv6）数下载，每台设备两个命名计数器
+//      fw3 / 只有 iptables：mangle 表两条链 cmcp_acct_u / cmcp_acct_d（iptables 和 ip6tables 各一份），每台设备不带动作的规则，读字节数
+//      开着流量卸载（flow offloading）：卸载后的包不经过 prerouting / postrouting，改读连接跟踪的字节数（打开 nf_conntrack_acct，卸载时改回）
+//    Turbo ACC、NSS、硬件 NAT 这类绕过内核的加速：哪种都数不全，流量页提示
 //    今天的数字放内存（/tmp），每 30 分钟和跨天时写进闪存（/etc/claude-mcp/traffic/年-月.json），断电最多丢半小时
 // 2. 发现新设备连上 Wi-Fi 时发通知
+// 用法：cmcp-traffic        统计一次（看门狗每分钟）
+//       cmcp-traffic off    删掉防火墙计数（卸载时用）
+// 测试用环境变量：CMCP_TR_TMP、CMCP_TR_ETC、CMCP_TR_MODE（nft / ipt / ct / none）、CMCP_TR_RUN（要执行的命令写到这个文件，不真执行）、
+//   CMCP_TR_NFT（nft list counters 的输出）、CMCP_TR_IPT（目录：u4 d4 u6 d6 是 iptables -nvxL 的输出）、CMCP_TR_CT（连接跟踪文件）、
+//   CMCP_TR_ACCT（nf_conntrack_acct 开关文件）、CMCP_TR_LEASES、CMCP_TR_NEIGH（ip neigh 的输出）、CMCP_TR_SYS、CMCP_TR_OFFLOAD、
+//   CMCP_TR_NOCLASH（1 = 当成没有 Clash 接口）、CMCP_TR_CLASH（假的 Clash /connections 回复，文件）、CMCP_TR_PX（cmcp-proxy json 的输出，文件）
 'use strict';
 import * as L from 'cmcp.lib';
-import { readfile, mkdir, stat, glob, unlink } from 'fs';
+import { readfile, writefile, mkdir, stat, glob, unlink, access } from 'fs';
 
-const TS = '/tmp/cmcp_traf.json', TD = L.D + '/traffic', KNOWN = L.D + '/known_devices.json';
-if (!mkdir('/tmp/cmcp_traf.lock')) {
+const TT = getenv('CMCP_TR_TMP') || '/tmp', TE = getenv('CMCP_TR_ETC') || L.D, RUN = getenv('CMCP_TR_RUN');
+const SYS = getenv('CMCP_TR_SYS') || '/sys', CTF = getenv('CMCP_TR_CT') || '/proc/net/nf_conntrack', ACF = getenv('CMCP_TR_ACCT') || '/proc/sys/net/netfilter/nf_conntrack_acct';
+const TS = TT + '/cmcp_traf.json', TD = TE + '/traffic', KNOWN = TE + '/known_devices.json', AS = TT + '/cmcp_acct.json', ACT_ON = TE + '/acct_ct_on';
+const NT = 'inet cmcp_acct', CU = 'cmcp_acct_u', CD = 'cmcp_acct_d';
+
+/* ---------- 防火墙计数 ---------- */
+function run(cmds) {
+	if (!length(cmds)) return '';
+	if (RUN) { writefile(RUN, (readfile(RUN) ?? '') + join('\n', cmds) + '\n'); return ''; }
+	return L.sh(join('\n', cmds));
+}
+function offload() { let o = getenv('CMCP_TR_OFFLOAD'); return o != null ? o == '1' : trim(L.sh('uci -q get firewall.@defaults[0].flow_offloading')) == '1'; }
+function accel() {
+	if (stat(SYS + '/module/shortcut_fe') || stat(SYS + '/module/fast_classifier')) return 'Turbo ACC（快速转发）';
+	if (stat(SYS + '/module/ecm') || stat(SYS + '/module/qca_nss_ecm')) return 'NSS 硬件加速';
+	if (stat(SYS + '/module/mtkhnat') || stat(SYS + '/module/hw_nat') || stat(SYS + '/kernel/debug/hnat')) return '硬件 NAT 加速';
+	return null;
+}
+const has_ipt = () => access('/usr/sbin/iptables', 'x') || access('/usr/sbin/iptables-legacy', 'x');
+function amode() {
+	let m = getenv('CMCP_TR_MODE');
+	if (m) return m;
+	if (offload() && stat(CTF)) return 'ct';
+	if (access('/usr/sbin/nft', 'x')) return 'nft';
+	if (has_ipt()) return 'ipt';
+	return stat(CTF) ? 'ct' : 'none';
+}
+// 局域网设备：MAC → IPv4 和 IPv6 地址（DHCP、邻居表；不要 fe80 的链路本地地址）
+function devmap(devs) {
+	let m = {};
+	for (let ip in devs) { let d = devs[ip]; if (d?.mac && d.mac != '00:00:00:00:00:00') { m[d.mac] ??= { v4: {}, v6: {} }; m[d.mac].v4[ip] = 1; } }
+	let nf = getenv('CMCP_TR_NEIGH');
+	for (let l in split(nf ? (readfile(nf) ?? '') : L.sh('ip -6 neigh show 2>/dev/null'), '\n')) {
+		let x = match(l, /^([0-9a-fA-F:]+) .*lladdr ([0-9a-f:]{17})/);
+		if (!x || match(l, /FAILED|INCOMPLETE/) || match(x[1], /^fe80:/i) || index(x[1], ':') < 0) continue;
+		let mac = lc(x[2]);
+		if (m[mac]) m[mac].v6[lc(x[1])] = 1;
+	}
+	let out = [];
+	for (let mac in sort(keys(m))) push(out, { mac, v4: sort(keys(m[mac].v4)), v6: sort(keys(m[mac].v6)) });
+	return out;
+}
+const okip4 = (a) => match(a, /^[0-9]{1,3}(\.[0-9]{1,3}){3}$/) != null, okip6 = (a) => match(a, /^[0-9a-f:]+$/) != null && index(a, ':') >= 0;
+const okmac = (a) => match(a, /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/) != null;
+// nft：读命名计数器的字节数（u<序号> 上传，d<序号> 下载）
+function nft_read() {
+	let f = getenv('CMCP_TR_NFT'), t = f ? (readfile(f) ?? '') : L.sh('nft list counters table ' + NT + ' 2>/dev/null');
+	if (!length(trim(t))) return null;
+	// 一行一行看（ucode 的正则 [^}] 不跨行）：「counter u3 {」下面那行的「bytes 数字」
+	let r = {}, cur = null;
+	for (let l in split(t, '\n')) {
+		let m = match(l, /counter ([ud][0-9]+) /);
+		if (m) { cur = m[1]; continue; }
+		m = match(l, /bytes ([0-9]+)/);
+		if (m && cur) { r[cur] = +m[1]; cur = null; }
+	}
+	return r;
+}
+function nft_build(dl) {
+	let u = [], d = [], cs = [];
+	for (let i = 0; i < length(dl); i++) {
+		let x = dl[i];
+		if (!okmac(x.mac)) continue;
+		push(cs, '\tcounter u' + i + ' { }', '\tcounter d' + i + ' { }');
+		push(u, '\t\tether saddr ' + x.mac + ' counter name "u' + i + '"');
+		let v4 = filter(x.v4, okip4), v6 = filter(x.v6, okip6);
+		if (length(v4)) push(d, '\t\tip daddr { ' + join(', ', v4) + ' } counter name "d' + i + '"');
+		if (length(v6)) push(d, '\t\tip6 daddr { ' + join(', ', v6) + ' } counter name "d' + i + '"');
+	}
+	let sc = join('\n', ['table ' + NT, 'delete table ' + NT, 'table ' + NT + ' {', ...cs,
+		'\tchain up {', '\t\ttype filter hook prerouting priority -299; policy accept;', ...u, '\t}',
+		'\tchain down {', '\t\ttype filter hook postrouting priority 300; policy accept;', ...d, '\t}', '}']) + '\n';
+	let f = TT + '/cmcp_acct.nft';
+	writefile(f, sc);
+	run(['nft -f ' + L.shq(f)]);
+}
+// iptables（fw3）：规则的顺序就是设备的顺序（不靠 comment 模块），读第二列（字节数）
+const IPT = ['iptables', 'ip6tables'];
+function ipt_out(fam, ch) {
+	let d = getenv('CMCP_TR_IPT');
+	if (d) return readfile(d + '/' + (ch == CU ? 'u' : 'd') + (fam == 'iptables' ? '4' : '6'));
+	return L.sh(fam + ' -w -t mangle -nvxL ' + ch + ' 2>/dev/null');
+}
+function ipt_bytes(fam, ch) {
+	let t = ipt_out(fam, ch);
+	if (t == null || !length(trim(t))) return null;
+	let r = [];
+	for (let l in split(t, '\n')) { let m = match(l, /^\s*([0-9]+)\s+([0-9]+)\s+RETURN/); if (m) push(r, +m[2]); }
+	return r;
+}
+function ipt_ok() {
+	if (getenv('CMCP_TR_IPT')) return true;
+	return trim(L.sh("iptables -w -t mangle -C PREROUTING -j " + CU + " 2>/dev/null && iptables -w -t mangle -C POSTROUTING -j " + CD + " 2>/dev/null && echo Y")) == 'Y';
+}
+function ipt_build(dl) {
+	let cmds = [], map = { u4: [], d4: [], u6: [], d6: [] };
+	for (let fam in IPT) {
+		if (fam == 'ip6tables' && !getenv('CMCP_TR_IPT') && !access('/usr/sbin/ip6tables', 'x')) continue;
+		let k = fam == 'iptables' ? '4' : '6';
+		for (let ch in [CU, CD]) push(cmds, fam + ' -w -t mangle -N ' + ch + ' 2>/dev/null', fam + ' -w -t mangle -F ' + ch);
+		// 接在最后（-A）：暂停上网（CMCP_PAUSE，插在最前面）丢掉的包不算进流量
+		push(cmds, fam + ' -w -t mangle -C PREROUTING -j ' + CU + ' 2>/dev/null || ' + fam + ' -w -t mangle -A PREROUTING -j ' + CU,
+			fam + ' -w -t mangle -C POSTROUTING -j ' + CD + ' 2>/dev/null || ' + fam + ' -w -t mangle -A POSTROUTING -j ' + CD);
+		for (let i = 0; i < length(dl); i++) {
+			let x = dl[i];
+			if (!okmac(x.mac)) continue;
+			push(cmds, fam + ' -w -t mangle -A ' + CU + ' -m mac --mac-source ' + x.mac + ' -j RETURN'); push(map['u' + k], i);
+			for (let a in filter(k == '4' ? x.v4 : x.v6, k == '4' ? okip4 : okip6)) { push(cmds, fam + ' -w -t mangle -A ' + CD + ' -d ' + a + ' -j RETURN'); push(map['d' + k], i); }
+		}
+	}
+	run(cmds);
+	return map;
+}
+// 连接跟踪：每条连接的上传（发起方向）和下载（回复方向）字节数，跟上一次比多了多少
+function ct_read(ip2mac, prev) {
+	let t = readfile(CTF);
+	if (t == null) return null;
+	let cur = {}, add = {}, nb = 0;
+	for (let l in split(t, '\n')) {
+		// 一行里 src= dst= sport= dport= bytes= 各出现两次：前一组是发起方向，后一组是回复方向（ucode 的正则没有非贪婪，按空格拆开数）
+		let kv = { src: [], dst: [], sport: [], dport: [], bytes: [] }, w = split(trim(l), /[ \t]+/);
+		for (let x in w) { let e = index(x, '='); if (e > 0) { let k = substr(x, 0, e); if (kv[k]) push(kv[k], substr(x, e + 1)); } }
+		if (length(kv.src) < 2 || length(kv.bytes) < 2) continue;
+		nb++;
+		let s1 = lc(kv.src[0]), s2 = lc(kv.src[1]), b1 = +kv.bytes[0], b2 = +kv.bytes[1], mac = ip2mac[s1], up = b1, dn = b2;
+		if (!mac) { mac = ip2mac[s2]; up = b2; dn = b1; } // 从外面连进来的（端口转发）：回复方向才是这台设备发的
+		if (!mac) continue;
+		let k = (length(w) > 2 ? w[2] : '') + '|' + s1 + '|' + lc(kv.dst[0] ?? '') + '|' + (kv.sport[0] ?? '') + '|' + (kv.dport[0] ?? '');
+		cur[k] = [up, dn];
+		let p = prev?.[k], du = p ? up - p[0] : up, dd = p ? dn - p[1] : dn;
+		if (du < 0 || dd < 0) { du = up; dd = dn; }
+		if (du || dd) { let a = add[mac] ?? [0, 0]; a[0] += du; a[1] += dd; add[mac] = a; }
+	}
+	// 一条带 bytes= 的都没有、又有连接：nf_conntrack_acct 关着（刚打开时已有的连接也没有），这次算不了
+	if (!nb && length(trim(t))) return null;
+	return { cur, add };
+}
+function acct_off() {
+	run(['nft delete table ' + NT + ' 2>/dev/null']);
+	let c = [];
+	for (let fam in IPT) push(c, fam + ' -w -t mangle -D PREROUTING -j ' + CU + ' 2>/dev/null', fam + ' -w -t mangle -D POSTROUTING -j ' + CD + ' 2>/dev/null',
+		fam + ' -w -t mangle -F ' + CU + ' 2>/dev/null', fam + ' -w -t mangle -X ' + CU + ' 2>/dev/null', fam + ' -w -t mangle -F ' + CD + ' 2>/dev/null', fam + ' -w -t mangle -X ' + CD + ' 2>/dev/null');
+	run(c);
+	// 连接跟踪的计数是我们打开的：改回去
+	if (stat(ACT_ON)) { writefile(ACF, '0'); unlink(ACT_ON); }
+	unlink(AS);
+}
+// 读一次：{ mode, add: { MAC: [上传, 下载] }, warn }；用不了返回 { mode: 'none' }
+function acct_read(devs) {
+	let mode = amode(), a = accel(), warn = a ? '开着「' + a + '」：被加速的流量数不到，每台设备的用量会偏少' : null;
+	if (mode == 'none') return { mode, add: null, warn };
+	let st = L.readj(AS, null);
+	if (type(st) != 'object' || st.mode != mode) st = { mode };
+	let dl = devmap(devs), sig = sprintf('%J', dl), add = {};
+	if (mode == 'ct') {
+		if (offload() && !getenv('CMCP_TR_MODE') && index(L.sh('nft list flowtables 2>/dev/null'), 'counter') < 0 && access('/usr/sbin/nft', 'x')) warn ??= '开着流量卸载：卸载后的连接数不全，每台设备的用量会偏少';
+		if (trim(readfile(ACF) ?? '1') == '0') { writefile(ACF, '1'); writefile(ACT_ON, '1'); }
+		let ip2mac = {};
+		for (let x in dl) { for (let i in x.v4) ip2mac[i] = x.mac; for (let i in x.v6) ip2mac[i] = x.mac; }
+		let r = ct_read(ip2mac, st.ct);
+		if (!r) { L.writej(AS, { mode, ct: {} }); return { mode: 'none', add: null, warn }; }
+		L.writej(AS, { mode, ct: r.cur, at: L.now() });
+		return { mode, add: r.add, warn };
+	}
+	if (mode == 'nft') {
+		let c = nft_read(), macs = st.macs ?? [];
+		if (c && st.sig) for (let i = 0; i < length(macs); i++) {
+			let u = c['u' + i] ?? 0, d = c['d' + i] ?? 0, p = st.prev?.[i] ?? [0, 0];
+			let du = u >= p[0] ? u - p[0] : u, dd = d >= p[1] ? d - p[1] : d;
+			if (du || dd) add[macs[i]] = [du, dd];
+			st.prev[i] = [u, d];
+		}
+		if (!c || st.sig != sig) { nft_build(dl); st = { mode, sig, macs: map(dl, (x) => x.mac), prev: map(dl, () => [0, 0]) }; }
+	} else {
+		let macs = st.macs ?? [], m = st.map ?? {}, fresh = !ipt_ok();
+		if (!fresh && st.sig) for (let k in ['u4', 'd4', 'u6', 'd6']) {
+			let dir = substr(k, 0, 1), fam = substr(k, 1, 1) == '4' ? 'iptables' : 'ip6tables'; // ucode 的字符串不能用下标取字
+			let b = ipt_bytes(fam, dir == 'u' ? CU : CD);
+			if (b == null) continue;
+			st.prev ??= {}; let p = st.prev[k] ?? [];
+			for (let j = 0; j < length(b) && j < length(m[k] ?? []); j++) {
+				let mac = macs[m[k][j]], v = b[j], o = p[j] ?? 0, dv = v >= o ? v - o : v;
+				if (mac && dv) { let x = add[mac] ?? [0, 0]; x[dir == 'u' ? 0 : 1] += dv; add[mac] = x; }
+				p[j] = v;
+			}
+			st.prev[k] = p;
+		}
+		if (fresh || st.sig != sig) { let mp = ipt_build(dl); st = { mode, sig, macs: map(dl, (x) => x.mac), map: mp, prev: {} }; }
+	}
+	st.at = L.now();
+	L.writej(AS, st);
+	return { mode, add, warn };
+}
+
+if (ARGV[0] == 'off') { acct_off(); exit(0); }
+
+if (!mkdir(TT + '/cmcp_traf.lock')) {
 	// 上一次还没跑完（或者异常退出留下的锁超过 3 分钟）
-	let s = stat('/tmp/cmcp_traf.lock');
+	let s = stat(TT + '/cmcp_traf.lock');
 	if (s && L.now() - s.mtime < 180) exit(0);
 }
 mkdir(TD);
@@ -24,13 +232,20 @@ if (!st || st.day != day) {
 	if (st && st.day) {
 		let om = substr(st.day, 0, 7), od = om == mon ? mdata : L.readj(mf(om), { days: {}, names: {} });
 		od.days[st.day] = st.today; for (let k in st.names) od.names[k] = st.names[k];
+		if (st.nx) { od.nx ??= {}; od.nx[st.day] = 1; }
 		L.writej(mf(om), od);
 		if (om == mon) mdata = od;
 	}
-	st = { day, conns: st?.conns ?? {}, today: mdata.days[day] ?? {}, names: mdata.names ?? {}, flushed: t, tot: st?.tot, at: st?.at };
+	st = { day, conns: st?.conns ?? {}, today: mdata.days[day] ?? {}, names: mdata.names ?? {}, flushed: t, tot: st?.tot, at: st?.at, nx: !!mdata.nx?.[day] };
 }
 
-const devs = L.lan_devices();
+// 测试时用假的 DHCP 租约和邻居表（不碰真的）
+function test_devs() {
+	let byip = {};
+	for (let l in split(readfile(getenv('CMCP_TR_LEASES')) ?? '', '\n')) { let f = split(l, ' '); if (length(f) >= 4) byip[f[2]] = { mac: lc(f[1]), name: f[3] == '*' ? null : f[3], lease: +f[0] }; }
+	return byip;
+}
+const devs = getenv('CMCP_TR_LEASES') ? test_devs() : L.lan_devices();
 // 路由器自己的所有地址（局域网、WAN、隧道……）：这些地址发出的流量算「路由器自己」
 const mine = {};
 for (let l in split(L.sh("ip -o addr show | awk '{print $4}'"), '\n')) { let a = split(trim(l), '/')[0]; if (length(a)) mine[a] = 1; }
@@ -41,10 +256,12 @@ const key = (ip) => {
 	return ip;
 };
 
-// 1) 流量
-const r = L.api('GET', '/connections', null, 8);
+// 1) 流量：防火墙计数（总数）+ Clash 的连接列表（走代理多少）
+const A = acct_read(devs);
+const r = getenv('CMCP_TR_CLASH') ? { code: 200, json: json(readfile(getenv('CMCP_TR_CLASH')) ?? 'null') } : getenv('CMCP_TR_NOCLASH') == '1' ? { code: 0 } : L.api('GET', '/connections', null, 8);
+let add = {};
 if (r.code == 200 && r.json) {
-	let seen = {}, add = {}, su = 0, sd = 0;
+	let seen = {}, su = 0, sd = 0;
 	for (let c in r.json.connections ?? []) {
 		let u = +c.upload || 0, dn = +c.download || 0, p = st.conns[c.id];
 		let du = p ? u - p[0] : u, dd = p ? dn - p[1] : dn;
@@ -73,16 +290,33 @@ if (r.code == 200 && r.json) {
 			}
 		}
 	}
-	st.tot = [U, D]; st.at = t;
-	for (let k in add) {
-		let a = st.today[k] ?? [0, 0, 0, 0], b = add[k];
-		for (let i = 0; i < 4; i++) a[i] += b[i];
-		st.today[k] = a;
-	}
+	st.tot = [U, D];
 	st.conns = seen;
 }
+// 有防火墙计数：每台设备的总数以它为准；走代理的取 Clash 算的（不超过总数），其余算直连
+if (A.add) {
+	for (let mac in A.add) {
+		let T = A.add[mac], c = add[mac] ?? [0, 0, 0, 0];
+		let pu = c[0] < T[0] ? c[0] : T[0], pd = c[1] < T[1] ? c[1] : T[1];
+		add[mac] = [pu, pd, T[0] - pu, T[1] - pd];
+	}
+	// Clash 那边有、防火墙这边没数到的设备（这一分钟没流量）：Clash 算的照样记（多半是计数器刚重建）
+}
+// 用的是 PassWall、HomeProxy、SSR Plus+（没有 Clash 接口）：分不出走代理还是直连，这一天标上，流量页只显示总数
+if (A.add && r.code != 200) {
+	let px = null; try { px = json(getenv('CMCP_TR_PX') ? readfile(getenv('CMCP_TR_PX')) : L.sh('/usr/sbin/cmcp-proxy json 2>/dev/null')); } catch (e) {}
+	for (let x in (type(px?.list) == 'array' ? px.list : [])) if (x?.running && !(x.id in ['openclash', 'nikki'])) st.nx = true;
+}
+if ((r.code == 200 && r.json) || A.add) st.at = t;
+for (let k in add) {
+	let a = st.today[k] ?? [0, 0, 0, 0], b = add[k];
+	for (let i = 0; i < 4; i++) a[i] += b[i];
+	st.today[k] = a;
+}
+st.acct = A.mode; st.warn = A.warn;
 if (t - (st.flushed ?? 0) >= 1800) {
 	mdata.days[day] = st.today; for (let k in st.names) mdata.names[k] = st.names[k];
+	if (st.nx) { mdata.nx ??= {}; mdata.nx[day] = 1; }
 	L.writej(mf(mon), mdata);
 	st.flushed = t;
 	// 只留最近 3 个月
@@ -113,7 +347,7 @@ if (first || length(fresh)) L.writej(KNOWN, known);
 // 名字跟以前见过的设备一样就说明「可能是它换了地址」，不吓人；推送上有「暂停它上网」按钮，在面板里选多久、确认了才生效
 const rnd_mac = (m) => match(m, /^.[26ae]:/) != null;
 const generic = (n) => !n || match(lc(n), /^(unknown|android|iphone|ipad|localhost|\*|未知设备)$/) != null;
-if (readfile(L.D + '/off.newdev') == null) for (let d in fresh) {
+if (readfile(TE + '/off.newdev') == null) for (let d in fresh) {
 	let same = null;
 	if (rnd_mac(d.mac) && !generic(d.name)) for (let m in known) if (m != d.mac && known[m].name == d.name) { same = known[m]; break; }
 	if (same)
@@ -125,7 +359,7 @@ if (readfile(L.D + '/off.newdev') == null) for (let d in fresh) {
 // 3) 每台设备在线多久（面板「设备」里显示）：第一次看到在线时记下时间，离线就清掉；
 //    Wi-Fi 设备用无线驱动报的「连上多久」（路由器重启后也准），有线设备从路由器看到它开始算
 {
-	const OF = '/tmp/cmcp_online.json';
+	const OF = TT + '/cmcp_online.json';
 	let prev = L.readj(OF, {}), cur = {}, wifi = {};
 	if (type(prev) != 'object') prev = {};
 	for (let ifn in split(L.sh("iw dev 2>/dev/null | awk '$1==\"Interface\"{print $2}'"), '\n')) {
@@ -151,4 +385,4 @@ if (readfile(L.D + '/off.newdev') == null) for (let d in fresh) {
 	L.writej(OF, cur);
 }
 
-L.sh('rmdir /tmp/cmcp_traf.lock');
+L.sh('rmdir ' + L.shq(TT + '/cmcp_traf.lock'));

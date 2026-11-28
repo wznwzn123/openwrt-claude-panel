@@ -77,7 +77,7 @@ function mStatsRender(r) {
 	const t = r.today || {}, d = r.devices || {};
 	$('mDl').textContent = '↓ ' + B(t.dl || 0); $('mUl').textContent = '↑ ' + B(t.ul || 0);
 	const top = t.top || [];
-	$('mTopT').textContent = top.length ? '今天用得最多（下行 + 上行合计）' : (t.counting ? '今天还没有设备用流量' : 'OpenClash 或 Nikki 在运行时才统计每台设备的流量');
+	$('mTopT').textContent = top.length ? '今天用得最多（下行 + 上行合计）' : (t.counting ? '今天还没有设备用流量' : t.acct && t.acct !== 'none' ? '统计刚开始 过一两分钟再看' : 'OpenClash 或 Nikki 在运行时才统计每台设备的流量');
 	// 同一台手机连 2.4G 和 5G 时可能各用一个随机地址，名字一样：后面的标上「另一个地址」，免得看成两台
 	const seen = {};
 	$('mTop').innerHTML = top.map((x) => { const n = x.name || x.id, dup = seen[n]; seen[n] = 1;

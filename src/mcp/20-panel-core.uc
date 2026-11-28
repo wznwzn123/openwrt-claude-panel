@@ -213,6 +213,6 @@ P.home_stats = function() {
 	let lm = lease_map();
 	for (let ip in lm) if (lm[ip]?.mac) all[lm[ip].mac] = 1;
 	let n = length(keys(on));
-	return { today: { day, dl, ul, top, counting: !!tr?.at && time() - tr.at < 600 }, devices: { online: n, wifi, wired: n - wifi, total: length(keys(all)) } };
+	return { today: { day, dl, ul, top, counting: !!tr?.at && time() - tr.at < 600, acct: tr?.acct ?? null }, devices: { online: n, wifi, wired: n - wifi, total: length(keys(all)) } };
 };
 

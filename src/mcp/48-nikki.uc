@@ -95,9 +95,10 @@ P.nk_sub_update = function(a) {
 	let id = nk_id(a?.id), pr = nk_prof();
 	if (nk_sec(id)?.['.type'] != 'subscription') die('没有这个订阅');
 	if (sx_busy()) die('订阅正在更新，稍等');
-	let restart = pr.kind == 'sub' && pr.id == id && nk_on();
+	// 正在用的订阅：更新完重启才用上；Nikki 关着就不重启（不把它打开）
+	let restart = pr.kind == 'sub' && pr.id == id;
 	writefile(SX_BUSY, '' + time());
-	nk_run(sprintf('/etc/init.d/nikki update_subscription %s; %s rm -f %s', shq(id), restart ? nk_restart_cmd() + ';' : '', shq(SX_BUSY)));
+	nk_run(sprintf('/etc/init.d/nikki update_subscription %s; %s rm -f %s', shq(id), restart ? SBIN + '/cmcp-proxy running nikki && ' + nk_restart_cmd() + ';' : '', shq(SX_BUSY)));
 	return { ok: true, restart };
 };
 // 换成这个订阅 / 这个配置文件：改 nikki.config.profile，要重启 Nikki 才用上（用户 11/26：先问，点了才重启）。订阅还没下载过就先下载

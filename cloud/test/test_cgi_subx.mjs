@@ -40,7 +40,7 @@ try {
 	ok('机场没给流量信息：说清楚', r.result?.ok === false && /没有提供流量信息/.test(r.result.msg));
 	ok('没有的订阅', /没有这个订阅/.test(err(await cgi('subx_info', { id: 'nope' }))));
 	r = await cgi('subx_update');
-	ok('Nikki 更新：每个订阅都更新，正在用的是订阅就重启 Nikki，跑完删掉标记', r.result?.ok && r.result.n === 2 && /nikki update_subscription 'sub1'; \/etc\/init\.d\/nikki update_subscription 'sub2'; \/etc\/init\.d\/nikki restart; rm -f/.test(rd(RUN)), rd(RUN));
+	ok('Nikki 更新：每个订阅都更新，正在用的是订阅、Nikki 在跑才重启（关着的不打开，用户 11/28），跑完删掉标记', r.result?.ok && r.result.n === 2 && /nikki update_subscription 'sub1'; \/etc\/init\.d\/nikki update_subscription 'sub2'; \/[^ ]*\/cmcp-proxy running nikki && \/etc\/init\.d\/nikki restart; rm -f/.test(rd(RUN)), rd(RUN));
 	ok('正在更新：不能再点', (await cgi('subx_state')).result?.busy === true && /正在更新/.test(err(await cgi('subx_update'))));
 	fs.unlinkSync(BUSY); fs.writeFileSync(RUN, '');
 	// PassWall / PassWall 2

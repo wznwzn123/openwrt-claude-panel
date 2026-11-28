@@ -126,8 +126,8 @@ function sp_pw(kind) {
 		else if (s['.type'] == 'nodes') { by[s['.name']] = s; push(nodes, s); }
 	}
 	// 新版 PassWall 的主节点叫 node，老版叫 tcp_node
-	let opt = g && g.node == null && g.tcp_node != null ? 'tcp_node' : 'node', mid = g?.[opt], main = by[mid];
-	return { secs, g, by, nodes, opt, mid, main, shunt: main?.protocol == '_shunt' };
+	let opt = g && g.node == null && g.tcp_node != null ? 'tcp_node' : 'node', mid = g?.[opt], mn = by[mid];
+	return { secs, g, by, nodes, opt, mid, main: mn, shunt: mn?.protocol == '_shunt' };
 }
 // 老版本的 PassWall 分流规则没有「来源」：不能按设备分。看装着的生成配置的程序里有没有读 source（找不到这个文件当成能）
 function sp_pw_src(kind, st) {
@@ -165,7 +165,7 @@ function sp_cap(kind) {
 }
 // 能选的去向：groups（PassWall 的负载均衡、自动选择节点，HomeProxy 的路由节点）、nodes（单个节点）、main（「代理」走的那个，没有 = null）
 function sp_px_list(kind) {
-	let gs = [], ns = [], seen = {}, main = null;
+	let gs = [], ns = [], seen = {}, mg0 = null;
 	let nd = (n) => { if (length(n) && !seen[n]) { seen[n] = 1; push(ns, { n, d: 0, reg: CL.node_meta(n).reg }); } };
 	if (kind == 'passwall' || kind == 'passwall2') {
 		let st = sp_pw(kind);
@@ -175,23 +175,23 @@ function sp_px_list(kind) {
 			if (p == '_balancing' || p == '_urltest') { seen[n] = 1; push(gs, n); } else if (!match(p, /^_/)) nd(n);
 		}
 		let m = st.by[st.shunt ? st.main.default_node : st.mid];
-		main = m && m.protocol != '_shunt' ? sp_lab(m, 'remarks') : null;
+		mg0 = m && m.protocol != '_shunt' ? sp_lab(m, 'remarks') : null;
 	} else if (kind == 'homeproxy') {
 		let h = sp_hp();
 		if (h.custom) {
 			for (let r in h.rns) { let n = sp_lab(r, 'label'); if (r.enabled == '1' && !match(r['.name'], /^cmcp_rn_/) && !seen[n]) { seen[n] = 1; push(gs, n); } }
 			for (let s in h.nodes) nd(sp_lab(s, 'label'));
 			let r = h.by[h.dout];
-			main = r?.['.type'] == 'routing_node' ? sp_lab(r, 'label') : null;
+			mg0 = r?.['.type'] == 'routing_node' ? sp_lab(r, 'label') : null;
 		} else {
 			let mn = h.by.config?.main_node;
-			main = mn && mn != 'nil' ? (mn == 'urltest' ? '自动选择' : sp_lab(h.by[mn] ?? { '.name': mn }, 'label')) : null;
+			mg0 = mn && mn != 'nil' ? (mn == 'urltest' ? '自动选择' : sp_lab(h.by[mn] ?? { '.name': mn }, 'label')) : null;
 		}
 	} else if (kind == 'shadowsocksr') {
 		let x = sp_ssr(), gsv = x.g?.global_server;
-		main = gsv && gsv != 'nil' ? sp_lab(x.by[gsv] ?? { '.name': gsv }, 'alias') : null;
+		mg0 = gsv && gsv != 'nil' ? sp_lab(x.by[gsv] ?? { '.name': gsv }, 'alias') : null;
 	}
-	return { groups: gs, nodes: slice(ns, 0, 500), main };
+	return { groups: gs, nodes: slice(ns, 0, 500), main: mg0 };
 }
 // 现在有哪些策略组（null = 读不到：插件没在跑）
 function sp_proxies() {

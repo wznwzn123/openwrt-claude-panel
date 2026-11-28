@@ -81,7 +81,7 @@ try {
 	ok('删别的订阅', r.result?.ok && !rd(CFG + '/nikki').includes('新机场'));
 	clr(RUN);
 	r = await cgi('nk_sub_update', { id: 'sub1' });
-	ok('更新正在用的订阅：用 Nikki 自己的脚本，更新完重启，跑完删掉标记', r.result?.restart && /nikki update_subscription 'sub1'; \/etc\/init\.d\/nikki restart; rm -f /.test(rd(RUN)) && fs.existsSync(BUSY), rd(RUN));
+	ok('更新正在用的订阅：用 Nikki 自己的脚本，更新完 Nikki 在跑才重启（关着的不打开），跑完删掉标记', r.result?.restart && /nikki update_subscription 'sub1'; \/[^ ]*\/cmcp-proxy running nikki && \/etc\/init\.d\/nikki restart; rm -f /.test(rd(RUN)) && fs.existsSync(BUSY), rd(RUN));
 	ok('正在更新：不能再点', /正在更新/.test(err(await cgi('nk_sub_update', { id: 'sub2' }))));
 	fs.unlinkSync(BUSY); clr(RUN);
 	r = await cgi('nk_use', { kind: 'sub', id: 'sub2', restart: true });

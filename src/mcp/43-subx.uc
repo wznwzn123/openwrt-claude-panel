@@ -54,8 +54,8 @@ P.subx_update = function() {
 	let cmd;
 	if (px == 'nikki') {
 		let prof = uci_get('nikki.config.profile') ?? '', cmds = map(subs, (s) => '/etc/init.d/nikki update_subscription ' + shq(s.id));
-		// 正在用的配置就是其中一个订阅：更新完重启 Nikki 才会用上新的
-		if (match(prof, /^subscription:/)) push(cmds, '/etc/init.d/nikki restart');
+		// 正在用的配置就是其中一个订阅：更新完重启 Nikki 才会用上新的。Nikki 关着就不重启（以前会把关着的 Nikki 打开，用户 11/28 定修）
+		if (match(prof, /^subscription:/)) push(cmds, SBIN + '/cmcp-proxy running nikki && /etc/init.d/nikki restart');
 		cmd = join('; ', cmds);
 	}
 	else if (px == 'passwall' || px == 'passwall2') cmd = sprintf('lua /usr/share/%s/subscribe.lua start all manual', px);

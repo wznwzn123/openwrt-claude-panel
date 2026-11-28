@@ -179,7 +179,7 @@ try { fs.rmSync('/tmp/cmcp_popen'); } catch (e) {}
 r = await hp(HP, 'whoami');
 const po = Number(fs.existsSync('/tmp/cmcp_popen') ? fs.readFileSync('/tmp/cmcp_popen', 'utf8') : 0);
 ok('[托管] 手机面板用着：记下最后打开面板的时间（后台「打开面板 x 前」，用户 11/28）', Math.abs(po - Date.now() / 1000) < 30, String(po));
-ok('[托管] 心跳带上打开面板时间和补丁号', /"po":%s,"hot":%s/.test(fs.readFileSync('../src/bin/cmcp-watchdog', 'utf8')));
+ok('[托管] 心跳带上打开面板时间、几秒前打开的（pa，V4 起用官网的钟算）和补丁号', /"po":%s,"pa":%s,"hot":%s/.test(fs.readFileSync('../src/bin/cmcp-watchdog', 'utf8')));
 ok('[托管] 通行证地址照样按账号查权限（主账号）', r.result?.role === 'owner' && r.result.uid === ua, JSON.stringify(r));
 ok('[托管] 托管版不能用登录地址换钥匙（要走官网）', /官网/.test(err(await cgi(E3, '/' + TOKEN, { jsonrpc: '2.0', id: ++rid, method: 'panel/pass_login', params: {}, client: 'panel', dev: HD }))));
 ok('[托管] 没登录的手机换通行证：提示从官网打开（带 need_code）', (() => true)() && (await hp('', 'pass_new', { dev: 'x' })).error?.data?.need_code === true);
